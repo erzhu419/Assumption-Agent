@@ -1,0 +1,112 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc02_T_multibudget_kronecker_kkt_transfer_ff58e60bf7c1",
+    "source_hash": "ff58e60bf7c1b48e6565ffd4f777cb9bc0f8d9651b14c9e236fb3b9aa1cb15ea",
+    "parent_ids": [],
+    "source_episode_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "task_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_suc02_transfer.py",
+        "archived_relpath": "producers/tmp__audit_suc02_transfer.py",
+        "bytes": 1584,
+        "sha256": "acf49689fe66d310eb498b39ad0fb3907fb16b65cc6efc08b6b975abd145eb04"
+      },
+      {
+        "container_path": "/tmp/verify_suc02_transfer.py",
+        "archived_relpath": "producers/tmp__verify_suc02_transfer.py",
+        "bytes": 3963,
+        "sha256": "6bbe575b766b45e77834c9fe0551730e819845e463d6100bde0fa9296c516e0a"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 8595,
+        "sha256": "552e41162a11dad89e96171a193f49843dfd00aa7ddf436995314d041cbeb0cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && ls -la /pretrain_task /tmp/hegel_knowledge_ref 2>/dev/null; if [ -f /tmp/hegel_knowledge_ref/describe_ref.py ]; then python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'ridge nuisance profiling'; fi; cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_suc02_T_studies.pkl','rb') as f: x=pickle.load(f)\nprint('root',type(x),len(x))\nif isinstance(x,dict): print('root keys',list(x)); x=x if 'source_modes' in x else next(iter(x.values()))\nif isinstance(x,(list,tuple)): x=x[0]\nprint('study type',type(x))\nif isin",
+      "cd /holdout_task; sed -n '40,150p' validate_public_schema.py; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_separable_transport_inversion.recover_transport_mixture; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; find /tmp/hegel_knowledge_ref -iname '*transport*' -o -iname '*profiled_matching*'; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc02_T_studies.pkl','rb'))[0]\nfor kk,d in p.items():\n print(kk)\n for k,v in d.items():\n  a=np.asarray(v); print(k,a.shape,a.dtype, repr",
+      "cd /holdout_task && sed -n '1,230p' /tmp/hegel_knowledge_ref/autogenous_separable_transport_inversion.reference.txt && grep -A38 '^def fit_ridge_nuisance' /tmp/hegel_knowledge_ref/autogenous_prim_ridge_profiled_matching.reference.txt && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc02_T_studies.pkl','rb'))[0]; s=p['study']; t=p['gt']; Z=s['Z_nuisance']; y=s['y_obs']; r=s['nuisance_ridge']; R=y-Z@np.linalg.solve(Z.T@Z+r*np.eye(Z.shape[1]),Z.T@y); Q,d,_=np.linalg.svd(Z,full_matrices=False); W=y-Q@((1-np.sqrt(r/(d*d+r)))*(Q.T@y)); print('ridge residual / sqrt-profile ma",
+      "cat > /holdout_task/multibudget_kronecker_kkt_transfer_solver.py <<'PY'\n\"\"\"Separable shifted transport and tangential box-simplex certificates.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\n\n\ndef _axis_stencil(length, kappa, velocity, robin):\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(velocity, dtype=float)\n    h = length / k.size\n    face = (2.0 * k[:-1] * k[1:]) / ((k[:-1] + k[1:]) * h**2)\n    diagonal = np.abs(v) / h\n    diagonal[:-1] += face\n    diagonal[1:] += face\n    ends = np.array([0, k.size - 1])\n    np.add.at(diagonal, ends, robin * k[ends] / (h * (",
+      "cat > /tmp/verify_suc02_transfer.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('candidate', root / 'multibudget_kronecker_kkt_transfer_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nsource = (root / 'validate_public_schema.py').read_text()\nvalidator = {}\nexec(source.split('\\n_d = ')[0], validator)\nverify = validator['verify_box_simplex_kkt_certificate']\nitem = pickle.loads((roo",
+      "cat > /tmp/audit_suc02_transfer.py <<'PY'\nfrom pathlib import Path\n\n# Reuse the independent sparse comparison and certificate verifier, not its old cases.\nsource = Path('/tmp/verify_suc02_transfer.py').read_text()\nexec(compile(source.split(\"\\nout = check('public'\", 1)[0], '/tmp/verify_suc02_transfer.py', 'exec'))\n\nprint('Public nuisance design shape:', public['Z_nuisance'].shape, 'ridge:', public['nuisance_ridge'])\nraw, _ = mod._sensor_design(public)\nz = public['Z_nuisance']\ny = public['y_obs']\nridge = public['nuisance_ridge']\n_, baseline = mod._ridge_residualize(raw, y, z, ridge)\nassert np.al"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+        "filename": "multibudget_kronecker_kkt_transfer_solver.py",
+        "bytes": 6155,
+        "sha256": "314dc6f804a7b3617a590276a843eecd52c27ab434ffea752bf77ee1f0afa4dd",
+        "content_addressed_ref": "content_addressed_blobs/314dc6f804a7b3617a590276a843eecd52c27ab434ffea752bf77ee1f0afa4dd.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py"
+    ],
+    "exported_pure_functions": [
+      "axis"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ff58e60bf7c1b48e6565ffd4f777cb9bc0f8d9651b14c9e236fb3b9aa1cb15ea",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat > /tmp/audit_suc02_transfer.py <<'PY'\nfrom pathlib import Path\n\n# Reuse the independent sparse comparison and certificate verifier, not its old cases.\nsource = Path('/tmp/verify_suc02_transfer.py').read_text()\nexec(compile(source.split(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ff58e60bf7c1b48e6565ffd4f777cb9bc0f8d9651b14c9e236fb3b9aa1cb15ea",
+        "expected_candidate_sha256": "ff58e60bf7c1b48e6565ffd4f777cb9bc0f8d9651b14c9e236fb3b9aa1cb15ea",
+        "computed_candidate_sha256": "ff58e60bf7c1b48e6565ffd4f777cb9bc0f8d9651b14c9e236fb3b9aa1cb15ea",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+            "bytes": 6155
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ff58e60b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "axis",
+        "code": "def axis(length, k, v, r):\n    n = len(k)\n    h = length / n\n    mat = np.zeros((n, n))\n    for i in range(n):\n        for j in (i - 1, i + 1):\n            if 0 <= j < n:\n                coeff = 2 / (1 / k[i] + 1 / k[j]) / h ** 2\n                mat[i, j] -= coeff\n                mat[i, i] += coeff\n        mat[i, i] += abs(v[i]) / h\n        j = i - 1 if v[i] >= 0 else i + 1\n        if 0 <= j < n:\n            mat[i, j] -= abs(v[i]) / h\n    for i in (0, n - 1):\n        mat[i, i] += r / (1 + r * h / (2 * k[i])) / h\n    return mat"
+      }
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc01_C_viscoplastic_overstress_counterexample_5dba10373d18",
+    "source_hash": "5dba10373d18ed8c336966f6036a7a8b05f8001b6f9e1b253c7bdf4f0a7f0162",
+    "parent_ids": [],
+    "source_episode_id": "suc01_C__viscoplastic_bingham_overstress_counterexample_revision",
+    "task_id": "suc01_C__viscoplastic_bingham_overstress_counterexample_revision",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_viscoplastic.py",
+        "archived_relpath": "producers/tmp__audit_viscoplastic.py",
+        "bytes": 2273,
+        "sha256": "195959b1bac0e1a36111fd8e543ad3cea404e8571c20c2f7b41574d452c8fc4a"
+      },
+      {
+        "container_path": "/tmp/score_viscoplastic.py",
+        "archived_relpath": "producers/tmp__score_viscoplastic.py",
+        "bytes": 1064,
+        "sha256": "dee3f5ad5186bc834d94db2af4140757293446c00cb34f46af9a21a05188a876"
+      },
+      {
+        "container_path": "/tmp/validate_rate_conditioning.py",
+        "archived_relpath": "producers/tmp__validate_rate_conditioning.py",
+        "bytes": 2734,
+        "sha256": "30df93664b0729f547db7fbb7b07f1dacb41b4af508c8019cccc865226bb36ca"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle\nwith open('public_suc01_C_datasets.pkl','rb') as f:\n    data=pickle.load(f)\ndef show(x, indent='', depth=0):\n    if isinstance(x, dict) and depth < 5:\n        for k,v in list(x.items())[:30]:\n            print(indent, repr(k), type(v).__name__, getattr(v,'shape',''), getattr(v,'dtype',''), repr(v)[:160] if isinstance(v,(str,int,float)) else '')\n            show(v,indent+'  ',depth+1)\n    elif isinstance(x,(list,tuple)) and depth < 5:\n        print(indent,'length',len(x))\n        if x: show(x[0],indent",
+      "export PYTHONPATH=/tmp\nfor fn in autogenous_hereditary_spectrum_identification.align_reference_panel autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_reference_panel_balancing.weighted_column_fill; do python3 -m hegel_wormhole_skills --describe \"$fn\"; done\nls -la /tmp/hegel_wormhole_skills\nfind /pretrain_task /tmp/hegel_wormhole_skills -maxdepth 3 -type f | head -100\ncd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc01_C_datasets.pkl','rb'))[0]; d=p['dataset']; print('dt/time',d['past_dt'],d['eval_times']); print('GT par",
+      "sed -n '1,270p' /tmp/hegel_wormhole_skills/autogenous_hereditary_spectrum_identification.py; ls -la /pretrain_task; python3 -c 'import scipy; print(\"scipy\", scipy.__version__)'",
+      "set -e\ncd /holdout_task\nsed -n '/^def hereditary_design/,/^def fit_/p' /tmp/hegel_wormhole_skills/autogenous_hereditary_spectrum_identification.py | head -60\ncat > viscoplastic_overstress_hereditary_solver.py <<'PY'\n\"\"\"Identify a two-branch Prony law with thresholded viscoplastic flow.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom hegel_wormhole_skills.autogenous_hereditary_spectrum_identification import (\n    align_reference_panel,\n    hereditary_design,\n)\n\n\ndef _history(split, dt, yield_stress):\n    past = np.asarray(split['past_stress'])\n    hold = np.asarray(split['s",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 -I /holdout_task/validate_public_schema.py\npython3 -I /tmp/score_viscoplastic.py\npython3 -I - <<'PY'\nimport runpy, numpy as np\nv = runpy.run_path('/tmp/score_viscoplastic.py'); m,d,g = (v[k] for k in ('m','d','g')); t=d['eval_times']; calls=[]; original=m.least_squares\ndef record(*a,**kw):\n    fit=original(*a,**kw); calls.append(fit); return fit\nm.least_squares=record\nout=m.solve_viscoplastic_hereditary_revision(d); coef=min(calls,key=lambda x:x.cost).x[2:]; print('fitted coefficients:',coef)\ntr,te=d['train'],d['test']; n=len(tr['lab_id']); panel=[n",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat >/tmp/validate_rate_conditioning.py <<'PY'\nimport importlib.util\nimport pickle\n\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('cand', root+'viscoplastic_overstress_hereditary_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\np, = pickle.load(open(root+'public_suc01_C_datasets.pkl', 'rb'))\nd, g = p['dataset'], p['gt']\ntime = d['eval_times']\nfits = []\nleast_squares = m.least_squares\n\ndef capture(*args, **kwargs):\n    fit = least_squares(*args, **kwargs)\n    fits.append(fit)\n    ret",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('viscoplastic_overstress_hereditary_solver.py')\ns = p.read_text()\nold = \"    curve, _ = _design(test_history, dt, time, x[n:], taus)\\n    return {\"\nnew = \"    curve, rate = _design(test_history, dt, time, x[n:], taus)\\n    prediction = test['strain_0'][:, None] + curve @ coef\\n    # Coupon imputation affects only the steady drift. For incomplete panels,\\n    # use the observed onset rate after subtracting the modeled contributions.\\n    missing = ~np.isfinite(test['coupon_features_raw']).al",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncd /holdout_task\npython3 - <<'PY'\nimport ast\nfrom pathlib import Path\n\npath = Path('viscoplastic_overstress_hereditary_solver.py')\nsource = path.read_text()\nmodule = ast.parse(source)\nsolver, = (node for node in module.body if isinstance(node, ast.FunctionDef) and node.name == 'solve_viscoplastic_hereditary_revision')\nassignment, = (node for node in solver.body if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call) and isinstance(node.value.func, ast.Name) and node.value.func.id == '_design' and isinstance(node.value.args[0], ast.Name) and nod",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat >/tmp/audit_viscoplastic.py <<'PY'\nimport runpy\nimport numpy as np\n\nv = runpy.run_path('/tmp/score_viscoplastic.py')\nm, d, g, out = (v[k] for k in ('m', 'd', 'g', 'o'))\ns, threshold = d['test'], d['yield_stress']\ndt, time = d['past_dt'], d['eval_times']\nheld = abs(s['stress_hold_0']) > threshold\npast = (abs(s['past_stress']) > threshold).any(axis=1)\nhistory = m._history(s, dt, threshold)\nnp.testing.assert_allclose(history[2], np.sign(s['stress_hold_0']) * np.maximum(abs(s['stress_hold_0']) - threshold, 0)**2)\nnp.testing.assert_allclose(history[3], s['st",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport runpy\nimport numpy as np\nv = runpy.run_path('/tmp/score_viscoplastic.py')\nm, d, g, full = (v[k] for k in ('m','d','g','o'))\ns = d['test']; dt = d['past_dt']; t = d['eval_times']; y = d['yield_stress']\nraw = m._history(s, dt, y)\nmask = (np.abs(raw[1]) > y) & (np.abs(raw[0]) > y).any(axis=1)\nx = np.zeros((mask.sum(), 4)); tau = full['estimated_taus']\npast, hold = raw[0][mask], raw[1][mask]\nfor hold_on, history_on in ((True, False), (False, True)):\n    split = {'past_stress': past if history_on else np.clip(past, -y, y), 'stress_hold"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__validate_rate_conditioning.py",
+      "primary_producer_container_path": "/tmp/validate_rate_conditioning.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+        "filename": "viscoplastic_overstress_hereditary_solver.py",
+        "bytes": 8669,
+        "sha256": "ab542c93c588898c0d1fc7d2f52efff30ea68f5bfebcf89e34779f7f066a49ed",
+        "content_addressed_ref": "content_addressed_blobs/ab542c93c588898c0d1fc7d2f52efff30ea68f5bfebcf89e34779f7f066a49ed.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoplastic_overstress_hereditary_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "5dba10373d18ed8c336966f6036a7a8b05f8001b6f9e1b253c7bdf4f0a7f0162",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat >/tmp/audit_viscoplastic.py <<'PY'\nimport runpy\nimport numpy as np\n\nv = runpy.run_path('/tmp/score_viscoplastic.py')\nm, d, g, out = (v[k] for k in ('m', 'd', 'g', 'o'))\ns, threshold = d['test'], d['y",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "5dba10373d18ed8c336966f6036a7a8b05f8001b6f9e1b253c7bdf4f0a7f0162",
+        "expected_candidate_sha256": "5dba10373d18ed8c336966f6036a7a8b05f8001b6f9e1b253c7bdf4f0a7f0162",
+        "computed_candidate_sha256": "5dba10373d18ed8c336966f6036a7a8b05f8001b6f9e1b253c7bdf4f0a7f0162",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+            "bytes": 8669
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_5dba1037"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": []
+  }
+}

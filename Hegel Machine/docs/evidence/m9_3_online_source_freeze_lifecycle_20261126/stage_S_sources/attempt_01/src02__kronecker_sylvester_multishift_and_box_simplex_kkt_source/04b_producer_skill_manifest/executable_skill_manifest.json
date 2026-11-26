@@ -1,0 +1,97 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_src02_kronecker_sylvester_box_simplex_kkt_source_318a8d601e13",
+    "source_hash": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+    "parent_ids": [],
+    "source_episode_id": "src02__kronecker_sylvester_multishift_and_box_simplex_kkt_source",
+    "task_id": "src02__kronecker_sylvester_multishift_and_box_simplex_kkt_source",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/src02_qp_stress.py",
+        "archived_relpath": "producers/tmp__src02_qp_stress.py",
+        "bytes": 2039,
+        "sha256": "7d318576e70811143790f9f950dcdbb358e7aad813f9b81bfcc896b13606e998"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && sed -n '1,240p' validate_public_schema.py && python3 -I - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_src02_studies.pkl','rb') as f: data=pickle.load(f)\nprint('versions',np.__version__,scipy.__version__)\nprint('container',type(data).__name__,len(data))\ndef show(x,depth=0):\n    if depth>3: return\n    if isinstance(x,dict):\n        for k,v in x.items():\n            if isinstance(v,np.ndarray): print(' '*depth,k,v.shape,v.dtype,(float(v.min()),float(v.max())) if v.size and v.dtype.kind in 'fiu' else '')\n            elif isinstance(v,(dict,list,tuple)): print(' '",
+      "cd /holdout_task && sed -n '48,180p' validate_public_schema.py && python3 -I - <<'PY'\nimport pickle, numpy as np\nwith open('public_src02_studies.pkl','rb') as f: d=pickle.load(f)\nprint('root:', type(d).__name__, list(d) if isinstance(d,dict) else len(d))\ndef walk(x, path='root'):\n    if isinstance(x,dict):\n        if 'source_modes' in x or 'w_opt' in x:\n            print(path, {k: np.shape(v) if isinstance(v,(list,np.ndarray)) else v if np.isscalar(v) else type(v).__name__ for k,v in x.items()})\n        else:\n            for k,v in x.items(): walk(v,f'{path}/{k}')\n    elif isinstance(x,(list,t",
+      "cd /holdout_task && cat > kronecker_box_simplex_kkt_source_solver.py <<'PY'\n\"\"\"Separable reaction-transport inversion on a capped simplex.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\nfrom scipy.sparse import csr_matrix, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _stencil(length, n, kappa, velocity, robin):\n    h = length / n\n    kappa = np.asarray(kappa, dtype=float)\n    velocity = np.asarray(velocity, dtype=float)\n    face = 2 * kappa[:-1] * kappa[1:] / (kappa[:-1] + kappa[1:]) / h**2\n    diag = np.abs(velocity) / h\n    diag[:-1] += face\n    diag[1:] += face\n   ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\n\nspec = importlib.util.spec_from_file_location('solver', 'kronecker_box_simplex_kkt_source_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_src02_studies.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nst, gt = item['study'], item['gt']\nrng = np.random.default_rng(293)\n\ndef axis(s, a):\n    n, h = s['n'+a], s['L'+a] / s['n'+a]\n    k, v, r = (s[t+'_'+a] for t in ('kappa', 'vel', 'robin')",
+      "cd /holdout_task && cat > /tmp/src02_qp_stress.py <<'PY'\nimport importlib.util, pickle, sys\nfrom collections import deque\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/kronecker_box_simplex_kkt_source_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('/holdout_task/public_src02_studies.pkl', 'rb') as f:\n    shape = pickle.load(f)[0]['study']['y_obs'].shape\nrng = np.random.default_rng(293)\nrng.normal(size=shape)\n\ndef trace(frame, event, arg):\n    if frame.f_code is s._solve_capped.__code__:\n        if event ==",
+      "cd /holdout_task && python3 -I - <<'PY'\nfrom pathlib import Path\np = Path('kronecker_box_simplex_kkt_source_solver.py')\ns = p.read_text()\na = '    bound = np.zeros(n, dtype=np.int8)\\n    for _ in range(40 * n):'\nb = '    bound = np.zeros(n, dtype=np.int8)\\n    bound_tol = 8 * np.finfo(float).eps * max(box, budget)\\n    for _ in range(40 * n):'\nassert a in s\ns = s.replace(a, b)\na = '            trial[j] = budget_free - trial[other].sum()\\n            delta = trial - w'\nb = '            trial[j] = budget_free - trial[other].sum()\\n            # At an integer-budget vertex, subtraction can put a ",
+      "cd /holdout_task && python3 -I - <<'PY'\nfrom pathlib import Path\np = Path('kronecker_box_simplex_kkt_source_solver.py')\ns = p.read_text()\na = '        g = design.T @ (design @ w - target)\\n        tol = 64 * np.finfo(float).eps * max(1.0, np.max(np.abs(g)))\\n'\nb = '''        g = design.T @ (design @ w - target)\n        eps = np.finfo(float).eps\n        tol = 64 * eps * max(1.0, np.max(np.abs(g)))\n        # A nearly zero residual can leave roundoff-sized reduced costs.\n        # Before releasing a bound on that evidence, check the actual tangent gap.\n        if free.size:\n            nu_face = ",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('kronecker_box_simplex_kkt_source_solver.py')\ns = p.read_text().replace('from scipy.linalg import eigh_tridiagonal', 'from scipy.linalg import eigh_tridiagonal, helmert')\na = s.index('            j = free[-1]')\nb = s.index('            # At an integer-budget vertex', a)\ns = s[:a] + '''            trial[free] += (budget_free - trial[free].sum()) / free.size\n            # Solve for the shortest correction on the face. Recomputing a\n            # minimum-norm weight vector can move along a flat direction and\n           ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\n\nspec = importlib.util.spec_from_file_location('solver', 'kronecker_box_simplex_kkt_source_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_src02_studies.pkl', 'rb') as f:\n    items = pickle.load(f)\n\ndef check(st, gt=None):\n    a, b = [solver._stencil(st['L'+k], st['n'+k], st['kappa_'+k], st['vel_'+k], st['robin_'+k]) for k in ('x', 'y')]\n    modes, shifts = st['source_modes'], ",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/kronecker_box_simplex_kkt_source_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_src02_studies.pkl', 'rb') as f:\n    studies = pickle.load(f)\nrng = np.random.default_rng(313)\nworst = np.zeros((3, 3))\nfor item in studies:\n    study = item['study']\n    baseline = solver.solve_kronecker_box_simplex_source(study)\n    w = baseline['weights']\n    fi"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__src02_qp_stress.py",
+      "primary_producer_container_path": "/tmp/src02_qp_stress.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/kronecker_box_simplex_kkt_source_solver.py",
+        "filename": "kronecker_box_simplex_kkt_source_solver.py",
+        "bytes": 7595,
+        "sha256": "e63eb6988a80bb23edb6046188dea55122800c00cb29e192c6d9efad2c4b7943",
+        "content_addressed_ref": "content_addressed_blobs/e63eb6988a80bb23edb6046188dea55122800c00cb29e192c6d9efad2c4b7943.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/kronecker_box_simplex_kkt_source_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/kronecker_box_simplex_kkt_source_solver.py')\ns",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "expected_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "computed_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kronecker_box_simplex_kkt_source_solver.py",
+            "bytes": 7595
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_318a8d60"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

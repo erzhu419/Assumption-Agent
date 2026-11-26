@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc02_T_multibudget_kronecker_kkt_transfer_1d6a3a51ee08",
+    "source_hash": "1d6a3a51ee08aef2e9e3b7112d884c1ec5b9e7c02e5328c5bdb20fcfca525bf8",
+    "parent_ids": [],
+    "source_episode_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "task_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport scipy\nwith open('/holdout_task/public_suc02_T_studies.pkl','rb') as f:\n    data=pickle.load(f)\nprint('scipy',scipy.__version__,'root',type(data).__name__)\ndef brief(v,depth=0):\n    if isinstance(v,dict) and depth<3:\n        for k,x in list(v.items())[:40]:\n            print('  '*depth,k,end=': ')\n            brief(x,depth+1)\n    elif isinstance(v,(list,tuple)):\n        print(type(v).__name__,len(v))\n        if v and depth<3: brief(v[0],depth+1)\n    elif isinstance(v,np.n",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling'; ls -lah /pretrain_task; sed -n '30,68p' /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.linalg import eigh\nitem=pickle.load(open('/holdout_task/public_suc02_T_studies.pkl','rb'))[0]; s,g=item['study'],item['gt']\nfor d,key in [('x','Ax'),('y','By')]:\n k,v,r=(s[f'{a}_{d}'] for a in ('kappa','vel','robin')); n=len(k); h=s[f'L{d}']/n; f=2*k[:-1]*k[1:]/(k[:-1]+k[1:])/h**2; p=np.maximum(v,0)/h; q=np.maximum(-v,0)/h; bi=r/h/(1+r*h/(2*k[[0,-1]]));",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -45\ncat > /holdout_task/multibudget_kronecker_kkt_transfer_solver.py <<'PY'\n\"\"\"Separable shifted transport and certified box-simplex budget optimization.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import cho_factor, cho_solve, eigh_tridiagonal\n\n\ndef _axis_modes(length, kappa, velocity, robin):\n    \"\"\"Return eigenvalues and left/right transforms in the physical grid basis.\"\"\"\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(velocity, dtype=float)\n    h = length / ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\nimport scipy.sparse as sp\nfrom scipy.sparse.linalg import splu\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',p+'multibudget_kronecker_kkt_transfer_solver.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nwith open(p+'public_suc02_T_studies.pkl','rb') as f: item=pickle.load(f)[0]\ns,g=item['study'],item['gt']\nt=time.perf_counter(); out=mod.solve_multibudget_kronecker_transfer(s); print('public solve seconds',time.perf_counter()-t)\nfor k in ('weig",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom pathlib import Path\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'multibudget_kronecker_kkt_transfer_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith (p/'public_suc02_T_studies.pkl').open('rb') as f:\n    items = pickle.load(f)\nprint('public studies:', len(items), '; input keys:', sorted(items[0]['study']))\nworst = dict(design=0., target=0., pde=0., envelope=0., weight=0., field=0., gap=0.)\nfor item in items:\n    s, gt",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nfrom pathlib import Path\nimport pickle\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'multibudget_kronecker_kkt_transfer_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith (p/'public_suc02_T_studies.pkl').open('rb') as f:\n    items = pickle.load(f)\nrng = np.random.default_rng(461)\nworst_w = worst_f = worst_gap = 0.0\nfor item in items:\n    s, gt = item['study'], item['gt']\n    count = len(s['sensor_ij'])\n    order = rng.permutation(count)\n "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+        "filename": "multibudget_kronecker_kkt_transfer_solver.py",
+        "bytes": 5683,
+        "sha256": "bfc7bfb326d958e9067431763c50ce202da8806472bab30c2ba8649bb40960a8",
+        "content_addressed_ref": "content_addressed_blobs/bfc7bfb326d958e9067431763c50ce202da8806472bab30c2ba8649bb40960a8.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1d6a3a51ee08aef2e9e3b7112d884c1ec5b9e7c02e5328c5bdb20fcfca525bf8",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nfrom pathlib import Path\nimport pickle\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'multibudget_kronecker_kkt_transf",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1d6a3a51ee08aef2e9e3b7112d884c1ec5b9e7c02e5328c5bdb20fcfca525bf8",
+        "expected_candidate_sha256": "1d6a3a51ee08aef2e9e3b7112d884c1ec5b9e7c02e5328c5bdb20fcfca525bf8",
+        "computed_candidate_sha256": "1d6a3a51ee08aef2e9e3b7112d884c1ec5b9e7c02e5328c5bdb20fcfca525bf8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+            "bytes": 5683
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1d6a3a51"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

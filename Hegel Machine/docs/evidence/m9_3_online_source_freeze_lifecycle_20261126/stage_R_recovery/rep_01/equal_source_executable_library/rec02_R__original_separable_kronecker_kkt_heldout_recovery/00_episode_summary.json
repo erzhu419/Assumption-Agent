@@ -1,0 +1,313 @@
+{
+  "task_id": "rec02_R__original_separable_kronecker_kkt_heldout_recovery",
+  "short_name": "rec02_R_original_separable_kronecker_recovery",
+  "benchmark": "Hegel-M93-Lifecycle",
+  "wave": "m93_stage_R_recovery",
+  "scientific_domain": "Original-Condition Return Check: Held-Out Pure Separable 2D Kronecker Sylvester & Box-Simplex KKT",
+  "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 13,
+  "max_turns": 18,
+  "final_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+  "validated_incumbent_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', 'kronecker_box_simplex_kkt_recovery_solver.py')\nsolver = impo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+        "expected_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+        "computed_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kronecker_box_simplex_kkt_recovery_solver.py",
+            "bytes": 4970
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1b475b00"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t04",
+      "turn_idx": 4,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "stencil_convention",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "Arithmetic face diffusion on an endpoint-inclusive grid reproduces the benchmark stencil.",
+      "empirical_witness": "Both axes fit harmonic, not arithmetic, face coefficients: the harmonic scaling is (n/(n-1))² and upwind scaling is n/(n-1), with off-diagonal residuals at roundoff.",
+      "causal_blanket_diagnosis": "The initial stencil used the wrong interface mean and grid spacing; nuisance profiling already matches independently.",
+      "sublated_pivot": "Keep the separable Sylvester model and use a cell-centered harmonic-face stencil with the benchmark Robin rule.",
+      "pending_resolution_proposed_at_turn": 6,
+      "agent_claimed_probe": {
+        "turn": 6,
+        "command_preview": "set -e\ncd /holdout_task\ncat > kronecker_box_simplex_kkt_recovery_solver.py <<'PY'\n\"\"\"Recover source weights for a separable shifted transport model.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eig",
+        "stdout_preview": "{\"schema_valid\": true, \"errors\": []}\n0 weight max abs 4.9960036108132044e-15 field rel L2 1.2675599519538754e-14 reference objective minus reported bound 3.2612801348363973e-16\n"
+      },
+      "probe_support_status": "supported_on_host_public_probe",
+      "resolved_at_turn": 6,
+      "resolved_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_rec02_R_studies.pkl": "c8ab074d4d1141f83d4ec729024dbead52d647b688bec8894bde4585c1d673c4",
+          "/holdout_task/validate_public_schema.py": "43a29b4f9f8997dca34c05c05097146ad329817e1b315c0ed7daa67c2a92edd4"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "resolution_witness_scope_verified": "public_probe_scope"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 6,
+      "verified_turn": 6,
+      "resolved_nogood_ids": [
+        "ng_t04"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_rec02_R_studies.pkl": "c8ab074d4d1141f83d4ec729024dbead52d647b688bec8894bde4585c1d673c4",
+          "/holdout_task/validate_public_schema.py": "43a29b4f9f8997dca34c05c05097146ad329817e1b315c0ed7daa67c2a92edd4"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_13_split_tensor_reaction_inversion",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_06_robust_network_assimilation",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_rec02_R_original_separable_kronecker_recovery_1b475b008252",
+    "binding_status": "missing_producer",
+    "full_producer_count": 0,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 3,
+  "skill_activations": [
+    {
+      "ts": 1795683997.819,
+      "module": "autogenous_separable_transport_inversion",
+      "function": "cell_transport",
+      "status": "completed",
+      "caller_role": "agent",
+      "duration_ms": 0.222,
+      "n_args": 4,
+      "kwarg_keys": [],
+      "call_count": 1
+    },
+    {
+      "ts": 1795683997.82,
+      "module": "autogenous_separable_transport_inversion",
+      "function": "cell_transport",
+      "status": "completed",
+      "caller_role": "agent",
+      "duration_ms": 0.062,
+      "n_args": 4,
+      "kwarg_keys": [],
+      "call_count": 1
+    },
+    {
+      "ts": 1795683997.829,
+      "module": "autogenous_separable_transport_inversion",
+      "function": "shifted_transport_fields",
+      "status": "completed",
+      "caller_role": "agent",
+      "duration_ms": 9.731,
+      "n_args": 4,
+      "kwarg_keys": [],
+      "call_count": 1
+    }
+  ],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 8,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 8,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 2,
+    "search_skill_query_count": 2,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 3,
+    "describe_skill_queries": [
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance",
+      "autogenous_tensor_reaction_inversion.fit_box_simplex"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": true,
+    "dynamic_calls_by_caller_role": {
+      "agent": 3
+    },
+    "dynamic_skill_activation_count": 3,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [
+      "autogenous_separable_transport_inversion"
+    ],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [
+      "autogenous_separable_transport_inversion.cell_transport",
+      "autogenous_separable_transport_inversion.shifted_transport_fields"
+    ],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "1b475b00825249f1a92f5b02ec94d481839485ef4dd116ae766be91cb9d225f5",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_kronecker_box_simplex_recovery"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "kronecker_box_simplex_kkt_recovery_solver.py",
+          "final_file_sha256": "0855918115f05992cd5e7e6988540f9caa57610bd321f7d0785c0e34824dc836",
+          "public_entrypoints": [
+            "solve_kronecker_box_simplex_recovery"
+          ],
+          "effective_entrypoints": [
+            "solve_kronecker_box_simplex_recovery"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": true
+  },
+  "saved_artifact_snapshots": [
+    "kronecker_box_simplex_kkt_recovery_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_rec02_R_studies.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_rec02_R_studies.pkl": "c8ab074d4d1141f83d4ec729024dbead52d647b688bec8894bde4585c1d673c4",
+      "/holdout_task/validate_public_schema.py": "43a29b4f9f8997dca34c05c05097146ad329817e1b315c0ed7daa67c2a92edd4"
+    },
+    "shared_public_schema_validator_present": true
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5318,
+    "initial_user_payload_chars": 1817,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 13495
+  },
+  "provider_attempt_accounting": {
+    "logical_agent_decision_calls": 13,
+    "total_provider_attempts": 13,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete"
+  },
+  "decision_count": 32,
+  "prompt_tokens": 317210,
+  "cached_tokens": 96896,
+  "completion_tokens": 11286,
+  "total_tokens": 328496,
+  "token_cost_proxy": 255824,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 255824,
+  "wall_ms": 407453.16,
+  "provenance_verified": true,
+  "terminal_record_sha256": "c2d23129c451610d9c8d35397b8e1912b1a2fe4b38123a78e797b515e1f06b01"
+}

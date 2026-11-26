@@ -1,0 +1,146 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc01_T_preloaded_hereditary_secant_hazard_a06b0736fd2b",
+    "source_hash": "a06b0736fd2b88b7ae0621c6c05baf1174a5a251c3845c1a5919ad4bd1b53f5b",
+    "parent_ids": [],
+    "source_episode_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "task_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_calibration.py",
+        "archived_relpath": "producers/tmp__audit_calibration.py",
+        "bytes": 2354,
+        "sha256": "f0e23deeff991469e9c5b359c3962df19ec3a7476b235c9b1361b564d5aa35e4"
+      },
+      {
+        "container_path": "/tmp/audit_preloaded.py",
+        "archived_relpath": "producers/tmp__audit_preloaded.py",
+        "bytes": 3342,
+        "sha256": "4b69814ed02e87bf84ce6cbba412fc0352ad6caa9fff93fcec32ca08bf2a7ad2"
+      },
+      {
+        "container_path": "/tmp/preloaded_baseline.py",
+        "archived_relpath": "producers/tmp__preloaded_baseline.py",
+        "bytes": 4612,
+        "sha256": "0a449742d42beb89a903b2eb7335900d64be0c63da693eba95c9db6a2940412c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && ls -lah && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference-panel alignment imputation Cauchy IRLS' ; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('public_suc01_T_datasets.pkl','rb'))\ndef view(x,k='',d=0):\n if isinstance(x,dict):\n  print(k,'dict',list(x));\n  for a,b in x.items(): view(b,k+'/'+str(a),d+1)\n elif isinstance(x,(tuple,list)) and x and isinstance(x[0],dict):\n  print(k,type(x).__name__,len(x)); view(x[0],k+'/0',d+1)\n else:\n  a=np.asarray(x); desc=''\n  ",
+      "cd /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.align_reference_panel; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.balanced_cell_weights; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'hereditary relaxation exponential hold variable projection'; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc01_T_datasets",
+      "grep -nE '^def |hold|derivative|theta|expm1' /tmp/hegel_wormhole_skills/autogenous_{hereditary_spectrum_identification,prim_exponential_memory}.py; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc01_T_datasets.pkl','rb')); print('cases',len(p))\nfor k,c in enumerate(p):\n d=c['dataset']; print(k,list(d), {key:np.asarray(value).tolist() for key,value in d.items() if not isinstance(value,dict)},list(d['train']),list(d['test'])); print('train/test sizes',*(len(d[s]['lab_id']) for s in ('train','test')))\nPY",
+      "sed -n '1,80p' /tmp/hegel_wormhole_skills/autogenous_hereditary_spectrum_identification.py; sed -n '46,64p' /tmp/hegel_wormhole_skills/autogenous_prim_exponential_memory.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_exponential_memory.hereditary_design | head -55; cd /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]['dataset']\nfor key in ['train','test']:\n s=p[key]; print(key)\n for lab in np.unique(s['lab_id']):\n  m=s['lab_id']==lab; r=s['ref_coupons'][m]; c=s['coupon_features_raw'][m]; print(l",
+      "sed -n '66,78p' /tmp/hegel_wormhole_skills/autogenous_hereditary_spectrum_identification.py; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\np=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]; d=p['dataset']; s=d['train']; dt=d['past_dt']; t=d['eval_times']; y=s['strain_curves_obs']-s['strain_0'][:,None]; r=s['instant_rate_obs']; h=s['stress_hold_0']; x=s['coupon_features_raw'].copy()\nfor lab in np.unique(s['lab_id']):\n m=s['lab_id']==lab; c=s['ref_coupons'][m]; x[m]=(x[m]-np.median(np.nanmean(c,axis=0)))/n",
+      "cd /holdout_task && cat > preloaded_hereditary_secant_hazard_solver.py <<'PY'\n\"\"\"Fit and transfer a two-branch hereditary creep law.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _cell_weights(lab, stratum):\n    _, cell, count = np.unique(np.column_stack((lab, stratum)), axis=0,\n                               return_inverse=True, return_counts=True)\n    return len(lab) / (len(count) * count[cell.ravel()])\n\n\ndef _coupons(train, test):\n    lab = np.r_[train['lab_id'], test['lab_id']]\n    ref = np.concatenate((train['ref_coupons'], test['ref_coupons']))\n    raw = np.concate",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','preloaded_hereditary_secant_hazard_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; q=d['test']; o=s.solve_preloaded_hereditary_transfer(d); t=d['eval_times']; missing=~np.isfinite(q['coupon_features_raw']).all(axis=1)\nassert np.allclose(o['secant_compliance'],(o['predicted_strain'][:,-1]-q['strain_0'])/np.maximum(abs(q['s",
+      "cat > /tmp/audit_preloaded.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nP='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',P+'preloaded_hereditary_secant_hazard_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nd=pickle.load(open(P+'public_suc01_T_datasets.pkl','rb'))[0]['dataset']; a=d['train']; t=d['eval_times']; dt=d['past_dt']; lab=a['lab_id']; st=a['stratum']; n=len(lab)\n\ndef subsets(mask): return {k:v[mask] for k,v in a.items()}\ndef calibrate(tr,va,kind):\n    if kind=='baseline': re",
+      "cat > /tmp/audit_calibration.py <<'PY'\nimport runpy\nfrom scipy.optimize import least_squares\np=runpy.run_path('/tmp/audit_preloaded.py',run_name='preload_audit') if False else {}\nimport importlib.util,pickle,numpy as np\npath='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',path+'preloaded_hereditary_secant_hazard_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nd=pickle.load(open(path+'public_suc01_T_datasets.pkl','rb'))[0]['dataset']; a=d['train']; lab=a['lab_id']; st=a['stratum']; times=d['eval_times']; dt=d['past_dt']; n=len(lab)\ndef spli",
+      "set -e\ncd /holdout_task\ncp preloaded_hereditary_secant_hazard_solver.py /tmp/preloaded_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('preloaded_hereditary_secant_hazard_solver.py')\ns = p.read_text()\nanchor = 'def _crossings(times, initial, curves, critical):'\naddition = '''def _correct_lab_drift(train, test, dt, times, tau, amplitude, beta,\n                       x, xt, complete):\n    # Refine the reference-panel offset and gain using late training curves.\n    # An unseen lab keeps its reference-only estimate.\n    curve, _ = _branches(train, dt, times, tau)\n    late = slice(le"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__preloaded_baseline.py",
+      "primary_producer_container_path": "/tmp/preloaded_baseline.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+        "filename": "preloaded_hereditary_secant_hazard_solver.py",
+        "bytes": 5858,
+        "sha256": "b6ea4a6827751e0ce22425dd5bb39bb41b6ac20bcb123b4d0a42fb606ada206e",
+        "content_addressed_ref": "content_addressed_blobs/b6ea4a6827751e0ce22425dd5bb39bb41b6ac20bcb123b4d0a42fb606ada206e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/preloaded_hereditary_secant_hazard_solver.py"
+    ],
+    "exported_pure_functions": [
+      "terms",
+      "_cell_weights",
+      "_coupons",
+      "_branches",
+      "_fit",
+      "_crossings",
+      "solve_preloaded_hereditary_transfer"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a06b0736fd2b88b7ae0621c6c05baf1174a5a251c3845c1a5919ad4bd1b53f5b",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\ncp preloaded_hereditary_secant_hazard_solver.py /tmp/preloaded_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('preloaded_hereditary_secant_hazard_solver.py')\ns = p.read_text()\nanchor = 'def _crossings",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a06b0736fd2b88b7ae0621c6c05baf1174a5a251c3845c1a5919ad4bd1b53f5b",
+        "expected_candidate_sha256": "a06b0736fd2b88b7ae0621c6c05baf1174a5a251c3845c1a5919ad4bd1b53f5b",
+        "computed_candidate_sha256": "a06b0736fd2b88b7ae0621c6c05baf1174a5a251c3845c1a5919ad4bd1b53f5b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+            "bytes": 5858
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a06b0736"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "terms",
+        "code": "def terms(x):\n    u = x[:, 1:]\n    (i, j) = np.triu_indices(u.shape[1], 1)\n    return np.column_stack((u * u, u[:, i] * u[:, j], u / (1 + 0.25 * u * u)))"
+      },
+      {
+        "name": "_cell_weights",
+        "code": "def _cell_weights(lab, stratum):\n    (_, cell, count) = np.unique(np.column_stack((lab, stratum)), axis=0, return_inverse=True, return_counts=True)\n    return len(lab) / (len(count) * count[cell.ravel()])"
+      },
+      {
+        "name": "_coupons",
+        "code": "def _coupons(train, test):\n    lab = np.r_[train['lab_id'], test['lab_id']]\n    ref = np.concatenate((train['ref_coupons'], test['ref_coupons']))\n    raw = np.concatenate((train['coupon_features_raw'], test['coupon_features_raw'])).astype(float)\n    for label in np.unique(lab):\n        mask = lab == label\n        panel = ref[mask]\n        panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n        offset = np.median(np.nanmean(panel, axis=0))\n        gain = np.median(np.nanstd(panel, axis=0))\n        raw[mask] = (raw[mask] - offset) / gain\n    n = len(train['lab_id'])\n    w = _cell_weights(train['lab_id'], train['stratum'])\n    valid = np.isfinite(raw)\n    observed = valid[:n]\n    mass = w @ observed\n    total = w @ np.where(observed, raw[:n], 0.0)\n    fill = np.divide(total, mass, out=np.zeros_like(total), where=mass > 0)\n    features = np.column_stack((np.ones(len(raw)), np.where(valid, raw, fill)))\n    complete = valid.all(axis=1)\n    return (features[:n], features[n:], complete[:n], complete[n:], w)"
+      },
+      {
+        "name": "_branches",
+        "code": "def _branches(split, dt, times, tau):\n    tail = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    kernel = -np.expm1(-dt[:, None] / tau) * np.exp(-tail[:, None] / tau)\n    end = split['past_stress'] @ kernel + split['initial_memory_states'] * np.exp(-sum(dt) / tau)\n    gap = split['stress_hold_0'][:, None] - end\n    return (gap[:, None, :] * -np.expm1(-times[:, None] / tau), gap / tau)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(train, dt, t, x, complete, weight):\n    from scipy.optimize import least_squares\n    y = train['strain_curves_obs'] - train['strain_0'][:, None]\n    rate = train['instant_rate_obs']\n    w = np.sqrt(weight)\n    (curve_scale, rate_scale) = (0.018, 0.014)\n    contrast_scale = np.hypot(curve_scale, rate_scale * t)\n\n    def unpack(q):\n        fast = q[0]\n        return np.array([fast, fast + q[1] * (9.0 - fast)])\n\n    def residual(q):\n        tau = unpack(q)\n        (curve, slope) = _branches(train, dt, t, tau)\n        (branch_curve, branch_rate) = (curve @ q[2:4], slope @ q[2:4])\n        drift = x @ q[4:]\n        a = (branch_curve[complete] + drift[complete, None] * t - y[complete]) / curve_scale\n        b = (branch_rate[complete] + drift[complete] - rate[complete]) / rate_scale\n        m = ~complete\n        c = (branch_curve[m] + (rate[m] - branch_rate[m])[:, None] * t - y[m]) / contrast_scale\n        return np.r_[(a * w[complete, None]).ravel(), b * w[complete], (c * w[m, None]).ravel()]\n    bounds = ([0.2, 1e-06, -np.inf, -np.inf] + [-np.inf] * x.shape[1], [9.0 - 1e-05, 1.0, np.inf, np.inf] + [np.inf] * x.shape[1])\n    start = np.r_[0.55, (3.5 - 0.55) / (9.0 - 0.55), 0.7, 0.5, np.zeros(x.shape[1])]\n    ans = least_squares(residual, start, bounds=bounds, loss='cauchy', f_scale=2.0, max_nfev=160)\n    return (unpack(ans.x), ans.x[2:4], ans.x[4:])"
+      },
+      {
+        "name": "_crossings",
+        "code": "def _crossings(times, initial, curves, critical):\n    out = np.full(len(initial), times[-1], dtype=float)\n    out[initial >= critical] = 0.0\n    hit = curves >= critical[:, None]\n    rows = np.flatnonzero((initial < critical) & hit.any(axis=1))\n    j = hit[rows].argmax(axis=1)\n    y0 = np.column_stack((initial, curves))[rows, j]\n    t0 = np.r_[0.0, times][j]\n    out[rows] = t0 + (times[j] - t0) * (critical[rows] - y0) / (curves[rows, j] - y0)\n    return out"
+      },
+      {
+        "name": "solve_preloaded_hereditary_transfer",
+        "code": "def solve_preloaded_hereditary_transfer(dataset: dict) -> dict:\n    (train, test) = (dataset['train'], dataset['test'])\n    (dt, times) = (np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times']))\n    (x, xt, complete, complete_test, w) = _coupons(train, test)\n    (tau, amplitude, drift_coef) = _fit(train, dt, times, x, complete, w)\n    (curve, rate) = _branches(test, dt, times, tau)\n    rate_drift = test['instant_rate_obs'] - rate @ amplitude\n    coupon_drift = xt @ drift_coef\n    drift = np.where(complete_test, 0.75 * coupon_drift + 0.25 * rate_drift, rate_drift)\n    initial = test['strain_0']\n    prediction = initial[:, None] + curve @ amplitude + drift[:, None] * times\n    return {'estimated_taus': tau, 'predicted_strain': prediction, 'secant_compliance': (prediction[:, -1] - initial) / np.maximum(np.abs(test['stress_hold_0']), 0.5), 'hazard_crossing_times': _crossings(times, initial, prediction, test['critical_strain'])}"
+      }
+    ]
+  }
+}

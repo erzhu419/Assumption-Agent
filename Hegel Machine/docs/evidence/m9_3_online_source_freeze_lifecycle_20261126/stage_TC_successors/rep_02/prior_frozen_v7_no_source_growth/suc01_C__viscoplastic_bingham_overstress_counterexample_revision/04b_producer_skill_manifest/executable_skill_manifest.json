@@ -1,0 +1,173 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc01_C_viscoplastic_overstress_counterexample_2d8aaf67ccf5",
+    "source_hash": "2d8aaf67ccf5d1fc4f5a7bd86fdc9b9f77734b382851816205b623625f02d765",
+    "parent_ids": [],
+    "source_episode_id": "suc01_C__viscoplastic_bingham_overstress_counterexample_revision",
+    "task_id": "suc01_C__viscoplastic_bingham_overstress_counterexample_revision",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_vp.py",
+        "archived_relpath": "producers/tmp__audit_vp.py",
+        "bytes": 3052,
+        "sha256": "16542d89d316010bb328544c4319cc8cf113e83b88e8d2f5034f4ff5a9526651"
+      },
+      {
+        "container_path": "/tmp/stress_joint.py",
+        "archived_relpath": "producers/tmp__stress_joint.py",
+        "bytes": 2994,
+        "sha256": "85e5b7263031d8f1cd5a51eb0e82a7cf0390a5d61ce944b390e5cf356f8092cf"
+      },
+      {
+        "container_path": "/tmp/stress_vp.py",
+        "archived_relpath": "producers/tmp__stress_vp.py",
+        "bytes": 3036,
+        "sha256": "09f4ebd87e828432a87697cdac966a069464da0668e0d6b4f86345df03d3c011"
+      },
+      {
+        "container_path": "/tmp/verify_joint.py",
+        "archived_relpath": "producers/tmp__verify_joint.py",
+        "bytes": 1238,
+        "sha256": "27c3546425f7867482484c26a57fe0dc83de9c1cf1834b5ca740880b2a8a3578"
+      },
+      {
+        "container_path": "/tmp/verify_vp.py",
+        "archived_relpath": "producers/tmp__verify_vp.py",
+        "bytes": 1280,
+        "sha256": "5256257ceabdefefd12954b653ae4cc6baae065f8b744181550980154e570444"
+      },
+      {
+        "container_path": "/tmp/vp_baseline.py",
+        "archived_relpath": "producers/tmp__vp_baseline.py",
+        "bytes": 5486,
+        "sha256": "7e17ff1a6d3c4862763cc1a44838b4bfffa78df23e2533480c3b524caee66989"
+      },
+      {
+        "container_path": "/tmp/vp_joint.py",
+        "archived_relpath": "producers/tmp__vp_joint.py",
+        "bytes": 8331,
+        "sha256": "f7a8f0ef7709860c039c6163231ed6e73793f6f8a58f09a7254e1a37b5f68e9a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /pretrain_task; cat /holdout_task/validate_public_schema.py; python3 /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference-panel alignment cell-balanced imputation Cauchy robust IRLS'; python3 - <<'PY'\nimport pickle, numpy as np\np=pickle.load(open('/holdout_task/public_suc01_C_datasets.pkl','rb'))\ndef show(x,d=0):\n if d>5:return\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*d,k,end=': '); show(v,d+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x),len(x));\n  if len(x):show(x[0]",
+      "export PYTHONPATH=/tmp; python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.align_reference_panel; python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.balanced_cell_weights; python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights; python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.fit_anchored_relaxation; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_suc01_C_datasets.pkl','rb'))[0];d,g=p['dataset'],p['",
+      "cat > /holdout_task/viscoplastic_overstress_hereditary_solver.py <<'PY'\n\"\"\"Two-branch hereditary response with signed overstress and work softening.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef _aligned_coupons(train, test):\n    \"\"\"Calibrate shared lab transforms on the reference panel, then fill by cell balance.\"\"\"\n    lab = np.concatenate([train['lab_id'], test['lab_id']])\n    stratum = np.concatenate([train['stratum'], test['stratum']])\n    x = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']])\n    ref = np.vstack([train['ref_coupons'], test['ref_coup",
+      "cat > /tmp/stress_vp.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/viscoplastic_overstress_hereditary_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\np = pickle.load(open('/holdout_task/public_suc01_C_datasets.pkl', 'rb'))[0]\n\ndef check(d, clean, tau, vp, label):\n    out = m.solve_viscoplastic_hereditary_revision(d)\n    e = np.abs(out['predicted_strain'] - clean)\n    q, y = d['test'], d['yield_stress']\n    hold = np.abs(q['stress_hold_0']) > y\n    hist = np.an",
+      "cp /holdout_task/viscoplastic_overstress_hereditary_solver.py /tmp/vp_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/vp_baseline.py'); s=p.read_text()\npos=s.index('\\ndef solve_viscoplastic_hereditary_revision')\ns=s[:pos]+'''\ndef _refine_memory(history, dt, t, train, x, tau, slopes, drift_coeff):\n    \"\"\"Jointly fit the hereditary branches and a robust coupon drift prior.\"\"\"\n    D = np.column_stack((np.ones(len(x)), x, history[2]))\n    missing = ~np.isfinite(train['coupon_features_raw']).all(axis=1)\n    r = (slopes - D @ drift_coeff)[~missing]\n    spread = max(.008, 1.4826 * ",
+      "set -e\ncp /tmp/vp_joint.py /holdout_task/viscoplastic_overstress_hereditary_solver.py\nexport OPENBLAS_NUM_THREADS=1\npython3 -I /holdout_task/validate_public_schema.py\npython3 -I /tmp/verify_vp.py\npython3 -I /tmp/stress_vp.py",
+      "set -e\ncat > /tmp/audit_vp.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/viscoplastic_overstress_hereditary_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\nfor p in pickle.load(open('/holdout_task/public_suc01_C_datasets.pkl', 'rb')):\n    d, g = p['dataset'], p['gt']\n    tr, te = d['train'], d['test']\n    t, dt, tau, sy = d['eval_times'], d['past_dt'], g['taus'], d['yield_stress']\n    h, s = te['past_stress'], te['stress_hold_0']\n    hold, hist = abs(s) > sy,",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/viscoplastic_overstress_hereditary_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_suc01_C_datasets.pkl', 'rb') as f:\n    panels = pickle.load(f)\noriginal_history = m._history\ndef linear_history(*args):\n    h, s, ov, work = original_history(*args)\n    return h, s, np.zeros_like(ov), np.zeros_like(work)\nfor panel in panels:\n    d, g = panel['data"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__vp_joint.py",
+      "primary_producer_container_path": "/tmp/vp_joint.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+        "filename": "viscoplastic_overstress_hereditary_solver.py",
+        "bytes": 8331,
+        "sha256": "f7a8f0ef7709860c039c6163231ed6e73793f6f8a58f09a7254e1a37b5f68e9a",
+        "content_addressed_ref": "content_addressed_blobs/f7a8f0ef7709860c039c6163231ed6e73793f6f8a58f09a7254e1a37b5f68e9a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoplastic_overstress_hereditary_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_aligned_coupons",
+      "_history",
+      "_branches",
+      "_project",
+      "_fit_memory",
+      "_fit_drift",
+      "solve_viscoplastic_hereditary_revision",
+      "_refine_memory"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2d8aaf67ccf5d1fc4f5a7bd86fdc9b9f77734b382851816205b623625f02d765",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\npath = '/holdout_task/viscoplastic_overstress_hereditary_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = i",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2d8aaf67ccf5d1fc4f5a7bd86fdc9b9f77734b382851816205b623625f02d765",
+        "expected_candidate_sha256": "2d8aaf67ccf5d1fc4f5a7bd86fdc9b9f77734b382851816205b623625f02d765",
+        "computed_candidate_sha256": "2d8aaf67ccf5d1fc4f5a7bd86fdc9b9f77734b382851816205b623625f02d765",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+            "bytes": 8331
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_2d8aaf67"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_aligned_coupons",
+        "code": "def _aligned_coupons(train, test):\n    \"\"\"Calibrate shared lab transforms on the reference panel, then fill by cell balance.\"\"\"\n    lab = np.concatenate([train['lab_id'], test['lab_id']])\n    stratum = np.concatenate([train['stratum'], test['stratum']])\n    x = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']])\n    ref = np.vstack([train['ref_coupons'], test['ref_coupons']])\n    for group in np.unique(lab):\n        mask = lab == group\n        panel = ref[mask]\n        center = np.nanmedian(np.nanmean(panel, axis=0))\n        scale = np.nanmedian(np.nanstd(panel, axis=0))\n        x[mask] = (x[mask] - center) / scale\n    n = len(train['lab_id'])\n    (_, cell, count) = np.unique(np.column_stack((lab[:n], stratum[:n])), axis=0, return_inverse=True, return_counts=True)\n    weights = (1.0 / count[cell])[:, None]\n    observed = np.isfinite(x[:n])\n    means = np.sum(weights * np.where(observed, x[:n], 0), axis=0) / np.sum(weights * observed, axis=0)\n    x = np.where(np.isfinite(x), x, means)\n    return (x[:n], x[n:])"
+      },
+      {
+        "name": "_history",
+        "code": "def _history(split, dt, threshold):\n    h = np.asarray(split['past_stress'], dtype=float)\n    s = np.asarray(split['stress_hold_0'], dtype=float)\n    ov = np.sign(s) * np.maximum(np.abs(s) - threshold, 0.0) ** 2\n    work = np.maximum(np.abs(h) - threshold, 0.0) ** 2 @ dt * s\n    return (h, s, ov, work)"
+      },
+      {
+        "name": "_branches",
+        "code": "def _branches(history, dt, t, tau):\n    (h, s, _, work) = history\n    decay = np.exp(-dt[:, None] / tau)\n    arrival = -np.expm1(-dt[:, None] / tau)\n    z = np.zeros((len(s), 2))\n    for j in range(len(dt)):\n        z = z * decay[j] + h[:, j, None] * arrival[j]\n    a = np.column_stack((s[:, None] - z, work))\n    phi = -np.expm1(-t[:, None] / tau)\n    phi = np.vstack((phi, 1.0 / tau))\n    return a[:, None, :] * phi[None, :, [0, 1, 0]]"
+      },
+      {
+        "name": "_project",
+        "code": "def _project(A, y, b, w):\n    \"\"\"Weighted least squares with a separate linear drift for every sample.\"\"\"\n    wb = w * b\n    norm = wb @ b\n    a_slopes = np.einsum('nkp,nk->np', A, wb) / norm[:, None]\n    y_slopes = np.sum(y * wb, axis=1) / norm\n    Ap = A - b[None, :, None] * a_slopes[:, None, :]\n    yp = y - b * y_slopes[:, None]\n    gram = np.einsum('nki,nkj,nk->ij', Ap, Ap, w)\n    rhs = np.einsum('nki,nk,nk->i', Ap, yp, w)\n    coeff = np.linalg.lstsq(gram, rhs, rcond=None)[0]\n    drift = y_slopes - a_slopes @ coeff\n    return (coeff, drift, yp - Ap @ coeff)"
+      },
+      {
+        "name": "_fit_memory",
+        "code": "def _fit_memory(history, dt, t, train):\n    from scipy.optimize import minimize\n    y = np.column_stack((train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs']))\n    scale = np.r_[np.full(len(t), 0.026), 0.016]\n    b = np.r_[t, 1.0] / scale\n    y = y / scale\n\n    def profile(log_tau, full=False):\n        A = _branches(history, dt, t, np.exp(log_tau)) / scale[None, :, None]\n        w = np.ones_like(y)\n        for _ in range(24):\n            (coeff, drift, resid) = _project(A, y, b, w)\n            new_w = 1.0 / (1.0 + resid ** 2)\n            if np.max(np.abs(w - new_w)) < 1e-05:\n                break\n            w = new_w\n        if full:\n            return (coeff, drift)\n        return np.mean(np.log1p(resid ** 2))\n    bounds = [(np.log(0.2), np.log(8.0))] * 2\n    ordered = {'type': 'ineq', 'fun': lambda u: u[1] - u[0] - 1e-06}\n    fits = [minimize(profile, np.log(start), method='SLSQP', bounds=bounds, constraints=ordered, options={'ftol': 1e-10, 'maxiter': 70}) for start in ((0.45, 3.0), (1.0, 5.5))]\n    log_tau = min(fits, key=lambda f: f.fun).x\n    (coeff, drift) = profile(log_tau, full=True)\n    return (np.exp(log_tau), coeff, drift)"
+      },
+      {
+        "name": "_fit_drift",
+        "code": "def _fit_drift(x, ov, slopes):\n    A = np.column_stack((np.ones(len(x)), x, ov))\n    w = np.ones(len(x))\n    for step in range(20):\n        root = np.sqrt(w)\n        coef = np.linalg.lstsq(A * root[:, None], slopes * root, rcond=None)[0]\n        r = slopes - A @ coef\n        if step == 0:\n            scale = max(0.014, 1.4826 * np.median(np.abs(r - np.median(r))))\n        w = 1.0 / (1.0 + (r / (2 * scale)) ** 2)\n    return (coef, scale)"
+      },
+      {
+        "name": "solve_viscoplastic_hereditary_revision",
+        "code": "def solve_viscoplastic_hereditary_revision(dataset: dict) -> dict:\n    (train, test) = (dataset['train'], dataset['test'])\n    dt = np.asarray(dataset['past_dt'], dtype=float)\n    t = np.asarray(dataset['eval_times'], dtype=float)\n    yld = float(dataset['yield_stress'])\n    (train_h, test_h) = (_history(split, dt, yld) for split in (train, test))\n    (train_x, test_x) = _aligned_coupons(train, test)\n    (tau, coeff, slopes) = _fit_memory(train_h, dt, t, train)\n    (drift_coeff, scatter) = _fit_drift(train_x, train_h[2], slopes)\n    response = _branches(test_h, dt, t, tau) @ coeff\n    coupon_drift = np.column_stack((np.ones(len(test_x)), test_x, test_h[2])) @ drift_coeff\n    rate_drift = test['instant_rate_obs'] - response[:, -1]\n    correction = coupon_drift - rate_drift\n    fraction = 0.01 ** 2 / (0.01 ** 2 + scatter ** 2)\n    drift = rate_drift + fraction * np.clip(correction, -2.5 * scatter, 2.5 * scatter)\n    return {'estimated_taus': tau, 'viscoplastic_weights': np.array([drift_coeff[-1], coeff[-1]]), 'predicted_strain': test['strain_0'][:, None] + response[:, :-1] + drift[:, None] * t}"
+      },
+      {
+        "name": "_refine_memory",
+        "code": "def _refine_memory(history, dt, t, train, x, tau, slopes, drift_coeff):\n    \"\"\"Jointly fit the hereditary branches and a robust coupon drift prior.\"\"\"\n    from scipy.optimize import minimize\n    D = np.column_stack((np.ones(len(x)), x, history[2]))\n    missing = ~np.isfinite(train['coupon_features_raw']).all(axis=1)\n    r = (slopes - D @ drift_coeff)[~missing]\n    spread = max(0.008, 1.4826 * np.median(np.abs(r - np.median(r))))\n    drift_scale = np.where(missing, max(0.12, spread), spread)\n    scale = np.r_[np.full(len(t), 0.026), 0.012]\n    y = np.column_stack((train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])) / scale\n    b = np.r_[t, 1.0] / scale\n    Y = np.column_stack((y, np.zeros(len(y))))\n    B = np.column_stack((np.broadcast_to(b, y.shape), 1.0 / drift_scale))\n\n    def profile(log_tau, full=False):\n        A = np.zeros((len(y), len(b) + 1, 9))\n        A[:, :-1, :3] = _branches(history, dt, t, np.exp(log_tau)) / scale[None, :, None]\n        A[:, -1, 3:] = -D / drift_scale[:, None]\n        w = np.ones_like(Y)\n        for _ in range(40):\n            WB = w * B\n            norm = np.sum(WB * B, axis=1)\n            a = np.einsum('nki,nk->ni', A, WB) / norm[:, None]\n            y0 = np.sum(Y * WB, axis=1) / norm\n            Ap = A - B[:, :, None] * a[:, None, :]\n            Yp = Y - B * y0[:, None]\n            WA = Ap * w[:, :, None]\n            gram = Ap.reshape(-1, 9).T @ WA.reshape(-1, 9)\n            rhs = WA.reshape(-1, 9).T @ Yp.ravel()\n            pars = np.linalg.lstsq(gram, rhs, rcond=None)[0]\n            resid = Yp - Ap @ pars\n            w_new = 1 / (1 + resid ** 2)\n            w_new[:, -1] = 1 / np.maximum(1, np.abs(resid[:, -1]) / 1.5)\n            if np.max(np.abs(w_new - w)) < 1e-05:\n                break\n            w = w_new\n        if full:\n            return (pars[:3], pars[3:], spread)\n        a = np.abs(resid[:, -1])\n        return (np.log1p(resid[:, :-1] ** 2).sum() + np.where(a <= 1.5, a * a, 3 * a - 2.25).sum()) / Y.size\n    fit = minimize(profile, np.log(tau), method='SLSQP', bounds=[(np.log(0.2), np.log(8.0))] * 2, constraints={'type': 'ineq', 'fun': lambda u: u[1] - u[0] - 1e-06}, options={'ftol': 1e-10, 'maxiter': 70})\n    (coeff, drift_coeff, spread) = profile(fit.x, full=True)\n    return (np.exp(fit.x), coeff, drift_coeff, spread)"
+      }
+    ]
+  }
+}

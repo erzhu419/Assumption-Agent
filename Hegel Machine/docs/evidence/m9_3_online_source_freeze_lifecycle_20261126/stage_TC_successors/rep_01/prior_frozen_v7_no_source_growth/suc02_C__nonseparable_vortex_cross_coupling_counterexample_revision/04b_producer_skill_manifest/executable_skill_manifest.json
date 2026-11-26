@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc02_C_nonseparable_vortex_pocket_counterexample_49773e1a8b07",
+    "source_hash": "49773e1a8b07c7a8988f06f70818b43f32f67e0840c4886a2da66423b77d78ae",
+    "parent_ids": [],
+    "source_episode_id": "suc02_C__nonseparable_vortex_cross_coupling_counterexample_revision",
+    "task_id": "suc02_C__nonseparable_vortex_cross_coupling_counterexample_revision",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && cat validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling box simplex KKT'; cd /holdout_task && python3 - <<'PY'\nimport pickle\nwith open('public_suc02_C_studies.pkl','rb') as f:\n    obj=pickle.load(f)\ndef show(x, depth=0):\n    print(' '*depth, type(x).__name__, getattr(x,'shape',''), getattr(x,'dtype',''))\n    if depth >= 4: return\n    if isinstance(x,dict):\n        for k,v in list(x.items())[:25]:\n            print(' '*depth,repr(k),repr(v) if isinstance(v,(str,float,int,bool)) else '')\n            show(v",
+      "cd /holdout_task && sed -n '42,150p' validate_public_schema.py; printf '\\n--- Available prior files ---\\n'; ls -la /pretrain_task /holdout_task; printf '\\n--- Ridge skill ---\\n'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; cd /holdout_task && python3 - <<'PY'\nimport numpy as np,pickle\nwith open('public_suc02_C_studies.pkl','rb') as f: rec=pickle.load(f)[0]\ns,g=rec['study'],rec['gt']\nnp.set_printoptions(precision=9,suppress=True)\nfor v,A in [('x',g['Ax']),('y',g['By'])]:\n n=s['n'+v]; k=s['kappa_'+v]; u=s['vel_'+v]; L=s[",
+      "set -e\ncat > /holdout_task/coupled_channel_vortex_kkt_solver.py <<'PY'\n\"\"\"Dual-channel transport inversion with a box-simplex KKT certificate.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _transport_axis(length, kappa, velocity, robin):\n    \"\"\"Cell-centered diffusion, upwind advection, and Robin boundary flux.\"\"\"\n    h = length / kappa.size\n    face = (kappa[:-1] + kappa[1:]) / (2 * h**2)\n    pos = np.maximum(velocity, 0.0) / h\n    neg = np.maximum(-velocity, 0.0) / h\n    lower = -face - po",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('coupled_channel_vortex_kkt_solver.py')\nspec = importlib.util.spec_from_file_location('solver', p)\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nr = pickle.load(open('public_suc02_C_studies.pkl', 'rb'))[0]; s, g = r['study'], r['gt']\nfor a, key in [('x', 'Ax'), ('y', 'By')]:\n    k, v, L = s['kappa_'+a], s['vel_'+a], s['L'+a]\n    h = L / k.size\n    l, d, u = m._transport_axis(L, k, v, s['robin_'+a])\n    face_ref = -np.diag(",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\np = Path('coupled_channel_vortex_kkt_solver.py')\nspec = importlib.util.spec_from_file_location('solver', p)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nns = {}\nexec(Path('validate_public_schema.py').read_text().split('\\n_d = ')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nrecord = pickle.loads(Path('public_suc02_C_studies.pkl').read_bytes())[0]\ns, ref = record['study'], record['gt']\nz = s['Z_nuisance']\nraw,",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', Path('coupled_channel_vortex_kkt_solver.py'))\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nns = {}\nexec(Path('validate_public_schema.py').read_text().split('\\n_d = ')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nrecord = pickle.loads(Path('public_suc02_C_studies.pkl').read_bytes())[0]\ns, ref = record['study'], record['gt']\nz, S = s['Z_nuisance'], ref['S",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\nfrom scipy.sparse import csc_matrix, diags, eye, kron\nfrom scipy.sparse.linalg import spsolve\n\nspec = importlib.util.spec_from_file_location('solver', 'coupled_channel_vortex_kkt_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_suc02_C_studies.pkl', 'rb') as f:\n    records = pickle.load(f)\nworst = dict(a=0., b=0., profile=0.)\nfor record in records:\n    s, gt = record['study'",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', 'coupled_channel_vortex_kkt_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('public_suc02_C_studies.pkl', 'rb') as f:\n    records = pickle.load(f)\nrng = np.random.default_rng(10)\nfor record in records:\n    s, ref = record['study'], record['gt']\n    z = np.asarray(s['Z_nuisance'])\n    q, _ = np.linalg.qr(rng.normal(size=(z.shape[1], z.shape[1])))\n    perm = rng.permu"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_channel_vortex_kkt_solver.py",
+        "filename": "coupled_channel_vortex_kkt_solver.py",
+        "bytes": 6591,
+        "sha256": "765931d81b0b93b5c59285b6c421c56e4a2a0a1198ae3f9c7bb778587d2d58d1",
+        "content_addressed_ref": "content_addressed_blobs/765931d81b0b93b5c59285b6c421c56e4a2a0a1198ae3f9c7bb778587d2d58d1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_channel_vortex_kkt_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "49773e1a8b07c7a8988f06f70818b43f32f67e0840c4886a2da66423b77d78ae",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', 'coupled_channel_vortex_kkt_solver.py')\nsolver = importlib.ut",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "49773e1a8b07c7a8988f06f70818b43f32f67e0840c4886a2da66423b77d78ae",
+        "expected_candidate_sha256": "49773e1a8b07c7a8988f06f70818b43f32f67e0840c4886a2da66423b77d78ae",
+        "computed_candidate_sha256": "49773e1a8b07c7a8988f06f70818b43f32f67e0840c4886a2da66423b77d78ae",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_channel_vortex_kkt_solver.py",
+            "bytes": 6591
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_49773e1a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,298 @@
+{
+  "task_id": "suc01_C__viscoplastic_bingham_overstress_counterexample_revision",
+  "short_name": "suc01_C_viscoplastic_overstress_counterexample",
+  "benchmark": "Hegel-M93-Lifecycle",
+  "wave": "m93_stage_C_counterexample",
+  "scientific_domain": "Localized Premise Counterexample: Bingham-Perzyna Viscoplastic Overstress & Plastic-Work Softening Above Yield",
+  "wormhole_family": "fam_hereditary_viscoelastic_memory",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 13,
+  "max_turns": 18,
+  "final_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+  "validated_incumbent_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "d6b441a10c2c14039e4713127bda99a98540e4dcaed4b9d42d8914c06a080c0e",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "cat > /tmp/compare_vp.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import csr_matrix, hstack\np='/holdout_task/viscoplastic_overstress_hereditary_solver.py'\ns=importlib",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d6b441a10c2c14039e4713127bda99a98540e4dcaed4b9d42d8914c06a080c0e",
+        "expected_candidate_sha256": "d6b441a10c2c14039e4713127bda99a98540e4dcaed4b9d42d8914c06a080c0e",
+        "computed_candidate_sha256": "d6b441a10c2c14039e4713127bda99a98540e4dcaed4b9d42d8914c06a080c0e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+            "bytes": 4941
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d6b441a1"
+    },
+    {
+      "candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = '/holdout_task/viscoplastic_overstress_hereditary_solver.py'\ns = importlib.util.spec_from_file_location('solver', p)\nm = impor",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+        "expected_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+        "computed_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoplastic_overstress_hereditary_solver.py",
+            "bytes": 7233
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_92aba501"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t06",
+      "turn_idx": 6,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "constitutive_basis_omission",
+      "candidate_sha256": "d6b441a10c2c14039e4713127bda99a98540e4dcaed4b9d42d8914c06a080c0e",
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "The complete two-branch linear Prony law, with aligned coupon drift but no yield-gated terms, suffices above yield.",
+      "empirical_witness": "On the clean public overstressed test cohort, refitting with both viscoplastic weights fixed to zero raises MAE from 0.02720 to 2.33015; worst clipped out-of-fold overstressed MAE rises from 0.03788 to 0.13131.",
+      "causal_blanket_diagnosis": "After accounting for aligned coupon drift, exact history integration, and measured onset, the linear basis still lacks the signed hold-overstress slope and accumulated-work transient.",
+      "sublated_pivot": "Preserve the exact Prony basis and add signed quadratic hold overstress and the history-work fast transient; both vanish on fully sub-yield trajectories.",
+      "pending_resolution_proposed_at_turn": 7,
+      "agent_claimed_probe": {
+        "turn": 7,
+        "command_preview": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/viscoplastic_overstress_hereditary_solver.py')\ns = p.read_text().replace('from scipy.optimize import least_squares', 'from scip",
+        "stdout_preview": "{\"schema_valid\": true, \"errors\": []}\nruntime 0.23894828488118947\ntaus [0.57700153 3.61625434] rel [0.00516978 0.0727553 ] vp [0.24634871 0.1589206 ] rel 0.02232603622477567\nall 90 0.019647100166075262 last 0.05436373601550313\nover 37 0.0218"
+      },
+      "probe_support_status": "supported_on_host_public_probe",
+      "resolved_at_turn": 7,
+      "resolved_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_suc01_C_datasets.pkl": "f32b58782293c76ccdbc3ad96582109c4cb7c00eecd455214f000147b067ace4",
+          "/holdout_task/validate_public_schema.py": "b2cd991dca4f70de9689b80b50e71f2456be478321d61d4c20a7a7e1958009a0"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "resolution_witness_scope_verified": "public_probe_scope"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 7,
+      "verified_turn": 7,
+      "resolved_nogood_ids": [
+        "ng_t06"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_suc01_C_datasets.pkl": "f32b58782293c76ccdbc3ad96582109c4cb7c00eecd455214f000147b067ace4",
+          "/holdout_task/validate_public_schema.py": "b2cd991dca4f70de9689b80b50e71f2456be478321d61d4c20a7a7e1958009a0"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_suc01_C_viscoplastic_overstress_counterexample_92aba501ba26",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 3,
+    "exported_pure_functions": [
+      "subset"
+    ],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 4,
+    "search_skill_query_count": 2,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 4,
+    "describe_skill_queries": [
+      "autogenous_prim_reference_panel_balancing.align_reference_panel",
+      "autogenous_prim_reference_panel_balancing.balanced_cell_weights",
+      "autogenous_prim_reference_panel_balancing.weighted_column_fill",
+      "autogenous_prim_robust_affine_projection.robust_residual_weights"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "92aba501ba26ffe23f9fb373e2e2d10ff30596a4909521a6bb9e82b64ff0eb33",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_viscoplastic_hereditary_revision"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "viscoplastic_overstress_hereditary_solver.py",
+          "final_file_sha256": "7ddec37a8bb0b52da4d374470536803f13c4b1bcec7855335fdfcdd6166dd23a",
+          "public_entrypoints": [
+            "solve_viscoplastic_hereditary_revision"
+          ],
+          "effective_entrypoints": [
+            "solve_viscoplastic_hereditary_revision"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "viscoplastic_overstress_hereditary_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_suc01_C_datasets.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_suc01_C_datasets.pkl": "f32b58782293c76ccdbc3ad96582109c4cb7c00eecd455214f000147b067ace4",
+      "/holdout_task/validate_public_schema.py": "b2cd991dca4f70de9689b80b50e71f2456be478321d61d4c20a7a7e1958009a0"
+    },
+    "shared_public_schema_validator_present": true
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5318,
+    "initial_user_payload_chars": 3193,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 13955
+  },
+  "provider_attempt_accounting": {
+    "logical_agent_decision_calls": 13,
+    "total_provider_attempts": 13,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete"
+  },
+  "decision_count": 32,
+  "prompt_tokens": 371769,
+  "cached_tokens": 116224,
+  "completion_tokens": 15459,
+  "total_tokens": 387228,
+  "token_cost_proxy": 300060,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 300060,
+  "wall_ms": 556404.62,
+  "provenance_verified": true,
+  "terminal_record_sha256": "143cf734a942f7a723efa6a78d54d8f62c4152b467276377adf21ba09263ba11"
+}

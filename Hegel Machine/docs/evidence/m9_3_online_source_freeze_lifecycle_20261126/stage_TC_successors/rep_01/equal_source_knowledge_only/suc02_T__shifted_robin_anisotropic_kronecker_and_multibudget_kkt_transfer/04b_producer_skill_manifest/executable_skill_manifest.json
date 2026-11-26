@@ -1,0 +1,112 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc02_T_multibudget_kronecker_kkt_transfer_6e280117476a",
+    "source_hash": "6e280117476a409199f85828c980942eaa80bf107f1250d6cb98b63056216167",
+    "parent_ids": [],
+    "source_episode_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "task_id": "suc02_T__shifted_robin_anisotropic_kronecker_and_multibudget_kkt_transfer",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_multibudget.py",
+        "archived_relpath": "producers/tmp__verify_multibudget.py",
+        "bytes": 3741,
+        "sha256": "0c91a0a9cb293063754e6e63679161b7a2cc64cb32c070241c2e041e5f38c74c"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 8595,
+        "sha256": "552e41162a11dad89e96171a193f49843dfd00aa7ddf436995314d041cbeb0cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && ls -la /pretrain_task /tmp/hegel_knowledge_ref; if [ -f /tmp/hegel_knowledge_ref/describe_ref.py ]; then python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'ridge nuisance'; fi; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc02_T_studies.pkl','rb'))\nprint(type(p),len(p))\nprint('outer keys',list(p) if isinstance(p,dict) else None)\ndef inspect(p,d=0):\n if isinstance(p,dict):\n  for k,v in p.items():\n   print(' '*d,k,type(v),getattr(v,'shape',''), repr(v)[:220] if not isinstance(v,(dict,list,n",
+      "cd /holdout_task && sed -n '55,200p' validate_public_schema.py && ls -la /pretrain_task && python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'profile nuisance' | head -18; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc02_T_studies.pkl','rb'))[0];s=p['study'];g=p['gt']\nfor a,key in [('x','Ax'),('y','By')]:\n k=s['kappa_'+a];v=s['vel_'+a];A=g[key];n=len(k);L=s['L'+a];r=s['robin_'+a];h=2*k[:-1]*k[1:]/(k[:-1]+k[1:]);print(a,'velocity',v.min(),v.max(),'boundary rows',A[0,:3],A[-1,-3:]);print('edge k and v',k[[0,-1]],v[[0,-",
+      "cd /holdout_task && sed -n '38,58p' validate_public_schema.py; ref=/tmp/hegel_knowledge_ref/describe_ref.py; python3 \"$ref\" --describe autogenous_separable_transport_inversion.recover_transport_mixture; python3 \"$ref\" --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; find /tmp/hegel_knowledge_ref -name '*separable_transport*.reference.txt' -o -name '*ridge_profiled_matching*.reference.txt' | while IFS= read -r f; do echo \"$f\"; grep -nEi 'robin|upwind|profile|certificate' \"$f\" | head -35; done; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(ope",
+      "set -e\ncd /holdout_task\nsed -n '15,57p;177,220p' /tmp/hegel_knowledge_ref/autogenous_separable_transport_inversion.reference.txt\nsed -n '13,31p' /tmp/hegel_knowledge_ref/autogenous_prim_ridge_profiled_matching.reference.txt\ncat > multibudget_kronecker_kkt_transfer_solver.py <<'PY'\n\"\"\"Shifted separable transport and certified box-simplex inversion.\"\"\"\n\nimport numpy as np\n\n\ndef _axis_spectrum(length, kappa, velocity, robin):\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(velocity, dtype=float)\n    h = length / k.size\n    diffusion = (2 * k[:-1] * k[1:] / (k[:-1] + k[1:])) / h**2\n    u",
+      "set -e\ncd /holdout_task\ncat >/tmp/verify_multibudget.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.sparse import csc_matrix, eye, kron\nfrom scipy.sparse.linalg import splu\npath = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', path+'multibudget_kronecker_kkt_transfer_solver.py')\nmod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nwith open(path+'public_suc02_T_studies.pkl','rb') as f:\n    item = pickle.load(f)[0]\nvalidator = {}\nwith open(path+'validate_public_schema.py') as f:\n    exec(f.read().split('\\n_d =')[0], validator",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nv = runpy.run_path('/tmp/verify_multibudget.py')\nwith open('public_suc02_T_studies.pkl', 'rb') as f:\n    items = pickle.load(f)\nprint('Public studies:', len(items))\nsolve = v['mod'].solve_multibudget_kronecker_transfer\nrng = np.random.default_rng(327)\nfor i, item in enumerate(items):\n    s = item['study']\n    if i:\n        v['check'](f'public {i}', s, item['gt'])\n    z = s['Z_nuisance']\n    q, _ = np.linalg.qr(rng.normal(size=(z.shape[1], z.shape[1])))\n    a = solve(s)\n    b = solve(dict(",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nv = runpy.run_path('/tmp/verify_multibudget.py')\nwith open('public_suc02_T_studies.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\nsolve = v['mod'].solve_multibudget_kronecker_transfer\nbase = solve(s)\n# Reflect one axis at a time, including the signs of its advective velocities.\nfor axis, a in enumerate(('x', 'y')):\n    ij = s['sensor_ij'].copy()\n    ij[:,axis] = len(s['kappa_'+a])-1-ij[:,axis]\n    reflected = dict(s, source_modes=np.flip(s['source_modes'], axis=axis+1), sensor_ij=ij"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+        "filename": "multibudget_kronecker_kkt_transfer_solver.py",
+        "bytes": 6681,
+        "sha256": "72cb5500988c72bfdba3e922dee9ce533bd88955ebe0167c1d1e1d7ccd96c648",
+        "content_addressed_ref": "content_addressed_blobs/72cb5500988c72bfdba3e922dee9ce533bd88955ebe0167c1d1e1d7ccd96c648.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py"
+    ],
+    "exported_pure_functions": [
+      "axis",
+      "reference"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6e280117476a409199f85828c980942eaa80bf107f1250d6cb98b63056216167",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nv = runpy.run_path('/tmp/verify_multibudget.py')\nwith open('public_suc02_T_studies.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6e280117476a409199f85828c980942eaa80bf107f1250d6cb98b63056216167",
+        "expected_candidate_sha256": "6e280117476a409199f85828c980942eaa80bf107f1250d6cb98b63056216167",
+        "computed_candidate_sha256": "6e280117476a409199f85828c980942eaa80bf107f1250d6cb98b63056216167",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multibudget_kronecker_kkt_transfer_solver.py",
+            "bytes": 6681
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_6e280117"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "axis",
+        "code": "def axis(s, a):\n    (k, v, r) = (s['kappa_' + a], s['vel_' + a], s['robin_' + a])\n    n = len(k)\n    h = s['L' + a] / n\n    A = np.zeros((n, n))\n    for i in range(n):\n        A[i, i] = abs(v[i]) / h\n        for j in (i - 1, i + 1):\n            if 0 <= j < n:\n                diffusion = 2 / (1 / k[i] + 1 / k[j]) / h ** 2\n                A[i, i] += diffusion\n                A[i, j] = -diffusion - max(0.0, v[i] * np.sign(i - j)) / h\n            else:\n                A[i, i] += r * k[i] / (h * (k[i] + r * h / 2))\n    return A"
+      },
+      {
+        "name": "reference",
+        "code": "def reference(s):\n    from scipy.sparse import csc_matrix\n    from scipy.sparse import eye\n    from scipy.sparse import kron\n    from scipy.sparse.linalg import splu\n    F = s['source_modes']\n    (m, nx, ny) = F.shape\n    (Ax, By) = (axis(s, 'x'), axis(s, 'y'))\n    K = kron(csc_matrix(Ax), eye(ny)) + kron(eye(nx), csc_matrix(By))\n    idx = np.ravel_multi_index(s['sensor_ij'].T, (nx, ny))\n    blocks = []\n    for mu in s['mu_shifts']:\n        U = splu((K + mu * eye(nx * ny)).tocsc()).solve(F.reshape(m, -1).T)\n        np.testing.assert_allclose(K @ U + mu * U, F.reshape(m, -1).T, atol=2e-11, rtol=2e-10)\n        blocks.append(U[idx])\n    return (np.concatenate(blocks), U.T.reshape(F.shape))"
+      }
+    ]
+  }
+}

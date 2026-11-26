@@ -1,0 +1,125 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc01_T_preloaded_hereditary_secant_hazard_872b4243d70d",
+    "source_hash": "872b4243d70db1920ae843d3d7470dba6de4aeead0da7601242131ad4ecb8a20",
+    "parent_ids": [],
+    "source_episode_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "task_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/visco_eval.py",
+        "archived_relpath": "producers/tmp__visco_eval.py",
+        "bytes": 1465,
+        "sha256": "1fdab56f06698fd97937b0e13ad48cdc8ba12605f03a0e67a444aaa5095027d0"
+      },
+      {
+        "container_path": "/tmp/visco_margin_audit.py",
+        "archived_relpath": "producers/tmp__visco_margin_audit.py",
+        "bytes": 3064,
+        "sha256": "238e873396202fe83f4c037ecb2f22c05d35440dd2d8320359f2756ee8bb3ff1"
+      },
+      {
+        "container_path": "/tmp/visco_verify.py",
+        "archived_relpath": "producers/tmp__visco_verify.py",
+        "bytes": 2776,
+        "sha256": "a83686d109fc62dc42b1c24c54776983362d3067d2ab5229f057ce2e4b4ddb4f"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 8595,
+        "sha256": "552e41162a11dad89e96171a193f49843dfd00aa7ddf436995314d041cbeb0cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && cat validate_public_schema.py && python3 validate_public_schema.py\npython3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'viscoelastic relaxation'\npython3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'reference-panel alignment imputation'\npython3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'Cauchy robust IRLS'\npython3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_suc01_T_datasets.pkl','rb') as f: d=pickle.load(f)\ndef inspect(x,p='',depth=0):\n if isinstance(x,dict):\n  print(p, 'dict', list(x));\n  for k,v in list(x.items())[:30]: ",
+      "python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_hereditary_spectrum_identification.fit_hereditary_spectrum | head -100; ls /tmp/hegel_knowledge_ref; find /tmp/hegel_knowledge_ref -iname '*.reference.txt' | grep -Ei 'heredit|align|imput|cauchy|coupon|nuisance'; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'reference coupon alignment' | cut -c1-440 | head -12; python3 - <<'PY'\nimport pickle,numpy as np\nfrom collections import Counter\nimport scipy\nx=pickle.load(open('/holdout_task/public_suc01_T_datasets.pkl','rb'))[0]['dataset']; print('Scipy',scipy.__version_",
+      "find /tmp/hegel_knowledge_ref -maxdepth 3 -type f | grep -E 'hereditary_spectrum|reference_panel_balancing'; for target in autogenous_hereditary_spectrum_identification.align_reference_panel autogenous_prim_reference_panel_balancing.weighted_column_fill; do python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe \"$target\" | python3 -c 'import json,sys; d=json.load(sys.stdin); print([(m.get(\"functions\"), m.get(\"artifact_paths\")) for m in d.get(\"matches\",[])])'; done; p=$(find /tmp/hegel_knowledge_ref -type f -name '*hereditary_spectrum*.reference.txt' -print -quit); if [ -n \"$p\" ]; then cat",
+      "p=/tmp/hegel_knowledge_ref/autogenous_hereditary_spectrum_identification.reference.txt; sed -n '/^def hereditary_design/,/^def fit_hereditary_spectrum/p' \"$p\"; sed -n '/^    for g /,/^def /p' \"$p\" | head -50; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'Cauchy IRLS' | cut -c1-250 | head -8",
+      "set -e\ncat > /holdout_task/preloaded_hereditary_secant_hazard_solver.py <<'PY'\n\"\"\"Two-branch hereditary transfer with a reference-panel drift model.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _balanced(lab, stratum):\n    _, ids, counts = np.unique(np.column_stack((lab, stratum)), axis=0,\n                               return_inverse=True, return_counts=True)\n    return len(lab) / (len(counts) * counts[ids])\n\n\ndef _panel(train, test):\n    raw = np.concatenate([train['coupon_features_raw'], test['coupon_features_raw']]).astype(float)\n    ref = np.concatenate([train['ref",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('preloaded_hereditary_secant_hazard_solver.py')\ns = p.read_text()\ns = s.replace('def _fit(train, dt, times, x, conditioned=False):', 'def _fit(train, dt, times, x):')\na = s.index('    # Rate propagation')\nb = s.index('\\n    lo, hi', a)\ns = s[:a] + '''    target = np.r_[(curve / .022).ravel(), rate / .023]\n    root = np.sqrt(np.r_[np.repeat(w, len(times)), w])\n    drift = (x[:, None, :] * (times / .022)[None, :, None]).reshape(n * len(times), -1)\n    drift = np.vstack((drift, x / .023))\n\n    def design(tau):\n        a, b",
+      "set -e\ncat > /tmp/visco_margin_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root + 'preloaded_hereditary_secant_hazard_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open(root + 'public_suc01_T_datasets.pkl', 'rb') as f:\n    items = pickle.load(f)\n\nfor item in items:\n    d, g = item['dataset'], item['gt']\n    tr, te = d['train'], d['test']\n    dt, t = d['past_dt'], d['eval_times']\n    out = m.solve_preloaded_hereditary_transfer(d)\n    for tau in [out",
+      "set -e\npython3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nroot='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',root+'preloaded_hereditary_secant_hazard_solver.py')\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\nwith open(root+'public_suc01_T_datasets.pkl','rb') as f:\n    items=pickle.load(f)\nfor item in items:\n    d,g=item['dataset'],item['gt']; te=d['test']; t=d['eval_times']\n    out=m.solve_preloaded_hereditary_transfer(d)\n    y0=te['strain_0']; y=out['predicted_strai"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+        "filename": "preloaded_hereditary_secant_hazard_solver.py",
+        "bytes": 6392,
+        "sha256": "1889649156e6127af35c63d282f4189f6096b66a37c670222c67b48c5abeddea",
+        "content_addressed_ref": "content_addressed_blobs/1889649156e6127af35c63d282f4189f6096b66a37c670222c67b48c5abeddea.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/preloaded_hereditary_secant_hazard_solver.py"
+    ],
+    "exported_pure_functions": [
+      "errors",
+      "check_readouts"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "872b4243d70db1920ae843d3d7470dba6de4aeead0da7601242131ad4ecb8a20",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\npython3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nroot='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',root+'preloaded_heredit",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "872b4243d70db1920ae843d3d7470dba6de4aeead0da7601242131ad4ecb8a20",
+        "expected_candidate_sha256": "872b4243d70db1920ae843d3d7470dba6de4aeead0da7601242131ad4ecb8a20",
+        "computed_candidate_sha256": "872b4243d70db1920ae843d3d7470dba6de4aeead0da7601242131ad4ecb8a20",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+            "bytes": 6392
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_872b4243"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "errors",
+        "code": "def errors(e, groupings):\n    print('pooled', np.round(e.mean(0), 6))\n    for (name, groups) in groupings:\n        vals = [(g, e[groups == g].mean(0)) for g in np.unique(groups)]\n        print(name, [(str(g), np.round(v, 6).tolist()) for (g, v) in vals] if len(vals) < 5 else np.round(np.max([v for (g, v) in vals], axis=0), 6))"
+      },
+      {
+        "name": "check_readouts",
+        "code": "def check_readouts(data, out, t):\n    y = out['predicted_strain']\n    y0 = data['strain_0']\n    crit = data['critical_strain']\n    sec = out['secant_compliance']\n    cross = out['hazard_crossing_times']\n    np.testing.assert_allclose(sec, (y[:, -1] - y0) / np.maximum(abs(data['stress_hold_0']), 0.5), rtol=0, atol=1e-13)\n    manual = []\n    for (vals, target) in zip(np.column_stack((y0, y)), crit):\n        j = next((j for (j, v) in enumerate(vals) if v >= target), None)\n        grid = np.r_[0.0, t]\n        manual.append(t[-1] if j is None else 0.0 if j == 0 else np.interp(target, vals[j - 1:j + 1], grid[j - 1:j + 1]))\n    np.testing.assert_allclose(cross, manual, rtol=0, atol=1e-12)"
+      }
+    ]
+  }
+}

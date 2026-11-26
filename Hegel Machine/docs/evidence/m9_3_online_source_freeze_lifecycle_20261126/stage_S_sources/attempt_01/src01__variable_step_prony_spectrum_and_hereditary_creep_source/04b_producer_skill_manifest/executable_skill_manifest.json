@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_src01_variable_step_prony_hereditary_source_4033fc4a57c4",
+    "source_hash": "4033fc4a57c48b7d4f86b644be339c264f74bf04eb879656b2921bf8298bd1af",
+    "parent_ids": [],
+    "source_episode_id": "src01__variable_step_prony_spectrum_and_hereditary_creep_source",
+    "task_id": "src01__variable_step_prony_spectrum_and_hereditary_creep_source",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation Cauchy robust IRLS viscoelastic relaxation'; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('public_src01_datasets.pkl','rb'))\ndef show(v,p=''):\n if isinstance(v,dict):\n  for k,w in v.items(): show(w,p+'/'+str(k))\n elif isinstance(v,(list,tuple)) and v and isinstance(v[0],dict):\n  print(p,len(v)); [show(w,p+'/'+str(i)) for i,w in enumerate(v[:8])]\n elif isinstance(v,np.ndarray):\n  print(p,v.shape,v.dtype, np.roun",
+      "cd /holdout_task\nexport PYTHONPATH=/tmp\nfor fn in align_reference_panel balanced_cell_weights weighted_column_fill; do python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.$fn | head -35; done\npython3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights | head -35\npython3 - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('public_src01_datasets.pkl','rb'))[0]; d=p['dataset']; g=p['gt']; a,b=[d[k] for k in ('train','test')]; n=len(a['lab_id']); c=np.r_[a['lab_id'],b['lab_id']]; s=np.r_[a['stratum'],b['stra",
+      "cd /holdout_task && cat > hereditary_prony_source_solver.py <<'PY'\n\"\"\"Robust identification of two variable-step hereditary creep branches.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _panel(train, test):\n    lab = np.r_[train['lab_id'], test['lab_id']]\n    stratum = np.r_[train['stratum'], test['stratum']]\n    refs = np.vstack((train['ref_coupons'], test['ref_coupons']))\n    x = np.vstack((train['coupon_features_raw'], test['coupon_features_raw']))\n    _, cell, count = np.unique(np.column_stack((lab, stratum)), axis=0,\n                               return_inverse=Tr",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/hereditary_prony_source_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\np = pickle.load(open('public_src01_datasets.pkl', 'rb'))[0]\nbase = p['dataset']\ntrain, test = (base[k] for k in ('train', 'test'))\nn = len(train['lab_id'])\nlab = np.r_[train['lab_id'], test['lab_id']]\nst = np.r_[train['stratum'], test['stratum']]\nrefs = np.r_[train['ref_coupons'], test['ref_coupons",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/hereditary_prony_source_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\np = pickle.load(open('public_src01_datasets.pkl', 'rb'))[0]\nd, truth = p['dataset'], p['gt']\na, b = d['train'], d['test']\norig_panel = m._panel\n\ndef panel_variant(mode):\n    def panel(train, test):\n        x, w = orig_panel(train, test)\n        if mode == 'unweighted_fit':\n            w = np.ones_like(w)\n   ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/hereditary_prony_source_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('public_src01_datasets.pkl', 'rb') as f:\n    records = pickle.load(f)\nfor row in records:\n    d, g = row['dataset'], row['gt']\n    a, b = d['train'], d['test']\n    t, dt = d['eval_times'], d['past_dt']\n    out = mod.solve_hereditary_pr"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/hereditary_prony_source_solver.py",
+        "filename": "hereditary_prony_source_solver.py",
+        "bytes": 4209,
+        "sha256": "0ac328b984963b2dd83b113932b429cee1458a5de8e1768b65a6ddbfa29080d6",
+        "content_addressed_ref": "content_addressed_blobs/0ac328b984963b2dd83b113932b429cee1458a5de8e1768b65a6ddbfa29080d6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/hereditary_prony_source_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4033fc4a57c48b7d4f86b644be339c264f74bf04eb879656b2921bf8298bd1af",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4033fc4a57c48b7d4f86b644be339c264f74bf04eb879656b2921bf8298bd1af",
+        "expected_candidate_sha256": "4033fc4a57c48b7d4f86b644be339c264f74bf04eb879656b2921bf8298bd1af",
+        "computed_candidate_sha256": "4033fc4a57c48b7d4f86b644be339c264f74bf04eb879656b2921bf8298bd1af",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/hereditary_prony_source_solver.py",
+            "bytes": 4209
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4033fc4a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

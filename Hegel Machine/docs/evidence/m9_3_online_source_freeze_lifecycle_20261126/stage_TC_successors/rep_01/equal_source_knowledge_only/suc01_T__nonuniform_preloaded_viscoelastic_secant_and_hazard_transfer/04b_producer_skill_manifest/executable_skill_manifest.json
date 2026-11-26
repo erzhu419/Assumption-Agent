@@ -1,0 +1,141 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc01_T_preloaded_hereditary_secant_hazard_51fd3adabe7c",
+    "source_hash": "51fd3adabe7c055069e6aa620e14995d188d805eb52f8e1532eda15f459990b9",
+    "parent_ids": [],
+    "source_episode_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "task_id": "suc01_T__nonuniform_preloaded_viscoelastic_secant_and_hazard_transfer",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_coupon_drift.py",
+        "archived_relpath": "producers/tmp__audit_coupon_drift.py",
+        "bytes": 2740,
+        "sha256": "28d8fcaf0b33a2688af1ef3e51e75669d2c0ec21db8bd30fdbe5db7d59990f06"
+      },
+      {
+        "container_path": "/tmp/solver_lab_calibration.py",
+        "archived_relpath": "producers/tmp__solver_lab_calibration.py",
+        "bytes": 6713,
+        "sha256": "68834e8a2cfa329066b39293c9fdd0817cbc45a238c1425d6f4fd63248734a0d"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 8595,
+        "sha256": "552e41162a11dad89e96171a193f49843dfd00aa7ddf436995314d041cbeb0cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np,scipy\nwith open('public_suc01_T_datasets.pkl','rb') as f: data=pickle.load(f)\ndef show(x,p='',d=0):\n if isinstance(x,dict):\n  print(p,list(x))\n  for k,v in x.items(): show(v,p+'/'+str(k),d+1)\n elif isinstance(x,np.ndarray):\n  a=x.ravel(); print(p,x.shape,x.dtype,a[:8], ('finite',int(np.isfinite(a).sum())) if a.dtype.kind in 'fiu' else '')\n elif isinstance(x,(list,tuple)):\n  print(p,type(x).__name__,len(x));\n  for i,v in enumerate(x[:3]): show(v,p+'/'+str(i),d+1)\n",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_suc01_T_datasets.pkl','rb') as f: data=pickle.load(f)\nprint(type(data),len(data))\ndef show(x,p=''):\n if isinstance(x,dict):\n  print(p,list(x))\n  for k,v in x.items(): show(v,p+'/'+str(k))\n elif isinstance(x,np.ndarray):\n  a=x.ravel(); print(p,x.shape,x.dtype,a[:5],('finite',int(np.isfinite(a).sum())) if a.dtype.kind in 'fiu' else '')\n else: print(p,repr(x)[:200])\nshow(data[0]); print('all entries:',[list(v) for v in data])\nPY\nfor fn in align_reference_panel fit_hereditary_spectrum; do python3 /tmp/hegel_knowledge_",
+      "sed -n '/^def hereditary_design/,/^def fit_hereditary_spectrum/p' /tmp/hegel_knowledge_ref/autogenous_hereditary_spectrum_identification.reference.txt; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]\nprint('ground truth fields and shapes:',{k:np.shape(v) for k,v in p['gt'].items()})\nd=p['dataset']; print('history total, evaluation times:',d['past_dt'].sum(),d['eval_times']); a=d['train']; print('curve increment and rate quantiles:',*[np.quantile(v,[0,.1,.5,.9,1]) for v in [a['strain_curves_obs'][:,-1]-a['strain_0'],a['in",
+      "cd /holdout_task && cat > preloaded_hereditary_secant_hazard_solver.py <<'PY'\n\"\"\"Robust two-branch identification and first-passage prediction.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    n = len(train['lab_id'])\n    x, ref, lab, strata = (np.concatenate((train[k], test[k]), axis=0) for k in\n                           ('coupon_features_raw', 'ref_coupons', 'lab_id', 'stratum'))\n    for group in np.unique(lab):\n        at = lab == group\n        panel = ref[at]\n        panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n        offset = np.m",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport preloaded_hereditary_secant_hazard_solver as s\np=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; x,xt,w=s._features(tr,te); tau,b=s._fit(tr,dt,t,x,w)\na,r=s._design(tr,dt,t,x,tau); at,rt=s._design(te,dt,t,xt,tau); base=te['strain_0'][:,None]+at@b; innovation=te['instant_rate_obs']-rt@b\nm=~np.isfinite(te['coupon_features_raw']); mt=~np.isfinite(tr['coupon_features_raw']); observed=np.ma.array(x[:,1:]",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('preloaded_hereditary_secant_hazard_solver.py')\ns = p.read_text()\npos = s.index('\\ndef _crossings(')\ns = s[:pos] + '''\ndef _rate_update(train, test, dt, t, x, xt, tau, coef, rate_test):\n    \"\"\"Condition the constant drift on the measured initial slope.\"\"\"\n    curve, rate = _design(train, dt, t, x, tau)\n    # Late-time residuals divided by time estimate drift independently of\n    # the rate sensor. A median across times suppresses curve glitches.\n    late = slice(len(t) // 2, None)\n    observed = train['strain_curves_obs'] -",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec=importlib.util.spec_from_file_location('solver','preloaded_hereditary_secant_hazard_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\np=pickle.load(open('public_suc01_T_datasets.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,xt,w=s._features(tr,te); tau,b=s._fit(tr,dt,t,x,w)\nfor a, xx in ((tr,x),(te,xt)):\n    design, rate = s._design(a,dt,t,xx,tau)\n    z=a['initial_memory_states'].copy(); decay=",
+      "cat > /tmp/audit_coupon_drift.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root + 'preloaded_hereditary_secant_hazard_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nd = pickle.load(open(root + 'public_suc01_T_datasets.pkl', 'rb'))[0]['dataset']\na = d['train']\ndt, t = d['past_dt'], d['eval_times']\nlab, stratum = a['lab_id'], a['stratum']\ncomplete = np.isfinite(a['coupon_features_raw']).all(axis=1)\n_, cell = np.unique(np.column_stack((lab, stratum)), axis=0, retu",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('preloaded_hereditary_secant_hazard_solver.py')\ns = p.read_text()\na = \"    return gain * (test['instant_rate_obs'] - rate_test @ coef)\"\nb = \"\"\"    innovation = test['instant_rate_obs'] - rate_test @ coef\n    update = gain * innovation\n    # Calibrate complete panels using training outcomes from the same lab.\n    # Keep the pooled update for missing coupons and for a lab without outcomes.\n    for lab in np.unique(train['lab_id']):\n        calibration = (train['lab_id'] == lab) & ~missing_train.any(axis=1)\n        apply = (te",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\ncp /tmp/solver_lab_calibration.py preloaded_hereditary_secant_hazard_solver.py\npython3 -I validate_public_schema.py\npython3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/preloaded_hereditary_secant_hazard_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\np = pickle.load(open('public_suc01_T_datasets.pkl', 'rb'))[0]\nd, g = p['dataset'], p['gt']\no = s.solve_preloaded_hereditary_transfer(d)\nt, te = d['eval_times'], d['test']\ny, "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+        "filename": "preloaded_hereditary_secant_hazard_solver.py",
+        "bytes": 6713,
+        "sha256": "68834e8a2cfa329066b39293c9fdd0817cbc45a238c1425d6f4fd63248734a0d",
+        "content_addressed_ref": "content_addressed_blobs/68834e8a2cfa329066b39293c9fdd0817cbc45a238c1425d6f4fd63248734a0d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/preloaded_hereditary_secant_hazard_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_features",
+      "_design",
+      "_fit",
+      "_rate_update",
+      "_crossings",
+      "solve_preloaded_hereditary_transfer"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "51fd3adabe7c055069e6aa620e14995d188d805eb52f8e1532eda15f459990b9",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\ncp /tmp/solver_lab_calibration.py preloaded_hereditary_secant_hazard_solver.py\npython3 -I validate_public_schema.py\npython3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\ns",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "51fd3adabe7c055069e6aa620e14995d188d805eb52f8e1532eda15f459990b9",
+        "expected_candidate_sha256": "51fd3adabe7c055069e6aa620e14995d188d805eb52f8e1532eda15f459990b9",
+        "computed_candidate_sha256": "51fd3adabe7c055069e6aa620e14995d188d805eb52f8e1532eda15f459990b9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/preloaded_hereditary_secant_hazard_solver.py",
+            "bytes": 6713
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_51fd3ada"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_features",
+        "code": "def _features(train, test):\n    n = len(train['lab_id'])\n    (x, ref, lab, strata) = (np.concatenate((train[k], test[k]), axis=0) for k in ('coupon_features_raw', 'ref_coupons', 'lab_id', 'stratum'))\n    for group in np.unique(lab):\n        at = lab == group\n        panel = ref[at]\n        panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n        offset = np.median(np.nanmean(panel, axis=0))\n        gain = np.median(np.nanstd(panel, axis=0))\n        x[at] = (x[at] - offset) / gain\n    (_, cell, count) = np.unique(np.column_stack((lab, strata)), axis=0, return_inverse=True, return_counts=True)\n    w = 1.0 / count[cell.ravel()]\n    observed = np.isfinite(x)\n    denom = w @ observed\n    fill = w @ np.where(observed, x, 0.0) / np.where(denom > 0, denom, 1.0)\n    x = np.where(observed, x, fill)\n    x = np.column_stack((np.ones(len(x)), x))\n    return (x[:n], x[n:], w[:n] / w[:n].mean())"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(data, dt, t, x, tau):\n    tail = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    weights = -np.expm1(-dt[:, None] / tau) * np.exp(-tail[:, None] / tau)\n    memory = data['past_stress'] @ weights + data['initial_memory_states'] * np.exp(-dt.sum() / tau)\n    gap = data['stress_hold_0'][:, None] - memory\n    creep = -np.expm1(-t[:, None] / tau)\n    curve = np.concatenate((gap[:, None, :] * creep, t[None, :, None] * x[:, None, :]), axis=2)\n    return (curve, np.column_stack((gap / tau, x)))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(data, dt, t, x, w):\n    from scipy.optimize import least_squares\n    (n, k) = data['strain_curves_obs'].shape\n    y = np.r_[(data['strain_curves_obs'] - data['strain_0'][:, None]).ravel(), data['instant_rate_obs']]\n    weight = np.r_[np.repeat(w, k), w]\n    scale = np.r_[np.full(n * k, 0.025), np.full(n, 0.04)]\n    target = y / scale\n    root = np.sqrt(weight)\n    p = 2 + x.shape[1]\n\n    def matrix(tau):\n        (curve, rate) = _design(data, dt, t, x, tau)\n        return np.vstack((curve.reshape(n * k, p), rate)) / scale[:, None]\n\n    def taus(q):\n        fast = np.exp(q[0])\n        return np.array([fast, np.exp(q[0] + q[1] * (np.log(9.0) - q[0]))])\n\n    def residual(q):\n        r = matrix(taus(q)) @ q[2:] - target\n        return root * np.copysign(np.sqrt(np.log1p(r * r)), r)\n\n    def linear(a, weights):\n        sw = np.sqrt(weights)\n        return np.linalg.lstsq(a * sw[:, None], target * sw, rcond=None)[0]\n    grid = np.geomspace(0.2, 9.0, 9)\n    starts = []\n    for (i, fast) in enumerate(grid[:-1]):\n        for slow in grid[i + 1:]:\n            a = matrix(np.array([fast, slow]))\n            b = linear(a, weight)\n            for temp in (12.0, 6.0, 3.0, 1.5, 1.0):\n                b = linear(a, weight / (1 + ((a @ b - target) / temp) ** 2))\n            r = a @ b - target\n            q = np.r_[np.log(fast), np.clip(np.log(slow / fast) / np.log(9.0 / fast), 1e-06, 1.0), b]\n            starts.append((weight @ np.log1p(r * r), q))\n    lo = np.r_[np.log(0.2), 1e-06, np.full(p, -np.inf)]\n    hi = np.r_[np.log(9.0) - 1e-06, 1.0, np.full(p, np.inf)]\n    best = min((least_squares(residual, q, bounds=(lo, hi), x_scale='jac', max_nfev=150) for (_, q) in sorted(starts, key=lambda z: z[0])[:3]), key=lambda z: z.cost)\n    return (taus(best.x), best.x[2:])"
+      },
+      {
+        "name": "_rate_update",
+        "code": "def _rate_update(train, test, dt, t, x, tau, coef, rate_test):\n    \"\"\"Condition the constant drift on the measured initial slope.\"\"\"\n    (curve, rate) = _design(train, dt, t, x, tau)\n    late = slice(len(t) // 2, None)\n    observed = train['strain_curves_obs'] - train['strain_0'][:, None]\n    drift = np.median((observed[:, late] - curve[:, late] @ coef) / t[late], axis=1)\n    rate_error = train['instant_rate_obs'] - rate @ coef - drift\n\n    def mad_scale(v):\n        return 1.4826 * np.median(np.abs(v - np.median(v)))\n    missing_train = ~np.isfinite(train['coupon_features_raw'])\n    missing_test = ~np.isfinite(test['coupon_features_raw'])\n    rate_variance = mad_scale(rate_error) ** 2\n    drift_variance = mad_scale(drift[~missing_train.any(axis=1)]) ** 2\n    coupon_variance = np.nanvar(np.where(missing_train, np.nan, x[:, 1:]), axis=0)\n    prior_variance = drift_variance + missing_test @ (coef[3:] ** 2 * coupon_variance)\n    gain = prior_variance / (prior_variance + rate_variance)\n    innovation = test['instant_rate_obs'] - rate_test @ coef\n    update = gain * innovation\n    for lab in np.unique(train['lab_id']):\n        calibration = (train['lab_id'] == lab) & ~missing_train.any(axis=1)\n        apply = (test['lab_id'] == lab) & ~missing_test.any(axis=1)\n        if not calibration.any() or not apply.any():\n            continue\n        center = np.median(drift[calibration])\n        local_drift_var = mad_scale(drift[calibration]) ** 2\n        local_rate_var = mad_scale(rate_error[calibration]) ** 2\n        if local_drift_var + local_rate_var > 0:\n            local_gain = local_drift_var / (local_drift_var + local_rate_var)\n            update[apply] = center + local_gain * (innovation[apply] - center)\n    return update"
+      },
+      {
+        "name": "_crossings",
+        "code": "def _crossings(t, initial, curve, critical):\n    result = np.full(len(initial), t[-1])\n    reached = initial >= critical\n    result[reached] = 0.0\n    (prev, left) = (initial, 0.0)\n    for (right, current) in zip(t, curve.T):\n        hit = ~reached & (current >= critical)\n        result[hit] = left + (right - left) * (critical[hit] - prev[hit]) / (current[hit] - prev[hit])\n        reached |= hit\n        (prev, left) = (current, right)\n    return result"
+      },
+      {
+        "name": "solve_preloaded_hereditary_transfer",
+        "code": "def solve_preloaded_hereditary_transfer(dataset: dict) -> dict:\n    (train, test) = (dataset['train'], dataset['test'])\n    (dt, t) = (np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times']))\n    (x, xt, w) = _features(train, test)\n    (tau, coef) = _fit(train, dt, t, x, w)\n    (curve, rate) = _design(test, dt, t, xt, tau)\n    initial = test['strain_0']\n    drift_update = _rate_update(train, test, dt, t, x, tau, coef, rate)\n    strain = initial[:, None] + curve @ coef + drift_update[:, None] * t\n    return {'estimated_taus': tau, 'predicted_strain': strain, 'secant_compliance': (strain[:, -1] - initial) / np.maximum(np.abs(test['stress_hold_0']), 0.5), 'hazard_crossing_times': _crossings(t, initial, strain, test['critical_strain'])}"
+      }
+    ]
+  }
+}

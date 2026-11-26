@@ -1,0 +1,95 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_suc02_C_nonseparable_vortex_pocket_counterexample_b3763266e70d",
+    "source_hash": "b3763266e70d068e0cdbbe867ec71d62a998d5f65ee32da8d16faf915644bff7",
+    "parent_ids": [],
+    "source_episode_id": "suc02_C__nonseparable_vortex_cross_coupling_counterexample_revision",
+    "task_id": "suc02_C__nonseparable_vortex_cross_coupling_counterexample_revision",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 8595,
+        "sha256": "552e41162a11dad89e96171a193f49843dfd00aa7ddf436995314d041cbeb0cb"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle\nwith open('public_suc02_C_studies.pkl','rb') as f:\n    p=pickle.load(f)\ndef show(x,depth=0):\n    prefix='  '*depth\n    if isinstance(x,dict):\n        print(prefix,'dict keys:',list(x)[:30])\n        if depth<3:\n            for k,v in list(x.items())[:30]:\n                print(prefix,k, end=': '); show(v,depth+1)\n    elif isinstance(x,(tuple,list)):\n        print(prefix,type(x).__name__,len(x))\n        if x and depth<3: show(x[0],depth+1)\n    elif hasattr(x,'shape'): print(prefix,type(x).__name__,x.shap",
+      "cd /holdout_task && sed -n '40,180p' validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_suc02_C_studies.pkl','rb') as f: p=pickle.load(f)\nprint('SciPy',scipy.__version__)\ndef show(v,d=0):\n    if isinstance(v,dict):\n        print('dict',list(v))\n        if d<3:\n            for k,a in v.items():\n                print(' '*d,k,end=': '); show(a,d+1)\n    elif isinstance(v,(tuple,list)):\n        print(type(v).__name__,len(v))\n        if v and d<3: show(v[0],d+1)\n    elif hasattr(v,'shape'):\n        print(v.shape,v.dtype,end=' ')\n        if v.size and np",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_suc02_C_studies.pkl','rb'))[0]\nfor name,d in p.items():\n print(name)\n for k,v in d.items():\n  a=np.asarray(v); print(k, (a.shape,str(a.dtype),str(a.ravel()[:3])) if a.ndim else str(v)[:130])\ns=p['study']; v=s['V_pocket_channel_b']; print('potential relative additive-approximation error',np.linalg.norm(v-v.mean(0)-v.mean(1,keepdims=True)+v.mean())/np.linalg.norm(v))\nPY\nr=/tmp/hegel_knowledge_ref; python3 \"$r/describe_ref.py\" --search 'nuisance' | cut -c1-160 | head -10; grep -inE 'nuisance|profil' \"$r/auto",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.sparse import csc_matrix,eye,kron,diags\nfrom scipy.sparse.linalg import splu\np=pickle.load(open('public_suc02_C_studies.pkl','rb'))[0]; s,g=p['study'],p['gt']\nfor a,key in [('x','Ax'),('y','By')]:\n A=g[key]; n=len(A); h=s['L'+a]/(n-1); k=s['kappa_'+a]; v=s['vel_'+a]; r=s['robin_'+a]\n print(a,'h',h,'robin',r,'max offdiagonal asymmetry',abs(A-A.T).max()); print('j k v lower diag upper rowsum')\n for j in [0,1,2,n//2,n-2,n-1]: print(j,k[j],v[j],A[j,j-1] if j else 0,A[j,j],A[j,j+1] if j<n-1 else 0,A[j].sum())\n dx=np.diff(np.a",
+      "set -e\ncd /holdout_task\ncat > coupled_channel_vortex_kkt_solver.py <<'PY'\n\"\"\"Forward transport and certified box-simplex inversion for two tracer channels.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\nfrom scipy.sparse import csc_matrix, diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _transport(length, diffusivity, velocity, robin):\n    \"\"\"Cell-centered harmonic diffusion, upwind advection, and Robin loss.\"\"\"\n    k = np.asarray(diffusivity, dtype=float) / length**2\n    v = np.asarray(velocity, dtype=float) / length\n    r = robin / length\n    h = 1.0 / k.size\n  ",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom pathlib import Path\nfrom scipy.sparse import csc_matrix, diags, eye, kron\nfrom scipy.sparse.linalg import splu\np = Path('coupled_channel_vortex_kkt_solver.py')\nspec = importlib.util.spec_from_file_location('candidate', p)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nverify = {}\nexec(Path('validate_public_schema.py').read_text().split('\\n_d =')[0], verify)\nverify = verify['verify_box_simplex_kkt",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.sparse import csc_matrix, diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\ndef load(name):\n    spec = importlib.util.spec_from_file_location(name, Path(name + '.py'))\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\nsolve = load('coupled_channel_vortex_kkt_solver').solve_coupled_channel_vortex_inversion\nns = {}\nexec(Path('validate_public_schema.py').read_text().split('\\n_d =')[0], ns)\nverify",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/coupled_channel_vortex_kkt_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('public_suc02_C_studies.pkl', 'rb') as f:\n    studies = pickle.load(f)\n\nrng = np.random.default_rng(42)\nworst_weight = worst_field = worst_gap = 0.\nfor item in studies:\n    s = item['study']\n    base = mod.solve_coupled_channel_vortex_inversion(s)\n    z = s['Z_nuisance']\n    q = n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_channel_vortex_kkt_solver.py",
+        "filename": "coupled_channel_vortex_kkt_solver.py",
+        "bytes": 7004,
+        "sha256": "ba883a3e66c4c3acf361c9c3494b0335c27591e39cd1a146c1d10806270846d5",
+        "content_addressed_ref": "content_addressed_blobs/ba883a3e66c4c3acf361c9c3494b0335c27591e39cd1a146c1d10806270846d5.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_channel_vortex_kkt_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b3763266e70d068e0cdbbe867ec71d62a998d5f65ee32da8d16faf915644bff7",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/coupled_channel_vortex_kkt_solver.py')\nmod ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b3763266e70d068e0cdbbe867ec71d62a998d5f65ee32da8d16faf915644bff7",
+        "expected_candidate_sha256": "b3763266e70d068e0cdbbe867ec71d62a998d5f65ee32da8d16faf915644bff7",
+        "computed_candidate_sha256": "b3763266e70d068e0cdbbe867ec71d62a998d5f65ee32da8d16faf915644bff7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_channel_vortex_kkt_solver.py",
+            "bytes": 7004
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b3763266"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

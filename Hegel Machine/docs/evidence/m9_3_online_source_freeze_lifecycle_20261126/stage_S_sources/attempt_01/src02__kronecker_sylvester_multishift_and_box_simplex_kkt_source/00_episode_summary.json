@@ -1,0 +1,293 @@
+{
+  "task_id": "src02__kronecker_sylvester_multishift_and_box_simplex_kkt_source",
+  "short_name": "src02_kronecker_sylvester_box_simplex_kkt_source",
+  "benchmark": "Hegel-M93-Lifecycle",
+  "wave": "m93_stage_S_source",
+  "scientific_domain": "Separable 2D Kronecker Sylvester Multi-Shift Reaction-Transport & Certified Box-Simplex KKT Tomography",
+  "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "PASSED_ALL_CHECKS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 18,
+  "final_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+  "validated_incumbent_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "d1b55627826782a34b631104cf9c9144dff0c3d16c6ef54778a1ba10e7e0e7d7",
+      "verified_post_package": true,
+      "verified_turn": 3,
+      "verification_command": "cd /holdout_task && cat > kronecker_box_simplex_kkt_source_solver.py <<'PY'\n\"\"\"Separable reaction-transport inversion on a capped simplex.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\nfrom scipy.sparse import csr_matrix,",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d1b55627826782a34b631104cf9c9144dff0c3d16c6ef54778a1ba10e7e0e7d7",
+        "expected_candidate_sha256": "d1b55627826782a34b631104cf9c9144dff0c3d16c6ef54778a1ba10e7e0e7d7",
+        "computed_candidate_sha256": "d1b55627826782a34b631104cf9c9144dff0c3d16c6ef54778a1ba10e7e0e7d7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kronecker_box_simplex_kkt_source_solver.py",
+            "bytes": 6602
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d1b55627"
+    },
+    {
+      "candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/kronecker_box_simplex_kkt_source_solver.py')\ns",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "expected_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "computed_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/kronecker_box_simplex_kkt_source_solver.py",
+            "bytes": 7595
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_318a8d60"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t08",
+      "turn_idx": 8,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "Rank-deficient working-set cycling",
+      "candidate_sha256": "0b25e3434ac56c1ce07209f0a262f128872ebb7b0ea17bf21f8f326a614a4da7",
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "An arbitrary least-squares minimizer on each enlarged face suffices to make progress after releasing a bound.",
+      "empirical_witness": "On rank-six QP slice 845, releasing coordinate 7 sends the trial to -1.82e-3 in that coordinate. The feasible step length is zero, and the same working sets repeat.",
+      "causal_blanket_diagnosis": "Rank deficiency leaves multiple face minimizers; selecting a fresh minimum-norm representative can move along a direction that does not improve the objective and re-fix the released coordinate.",
+      "sublated_pivot": "Use an orthonormal sum-zero basis to solve for the smallest correction from the current iterate, and use the tangent gap to decide whether to stop on a rank-deficient face.",
+      "pending_resolution_proposed_at_turn": 9,
+      "agent_claimed_probe": {
+        "turn": 9,
+        "command_preview": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\n\nspec = importlib.util.spec_from_file_loc",
+        "stdout_preview": "End-to-end slices: 3 ; worst (Sylvester residual, terminal relative error, KKT gap): [2.80614757e-13 1.07523077e-13 1.09634524e-15]\n"
+      },
+      "probe_support_status": "supported_on_host_public_probe",
+      "resolved_at_turn": 9,
+      "resolved_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_src02_studies.pkl": "8292f720910e25dda6360e3e2992e7f05d54864453c313d466cd99ffc240d0fe",
+          "/holdout_task/validate_public_schema.py": "139408cf668d26910f60bc42076ee1613d0ebe9ceceb1fa77674b97a73ab66d8"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "resolution_witness_scope_verified": "public_probe_scope"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 9,
+      "verified_turn": 9,
+      "resolved_nogood_ids": [
+        "ng_t08"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "probe_protocol_version": "hegel_host_public_probe_v2",
+        "candidate_bundle_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_src02_studies.pkl": "8292f720910e25dda6360e3e2992e7f05d54864453c313d466cd99ffc240d0fe",
+          "/holdout_task/validate_public_schema.py": "139408cf668d26910f60bc42076ee1613d0ebe9ceceb1fa77674b97a73ab66d8"
+        },
+        "schema_valid": true,
+        "measured_metrics": {
+          "schema_valid": true,
+          "errors": []
+        },
+        "gauge_invariance_verified": false,
+        "result": "supported_on_host_public_probe"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_06_robust_network_assimilation",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_src02_kronecker_sylvester_box_simplex_kkt_source_318a8d601e13",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 3,
+    "describe_skill_queries": [
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "318a8d601e13fc154a1a5eef9a2bced31fe76c51308c36c309f7d681d713e8b0",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_kronecker_box_simplex_source"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "kronecker_box_simplex_kkt_source_solver.py",
+          "final_file_sha256": "e63eb6988a80bb23edb6046188dea55122800c00cb29e192c6d9efad2c4b7943",
+          "public_entrypoints": [
+            "solve_kronecker_box_simplex_source"
+          ],
+          "effective_entrypoints": [
+            "solve_kronecker_box_simplex_source"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "kronecker_box_simplex_kkt_source_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_src02_studies.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_src02_studies.pkl": "8292f720910e25dda6360e3e2992e7f05d54864453c313d466cd99ffc240d0fe",
+      "/holdout_task/validate_public_schema.py": "139408cf668d26910f60bc42076ee1613d0ebe9ceceb1fa77674b97a73ab66d8"
+    },
+    "shared_public_schema_validator_present": true
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5316,
+    "initial_user_payload_chars": 4029,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 14396
+  },
+  "provider_attempt_accounting": {
+    "logical_agent_decision_calls": 12,
+    "total_provider_attempts": 14,
+    "usage_unknown_attempt_count": 2,
+    "cost_accounting_status": "partial_unknown_usage"
+  },
+  "decision_count": 30,
+  "prompt_tokens": 330096,
+  "cached_tokens": 71680,
+  "completion_tokens": 13376,
+  "total_tokens": 343472,
+  "token_cost_proxy": 289712,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 289712,
+  "wall_ms": 1170136.36,
+  "provenance_verified": true,
+  "terminal_record_sha256": "0a45de12b3ecf9e428a87f77ec9500d0e5d5d566b9cb995d728b50b7c3e141db"
+}
