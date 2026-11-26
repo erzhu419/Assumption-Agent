@@ -1,0 +1,91 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq03_viscoelastic_hereditary_memory_329119edfedd",
+    "source_hash": "329119edfedd2631adaa9ea422f91c20efdfe6b00a73e76db5d5d89434b6ef19",
+    "parent_ids": [],
+    "source_episode_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "task_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_viscoelastic.py",
+        "archived_relpath": "producers/tmp__verify_viscoelastic.py",
+        "bytes": 5712,
+        "sha256": "fdf79e2d0880e754c4066f3aee5ddec783635753791c958c36b3900a89d6234f"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; sed -n '1,220p' /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation Cauchy IRLS reference panel alignment'",
+      "pwd; ls -ld /pretrain_task /holdout_task /app /workspace; find /pretrain_task /holdout_task /app /workspace -maxdepth 3 -type f \\( -iname '*eq03*' -o -name 'validate_public_schema.py' -o -iname '*viscoelastic*' \\) -print 2>/dev/null; for fn in autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_reference_panel_balancing.balanced_cell_weights autogenous_prim_reference_panel_balancing.weighted_column_fill autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; do PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe \"$fn\"; done",
+      "set -eu\ncat > /tmp/verify_viscoelastic.py <<'PY'\nimport importlib.util\nimport numpy as np\n\npath = '/holdout_task/viscoelastic_hereditary_forecast.py'\nspec = importlib.util.spec_from_file_location('forecast', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\n# Independent scalar check for initial contact, nonmonotone first passage,\n# exact contact at a knot, and the no-contact convention.\nnp.testing.assert_allclose(m._crossings(np.array([1., 3., 8.]), np.array([1., 0., 0., 0., 0.]), np.array([[0, 0, 0], [2, -2, 4], [0, 1, 0], [-1, 0, .9], [-2, -1, 2]]), np.ones(5)), [0",
+      "set -eu\nfind /holdout_task /pretrain_task /mnt /opt -maxdepth 4 -type f \\( -name 'public_eq03_datasets.pkl' -o -name 'validate_public_schema.py' \\) -print 2>/dev/null\nif [ -f /holdout_task/public_eq03_datasets.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then\n  python3 -I /holdout_task/validate_public_schema.py\nelse\n  printf '%s\\n' 'Real-data audit unavailable: the documented public fixture and validator are not mounted.'\n  OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport numpy as np\np = Path('/tmp/verify_viscoelastic.py')\nscope = {}\nexec(compile(p.read_te"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_viscoelastic.py",
+      "primary_producer_container_path": "/tmp/verify_viscoelastic.py",
+      "selected_channels": [
+        "fam_multiscale_memory_and_outlier_deconfounding"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_hereditary_forecast.py",
+        "filename": "viscoelastic_hereditary_forecast.py",
+        "bytes": 4456,
+        "sha256": "ad8f98618202b1ed10b448900da1a7ee837a7d782f28ac5baa8b583d54e3aa26",
+        "content_addressed_ref": "content_addressed_blobs/ad8f98618202b1ed10b448900da1a7ee837a7d782f28ac5baa8b583d54e3aa26.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_hereditary_forecast.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "329119edfedd2631adaa9ea422f91c20efdfe6b00a73e76db5d5d89434b6ef19",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "set -eu\nfind /holdout_task /pretrain_task /mnt /opt -maxdepth 4 -type f \\( -name 'public_eq03_datasets.pkl' -o -name 'validate_public_schema.py' \\) -print 2>/dev/null\nif [ -f /holdout_task/public_eq03_datasets.pkl ] && [ -f /holdout_task/va",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "329119edfedd2631adaa9ea422f91c20efdfe6b00a73e76db5d5d89434b6ef19",
+        "expected_candidate_sha256": "329119edfedd2631adaa9ea422f91c20efdfe6b00a73e76db5d5d89434b6ef19",
+        "computed_candidate_sha256": "329119edfedd2631adaa9ea422f91c20efdfe6b00a73e76db5d5d89434b6ef19",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_hereditary_forecast.py",
+            "bytes": 4456
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_329119ed"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

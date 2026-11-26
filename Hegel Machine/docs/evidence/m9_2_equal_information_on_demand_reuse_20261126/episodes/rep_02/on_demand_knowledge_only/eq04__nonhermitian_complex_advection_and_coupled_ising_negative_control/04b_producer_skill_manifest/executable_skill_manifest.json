@@ -1,0 +1,132 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq04_nonhermitian_complex_coupled_negctrl_0cf1efab434b",
+    "source_hash": "0cf1efab434b83dcd42b996576d2e589fbcf8fb29b9db0b2731561897f8fc709",
+    "parent_ids": [],
+    "source_episode_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "task_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_eq04_diagnose.py",
+        "archived_relpath": "producers/tmp__audit_eq04_diagnose.py",
+        "bytes": 3842,
+        "sha256": "9aad866f6621549e93fe072cbe77e01b2f6f6e4777cee72e53f44a74c51f98cd"
+      },
+      {
+        "container_path": "/tmp/audit_eq04_matched_map.py",
+        "archived_relpath": "producers/tmp__audit_eq04_matched_map.py",
+        "bytes": 3125,
+        "sha256": "d5ffb8048f6ab1507191b11c392600c518524f578f9318eeeda1da4039b6ef47"
+      },
+      {
+        "container_path": "/tmp/audit_eq04_resonance.py",
+        "archived_relpath": "producers/tmp__audit_eq04_resonance.py",
+        "bytes": 2809,
+        "sha256": "eadbc09298c803958b21763aa2fc3527cf5e4eeae7a854524b7a97a28962fdd8"
+      },
+      {
+        "container_path": "/tmp/verify_eq04.py",
+        "archived_relpath": "producers/tmp__verify_eq04.py",
+        "bytes": 6528,
+        "sha256": "30a5f06c9da4b81988509b5e05c5473ff47425c4a87594abeb66aaa36f5d89bd"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 4068,
+        "sha256": "e9eba46d5eed38028067bbfd2806e3a8bd0d54288beecb3c65448b4e7c2e3154"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; sed -n '1,220p' /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('/holdout_task/public_eq04_cases.pkl','rb') as f:\n    data=pickle.load(f)\nprint('versions',np.__version__,scipy.__version__)\ndef structure(x,d=0):\n    if d>=4: return type(x).__name__\n    if isinstance(x,dict): return {k:structure(v,d+1) for k,v in list(x.items())[:28]}\n    if isinstance(x,(tuple,list)): return (type(x).__name__,len(x),[structure(v,d+1) for v in x[:2]])\n    if isinstance(x,np.ndarray): return (x.shape,str(x.dtype))\n    return x if isins",
+      "pwd; ls -ld /holdout_task /pretrain_task /app /workspace /tmp/hegel_knowledge_ref 2>/dev/null || true; for d in /pretrain_task /app /workspace; do if [ -d \"$d\" ]; then find \"$d\" -maxdepth 3 -type f \\( -name '*.py' -o -name '*.pkl' -o -name 'README*' -o -name 'AGENTS.md' \\) -printf '%p (%s bytes)\\n'; fi; done | head -100; if [ -f /tmp/hegel_knowledge_ref/describe_ref.py ]; then python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'exact subset support enumeration complex ridge pairwise penalties'; fi; python3 -I -c 'import numpy, scipy; print(numpy.__version__, scipy.__version__)'",
+      "set -e\ncat > /tmp/verify_eq04.py <<'PY'\nimport importlib.util\nimport itertools\nimport pathlib\nimport time\n\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef forward(p):\n    m, nx, ny = p['basis'].shape\n    hx, hy = p['Lx']/(nx+1), p['Ly']/(ny+1)\n    dx, dy = p['nu']/hx**2, p['nu']/hy**2\n    a = lil_matrix((nx*ny, nx*ny), dtype=np.complex128)\n   ",
+      "set -e\nsed -i 's/np.array(\\[1, x, y, x\\*y\\])/np.stack([np.ones_like(x), x, y, x*y])/' /tmp/verify_eq04.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_eq04.py\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then python3 /holdout_task/validate_public_schema.py; fi",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nrng = np.random.default_rng(148)\nnx = ny = 32\nbasis = rng.normal(size=(11,nx,ny))\nbasis[1] = basis[0]\nobs_idx = rng.choice(nx*ny, 40, replace=False)\nij = np.column_stack(divmod(obs_idx, ny))\np = dict(basis=basis, Lx=1., Ly=.7, nu=.003, vx=rng.uniform(-.2,.2,(nx,ny)), vy=rng.uniform(-.4,.4,(nx,ny)), sigma=np.zeros",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text()\ns = s.replace('    gram = g.conj().T @ g + lam2 * np.eye(m)\\n    rhs = g.conj().T @ y\\n', '    # Keep the ridge rows explicit: forming G^H G can round away a\\n    # small positive ridge on linearly dependent sensor columns.\\n    design = np.vstack((g, np.sqrt(lam2) * np.eye(m)))\\n    target = np.concatenate((y, np.zeros(m, dtype=np.complex128)))\\n')\ns = s.replace('    # Group equal-sized supports for batched solves; charge each listed pair\\n    # only when bo",
+      "set -e\ncat > /tmp/audit_eq04_resonance.py <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.linalg import lstsq\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/nonhermitian_advection_coupled_select.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nrng = np.random.default_rng(2504)\nn, m = 32, 11\nlx, ly, nu = 1.2, .73, .002\nhx, hy = lx/33, ly/33\nvx, vy, omega = .11, -.13, -.003\ndx, dy, ux, uy = nu/hx**2, nu/hy**2, vx/hx, -vy/hy\nj = np.arange(1, n+1)\n# A separable upwind operator is diagonally similar to two symmetric\n# tridiagonals.",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/audit_eq04_resonance.py')\ns = p.read_text()\ns = s.replace('    assert np.all(errs <= [1e-8,1e-6,1e-5]), errs', '''    cand_fields = mod._responses(p)\n    gc = cand_fields[ij[:,0],ij[:,1]]\n    def candidate_score(z):\n        a = np.abs(z)>1e-8\n        return .5*np.linalg.norm(gc@z-y)**2 + .5*lam2*np.linalg.norm(z)**2 + lam0*a.sum() + sum(c for u,v,c in pairs if a[u] and a[v])\n    print('  returned, analytic optimum, analytic at candidate, candidate at candidate:',out['objective'],best,score(w),candidate_score(w))\n    print('  su",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\ns = Path('/tmp/audit_eq04_resonance.py').read_text()\nstart = s.index('    def score(w):')\nstop = s.index(\"print('Audit worst:\", start)\ns = s[:start] + '''    out = mod.solve_nonhermitian_coupled_inversion(p)\n    w = out['weights_real'] + 1j*out['weights_imag']\n    cand_fields = mod._responses(p)\n    gc = cand_fields[ij[:,0],ij[:,1]]\n    def score(matrix, z):\n        a = np.abs(z)>1e-8\n        return .5*np.linalg.norm(matrix@z-y)**2 + .5*lam2*np.linalg.norm(z)**2 + lam0*a.sum() + sum(c for u,v,c in pairs if a[u] and a[v])\n    def optimum(matri"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/nonhermitian_advection_coupled_select.py",
+        "filename": "nonhermitian_advection_coupled_select.py",
+        "bytes": 3476,
+        "sha256": "819cf684fd3c290db62f7870c3c0b775101e777d815d666107a1b2dd945ac0fd",
+        "content_addressed_ref": "content_addressed_blobs/819cf684fd3c290db62f7870c3c0b775101e777d815d666107a1b2dd945ac0fd.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/nonhermitian_advection_coupled_select.py"
+    ],
+    "exported_pure_functions": [
+      "objective",
+      "oracle"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "0cf1efab434b83dcd42b996576d2e589fbcf8fb29b9db0b2731561897f8fc709",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text()\ns = s.replace('    gram = g.conj().T @ g + lam2 * np.eye(m)\\n    rhs = g.conj().T @ y\\n', '    # Keep t",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "0cf1efab434b83dcd42b996576d2e589fbcf8fb29b9db0b2731561897f8fc709",
+        "expected_candidate_sha256": "0cf1efab434b83dcd42b996576d2e589fbcf8fb29b9db0b2731561897f8fc709",
+        "computed_candidate_sha256": "0cf1efab434b83dcd42b996576d2e589fbcf8fb29b9db0b2731561897f8fc709",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/nonhermitian_advection_coupled_select.py",
+            "bytes": 3476
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_0cf1efab"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "objective",
+        "code": "def objective(g, y, p, w):\n    active = np.abs(w) > 1e-08\n    err = g @ w - y\n    return 0.5 * np.vdot(err, err).real + 0.5 * p['lam2'] * np.vdot(w, w).real + p['lam0'] * np.count_nonzero(active) + sum((c for (u, v, c) in p['pair_penalties'] if active[u] and active[v]))"
+      },
+      {
+        "name": "oracle",
+        "code": "def oracle(g, y, p):\n    import itertools\n    m = g.shape[1]\n    h = np.vstack((g, np.sqrt(p['lam2']) * np.eye(m)))\n    target = np.r_[y, np.zeros(m)]\n    (best, win) = (np.inf, None)\n    for k in range(m + 1):\n        for support in itertools.combinations(range(m), k):\n            w = np.zeros(m, dtype=complex)\n            if k:\n                w[list(support)] = np.linalg.lstsq(h[:, support], target, rcond=None)[0]\n            score = objective(g, y, p, w)\n            if score < best:\n                (best, win) = (score, w)\n    return (best, win)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,156 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq02_coupled_interferometry_cauchy_box_l0_e11a179ccebf",
+    "source_hash": "e11a179ccebff6ebe86001e6e6efed2c5598a6e2e1d30c5b6d10d4e0442f8b29",
+    "parent_ids": [],
+    "source_episode_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "task_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_eq02.py",
+        "archived_relpath": "producers/tmp__audit_eq02.py",
+        "bytes": 2357,
+        "sha256": "279db4d219e8a603b7fa49154f2650b0f52c40f11c78e71f72ab5b5490d4057a"
+      },
+      {
+        "container_path": "/tmp/eq02_v01.py",
+        "archived_relpath": "producers/tmp__eq02_v01.py",
+        "bytes": 11626,
+        "sha256": "319205d2713e3ace57629c8174df1e3d229be6b993393a8521c0265aa1b36884"
+      },
+      {
+        "container_path": "/tmp/eq02_v02.py",
+        "archived_relpath": "producers/tmp__eq02_v02.py",
+        "bytes": 11856,
+        "sha256": "9bdf928bb09082678c51eee9cbec51e1419ab62ca7306d1d0c61f93318041afe"
+      },
+      {
+        "container_path": "/tmp/paired_eq02.py",
+        "archived_relpath": "producers/tmp__paired_eq02.py",
+        "bytes": 693,
+        "sha256": "4726f7a121ef08542fbbc864b790dd4835aa56fff5259bfbe4487b8008671643"
+      },
+      {
+        "container_path": "/tmp/stress_eq02.py",
+        "archived_relpath": "producers/tmp__stress_eq02.py",
+        "bytes": 1226,
+        "sha256": "c497d73061a0b72bbf6e15814282ef26c081aa17b6bcade9cf12656a7767505b"
+      },
+      {
+        "container_path": "/tmp/test_eq02.py",
+        "archived_relpath": "producers/tmp__test_eq02.py",
+        "bytes": 5767,
+        "sha256": "3906322208c99b66948f5dc9f5910f936bc894e5886442728882f804e8638d22"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; sed -n '1,300p' /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport pickle,numpy as np,scipy\nx=pickle.load(open('/holdout_task/public_eq02_studies.pkl','rb')); print(type(x)); print(list(x) if isinstance(x,dict) else len(x));\nfor s in (x.values() if isinstance(x,dict) else x):\n if isinstance(s,dict):\n  for k,v in s.items(): print(k, list(v) if isinstance(v,dict) else (np.shape(v),v if np.ndim(v)==0 else ''))\nPY",
+      "pwd; ls -la /; ls -la /pretrain_task; find /pretrain_task /app /workspace /mnt /opt -maxdepth 4 -type f \\( -iname '*eq02*' -o -iname '*schema*' -o -iname '*interferometr*' -o -name 'AGENTS.md' \\) -print 2>/dev/null; python3 -c 'import numpy, scipy; print(numpy.__version__, scipy.__version__)'",
+      "mkdir -p /holdout_task && cat > /holdout_task/coupled_interferometry_certified_l0.py <<'PY'\n\"\"\"Reference-panel calibration and certified symmetric-box L0 selection.\"\"\"\n\nimport heapq\n\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef _align(panel):\n    x = np.array(panel['X_panel_raw'], dtype=np.float64, copy=True)\n    controls = np.asarray(panel['controls'], dtype=np.float64)\n    centers = np.asarray(panel['center_id'])\n    strata = np.asarray(panel['stratum'])\n    cell_size = np.empty(len(x), dtype=np.float64)\n    for center in np.unique(centers):\n        mask = centers == center\n ",
+      "cat > /tmp/test_eq02.py <<'PY'\nimport importlib.util\nimport itertools\nimport os\nimport time\nimport numpy as np\n\npath = '/holdout_task/coupled_interferometry_certified_l0.py'\nspec = importlib.util.spec_from_file_location('eq02', path)\neq = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(eq)\n\ndef check(x,y,l2,l0,m,out):\n    p=x.shape[1]; w=np.asarray(out['weights']); r=x@w-y\n    value=.5*(r@r+l2*(w@w))+l0*np.count_nonzero(abs(w)>1e-8)\n    assert w.shape==(p,) and np.max(abs(w))<=m+1e-12 and abs(value-out['objective'])<1e-8\n    leaves=out['subcube_leaves']; assert 1<=len(leaves)<=20",
+      "cat > /tmp/stress_eq02.py <<'PY'\nfrom test_eq02 import eq, check, design\nimport time\nimport numpy as np\n\nfor seed,p,kind in [(17,19,'near-threshold'),(18,18,'near-threshold'),(29,19,'paired'),(33,18,'paired'),(51,19,'cancellation')]:\n    rng=np.random.default_rng(seed); n=120; lam0=.35; lam2=.035; m=.52\n    if kind=='near-threshold':\n        x=design(rng,n,p,.30)\n        g=x.T@x\n        z=rng.choice([-1.,1.],p)*np.sqrt(2*lam0*g.diagonal())*rng.uniform(.88,1.12,p)\n        y=x@np.linalg.solve(g,z)+.07*rng.normal(size=n)\n    elif kind=='paired':\n        a=design(rng,n,(p+1)//2,.10)\n        x=np.r",
+      "python3 -I - <<'PY'\nimport sys, time\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, design\nimport numpy as np\nfor seed,p in [(29,19),(33,18),(31,19),(34,18)]:\n    rng=np.random.default_rng(seed); n=120\n    a=design(rng,n,(p+1)//2,.10)\n    x=np.repeat(a,2,axis=1)[:,:p]+.005*rng.normal(size=(n,p))\n    y=a@(rng.choice([-1.,1.],a.shape[1])*rng.uniform(.47,.59,a.shape[1]))+.04*rng.normal(size=n)\n    t=time.perf_counter()\n    try:\n        out=eq._Selector(x,y,.035,.35,.52).solve()\n        elapsed=time.perf_counter()-t\n        print(seed,p,'seconds',round(elapsed,3),'certificate',check(x",
+      "cp /holdout_task/coupled_interferometry_certified_l0.py /tmp/eq02_v01.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/coupled_interferometry_certified_l0.py')\ns=p.read_text().replace('from scipy.optimize import minimize','from scipy.linalg import solve as linear_solve\\nfrom scipy.optimize import minimize')\ns=s.replace('self.seen = set()', 'self.fits = {}')\ns=s.replace('        if not key or key in self.seen:\\n            return\\n        self.seen.add(key)', '        if not key:\\n            return np.zeros(self.p)\\n        if key in self.fits:\\n            return self.fits[k",
+      "python3 -I - <<'PY'\nimport sys, time\nfrom pathlib import Path\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, design\nimport numpy as np\nroot = Path('/holdout_task')\npublic = root / 'public_eq02_studies.pkl'\nvalidator = root / 'validate_public_schema.py'\nprint('public studies:', public.is_file(), '| public validator:', validator.is_file(), flush=True)\nfor seed, p in ((31,19),(34,18),(35,19),(36,19)):\n    rng=np.random.default_rng(seed)\n    a=design(rng,120,(p+1)//2,.10)\n    x=np.repeat(a,2,axis=1)[:,:p]+.005*rng.normal(size=(120,p))\n    y=a@(rng.choice([-1.,1.],a.shape[1])*rng.unifo",
+      "cp /holdout_task/coupled_interferometry_certified_l0.py /tmp/eq02_v02.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/coupled_interferometry_certified_l0.py')\ns=p.read_text()\nix=s.index('    def _leaf(')\ns=s[:ix]+'''    def _branch(self, state, center, frac):\n        # Probe both children in parallel with proximal steps on the same\n        # convex envelope. Probe bounds choose a split, not a pruning rule.\n        free = np.flatnonzero(state == -1)\n        score = np.minimum(frac[free], 1 - frac[free])\n        ambiguous = free[score > 1e-5]\n        if len(ambiguous) < 2:\n   ",
+      "python3 -I /tmp/test_eq02.py && python3 -I - <<'PY'\nimport sys, time\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, design\nimport numpy as np\nfor seed, p, rho in [(17, 19, .30), (18, 18, .30), (51, 19, .997)]:\n    rng = np.random.default_rng(seed)\n    x = design(rng, 120, p, rho)\n    if rho < .9:\n        g = x.T @ x\n        z = rng.choice([-1., 1.], p) * np.sqrt(.7 * g.diagonal()) * rng.uniform(.88, 1.12, p)\n        y = x @ np.linalg.solve(g, z) + .07 * rng.normal(size=120)\n    else:\n        w = np.zeros(p)\n        w[:8] = rng.choice([-1., 1.], 8) * rng.uniform(1.1, 1.4, 8)\n      ",
+      "cat > /tmp/audit_eq02.py <<'PY'\nimport pickle\nimport runpy\nimport sys\nimport time\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, panel_trial\n\nroot = Path('/holdout_task')\nstudies_path = root / 'public_eq02_studies.pkl'\nvalidator = root / 'validate_public_schema.py'\nprint('Public studies present:', studies_path.is_file(), '| official validator present:', validator.is_file(), flush=True)\nif validator.is_file():\n    sys.path.insert(0, str(root))\n    runpy.run_path(str(validator), run_name='__main__')\n\nsolve = eq.solve_coupled_interferometry",
+      "python3 -I - <<'PY'\nimport importlib.util\nimport sys\nimport time\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, design\n\nrng = np.random.default_rng(36)\na = design(rng, 120, 10, .10)\nx = np.repeat(a, 2, axis=1)[:, :19] + .005 * rng.normal(size=(120, 19))\ny = a @ (rng.choice([-1., 1.], 10) * rng.uniform(.47, .59, 10)) + .04 * rng.normal(size=120)\nstart = time.perf_counter()\nout = eq._Selector(x, y, .035, .35, .52).solve()\nelapsed = time.perf_counter() - start\nleaves, gap, psd = check(x, y, .035, .35, .52, out)\nprint(f'ng_t09 paired-column seed=36 p=19 baseline_lea"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__eq02_v02.py",
+      "primary_producer_container_path": "/tmp/eq02_v02.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_interferometry_certified_l0.py",
+        "filename": "coupled_interferometry_certified_l0.py",
+        "bytes": 13507,
+        "sha256": "fda447e69419c200ab176bd83e7428ac12cd28f28b6fb9ffcf5bd688e1a41239",
+        "content_addressed_ref": "content_addressed_blobs/fda447e69419c200ab176bd83e7428ac12cd28f28b6fb9ffcf5bd688e1a41239.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_interferometry_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "_align",
+      "_calibrate",
+      "_diagonal",
+      "check",
+      "design"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e11a179ccebff6ebe86001e6e6efed2c5598a6e2e1d30c5b6d10d4e0442f8b29",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cat > /tmp/audit_eq02.py <<'PY'\nimport pickle\nimport runpy\nimport sys\nimport time\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_eq02 import eq, check, panel_trial\n\nroot = Path('/holdout_task')\nstudies_path",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e11a179ccebff6ebe86001e6e6efed2c5598a6e2e1d30c5b6d10d4e0442f8b29",
+        "expected_candidate_sha256": "e11a179ccebff6ebe86001e6e6efed2c5598a6e2e1d30c5b6d10d4e0442f8b29",
+        "computed_candidate_sha256": "e11a179ccebff6ebe86001e6e6efed2c5598a6e2e1d30c5b6d10d4e0442f8b29",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_interferometry_certified_l0.py",
+            "bytes": 13507
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_e11a179c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_align",
+        "code": "def _align(panel):\n    x = np.array(panel['X_panel_raw'], dtype=np.float64, copy=True)\n    controls = np.asarray(panel['controls'], dtype=np.float64)\n    centers = np.asarray(panel['center_id'])\n    strata = np.asarray(panel['stratum'])\n    cell_size = np.empty(len(x), dtype=np.float64)\n    for center in np.unique(centers):\n        mask = centers == center\n        c = controls[mask]\n        valid = np.isfinite(c)\n        cols = valid.sum(axis=0) >= 2\n        c = np.where(valid[:, cols], c[:, cols], np.nan)\n        offset = np.median(np.nanmean(c, axis=0))\n        gain = np.median(np.nanstd(c, axis=0, ddof=0))\n        x[mask] = (x[mask] - offset) / gain\n        for stratum in (0, 1, 2):\n            cell = mask & (strata == stratum)\n            cell_size[cell] = cell.sum()\n    weight = 1 / cell_size\n    weight /= weight.mean()\n    finite = np.isfinite(x)\n    means = weight @ np.where(finite, x, 0) / (weight @ finite)\n    return np.where(finite, x, means)"
+      },
+      {
+        "name": "_calibrate",
+        "code": "def _calibrate(h, y):\n    beta = np.linalg.lstsq(h, y, rcond=None)[0]\n    for _ in range(35):\n        r = y - h @ beta\n        sw = (r * r + 1e-06) ** (-0.25)\n        nxt = np.linalg.lstsq(h * sw[:, None], y * sw, rcond=None)[0]\n        if np.linalg.norm(nxt - beta) <= 1e-08 * (1 + np.linalg.norm(beta)):\n            beta = nxt\n            break\n        beta = nxt\n    r = y - h @ beta\n    scale = max(1.5 * 1.4826 * np.median(np.abs(r - np.median(r))), 1e-07)\n    for _ in range(100):\n        sw = 1 / np.hypot(1, (y - h @ beta) / scale)\n        nxt = np.linalg.lstsq(h * sw[:, None], y * sw, rcond=None)[0]\n        if np.linalg.norm(nxt - beta) <= 1e-10 * (1 + np.linalg.norm(beta)):\n            return nxt\n        beta = nxt\n    return beta"
+      },
+      {
+        "name": "_diagonal",
+        "code": "def _diagonal(g):\n    norm = np.sqrt(np.maximum(g.diagonal(), np.finfo(float).tiny))\n    scaled = g / norm[:, None] / norm\n    smallest = np.linalg.eigvalsh(scaled)[0]\n    if smallest <= 1e-10:\n        return np.zeros(len(g))\n    lo = 0.45 * smallest\n    r = scaled - lo * np.eye(len(g))\n    inv = np.linalg.inv(r)\n    d = np.full(len(g), lo)\n    for _ in range(4):\n        for j in np.argsort(-1 / inv.diagonal()):\n            v = inv[:, j].copy()\n            inc = 0.38 / inv[j, j]\n            d[j] += inc\n            inv += inc / (1 - inc * v[j]) * np.outer(v, v)\n    d *= norm ** 2\n    return 0.999999 * d"
+      },
+      {
+        "name": "check",
+        "code": "def check(x, y, l2, l0, m, out):\n    p = x.shape[1]\n    w = np.asarray(out['weights'])\n    r = x @ w - y\n    value = 0.5 * (r @ r + l2 * (w @ w)) + l0 * np.count_nonzero(abs(w) > 1e-08)\n    assert w.shape == (p,) and np.max(abs(w)) <= m + 1e-12 and (abs(value - out['objective']) < 1e-08)\n    leaves = out['subcube_leaves']\n    assert 1 <= len(leaves) <= 2048\n    universe = np.arange(1 << p, dtype=np.int32)\n    covered = np.zeros(len(universe), dtype=np.int16)\n    g = x.T @ x\n    b = x.T @ y\n    base = 0.5 * (y @ y)\n    smallest = np.inf\n    slack = np.inf\n    for leaf in leaves:\n        (z, a) = [leaf[k] for k in ('fixed_zero', 'fixed_active')]\n        assert all((len(v) == p and all((type(q) is bool for q in v)) for v in (z, a)))\n        (z, a) = (np.asarray(z), np.asarray(a))\n        assert not (z & a).any()\n        ab = sum((1 << int(j) for j in np.flatnonzero(a)))\n        zb = sum((1 << int(j) for j in np.flatnonzero(z)))\n        covered[universe & (ab | zb) == ab] += 1\n        (d, c) = [np.asarray(leaf[k]) for k in ('minorant_diagonal', 'minorant_center')]\n        assert d.shape == c.shape == (p,) and np.all(d >= 0)\n        q = g - np.diag(d)\n        slack = min(slack, np.linalg.eigvalsh(q)[0])\n        assert slack >= -1e-09\n        coef = q @ c - b\n        curv = d + l2\n        t = np.array([np.clip(-u / v, -m, m) if v > 0 else -np.sign(u) * m for (u, v) in zip(coef, curv)])\n        f = l0 + coef * t + 0.5 * curv * t * t\n        recomputed = base - 0.5 * c @ (q @ c) + sum(f[a]) + sum(np.minimum(f[~(a | z)], 0))\n        assert leaf['lb'] <= recomputed + 1e-08\n        smallest = min(smallest, leaf['lb'])\n    assert np.all(covered == 1)\n    gap = value - out['certified_lower_bound']\n    assert 0 <= gap <= 1e-05 and abs(out['certified_lower_bound'] - smallest) < 1e-08\n    return (len(leaves), gap, slack)"
+      },
+      {
+        "name": "design",
+        "code": "def design(rng, n, p, rho):\n    x = rng.normal(size=(n, p))\n    if rho:\n        x = np.sqrt(1 - rho) * x + np.sqrt(rho) * rng.normal(size=(n, 1)) * rng.choice([-1, 1], size=p)\n    return x / np.linalg.norm(x, axis=0) * rng.uniform(1.7, 3.0, p)"
+      }
+    ]
+  }
+}

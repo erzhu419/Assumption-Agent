@@ -1,0 +1,107 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq03_viscoelastic_hereditary_memory_204cd6ccaf41",
+    "source_hash": "204cd6ccaf4181d5113bf0298830ae1965b1c7abaeb973ecbb9af8e53d67723d",
+    "parent_ids": [],
+    "source_episode_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "task_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_eq03.py",
+        "archived_relpath": "producers/tmp__audit_eq03.py",
+        "bytes": 6320,
+        "sha256": "9b5e934ab342c5f6c125bf0f8d15d2c9ebcfb45b52d06ef6b5672722b44a9ca5"
+      },
+      {
+        "container_path": "/tmp/verify_eq03.py",
+        "archived_relpath": "producers/tmp__verify_eq03.py",
+        "bytes": 5329,
+        "sha256": "e3273b05305939cc2ca64ab21e1028ed7a4ec59b7902b4aed341924ef8d667d8"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation Cauchy IRLS reference panel alignment imputation'; sed -n '1,220p' /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport pickle\nfrom collections.abc import Mapping\np='/holdout_task/public_eq03_datasets.pkl'\nwith open(p,'rb') as f: d=pickle.load(f)\ndef show(x, depth=0):\n    if isinstance(x,Mapping) and depth<4:\n        for k,v in list(x.items())[:30]:\n            print('  '*depth,k,end=': ')\n            if isinstance(v,Mapping): print()\n            show(v,depth+1)\n    elif isinsta",
+      "pwd; ls -ld /pretrain_task /holdout_task /workspace /app /results; find /pretrain_task /holdout_task /workspace /app /results /mnt /data -maxdepth 4 -type f \\( -name '*eq03*' -o -name 'validate_public_schema.py' -o -name 'AGENTS.md' \\) -print 2>/dev/null; export PYTHONPATH=/tmp; for fn in autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_reference_panel_balancing.balanced_cell_weights autogenous_prim_reference_panel_balancing.weighted_column_fill autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; do python3 -m hegel_wormhole_skills --describe \"$fn\"; don",
+      "set -e\nls -lh /pretrain_task\nmkdir -p /holdout_task\ncat > /holdout_task/viscoelastic_hereditary_forecast.py <<'PY'\n\"\"\"Calibrate laboratory coupons and forecast creep from causal Prony states.\"\"\"\n\nimport numpy as np\n\n\ndef _align(train, test):\n    def pool(name):\n        return np.concatenate((train[name], test[name]), axis=0)\n\n    lab, stratum = pool('lab_id'), pool('stratum')\n    controls = pool('ref_coupons')\n    features = pool('coupon_features_raw').astype(float, copy=True)\n    for group in np.unique(lab):\n        rows = lab == group\n        panel = controls[rows]\n        valid = np.sum(np.",
+      "set -e\ncd /holdout_task\nif [ -f validate_public_schema.py ] && [ -f public_eq03_datasets.pkl ]; then python3 validate_public_schema.py; else echo 'Public dataset and validator not mounted; running synthetic contract tests.'; fi\ncat > /tmp/verify_eq03.py <<'PY'\nimport importlib.util\nimport numpy as np\n\npath = '/holdout_task/viscoelastic_hereditary_forecast.py'\nspec = importlib.util.spec_from_file_location('forecast', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef crossing(t, y, z):\n    if y[0] >= z:\n        return 0.\n    for j in range(1, len(t)):\n        if y[j",
+      "set -e\nsed -i 's/err\\[rows, cols\\]/err[rows][:, cols]/' /tmp/verify_eq03.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_eq03.py",
+      "set -e\ncd /holdout_task\nif [ -f validate_public_schema.py ] && [ -f public_eq03_datasets.pkl ]; then python3 -I validate_public_schema.py; else echo 'Public measurements and validator are not mounted.'; fi\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/verify_eq03.py').read_text()\nmarker = '    err = np.abs(pred-clean[nt:])'\nassert marker in src\nsrc = src.replace('worst = np.zeros(7)', 'worst = np.zeros(7)\\naudit = []')\nsrc = src.replace(marker, '''    short = (clean[right] - clean[left])[:10]\n    strong = (clean[right] - clean[left])[10:]\n    # Any present-only model must return t",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom copy import deepcopy\nimport runpy\nimport numpy as np\n\n# Reuse the existing independent twin oracle and its final held-out split.\nsuite = runpy.run_path('/tmp/audit_eq03.py')\nsolve = suite['m'].solve_viscoelastic_hereditary_forecast\nd = suite['d']\nbase = suite['out']\n\n# All three forecast outputs must be invariant to laboratory instrument units.\nchanged = deepcopy(d)\nfor split in ('train', 'test'):\n    block = changed[split]\n    lab = block['lab_id']\n    gain = np.array([2.7, .35, 1.8, .60])[lab, None]\n    offset = np.array([-3., 2., .8, 4."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_eq03.py",
+      "primary_producer_container_path": "/tmp/audit_eq03.py",
+      "selected_channels": [
+        "fam_multiscale_memory_and_outlier_deconfounding"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_hereditary_forecast.py",
+        "filename": "viscoelastic_hereditary_forecast.py",
+        "bytes": 4124,
+        "sha256": "dd29f1b80f3e09b3c0fef09a50d74aaa1213a1ade94d8a51e7d3dce280e0679a",
+        "content_addressed_ref": "content_addressed_blobs/dd29f1b80f3e09b3c0fef09a50d74aaa1213a1ade94d8a51e7d3dce280e0679a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_hereditary_forecast.py"
+    ],
+    "exported_pure_functions": [
+      "crossing"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "204cd6ccaf4181d5113bf0298830ae1965b1c7abaeb973ecbb9af8e53d67723d",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom copy import deepcopy\nimport runpy\nimport numpy as np\n\n# Reuse the existing independent twin oracle and its final held-out split.\nsuite = runpy.run_path('/tmp/audit_eq03.py')\nsolve = sui",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "204cd6ccaf4181d5113bf0298830ae1965b1c7abaeb973ecbb9af8e53d67723d",
+        "expected_candidate_sha256": "204cd6ccaf4181d5113bf0298830ae1965b1c7abaeb973ecbb9af8e53d67723d",
+        "computed_candidate_sha256": "204cd6ccaf4181d5113bf0298830ae1965b1c7abaeb973ecbb9af8e53d67723d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_hereditary_forecast.py",
+            "bytes": 4124
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_204cd6cc"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "crossing",
+        "code": "def crossing(t, y, z):\n    if y[0] >= z:\n        return 0.0\n    for j in range(1, len(t)):\n        if y[j] >= z:\n            return t[j - 1] + (t[j] - t[j - 1]) * (z - y[j - 1]) / (y[j] - y[j - 1])\n    return t[-1]"
+      }
+    ]
+  }
+}

@@ -1,0 +1,128 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq02_coupled_interferometry_cauchy_box_l0_ea6eb8eea7bc",
+    "source_hash": "ea6eb8eea7bc253b71cf93ba5a7a04b3addd65d1ff3a411ec1f0c1bd3fee49f0",
+    "parent_ids": [],
+    "source_episode_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "task_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_eq02.py",
+        "archived_relpath": "producers/tmp__audit_eq02.py",
+        "bytes": 2031,
+        "sha256": "3f18b0af33be0035d30e11c9c22b06e3ccff0a2a7d846640c57c202910a2927b"
+      },
+      {
+        "container_path": "/tmp/eq02_boundary.py",
+        "archived_relpath": "producers/tmp__eq02_boundary.py",
+        "bytes": 1549,
+        "sha256": "1742256fce9cbc0e72c54c25909349bc0392b63c54039bdc252c49c889a4c7dc"
+      },
+      {
+        "container_path": "/tmp/verify_eq02.py",
+        "archived_relpath": "producers/tmp__verify_eq02.py",
+        "bytes": 6721,
+        "sha256": "f9ec8b28d211f8f3c7158fed52c3bb48917d78c50012f550f8e52d85f12c5cb9"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 4068,
+        "sha256": "e9eba46d5eed38028067bbfd2806e3a8bd0d54288beecb3c65448b4e7c2e3154"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; sed -n '1,260p' /holdout_task/validate_public_schema.py; if test -f /tmp/hegel_knowledge_ref/describe_ref.py; then python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'box L0 certified diagonal minorant dual branch bound'; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'Cauchy IRLS reference panel alignment imputation'; fi",
+      "pwd; ls -la /; if test -d /pretrain_task; then find /pretrain_task -maxdepth 3 -type f -printf '%s %p\\n' | sort -k2 | head -100; fi; for item in autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound autogenous_sparse_ridge_certification.solve_and_certify_l0 autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; do python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe \"$item\"; done; find /tmp/hegel_knowledge_ref -iname '*.reference.txt' | grep -E 'box_ridge|sparse_ridge|panel_balancing|robust_trend'",
+      "ls -la /pretrain_task /holdout_task 2>/dev/null; for f in /tmp/hegel_knowledge_ref/{autogenous_prim_box_ridge_bounds,autogenous_sparse_ridge_certification,autogenous_prim_reference_panel_balancing,autogenous_prim_robust_trend_decomposition}.reference.txt; do printf '\\n--- %s ---\\n' \"$f\"; grep -nE '^def |minorant_center|dual_nu|def .*lower|fixed_active|MAD' \"$f\" | head -45; done; sed -n '/^def box_ridge_cube_lower_bound/,/^def /p' /tmp/hegel_knowledge_ref/autogenous_prim_box_ridge_bounds.reference.txt | head -125; sed -n '/^def cauchy_linear_fit/,/^def /p' /tmp/hegel_knowledge_ref/autogenous_pr",
+      "cat > /tmp/verify_eq02.py <<'PY'\nimport importlib.util\nimport itertools\nfrom pathlib import Path\nfrom time import perf_counter\n\nimport numpy as np\nfrom numpy.testing import assert_allclose\nfrom scipy.optimize import lsq_linear\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solution', root / 'coupled_interferometry_certified_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef replay(x, y, l0, l2, box, cert):\n    n, p = x.shape\n    w = np.asarray(cert['weights'])\n    leaves = cert['subcube_leaves']\n    assert w.shape == (p,) and np.",
+      "find /holdout_task /pretrain_task /workspace /app /mnt /data -maxdepth 4 -type f \\( -name 'public_eq02_studies.pkl' -o -name 'validate_public_schema.py' \\) -print 2>/dev/null; cat > /tmp/audit_eq02.py <<'PY'\nfrom pathlib import Path\nexec(Path('/tmp/verify_eq02.py').read_text().split('for seed, kind in enumerate')[0])\n\n# Targets near inclusion boundaries and reduced-rank blocks can reveal weak leaf bounds.\nfor seed, kind in enumerate(('paired','ar','common','rankdef')*3, 90):\n    p = 18 + seed % 2\n    rng = np.random.default_rng(seed)\n    x = design(rng, 48, p, kind)\n    box = (.20, .55, 1.2)[(",
+      "cat > /tmp/eq02_boundary.py <<'PY'\nfrom pathlib import Path\nexec(Path('/tmp/verify_eq02.py').read_text().split('for seed, kind in enumerate')[0])\n\npublic = root / 'public_eq02_studies.pkl'\nvalidator = root / 'validate_public_schema.py'\nif public.is_file() and validator.is_file():\n    import subprocess, sys\n    subprocess.run([sys.executable, '-I', str(validator)], cwd=root, check=True)\nelse:\n    print('Public fixtures unavailable; the following are synthetic tolerance tests.', flush=True)\n\n# Weakly correlated predictors with all marginal scores near the activation\n# boundary can require a larg"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_interferometry_certified_l0.py",
+        "filename": "coupled_interferometry_certified_l0.py",
+        "bytes": 8736,
+        "sha256": "977864acc1cfb3f593a92e66d9ea485f15b5060400e20b754a025fd18556eded",
+        "content_addressed_ref": "content_addressed_blobs/977864acc1cfb3f593a92e66d9ea485f15b5060400e20b754a025fd18556eded.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_interferometry_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "replay",
+      "design",
+      "study_for"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ea6eb8eea7bc253b71cf93ba5a7a04b3addd65d1ff3a411ec1f0c1bd3fee49f0",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/eq02_boundary.py <<'PY'\nfrom pathlib import Path\nexec(Path('/tmp/verify_eq02.py').read_text().split('for seed, kind in enumerate')[0])\n\npublic = root / 'public_eq02_studies.pkl'\nvalidator = root / 'validate_public_schema.py'\nif p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ea6eb8eea7bc253b71cf93ba5a7a04b3addd65d1ff3a411ec1f0c1bd3fee49f0",
+        "expected_candidate_sha256": "ea6eb8eea7bc253b71cf93ba5a7a04b3addd65d1ff3a411ec1f0c1bd3fee49f0",
+        "computed_candidate_sha256": "ea6eb8eea7bc253b71cf93ba5a7a04b3addd65d1ff3a411ec1f0c1bd3fee49f0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_interferometry_certified_l0.py",
+            "bytes": 8736
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ea6eb8ee"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "replay",
+        "code": "def replay(x, y, l0, l2, box, cert):\n    from numpy.testing import assert_allclose\n    (n, p) = x.shape\n    w = np.asarray(cert['weights'])\n    leaves = cert['subcube_leaves']\n    assert w.shape == (p,) and np.max(abs(w)) <= box and (1 <= len(leaves) <= 2048)\n    obj = 0.5 * (np.linalg.norm(x @ w - y) ** 2 + l2 * (w @ w)) + l0 * np.count_nonzero(abs(w) > 1e-08)\n    assert_allclose(cert['objective'], obj, rtol=0, atol=2e-10)\n    cube = np.arange(1 << p)\n    covered = np.zeros(cube.size, bool)\n    bits = 1 << np.arange(p)\n    base = x.T @ x\n    xy = x.T @ y\n    eig = {}\n    lower = np.inf\n    min_slack = np.inf\n    for leaf in leaves:\n        (zeros, actives) = (leaf[k] for k in ('fixed_zero', 'fixed_active'))\n        assert len(zeros) == len(actives) == p and all((type(i) is bool for i in zeros + actives))\n        (z, a) = (np.array(zeros), np.array(actives))\n        assert not np.any(z & a)\n        match = (cube & bits[z].sum() == 0) & (cube & bits[a].sum() == bits[a].sum())\n        assert not covered[match].any()\n        covered |= match\n        free = ~(z | a)\n        if 'dual_nu' in leaf:\n            nu = np.asarray(leaf['dual_nu'])\n            assert nu.shape == (n,)\n            (k, linear) = (l2, x.T @ nu)\n            constant = nu @ y - 0.5 * (nu @ nu)\n        else:\n            (d, c) = (np.asarray(leaf[k]) for k in ('minorant_diagonal', 'minorant_center'))\n            assert d.shape == c.shape == (p,) and np.all(d >= 0)\n            dt = tuple(d)\n            if dt not in eig:\n                eig[dt] = np.linalg.eigvalsh(base - np.diag(d))[0]\n            assert eig[dt] >= -1e-10\n            (k, linear) = (d + l2, xy - (base - np.diag(d)) @ c)\n            constant = 0.5 * (y @ y - c @ (base - np.diag(d)) @ c)\n        magnitude = abs(linear)\n        amp = np.minimum(box, np.divide(magnitude, k, out=np.full(p, box), where=k > 0))\n        active = l0 - amp * (magnitude - 0.5 * k * amp)\n        replayed = constant + active[a].sum() + np.minimum(active[free], 0).sum()\n        assert leaf['lb'] <= replayed + 2e-09, (leaf['lb'], replayed)\n        min_slack = min(min_slack, replayed - leaf['lb'])\n        lower = min(lower, leaf['lb'])\n    assert covered.all()\n    assert cert['certified_lower_bound'] <= lower + 2e-09\n    gap = obj - cert['certified_lower_bound']\n    assert -2e-10 <= gap <= 1e-05\n    return (gap, len(leaves), min_slack)"
+      },
+      {
+        "name": "design",
+        "code": "def design(rng, n, p, kind):\n    x = rng.normal(size=(n, p))\n    if kind == 'paired':\n        x[:, 1::2] = 0.97 * x[:, :2 * (p // 2):2] + 0.245 * x[:, 1::2]\n    elif kind == 'common':\n        x = 0.3 * x + rng.normal(size=(n, 1))\n    elif kind == 'ar':\n        for j in range(1, p):\n            x[:, j] = 0.88 * x[:, j - 1] + 0.475 * x[:, j]\n    elif kind == 'rankdef':\n        x[:, -2:] = x[:, :2]\n    return x / np.linalg.norm(x, axis=0)"
+      },
+      {
+        "name": "study_for",
+        "code": "def study_for(seed, p, kind):\n    rng = np.random.default_rng(seed)\n    cells = np.repeat(np.arange(15), rng.integers(15, 75, 15))\n    rng.shuffle(cells)\n    (center, strata) = (cells // 3, cells % 3)\n    n = cells.size\n    offsets = np.array([-2.0, 0.5, 1.0, -0.8, 2.0])\n    gains = np.array([0.5, 0.95, 1.6, 0.85, 1.2])\n    true = rng.normal(size=(n, 8)) + 0.4 * strata[:, None]\n    raw = true * gains[center, None] + offsets[center, None]\n    raw[rng.random(raw.shape) < 0.025] = np.nan\n    controls = rng.normal(size=(n, 18)) * gains[center, None] + offsets[center, None]\n    controls[rng.random(controls.shape) < 0.05] = np.nan\n    phase = rng.uniform(-np.pi, np.pi, size=(n, 2))\n    carrier = rng.uniform(-np.pi, np.pi, size=(n, 2))\n    theta = rng.normal(size=13) * 0.4\n    target = np.arange(n - 110, n)\n    cal = np.arange(n - 110)\n    x = design(rng, len(target), p, kind)\n    w = np.zeros(p)\n    w[rng.choice(p, 5, False)] = rng.choice([-1, 1], 5) * rng.uniform(0.75, 1.7, 5)\n    h = np.column_stack((np.ones(n), strata == 1, strata == 2, true, phase))\n    y = h @ theta + rng.normal(0, 0.035, n)\n    glitches = rng.choice(cal, int(0.12 * len(cal)), False)\n    y[glitches] += np.clip(2 * rng.standard_cauchy(len(glitches)), -11, 11)\n    y[target] += x @ w\n    study = dict(panel=dict(center_id=center, stratum=strata, controls=controls, X_panel_raw=raw), interferometry=dict(signal_phasor=np.exp(1j * (phase + carrier)), ref_phasor=np.exp(1j * carrier)), calibration_indices=cal, stage3_indices=target, y_assay_raw=y, X_cand=x, lam0=0.14, lam2=0.05, M=1.0)\n    return (study, theta, true)"
+      }
+    ]
+  }
+}

@@ -1,0 +1,132 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq04_nonhermitian_complex_coupled_negctrl_cc20b9aa2e5a",
+    "source_hash": "cc20b9aa2e5a32c4879aef4b32dffd52fdfb16dd2203c67f1daaced6b0bc5a98",
+    "parent_ids": [],
+    "source_episode_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "task_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_eq04.py",
+        "archived_relpath": "producers/tmp__verify_eq04.py",
+        "bytes": 4278,
+        "sha256": "5bd292985c35625271c1805e03b2a37ec0d672a9c4066eaca2f1ff76ae35fc36"
+      },
+      {
+        "container_path": "/tmp/verify_eq04_correlated.py",
+        "archived_relpath": "producers/tmp__verify_eq04_correlated.py",
+        "bytes": 2102,
+        "sha256": "4d9215a98f0dc26a437871352749ca95f0a06994739e4c39fb6de81bd56f97e3"
+      },
+      {
+        "container_path": "/tmp/verify_eq04_disks.py",
+        "archived_relpath": "producers/tmp__verify_eq04_disks.py",
+        "bytes": 1816,
+        "sha256": "b31cd68540dc1bc0ab1cd155f0a989a170a7567ec8e3ca401ae6a1bb91e33b93"
+      },
+      {
+        "container_path": "/tmp/verify_eq04_weak.py",
+        "archived_relpath": "producers/tmp__verify_eq04_weak.py",
+        "bytes": 1250,
+        "sha256": "0d46dce825966462fa3df869864c6d1aefb65c6ee1f8fef89abea68eb0879496"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task; sed -n '1,240p' /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'certified box L0 exact subset ridge pairwise' || true",
+      "pwd; ls -ld /holdout_task /pretrain_task /workspace /app 2>/dev/null; for d in /pretrain_task /holdout_task /workspace /app; do if test -d \"$d\"; then find \"$d\" -maxdepth 3 -type f -printf '%p %s bytes\\n' | head -80; fi; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0",
+      "set -e\nif test -f /holdout_task/validate_public_schema.py && test -f /holdout_task/public_eq04_cases.pkl; then OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py; fi\ncat > /tmp/verify_eq04.py <<'PY'\nimport importlib.util\nimport time\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('eq04_candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef r",
+      "set -e\nif test -f /holdout_task/validate_public_schema.py && test -f /holdout_task/public_eq04_cases.pkl; then\n  cd /holdout_task\n  OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\nelse\n  echo 'Public validator and fixtures not available together; using a manufactured solution.'\nfi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\np = '/holdout_task/nonhermitian_advection_coupled_select.py'\ns = importlib.util.spec_from_file_location('eq04', p)\nm = importlib.util.module_from_spec(s)\ns.loader.exec_module(m)\nsolve = m.solve_nonhermitian_coupled_inversion\n",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text().replace('from scipy.sparse import coo_matrix', 'from scipy.optimize import minimize\\nfrom scipy.sparse import coo_matrix')\npos = s.index('\\ndef solve_nonhermitian_coupled_inversion')\ns = s[:pos] + '''\n\ndef _fit_inactive(design, target):\n    \"\"\"Minimize the projected residual on the product of unit complex disks.\"\"\"\n    k = design.shape[1]\n    gram = design.conj().T @ design\n    rhs = design.conj().T @ target\n    energy = gram.diagonal().real\n    u = np.zeros(k, ",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nn, nu, lx, ly, omega = 32, 1e-4, 1.3, .7, -3.\nz = np.zeros((n,n))\nt = diags([-np.ones(n-1), 2*np.ones(n), -np.ones(n-1)], [-1,0,1])\na = nu*(kron(t,eye(n))/(lx/33)**2 + kron(eye(n),t)/(ly/33)**2) + (2+1j*omega)*eye(n*n)\np = d",
+      "set -e\ncat > /tmp/verify_eq04_weak.py <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('eq04', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nn = 32\nzero = np.zeros((n,n))\nbasis = np.zeros((11,n,n))\nbasis[0,1,1] = 1\nbasis[1,1,1] = 1\nbasis[1,30,30] = .3\nnu, lam2 = 1e-4, 1e-5\nD = diags([-np.ones(31),2*np.ones(32),-np.ones(31)],[-1,0,1])\nA = (nu*33**2*(kron(D,eye(n))+kron(eye(",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text()\na = s.index('    gram = design.conj().T @ design')\nb = s.index('    for _ in range(64):', a)\ns = s[:a] + '''    # An interior optimum is an ordinary ridge least-squares fit. Solve\n    # directly instead of relying on an objective-gap test at weak signal.\n    radius = (1 - 4 * np.finfo(float).eps) * 1e-8\n    u = np.linalg.lstsq(design, target, rcond=0.0)[0]\n    if np.all(np.abs(u) <= 1):\n        return radius * u\n    gram = design.conj().T @ design\n    rhs = desi",
+      "set -e\nif test -f /holdout_task/validate_public_schema.py && test -f /holdout_task/public_eq04_cases.pkl; then\n  (cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py)\nelse\n  printf '%s\\n' 'Public cases are not mounted; running an analytic correlated-disk stress test.'\nfi\nsed '/^wref =/,$d' /tmp/verify_eq04_weak.py > /tmp/verify_eq04_correlated.py\ncat >> /tmp/verify_eq04_correlated.py <<'PY'\n# Manufacture the optimum by prescribing its residual to satisfy the disk\n# optimality conditions. Opposing coefficients make the field more sensitive\n# than the scalar objective to",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text().replace('from scipy.optimize import minimize', 'from scipy.optimize import minimize, root')\npos = s.index('\\ndef _fit_inactive')\ns = s[:pos] + '''\n\ndef _polish_disk_fit(design, target, u):\n    \"\"\"Refine the active disk phases after profiling out interior coordinates.\"\"\"\n    boundary = np.abs(u) >= 1 - 1e-7\n    if not np.any(boundary):\n        return u\n    free = design[:, ~boundary]\n    q, r = np.linalg.qr(free, mode='reduced')\n    edges = design[:, boundary]\n  "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_eq04.py",
+      "primary_producer_container_path": "/tmp/verify_eq04.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/nonhermitian_advection_coupled_select.py",
+        "filename": "nonhermitian_advection_coupled_select.py",
+        "bytes": 8492,
+        "sha256": "c7cc7b6c4a68d6de9e21b4e92b6d32eb5fe136eb345894baeadb39c019bdaaf4",
+        "content_addressed_ref": "content_addressed_blobs/c7cc7b6c4a68d6de9e21b4e92b6d32eb5fe136eb345894baeadb39c019bdaaf4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/nonhermitian_advection_coupled_select.py"
+    ],
+    "exported_pure_functions": [
+      "reference_fields",
+      "score",
+      "brute"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "cc20b9aa2e5a32c4879aef4b32dffd52fdfb16dd2203c67f1daaced6b0bc5a98",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text().replace('from scipy.optimize import minimize', 'from scipy.optimize import minimize, root')\npos = s.index(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "cc20b9aa2e5a32c4879aef4b32dffd52fdfb16dd2203c67f1daaced6b0bc5a98",
+        "expected_candidate_sha256": "cc20b9aa2e5a32c4879aef4b32dffd52fdfb16dd2203c67f1daaced6b0bc5a98",
+        "computed_candidate_sha256": "cc20b9aa2e5a32c4879aef4b32dffd52fdfb16dd2203c67f1daaced6b0bc5a98",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/nonhermitian_advection_coupled_select.py",
+            "bytes": 8492
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_cc20b9aa"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "reference_fields",
+        "code": "def reference_fields(p):\n    from scipy.sparse import lil_matrix\n    from scipy.sparse.linalg import spsolve\n    a = lil_matrix((1024, 1024), dtype=np.complex128)\n    (hx, hy) = (p['Lx'] / 33, p['Ly'] / 33)\n    for i in range(32):\n        for j in range(32):\n            k = i * 32 + j\n            a[k, k] = 2 * p['nu'] / hx ** 2 + 2 * p['nu'] / hy ** 2 + p['sigma'][i, j] + 1j * p['omega']\n            for (h, v, loc, stride) in [(hx, p['vx'][i, j], i, 32), (hy, p['vy'][i, j], j, 1)]:\n                d = p['nu'] / h ** 2\n                if loc > 0:\n                    a[k, k - stride] = -d\n                if loc < 31:\n                    a[k, k + stride] = -d\n                a[k, k] += abs(v) / h\n                if v >= 0 and loc > 0:\n                    a[k, k - stride] -= v / h\n                if v < 0 and loc < 31:\n                    a[k, k + stride] += v / h\n    rhs = p['basis'].reshape(11, 1024).T\n    return spsolve(a.tocsc(), rhs)"
+      },
+      {
+        "name": "score",
+        "code": "def score(g, y, w, p):\n    active = np.abs(w) > 1e-08\n    return 0.5 * np.linalg.norm(g @ w - y) ** 2 + 0.5 * p['lam2'] * np.linalg.norm(w) ** 2 + p['lam0'] * active.sum() + sum((c for (i, j, c) in p['pair_penalties'] if active[i] and active[j]))"
+      },
+      {
+        "name": "brute",
+        "code": "def brute(g, y, p):\n    from itertools import combinations\n    w = np.zeros(11, complex)\n    best = score(g, y, w, p)\n    winner = w.copy()\n    for n in range(1, 12):\n        for s in combinations(range(11), n):\n            columns = list(s)\n            b = np.vstack((g[:, columns], np.sqrt(p['lam2']) * np.eye(n)))\n            w[columns] = np.linalg.lstsq(b, np.r_[y, np.zeros(n)], rcond=None)[0]\n            value = score(g, y, w, p)\n            if value < best:\n                (best, winner) = (value, w.copy())\n            w[columns] = 0\n    return (best, winner)"
+      }
+    ]
+  }
+}

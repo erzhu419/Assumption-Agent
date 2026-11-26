@@ -1,0 +1,116 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq01_3d_multi_operator_robin_continuation_273ad67ab5c8",
+    "source_hash": "273ad67ab5c8019f9a1e8373500d022b0ec58b84fc5eb9216113df58184ee422",
+    "parent_ids": [],
+    "source_episode_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "task_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_robin.py",
+        "archived_relpath": "producers/tmp__verify_robin.py",
+        "bytes": 6196,
+        "sha256": "a348f7b239a5f3ba9324daf608fe74182454a276b8f83f42def15571d3c083d9"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && sed -n '1,240p' validate_public_schema.py && python3 - <<'PY'\nimport importlib.util,pickle,numpy as np,os\nfor name in ('scipy','pyamg','threadpoolctl'):\n print(name, bool(importlib.util.find_spec(name)))\nprint('CPU quota:', open('/sys/fs/cgroup/cpu.max').read().strip() if os.path.exists('/sys/fs/cgroup/cpu.max') else 'unknown')\nwith open('public_eq01_studies.pkl','rb') as f: data=pickle.load(f)\ndef describe(x,depth=0):\n if isinstance(x,dict) and 'kappa_base' in x:\n  for k,v in x.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,float(np.min(v)) if v",
+      "pwd; ls -la / /pretrain_task /workspace /app 2>/dev/null; find /pretrain_task /workspace /app /mnt /tmp -maxdepth 4 -type f \\( -name 'public_eq01_studies.pkl' -o -name 'validate_public_schema.py' -o -name 'AGENTS.md' \\) -print 2>/dev/null; python3 - <<'PY'\nimport importlib.util, os\nfor mod in ('numpy', 'scipy', 'pyamg', 'threadpoolctl'):\n    spec = importlib.util.find_spec(mod)\n    print(mod, spec.origin if spec else 'not installed')\nif os.path.exists('/sys/fs/cgroup/cpu.max'):\n    print('CPU quota:', open('/sys/fs/cgroup/cpu.max').read().strip())\nPY",
+      "mkdir -p /holdout_task && cat > /holdout_task/robin_continuation_tomography.py <<'PY'\n\"\"\"Finite-volume Robin continuation and ridge-profiled sensor inversion.\"\"\"\nimport numpy as np\nfrom scipy import linalg, sparse\n\n\nclass _Grid:\n    def __init__(self, shape, lengths, gamma):\n        self.shape = shape\n        self.n = int(np.prod(shape))\n        self.h = np.asarray(lengths) / shape\n        self.vol = float(np.prod(self.h))\n        self.gamma = gamma\n        cells = np.arange(self.n).reshape(shape)\n        self.faces = []\n        for axis, h in enumerate(self.h):\n            views = np.moveaxis",
+      "cat > /tmp/verify_robin.py <<'PY'\nimport importlib.util, pickle, time\nfrom pathlib import Path\nimport numpy as np\nfrom scipy import sparse, linalg\nfrom scipy.sparse.linalg import splu\nfrom threadpoolctl import threadpool_limits\n\npath = Path('/holdout_task/robin_continuation_tomography.py')\nspec = importlib.util.spec_from_file_location('robin', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\n# Independent incidence-matrix assembly, including summed corner Robin fluxes.\ndef reference_matrix(d,t):\n    k=d['kappa_base']+t*d['kappa_mod1']+t**2*d['kappa_mod2']\n    sha",
+      "python3 -I - <<'PY'\nimport importlib.util\nfrom pathlib import Path\nimport numpy as np\nfrom scipy import linalg\nfrom threadpoolctl import threadpool_limits\n\nspec = importlib.util.spec_from_file_location('verify_robin', '/tmp/verify_robin.py')\nv = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(v)\nprint('Public fixture staged:', v.path.with_name('public_eq01_studies.pkl').is_file())\nprint('Public validator staged:', v.path.with_name('validate_public_schema.py').is_file())\nrng = np.random.default_rng(276)\nworst = np.zeros(2)\nwith threadpool_limits(limits=1, user_api='blas'):\n    for",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text()\nstart = s.index('    u, sv, _ = linalg.svd(')\nend = s.index('    gram = sw.T @ sw', start)\nold = s[start:end]\nnew = '    if z.shape[1] == 0:\\n        sw, yw = s, y\\n    else:\\n' + ''.join('    ' + line for line in old.splitlines(keepends=True))\np.write_text(s[:start] + new + s[end:])\nPY\npython3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy import linalg\nfrom threadpoolctl import threadpool_limits\nspec = importlib.util.spec_from_file_location('verify_ro",
+      "python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom threadpoolctl import threadpool_limits\nspec = importlib.util.spec_from_file_location('verify_robin', '/tmp/verify_robin.py')\nv = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(v)\nrng = np.random.default_rng(819)\nn = 28\ni,j,k = np.indices((n,n,n))\nshape = i.shape\nelapsed = []\nfor label, lengths, gamma, base, mod2 in [\n    ('anisotropic layered grid', (.35,1.0,1.65), .45, np.where((k//3)%2,7.,.002), np.where(k<n//2,.03,.0001)),\n    ('weak Robin with disconnected inclusions', (1.,1.2,.85), .003, np.where((((i%9)-4)**"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_robin.py",
+      "primary_producer_container_path": "/tmp/verify_robin.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_preconditioned_operators"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_continuation_tomography.py",
+        "filename": "robin_continuation_tomography.py",
+        "bytes": 7076,
+        "sha256": "c4b150f05f66aa874211e54d59ca11c4bca86a3eeec564fe59363d5905e5972f",
+        "content_addressed_ref": "content_addressed_blobs/c4b150f05f66aa874211e54d59ca11c4bca86a3eeec564fe59363d5905e5972f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_continuation_tomography.py"
+    ],
+    "exported_pure_functions": [
+      "reference_matrix",
+      "truth",
+      "relative",
+      "make"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "273ad67ab5c8019f9a1e8373500d022b0ec58b84fc5eb9216113df58184ee422",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom threadpoolctl import threadpool_limits\nspec = importlib.util.spec_from_file_location('verify_robin', '/tmp/verify_robin.py')\nv = importlib.util.module_from_spec(spec)\nspec.lo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "273ad67ab5c8019f9a1e8373500d022b0ec58b84fc5eb9216113df58184ee422",
+        "expected_candidate_sha256": "273ad67ab5c8019f9a1e8373500d022b0ec58b84fc5eb9216113df58184ee422",
+        "computed_candidate_sha256": "273ad67ab5c8019f9a1e8373500d022b0ec58b84fc5eb9216113df58184ee422",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_continuation_tomography.py",
+            "bytes": 7076
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_273ad67a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "reference_matrix",
+        "code": "def reference_matrix(d, t):\n    from scipy import sparse\n    k = d['kappa_base'] + t * d['kappa_mod1'] + t ** 2 * d['kappa_mod2']\n    shape = k.shape\n    h = np.array([d['Lx'], d['Ly'], d['Lz']]) / shape\n    v = h.prod()\n    g = d['gamma_robin']\n    idx = np.arange(k.size).reshape(shape)\n    sink = v * (d['sigma_base'] + t * d['sigma_mod'])\n    cs = []\n    ds = []\n    ws = []\n    for a in range(3):\n        lo = [slice(None)] * 3\n        hi = lo.copy()\n        lo[a] = slice(None, -1)\n        hi[a] = slice(1, None)\n        (lo, hi) = (tuple(lo), tuple(hi))\n        cs.append(idx[lo].ravel())\n        ds.append(idx[hi].ravel())\n        ws.append((2 * v / h[a] ** 2 / (1 / k[lo] + 1 / k[hi])).ravel())\n        for end in (0, -1):\n            sl = [slice(None)] * 3\n            sl[a] = end\n            sl = tuple(sl)\n            sink[sl] += v / h[a] / (1 / g + 0.5 * h[a] / k[sl])\n    c = np.concatenate(cs)\n    e = np.concatenate(ds)\n    w = np.concatenate(ws)\n    rows = np.repeat(np.arange(len(c)), 2)\n    cols = np.stack((c, e), axis=1).ravel()\n    D = sparse.csr_matrix((np.tile([1.0, -1.0], len(c)), (rows, cols)), shape=(len(c), k.size))\n    return ((D.T @ D.multiply(w[:, None]) + sparse.diags(sink.ravel())).tocsc(), v)"
+      },
+      {
+        "name": "truth",
+        "code": "def truth(d):\n    from scipy.sparse.linalg import splu\n    s = []\n    ijk = tuple(d['sensor_ijk'].T)\n    src = d['source_modes']\n    shape = src.shape[1:]\n    for t in d['thetas']:\n        (a, v) = reference_matrix(d, t)\n        u = splu(a).solve(v * src.reshape(len(src), -1).T).T.reshape(src.shape)\n        s.append(u[(slice(None),) + ijk].T)\n    return (np.vstack(s), u)"
+      },
+      {
+        "name": "relative",
+        "code": "def relative(x, y):\n    return np.linalg.norm(x - y) / np.linalg.norm(y)"
+      },
+      {
+        "name": "make",
+        "code": "def make(kind, shape):\n    r = np.random.default_rng(941 + kind)\n    (i, j, k) = np.indices(shape)\n    X = i / shape[0]\n    Y = j / shape[1]\n    Z = k / shape[2]\n\n    def field(lo, hi):\n        return np.exp(r.uniform(np.log(lo), np.log(hi), shape))\n    if kind == 0:\n        base = np.where((i // 4 + j // 5 + k // 6) % 2, 12.0, 12.0 / 3500) * field(0.8, 1.2)\n        m1 = field(0.001, 1.0)\n        m2 = field(0.0001, 0.1)\n        lengths = (1.0, 1.3, 0.8)\n        gamma = 4.0\n    elif kind == 1:\n        base = field(1 / 3500, 1.0)\n        m1 = field(4e-05, 0.04)\n        m2 = np.where(i < shape[0] // 2, 2.0, 5e-05)\n        lengths = (0.42, 1.55, 0.87)\n        gamma = 0.045\n    else:\n        base = np.where((j % 4 == 0) & (k % 4 == 0), 35.0, 0.01)\n        m1 = field(3e-05, 0.0003)\n        m2 = field(1e-05, 0.0001)\n        lengths = (0.8, 1.4, 1.0)\n        gamma = 0.2\n    theta = np.array([0.15, 1.85, 0.33, 1.57, 1.13, 0.66, 0.91, 1.38, 0.47])\n    nobs = 57\n    src = np.array([np.ones(shape), np.cos(2 * np.pi * X) * np.sin(np.pi * Y) + 0.12 * r.normal(size=shape), (Z - 0.4) * np.sin(np.pi * X) + 0.08 * r.normal(size=shape)])\n    d = dict(zip(('Lx', 'Ly', 'Lz'), lengths))\n    d.update(kappa_base=base, kappa_mod1=m1, kappa_mod2=m2, sigma_base=field(0.008, 0.08), sigma_mod=field(0.001, 0.012), gamma_robin=gamma, thetas=theta, source_modes=src, sensor_ijk=np.column_stack([r.integers(0, n, nobs) for n in shape]), nuisance_ridge=2e-05, source_ridge=3e-06)\n    (s, v) = truth(d)\n    nuisance = r.normal(size=(len(theta) * nobs, 12))\n    nuisance[:, 0] = s[:, 0] + 0.0006 * nuisance[:, 0]\n    nuisance[:, 1] = nuisance[:, 2] * 2\n    y = s @ r.normal(size=(3, 7)) + nuisance @ r.normal(size=(12, 7)) + 0.007 * r.normal(size=(len(s), 7))\n    d.update(Z_nuisance=nuisance, Y_obs=y)\n    return (d, (s, v))"
+      }
+    ]
+  }
+}

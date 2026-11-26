@@ -1,0 +1,119 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq02_coupled_interferometry_cauchy_box_l0_743e903d389d",
+    "source_hash": "743e903d389db0812f91b8e62beac2f0ec2e553b74a899b265e754529c8088df",
+    "parent_ids": [],
+    "source_episode_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "task_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/eq02_gate.py",
+        "archived_relpath": "producers/tmp__eq02_gate.py",
+        "bytes": 3005,
+        "sha256": "b3dc01a94e837c0914ec5a462ab71b51a7ed2a0bcf446135ba7e17ed5c6dd2c8"
+      },
+      {
+        "container_path": "/tmp/eq02_margin.py",
+        "archived_relpath": "producers/tmp__eq02_margin.py",
+        "bytes": 1363,
+        "sha256": "97e3b629a90cd2824c2eacb675901e9b8cf16a5dafc6cfc3b267be15c12fbf4f"
+      },
+      {
+        "container_path": "/tmp/eq02_verify.py",
+        "archived_relpath": "producers/tmp__eq02_verify.py",
+        "bytes": 4796,
+        "sha256": "e0c47a0ebc3ab91b0e05c5ba8748dcd800d823e6c0749cdb576b3f152f8d8d4d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport pickle,numpy as np,scipy\np='/holdout_task/public_eq02_studies.pkl'; a=pickle.load(open(p,'rb')); print(type(a), list(a) if isinstance(a,dict) else len(a)); print(scipy.__version__)\nfor s in (a.values() if isinstance(a,dict) else a):\n if not isinstance(s,dict): print(type(s)); continue\n print({k:(v.shape if hasattr(v,'shape') else v if np.isscalar(v) else type(v)) for k,v in s.items()}); X=s.get('X_cand');\n if X is not None:\n  G=X.T@X; print('Gram diagonal:',G.diagonal()); print('Gram eigenvalues:',np.li",
+      "pwd; ls -la / /pretrain_task; find /pretrain_task /app /workspace /results /tmp /mnt -maxdepth 4 -type f \\( -name '*.pkl' -o -iname '*schema*' -o -iname '*interferometr*' -o -name 'README*' \\) -print 2>/dev/null | head -80; python3 - <<'PY'\nimport numpy, scipy\nprint('numpy', numpy.__version__, 'scipy', scipy.__version__)\nPY",
+      "mkdir -p /holdout_task\ncat > /holdout_task/coupled_interferometry_certified_l0.py <<'PY'\n\"\"\"Reference-panel calibration and certified symmetric-box sparse regression.\"\"\"\n\nimport heapq\nfrom itertools import count\n\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.optimize import minimize\n\n\ndef _panel(panel):\n    x = np.array(panel['X_panel_raw'], dtype=np.float64, copy=True)\n    controls = np.asarray(panel['controls'], dtype=np.float64)\n    strata = np.asarray(panel['stratum'])\n    _, centers = np.unique(panel['center_id'], return_inverse=True)\n    cells = 3 * centers + strata.astype",
+      "cat > /tmp/eq02_verify.py <<'PY'\nimport importlib.util, itertools, os, pickle, time\nimport numpy as np\nfrom scipy.optimize import minimize\npath='/holdout_task/coupled_interferometry_certified_l0.py'\nspec=importlib.util.spec_from_file_location('eq02',path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n\ndef verify(x,y,l2,l0,M,cert):\n    w=np.asarray(cert['weights']); p=len(w); leaves=cert['subcube_leaves']; G=x.T@x; b=x.T@y; const=y@y/2\n    assert w.shape==(x.shape[1],) and np.max(abs(w))<=M+1e-10\n    f=np.linalg.norm(x@w-y)**2/2+l2*(w@w)/2+l0*np.count_nonzero(abs(w)>1",
+      "python3 -I - <<'PY'\nimport runpy, time\nimport numpy as np\nv=runpy.run_path('/tmp/eq02_verify.py'); mod=v['mod']; verify=v['verify']\nfor seed,r,noise,M in [(802,6,.22,1.2),(803,9,.35,.9),(804,13,.45,1.5),(805,15,.65,.4),(806,5,.5,.8),(807,11,.23,1.8)]:\n    rng=np.random.default_rng(seed); p=19\n    X=rng.normal(size=(70,r))@rng.normal(size=(r,p))/np.sqrt(r)+noise*rng.normal(size=(70,p)); X/=np.linalg.norm(X,axis=0)\n    y=X@rng.choice([-1.,1.],size=p)*.55+.22*rng.normal(size=len(X))\n    l2=.035; l0=.12\n    t=time.monotonic(); cert=mod._box_l0(X,y,l2,l0,M); elapsed=time.monotonic()-t\n    _,gap,n=v",
+      "cat > /tmp/eq02_gate.py <<'PY'\nimport os\nimport runpy\nimport time\nimport numpy as np\n\nv = runpy.run_path('/tmp/eq02_verify.py')\nm, verify, fixture = (v[k] for k in ('mod', 'verify', 'fixture'))\nfor p in ('/holdout_task/public_eq02_studies.pkl', '/holdout_task/validate_public_schema.py'):\n    print(p, 'available' if os.path.isfile(p) else 'not mounted', flush=True)\n\n# Hold out a center from calibration, but keep its own reference controls for alignment.\nworst = [0., 0., 0., 0.]\nfor seed in range(876, 881):\n    st, truth, theta = fixture(seed, 19, 1.3, .63)\n    panel = st['panel']; center = pane",
+      "cat > /tmp/eq02_margin.py <<'PY'\nimport runpy, time, warnings\nimport numpy as np\nv = runpy.run_path('/tmp/eq02_verify.py')\nm, verify = v['mod'], v['verify']\n# Connected, nearly independent pairs with competing supports close to the L0 threshold.\nfor seed in range(318, 326):\n    rng = np.random.default_rng(seed)\n    p = 18 + seed % 2\n    base = rng.normal(size=(95, (p+1)//2))\n    x = base[:, np.arange(p)//2] + (0.23 + 0.08*(seed%4))*rng.normal(size=(95,p))\n    x *= np.exp(rng.uniform(-0.6, 0.6, p)) / np.linalg.norm(x, axis=0)\n    y = x @ (rng.choice([-1., 1.], p)*rng.uniform(.22,.67,p)) + .09*r",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/coupled_interferometry_certified_l0.py')\ns = p.read_text()\na = '''    t = np.sqrt(np.divide(2 * lam0, q, out=np.full(p, np.inf), where=q > 0))\n    t = np.minimum(t, M)\n    slope = lam0 / t + 0.5 * q * t\n'''\nb = '''    if lam0 > 0:\n        t = np.sqrt(np.divide(2 * lam0, q, out=np.full(p, np.inf), where=q > 0))\n        t = np.minimum(t, M)\n        slope = lam0 / t + 0.5 * q * t\n'''\nassert s.count(a) == 1\ns = s.replace(a, b).replace('        v[np.abs(v) <= 1e-8] = 0\\n', '        if lam0 > 0:\\n            v[np.abs(v) <= 1e-8] = 0\\n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__eq02_verify.py",
+      "primary_producer_container_path": "/tmp/eq02_verify.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_interferometry_certified_l0.py",
+        "filename": "coupled_interferometry_certified_l0.py",
+        "bytes": 10145,
+        "sha256": "9a08b19b2dafaebb88deba766430eed22de93ecb78c19c8c0aa41722374f8aca",
+        "content_addressed_ref": "content_addressed_blobs/9a08b19b2dafaebb88deba766430eed22de93ecb78c19c8c0aa41722374f8aca.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_interferometry_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "verify",
+      "fixture"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "743e903d389db0812f91b8e62beac2f0ec2e553b74a899b265e754529c8088df",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/coupled_interferometry_certified_l0.py')\ns = p.read_text()\na = '''    t = np.sqrt(np.divide(2 * lam0, q, out=np.full(p, np.inf), where=q > 0))\n    t = np.minimum(t, M)\n    sl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "743e903d389db0812f91b8e62beac2f0ec2e553b74a899b265e754529c8088df",
+        "expected_candidate_sha256": "743e903d389db0812f91b8e62beac2f0ec2e553b74a899b265e754529c8088df",
+        "computed_candidate_sha256": "743e903d389db0812f91b8e62beac2f0ec2e553b74a899b265e754529c8088df",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_interferometry_certified_l0.py",
+            "bytes": 10145
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_743e903d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "verify",
+        "code": "def verify(x, y, l2, l0, M, cert):\n    w = np.asarray(cert['weights'])\n    p = len(w)\n    leaves = cert['subcube_leaves']\n    G = x.T @ x\n    b = x.T @ y\n    const = y @ y / 2\n    assert w.shape == (x.shape[1],) and np.max(abs(w)) <= M + 1e-10\n    f = np.linalg.norm(x @ w - y) ** 2 / 2 + l2 * (w @ w) / 2 + l0 * np.count_nonzero(abs(w) > 1e-08)\n    assert abs(cert['objective'] - f) < 1e-08\n    ids = np.arange(1 << p, dtype=np.int32)\n    cover = np.zeros(len(ids), dtype=np.uint16)\n    min_lb = np.inf\n    diags = {}\n    bits = 1 << np.arange(p)\n    for leaf in leaves:\n        assert all((len(leaf[k]) == p and all((type(v) is bool for v in leaf[k])) for k in ('fixed_zero', 'fixed_active')))\n        z = np.asarray(leaf['fixed_zero'])\n        a = np.asarray(leaf['fixed_active'])\n        assert not np.any(z & a)\n        mask = int(bits @ (z | a))\n        active = int(bits @ a)\n        free = (1 << p) - 1 ^ mask\n        sub = np.array([0], dtype=np.int32)\n        while free:\n            bit = free & -free\n            sub = np.r_[sub, sub | bit]\n            free ^= bit\n        cover[sub | active] += 1\n        d = np.asarray(leaf['minorant_diagonal'])\n        u = np.asarray(leaf['minorant_center'])\n        key = tuple(d)\n        if key not in diags:\n            assert np.min(d) >= 0 and np.linalg.eigvalsh(G - np.diag(d))[0] >= -1e-08\n            diags[key] = G - np.diag(d)\n        B = diags[key]\n        h = B @ u - b\n        q = d + l2\n        v = np.clip(-h / q, -M, M)\n        part = l0 + h * v + q * v * v / 2\n        lb = const - u @ B @ u / 2 + sum(part[a]) + sum(np.minimum(part[~(a | z)], 0))\n        assert abs(lb - leaf['lb']) < 1e-08 * (1 + abs(lb))\n        min_lb = min(min_lb, lb)\n    assert np.all(cover == 1)\n    gap = f - cert['certified_lower_bound']\n    assert abs(cert['certified_lower_bound'] - min(min_lb, cert['objective'])) < 1e-08\n    return (f, gap, len(leaves))"
+      },
+      {
+        "name": "fixture",
+        "code": "def fixture(seed, p, coupling, M):\n    rng = np.random.default_rng(seed)\n    counts = rng.integers(22, 65, (5, 3))\n    (c, s) = (np.repeat(np.arange(15), counts.ravel()) // 3, np.repeat(np.arange(15), counts.ravel()) % 3)\n    N = len(c)\n    T = rng.normal(size=(N, 8)) + s[:, None] * rng.normal(0, 0.25, (1, 8))\n    R = rng.normal(size=(N, 18))\n    shift = np.linspace(-1.8, 1.8, 5)[c]\n    gain = np.linspace(0.55, 1.6, 5)[c]\n    raw = shift[:, None] + gain[:, None] * T\n    raw[rng.random(raw.shape) < 0.025] = np.nan\n    R = shift[:, None] + gain[:, None] * R\n    R[rng.random(R.shape) < 0.05] = np.nan\n    phase = rng.uniform(-1.5, 1.5, (N, 2))\n    ref = np.exp(1j * rng.uniform(-np.pi, np.pi, (N, 2)))\n    signal = ref * np.exp(1j * phase)\n    h = np.column_stack((np.ones(N), s == 1, s == 2, T, phase))\n    theta = rng.normal(0, 0.35, 13)\n    yy = h @ theta + rng.normal(0, 0.08, N)\n    loc = rng.permutation(N)\n    (cal, j) = (loc[110:], loc[:110])\n    glitch = rng.choice(cal, round(0.12 * len(cal)), replace=False)\n    yy[glitch] += np.clip(2.5 * rng.standard_cauchy(len(glitch)), -11, 11)\n    X = rng.normal(size=(len(j), p))\n    X += coupling * rng.normal(size=(len(j), 1))\n    X /= np.linalg.norm(X, axis=0)\n    sparse = np.zeros(p)\n    sparse[:5] = np.minimum(M, 1.4) * np.array([1, -0.9, 1, -0.75, 0.85])\n    yy[j] += X @ sparse\n    st = dict(panel=dict(center_id=c, stratum=s, X_panel_raw=raw, controls=R), interferometry=dict(signal_phasor=signal, ref_phasor=ref), y_assay_raw=yy, calibration_indices=cal, stage3_indices=j, X_cand=X, lam2=0.045, lam0=0.085, M=M)\n    return (st, T, theta)"
+      }
+    ]
+  }
+}

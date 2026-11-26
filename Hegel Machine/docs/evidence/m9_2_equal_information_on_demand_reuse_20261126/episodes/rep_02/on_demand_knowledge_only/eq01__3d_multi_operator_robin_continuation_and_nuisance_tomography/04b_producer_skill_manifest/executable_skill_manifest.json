@@ -1,0 +1,138 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq01_3d_multi_operator_robin_continuation_b3af8534e457",
+    "source_hash": "b3af8534e4574fbedb85f5f556a0a3b6a9b8ac5acebccae20a3eb4c2437ae641",
+    "parent_ids": [],
+    "source_episode_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "task_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check_robin.py",
+        "archived_relpath": "producers/tmp__check_robin.py",
+        "bytes": 5045,
+        "sha256": "c1ffe6b5af3f3546742bc43a3a5d338910371a3835fdac11822a7b93a61adc41"
+      },
+      {
+        "container_path": "/tmp/check_robin_sorted.py",
+        "archived_relpath": "producers/tmp__check_robin_sorted.py",
+        "bytes": 5323,
+        "sha256": "80b4eb37eb9d0cd158f4e2c407f0fbbadc217eab72a14801e261aa8e0168b425"
+      },
+      {
+        "container_path": "/tmp/robin_verified_baseline.py",
+        "archived_relpath": "producers/tmp__robin_verified_baseline.py",
+        "bytes": 5037,
+        "sha256": "0542241287ed45509c13f12012df50210e184b2f9a574e96a49752df5fcafa08"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 4068,
+        "sha256": "e9eba46d5eed38028067bbfd2806e3a8bd0d54288beecb3c65448b4e7c2e3154"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; sed -n '1,230p' /holdout_task/validate_public_schema.py; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'SPD AMG CG preconditioning'; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'ridge nuisance profiling'; python3 - <<'PY'\nimport pickle, numpy as np, scipy, importlib.util\nprint('SciPy', scipy.__version__, 'pyamg', importlib.util.find_spec('pyamg'))\nx=pickle.load(open('/holdout_task/public_eq01_studies.pkl','rb'))\ndef inspect(x, depth=0):\n if isinstance(x,dict):\n  print('keys',list(x));\n  for k,v in x.items():\n   if isinstance(v,np.ndarray): print(",
+      "pwd; ls -la /; ls -la /pretrain_task; find /pretrain_task /app /workspace -maxdepth 4 -type f \\( -name '*.pkl' -o -name '*schema*.py' -o -iname '*robin*' -o -name 'AGENTS.md' \\) -print 2>/dev/null; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_conservative_spd_solve.galerkin_preconditioner; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; find /tmp/hegel_knowledge_ref -name '*.reference.txt' | grep -E 'spd_solve|ridge_profiled' | xargs -r -n1 sh -c 'echo \"$0\"; sed -n \"1,210p\" \"$0\"'; python3 - <",
+      "mkdir -p /holdout_task; cat > /holdout_task/robin_continuation_tomography.py <<'PY'\n\"\"\"Cell-centered Robin diffusion continuation and ridge-profiled tomography.\"\"\"\n\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import LinearOperator, cg, splu\nfrom threadpoolctl import threadpool_limits\n\n\ndef _operator(study, theta, grid, spacing):\n    \"\"\"Assemble conservative interior fluxes and six half-cell wall fluxes.\"\"\"\n    volume = np.prod(spacing)\n    kappa = study['kappa_base'] + theta * study['kappa_mod1'] + theta**2 * study['kappa_mod2']\n    diagonal = volume * (study['",
+      "cat > /tmp/check_robin.py <<'PY'\nimport importlib.util\nimport time\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import splu\nfrom threadpoolctl import threadpool_limits\n\npath = '/holdout_task/robin_continuation_tomography.py'\nspec = importlib.util.spec_from_file_location('robin', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef independent_matrix(s, theta):\n    shape = s['kappa_base'].shape\n    h = np.array([s['Lx'], s['Ly'], s['Lz']]) / shape\n    volume = np.prod(h)\n    k = (s['kappa_base'] + theta * (s['kappa_mod1'] + theta * ",
+      "if test -r /holdout_task/public_eq01_studies.pkl; then echo 'Public study now available'; ls -lh /holdout_task/public_eq01_studies.pkl /holdout_task/validate_public_schema.py; else echo 'Public study is not mounted'; fi\npython3 -I - <<'PY'\nfrom pathlib import Path\nexec(Path('/tmp/check_robin.py').read_text().split('original_cg = mod.cg')[0])\ns = make(0)\ns['thetas'] = np.array([1.85,.15,1.8,.16,1.75,.17,1.7,.18,1.65])\ns['gamma_robin'] = .08\ns['sigma_base'] *= .1\ns['sigma_mod'] *= .1\ncg = mod.cg\nsolves = []\ndef observe(a, b, **kw):\n    x, info = cg(a, b, **kw)\n    solves.append((x.copy(), np.lin",
+      "set -e\np=/holdout_task/robin_continuation_tomography.py\ncp \"$p\" /tmp/robin_verified_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text().replace('    fields = np.empty((len(rhs), grid.size))','    fields = np.empty((len(rhs), grid.size))\\n    terminal = np.empty_like(fields)')\ns = s.replace('        for k, theta in enumerate(thetas):','        # Keep neighboring warm starts close without changing the output order.\\n        for step, k in enumerate(np.argsort(thetas)):\\n            theta = thetas[k]')\ns = s.replace('x"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__robin_verified_baseline.py",
+      "primary_producer_container_path": "/tmp/robin_verified_baseline.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_preconditioned_operators"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_continuation_tomography.py",
+        "filename": "robin_continuation_tomography.py",
+        "bytes": 5274,
+        "sha256": "fd98aa0e7db51e2d6a9f4ae974fb5f3b0e84a816945d93f2af8dc77e544ef1d0",
+        "content_addressed_ref": "content_addressed_blobs/fd98aa0e7db51e2d6a9f4ae974fb5f3b0e84a816945d93f2af8dc77e544ef1d0.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_continuation_tomography.py"
+    ],
+    "exported_pure_functions": [
+      "independent_matrix",
+      "make",
+      "rel",
+      "_operator",
+      "_profile"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b3af8534e4574fbedb85f5f556a0a3b6a9b8ac5acebccae20a3eb4c2437ae641",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\np=/holdout_task/robin_continuation_tomography.py\ncp \"$p\" /tmp/robin_verified_baseline.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text().replace('    fields = np.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b3af8534e4574fbedb85f5f556a0a3b6a9b8ac5acebccae20a3eb4c2437ae641",
+        "expected_candidate_sha256": "b3af8534e4574fbedb85f5f556a0a3b6a9b8ac5acebccae20a3eb4c2437ae641",
+        "computed_candidate_sha256": "b3af8534e4574fbedb85f5f556a0a3b6a9b8ac5acebccae20a3eb4c2437ae641",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_continuation_tomography.py",
+            "bytes": 5274
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_b3af8534"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "independent_matrix",
+        "code": "def independent_matrix(s, theta):\n    from scipy import sparse\n    shape = s['kappa_base'].shape\n    h = np.array([s['Lx'], s['Ly'], s['Lz']]) / shape\n    volume = np.prod(h)\n    k = (s['kappa_base'] + theta * (s['kappa_mod1'] + theta * s['kappa_mod2'])).ravel()\n    d = volume * (s['sigma_base'] + theta * s['sigma_mod']).ravel()\n    gamma = s['gamma_robin']\n    n = k.size\n    i = np.arange(n)\n    xyz = np.array(np.unravel_index(i, shape))\n    offsets = [0]\n    offdiag = []\n    for (a, step) in enumerate((shape[1] * shape[2], shape[2], 1)):\n        valid = i[xyz[a] < shape[a] - 1]\n        c = np.zeros(n - step)\n        c[valid] = volume / h[a] ** 2 / (0.5 / k[valid] + 0.5 / k[valid + step])\n        d[valid] += c[valid]\n        d[valid + step] += c[valid]\n        wall = (xyz[a] == 0) | (xyz[a] == shape[a] - 1)\n        d[wall] += volume / h[a] / (1 / gamma + h[a] * 0.5 / k[wall])\n        offsets.extend((-step, step))\n        offdiag.extend((-c, -c))\n    return (sparse.diags([d] + offdiag, offsets, format='csc'), volume)"
+      },
+      {
+        "name": "make",
+        "code": "def make(i):\n    rng = np.random.default_rng(8829 + i)\n    shape = (28,) * 3\n    xyz = np.indices(shape)\n    if i == 0:\n        base = np.where((xyz[0] < 10) | (xyz[2] > 16) & (xyz[1] > 14), 3500.0, 1.0)\n        q = np.where(xyz[0] % 4 < 2, 0.03, 8000.0)\n        (gamma, sigma) = (0.3, 0.08)\n    else:\n        base = np.exp(rng.uniform(0, np.log(3500), shape))\n        q = np.where((xyz[0] + xyz[1]) % 6 < 3, 10000.0, 0.001)\n        (gamma, sigma) = (15.0, 0.002)\n    theta = np.linspace(0.15, 1.85, 9)[[8, 0, 7, 1, 6, 2, 5, 3, 4]]\n    sources = rng.normal(size=(3,) + shape) * 0.1 + np.array([0.8, -0.2, 0.0])[:, None, None, None]\n    sources[2] += (xyz[0] - xyz[2]) / 28\n    sensors = np.concatenate((rng.integers(28, size=(96, 3)), [[0, 0, 0], [27, 0, 27], [0, 27, 27], [27, 27, 27], [0, 0, 0]]))\n    n = len(theta) * len(sensors)\n    z = rng.normal(size=(n, 7))\n    z[:, 0] = 1\n    z[:, 6] = z[:, 1] + 1e-08 * z[:, 2]\n    return dict(Lx=0.73, Ly=1.45, Lz=2.2, kappa_base=base, kappa_mod1=2 + 0.2 * base, kappa_mod2=q, sigma_base=np.full(shape, sigma), sigma_mod=np.full(shape, sigma * 0.1), gamma_robin=gamma, thetas=theta, source_modes=sources, sensor_ijk=sensors, Z_nuisance=z, Y_obs=rng.normal(size=(n, 6)) + z @ rng.normal(size=(7, 6)), nuisance_ridge=0.005, source_ridge=0.00015)"
+      },
+      {
+        "name": "rel",
+        "code": "def rel(x, y):\n    return np.linalg.norm(x - y) / np.linalg.norm(y)"
+      },
+      {
+        "name": "_operator",
+        "code": "def _operator(study, theta, grid, spacing):\n    \"\"\"Assemble conservative interior fluxes and six half-cell wall fluxes.\"\"\"\n    from scipy import sparse\n    volume = np.prod(spacing)\n    kappa = study['kappa_base'] + theta * study['kappa_mod1'] + theta ** 2 * study['kappa_mod2']\n    diagonal = volume * (study['sigma_base'] + theta * study['sigma_mod'])\n    gamma = study['gamma_robin']\n    (rows, cols, values) = ([], [], [])\n    for (axis, h) in enumerate(spacing):\n        area = volume / h\n        low = np.swapaxes(kappa, 0, axis)\n        ids = np.swapaxes(grid, 0, axis)\n        diag = np.swapaxes(diagonal, 0, axis)\n        (left, right) = (low[:-1], low[1:])\n        w = area / h * (2 * left * right / (left + right))\n        diag[:-1] += w\n        diag[1:] += w\n        for wall in (0, -1):\n            face = low[wall]\n            diag[wall] += area * (gamma * face) / (gamma * 0.5 * h + face)\n        (i, j) = (ids[:-1].ravel(), ids[1:].ravel())\n        rows.extend((i, j))\n        cols.extend((j, i))\n        values.extend((-w.ravel(), -w.ravel()))\n    ids = grid.ravel()\n    rows.append(ids)\n    cols.append(ids)\n    values.append(diagonal.ravel())\n    return sparse.csr_matrix((np.concatenate(values), (np.concatenate(rows), np.concatenate(cols))), shape=(grid.size, grid.size))"
+      },
+      {
+        "name": "_profile",
+        "code": "def _profile(sensors, observations, nuisance, lam_z, lam_s):\n    from scipy import linalg\n    (u, singular, _) = linalg.svd(nuisance, full_matrices=False, check_finite=False)\n    data = np.column_stack((sensors, observations))\n    coordinates = u.T @ data\n    shrink = np.sqrt(lam_z / (singular ** 2 + lam_z))\n    whitened = np.concatenate((data - u @ coordinates, shrink[:, None] * coordinates), axis=0)\n    modes = sensors.shape[1]\n    (s, y) = (whitened[:, :modes], whitened[:, modes:])\n    gram = s.T @ s\n    cross = s.T @ y\n    amplitudes = cross / gram.diagonal()[:, None]\n    a = np.concatenate((s, np.sqrt(lam_s) * np.eye(modes)), axis=0)\n    b = np.concatenate((y, np.zeros((modes, y.shape[1]))), axis=0)\n    weights = linalg.lstsq(a, b, check_finite=False)[0]\n    return (amplitudes, weights)"
+      }
+    ]
+  }
+}

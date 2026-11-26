@@ -1,0 +1,112 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq02_coupled_interferometry_cauchy_box_l0_f9497b40df24",
+    "source_hash": "f9497b40df24e9ab203dbcb15553919ad866cd40fef6883d5c4336263b88f369",
+    "parent_ids": [],
+    "source_episode_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "task_id": "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/eq02_end_to_end.py",
+        "archived_relpath": "producers/tmp__eq02_end_to_end.py",
+        "bytes": 4806,
+        "sha256": "1feeff336575cb1f79b87d0d887808e23e4c1cecf45ee74099db7f39ab16a33d"
+      },
+      {
+        "container_path": "/tmp/eq02_stress.py",
+        "archived_relpath": "producers/tmp__eq02_stress.py",
+        "bytes": 2993,
+        "sha256": "87390de03ede6780321dc4071633ea3d990050ec4f3e70578e853b9419d4b346"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; sed -n '1,260p' /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'certified box L0 bounds Cauchy IRLS reference panel alignment imputation'",
+      "pwd; ls -la /pretrain_task /app /workspace 2>/dev/null; find /pretrain_task /app /workspace -maxdepth 4 -type f \\( -iname '*schema*' -o -iname '*eq02*' -o -iname '*interferometry*' \\) -printf '%p %s bytes\\n' 2>/dev/null; export PYTHONPATH=/tmp; for f in autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound autogenous_prim_box_ridge_bounds.gram_diagonal_minorant autogenous_prim_reference_panel_balancing.balanced_cell_weights autogenous_prim_reference_panel_balancing.weighted_column_fill autogenous_prim_robust_affine_projection.robust_residual_weights; do python3 -m hegel_wormhole_skills -",
+      "ls -la /; find /tmp/hegel_wormhole_skills -maxdepth 2 -name '*box_ridge*' -o -name '*reference_panel*'; sed -n '1,260p' /tmp/hegel_wormhole_skills/autogenous_prim_box_ridge_bounds.py; python3 -I -c 'import numpy, scipy; print(numpy.__version__, scipy.__version__)'",
+      "mkdir -p /holdout_task; cat > /holdout_task/coupled_interferometry_certified_l0.py <<'PY'\n\"\"\"Panel calibration and globally bounded connected box-L0 selection.\"\"\"\nimport heapq\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef _align(panel):\n    group = np.asarray(panel['center_id'])\n    strata = np.asarray(panel['stratum'])\n    raw = np.asarray(panel['X_panel_raw'], dtype=np.float64)\n    controls = np.asarray(panel['controls'], dtype=np.float64)\n    aligned = np.empty_like(raw)\n    weight = np.empty(len(group))\n    for center in np.unique(group):\n        rows = group == center\n     ",
+      "cat > /tmp/eq02_stress.py <<'PY'\nimport importlib.util, numpy as np, time\nfrom scipy.optimize import lsq_linear\npath='/holdout_task/coupled_interferometry_certified_l0.py'\nspec=importlib.util.spec_from_file_location('eq02',path)\nmod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n\ndef check(x,y,l2,l0,m,sol):\n    p=x.shape[1]; w=np.array(sol['weights']); f=.5*np.sum((x@w-y)**2)+.5*l2*(w@w)+l0*np.count_nonzero(abs(w)>1e-8)\n    assert np.max(abs(w))<=m and abs(f-sol['objective'])<1e-8\n    ids=np.arange(1<<p,dtype=np.int64); seen=np.zeros(len(ids),dtype=np.uint8); bits=1<<np.ar",
+      "cat > /tmp/eq02_end_to_end.py <<'PY'\nimport importlib.util\nimport pathlib\nimport sys\nimport time\nimport numpy as np\n\nroot = pathlib.Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('eq02', root / 'coupled_interferometry_certified_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nsys.path.insert(0, '/tmp')\nfrom hegel_wormhole_skills.autogenous_prim_box_ridge_bounds import box_ridge_cube_lower_bound\n\nfor p, seed in [(18, 62), (19, 100)]:\n    rng = np.random.default_rng(seed)\n    counts = np.array([[120, 40, 30], [37, 149, 44], [45, 32, 120], [183",
+      "set -e\nif [ -f /holdout_task/public_eq02_studies.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then python3 -I /holdout_task/validate_public_schema.py; else printf '%s\\n' 'Public studies and validator are not both available; running synthetic support-tie audit.'; fi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, time\nimport numpy as np\npname='/holdout_task/coupled_interferometry_certified_l0.py'\ns=importlib.util.spec_from_file_location('eq02',pname); mod=importlib.util.module_from_spec(s); s.loader.exec_module(mod)\nfor p in (18,19):\n    for case in ('mixed_aliases"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__eq02_end_to_end.py",
+      "primary_producer_container_path": "/tmp/eq02_end_to_end.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/coupled_interferometry_certified_l0.py",
+        "filename": "coupled_interferometry_certified_l0.py",
+        "bytes": 7289,
+        "sha256": "fe6b1738f1c24e928e9afc32668dd31a908a105c0950f1c19955ee54a6976f48",
+        "content_addressed_ref": "content_addressed_blobs/fe6b1738f1c24e928e9afc32668dd31a908a105c0950f1c19955ee54a6976f48.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/coupled_interferometry_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "check",
+      "design"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f9497b40df24e9ab203dbcb15553919ad866cd40fef6883d5c4336263b88f369",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e\nif [ -f /holdout_task/public_eq02_studies.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then python3 -I /holdout_task/validate_public_schema.py; else printf '%s\\n' 'Public studies and validator are not both available; runn",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f9497b40df24e9ab203dbcb15553919ad866cd40fef6883d5c4336263b88f369",
+        "expected_candidate_sha256": "f9497b40df24e9ab203dbcb15553919ad866cd40fef6883d5c4336263b88f369",
+        "computed_candidate_sha256": "f9497b40df24e9ab203dbcb15553919ad866cd40fef6883d5c4336263b88f369",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/coupled_interferometry_certified_l0.py",
+            "bytes": 7289
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_f9497b40"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "check",
+        "code": "def check(x, y, l2, l0, m, sol):\n    p = x.shape[1]\n    w = np.array(sol['weights'])\n    f = 0.5 * np.sum((x @ w - y) ** 2) + 0.5 * l2 * (w @ w) + l0 * np.count_nonzero(abs(w) > 1e-08)\n    assert np.max(abs(w)) <= m and abs(f - sol['objective']) < 1e-08\n    ids = np.arange(1 << p, dtype=np.int64)\n    seen = np.zeros(len(ids), dtype=np.uint8)\n    bits = 1 << np.arange(p)\n    g = x.T @ x\n    slack = 0\n    for leaf in sol['subcube_leaves']:\n        assert all((type(v) is bool for name in ['fixed_active', 'fixed_zero'] for v in leaf[name]))\n        a = np.array(leaf['fixed_active'])\n        z = np.array(leaf['fixed_zero'])\n        assert not (a & z).any()\n        seen[ids & bits @ (a | z) == bits @ a] += 1\n        c = np.array(leaf['minorant_center'])\n        d = np.array(leaf['minorant_diagonal'])\n        assert min(d) >= 0 and np.linalg.eigvalsh(g - np.diag(d))[0] >= -1e-09\n        r = y - x @ c\n        h = x.T @ r\n        v = h + d * c\n        k = d + l2\n        u = np.clip(np.divide(v, k, out=m * np.sign(v), where=k > 0), -m, m)\n        on = l0 + 0.5 * k * u * u - v * u\n        lb = 0.5 * (r @ r) + h @ c + 0.5 * np.dot(d, c * c) + on[a].sum() + np.minimum(on[~(a | z)], 0).sum()\n        slack = max(slack, leaf['lb'] - lb)\n    assert np.all(seen == 1) and slack <= 1e-09\n    return (f - sol['certified_lower_bound'], len(sol['subcube_leaves']))"
+      },
+      {
+        "name": "design",
+        "code": "def design(rng, n, p, case):\n    x = rng.normal(size=(n, p)) / np.sqrt(n)\n    if case == 'cluster':\n        x = 0.48 * x + 0.88 * np.repeat(rng.normal(size=(n, (p + 2) // 3)) / np.sqrt(n), 3, axis=1)[:, :p]\n    if case == 'collinear':\n        x = 0.17 * x + 0.98 * np.repeat(rng.normal(size=(n, (p + 1) // 2)) / np.sqrt(n), 2, axis=1)[:, :p]\n    if case == 'scaled':\n        x *= np.geomspace(0.15, 4, p)\n    if case == 'bridge':\n        x = np.zeros((n, p))\n        rr = np.arange(n - 1)\n        j = rng.integers(p, size=n - 1)\n        x[rr, j] = rng.normal(size=n - 1)\n        x[-1, :] = 0.07\n        x /= np.linalg.norm(x, axis=0)\n    return x"
+      }
+    ]
+  }
+}

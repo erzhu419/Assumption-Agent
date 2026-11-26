@@ -1,0 +1,124 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq04_nonhermitian_complex_coupled_negctrl_ae133e99323f",
+    "source_hash": "ae133e99323fd84cc0ea0ea732eca04a2e9c889606b14b4e81488c918fcae552",
+    "parent_ids": [],
+    "source_episode_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "task_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_eq04.py",
+        "archived_relpath": "producers/tmp__verify_eq04.py",
+        "bytes": 5018,
+        "sha256": "c2956ef91565ba5c03109c5c0e14ffc0ffe309a8c6b768ce65aa1927c9012de0"
+      },
+      {
+        "container_path": "/tmp/verify_eq04_threshold.py",
+        "archived_relpath": "producers/tmp__verify_eq04_threshold.py",
+        "bytes": 3089,
+        "sha256": "312b117b253190ff8b0611059f438709a815897bf9c267ed62d438be1ad99151"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 4068,
+        "sha256": "e9eba46d5eed38028067bbfd2806e3a8bd0d54288beecb3c65448b4e7c2e3154"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; sed -n '1,220p' /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\nimport scipy, numpy, pickle\nprint('SciPy',scipy.__version__,'NumPy',numpy.__version__)\nwith open('/holdout_task/public_eq04_cases.pkl','rb') as f: v=pickle.load(f)\nprint(type(v),len(v))\nif isinstance(v,dict): print(list(v)[:15]); v=next(iter(v.values()))\nif isinstance(v,(list,tuple)): print('cases',len(v)); v=v[0]\nif isinstance(v,dict): print({k:getattr(x,'shape',type(x).__name__) for k,x in v.items()})\nPY",
+      "set -e\ncat > /tmp/verify_eq04.py <<'PY'\nimport importlib.util\nimport itertools\nimport pathlib\nimport time\n\nimport numpy as np\nfrom scipy.linalg import solve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nsolver = module.solve_nonhermitian_coupled_inversion\n\ndef dense_reference(p):\n    m, nx, ny = p['basis'].shape\n    A = np.zeros((nx*ny, nx*ny), dtype=np.complex128)\n    hx, hy = p['Lx']/(nx+1), p['Ly']/(ny+1)\n    for i, j in np.ndinde",
+      "set -e\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py; else echo 'Public fixtures and validator are not available.'; fi\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport itertools\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/nonhermitian_advection_coupled_select.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nn = 32\nLx, Ly, nu = 0.81, 1.73, 0.01",
+      "set -e\ncat > /tmp/verify_eq04_threshold.py <<'PY'\nimport importlib.util\nimport itertools\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/nonhermitian_advection_coupled_select.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\nLx, Ly, nu = .81, 1.73, .015\nhx, hy = Lx/33, Ly/33\nx = np.arange(1, 33)\nks = [(1,1),(1,2),(2,1),(2,2),(1,3),(3,1),(3,2),(2,3),(3,3),(4,1),(1,4)]\nphi = np.stack([2/33 * np.outer(np.sin(np.pi*a*x/33), np.sin(np.pi*b*x/33)) for a,b in ks])\neig = np.array([4*nu*(np.sin(np.pi*a/66)**2/hx**2 + np.sin",
+      "set -e\nref=/tmp/hegel_knowledge_ref\npython3 \"$ref/describe_ref.py\" --search 'ridge nuisance profiling variable projection constrained least squares'\nls -1 \"$ref\" | head -30",
+      "set -e\nref=/tmp/hegel_knowledge_ref\npython3 \"$ref/describe_ref.py\" --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance\npython3 \"$ref/describe_ref.py\" --describe autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound\nsed -n '1,135p' \"$ref/autogenous_prim_ridge_profiled_matching.reference.txt\"\nsed -n '1,105p' \"$ref/autogenous_prim_box_ridge_bounds.reference.txt\"",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text().replace('from scipy.linalg import lstsq', 'from scipy.linalg import qr, solve_triangular\\nfrom scipy.optimize import minimize')\ns = s[:s.index('def solve_nonhermitian_coupled_inversion')]\ns += '''_CUTOFF = 1e-8\n\n\ndef _disk_fit(design, target):\n    \"\"\"Minimize the profiled quadratic over a product of complex unit disks.\"\"\"\n    adjoint = design.conj().T\n    linear = adjoint @ target\n    norms = np.sum(np.abs(design)**2, axis=0)\n    scale = max(np.max(norms), np.ma",
+      "set -e\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/nonhermitian_advection_coupled_select.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nn = 32\nx = np.arange(1, n+1)\nLx, Ly, nu, omega = .81, 1.73, .015, -.7\nmodes = [(1,1),(1,2),(2,1),(2,2),(1,3),(3,1),(3,2),(2,3),(3,3),(4,1),(1,4)]\nphi = np.stack([2/33*np.outer(np.sin(np.pi*a*x/33),np.sin(np.pi*b*x/33)) for a,b in modes]).reshape(11,-1).T\neig = np.array([4*nu*((np.sin(np.pi*a/66)/(Lx/"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/nonhermitian_advection_coupled_select.py",
+        "filename": "nonhermitian_advection_coupled_select.py",
+        "bytes": 6821,
+        "sha256": "70fb068dc6c489993b311077559cf74ef19988ec697a51f2d113d0044d91e618",
+        "content_addressed_ref": "content_addressed_blobs/70fb068dc6c489993b311077559cf74ef19988ec697a51f2d113d0044d91e618.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/nonhermitian_advection_coupled_select.py"
+    ],
+    "exported_pure_functions": [
+      "dense_reference",
+      "objective",
+      "oracle"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ae133e99323fd84cc0ea0ea732eca04a2e9c889606b14b4e81488c918fcae552",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/nonhermitian_advection_coupled_select.py')\nmod = importli",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ae133e99323fd84cc0ea0ea732eca04a2e9c889606b14b4e81488c918fcae552",
+        "expected_candidate_sha256": "ae133e99323fd84cc0ea0ea732eca04a2e9c889606b14b4e81488c918fcae552",
+        "computed_candidate_sha256": "ae133e99323fd84cc0ea0ea732eca04a2e9c889606b14b4e81488c918fcae552",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/nonhermitian_advection_coupled_select.py",
+            "bytes": 6821
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_ae133e99"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "dense_reference",
+        "code": "def dense_reference(p):\n    from scipy.linalg import solve\n    (m, nx, ny) = p['basis'].shape\n    A = np.zeros((nx * ny, nx * ny), dtype=np.complex128)\n    (hx, hy) = (p['Lx'] / (nx + 1), p['Ly'] / (ny + 1))\n    for (i, j) in np.ndindex(nx, ny):\n        row = i * ny + j\n        (vx, vy) = (p['vx'][i, j], p['vy'][i, j])\n        A[row, row] = 2 * p['nu'] / hx ** 2 + 2 * p['nu'] / hy ** 2 + abs(vx) / hx + abs(vy) / hy + p['sigma'][i, j] + 1j * p['omega']\n        for (a, b, h) in ((i - 1, j, hx), (i + 1, j, hx), (i, j - 1, hy), (i, j + 1, hy)):\n            if 0 <= a < nx and 0 <= b < ny:\n                A[row, a * ny + b] = -p['nu'] / h ** 2\n        a = i - 1 if vx >= 0 else i + 1\n        b = j - 1 if vy >= 0 else j + 1\n        if 0 <= a < nx:\n            A[row, a * ny + j] -= abs(vx) / hx\n        if 0 <= b < ny:\n            A[row, i * ny + b] -= abs(vy) / hy\n    rhs = p['basis'].reshape(m, -1).T\n    return (A, rhs, solve(A, rhs, assume_a='gen'))"
+      },
+      {
+        "name": "objective",
+        "code": "def objective(g, y, p, w):\n    active = np.abs(w) > 1e-08\n    return np.sum(abs(g @ w - y) ** 2) / 2 + p['lam2'] * np.sum(abs(w) ** 2) / 2 + p['lam0'] * sum(active) + sum((gamma for (u, v, gamma) in p['pair_penalties'] if active[u] and active[v]))"
+      },
+      {
+        "name": "oracle",
+        "code": "def oracle(g, y, p):\n    import itertools\n    scores = []\n    for k in range(g.shape[1] + 1):\n        for tup in itertools.combinations(range(g.shape[1]), k):\n            w = np.zeros(g.shape[1], dtype=np.complex128)\n            if k:\n                (u, s, vh) = np.linalg.svd(g[:, tup], full_matrices=False)\n                w[list(tup)] = vh.conj().T @ (u.conj().T @ y * s / (s * s + p['lam2']))\n            scores.append((objective(g, y, p, w), w))\n    scores.sort(key=lambda x: x[0])\n    return (scores[0], scores[1][0] - scores[0][0])"
+      }
+    ]
+  }
+}

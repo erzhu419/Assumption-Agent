@@ -1,0 +1,179 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq01_3d_multi_operator_robin_continuation_eeceaf85dcc5",
+    "source_hash": "eeceaf85dcc50a6f07af2a0d0cde2cbc025db22944337935e01a3d9cc22d0ca7",
+    "parent_ids": [],
+    "source_episode_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "task_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/robin_endpoint_audit.py",
+        "archived_relpath": "producers/tmp__robin_endpoint_audit.py",
+        "bytes": 2393,
+        "sha256": "68da6e53d155b7781725ecd0a8631515394eaff760ded093f6969afdd93b090a"
+      },
+      {
+        "container_path": "/tmp/robin_overlap_audit.py",
+        "archived_relpath": "producers/tmp__robin_overlap_audit.py",
+        "bytes": 1202,
+        "sha256": "f33d298219545b93036ef26134a8e7c3317fd730d7533bd0641a4245b72563f5"
+      },
+      {
+        "container_path": "/tmp/robin_recursive.py",
+        "archived_relpath": "producers/tmp__robin_recursive.py",
+        "bytes": 7984,
+        "sha256": "10fe58524a6558137c9d3f2d959a8efa9faad5b3dd145c95dbd745776f4179cd"
+      },
+      {
+        "container_path": "/tmp/robin_recursive_stress.py",
+        "archived_relpath": "producers/tmp__robin_recursive_stress.py",
+        "bytes": 6111,
+        "sha256": "21db736435e07d644b742d3926a07e240de06482f6c5ead79fa9194aa092d3c2"
+      },
+      {
+        "container_path": "/tmp/robin_reference_lu.py",
+        "archived_relpath": "producers/tmp__robin_reference_lu.py",
+        "bytes": 5766,
+        "sha256": "0ae72f6ca64fb0787b71fb117bdf778a52bf638e3874d807e6ab40df77e04674"
+      },
+      {
+        "container_path": "/tmp/robin_stress.py",
+        "archived_relpath": "producers/tmp__robin_stress.py",
+        "bytes": 6134,
+        "sha256": "7cca95d98aac80d2ae5b683eafbc6369418c70103780ac42bdd41bec06b91bdf"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; sed -n '1,240p' /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport importlib.util,pickle,numpy as np,scipy,os\nprint('scipy',scipy.__version__, 'pyamg',importlib.util.find_spec('pyamg'),'affinity',len(os.sched_getaffinity(0)))\nx=pickle.load(open('/holdout_task/public_eq01_studies.pkl','rb'))\nprint(type(x),list(x) if isinstance(x,dict) else len(x))\ndef describe(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,(float(v.min()),float(v.max())) if v.size else ())\n   elif isinstance(v,(list,tuple,d",
+      "pwd; ls -la / /pretrain_task; find /pretrain_task /app /workspace /mnt /results -maxdepth 4 -type f \\( -iname '*eq01*' -o -iname '*schema*' -o -name 'AGENTS.md' \\) -printf '%p %s bytes\\n' 2>/dev/null; mkdir -p /holdout_task; python3 -I -c 'import numpy as np, scipy; print(\"NumPy\", np.__version__, \"SciPy\", scipy.__version__); np.show_config()'",
+      "set -e\nmkdir -p /holdout_task\ncat > /holdout_task/robin_continuation_tomography.py <<'PY'\n\"\"\"Finite-volume Robin continuation and ridge-profiled source tomography.\"\"\"\n\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import LinearOperator, cg, splu\n\n\ndef _dissection(cells):\n    \"\"\"Order interiors before their planar separator to limit 3D fill.\"\"\"\n    axis = int(np.argmax(cells.shape))\n    if cells.shape[axis] <= 3:\n        return cells.ravel()\n    planes = np.moveaxis(cells, axis, 0)\n    middle = len(planes) // 2\n    return np.concatenate((_dissection(planes[:middle",
+      "set -e\ncat > /tmp/robin_stress.py <<'PY'\nimport importlib.util\nimport time\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/robin_continuation_tomography.py'\nspec = importlib.util.spec_from_file_location('robin', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\n\ndef study(shape, variant):\n    rng = np.random.default_rng(78 + variant)\n    x, y, z = np.indices(shape) / np.array(shape)[:, None, None, None]\n    if variant == 1:\n        base = np.where(x + .15 * np.sin(10*y) < .55, 1., 1/3500)\n        m",
+      "set -e\nfor threads in 1 2; do\n  OPENBLAS_NUM_THREADS=$threads OMP_NUM_THREADS=$threads python3 -I - <<'PY'\nimport numpy as np, time\nx=np.ones(21952); y=x.copy()\nfor name,f in [('dot',lambda: np.dot(x,y)),('norm',lambda:np.linalg.norm(x)),('einsum',lambda:np.einsum('i,i->',x,y))]:\n    start=time.perf_counter()\n    for _ in range(200): f()\n    print(name,round((time.perf_counter()-start)/200*1e6,2),'us')\nPY\ndone\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/robin_stress.py",
+      "set -e\ncp /holdout_task/robin_continuation_tomography.py /tmp/robin_reference_lu.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text().replace('from scipy.sparse.linalg import LinearOperator, cg, splu','from scipy.sparse.linalg import splu')\nstart = s.index('\\ndef _profile(')\ns = s[:start] + '''\ndef _two_grid(a, cells):\n    \"\"\"Symmetric two-grid inverse with a smoothed aggregate coarse basis.\"\"\"\n    shape = tuple((length + 1) // 2 for length in cells.shape)\n    coarse = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)\n",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/holdout_task/robin_continuation_tomography.py').read_text()\nsrc = src.replace('def _two_grid(a, cells):','def _two_grid(a, cells):').replace('    permutation = _dissection(coarse)\\n    inverse = np.argsort(permutation)\\n    lu = _factor(coarse_a, permutation)', '''    if coarse.size > 400:\n        coarse_solve = _two_grid(coarse_a, coarse)\n    else:\n        permutation = _dissection(coarse)\n        inverse = np.argsort(permutation)\n        lu = _factor(coarse_a, permutation)\n\n        def coarse_solve(rhs):\n            return lu.solv",
+      "set -e\nsed -e 's/_two_grid/_multigrid/g' -e 's/Symmetric two-grid inverse with a smoothed aggregate coarse basis./Symmetric multigrid cycle with smoothed aggregate coarse bases./' /tmp/robin_recursive.py > /holdout_task/robin_continuation_tomography.py\npython3 -I /tmp/robin_stress.py\nOPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy\nimport numpy as np\nns = runpy.run_path('/tmp/robin_stress.py')\nmod = ns['mod']\nfor variant in (0, 1):\n    s = ns['study']((28, 28, 28), variant)\n    out = mod.solve_robin_continuation_tomography(s)\n    shape = s['kappa_base'].shape\n    perm ",
+      "set -e\nif [ -f /holdout_task/public_eq01_studies.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then python3 /holdout_task/validate_public_schema.py; else echo 'Public study and schema validator unavailable for this audit'; fi\ncat > /tmp/robin_endpoint_audit.py <<'PY'\nimport runpy\nimport time\nimport numpy as np\n\nns = runpy.run_path('/tmp/robin_stress.py')\nmod = ns['mod']\noriginal = mod.cg\n\ndef flux_residual(s, theta, solution, rhs):\n    shape = s['kappa_base'].shape\n    h = np.array([s['Lx'], s['Ly'], s['Lz']]) / shape\n    v = np.prod(h)\n    k = s['kappa_base'] + theta * s['kappa_mod",
+      "set -e\ncat > /tmp/robin_overlap_audit.py <<'PY'\nimport runpy\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.sparse.linalg import spsolve\n\nns = runpy.run_path('/tmp/robin_stress.py')\ns = ns['study']((8, 7, 6), 1)\nsensors = np.ravel_multi_index(s['sensor_ijk'].T, s['kappa_base'].shape)\nreference = []\nfor theta in s['thetas']:\n    a, vol = ns['independent_matrix'](s, theta)\n    rhs = vol * s['source_modes'].reshape(3, -1).T\n    reference.append(spsolve(a, rhs)[sensors])\nS = np.concatenate(reference)\nrng = np.random.default_rng(93)\nunit = S / np.linalg.norm(S, axis=0)\nZ = rng.normal(size=("
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__robin_recursive.py",
+      "primary_producer_container_path": "/tmp/robin_recursive.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_preconditioned_operators"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_continuation_tomography.py",
+        "filename": "robin_continuation_tomography.py",
+        "bytes": 7984,
+        "sha256": "9a9e47799f2fbce6963dfa49ebdef197ee72d992068fc15b5ee063b2a6ca7bd5",
+        "content_addressed_ref": "content_addressed_blobs/9a9e47799f2fbce6963dfa49ebdef197ee72d992068fc15b5ee063b2a6ca7bd5.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_continuation_tomography.py"
+    ],
+    "exported_pure_functions": [
+      "_dissection",
+      "_operator_family",
+      "_factor",
+      "_two_grid",
+      "_dot",
+      "_norm",
+      "cg",
+      "_profile",
+      "solve_robin_continuation_tomography",
+      "study"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "eeceaf85dcc50a6f07af2a0d0cde2cbc025db22944337935e01a3d9cc22d0ca7",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncat > /tmp/robin_overlap_audit.py <<'PY'\nimport runpy\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.sparse.linalg import spsolve\n\nns = runpy.run_path('/tmp/robin_stress.py')\ns = ns['study']((8, 7, 6), 1)\nsensors = np.ravel_m",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "eeceaf85dcc50a6f07af2a0d0cde2cbc025db22944337935e01a3d9cc22d0ca7",
+        "expected_candidate_sha256": "eeceaf85dcc50a6f07af2a0d0cde2cbc025db22944337935e01a3d9cc22d0ca7",
+        "computed_candidate_sha256": "eeceaf85dcc50a6f07af2a0d0cde2cbc025db22944337935e01a3d9cc22d0ca7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_continuation_tomography.py",
+            "bytes": 7984
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_eeceaf85"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_dissection",
+        "code": "def _dissection(cells):\n    \"\"\"Order interiors before their planar separator to limit 3D fill.\"\"\"\n    axis = int(np.argmax(cells.shape))\n    if cells.shape[axis] <= 3:\n        return cells.ravel()\n    planes = np.moveaxis(cells, axis, 0)\n    middle = len(planes) // 2\n    return np.concatenate((_dissection(planes[:middle]), _dissection(planes[middle + 1:]), _dissection(planes[middle:middle + 1])))"
+      },
+      {
+        "name": "_operator_family",
+        "code": "def _operator_family(study, cells):\n    from scipy import sparse\n    h = np.array([study['Lx'], study['Ly'], study['Lz']], dtype=float) / cells.shape\n    vol = float(h.prod())\n    n = cells.size\n    (faces, walls) = ([], [])\n    for axis in range(3):\n        planes = np.moveaxis(cells, axis, 0)\n        area = vol / h[axis]\n        faces.append((planes[:-1].ravel(), planes[1:].ravel(), area / h[axis]))\n        walls.append((planes[0].ravel(), area, h[axis] / 2))\n        walls.append((planes[-1].ravel(), area, h[axis] / 2))\n    left = np.concatenate([f[0] for f in faces])\n    right = np.concatenate([f[1] for f in faces])\n    cell_ids = cells.ravel()\n    row = np.r_[cell_ids, left, right]\n    col = np.r_[cell_ids, right, left]\n    order = np.lexsort((col, row))\n    indptr = np.r_[0, np.cumsum(np.bincount(row, minlength=n))].astype(np.int32)\n    indices = col[order].astype(np.int32)\n    (k0, k1, k2, s0, s1) = (np.asarray(study[k], dtype=float).ravel() for k in ('kappa_base', 'kappa_mod1', 'kappa_mod2', 'sigma_base', 'sigma_mod'))\n    gamma = float(study['gamma_robin'])\n\n    def assemble(theta):\n        k = k0 + theta * k1 + theta ** 2 * k2\n        w = np.concatenate([scale * (2 * k[a] * k[b] / (k[a] + k[b])) for (a, b, scale) in faces])\n        diagonal = vol * (s0 + theta * s1)\n        diagonal += np.bincount(left, weights=w, minlength=n)\n        diagonal += np.bincount(right, weights=w, minlength=n)\n        for (ids, area, half) in walls:\n            diagonal[ids] += area * gamma * k[ids] / (gamma * half + k[ids])\n        values = np.r_[diagonal, -w, -w][order]\n        return sparse.csr_matrix((values, indices, indptr), shape=(n, n))\n    return (assemble, vol)"
+      },
+      {
+        "name": "_factor",
+        "code": "def _factor(a, permutation):\n    from scipy.sparse.linalg import splu\n    return splu(a[permutation, :][:, permutation].tocsc(), permc_spec='NATURAL', diag_pivot_thresh=0, options={'SymmetricMode': True})"
+      },
+      {
+        "name": "_two_grid",
+        "code": "def _two_grid(a, cells):\n    \"\"\"Symmetric two-grid inverse with a smoothed aggregate coarse basis.\"\"\"\n    from scipy import sparse\n    shape = tuple(((length + 1) // 2 for length in cells.shape))\n    coarse = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)\n    membership = coarse[np.ix_(*(np.arange(length) // 2 for length in cells.shape))].ravel()\n    tentative = sparse.csr_matrix((np.ones(a.shape[0]), (cells.ravel(), membership)), shape=(a.shape[0], coarse.size))\n    diagonal = a.diagonal()\n    upper = np.max(np.asarray(abs(a).sum(axis=1)).ravel() / diagonal)\n    damping = 4 / (3 * upper) / diagonal\n    prolong = (tentative - (a @ tentative).multiply(damping[:, None])).tocsr()\n    prolong.eliminate_zeros()\n    restrict = prolong.T.tocsr()\n    coarse_a = (restrict @ (a @ prolong)).tocsr()\n    if coarse.size > 400:\n        coarse_solve = _two_grid(coarse_a, coarse)\n    else:\n        permutation = _dissection(coarse)\n        inverse = np.argsort(permutation)\n        lu = _factor(coarse_a, permutation)\n\n        def coarse_solve(rhs):\n            return lu.solve(rhs[permutation])[inverse]\n\n    def cycle(r):\n        x = damping * r\n        x += damping * (r - a @ x)\n        rc = restrict @ (r - a @ x)\n        x += prolong @ coarse_solve(rc)\n        x += damping * (r - a @ x)\n        x += damping * (r - a @ x)\n        return x\n    return cycle"
+      },
+      {
+        "name": "_dot",
+        "code": "def _dot(x, y):\n    return np.einsum('i,i->', x, y)"
+      },
+      {
+        "name": "_norm",
+        "code": "def _norm(x):\n    return np.sqrt(_dot(x, x))"
+      },
+      {
+        "name": "cg",
+        "code": "def cg(a, rhs, x0=None, M=None, rtol=1e-10, maxiter=100, callback=None):\n    x = np.zeros_like(rhs) if x0 is None else x0.copy()\n    r = rhs - a @ x\n    target = rtol ** 2 * _dot(rhs, rhs)\n    previous = None\n    for i in range(maxiter):\n        if _dot(r, r) <= target:\n            return (x, 0)\n        z = M(r)\n        rz = _dot(r, z)\n        if previous is None:\n            direction = z\n        else:\n            direction *= rz / previous\n            direction += z\n        product = a @ direction\n        step = rz / _dot(direction, product)\n        x += step * direction\n        r -= step * product\n        previous = rz\n        if callback is not None:\n            callback(x)\n    return (x, maxiter)"
+      },
+      {
+        "name": "_profile",
+        "code": "def _profile(study, predictors):\n    from scipy import linalg\n    z = np.asarray(study['Z_nuisance'], dtype=float)\n    y = np.asarray(study['Y_obs'], dtype=float)\n    modes = predictors.shape[1]\n    (n, q) = z.shape\n    design = np.vstack((z, np.sqrt(study['nuisance_ridge']) * np.eye(q)))\n    basis = linalg.qr(design, mode='economic', check_finite=False)[0]\n    data = np.zeros((n + q, modes + y.shape[1]))\n    (data[:n, :modes], data[:n, modes:]) = (predictors, y)\n    data -= basis @ (basis.T @ data)\n    (signal, obs) = (data[:, :modes], data[:, modes:])\n    gram = signal.T @ signal\n    cross = signal.T @ obs\n    amplitudes = cross / np.diag(gram)[:, None]\n    joint = linalg.lstsq(np.vstack((signal, np.sqrt(study['source_ridge']) * np.eye(modes))), np.vstack((obs, np.zeros((modes, y.shape[1])))), check_finite=False)[0]\n    return (amplitudes, joint)"
+      },
+      {
+        "name": "solve_robin_continuation_tomography",
+        "code": "def solve_robin_continuation_tomography(study: dict) -> dict:\n    \"\"\"Solve all continuation states and profile nuisance amplitudes.\"\"\"\n    from scipy.sparse.linalg import cg\n    source = np.asarray(study['source_modes'], dtype=float)\n    (modes, *shape) = source.shape\n    cells = np.arange(np.prod(shape), dtype=np.int32).reshape(shape)\n    n = cells.size\n    (assemble, vol) = _operator_family(study, cells)\n    thetas = np.asarray(study['thetas'], dtype=float)\n    permutation = _dissection(cells)\n    inverse = np.argsort(permutation)\n    theta_ref = float(np.sqrt(thetas.min() * thetas.max()))\n    pre = _two_grid(assemble(theta_ref), cells)\n    sensor = cells[tuple(np.asarray(study['sensor_ijk']).T)]\n    stacked = np.empty((len(thetas), len(sensor), modes))\n    b = vol * source.reshape(modes, n)\n    scales = np.linalg.norm(b, axis=1)\n    fields = np.zeros_like(b)\n    for idx in np.argsort(thetas):\n        a = assemble(float(thetas[idx]))\n        exact = None\n        for mode in range(modes):\n            if scales[mode] == 0:\n                continue\n            rhs = b[mode]\n            (x, _) = cg(a, rhs, x0=fields[mode], M=pre, rtol=3e-11, maxiter=100)\n            residual = rhs - a @ x\n            if _norm(residual) > 1e-09 * scales[mode]:\n                (delta, _) = cg(a, residual, M=pre, rtol=1e-07, maxiter=150)\n                x += delta\n                if _norm(rhs - a @ x) > 2e-08 * scales[mode]:\n                    if exact is None:\n                        exact = _factor(a, permutation)\n                    x = exact.solve(rhs[permutation])[inverse]\n            fields[mode] = x\n        stacked[idx] = fields[:, sensor].T\n        if idx == len(thetas) - 1:\n            terminal = fields.reshape(source.shape).copy()\n    stacked = stacked.reshape(-1, modes)\n    (amplitudes, joint) = _profile(study, stacked)\n    return dict(terminal_fields=terminal, continuation_sensor_predictions=stacked, profiled_amplitudes=amplitudes, joint_source_weights=joint)"
+      },
+      {
+        "name": "study",
+        "code": "def study(shape, variant):\n    rng = np.random.default_rng(78 + variant)\n    (x, y, z) = np.indices(shape) / np.array(shape)[:, None, None, None]\n    if variant == 1:\n        base = np.where(x + 0.15 * np.sin(10 * y) < 0.55, 1.0, 1 / 3500)\n        m1 = np.where(y < 0.48, 1e-07, 0.025)\n        m2 = np.where((z > 0.4) & (x > 0.45), 0.65, 1e-08)\n    else:\n        base = np.exp(np.log(3500) * rng.uniform(-1, 0, shape))\n        m1 = 0.015 * np.exp(rng.uniform(-5, 0, shape))\n        m2 = 0.08 * np.exp(rng.uniform(-5, 0, shape))\n    thetas = np.array([0.48, 1.85, 0.16, 1.6, 0.94, 0.15, 1.12, 0.67, 0.28])\n    sensors = np.column_stack([rng.integers(d, size=55) for d in shape])\n    n = len(thetas) * len(sensors)\n    Z = rng.normal(size=(n, 7))\n    Z[:, -1] = Z[:, 0] - 2 * Z[:, 1] + 1e-07 * Z[:, -1]\n    return dict(Lx=1.21, Ly=0.77, Lz=1.82, kappa_base=base, kappa_mod1=m1, kappa_mod2=m2, sigma_base=(0.0001 if variant == 1 else 0.001) * (1 + x), sigma_mod=0.0003 * (1 + y), gamma_robin=0.008 if variant == 1 else 1.8, thetas=thetas, source_modes=np.array([1 + x, np.sin(6 * y) + 0.1 * z, rng.normal(size=shape)]), sensor_ijk=sensors, Z_nuisance=Z, Y_obs=rng.normal(size=(n, 5)), nuisance_ridge=1e-05, source_ridge=0.002)"
+      }
+    ]
+  }
+}

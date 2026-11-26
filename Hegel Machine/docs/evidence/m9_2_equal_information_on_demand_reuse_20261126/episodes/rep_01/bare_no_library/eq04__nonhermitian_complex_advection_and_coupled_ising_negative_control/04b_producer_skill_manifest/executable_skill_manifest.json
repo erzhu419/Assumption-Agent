@@ -1,0 +1,109 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq04_nonhermitian_complex_coupled_negctrl_ac1350248f55",
+    "source_hash": "ac1350248f551b98881e8884cb3177e32af81de48aaca912bc2aa05bd0e6d859",
+    "parent_ids": [],
+    "source_episode_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "task_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_eq04.py",
+        "archived_relpath": "producers/tmp__verify_eq04.py",
+        "bytes": 5448,
+        "sha256": "2645d055bc183d9717d4c82ac5c5a4f9586829b1aaac8613b055582a063169de"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task && sed -n '1,220p' /holdout_task/validate_public_schema.py && python3 - <<'PY'\nimport pickle\nfrom pathlib import Path\nimport scipy\np = Path('/holdout_task/public_eq04_cases.pkl')\nwith p.open('rb') as f:\n    cases = pickle.load(f)\nprint('scipy', scipy.__version__, 'public container', type(cases).__name__, 'count', len(cases))\nif isinstance(cases, dict):\n    print('top-level keys', list(cases)[:20]); seq = cases.values()\nelse:\n    seq = cases\nfor case in list(seq)[:3]:\n    if isinstance(case, dict):\n        print({k: (getattr(v, 'shape', None), getattr(v, 'dtype', None)) if",
+      "printf 'Working directory: '; pwd\nfor d in /holdout_task /pretrain_task /app /workspace /results; do\n  if [ -d \"$d\" ]; then\n    printf '\\n%s\\n' \"$d\"\n    find \"$d\" -maxdepth 3 -type f \\( -name '*eq04*' -o -name 'validate_public_schema.py' -o -name 'AGENTS.md' -o -name '*nonhermitian*' -o -iname 'readme*' \\) -printf '%p (%s bytes)\\n' | head -60\n  fi\ndone\nprintf '\\nRoot entries:\\n'; ls -1 /\npython3 -I -c 'import numpy, scipy; print(\"NumPy\", numpy.__version__, \"SciPy\", scipy.__version__)'",
+      "set -e\ncat > /tmp/verify_eq04.py <<'PY'\nimport importlib.util\nfrom pathlib import Path\nimport time\nimport numpy as np\nfrom scipy.linalg import solve\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\npath = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\nspec = importlib.util.spec_from_file_location('candidate', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\n\n\ndef reference_operator(p):\n    nx, ny = p['vx'].shape\n    hx, hy = p['Lx'] / (nx + 1), p['Ly'] / (ny + 1)\n    a = lil_matrix((nx * ny, nx * ny), dtype=np.comp",
+      "set -e\nsed -i \"s/\\[(0, 1, \\.8)\\]/[(0, 1, 2.0)]/\" /tmp/verify_eq04.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_eq04.py\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then python3 /holdout_task/validate_public_schema.py; else printf 'Public fixtures and validator unavailable in this container.\\n'; fi",
+      "set -e\nif [ -f /holdout_task/public_eq04_cases.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then\n  python3 -I /holdout_task/validate_public_schema.py\nelse\n  printf 'Public fixtures and validator unavailable; running synthetic contract slices.\\n'\nfi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('eq04', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nrng = np.random.default_rng(493)\nm = 11\ncases = [\n    ('a"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_eq04.py",
+      "primary_producer_container_path": "/tmp/verify_eq04.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/nonhermitian_advection_coupled_select.py",
+        "filename": "nonhermitian_advection_coupled_select.py",
+        "bytes": 3849,
+        "sha256": "db9cd3baf470f0e064a97138f67d0ffa900214467dc4675bbcea880012a18ed6",
+        "content_addressed_ref": "content_addressed_blobs/db9cd3baf470f0e064a97138f67d0ffa900214467dc4675bbcea880012a18ed6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/nonhermitian_advection_coupled_select.py"
+    ],
+    "exported_pure_functions": [
+      "reference_operator",
+      "objective",
+      "reference"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ac1350248f551b98881e8884cb3177e32af81de48aaca912bc2aa05bd0e6d859",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "set -e\nif [ -f /holdout_task/public_eq04_cases.pkl ] && [ -f /holdout_task/validate_public_schema.py ]; then\n  python3 -I /holdout_task/validate_public_schema.py\nelse\n  printf 'Public fixtures and validator unavailable; running synthetic co",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ac1350248f551b98881e8884cb3177e32af81de48aaca912bc2aa05bd0e6d859",
+        "expected_candidate_sha256": "ac1350248f551b98881e8884cb3177e32af81de48aaca912bc2aa05bd0e6d859",
+        "computed_candidate_sha256": "ac1350248f551b98881e8884cb3177e32af81de48aaca912bc2aa05bd0e6d859",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/nonhermitian_advection_coupled_select.py",
+            "bytes": 3849
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ac135024"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "reference_operator",
+        "code": "def reference_operator(p):\n    from scipy.sparse import lil_matrix\n    (nx, ny) = p['vx'].shape\n    (hx, hy) = (p['Lx'] / (nx + 1), p['Ly'] / (ny + 1))\n    a = lil_matrix((nx * ny, nx * ny), dtype=np.complex128)\n    for (i, j) in np.ndindex(nx, ny):\n        k = i * ny + j\n        a[k, k] = p['sigma'][i, j] + 1j * p['omega']\n        for (di, dj, h, v) in [(1, 0, hx, p['vx'][i, j]), (0, 1, hy, p['vy'][i, j])]:\n            a[k, k] += 2 * p['nu'] / h ** 2 + abs(v) / h\n            for sign in (-1, 1):\n                (ii, jj) = (i + sign * di, j + sign * dj)\n                if 0 <= ii < nx and 0 <= jj < ny:\n                    a[k, ii * ny + jj] = -p['nu'] / h ** 2 - max(-sign * v, 0) / h\n    return a.tocsr()"
+      },
+      {
+        "name": "objective",
+        "code": "def objective(p, g, y, w):\n    residual = g @ w - y\n    active = abs(w) > 1e-08\n    return 0.5 * np.vdot(residual, residual).real + 0.5 * p['lam2'] * np.vdot(w, w).real + p['lam0'] * active.sum() + sum((c for (u, v, c) in p['pair_penalties'] if active[u] and active[v]))"
+      },
+      {
+        "name": "reference",
+        "code": "def reference(p, g, y):\n    from scipy.linalg import solve\n    b = g.conj().T @ y\n    h = g.conj().T @ g + p['lam2'] * np.eye(11)\n    best = (np.inf, None)\n    second = np.inf\n    for mask in range(2048):\n        s = [i for i in range(11) if mask >> i & 1]\n        w = np.zeros(11, dtype=complex)\n        if s:\n            w[s] = solve(h[np.ix_(s, s)], b[s], assume_a='pos')\n            if np.any(abs(w[s]) <= 1e-08):\n                continue\n        value = objective(p, g, y, w)\n        if value < best[0]:\n            second = best[0]\n            best = (value, w)\n        elif value < second:\n            second = value\n    return (*best, second - best[0])"
+      }
+    ]
+  }
+}

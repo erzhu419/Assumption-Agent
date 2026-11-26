@@ -1,0 +1,144 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq01_3d_multi_operator_robin_continuation_c370a7ed9a56",
+    "source_hash": "c370a7ed9a564ad8743ed314b29a942c5b50fd832524baddb7b50e48b291f495",
+    "parent_ids": [],
+    "source_episode_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "task_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/anisotropic_robin_eq01.py",
+        "archived_relpath": "producers/tmp__anisotropic_robin_eq01.py",
+        "bytes": 1551,
+        "sha256": "944852c5113643f96d9886fc42cb26ad837d8637414d81f3565145ecf8214423"
+      },
+      {
+        "container_path": "/tmp/audit_robin_eq01.py",
+        "archived_relpath": "producers/tmp__audit_robin_eq01.py",
+        "bytes": 2937,
+        "sha256": "d94a981fd6b6ef25a83cc5483a7717e0af4e12fc73914bb3dc0f5cdf22f9826f"
+      },
+      {
+        "container_path": "/tmp/profile_robin_eq01.py",
+        "archived_relpath": "producers/tmp__profile_robin_eq01.py",
+        "bytes": 954,
+        "sha256": "53ded69407cd8f5518c10d2bc1bf3049b71ef6af4399dcef93edf35c32dd2172"
+      },
+      {
+        "container_path": "/tmp/test_robin_eq01.py",
+        "archived_relpath": "producers/tmp__test_robin_eq01.py",
+        "bytes": 5870,
+        "sha256": "084fa96d8a71dc6f80c635f874785b21724f67bbc8a117bc5f79efc27edd58d2"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 4068,
+        "sha256": "e9eba46d5eed38028067bbfd2806e3a8bd0d54288beecb3c65448b4e7c2e3154"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; sed -n '1,240p' /holdout_task/validate_public_schema.py; if test -f /tmp/hegel_knowledge_ref/describe_ref.py; then python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'SPD algebraic multigrid CG preconditioner'; python3 /tmp/hegel_knowledge_ref/describe_ref.py --search 'ridge nuisance profiling'; fi; python3 - <<'PY'\nimport importlib.util, os, scipy, numpy as np\nprint('scipy', scipy.__version__, 'pyamg', importlib.util.find_spec('pyamg'), 'threadpoolctl', importlib.util.find_spec('threadpoolctl'))\nprint('thread env', {k:v for k,v in os.environ.items() if 'THREAD' in",
+      "pwd; ls -la / /pretrain_task; find /pretrain_task /holdout_task /workspace /app -maxdepth 3 -type f \\( -name '*eq01*' -o -name 'validate_public_schema.py' \\) -print 2>/dev/null; mkdir -p /holdout_task; if test -f /tmp/hegel_knowledge_ref/describe_ref.py; then for f in autogenous_prim_conservative_spd_solve.galerkin_preconditioner autogenous_prim_ridge_profiled_matching.profile_candidate_amplitudes; do python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe \"$f\"; done; find /tmp/hegel_knowledge_ref -iname '*reference.txt' | grep -E 'conservative_spd|ridge_profiled'; fi; cat /sys/fs/cgroup/c",
+      "set -e\nsed -n '/^def galerkin_preconditioner/,/^def solve_residual_checked_cg/p' /tmp/hegel_knowledge_ref/autogenous_prim_conservative_spd_solve.reference.txt | head -95\nsed -n '/^def fit_ridge_nuisance/,/^def profile_candidate_amplitudes/p' /tmp/hegel_knowledge_ref/autogenous_prim_ridge_profiled_matching.reference.txt | head -65\nmkdir -p /holdout_task\ncat > /holdout_task/robin_continuation_tomography.py <<'PY'\n\"\"\"Finite-volume Robin continuation and nuisance-profiled tomography.\"\"\"\n\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import LinearOperator, cg, splu\n\n\n",
+      "cat > /tmp/test_robin_eq01.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nfrom time import perf_counter\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import splu\n\npath = Path('/holdout_task/robin_continuation_tomography.py')\nspec = importlib.util.spec_from_file_location('robin', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef generate(seed, shape, kind):\n    rng = np.random.default_rng(seed)\n    x,y,z = np.meshgrid(*(np.linspace(-1,1,n) for n in shape), indexing='ij')\n    if kind == 0:\n        k = 0.03 * 350",
+      "cat > /tmp/profile_robin_eq01.py <<'PY'\nimport runpy, sys\nfrom time import perf_counter\nns=runpy.run_path('/tmp/test_robin_eq01.py'); m=ns['m']; gen=ns['generate']\nfrom threadpoolctl import threadpool_info\nprint(threadpool_info(), flush=True)\nfor kind in map(int,sys.argv[1:]):\n    calls={k:[] for k in ('_factor','cg','_profile')}\n    def wrap(name, fn):\n        def tagged(*a,**kw):\n            start=perf_counter(); out=fn(*a,**kw); sec=perf_counter()-start\n            calls[name].append(sec)\n            if name=='_factor': print(f'factor {sec:.3f}s',flush=True)\n            return out\n        r",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text().replace('from scipy.sparse.linalg import LinearOperator, cg, splu', 'from scipy.sparse.linalg import LinearOperator, splu')\nstart = s.index('def _iterate(')\ns = s[:start] + '''def _dot(x, y):\n    # A serial reduction avoids BLAS thread overhead on these short vectors.\n    return np.einsum('i,i->', x, y)\n\n\ndef _pcg(A, b, M, guess, tolerance, maxiter):\n    x = np.zeros_like(b) if guess is None else guess.copy()\n    r = b.copy() if guess is None else b - A @ x\n    threshol",
+      "set -e\ncat > /tmp/audit_robin_eq01.py <<'PY'\nimport pickle\nfrom pathlib import Path\nimport runpy\n\nimport numpy as np\n\nn = runpy.run_path('/tmp/test_robin_eq01.py')\nm, test, generate = (n[k] for k in ('m','test','generate'))\npublic = Path('/holdout_task/public_eq01_studies.pkl')\nif public.is_file():\n    def studies(obj):\n        if isinstance(obj, dict):\n            if 'kappa_base' in obj and 'Y_obs' in obj:\n                yield obj\n            else:\n                for value in obj.values():\n                    yield from studies(value)\n        elif isinstance(obj, (list, tuple)):\n           ",
+      "set -e\nsed -i 's/np.swapaxes(expected,0,axis)\\[side\\]/np.moveaxis(expected, axis, 0)[side]/' /tmp/audit_robin_eq01.py\npython3 -I /tmp/audit_robin_eq01.py",
+      "set -e\npython3 -I - <<'PY'\nimport runpy\nfrom pathlib import Path\nimport numpy as np\nif Path('/holdout_task/public_eq01_studies.pkl').is_file():\n    runpy.run_path('/tmp/audit_robin_eq01.py', run_name='__main__')\nelse:\n    print('Public study is not mounted; testing the interaction of grid anisotropy and conductivity contrast.', flush=True)\n    n = runpy.run_path('/tmp/test_robin_eq01.py')\n    total = 0.0\n    for kind, lengths in enumerate(((0.55, 1.15, 2.2), (2.2, 0.55, 1.15))):\n        s = n['generate'](821 + kind, (28, 28, 28), kind)\n        s.update(zip(('Lx', 'Ly', 'Lz'), lengths))\n       ",
+      "set -e\ncat > /tmp/anisotropic_robin_eq01.py <<'PY'\nimport runpy\nimport numpy as np\nn = runpy.run_path('/tmp/test_robin_eq01.py')\nm = n['m']\ndef study(kind):\n    s = n['generate'](821 + kind, (28,28,28), kind)\n    s.update(zip(('Lx','Ly','Lz'), ((.55,1.15,2.2),(2.2,.55,1.15))[kind]))\n    if kind:\n        x,y,z = np.indices(s['kappa_base'].shape)\n        s['kappa_mod2'] = np.where((y+z//3)%11<5,17.,.002)*s['kappa_base']\n    order = ([0,6,2,3,4,8,1,7,5],[5,0,8,2,7,3,6,4,1])[kind]\n    s['thetas'] = s['thetas'][order]\n    return s\nif __name__ == '__main__':\n    s = study(1)\n    Ax = [n['oracle_oper",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text()\nold = '''        if np.sqrt(_dot(r, r)) > 5e-8 * scale:\n            x = _factor(A).solve(b)\n'''\nnew = '''        if np.sqrt(_dot(r, r)) > 3e-8 * scale:\n            # Refine the current field rather than replacing it with an\n            # unchecked direct solve. Extended-precision residuals avoid\n            # cancellation between large diffusion terms and weak losses.\n            factor = _factor(A)\n            wide_A = A.astype(np.longdouble)\n            wide_b = b.ast"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_preconditioned_operators"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_continuation_tomography.py",
+        "filename": "robin_continuation_tomography.py",
+        "bytes": 6169,
+        "sha256": "17f62327c661291bbbf73f15ae7f62fb0a0c30f760714c93cc7a32fceb31b494",
+        "content_addressed_ref": "content_addressed_blobs/17f62327c661291bbbf73f15ae7f62fb0a0c30f760714c93cc7a32fceb31b494.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_continuation_tomography.py"
+    ],
+    "exported_pure_functions": [
+      "generate",
+      "oracle_operator",
+      "error",
+      "oracle_profile"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c370a7ed9a564ad8743ed314b29a942c5b50fd832524baddb7b50e48b291f495",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text()\nold = '''        if np.sqrt(_dot(r, r)) > 5e-8 * scale:\n            x = _factor(A).solve(b)\n'''\nnew = '''        i",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c370a7ed9a564ad8743ed314b29a942c5b50fd832524baddb7b50e48b291f495",
+        "expected_candidate_sha256": "c370a7ed9a564ad8743ed314b29a942c5b50fd832524baddb7b50e48b291f495",
+        "computed_candidate_sha256": "c370a7ed9a564ad8743ed314b29a942c5b50fd832524baddb7b50e48b291f495",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_continuation_tomography.py",
+            "bytes": 6169
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_c370a7ed"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "generate",
+        "code": "def generate(seed, shape, kind):\n    rng = np.random.default_rng(seed)\n    (x, y, z) = np.meshgrid(*(np.linspace(-1, 1, n) for n in shape), indexing='ij')\n    if kind == 0:\n        k = 0.03 * 3500 ** rng.random(shape)\n        k1 = 0.2 * k * rng.random(shape)\n        k2 = k * rng.random(shape)\n        (gamma, reaction) = (0.9, 0.08)\n    else:\n        k = np.where(((x + 0.3 * z) ** 2 + (y - 0.15) ** 2 < 0.3) | (abs(z) < 0.067), 105.0, 0.03)\n        k1 = np.where(y > 0, 0.4, 0.001)\n        k2 = np.where(x > 0, 18.0, 0.0001)\n        (gamma, reaction) = (0.004, 0.00015)\n    theta = np.array([0.82, 0.15, 1.7, 0.24, 1.02, 1.85, 0.4, 1.31, 0.59])\n    sensors = np.column_stack([rng.integers(n, size=100) for n in shape])\n    Z = rng.normal(size=(900, 10))\n    Z[:, 5] = Z[:, 2] + Z[:, 3]\n    Z[:, 0] = 1.0\n    Y = rng.normal(size=(900, 6)) + Z @ rng.normal(size=(10, 6))\n    return dict(Lx=1.25, Ly=0.8, Lz=1.7, kappa_base=k, kappa_mod1=k1, kappa_mod2=k2, sigma_base=reaction * (1 + rng.random(shape)), sigma_mod=reaction * rng.random(shape), gamma_robin=gamma, thetas=theta, source_modes=np.array([1 + 0.3 * x, np.exp(-7 * ((x + 0.2) ** 2 + y * y + z * z)), (y + 0.4 * z) * np.cos(3 * x)]), sensor_ijk=sensors, Z_nuisance=Z, Y_obs=Y, nuisance_ridge=0.0001, source_ridge=0.001)"
+      },
+      {
+        "name": "oracle_operator",
+        "code": "def oracle_operator(s, theta):\n    from scipy import sparse\n    k = s['kappa_base'] + theta * s['kappa_mod1'] + theta ** 2 * s['kappa_mod2']\n    sig = s['sigma_base'] + theta * s['sigma_mod']\n    g = s['gamma_robin']\n    h = np.array([s['Lx'], s['Ly'], s['Lz']]) / k.shape\n    v = h.prod()\n    ids = np.arange(k.size).reshape(k.shape)\n    diag = v * sig.copy()\n    weights = []\n    left = []\n    right = []\n    for axis in range(3):\n        K = np.moveaxis(k, axis, 0)\n        I = np.moveaxis(ids, axis, 0)\n        D = np.moveaxis(diag, axis, 0)\n        face = v / h[axis] / (0.5 * h[axis] * (1 / K[:-1] + 1 / K[1:]))\n        weights.append(face.ravel())\n        left.append(I[:-1].ravel())\n        right.append(I[1:].ravel())\n        D[0] += v / h[axis] / (1 / g + 0.5 * h[axis] / K[0])\n        D[-1] += v / h[axis] / (1 / g + 0.5 * h[axis] / K[-1])\n    f = np.concatenate(weights)\n    i = np.concatenate(left)\n    j = np.concatenate(right)\n    r = np.arange(len(f))\n    incidence = sparse.csr_matrix((np.tile([1.0, -1.0], (len(f), 1)).ravel(), (np.repeat(r, 2), np.column_stack((i, j)).ravel())), shape=(len(f), k.size))\n    return ((incidence.T @ incidence.multiply(f[:, None]) + sparse.diags(diag.ravel())).tocsc(), v)"
+      },
+      {
+        "name": "error",
+        "code": "def error(actual, expected):\n    return np.linalg.norm(actual - expected) / max(np.linalg.norm(expected), 1e-100)"
+      },
+      {
+        "name": "oracle_profile",
+        "code": "def oracle_profile(s, S):\n    from scipy import linalg\n    (Z, Y) = (s['Z_nuisance'], s['Y_obs'])\n    q = Z.shape[1]\n    p = S.shape[1]\n    rz = np.sqrt(s['nuisance_ridge'])\n    rs = np.sqrt(s['source_ridge'])\n    az = np.vstack((Z, rz * np.eye(q)))\n    ay = np.vstack((Y, np.zeros((q, Y.shape[1]))))\n    mode = []\n    for x in S.T:\n        design = np.column_stack((az, np.r_[x, np.zeros(q)]))\n        mode.append(linalg.lstsq(design, ay, lapack_driver='gelsy')[0][-1])\n    design = np.block([[Z, S], [rz * np.eye(q), np.zeros((q, p))], [np.zeros((p, q)), rs * np.eye(p)]])\n    rhs = np.vstack((ay, np.zeros((p, Y.shape[1]))))\n    return (np.array(mode), linalg.lstsq(design, rhs, lapack_driver='gelsy')[0][-p:])"
+      }
+    ]
+  }
+}

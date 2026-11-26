@@ -1,0 +1,113 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq01_3d_multi_operator_robin_continuation_c4e0920c6b45",
+    "source_hash": "c4e0920c6b453b57c1afd1f270d69322ef3878c630b32ef412cc865bbbe3cd60",
+    "parent_ids": [],
+    "source_episode_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "task_id": "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/stress_robin_eq01.py",
+        "archived_relpath": "producers/tmp__stress_robin_eq01.py",
+        "bytes": 2731,
+        "sha256": "f44e62f8181d5155cf0616943f0c0309f1f1384113e65e98d2a71361ca28fad9"
+      },
+      {
+        "container_path": "/tmp/test_robin_eq01.py",
+        "archived_relpath": "producers/tmp__test_robin_eq01.py",
+        "bytes": 5737,
+        "sha256": "788455cc2557498445faf0f4de517d938595ac2e03949cfb95770c6c758d6c85"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && sed -n '1,220p' validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'SPD AMG CG reusable preconditioning ridge nuisance profiling'; python3 - <<'PY'\nimport importlib.util, os\nfor m in ('numpy','scipy','pyamg','threadpoolctl'):\n print(m, bool(importlib.util.find_spec(m)))\nprint('CPU affinity',len(os.sched_getaffinity(0)))\nPY",
+      "pwd; ls -ld /holdout_task /pretrain_task /workspace /app 2>/dev/null; for d in /holdout_task /pretrain_task /workspace /app; do if [ -d \"$d\" ]; then find \"$d\" -maxdepth 3 -type f \\( -name '*eq01*' -o -name 'validate_public_schema.py' \\) -print; fi; done; export PYTHONPATH=/tmp; python3 -m hegel_wormhole_skills --describe autogenous_prim_conservative_spd_solve.galerkin_preconditioner; python3 -m hegel_wormhole_skills --describe autogenous_prim_conservative_spd_solve.solve_residual_checked_cg; python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance",
+      "mkdir -p /holdout_task\ncat > /holdout_task/robin_continuation_tomography.py <<'PY'\n\"\"\"Cell-centered Robin continuation and ridge-profiled source tomography.\"\"\"\n\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import LinearOperator, cg, splu\n\ntry:\n    from threadpoolctl import threadpool_limits\nexcept ImportError:\n    from contextlib import nullcontext\n\n    def threadpool_limits(**kwargs):\n        return nullcontext()\n\n\nclass _RobinOperator:\n    def __init__(self, shape, lengths, gamma):\n        self.shape = shape\n        self.h = np.asarray(lengths, dtype=float) / ",
+      "cat > /tmp/test_robin_eq01.py <<'PY'\nimport importlib.util\nfrom time import perf_counter\nimport numpy as np\nfrom scipy import sparse, linalg\nfrom scipy.sparse.linalg import splu\nfrom threadpoolctl import threadpool_limits\n\nspec = importlib.util.spec_from_file_location('robin', '/holdout_task/robin_continuation_tomography.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef reference(st, t):\n    k = st['kappa_base'] + t * st['kappa_mod1'] + t*t * st['kappa_mod2']\n    shape = k.shape\n    h = np.array([st['Lx'], st['Ly'], st['Lz']]) / shape\n    v = np.prod(h)\n    xyz",
+      "cat > /tmp/stress_robin_eq01.py <<'PY'\nfrom pathlib import Path\nfrom time import perf_counter\nimport numpy as np\nfrom threadpoolctl import threadpool_limits\n\n# Reuse the full-grid fixtures and independent operator without rerunning baseline tests.\nsource = Path('/tmp/test_robin_eq01.py').read_text().split('\\nwith threadpool_limits(limits=1, user_api=\\'blas\\'):\\n    total =')[0]\nexec(compile(source, '/tmp/test_robin_eq01.py', 'exec'))\noriginal_cg, original_lu = mod.cg, mod.splu\n\ndef stress(st):\n    solves, factors = [], []\n    def cg(*args, **kwargs):\n        u, info = original_cg(*args, **kwar",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_continuation_tomography.py')\ns = p.read_text()\na = s.index('    fields = np.zeros_like(rhs)')\nb = s.index('        predictions[k]', a)\ns = s[:a] + '''    fields = np.zeros_like(rhs)\n    last = np.empty_like(fields)\n    for k in np.argsort(theta):\n        a = matrix(theta[k])\n        fields = _solve_state(a, rhs, rhs_norm, fields, inverse)\n''' + s[b:]\na = s.index('\\ndef _solve(study):')\ns = s[:a] + '''\ndef _solve_state(a, rhs, rhs_norm, fields, inverse):\n    direct = None\n    for m, b in enumerate(rhs):\n        norm = rhs_n",
+      "if test -f /holdout_task/public_eq01_studies.pkl; then ls -lh /holdout_task/public_eq01_studies.pkl /holdout_task/validate_public_schema.py; fi\npython3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy import linalg\n\npath = '/holdout_task/robin_continuation_tomography.py'\nspec = importlib.util.spec_from_file_location('robin', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\n# Interior fluxes cancel on a constant field; only reaction and wall flux remain.\nshape = (3, 4, 5)\nh = np.array([.21, .34, .47])\nv = np.prod(h)\ngamma = .63\nxyz = np.indices(shap",
+      "python3 -I - <<'PY'\nimport runpy\nimport numpy as np\nfrom threadpoolctl import threadpool_limits\n\nif __import__('os').path.isfile('/holdout_task/public_eq01_studies.pkl'):\n    print('Public fixture is now available; use it for the next validation step.')\n    raise SystemExit\n\nsuite = runpy.run_path('/tmp/test_robin_eq01.py')\nx, y, z = np.indices((28, 28, 28))\nwith threadpool_limits(limits=1, user_api='blas'):\n    total = 0.0\n    for i in range(2):\n        st = suite['make_study'](1)\n        # Separate the conducting paths at low and high theta. Unlike the\n        # previous planar slices, these"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__stress_robin_eq01.py",
+      "primary_producer_container_path": "/tmp/stress_robin_eq01.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_preconditioned_operators"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_continuation_tomography.py",
+        "filename": "robin_continuation_tomography.py",
+        "bytes": 7066,
+        "sha256": "9f3e2646fa485076e0aad778761b5940230d1733a91ef569a0b4ef96d590e276",
+        "content_addressed_ref": "content_addressed_blobs/9f3e2646fa485076e0aad778761b5940230d1733a91ef569a0b4ef96d590e276.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_continuation_tomography.py"
+    ],
+    "exported_pure_functions": [
+      "reference",
+      "make_study"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_preconditioned_operators",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c4e0920c6b453b57c1afd1f270d69322ef3878c630b32ef412cc865bbbe3cd60",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "if test -f /holdout_task/public_eq01_studies.pkl; then ls -lh /holdout_task/public_eq01_studies.pkl /holdout_task/validate_public_schema.py; fi\npython3 -I - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom scipy import linalg\n\npath = '/",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c4e0920c6b453b57c1afd1f270d69322ef3878c630b32ef412cc865bbbe3cd60",
+        "expected_candidate_sha256": "c4e0920c6b453b57c1afd1f270d69322ef3878c630b32ef412cc865bbbe3cd60",
+        "computed_candidate_sha256": "c4e0920c6b453b57c1afd1f270d69322ef3878c630b32ef412cc865bbbe3cd60",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_continuation_tomography.py",
+            "bytes": 7066
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_c4e0920c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "reference",
+        "code": "def reference(st, t):\n    from scipy import sparse\n    k = st['kappa_base'] + t * st['kappa_mod1'] + t * t * st['kappa_mod2']\n    shape = k.shape\n    h = np.array([st['Lx'], st['Ly'], st['Lz']]) / shape\n    v = np.prod(h)\n    xyz = np.indices(shape).reshape(3, -1)\n    k = k.ravel()\n    cell = np.arange(k.size)\n    diag = v * (st['sigma_base'] + t * st['sigma_mod']).ravel()\n    (diffs, weights) = ([], [])\n    for d in range(3):\n        start = cell[xyz[d] < shape[d] - 1]\n        end = start + np.prod(shape[d + 1:], dtype=int)\n        diffs.append(sparse.csr_matrix((np.tile([1.0, -1.0], start.size), (np.repeat(np.arange(start.size), 2), np.column_stack((start, end)).ravel())), shape=(start.size, k.size)))\n        weights.append(2 * v / h[d] ** 2 / (1 / k[start] + 1 / k[end]))\n        sides = cell[(xyz[d] == 0) | (xyz[d] == shape[d] - 1)]\n        diag[sides] += v / h[d] / (1 / st['gamma_robin'] + h[d] / (2 * k[sides]))\n    d = sparse.vstack(diffs, format='csr')\n    return ((d.T @ d.multiply(np.concatenate(weights)[:, None]) + sparse.diags(diag)).tocsr(), v)"
+      },
+      {
+        "name": "make_study",
+        "code": "def make_study(case):\n    rng = np.random.default_rng(801 + case)\n    shape = (28,) * 3\n    (x, y, z) = np.indices(shape) / 27\n    if case == 0:\n        base = np.exp(rng.uniform(0, np.log(3500), shape))\n        k1 = 0.02 + base * rng.uniform(0.01, 0.9, shape)\n        k2 = 0.02 + base * rng.uniform(0.01, 0.9, shape)\n        lengths = (1.2, 0.93, 1.61)\n    else:\n        base = np.where((x < 0.18) | (y > 0.3) & (y < 0.5) | (z > 0.85), 3500.0, 1.0)\n        k1 = 0.01 + 120 * np.exp(-90 * (z - 0.55) ** 2)\n        k2 = np.where((x > 0.75) | (z > 0.3) & (z < 0.5), 2800.0, 0.001)\n        lengths = (0.75, 1.15, 1.83)\n    t = rng.permutation(np.linspace(0.15, 1.85, 9))\n    sensors = rng.integers(0, 28, (80, 3))\n    n = len(sensors) * len(t)\n    a = rng.normal(size=(n, 15))\n    a[:, -1] = a[:, 0] + 1e-08 * a[:, 1]\n    return dict(Lx=lengths[0], Ly=lengths[1], Lz=lengths[2], kappa_base=base, kappa_mod1=k1, kappa_mod2=k2, sigma_base=0.01 + 0.015 * x, sigma_mod=0.002 + 0.012 * y, gamma_robin=[2.0, 0.18][case], thetas=t, source_modes=np.stack((np.ones(shape), np.sin(6.3 * x) * np.cos(4 * y), np.exp(-20 * ((x - 0.3) ** 2 + (y - 0.2) ** 2 + (z - 0.7) ** 2)))), sensor_ijk=sensors, Z_nuisance=a, Y_obs=rng.normal(size=(n, 5)), nuisance_ridge=1e-06, source_ridge=2e-06)"
+      }
+    ]
+  }
+}

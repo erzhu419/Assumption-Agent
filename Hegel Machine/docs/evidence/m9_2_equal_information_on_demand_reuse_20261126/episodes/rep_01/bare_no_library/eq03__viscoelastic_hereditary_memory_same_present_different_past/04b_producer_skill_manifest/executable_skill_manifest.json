@@ -1,0 +1,75 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq03_viscoelastic_hereditary_memory_18398cc3a36a",
+    "source_hash": "18398cc3a36a39a1bade278703d52e643fcaef0007b14eaa10aa3f8b4bbb0e12",
+    "parent_ids": [],
+    "source_episode_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "task_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && sed -n '1,220p' validate_public_schema.py && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_eq03_datasets.pkl','rb') as f:\n    data=pickle.load(f)\ndef inspect(x, prefix='', depth=0):\n    if isinstance(x,dict) and depth < 4:\n        for k,v in list(x.items())[:18]: inspect(v,prefix+'/'+str(k),depth+1)\n    elif isinstance(x,(list,tuple)) and len(x) and isinstance(x[0],dict) and depth < 3:\n        print(prefix,type(x).__name__,len(x)); inspect(x[0],prefix+'/0',depth+1)\n    elif hasattr(x,'shape'):\n        print(prefix,x.shape,x.dtype, 'nonfinite=",
+      "set -e\ncd /holdout_task\nif [ -f validate_public_schema.py ]; then python3 -I /holdout_task/validate_public_schema.py; fi\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport numpy as np\nfrom pathlib import Path\np = Path('/holdout_task/viscoelastic_hereditary_forecast.py')\ns = importlib.util.spec_from_file_location('forecast', p)\nm = importlib.util.module_from_spec(s)\ns.loader.exec_module(m)\nsolve = m.solve_viscoelastic_hereditary_forecast\nlimits = np.array([.15, .10, .08, .08, .18])\nworst = np.zeros(5)\nworst_lab = np.zeros(2)\nworst_status = np.zeros(3)\nmin_twin_gap = np.i",
+      "set -e\ncd /holdout_task\nif [ -f validate_public_schema.py ] && [ -f public_eq03_datasets.pkl ]; then python3 -I validate_public_schema.py; else printf 'Public dataset/validator unavailable; running a synthetic chronology and lab-confounding audit.\\n'; fi\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('forecast', '/holdout_task/viscoelastic_hereditary_forecast.py')\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\n\nbudgets = np.array([.15, .10, .08, .08, .18])\nworst = np.zeros(5)\n"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_hereditary_forecast.py",
+        "filename": "viscoelastic_hereditary_forecast.py",
+        "bytes": 4565,
+        "sha256": "9aa57fbcdf249e66659743f7715a1c5a56faf77fcbe6dfa3b743bfa373889491",
+        "content_addressed_ref": "content_addressed_blobs/9aa57fbcdf249e66659743f7715a1c5a56faf77fcbe6dfa3b743bfa373889491.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_hereditary_forecast.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "18398cc3a36a39a1bade278703d52e643fcaef0007b14eaa10aa3f8b4bbb0e12",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "set -e\ncd /holdout_task\nif [ -f validate_public_schema.py ] && [ -f public_eq03_datasets.pkl ]; then python3 -I validate_public_schema.py; else printf 'Public dataset/validator unavailable; running a synthetic chronology and lab-confounding",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "18398cc3a36a39a1bade278703d52e643fcaef0007b14eaa10aa3f8b4bbb0e12",
+        "expected_candidate_sha256": "18398cc3a36a39a1bade278703d52e643fcaef0007b14eaa10aa3f8b4bbb0e12",
+        "computed_candidate_sha256": "18398cc3a36a39a1bade278703d52e643fcaef0007b14eaa10aa3f8b4bbb0e12",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_hereditary_forecast.py",
+            "bytes": 4565
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_18398cc3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq03_viscoelastic_hereditary_memory_e82bf5c0e4c5",
+    "source_hash": "e82bf5c0e4c5fd37a21068f9e3c1ed3370952e62503aa83eb3ec19c27ccd7bde",
+    "parent_ids": [],
+    "source_episode_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "task_id": "eq03__viscoelastic_hereditary_memory_same_present_different_past",
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && sed -n '1,220p' validate_public_schema.py && python3 -I - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_eq03_datasets.pkl','rb') as f:\n    data = pickle.load(f)\ndef describe(obj, depth=0):\n    pad='  '*depth\n    if isinstance(obj, dict) and depth < 4:\n        for k,v in obj.items():\n            print(f'{pad}{k}:', end=' ')\n            if isinstance(v, dict):\n                print(); describe(v,depth+1)\n            else:\n                print(type(v).__name__, getattr(v,'shape',''),getattr(v,'dtype',''),repr(v)[:100] if np.isscalar(v) else",
+      "printf 'Working directory: '; pwd; ls -la / /pretrain_task; find /pretrain_task /app /workspace /results /mnt /tmp -maxdepth 4 -type f \\( -iname '*eq03*' -o -name 'validate_public_schema.py' -o -name 'AGENTS.md' -o -iname '*viscoelastic*' \\) -printf '%p (%s bytes)\\n' 2>/dev/null; python3 -I -c 'import numpy; print(\"NumPy\", numpy.__version__)'",
+      "set -eu\nmkdir -p /holdout_task\ncat > /holdout_task/viscoelastic_hereditary_forecast.py <<'PY'\n\"\"\"Coupon-calibrated hereditary creep and first-passage forecasts.\"\"\"\n\nimport numpy as np\n\n\ndef _align(train, test):\n    \"\"\"Estimate lab calibration and balanced imputation on the pooled coupons.\"\"\"\n    raw, refs, lab, stratum = (\n        np.concatenate((train[key], test[key]), axis=0)\n        for key in ('coupon_features_raw', 'ref_coupons', 'lab_id', 'stratum')\n    )\n    aligned = np.empty_like(raw, dtype=float)\n    for label in np.unique(lab):\n        mask = lab == label\n        controls = refs[mas",
+      "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy\nimport numpy as np\nfrom pathlib import Path\n\nroot = Path('/holdout_task')\nmodule = runpy.run_path(str(root / 'viscoelastic_hereditary_forecast.py'))\nsolve = module['solve_viscoelastic_hereditary_forecast']\ntaus = np.array([1., 4.5])\ndt = .25\ntheta = np.array([.43, .69, .12, .028, -.034, .019, .023])\noffset = np.array([-2.7, .2, 2.2, 5.1])\ngain = np.array([.65, 1.8, .95, 2.65])\n\ndef fixture(seed, latent):\n    rng = np.random.default_rng(seed)\n    ntr, nte, pairs = 480, 160, 48\n    n = ntr + nte\n    times = np.r_[.05, np.sort(rng.un",
+      "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nmodule = runpy.run_path(str(root / 'viscoelastic_hereditary_forecast.py'))\nsolve = module['solve_viscoelastic_hereditary_forecast']\nnp.testing.assert_allclose(module['_first_crossing'](np.array([0.,0.,1.,0.,0.]), np.array([[2.,0.,2.],[0.,1.,2.],[0.,0.,0.],[.1,.2,.3],[.2,1.,.1]]), np.ones(5), np.array([.5,2.,8.])), [.25,2.,0.,8.,2.])\n\ndef crossing(initial, forecast, threshold, times):\n    out = []\n    for y0, curve, crit in zip(initial, forecast, threshold):\n",
+      "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport runpy\nimport numpy as np\n\nroot = Path('/holdout_task')\nprint('Public dataset and validator available:', (root / 'public_eq03_datasets.pkl').is_file(), (root / 'validate_public_schema.py').is_file())\nsolve = runpy.run_path(str(root / 'viscoelastic_hereditary_forecast.py'))['solve_viscoelastic_hereditary_forecast']\nrng = np.random.default_rng(313)\nlab = np.repeat(np.arange(4), 160)\nn = lab.size\nstratum = (rng.random(n) < np.array([.12,.25,.76,.89])[lab]).astype(int)\nx = rng.normal(size=(n,4)) + 0.65*stratum[:,None"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_hereditary_forecast.py",
+        "filename": "viscoelastic_hereditary_forecast.py",
+        "bytes": 4547,
+        "sha256": "f066f9686cb01656dc19d4ec4c28c6baeca5dcca0ad4b9cddb180048e40ad5b7",
+        "content_addressed_ref": "content_addressed_blobs/f066f9686cb01656dc19d4ec4c28c6baeca5dcca0ad4b9cddb180048e40ad5b7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_hereditary_forecast.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_memory_and_outlier_deconfounding",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e82bf5c0e4c5fd37a21068f9e3c1ed3370952e62503aa83eb3ec19c27ccd7bde",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport runpy\nimport numpy as np\n\nroot = Path('/holdout_task')\nprint('Public dataset and validator available:', (root / 'public_eq03_datasets.pkl').is_file(), (root ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e82bf5c0e4c5fd37a21068f9e3c1ed3370952e62503aa83eb3ec19c27ccd7bde",
+        "expected_candidate_sha256": "e82bf5c0e4c5fd37a21068f9e3c1ed3370952e62503aa83eb3ec19c27ccd7bde",
+        "computed_candidate_sha256": "e82bf5c0e4c5fd37a21068f9e3c1ed3370952e62503aa83eb3ec19c27ccd7bde",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_hereditary_forecast.py",
+            "bytes": 4547
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_e82bf5c0"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

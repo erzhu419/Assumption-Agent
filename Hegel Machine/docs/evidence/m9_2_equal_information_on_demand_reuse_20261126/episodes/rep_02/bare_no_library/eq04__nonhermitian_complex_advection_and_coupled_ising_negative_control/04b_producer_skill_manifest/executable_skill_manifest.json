@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_eq04_nonhermitian_complex_coupled_negctrl_3cf5fd9c1762",
+    "source_hash": "3cf5fd9c176230c23ea302c23b326f158cdfa9034fa042328034febd2b3c6aab",
+    "parent_ids": [],
+    "source_episode_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "task_id": "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/eq04_cutoff_audit.py",
+        "archived_relpath": "producers/tmp__eq04_cutoff_audit.py",
+        "bytes": 1218,
+        "sha256": "1ea7413223ab25ef76712726d49aedb662e5a3c6ca498caac844c5a99e8f0466"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task; sed -n '1,240p' /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\nimport pickle, numpy, scipy\nprint('NumPy/SciPy', numpy.__version__, scipy.__version__)\nwith open('/holdout_task/public_eq04_cases.pkl','rb') as f: d=pickle.load(f)\nprint(type(d).__name__, len(d))\ndef describe(x, depth=0):\n if isinstance(x, dict):\n  print('  '*depth, list(x)[:24]);\n  if depth<2:\n   for k,v in list(x.items())[:24]:\n    print('  '*(depth+1), k, type(v).__name__, getattr(v,'shape',None), v if isinstance(v,(int,float,str)) else '')\n    if isinstance(v,(dict,list,tuple)): describe(v,d",
+      "set -eu\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then python3 /holdout_task/validate_public_schema.py; fi\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.linalg import lstsq\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmodule = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(module)\n",
+      "set -eu\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then\n  python3 /holdout_task/validate_public_schema.py\nelse\n  printf '%s\\n' 'Public fixture and validator are not both mounted; using a manufactured stress case.'\nfi\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nimport numpy as np\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nn = 32\nline = np.sin(np.pi * np.arange(1",
+      "set -eu\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text()\ns = s.replace('import numpy as np\\n', 'import numpy as np\\nfrom scipy.linalg import solve_triangular\\n', 1)\nold = '    gram = g.conj().T @ g + lam2 * np.eye(m)\\n    rhs = g.conj().T @ y\\n'\nassert old in s\ns = s.replace(old, '    # Keep the ridge in separate rows: forming G^H G can round it away.\\n    design = np.vstack((g, np.sqrt(lam2) * np.eye(m)))\\n    target = np.concatenate((y, np.zeros(m)))\\n')\nold = '        w = np.linalg.solve(gram[np.ix_(support, su",
+      "set -eu\nif [ -f /holdout_task/validate_public_schema.py ] && [ -f /holdout_task/public_eq04_cases.pkl ]; then python3 /holdout_task/validate_public_schema.py; else echo 'Public fixtures and validator are not both available.'; fi\ncat > /tmp/eq04_cutoff_audit.py <<'PY'\nimport importlib.util\nimport numpy as np\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nn = 32\nx = np.sin(np.pi*np.arange(1,n+1)/(n+1))\nmode = np.outer(x,x)\nnu, omega = .01, -.",
+      "set -eu\npython3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/nonhermitian_advection_coupled_select.py')\ns = p.read_text().replace('from scipy.linalg import solve_triangular\\n', 'from scipy.linalg import solve_triangular\\nfrom scipy.optimize import minimize\\n')\nstart = s.index('    best_obj =')\nend = s.index('    return {', start)\ns = s[:start] + '''    best_obj = 0.5 * np.vdot(y, y).real\n    best = np.zeros(m, dtype=np.complex128)\n    cutoff = 1e-8\n    # Leave one rounding margin when mapping a unit-disk solution back to w.\n    radius = cutoff * (1 - 4 * np.finfo(float).eps)\n  ",
+      "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/eq04_cutoff_audit.py\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.linalg import lstsq\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\npath = '/holdout_task/nonhermitian_advection_coupled_select.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nsolve = mod.solve_nonhermitian_coupled_inversion\nn, m = 32, 11\nworst = np.zeros(3)\n\ndef score(p,g"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__eq04_cutoff_audit.py",
+      "primary_producer_container_path": "/tmp/eq04_cutoff_audit.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/nonhermitian_advection_coupled_select.py",
+        "filename": "nonhermitian_advection_coupled_select.py",
+        "bytes": 5710,
+        "sha256": "0f7f0fcb9113547873a6ba62c556ee602fc1a941d2b6c39a82a154a496f06cce",
+        "content_addressed_ref": "content_addressed_blobs/0f7f0fcb9113547873a6ba62c556ee602fc1a941d2b6c39a82a154a496f06cce.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/nonhermitian_advection_coupled_select.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3cf5fd9c176230c23ea302c23b326f158cdfa9034fa042328034febd2b3c6aab",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -eu\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/eq04_cutoff_audit.py\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\nimport importlib.util\nfrom itertools import combinations\nimport numpy as np\nfrom scipy.linalg import lstsq\nfrom scipy.spars",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "3cf5fd9c176230c23ea302c23b326f158cdfa9034fa042328034febd2b3c6aab",
+        "expected_candidate_sha256": "3cf5fd9c176230c23ea302c23b326f158cdfa9034fa042328034febd2b3c6aab",
+        "computed_candidate_sha256": "3cf5fd9c176230c23ea302c23b326f158cdfa9034fa042328034febd2b3c6aab",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/nonhermitian_advection_coupled_select.py",
+            "bytes": 5710
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_3cf5fd9c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}
