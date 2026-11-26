@@ -1755,13 +1755,29 @@ def propose_concept_lift_via_gpt_cli(
     )
 
 
+def _normalize_probe_observation_context(probe_item: dict[str, Any]) -> dict[str, Any]:
+    """Normalize either a flat `{feat: val}` probe point OR a structured `ObservationContext` dict
+    preserving multi-scale temporal fields (`past_driver_history`, `history_dt`, `timestamps`, `trajectory_ids`, `initial_memory_states`).
+    """
+    if "x" in probe_item and isinstance(probe_item["x"], dict):
+        x_map = {str(k): np.atleast_1d(np.asarray(v, dtype=float)) for k, v in probe_item["x"].items()}
+        n_rows = len(next(iter(x_map.values()))) if x_map else 1
+        ctx: dict[str, Any] = {"x": x_map, "y": np.zeros(n_rows, dtype=float)}
+        for t_key in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states"):
+            if probe_item.get(t_key) is not None:
+                ctx[t_key] = deepcopy(probe_item[t_key])
+        return ctx
+    x_map = {str(k): np.array([float(v)], dtype=float) for k, v in probe_item.items()}
+    return {"x": x_map, "y": np.zeros(1, dtype=float)}
+
+
 def select_discriminating_observation_probe(
-    competing_predict_fns: list[tuple[str, Callable[[dict[str, np.ndarray]], np.ndarray]]],
-    candidate_probes: list[dict[str, float]],
+    competing_predict_fns: list[tuple[str, Callable[[dict[str, Any]], np.ndarray]]],
+    candidate_probes: list[dict[str, Any]],
     *,
     probe_costs: list[float] | None = None,
 ) -> dict[str, Any]:
-    """Select active intervention `AcquireObservation` maximizing full-`TaskModel` disagreement per cost."""
+    """Select active intervention `AcquireObservation` maximizing full-`TaskModel` disagreement per cost (supporting temporal `ObservationContext`)."""
     if not candidate_probes or len(competing_predict_fns) < 2:
         return {"selected_index": None, "max_utility": 0.0}
 
@@ -1769,8 +1785,10 @@ def select_discriminating_observation_probe(
     best_util = -1.0
     probe_scores: list[dict[str, Any]] = []
     for idx, p_pt in enumerate(candidate_probes):
-        x_probe = {k: np.array([float(v)], dtype=float) for k, v in p_pt.items()}
-        preds = [float(fn(x_probe)[0]) for _, fn in competing_predict_fns]
+        ctx_probe = _normalize_probe_observation_context(p_pt)
+        has_temporal_ctx = any(k in ctx_probe for k in ("past_driver_history", "timestamps", "trajectory_ids", "initial_memory_states"))
+        arg_for_pred = ctx_probe if has_temporal_ctx else ctx_probe["x"]
+        preds = [float(np.asarray(fn(arg_for_pred)).ravel()[-1]) for _, fn in competing_predict_fns]
         var_disagree = float(np.var(preds))
         cost = max(float(probe_costs[idx]) if probe_costs is not None else 1.0, 1e-6)
         util = var_disagree / cost
@@ -1948,11 +1966,34 @@ class M8VariationalPlanner:
         _hash_dataset_split_exact(_view_hasher, "va", ds_va)
         view_sha16 = _view_hasher.hexdigest()[:16]
 
+        def _prediction_only_mech_spec(m_obj: TypedMechanism) -> dict[str, Any]:
+            """`M8.9.1` `R7`: Hash ONLY prediction-determining state on `TypedMechanism` (excluding graph-management
+            bookkeeping such as `dependent_task_ids`, `inapplicable_task_ids`, and `provenance_note`) so registering
+            unrelated tasks on a shared root NEVER invalidates negative caches!
+            """
+            return {
+                "mechanism_id": m_obj.mechanism_id,
+                "parent_id": m_obj.parent_id,
+                "role": m_obj.role,
+                "version": m_obj.version,
+                "feature_names": list(m_obj.feature_names),
+                "shared_weights": dict(m_obj.shared_weights),
+                "python_expression": m_obj.python_expression,
+                "scope_guard": m_obj.scope_guard,
+                "support_bounds": m_obj.support_bounds,
+                "temporal_tau": m_obj.temporal_tau,
+                "temporal_driver_col": m_obj.temporal_driver_col,
+                "epistemic_status": m_obj.epistemic_status,
+            }
+
         _bound_mech_ids = [incumbent.shared_upstream_id, *incumbent.interaction_lift_ids]
         if incumbent.temporal_memory_id:
             _bound_mech_ids.append(incumbent.temporal_memory_id)
+        for _rb in incumbent.regime_branches:
+            if _rb.mechanism_id:
+                _bound_mech_ids.append(_rb.mechanism_id)
         _bound_mech_specs = {
-            _bmid: self.graph.mechanisms[_bmid].to_dict()
+            _bmid: _prediction_only_mech_spec(self.graph.mechanisms[_bmid])
             for _bmid in sorted(set(_bound_mech_ids))
             if _bmid and _bmid in self.graph.mechanisms
         }

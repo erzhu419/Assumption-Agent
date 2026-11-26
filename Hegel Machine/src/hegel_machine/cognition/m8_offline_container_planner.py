@@ -41,11 +41,11 @@ from .m8_persistent_variational_planner import (
 ROUTER_FEATURE_SCHEMA_VERSION = "m8_9_prefix_clean_v2"
 
 CONTAINER_STATE_FEATURE_NAMES: tuple[str, ...] = (
-    "unfinished_or_refuted",
-    "epistemic_unknown_unprobed",
-    "ungrounded_turn_exhaustion",
-    "verified_domain_benchmark",
-    "grounded_partial_scope",
+    "refuted_or_unfinished",
+    "unknown_code_or_ident_risk",
+    "unknown_biomystery",
+    "turn_exhaustion_pressure",
+    "grounded_evidence",
 )
 
 
@@ -647,11 +647,21 @@ class M8OfflineContainerPlanner:
                 out[arr_k] = np.asarray(out[arr_k], dtype=float)
         return out
 
+    @staticmethod
+    def _feature_builder_sha256() -> str:
+        import hashlib as _hl
+        import inspect as _insp
+
+        src = _insp.getsource(build_pre_action_feature_vector)
+        norm = ast.dump(ast.parse(src), include_attributes=False)
+        return _hl.sha256(norm.encode("utf-8")).hexdigest()
+
     def to_json_dict(self) -> dict[str, Any]:
         return {
             "schema": "hegel_m8_calibrated_container_planner_v4",
             "feature_schema_version": ROUTER_FEATURE_SCHEMA_VERSION,
             "feature_names": ["intercept", *CONTAINER_STATE_FEATURE_NAMES],
+            "feature_builder_sha256": self._feature_builder_sha256(),
             "posterior_recovery_rate": self.posterior_recovery_rate,
             "posterior_damage_rate": self.posterior_damage_rate,
             "cost_lambda": self.cost_lambda,
@@ -665,7 +675,32 @@ class M8OfflineContainerPlanner:
         }
 
     @classmethod
-    def from_json_dict(cls, data: dict[str, Any], *, allow_legacy_mixed_target: bool = False) -> M8OfflineContainerPlanner:
+    def from_json_dict(
+        cls,
+        data: dict[str, Any],
+        *,
+        allow_legacy_mixed_target: bool = False,
+        allow_schema_migration: bool = False,
+    ) -> M8OfflineContainerPlanner:
+        expected_names = ["intercept", *CONTAINER_STATE_FEATURE_NAMES]
+        expected_builder_sha = cls._feature_builder_sha256()
+        if not allow_schema_migration:
+            loaded_ver = data.get("feature_schema_version")
+            if loaded_ver != ROUTER_FEATURE_SCHEMA_VERSION:
+                raise ValueError(
+                    f"Router feature_schema_version mismatch: got `{loaded_ver!r}`, expected `{ROUTER_FEATURE_SCHEMA_VERSION!r}`. "
+                    "Re-calibrate via `fit_from_historical_records` or pass `allow_schema_migration=True`."
+                )
+            loaded_names = data.get("feature_names")
+            if loaded_names != expected_names:
+                raise ValueError(
+                    f"Router feature_names mismatch: got `{loaded_names!r}`, expected `{expected_names!r}`."
+                )
+            loaded_bsha = data.get("feature_builder_sha256")
+            if loaded_bsha is not None and loaded_bsha != expected_builder_sha:
+                raise ValueError(
+                    f"Router feature_builder_sha256 mismatch: got `{loaded_bsha!r}`, expected `{expected_builder_sha!r}`."
+                )
         nig_raw = cls._deser_nig(data["nig_fit"])
         assert nig_raw is not None
         fail_nig = cls._deser_nig(data.get("fail_nig_fit"))

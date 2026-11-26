@@ -2182,7 +2182,9 @@ def enrich_and_harden_l1_primitive_contracts(
                     mod["qualification_status"] = "stale_receipt_sha_mismatch"
 
     if reverify_in_clean_container:
-        stale_by_stem: dict[str, dict[str, Any]] = {}
+        # `M8.9.1` `R2`: Group stale L1 copies strictly by `(stem, actual_code_sha256, synthetic_unit_test_sha256)`
+        # and propagate receipts ONLY to copies with byte-identical actual code & test SHA!
+        stale_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
         for _, rec in iter_live_archive_nodes(archive):
             for mod in rec.get("autogenous_wormhole_modules") or []:
                 fname = str(mod.get("filename") or "")
@@ -2190,18 +2192,23 @@ def enrich_and_harden_l1_primitive_contracts(
                 if not (fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive"):
                     continue
                 cur_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+                cur_ut_sha = hashlib.sha256(str(mod.get("synthetic_unit_test_code") or "").encode("utf-8")).hexdigest()
                 ut_r = mod.get("unit_test_receipt")
-                if not (mod.get("unit_test_verified") and isinstance(ut_r, dict) and ut_r.get("verified_code_sha256") == cur_sha):
-                    stale_by_stem.setdefault(stem, mod)
-        if stale_by_stem:
+                if not (
+                    mod.get("unit_test_verified") is True
+                    and isinstance(ut_r, dict)
+                    and ut_r.get("passed") is True
+                    and ut_r.get("verified_code_sha256") == cur_sha
+                ):
+                    stale_by_key.setdefault((stem, cur_sha, cur_ut_sha), mod)
+        if stale_by_key:
             ensure_clean_scipy_sandbox_image()
             cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="1536m", cpus="2", network_mode="none")
             try:
-                for stem, rep_mod in sorted(stale_by_stem.items()):
+                for (stem, c_sha, ut_sha), rep_mod in sorted(stale_by_key.items()):
                     py_s = str(rep_mod.get("python_code") or "")
                     ut_s = str(rep_mod.get("synthetic_unit_test_code") or "")
                     pub_fns = list(rep_mod.get("function_names") or [])
-                    c_sha = hashlib.sha256(py_s.encode("utf-8")).hexdigest()
                     ut_res = verify_autogenous_module_in_clean_container(
                         sandbox_cid=cid,
                         mod_stem=stem,
@@ -2211,17 +2218,23 @@ def enrich_and_harden_l1_primitive_contracts(
                         require_all_public_fns_called=True,
                     )
                     ut_res["verified_code_sha256"] = c_sha
-                    ut_res["synthetic_unit_test_sha256"] = hashlib.sha256(ut_s.encode("utf-8")).hexdigest()
+                    ut_res["synthetic_unit_test_sha256"] = ut_sha
                     for _, rec2 in iter_live_archive_nodes(archive):
                         for mod2 in rec2.get("autogenous_wormhole_modules") or []:
-                            if Path(str(mod2.get("filename") or "")).stem == stem:
-                                mod2["compiled_code_sha256"] = c_sha
-                                mod2["unit_test_receipt"] = deepcopy(ut_res)
-                                mod2["unit_test_verified"] = bool(ut_res.get("passed"))
-                                mod2["qualification_status"] = (
-                                    "qualified_code_and_test_sha_bound" if ut_res.get("passed") else "failed_container_reverification"
-                                )
-                    if ut_res.get("passed"):
+                            if Path(str(mod2.get("filename") or "")).stem != stem:
+                                continue
+                            m2_sha = hashlib.sha256(str(mod2.get("python_code") or "").encode("utf-8")).hexdigest()
+                            m2_ut_sha = hashlib.sha256(str(mod2.get("synthetic_unit_test_code") or "").encode("utf-8")).hexdigest()
+                            if m2_sha != c_sha or m2_ut_sha != ut_sha:
+                                continue
+                            mod2["compiled_code_sha256"] = c_sha
+                            mod2["synthetic_unit_test_sha256"] = ut_sha
+                            mod2["unit_test_receipt"] = deepcopy(ut_res)
+                            mod2["unit_test_verified"] = bool(ut_res.get("passed") is True)
+                            mod2["qualification_status"] = (
+                                "qualified_code_and_test_sha_bound" if ut_res.get("passed") is True else "failed_container_reverification"
+                            )
+                    if ut_res.get("passed") is True and stem not in reverified_modules:
                         reverified_modules.append(stem)
             finally:
                 m6f.stop_container_safely(cid)
@@ -2279,9 +2292,10 @@ def sublate_autogenous_forest_into_compositional_primitives(
         else "online_or_mixed_l1_primitive_sublation"
     )
 
-    # Collect unique coarse `L2` autogenous modules + check existing verified `L1` modules STRICTLY by recomputed source SHA-256 (`M89-STRICT-SRC-DEDUP`)!
-    source_mods_by_fname: dict[str, dict[str, Any]] = {}
-    node_ids_by_fname: dict[str, list[str]] = {}
+    # `M8.9.1` `R2`: Collect unique coarse `L2` autogenous source VERSIONS keyed by `(filename, recomputed_source_sha256)`
+    # (NEVER by `filename` alone, which previously swallowed a 2nd node's updated source version of a same-named L2 file!).
+    source_mods_by_ver: dict[tuple[str, str], dict[str, Any]] = {}
+    node_ids_by_ver: dict[tuple[str, str], list[str]] = {}
     existing_l1_by_src_sha: dict[str, dict[str, Any]] = {}
     used_prim_stems: set[str] = set()
 
@@ -2298,17 +2312,20 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 ut_rec = mod.get("unit_test_receipt")
                 ut_sha_ok = (
                     isinstance(ut_rec, dict)
-                    and bool(ut_rec.get("passed", True))
-                    and str(ut_rec.get("verified_code_sha256") or mod.get("compiled_code_sha256") or "") == actual_l1_sha
-                ) or (ut_rec is None and bool(mod.get("unit_test_verified")) and str(mod.get("compiled_code_sha256") or "") == actual_l1_sha)
-                if bool(mod.get("unit_test_verified")) and ut_sha_ok and mod.get("source_candidate_sha256"):
+                    and (ut_rec.get("passed") is True)
+                    and str(ut_rec.get("verified_code_sha256") or "") == actual_l1_sha
+                    and str(mod.get("compiled_code_sha256") or "") == actual_l1_sha
+                )
+                if (mod.get("unit_test_verified") is True) and ut_sha_ok and mod.get("source_candidate_sha256"):
                     existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
                 continue
-            node_ids_by_fname.setdefault(fname, []).append(nid)
-            if fname not in source_mods_by_fname:
-                recomputed_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
-                declared_sha = str(mod.get("compiled_code_sha256") or "")
-                source_mods_by_fname[fname] = {
+            recomputed_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+            declared_sha = str(mod.get("compiled_code_sha256") or "")
+            ver_key = (fname, recomputed_sha)
+            node_ids_by_ver.setdefault(ver_key, []).append(nid)
+            if ver_key not in source_mods_by_ver:
+                source_mods_by_ver[ver_key] = {
+                    "source_filename": fname,
                     "mod": deepcopy(mod),
                     "recomputed_source_sha256": recomputed_sha,
                     "declared_source_sha256": declared_sha,
@@ -2317,31 +2334,37 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     "methodology_principle": str(rec.get("methodology_principle") or ""),
                     "consolidated_nogoods": list(rec.get("wave1_consolidated_nogoods") or []),
                 }
+            elif declared_sha and declared_sha != recomputed_sha:
+                source_mods_by_ver[ver_key]["declared_sha_mismatch"] = True
+                source_mods_by_ver[ver_key]["declared_source_sha256"] = declared_sha
 
-    if not source_mods_by_fname:
+    if not source_mods_by_ver:
         return {
             "compiled_primitive_count": 0,
             "retained_existing_count": 0,
+            "newly_compiled_count": 0,
+            "total_source_l2_modules": 0,
             "events": [],
             "contract_enrichment": enrich_receipt,
             "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
         }
 
-    events_by_fname: dict[str, dict[str, Any]] = {}
-    pending_items: list[tuple[str, dict[str, Any]]] = []
+    events_by_ver: dict[tuple[str, str], dict[str, Any]] = {}
+    pending_items: list[tuple[tuple[str, str], dict[str, Any]]] = []
     retained_count = 0
 
-    for src_fname, bundle_item in sorted(source_mods_by_fname.items()):
-        recomp_sha = bundle_item["recomputed_source_sha256"]
+    for ver_key, bundle_item in sorted(source_mods_by_ver.items()):
+        src_fname, recomp_sha = ver_key
         decl_sha = bundle_item["declared_source_sha256"]
         decl_mismatch = bool(bundle_item["declared_sha_mismatch"])
-        # `M89-STRICT-SRC-DEDUP`: NEVER fall back to `declared_sha`! If `declared_sha` mismatches `recomputed_sha`, reject stale qualification!
         existing_match = None if decl_mismatch else existing_l1_by_src_sha.get(recomp_sha)
         if decl_mismatch:
-            events_by_fname[src_fname] = {
+            events_by_ver[ver_key] = {
                 "source_l2_module": src_fname,
+                "source_version_key": f"{src_fname}@{recomp_sha[:12]}",
                 "source_provenance_episode_id": str(bundle_item["mod"].get("provenance_episode_id") or ""),
                 "representative_node_id": bundle_item["representative_node_id"],
+                "node_ids_with_this_version": list(node_ids_by_ver[ver_key]),
                 "recomputed_source_sha256": recomp_sha,
                 "declared_source_sha256": decl_sha,
                 "status": "rejected_stale_declared_source_sha_mismatch",
@@ -2353,10 +2376,12 @@ def sublate_autogenous_forest_into_compositional_primitives(
             continue
         if skip_already_compiled_sources and existing_match is not None:
             retained_count += 1
-            events_by_fname[src_fname] = {
+            events_by_ver[ver_key] = {
                 "source_l2_module": src_fname,
+                "source_version_key": f"{src_fname}@{recomp_sha[:12]}",
                 "source_provenance_episode_id": str(bundle_item["mod"].get("provenance_episode_id") or ""),
                 "representative_node_id": bundle_item["representative_node_id"],
+                "node_ids_with_this_version": list(node_ids_by_ver[ver_key]),
                 "recomputed_source_sha256": recomp_sha,
                 "status": "retained_existing_verified_l1",
                 "compiled_ok": True,
@@ -2370,7 +2395,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 "llm_tokens": {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0},
             }
         else:
-            pending_items.append((src_fname, bundle_item))
+            pending_items.append((ver_key, bundle_item))
 
     sys_prompt = (
         "You are the `Hegel-M8.8` Compositional Numerical Primitive Compiler (`L1` Mathematical Operator Pass).\n"
@@ -2387,14 +2412,17 @@ def sublate_autogenous_forest_into_compositional_primitives(
     )
 
     stem_lock = _th.Lock()
-    compiled_results_by_fname: dict[str, dict[str, Any] | None] = {}
+    compiled_results_by_ver: dict[tuple[str, str], dict[str, Any] | None] = {}
 
-    def _compile_one_source(src_fname: str, bundle_item: dict[str, Any]) -> tuple[str, dict[str, Any] | None, dict[str, Any]]:
+    def _compile_one_source(
+        ver_key: tuple[str, str],
+        bundle_item: dict[str, Any],
+    ) -> tuple[tuple[str, str], dict[str, Any] | None, dict[str, Any]]:
+        src_fname, recomp_sha = ver_key
         orig_mod = bundle_item["mod"]
-        recomp_sha = bundle_item["recomputed_source_sha256"]
         rep_nid = bundle_item["representative_node_id"]
         orig_stem = Path(src_fname).stem
-        short_tail = re.sub(r"^autogenous_", "", orig_stem)[:34]
+        short_tail = f"{re.sub(r'^autogenous_', '', orig_stem)[:24]}_{recomp_sha[:8]}"
         conv: list[dict[str, Any]] = [
             {
                 "role": "user",
@@ -2511,6 +2539,9 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     require_all_public_fns_called=True,
                 )
                 code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
+                if isinstance(ut_res, dict):
+                    ut_res["verified_code_sha256"] = code_sha
+                    ut_res["synthetic_unit_test_sha256"] = ut_sha
                 attempt_records.append(
                     {
                         "attempt_index": attempt_i,
@@ -2580,8 +2611,10 @@ def sublate_autogenous_forest_into_compositional_primitives(
 
         ev_out: dict[str, Any] = {
             "source_l2_module": src_fname,
+            "source_version_key": f"{src_fname}@{recomp_sha[:12]}",
             "source_provenance_episode_id": str(orig_mod.get("provenance_episode_id") or ""),
             "representative_node_id": rep_nid,
+            "node_ids_with_this_version": list(node_ids_by_ver[ver_key]),
             "recomputed_source_sha256": recomp_sha,
             "status": ("compiled_new_verified_l1" if compiled_entry is not None else "rejected_failed_verification"),
             "compiled_ok": compiled_entry is not None,
@@ -2601,36 +2634,37 @@ def sublate_autogenous_forest_into_compositional_primitives(
             )
         else:
             ev_out["error"] = last_err
-        return src_fname, compiled_entry, ev_out
+        return ver_key, compiled_entry, ev_out
 
     if pending_items:
         eff_workers = max(1, min(int(max_workers), len(pending_items)))
         if eff_workers == 1:
-            for s_fn, b_it in pending_items:
-                _, c_ent, ev_d = _compile_one_source(s_fn, b_it)
-                compiled_results_by_fname[s_fn] = c_ent
-                events_by_fname[s_fn] = ev_d
+            for v_key, b_it in pending_items:
+                _, c_ent, ev_d = _compile_one_source(v_key, b_it)
+                compiled_results_by_ver[v_key] = c_ent
+                events_by_ver[v_key] = ev_d
         else:
             with ThreadPoolExecutor(max_workers=eff_workers) as pool:
-                futs = {pool.submit(_compile_one_source, s_fn, b_it): s_fn for s_fn, b_it in pending_items}
+                futs = {pool.submit(_compile_one_source, v_key, b_it): v_key for v_key, b_it in pending_items}
                 for fut in as_completed(futs):
-                    s_fn_done, c_ent, ev_d = fut.result()
-                    compiled_results_by_fname[s_fn_done] = c_ent
-                    events_by_fname[s_fn_done] = ev_d
+                    v_key_done, c_ent, ev_d = fut.result()
+                    compiled_results_by_ver[v_key_done] = c_ent
+                    events_by_ver[v_key_done] = ev_d
 
     newly_compiled_count = 0
     tok_totals = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
     ordered_events: list[dict[str, Any]] = []
 
-    for src_fname in sorted(source_mods_by_fname.keys()):
-        ev_d = events_by_fname[src_fname]
+    for ver_key in sorted(source_mods_by_ver.keys()):
+        ev_d = events_by_ver[ver_key]
         for tk_k in ("prompt", "cached", "completion", "wall_ms"):
             tok_totals[tk_k] += ev_d["llm_tokens"][tk_k]
-        c_ent = compiled_results_by_fname.get(src_fname)
+        c_ent = compiled_results_by_ver.get(ver_key)
         if c_ent is not None:
             newly_compiled_count += 1
             attached_nodes: list[str] = []
-            for target_nid in node_ids_by_fname[src_fname]:
+            # Attach ONLY to nodes that actually hold this exact `(filename, recomputed_source_sha256)` version!
+            for target_nid in node_ids_by_ver[ver_key]:
                 mods_list = archive[target_nid].setdefault("autogenous_wormhole_modules", [])
                 mods_list = [m for m in mods_list if m.get("filename") != c_ent["filename"]]
                 archive[target_nid]["autogenous_wormhole_modules"] = [deepcopy(c_ent), *mods_list]
@@ -2660,7 +2694,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
         "compiled_primitive_count": total_qualified_l1,
         "retained_existing_count": retained_count,
         "newly_compiled_count": newly_compiled_count,
-        "total_source_l2_modules": len(source_mods_by_fname),
+        "total_source_l2_modules": len(source_mods_by_ver),
         "require_pretraining_only": require_pretraining_only,
         "source_qualification_status": qual_status,
         "contract_enrichment": enrich_receipt,
@@ -3347,7 +3381,8 @@ y = X @ beta_true + rng.normal(0.0, 0.08, size=n)
 np.savez("/pretrain_task/public_l0_instance.npz", X=X, y=y, lam0=0.18, lam2=0.06, M=2.5)
 ''',
             blackbox_grader_py=r'''
-import json, sys, numpy as np
+import json, math, sys, numpy as np
+from scipy.optimize import lsq_linear
 sys.path.insert(0, "/pretrain_task")
 import certified_l0_solver
 
@@ -3362,67 +3397,101 @@ y = X @ bt + rng.normal(0.0, 0.07, size=n)
 lam0, lam2, M, eps = 0.20, 0.05, 2.5, 1e-6
 
 res = certified_l0_solver.solve_and_certify_l0(X, y, lam0, lam2, M, eps)
-beta = np.asarray(res["beta"], dtype=float)
-nz = int(np.sum(np.abs(beta) > 1e-10))
-ub_true = 0.5 * float(np.sum((y - X @ beta) ** 2)) + lam0 * nz + 0.5 * lam2 * float(np.sum(beta ** 2))
-ub_rep = float(res["upper_bound"])
-leaves = res["tree_leaves"]
+raw_beta = res.get("beta")
+raw_ub = res.get("upper_bound")
+leaves = res.get("tree_leaves")
+finite_inputs = (
+    isinstance(res, dict)
+    and raw_beta is not None
+    and not isinstance(raw_ub, bool)
+    and isinstance(raw_ub, (int, float))
+    and math.isfinite(float(raw_ub))
+    and isinstance(leaves, list)
+    and len(leaves) >= 1
+)
+beta = np.asarray(raw_beta, dtype=float) if finite_inputs else np.full(p, np.nan)
+finite_inputs = bool(finite_inputs and beta.shape == (p,) and np.all(np.isfinite(beta)) and np.max(np.abs(beta)) <= M + 1e-7)
+nz = int(np.sum(np.abs(beta) > 1e-10)) if finite_inputs else 0
+ub_true = (0.5 * float(np.sum((y - X @ beta) ** 2)) + lam0 * nz + 0.5 * lam2 * float(np.sum(beta ** 2))) if finite_inputs else float("inf")
+ub_rep = float(raw_ub) if finite_inputs else float("nan")
 
-# Audit partition completeness (`sum 2^(p - |Z| - |A|) == 2^p` and pairwise disjointness) + true subcube lower bound!
 cov_masks = np.zeros(1 << p, dtype=int)
-lb_sound = True
-for lf in leaves:
-    fz = set(int(i) for i in lf["fixed_zero"])
-    fa = set(int(i) for i in lf["fixed_active"])
-    if (fz & fa) or any(i < 0 or i >= p for i in (fz | fa)):
-        lb_sound = False; break
-    # Exact perspective relaxation LB on subcube: active indices `fa` pay `lam0*|fa|`, free indices `F` use perspective penalty:
-    # Actually simplest exact universal check: minimize smooth convex relaxation or check over best active subset in subcube!
-    # Since p=13 (8192 states), we can compute the EXACT minimum of J(beta) over every support in this subcube!
-    for mask in range(1 << p):
-        ok_m = True
-        for z_i in fz:
-            if (mask >> z_i) & 1: ok_m = False; break
-        if not ok_m: continue
-        for a_i in fa:
-            if not ((mask >> a_i) & 1): ok_m = False; break
-        if not ok_m: continue
-        cov_masks[mask] += 1
+leaf_masks_list = []
+schema_ok = finite_inputs
+if schema_ok:
+    for lf in leaves:
+        if not isinstance(lf, dict) or isinstance(lf.get("lower_bound"), bool) or not isinstance(lf.get("lower_bound"), (int, float)):
+            schema_ok = False; break
+        if not math.isfinite(float(lf["lower_bound"])):
+            schema_ok = False; break
+        raw_fz, raw_fa = lf.get("fixed_zero"), lf.get("fixed_active")
+        if not isinstance(raw_fz, (list, tuple)) or not isinstance(raw_fa, (list, tuple)):
+            schema_ok = False; break
+        if any(isinstance(i, bool) or not isinstance(i, (int, np.integer)) for i in [*raw_fz, *raw_fa]):
+            schema_ok = False; break
+        fz = set(int(i) for i in raw_fz)
+        fa = set(int(i) for i in raw_fa)
+        if len(fz) != len(raw_fz) or len(fa) != len(raw_fa) or (fz & fa) or any(i < 0 or i >= p for i in (fz | fa)):
+            schema_ok = False; break
+        m_indices = []
+        for mask in range(1 << p):
+            if any((mask >> z_i) & 1 for z_i in fz):
+                continue
+            if any(not ((mask >> a_i) & 1) for a_i in fa):
+                continue
+            cov_masks[mask] += 1
+            m_indices.append(mask)
+        leaf_masks_list.append(m_indices)
 
-# Exact brute-force global optimum over 2^13 supports to verify exactness & leaf LB validity!
+Q_mat = X.T @ X + lam2 * np.eye(p)
+h_vec = X.T @ y
+inactive_guard = 1e-10 * float(np.sum(np.abs(h_vec) + M * np.sum(np.abs(Q_mat), axis=1)))
+
 best_global = 1e18
-min_on_subcube = [1e18] * len(leaves)
-from scipy.optimize import lsq_linear
+support_vals = np.full(1 << p, 1e18, dtype=float)
 for mask in range(1 << p):
     supp = [j for j in range(p) if (mask >> j) & 1]
     if not supp:
         val = 0.5 * float(np.dot(y, y))
     else:
         Xs = X[:, supp]
-        # Unconstrained ridge first, clip/lsq if exceeds M
         b_u = np.linalg.solve(Xs.T @ Xs + lam2 * np.eye(len(supp)), Xs.T @ y)
         if np.max(np.abs(b_u)) > M:
             A_aug = np.vstack([Xs, np.sqrt(lam2) * np.eye(len(supp))])
             y_aug = np.concatenate([y, np.zeros(len(supp))])
-            b_u = lsq_linear(A_aug, y_aug, bounds=(-M, M)).x
+            b_u = lsq_linear(A_aug, y_aug, bounds=(-M, M), method="bvls", tol=1e-12).x
         val = 0.5 * float(np.sum((y - Xs @ b_u) ** 2)) + lam0 * len(supp) + 0.5 * lam2 * float(np.sum(b_u ** 2))
+    support_vals[mask] = val
     if val < best_global:
         best_global = val
 
-partition_exact = bool(np.all(cov_masks == 1))
-opt_exact = abs(ub_true - best_global) <= 1e-5 and abs(ub_rep - ub_true) <= 1e-5
-all_leaves_prune = all(float(lf["lower_bound"]) >= ub_rep - eps - 1e-9 for lf in leaves)
-compact_ok = len(leaves) <= 90
+partition_exact = bool(schema_ok and np.all(cov_masks == 1))
+min_on_subcube = [
+    (float(np.min(support_vals[m_idxs])) - inactive_guard if m_idxs else float("inf"))
+    for m_idxs in leaf_masks_list
+] if partition_exact else []
+leaf_bounds_valid = bool(
+    partition_exact
+    and all(float(lf["lower_bound"]) <= min_on_subcube[idx] + 1e-5 for idx, lf in enumerate(leaves))
+)
+solution_correct = bool(finite_inputs and abs(ub_true - best_global) <= 1e-5 and abs(ub_rep - ub_true) <= 1e-5)
+all_leaves_prune = bool(partition_exact and all(float(lf["lower_bound"]) >= ub_rep - eps - 1e-9 for lf in leaves))
+compact_ok = bool(schema_ok and len(leaves) <= 90)
+certificate_valid = bool(partition_exact and leaf_bounds_valid and all_leaves_prune and compact_ok)
 
-passed = bool(lb_sound and partition_exact and opt_exact and all_leaves_prune and compact_ok)
+passed = bool(solution_correct and certificate_valid)
 print(json.dumps({
     "strict_pass": passed,
+    "solution_correct": solution_correct,
+    "opt_exact": solution_correct,
+    "partition_valid": partition_exact,
     "partition_exact": partition_exact,
-    "opt_exact": opt_exact,
-    "leaf_count": len(leaves),
-    "ub_true": round(ub_true, 6),
+    "leaf_bounds_valid": leaf_bounds_valid,
+    "certificate_valid": certificate_valid,
+    "leaf_count": len(leaves) if isinstance(leaves, list) else 0,
+    "ub_true": round(ub_true, 6) if math.isfinite(ub_true) else -1.0,
     "best_global": round(best_global, 6),
-}))
+}, allow_nan=False))
 ''',
         ),
     ]

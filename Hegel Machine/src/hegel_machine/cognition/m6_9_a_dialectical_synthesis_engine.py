@@ -1354,7 +1354,11 @@ def reconcile_thesis_and_antithesis_publicly(
                     disclosure_mode=disclosure_mode,
                     staging_policy=staging_policy,
                 )
-            staged_sub_by_stem = {Path(fn).stem: src for fn, src in sub_mods_map.items()}
+            staged_sub_by_stem = (
+                {}
+                if disclosure_mode == "progressive_knowledge_only"
+                else {Path(fn).stem: src for fn, src in sub_mods_map.items()}
+            )
             staged_sub_skills = (
                 stage_recalled_executable_wormholes_in_container(
                     synth_cid,
@@ -2678,7 +2682,7 @@ def run_m6_9_a_two_branch_episode(
                                     for _m in (_v.get("autogenous_wormhole_modules") or []) + (_v.get("wave1_executable_modules") or [])
                                     if _m.get("filename") and _m.get("python_code")
                                 },
-                                declared_entrypoints=m6f._extract_declared_python_entrypoints(task.instruction_text),
+                                declared_entrypoints=m6f._extract_declared_python_entrypoints(task.instruction_text, task=task),
                             )
                         )
                         if not is_bm

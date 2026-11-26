@@ -46,6 +46,7 @@ class HoldoutOODTask:
     instruction_text: str
     public_setup_py: str
     private_verifier_py: str
+    declared_callable_entrypoints: tuple[str, ...] = ()
 
 
 def build_holdout_ood_12_tasks() -> list[HoldoutOODTask]:

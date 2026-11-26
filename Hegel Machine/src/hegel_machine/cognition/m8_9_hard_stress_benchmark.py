@@ -57,6 +57,7 @@ HARD_STRESS_M89_TASKS: tuple[HoldoutOODTask, ...] = (
         scientific_domain="Global Combinatorial Optimization & Replayable Dual Subcube Certificates",
         wormhole_family="fam_sparse_cert_and_combinatorial_pruning",
         declared_artifacts=("/holdout_task/certified_box_l0.py",),
+        declared_callable_entrypoints=("solve_certified_box_l0",),
         instruction_text=(
             "Implement `/holdout_task/certified_box_l0.py` exposing:\n"
             "`def solve_certified_box_l0(problem: dict) -> dict:`\n\n"
@@ -75,14 +76,15 @@ HARD_STRESS_M89_TASKS: tuple[HoldoutOODTask, ...] = (
             "  - `'weights'`: 1D list/array of length `p` in `[-M, M]` achieving global optimality within `gap_tol`,\n"
             "  - `'objective'`: float `J(weights)` (`|objective - J(weights)| <= 1e-7`),\n"
             "  - `'certified_lower_bound'`: float global lower bound satisfying `0 <= objective - certified_lower_bound <= gap_tol`,\n"
-            "  - `'certificate_leaves'`: non-empty list (`1 <= len <= max_leaves`) of dicts\n"
+            "  - `'certificate_leaves'`: non-empty list (`1 <= len <= max_leaves` — a single valid root certificate leaf `len == 1` IS accepted whenever mathematically sound!) of dicts\n"
             "    `{'fixed_zero': list[int], 'fixed_nonzero': list[int], 'leaf_lower_bound': float}`\n"
+            "    (each leaf may optionally also include `'dual_nu': list[float]` of length `n` or `'minorant_diagonal'`/`'minorant_center'` as a proof-carrying witness)\n"
             "    forming an **exact disjoint exhaustive partition** of `{0, 1}^p` such that:\n"
             "    1. For every leaf, `fixed_zero` and `fixed_nonzero` are disjoint subsets of `{0, ..., p-1}`,\n"
             "    2. The subcubes `{z in {0,1}^p : z[fixed_zero]=0, z[fixed_nonzero]=1}` are pairwise disjoint and sum in measure to `2^p`,\n"
-            "    3. Every leaf's `'leaf_lower_bound'` is a **sound mathematical lower bound** on\n"
-            "       `min_{w: w[fixed_zero]=0, ||w||_inf <= M} [0.5*||X w - y||_2^2 + 0.5*ridge*||w||_2^2 + l0_penalty*|fixed_nonzero| + l0_penalty*count_nonzero(w[free])]`\n"
-            "       (warning: invalid diagonal minorants `G - diag(d) not PSD` produce unsound leaf bounds that exceed a leaf's true subproblem optimum and FAIL verification!),\n"
+            "    3. Every leaf's `'leaf_lower_bound'` is a **sound mathematical lower bound** on the true discrete subcube infimum\n"
+            "       `min_{w: |w[fixed_zero]|<=1e-10, |w[fixed_nonzero]|>1e-10, ||w||_inf <= M} J(w)`\n"
+            "       (warning: fake lower bounds derived from heuristic trial points or non-PSD diagonals `G - diag(d) not PSD` exceed the subcube infimum and FAIL verification!),\n"
             "    4. `certified_lower_bound <= min(leaf['leaf_lower_bound'] for leaf in certificate_leaves) + 1e-8`.\n"
             "- Public development instances are saved in `/holdout_task/public_box_l0_cases.pkl`.\n"
             "- Must solve 3 private instances (`p in {14, 15}`) within `< 20s` total using standard Python/NumPy/SciPy."
@@ -118,8 +120,8 @@ with open("/holdout_task/public_box_l0_cases.pkl", "wb") as f:
     pickle.dump({"cases": cases}, f)
 ''',
         private_verifier_py=r'''
-import json, math, sys, time, numpy as np
-from scipy.optimize import minimize
+import itertools, json, math, sys, time, numpy as np
+from scipy.optimize import lsq_linear
 sys.path.insert(0, "/holdout_task")
 import certified_box_l0 as mod
 
@@ -147,96 +149,130 @@ def _eval_exact_obj(X, y, w, ridge, l0_pen):
     k0 = int(np.sum(np.abs(w) > 1e-10))
     return float(0.5 * float(r @ r) + 0.5 * ridge * float(w @ w) + l0_pen * k0)
 
-def _leaf_true_upper_bound(X, y, ridge, l0_pen, box, b0_set, b1_set):
-    """Compute a valid feasible point (and continuous-on-B1 minimum) inside subcube (B0, B1).
-    Any sound leaf_lower_bound on the discrete subcube MUST satisfy leaf_lower_bound <= J(w_b1_only) + 1e-6
-    AND leaf_lower_bound <= min_{w[B0]=0, ||w||<=box} [0.5||Xw-y||^2 + 0.5*ridge*||w||^2 + l0*|B1| + sum_{j in free} pen_persp(w_j)]!
-    Even simpler & exact: for ANY feasible vector w in the subcube (such as w supported on B1, OR w supported on B1 U S for any S subseteq free),
-    the discrete objective J(w) is an EXACT upper bound on the true discrete subcube minimum!
-    """
-    p = X.shape[1]
-    b1 = sorted(b1_set)
-    w_sub = np.zeros(p, dtype=float)
-    if b1:
-        X1 = X[:, b1]
-        G1 = X1.T @ X1 + ridge * np.eye(len(b1))
-        rhs1 = X1.T @ y
-        w0 = np.clip(np.linalg.solve(G1 + 1e-12 * np.eye(len(b1)), rhs1), -box, box)
-        res_opt = minimize(
-            lambda u: 0.5 * float(np.sum((X1 @ u - y) ** 2)) + 0.5 * ridge * float(u @ u),
-            w0,
-            jac=lambda u: X1.T @ (X1 @ u - y) + ridge * u,
-            bounds=[(-box, box)] * len(b1),
-            method="L-BFGS-B",
-            options={"ftol": 1e-13, "gtol": 1e-11},
-        )
-        u_best = np.clip(res_opt.x, -box, box)
-        # Ensure coordinates in B1 are genuinely nonzero (if any is 0, nudging by 1e-9 changes smooth part by <1e-15)
-        for idx_k, col_j in enumerate(b1):
-            w_sub[col_j] = float(u_best[idx_k]) if abs(float(u_best[idx_k])) > 1e-9 else (2e-9 if rhs1[idx_k] >= 0 else -2e-9)
-    r = X @ w_sub - y
-    best_ub = float(0.5 * float(r @ r) + 0.5 * ridge * float(w_sub @ w_sub) + l0_pen * len(b1))
-    # Also test greedy 1-coordinate free activation from `free` so unsound bounds on free coordinates are caught!
-    free = [j for j in range(p) if (j not in b0_set) and (j not in b1_set)]
-    if free:
-        grad = X[:, free].T @ (y - X @ w_sub)
-        j_top = free[int(np.argmax(np.abs(grad)))]
-        xj = X[:, j_top]
-        denom = float(xj @ xj) + ridge
-        wj = float(np.clip(float(xj @ (y - X @ w_sub)) / max(denom, 1e-12), -box, box))
-        if abs(wj) > 1e-9:
-            w_try = w_sub.copy()
-            w_try[j_top] = wj
-            best_ub = min(best_ub, _eval_exact_obj(X, y, w_try, ridge, l0_pen))
-    return best_ub
+class _ExactSupportBoxQPReference:
+    def __init__(self, X, y, ridge, rho, M):
+        self.X, self.y = X, y
+        self.ridge, self.rho, self.M = float(ridge), float(rho), float(M)
+        self.p = X.shape[1]
+        self.Q = X.T @ X + self.ridge * np.eye(self.p)
+        self.h = X.T @ y
+        self.c = 0.5 * float(y @ y)
+        self.masks = np.arange(1 << self.p, dtype=np.int64)
+        self.lb = np.zeros(1 << self.p, dtype=float)
+        self.ub = np.full(1 << self.p, float("inf"), dtype=float)
+        self.refined = {0}
+        self.roundoff_guard = 1e-9
+        self.inactive_guard = 1e-10 * float(np.sum(np.abs(self.h) + self.M * np.sum(np.abs(self.Q), axis=1)))
+        self.lb[0] = self.ub[0] = self.c
+        for k in range(1, self.p + 1):
+            combos = list(itertools.combinations(range(self.p), k))
+            for off in range(0, len(combos), 256):
+                ids = np.asarray(combos[off : off + 256], dtype=int)
+                mats = self.Q[ids[:, :, None], ids[:, None, :]]
+                rhs = self.h[ids]
+                if self.ridge > 1e-12:
+                    sol = np.linalg.solve(mats, rhs[..., None])[..., 0]
+                    masks = np.sum(1 << ids, axis=1)
+                    vals = self.c - 0.5 * np.sum(rhs * sol, axis=1) + self.rho * k
+                    self.lb[masks] = vals - self.roundoff_guard
+                    within = np.all(np.abs(sol) <= self.M, axis=1)
+                    for row, mask in enumerate(masks):
+                        if within[row]:
+                            w = np.zeros(self.p, dtype=float)
+                            w[ids[row]] = sol[row]
+                            r = self.X @ w - self.y
+                            self.ub[mask] = 0.5 * float(r @ r) + 0.5 * self.ridge * float(w @ w) + self.rho * k
+                            self.refined.add(int(mask))
+                else:
+                    masks = np.sum(1 << ids, axis=1)
+                    for row, mask in enumerate(masks):
+                        sub_x = self.X[:, ids[row]]
+                        sol_r, *_ = np.linalg.lstsq(sub_x, self.y, rcond=None)
+                        r_un = sub_x @ sol_r - self.y
+                        val_un = 0.5 * float(r_un @ r_un) + self.rho * k
+                        self.lb[int(mask)] = val_un - self.roundoff_guard
+                        if bool(np.all(np.abs(sol_r) <= self.M)):
+                            self.ub[int(mask)] = val_un
+                            self.refined.add(int(mask))
 
-def _verify_partition_and_leaves(X, y, ridge, l0_pen, box, leaves, max_leaves):
+    def refine(self, mask):
+        ids = np.flatnonzero((int(mask) >> np.arange(self.p)) & 1)
+        if len(ids) == 0:
+            self.refined.add(0)
+            return
+        a = np.vstack([self.X[:, ids], math.sqrt(self.ridge) * np.eye(len(ids))]) if self.ridge > 0.0 else self.X[:, ids]
+        b = np.r_[self.y, np.zeros(len(ids))] if self.ridge > 0.0 else self.y
+        fit = lsq_linear(a, b, bounds=(-self.M, self.M), method="bvls", tol=1e-13, max_iter=1000)
+        v = np.clip(fit.x, -self.M, self.M)
+        w = np.zeros(self.p, dtype=float); w[ids] = v
+        r = self.X @ w - self.y
+        smooth = 0.5 * float(r @ r) + 0.5 * self.ridge * float(w @ w)
+        grad = self.Q[np.ix_(ids, ids)] @ v - self.h[ids]
+        primal = smooth + self.rho * len(ids)
+        dual = primal - float(grad @ v) - self.M * float(np.sum(np.abs(grad)))
+        self.lb[int(mask)] = max(float(self.lb[int(mask)]), dual - self.roundoff_guard)
+        self.ub[int(mask)] = min(float(self.ub[int(mask)]), primal)
+        self.refined.add(int(mask))
+
+    def interval(self, b0, b1):
+        z = sum(1 << int(j) for j in b0)
+        o = sum(1 << int(j) for j in b1)
+        where = np.flatnonzero(((self.masks & z) == 0) & ((self.masks & o) == o))
+        while True:
+            winner = int(where[np.argmin(self.lb[where])])
+            if not math.isfinite(float(np.min(self.ub[where]))):
+                self.refine(winner)
+            upper = float(np.min(self.ub[where]))
+            if self.lb[winner] >= upper - 1e-8 or winner in self.refined:
+                return float(self.lb[winner] - self.inactive_guard), upper
+            self.refine(winner)
+
+def _verify_partition_and_leaves(X, y, ridge, l0_pen, box, leaves, max_leaves, ref=None):
     p = X.shape[1]
+    if ref is None:
+        ref = _ExactSupportBoxQPReference(X, y, ridge, l0_pen, box)
     if not isinstance(leaves, list) or len(leaves) < 1 or len(leaves) > max_leaves:
-        return False, "invalid_leaf_count", float("nan")
+        return False, "invalid_leaf_count", float("nan"), ref
     parsed = []
     tot_measure = 0
     min_leaf_lb = float("inf")
     for lf in leaves:
         if not isinstance(lf, dict):
-            return False, "non_dict_leaf", float("nan")
+            return False, "non_dict_leaf", float("nan"), ref
         raw_b0 = lf.get("fixed_zero")
         raw_b1 = lf.get("fixed_nonzero")
         raw_lb = lf.get("leaf_lower_bound")
         if not isinstance(raw_b0, (list, tuple)) or not isinstance(raw_b1, (list, tuple)):
-            return False, "invalid_b0_b1_list", float("nan")
+            return False, "invalid_b0_b1_list", float("nan"), ref
         if isinstance(raw_lb, bool) or not isinstance(raw_lb, (int, float)):
-            return False, "non_numeric_leaf_lb", float("nan")
+            return False, "non_numeric_leaf_lb", float("nan"), ref
         lb_f = float(raw_lb)
         if not math.isfinite(lb_f):
-            return False, "nonfinite_leaf_lb", float("nan")
-        try:
-            b0 = frozenset(int(v) for v in raw_b0)
-            b1 = frozenset(int(v) for v in raw_b1)
-        except Exception:
-            return False, "non_int_indices", float("nan")
+            return False, "nonfinite_leaf_lb", float("nan"), ref
+        if any(isinstance(v, bool) or not isinstance(v, (int, np.integer)) for v in [*raw_b0, *raw_b1]):
+            return False, "non_int_indices", float("nan"), ref
+        b0 = frozenset(int(v) for v in raw_b0)
+        b1 = frozenset(int(v) for v in raw_b1)
         if len(b0) != len(raw_b0) or len(b1) != len(raw_b1):
-            return False, "duplicate_leaf_indices", float("nan")
+            return False, "duplicate_leaf_indices", float("nan"), ref
         if (b0 & b1) or any((idx < 0 or idx >= p) for idx in (b0 | b1)):
-            return False, "overlapping_or_oob_indices", float("nan")
+            return False, "overlapping_or_oob_indices", float("nan"), ref
         parsed.append((b0, b1, lb_f))
         tot_measure += 1 << (p - len(b0) - len(b1))
         min_leaf_lb = min(min_leaf_lb, lb_f)
     if tot_measure != (1 << p):
-        return False, f"measure_mismatch({tot_measure}!={1<<p})", float("nan")
-    # Pairwise disjointness check (O(L^2) with L <= 512 is < 2ms!)
+        return False, f"measure_mismatch({tot_measure}!={1<<p})", float("nan"), ref
     for i in range(len(parsed)):
         b0_i, b1_i, _ = parsed[i]
         for j in range(i + 1, len(parsed)):
             b0_j, b1_j, _ = parsed[j]
             if not ((b0_i & b1_j) or (b1_i & b0_j)):
-                return False, f"overlapping_leaves({i},{j})", float("nan")
-    # Soundness check on EVERY leaf AND exact global exhaustive check on {0,1}^p (p <= 15 -> <= 32768 masks)
+                return False, f"overlapping_leaves({i},{j})", float("nan"), ref
     for idx_l, (b0_i, b1_i, lb_i) in enumerate(parsed):
-        ub_leaf = _leaf_true_upper_bound(X, y, ridge, l0_pen, box, b0_i, b1_i)
-        if lb_i > ub_leaf + 2e-6:
-            return False, f"unsound_leaf_lower_bound(leaf={idx_l},lb={lb_i:.6f}>ub={ub_leaf:.6f})", float("nan")
-    return True, "ok", min_leaf_lb
+        true_lb, true_ub = ref.interval(b0_i, b1_i)
+        if lb_i > true_lb + 1e-6 or lb_i > true_ub + 1e-6:
+            return False, f"unsound_leaf_lower_bound(leaf={idx_l},lb={lb_i:.6f}>true_lb={true_lb:.6f})", float("nan"), ref
+    return True, "ok", min_leaf_lb, ref
 
 t0 = time.monotonic()
 priv_specs = [
@@ -245,21 +281,32 @@ priv_specs = [
     (99103, 52, 15, 0.07, 0.34, 1.25),
 ]
 all_valid = True
+all_solution_correct = True
+all_partition_valid = True
+all_leaf_bounds_valid = True
+all_certificate_valid = True
 max_gap = 0.0
 max_leaf_count = 0
+min_leaf_count = 10**9
 status_notes = []
 
 for seed_i, n_i, p_i, r_i, l0_i, box_i in priv_specs:
     prob = _make_corr_case(seed_i, n_i, p_i, r_i, l0_i, box_i)
-    # Check that single-leaf root relaxation is NOT tight (`root_gap > 0.05` => must genuinely branch)
+    ref_i = _ExactSupportBoxQPReference(prob["X"], prob["y"], r_i, l0_i, box_i)
+    indep_glob_lb, _ = ref_i.interval(frozenset(), frozenset())
     res = mod.solve_certified_box_l0({
         "X": prob["X"].copy(), "y": prob["y"].copy(),
         "ridge": prob["ridge"], "l0_penalty": prob["l0_penalty"],
         "box": prob["box"], "gap_tol": prob["gap_tol"], "max_leaves": prob["max_leaves"],
     })
     if not isinstance(res, dict):
-        all_valid = False; status_notes.append("non_dict_return"); break
-    w = np.asarray(res.get("weights", []), dtype=float)
+        all_valid = all_solution_correct = all_partition_valid = all_leaf_bounds_valid = all_certificate_valid = False
+        status_notes.append("non_dict_return"); break
+    raw_w = res.get("weights")
+    if raw_w is None or isinstance(raw_w, (bool, str, bytes, dict)) or np.asarray(raw_w).dtype == bool:
+        all_valid = all_solution_correct = all_partition_valid = all_leaf_bounds_valid = all_certificate_valid = False
+        status_notes.append("invalid_weights_type"); break
+    w = np.asarray(raw_w, dtype=float)
     raw_obj = res.get("objective")
     raw_lb = res.get("certified_lower_bound")
     leaves = res.get("certificate_leaves")
@@ -269,42 +316,63 @@ for seed_i, n_i, p_i, r_i, l0_i, box_i in priv_specs:
         or isinstance(raw_obj, bool) or not isinstance(raw_obj, (int, float))
         or isinstance(raw_lb, bool) or not isinstance(raw_lb, (int, float))
     ):
-        all_valid = False; status_notes.append("invalid_weights_or_scalars"); break
+        all_valid = all_solution_correct = all_partition_valid = all_leaf_bounds_valid = all_certificate_valid = False
+        status_notes.append("invalid_weights_or_scalars"); break
     rep_obj = float(raw_obj)
     cert_lb = float(raw_lb)
     if not (math.isfinite(rep_obj) and math.isfinite(cert_lb)):
-        all_valid = False; status_notes.append("nonfinite_scalars"); break
+        all_valid = all_solution_correct = all_partition_valid = all_leaf_bounds_valid = all_certificate_valid = False
+        status_notes.append("nonfinite_scalars"); break
     if float(np.max(np.abs(w))) > box_i + 1e-7:
-        all_valid = False; status_notes.append("box_violated"); break
+        all_valid = all_solution_correct = False
+        status_notes.append("box_violated"); break
     true_j = _eval_exact_obj(prob["X"], prob["y"], w, r_i, l0_i)
     if abs(rep_obj - true_j) > 1e-6:
-        all_valid = False; status_notes.append(f"obj_mismatch({rep_obj}!={true_j})"); break
-    part_ok, part_msg, min_leaf_lb = _verify_partition_and_leaves(
-        prob["X"], prob["y"], r_i, l0_i, box_i, leaves, prob["max_leaves"]
+        all_valid = all_solution_correct = False
+        status_notes.append(f"obj_mismatch({rep_obj}!={true_j})"); break
+    if true_j - indep_glob_lb > prob["gap_tol"] + 1e-6:
+        all_valid = all_solution_correct = False
+        status_notes.append(f"suboptimal_vs_exact_reference({true_j}>{indep_glob_lb})"); break
+    part_ok, part_msg, min_leaf_lb, _ = _verify_partition_and_leaves(
+        prob["X"], prob["y"], r_i, l0_i, box_i, leaves, prob["max_leaves"], ref=ref_i
     )
     if not part_ok:
-        all_valid = False; status_notes.append(part_msg); break
-    if cert_lb > min_leaf_lb + 1e-6 or cert_lb > true_j + 1e-6:
-        all_valid = False; status_notes.append(f"unsound_cert_lb({cert_lb}>{min(min_leaf_lb, true_j)})"); break
+        all_valid = all_certificate_valid = False
+        if part_msg.startswith("unsound_leaf"):
+            all_leaf_bounds_valid = False
+        else:
+            all_partition_valid = all_leaf_bounds_valid = False
+        status_notes.append(part_msg); break
+    if cert_lb > min_leaf_lb + 1e-8 or cert_lb > true_j + 1e-7:
+        all_valid = all_certificate_valid = False
+        status_notes.append(f"unsound_cert_lb({cert_lb}>{min(min_leaf_lb, true_j)})"); break
     gap = max(0.0, true_j - cert_lb)
     max_gap = max(max_gap, gap)
     max_leaf_count = max(max_leaf_count, len(leaves))
+    min_leaf_count = min(min_leaf_count, len(leaves))
     if gap > prob["gap_tol"] + 1e-7:
         all_valid = False; status_notes.append(f"gap_exceeded({gap})"); break
 
 elapsed = time.monotonic() - t0
 ok = bool(
     all_valid
+    and all_solution_correct
+    and all_certificate_valid
     and math.isfinite(max_gap)
     and max_gap <= 1.1e-6
-    and max_leaf_count >= 2
+    and max_leaf_count >= 1
     and max_leaf_count <= 512
     and elapsed < 20.0
 )
 print(json.dumps({
     "strict_pass": ok,
     "all_valid": all_valid,
+    "solution_correct": all_solution_correct,
+    "partition_valid": all_partition_valid,
+    "leaf_bounds_valid": all_leaf_bounds_valid,
+    "certificate_valid": all_certificate_valid,
     "max_gap": round(float(max_gap), 9) if math.isfinite(max_gap) else -1.0,
+    "min_leaf_count": int(min_leaf_count if min_leaf_count < 10**9 else 0),
     "max_leaf_count": int(max_leaf_count),
     "status_notes": status_notes,
     "elapsed_sec": round(float(elapsed), 4),
@@ -322,6 +390,7 @@ print(json.dumps({
         scientific_domain="Anisotropic Tensor Elliptic PDE & Outlier-Robust Inverse Source Identification",
         wormhole_family="fam_multiscale_pde_and_robust_assimilation",
         declared_artifacts=("/holdout_task/tensor_darcy_robin.py",),
+        declared_callable_entrypoints=("infer_tensor_darcy_sources",),
         instruction_text=(
             "Implement `/holdout_task/tensor_darcy_robin.py` exposing:\n"
             "`def infer_tensor_darcy_sources(problem: dict) -> dict:`\n\n"
@@ -616,6 +685,7 @@ print(json.dumps({
         scientific_domain="Viscoelastic Hereditary Memory Identification & Irregular-dt Deconvolution",
         wormhole_family="fam_temporal_memory_and_stage_deconfounding",
         declared_artifacts=("/holdout_task/hereditary_deconv.py",),
+        declared_callable_entrypoints=("deconvolve_hereditary_driver",),
         instruction_text=(
             "Implement `/holdout_task/hereditary_deconv.py` exposing:\n"
             "`def deconvolve_hereditary_driver(problem: dict) -> dict:`\n\n"
@@ -812,6 +882,7 @@ print(json.dumps({
         scientific_domain="Biostatistics, Missing Reference Control Alignment & Simpson-Confounded Calibration",
         wormhole_family="fam_cohort_deconfounding_and_reference_balancing",
         declared_artifacts=("/holdout_task/multicenter_calibration.py",),
+        declared_callable_entrypoints=("calibrate_multicenter_assay",),
         instruction_text=(
             "Implement `/holdout_task/multicenter_calibration.py` exposing:\n"
             "`def calibrate_multicenter_assay(dataset: dict) -> dict:`\n\n"

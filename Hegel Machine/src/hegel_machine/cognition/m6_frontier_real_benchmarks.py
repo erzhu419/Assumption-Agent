@@ -1690,7 +1690,9 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
             except SyntaxError:
                 return False
             has_artifact_import = False
+            imported_art_aliases: set[str] = set()
             has_read_or_exec = False
+            has_substantive_call_or_assert = False
             has_write_call = False
             read_or_exec_attrs = {
                 "load", "loadtxt", "genfromtxt", "read_csv", "read_table",
@@ -1706,14 +1708,21 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
                         mod_root = alias.name.split(".")[0].lower()
                         if mod_root in art_stems or mod_root in {"importlib", "pytest"} or (has_dir_artifact and mod_root not in stdlib_names):
                             has_artifact_import = True
+                            imported_art_aliases.add(alias.asname or alias.name.split(".")[0])
                 elif isinstance(node, _ast.ImportFrom):
                     mod_root = (node.module or "").split(".")[0].lower()
                     if mod_root in art_stems or mod_root in {"importlib", "pytest"} or (has_dir_artifact and mod_root and mod_root not in stdlib_names):
                         has_artifact_import = True
+                        for alias in node.names:
+                            imported_art_aliases.add(alias.asname or alias.name)
+                elif isinstance(node, _ast.Assert):
+                    has_substantive_call_or_assert = True
                 elif isinstance(node, _ast.Call):
                     if isinstance(node.func, _ast.Name):
                         if node.func.id in {"__import__", "exec", "eval"}:
                             has_read_or_exec = True
+                        elif node.func.id in imported_art_aliases:
+                            has_substantive_call_or_assert = True
                         elif node.func.id == "open":
                             mode_arg = node.args[1].value if (len(node.args) >= 2 and isinstance(node.args[1], _ast.Constant)) else "r"
                             if any(m in str(mode_arg) for m in ("w", "a", "x")):
@@ -1721,13 +1730,19 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
                             else:
                                 has_read_or_exec = True
                     elif isinstance(node.func, _ast.Attribute):
+                        if isinstance(node.func.value, _ast.Name) and node.func.value.id in imported_art_aliases:
+                            has_substantive_call_or_assert = True
                         if node.func.attr in read_or_exec_attrs:
                             has_read_or_exec = True
                         elif node.func.attr in write_attrs:
                             has_write_call = True
-            if not (has_artifact_import or has_read_or_exec):
+                        elif node.func.attr in {"assert_allclose", "assert_almost_equal", "isclose", "allclose"}:
+                            has_substantive_call_or_assert = True
+            # `M8.9.1` `R4`: Pure `python3 -c "import sol"` (zero callable execution and zero assertions/reads) is an import/syntax
+            # smoke check ONLY — NEVER a substantive scientific verification command!
+            if not (has_read_or_exec or (has_artifact_import and has_substantive_call_or_assert)):
                 return False
-            if has_write_call and not (has_artifact_import or has_read_or_exec):
+            if has_write_call and not (has_read_or_exec or (has_artifact_import and has_substantive_call_or_assert)):
                 return False
 
     if not declared_artifacts:
@@ -2039,18 +2054,58 @@ def _format_obs_for_history(
     }
 
 
-def _extract_declared_python_entrypoints(instruction_text: str) -> tuple[str, ...]:
-    """Extract required callable Python function entrypoints (`def foo(` or `` `foo(...)` ``) from `task.instruction_text` (`M8.9` `D3`)."""
+def _extract_declared_python_entrypoints(instruction_text: str, *, task: Any = None) -> tuple[str, ...]:
+    """Extract required callable Python function entrypoints (`M8.9.1` `R3`):
+    1. Prefers structured `task.declared_callable_entrypoints` when populated.
+    2. Parses multi-line fenced Python code blocks (`def foo(`) and explicit `exposing:` / `implement` signatures.
+    3. Excludes mathematical formula definitions like `` `s_bg(theta) = ...` ``, `` `ds(x, z) = ...` ``, or `` `J(w) = ...` ``!
+    """
+    if task is not None:
+        explicit_eps = getattr(task, "declared_callable_entrypoints", None)
+        if explicit_eps:
+            return tuple(str(x) for x in explicit_eps if str(x))
+
+    txt = instruction_text or ""
+    blacklist = {
+        "open", "print", "len", "range", "min", "max", "sum", "abs", "dict", "list",
+        "float", "int", "str", "bool", "set", "tuple", "exp", "log", "sin", "cos", "tan", "sqrt",
+        "count_nonzero", "run_self_test",
+    }
     found: list[str] = []
-    for pat in (
-        r"`def\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
-        r"(?:implement|define|expose|export|callable)\s+(?:function\s+)?`([a-zA-Z_][a-zA-Z0-9_]*)\s*\(",
-        r"`([a-zA-Z_][a-zA-Z0-9_]*)\s*\([^`\n]{1,140}\)`",
-    ):
-        for m in re.finditer(pat, instruction_text or "", flags=re.IGNORECASE):
-            fn = m.group(1)
-            if fn not in {"open", "print", "len", "range", "min", "max", "sum", "abs", "dict", "list"} and fn not in found:
+
+    # 1. Fenced code blocks (` ```python ... def foo( ... ``` `) — supports multi-line signatures (`ho06`, `uf01..uf04`)!
+    for fblock in re.finditer(r"```(?:python|py)?\s*(.*?)```", txt, flags=re.DOTALL | re.IGNORECASE):
+        body = fblock.group(1)
+        for m_def in re.finditer(r"^\s*def\s+([a-z_][a-zA-Z0-9_]*)\s*\(", body, flags=re.MULTILINE):
+            fn = m_def.group(1)
+            if fn not in blacklist and not fn.startswith("_") and fn not in found:
                 found.append(fn)
+
+    # 2. Inline `def foo(` or `exposing:\n  \`foo(...)\``
+    for pat in (
+        r"`def\s+([a-z_][a-zA-Z0-9_]*)\s*\(",
+        r"(?:exposing|expose|export|implement|define|callable)[^\n`]{0,60}:\s*\n?\s*`(?:def\s+)?([a-z_][a-zA-Z0-9_]*)\s*\(",
+        r"(?:implement|define|expose|export|callable)\s+(?:function\s+)?`(?:def\s+)?([a-z_][a-zA-Z0-9_]*)\s*\(",
+    ):
+        for m in re.finditer(pat, txt, flags=re.IGNORECASE):
+            fn = m.group(1)
+            if fn not in blacklist and not fn.startswith("_") and fn not in found:
+                found.append(fn)
+
+    # 3. Fallback inline signature `` `foo(arg: type, ...) -> ...` `` ONLY when NOT followed by `=` (which denotes a math equation!)
+    if not found:
+        for m_in in re.finditer(r"`([a-z_][a-zA-Z0-9_]*)\s*\(([^`\n]{1,180})\)\s*(->[^`\n]+)?`", txt):
+            fn = m_in.group(1)
+            args_blob = m_in.group(2)
+            ret_blob = m_in.group(3) or ""
+            tail_after = txt[m_in.end() : m_in.end() + 12].lstrip()
+            if "=" in m_in.group(0) and ":" not in args_blob and not ret_blob:
+                continue
+            if tail_after.startswith("="):
+                continue
+            if (":" in args_blob or bool(ret_blob)) and fn not in blacklist and not fn.startswith("_") and fn not in found:
+                found.append(fn)
+
     return tuple(found[:6])
 
 
@@ -2145,7 +2200,13 @@ def _build_system_and_initial_brief(
             if enable_auto_skill_packaging
             else "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
         )
-        if staged_wormhole_manifest and is_autogenous_blank:
+        if staged_wormhole_manifest and is_autogenous_blank and disclosure_mode == "progressive_knowledge_only":
+            exec_skill_rules = (
+                "5. AUTOGENOUSLY GROWN MATHEMATICAL & ALGORITHMIC REFERENCE CATALOG (`/tmp/hegel_knowledge_ref` — READ-ONLY KNOWLEDGE NOTES):\n"
+                "   - `mounted_executable_wormhole_skills` shows compact 1-line reference cards with critical preconditions (`REQ: ...`) from verified prior scientific discoveries.\n"
+                "   - Whenever a reference method's exact mathematical contract or algorithm is relevant, run `python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe <mod>.<fn>` (or read `/tmp/hegel_knowledge_ref/<mod>.reference.txt`) and implement a clean, self-contained solver directly in your declared target `.py` artifact (`no hegel_wormhole_skills Python package is mounted in this arm`).\n"
+            )
+        elif staged_wormhole_manifest and is_autogenous_blank:
             prog_line = (
                 "   - PROGRESSIVE CONTRACT DISCLOSURE (`M8.9A` READ-ONLY CLI): `mounted_executable_wormhole_skills` shows compact 1-line index cards with critical veto flags (`REQ: ...`). Before calling or adapting any skill whose subtle edge-case preconditions matter, run `python3 -m hegel_wormhole_skills --describe <mod>.<fn>` (or `--list` to browse all qualified modules, zero arbitrary code import)!\n"
                 if disclosure_mode == "progressive"
@@ -2927,7 +2988,11 @@ def run_frontier_episode(
                     staging_policy=staging_policy,
                     return_diagnostics=True,
                 )
-                staged_skill_sources_by_stem = {Path(fn).stem: src for fn, src in staged_mods_map.items()}
+                staged_skill_sources_by_stem = (
+                    {}
+                    if disclosure_mode == "progressive_knowledge_only"
+                    else {Path(fn).stem: src for fn, src in staged_mods_map.items()}
+                )
                 staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(
                     agent_cid,
                     stage_notes,
@@ -2955,9 +3020,13 @@ def run_frontier_episode(
                     candidates_evaluated=[{"module_import": m["module_import"]} for m in staged_wormhole_manifest],
                     chosen_option={"staged_module_count": len(staged_wormhole_manifest), "staged_modules": staged_wormhole_manifest},
                     rejection_reasons={},
-                    rationale_summary="Stage recalled domain-general & capability-matched L1/L2 wormhole Python modules into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled).",
+                    rationale_summary=(
+                        "Stage read-only mathematical & algorithmic reference catalog into `/tmp/hegel_knowledge_ref` (`knowledge_only` isolation)."
+                        if disclosure_mode == "progressive_knowledge_only"
+                        else "Stage recalled domain-general & capability-matched L1/L2 wormhole Python modules into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled)."
+                    ),
                 )
-                if is_m6_8 and agent_cid != "mock" and staged_wormhole_manifest:
+                if is_m6_8 and agent_cid != "mock" and staged_wormhole_manifest and disclosure_mode != "progressive_knowledge_only":
                     qual_res = qualify_staged_wormhole_modules_in_container(agent_cid, staged_wormhole_manifest)
                     last_parent = ledger.record_decision(
                         decision_type="D1C_SKILL_BINDING_AND_SMOKE_QUALIFICATION",
@@ -3624,23 +3693,70 @@ def run_frontier_episode(
                         }
                         verification_receipts_by_sha[current_candidate_sha256] = v_rec
                         validated_incumbent = v_rec
-                        # `M8.9` `P1-7` (`C5`): Promote pending nogood resolutions ONLY NOW after a real `VerificationReceipt` (`exit_code==0` & contract accepted)!
+                        # `M8.9.1` `R4`: Proposition-, `risk_kind`-, and `scope`-bound `nogood` resolution witness promotion!
                         if pending_nogood_resolutions and nogoods_recorded:
                             existing_ng_ids = {str(g.get("nogood_id") or "") for g in nogoods_recorded}
+                            cmd_low_w = cmd_str.lower()
+                            out_low_w = str(ex_res.get("stdout") or "").lower()
+                            combined_w = f"{cmd_low_w} {out_low_w}"
+                            has_explicit_assertion = any(
+                                k in combined_w
+                                for k in (
+                                    "assert", "allclose", "rmse", "mae", "max_err", "max_gap", "pass", "verified",
+                                    "ok", "error", "residual", "gap", "check_", "test_", "validate_", "verify_",
+                                )
+                            )
+                            has_identifiability_witness = any(
+                                k in combined_w
+                                for k in (
+                                    "identif", "gauge", "renam", "invarian", "profile", "jacobian", "nullspace",
+                                    "rank", "anchor", "deconfound", "stratum", "control_panel", "unique_recovery",
+                                    "two_gauge", "alt_gauge", "collinear",
+                                )
+                            )
                             still_pending: list[dict[str, Any]] = []
                             for pend in pending_nogood_resolutions:
                                 prop_ng = pend.get("proposed_by_nogood_id")
                                 valid_sup = prop_ng if (prop_ng and prop_ng in existing_ng_ids) else None
                                 resolved_now: list[str] = []
+                                unres_ids: list[str] = []
+                                reject_reasons: dict[str, str] = {}
                                 for prior_ng in nogoods_recorded:
                                     pid = str(prior_ng.get("nogood_id") or "")
-                                    if pid in pend["resolves_ids"] and not prior_ng.get("resolved"):
-                                        prior_ng["resolved"] = True
-                                        prior_ng["superseded_by"] = valid_sup
-                                        prior_ng["resolved_at_turn"] = turn_idx
-                                        prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
-                                        prior_ng["resolution_witness_command"] = cmd_str[:200]
-                                        resolved_now.append(pid)
+                                    if pid not in pend["resolves_ids"] or prior_ng.get("resolved"):
+                                        continue
+                                    r_kind = str(prior_ng.get("risk_kind") or prior_ng.get("nogood_kind") or "").strip().lower()
+                                    ng_scope = str(prior_ng.get("scope") or "").strip()
+                                    is_ident_ng = r_kind in {"target_identifiability", "parameter_non_identifiability", "underdetermined_target"} or (
+                                        "identifi" in str(prior_ng.get("assumption_refuted") or "").lower()
+                                    )
+                                    # Check scope/proposition compatibility:
+                                    if is_ident_ng and not has_identifiability_witness:
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = "identifiability_risk_requires_explicit_gauge_or_identifiability_witness"
+                                        continue
+                                    if not has_explicit_assertion:
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = "missing_quantitative_or_scientific_assertion_in_witness"
+                                        continue
+                                    if ng_scope and ng_scope.lower() not in {"", "global", "all", "task"}:
+                                        # Require either explicit mention of the nogood id, scope token overlap, or explicit superseding empirical nogood
+                                        scope_toks = {t for t in re.findall(r"[a-zA-Z0-9_]{4,}", ng_scope.lower()) if t not in {"all", "with", "from", "under", "only"}}
+                                        if scope_toks and not (
+                                            pid.lower() in combined_w
+                                            or bool(valid_sup)
+                                            or any(st in combined_w for st in scope_toks)
+                                        ):
+                                            unres_ids.append(pid)
+                                            reject_reasons[pid] = f"witness_does_not_cover_nogood_scope({ng_scope[:60]})"
+                                            continue
+                                    prior_ng["resolved"] = True
+                                    prior_ng["superseded_by"] = valid_sup
+                                    prior_ng["resolved_at_turn"] = turn_idx
+                                    prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
+                                    prior_ng["resolution_witness_command"] = cmd_str[:200]
+                                    prior_ng["resolution_witness_scope_verified"] = ng_scope or "global"
+                                    resolved_now.append(pid)
                                 if resolved_now:
                                     nogood_resolution_events.append(
                                         {
@@ -3650,6 +3766,15 @@ def run_frontier_episode(
                                             "superseded_by": valid_sup,
                                             "verified_candidate_sha256": current_candidate_sha256,
                                             "verification_command": cmd_str[:200],
+                                            "witness_kind": ("identifiability_or_gauge_probe" if has_identifiability_witness else "quantitative_assertion_probe"),
+                                        }
+                                    )
+                                if unres_ids:
+                                    still_pending.append(
+                                        {
+                                            **pend,
+                                            "resolves_ids": unres_ids,
+                                            "last_witness_rejection_reasons": reject_reasons,
                                         }
                                     )
                             pending_nogood_resolutions = still_pending
@@ -3972,7 +4097,7 @@ def run_frontier_episode(
                 "\n".join(json.dumps(r, ensure_ascii=False) for r in skill_inspections) + "\n",
                 encoding="utf-8",
             )
-        declared_eps = _extract_declared_python_entrypoints(task.instruction_text)
+        declared_eps = _extract_declared_python_entrypoints(task.instruction_text, task=task)
 
         all_archive_skill_sources: dict[str, str] = dict(staged_skill_sources_by_stem)
         for _anid, _arec in (forest_archive or {}).items():
@@ -4021,19 +4146,25 @@ def run_frontier_episode(
         )
         agent_unique_l1_fns = [f for f in agent_unique_fns if f.startswith("autogenous_prim_")]
         inspected_source_flag = any(
-            "hegel_wormhole_skills" in str(t.get("bash_command") or "")
+            ("hegel_wormhole_skills" in str(t.get("bash_command") or "") or "hegel_knowledge_ref" in str(t.get("bash_command") or ""))
             and bool(
                 re.search(
-                    r"\b(cat|sed|head|tail|ls|grep|rg|inspect\.getsource|help\()\b",
+                    r"\b(cat|sed|head|tail|ls|grep|rg|inspect\.getsource|help\(|reference\.txt)\b",
                     str(t.get("bash_command") or ""),
                 )
             )
+            and ("--describe" not in str(t.get("bash_command") or "") and "--list" not in str(t.get("bash_command") or ""))
+            for t in turn_logs
+        )
+        inspected_knowledge_ref_flag = any(
+            "hegel_knowledge_ref" in str(t.get("bash_command") or "") and ".reference.txt" in str(t.get("bash_command") or "")
             for t in turn_logs
         )
         imported_in_bash_flag = any(
             bool(re.search(r"\b(?:from|import)\s+hegel_wormhole_skills\b", str(t.get("bash_command") or "")))
             for t in turn_logs
         )
+        _sel_diag_view = locals().get("l1_sel_diag") or {}
         agent_call_total = int(calls_by_role.get("agent", 0))
         agent_l1_call_total = sum(
             int(r.get("call_count", 1))
@@ -4090,6 +4221,16 @@ def run_frontier_episode(
                 "staged_l1_primitive_count": sum(
                     1 for m in staged_wormhole_manifest if m.get("granularity_tier") == "L1_compositional_primitive"
                 ),
+                "recommended_turn1_l1_count": int(
+                    _sel_diag_view.get(
+                        "recommended_turn1_l1_count",
+                        sum(1 for m in staged_wormhole_manifest if m.get("granularity_tier") == "L1_compositional_primitive"),
+                    )
+                ),
+                "mounted_on_disk_l1_count": int(_sel_diag_view.get("mounted_on_disk_l1_count", 0)),
+                "knowledge_reference_l1_count": int(_sel_diag_view.get("knowledge_reference_l1_count", 0)),
+                "queryable_catalog_l1_count": int(_sel_diag_view.get("queryable_catalog_l1_count", 0)),
+                "card_char_stats": dict(_sel_diag_view.get("card_char_stats") or {}),
                 "describe_skill_inspection_count": sum(1 for ev in skill_inspections if ev.get("event") == "skill_contract_delivered"),
                 "describe_skill_queries": [
                     str(ev.get("target") or ev.get("query") or "")
@@ -4097,10 +4238,11 @@ def run_frontier_episode(
                     if ev.get("event") == "skill_contract_delivered"
                 ][:25],
                 "inspected_in_bash": any(
-                    "hegel_wormhole_skills" in str(t.get("bash_command") or "")
+                    ("hegel_wormhole_skills" in str(t.get("bash_command") or "") or "hegel_knowledge_ref" in str(t.get("bash_command") or ""))
                     for t in turn_logs
                 ),
                 "inspected_source_in_bash": inspected_source_flag,
+                "inspected_knowledge_ref_in_bash": inspected_knowledge_ref_flag,
                 "imported_in_bash_or_script": imported_in_bash_flag,
                 "dynamic_calls_by_caller_role": calls_by_role,
                 "dynamic_skill_activation_count": agent_call_total,

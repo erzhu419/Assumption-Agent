@@ -617,12 +617,32 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
                 "sublated_pivot": None,
             },
         },
-        # Turn 3: Write valid candidate + run substantive verification (`exit 0`) -> NOW `ng_t01` resolves cleanly!
+        # Turn 3: Write valid candidate + run generic 1-point check (`exit 0`, NO identifiability/gauge witness!) ->
+        # `M8.9.1` `R4` MUST STILL keep `target_identifiability` `ng_t01` pending!
         {
             "action_type": "execute_in_remote_docker",
             "bash_command": "printf 'def solve_val(x):\\n    return 2.0 * x\\n' > /holdout_task/sol.py && python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(3.0) == 6.0\"",
             "final_answer": None,
-            "rationale": "Fixed slope and verified exact contract.",
+            "rationale": "Fixed slope at single point without gauge check.",
+            "considered_alternatives": [],
+            "active_hypothesis_and_worst_slice_metric": "single_pt_err=0.0",
+            "nogood_update": {
+                "has_new_nogood": False,
+                "nogood_rung": "NONE",
+                "risk_kind": "none",
+                "resolves_nogood_ids": [],
+                "assumption_refuted": None,
+                "empirical_witness": None,
+                "causal_blanket_diagnosis": None,
+                "sublated_pivot": None,
+            },
+        },
+        # Turn 4: Run explicit anchor/gauge identifiability witness (`exit 0`) -> NOW `ng_t01` resolves cleanly!
+        {
+            "action_type": "execute_in_remote_docker",
+            "bash_command": "python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(0.0) == 0.0 and sol.solve_val(3.0) == 6.0; print('anchor_gauge_identifiability_verified')\"",
+            "final_answer": None,
+            "rationale": "Verified anchor gauge identifiability and exact slope.",
             "considered_alternatives": [],
             "active_hypothesis_and_worst_slice_metric": "exact=0.0, u == l",
             "nogood_update": {
@@ -636,7 +656,7 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
                 "sublated_pivot": None,
             },
         },
-        # Turn 4: Submit!
+        # Turn 5: Submit!
         {
             "action_type": "submit_completed_task",
             "bash_command": None,
@@ -657,6 +677,7 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
         },
     ]
     observed_ng_state_at_turn3_prompt: list[dict[str, Any]] = []
+    observed_ng_state_at_turn4_prompt: list[dict[str, Any]] = []
 
     class _FakeSeqClient:
         def __init__(self, **_: Any) -> None:
@@ -667,6 +688,10 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
                 # Inspect `hegel_m6_live_state` at the start of Turn 3 (right AFTER Turn 2's `exit 1` command!)
                 footer = json.loads(conversation_turns[-1]["content"])
                 observed_ng_state_at_turn3_prompt.extend(footer["hegel_m6_live_state"]["active_structural_nogoods"])
+            elif self.idx == 3:
+                # Inspect `hegel_m6_live_state` at the start of Turn 4 (right AFTER Turn 3's non-identifiability check!)
+                footer = json.loads(conversation_turns[-1]["content"])
+                observed_ng_state_at_turn4_prompt.extend(footer["hegel_m6_live_state"]["active_structural_nogoods"])
             out_p = scripted_turns[self.idx]
             self.idx += 1
             return {
@@ -699,11 +724,14 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
         assert observed_ng_state_at_turn3_prompt[0]["nogood_id"] == "ng_t01"
         assert observed_ng_state_at_turn3_prompt[0]["resolved"] is False
         assert observed_ng_state_at_turn3_prompt[0]["superseded_by"] is None
+        # Right after Turn 3's generic 1-point check (`exit 0` without identifiability witness), `ng_t01` MUST STILL BE UNRESOLVED!
+        assert observed_ng_state_at_turn4_prompt[0]["nogood_id"] == "ng_t01"
+        assert observed_ng_state_at_turn4_prompt[0]["resolved"] is False
 
-        # After Turn 3's passing verification (`exit 0`), `ng_t01` resolves with verified SHA and NO dangling `ng_t02`!
+        # After Turn 4's explicit anchor/gauge identifiability witness (`exit 0`), `ng_t01` resolves with verified SHA!
         final_ng = ep_sum["nogoods_recorded"][0]
         assert final_ng["resolved"] is True
-        assert final_ng["resolved_at_turn"] == 3
+        assert final_ng["resolved_at_turn"] == 4
         assert final_ng["superseded_by"] is None
         assert final_ng["resolved_candidate_sha256"] == ep_sum["final_candidate_sha256"]
         assert len(ep_sum["nogood_resolution_events"]) == 1

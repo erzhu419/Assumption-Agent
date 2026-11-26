@@ -1114,17 +1114,22 @@ def execute_in_container_local_repair(
     blinded_task_ref = "container_task_" + hashlib.sha256(str(task.task_id).encode("utf-8")).hexdigest()[:8]
 
     repair_skill_cards: list[str] = []
+    prefetched_skill_contracts: list[dict[str, Any]] = []
     if staged_skill_sources_by_stem:
-        from .m6_4_executable_wormhole_library import build_compact_skill_index_cards_from_sources
+        from .m6_4_executable_wormhole_library import build_repair_skill_context_from_sources
 
-        repair_skill_cards = build_compact_skill_index_cards_from_sources(
+        repair_ctx = build_repair_skill_context_from_sources(
             staged_skill_sources_by_stem,
             query_text=f"{task.instruction_text} {fam_before} {json.dumps(public_probe_before, ensure_ascii=False)}",
             max_cards=8,
+            top_k_prefetched_contracts=3,
         )
+        repair_skill_cards = repair_ctx["index_cards"]
+        prefetched_skill_contracts = repair_ctx["prefetched_contracts"]
 
     skill_repair_clause = (
-        "\nOptional Verified Skill Library: `available_wormhole_skill_cards` lists pure NumPy/SciPy primitives (`from hegel_wormhole_skills.<mod> import <fn>`); "
+        "\nOptional Verified Skill Library: `available_wormhole_skill_cards` lists pure NumPy/SciPy primitives (`from hegel_wormhole_skills.<mod> import <fn>`), "
+        "and `prefetched_top_skill_contracts` provides exact signatures, preconditions, and summaries for the closest matching functions; "
         "if imported in `repaired_python_code`, our host static dependency packager automatically bundles their self-contained closure before verification."
         if repair_skill_cards
         else ""
@@ -1150,6 +1155,8 @@ def execute_in_container_local_repair(
     }
     if repair_skill_cards:
         payload_dict["available_wormhole_skill_cards"] = repair_skill_cards
+    if prefetched_skill_contracts:
+        payload_dict["prefetched_top_skill_contracts"] = prefetched_skill_contracts
     user_payload = json.dumps(payload_dict, ensure_ascii=False)
     llm_res = codex_client.call_structured(
         stage_subdir=stage_subdir,
@@ -1277,6 +1284,7 @@ def execute_in_container_local_repair(
         "reason": ("ok" if repaired_ok else (probe_exc_reason or "public_probe_rejected")),
         "raw_candidate_sha256": orig_sha,
         "repaired_candidate_sha256": rep_sha,
+        "repaired_digest_kind": "raw_single_file_sha256",
         "skill_packaging_receipt": packaging_receipt,
         "repaired_python_code": repaired_code if repaired_ok else None,
         "attempted_repaired_python_code": repaired_code,
