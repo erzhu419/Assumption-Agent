@@ -89,8 +89,8 @@ def test_m9_1_zero_turn1_tax_manifest_search_cli_and_unconfounded_router() -> No
     assert diag_hd01["demand_triggered_recommended_l1_count"] >= 3
     assert len(diag_hd01["demand_triggered_recommended_cards"]) >= 6
 
-    # Verify Turn-1 `init_payload` size in `demand_triggered_zero_tax` is IDENTICAL to `Bare`!
-    _, payload_bare = m6f._build_system_and_initial_brief(
+    # Verify Turn-1 `init_payload` has zero skill manifest (`identical` to `Bare`) while full request accounts for fixed system instruction!
+    sys_bare, payload_bare = m6f._build_system_and_initial_brief(
         hd_tasks["hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline"],
         "Hegel_M6_9_Antithesis_LiveGPT",
         env_boot_info="linux",
@@ -101,7 +101,7 @@ def test_m9_1_zero_turn1_tax_manifest_search_cli_and_unconfounded_router() -> No
         disclosure_mode="dedup_full",
         has_dormant_on_demand_skills=False,
     )
-    _, payload_zero_tax = m6f._build_system_and_initial_brief(
+    sys_zero_tax, payload_zero_tax = m6f._build_system_and_initial_brief(
         hd_tasks["hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline"],
         "Hegel_M6_9_Antithesis_LiveGPT",
         env_boot_info="linux",
@@ -113,6 +113,7 @@ def test_m9_1_zero_turn1_tax_manifest_search_cli_and_unconfounded_router() -> No
         has_dormant_on_demand_skills=True,
     )
     assert json.dumps(payload_zero_tax) == json.dumps(payload_bare)
+    assert 0 < (len(sys_zero_tax) - len(sys_bare)) <= 700
 
     # 2. On `vr04` (`Indefinite Complex Helmholtz`), `demand_triggered_recommended_cards == []` (`0` false-positive hints!)
     _, man_vr04, diag_vr04 = m64.collect_recalled_executable_wormhole_sources(
@@ -183,16 +184,26 @@ def test_m9_1_zero_turn1_tax_manifest_search_cli_and_unconfounded_router() -> No
         assert insp_log.is_file() and "skill_search_executed" in insp_log.read_text(encoding="utf-8")
         assert not act_log.exists()
 
-    # Verify `m7_4` (`Frontier-20`) true LOTO remains `14/20`!
-    m74_recs = load_historical_suite_episode_records(REPO_ROOT / "docs/evidence/m7_4_exp1_frozen_20task_and_ablations_20261124")
-    loto_passes = 0
-    for i, held in enumerate(m74_recs):
-        pl = M8OfflineContainerPlanner.fit_from_historical_records(m74_recs[:i] + m74_recs[i + 1 :], suite_ids=["m74_loto"])
+    # Verify `m7_4` (`Frontier-20`) true LOTO reproduces `14/20` on `v4_legacy` (`treatment_invariant_mode=False`) and runs cleanly on `v5_treatment_invariant` (`True`)!
+    m74_legacy = load_historical_suite_episode_records(REPO_ROOT / "docs/evidence/m7_4_exp1_frozen_20task_and_ablations_20261124", treatment_invariant_mode=False)
+    loto_legacy_passes = 0
+    for i, held in enumerate(m74_legacy):
+        pl = M8OfflineContainerPlanner.fit_from_historical_records(m74_legacy[:i] + m74_legacy[i + 1 :], suite_ids=["m74_loto_v4"])
         dec = pl.decide_second_branch(held["pre_action_state"], step_index=1, record_to_ledger=False)
         oc = held["outcomes"]
         if (oc["m8_twobranch_pass"] if dec["spawn_second_branch"] else oc["antithesis_1x_pass"]):
-            loto_passes += 1
-    assert loto_passes == 14
+            loto_legacy_passes += 1
+    assert loto_legacy_passes == 14
+
+    m74_v5 = load_historical_suite_episode_records(REPO_ROOT / "docs/evidence/m7_4_exp1_frozen_20task_and_ablations_20261124", treatment_invariant_mode=True)
+    loto_v5_passes = 0
+    for i, held in enumerate(m74_v5):
+        pl = M8OfflineContainerPlanner.fit_from_historical_records(m74_v5[:i] + m74_v5[i + 1 :], suite_ids=["m74_loto_v5"])
+        dec = pl.decide_second_branch(held["pre_action_state"], step_index=1, record_to_ledger=False)
+        oc = held["outcomes"]
+        if (oc["m8_twobranch_pass"] if dec["spawn_second_branch"] else oc["antithesis_1x_pass"]):
+            loto_v5_passes += 1
+    assert loto_v5_passes >= 12
 
 
 def test_hd01_and_hd02_reference_v5_composers_pass_and_naive_controls_fail() -> None:

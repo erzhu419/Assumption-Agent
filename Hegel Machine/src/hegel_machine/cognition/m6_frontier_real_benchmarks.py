@@ -1168,9 +1168,75 @@ class FrontierCodexClient(CodexSubscriptionClient):
         clean_env = {k: v for k, v in os.environ.items() if k not in self._SCRUBBED_ENV_KEYS}
 
         t0 = monotonic()
+        req_sha256 = hashlib.sha256(
+            (system_prompt + "\0" + json.dumps(output_schema, sort_keys=True) + "\0" + stdin_payload).encode("utf-8")
+        ).hexdigest()
         proc = None
         timeout_retries = 0
+        cum_in_tok = 0
+        cum_cached_tok = 0
+        cum_out_tok = 0
+        usage_unknown_attempts = 0
+        returned_model = self.model
+        errs: list[str] = []
+        attempt_receipts: list[dict[str, Any]] = []
+
+        def _parse_stdout_usage(raw_out: str | bytes | None) -> tuple[int, int, int, bool, str, list[str]]:
+            if raw_out is None:
+                return 0, 0, 0, False, self.model, []
+            txt = raw_out.decode("utf-8", errors="replace") if isinstance(raw_out, bytes) else str(raw_out)
+            a_in = a_ca = a_out = 0
+            saw_u = False
+            rmod = self.model
+            a_errs: list[str] = []
+            for ln_a in txt.splitlines():
+                s_a = ln_a.strip()
+                if not s_a:
+                    continue
+                try:
+                    ev_a = json.loads(s_a)
+                except json.JSONDecodeError:
+                    continue
+                if ev_a.get("model"):
+                    rmod = str(ev_a["model"])
+                if ev_a.get("type") == "turn.completed" and isinstance(ev_a.get("usage"), dict):
+                    u_a = ev_a["usage"]
+                    a_in += int(u_a.get("input_tokens") or 0)
+                    a_ca += int(u_a.get("cached_input_tokens") or 0)
+                    a_out += int(u_a.get("output_tokens") or 0)
+                    saw_u = True
+                if ev_a.get("type") in {"error", "turn.failed"}:
+                    a_errs.append(str(ev_a.get("message") or ev_a.get("error") or ""))
+            return a_in, a_ca, a_out, saw_u, rmod, a_errs
+
+        def _persist_attempts_ledger() -> None:
+            try:
+                (ep_wsl / f"attempts_{call_seq:03d}.json").write_text(
+                    json.dumps(
+                        {
+                            "call_seq": call_seq,
+                            "request_sha256": req_sha256,
+                            "system_prompt_chars": len(system_prompt),
+                            "stdin_payload_chars": len(stdin_payload),
+                            "attempt_count": len(attempt_receipts),
+                            "usage_unknown_attempt_count": usage_unknown_attempts,
+                            "cumulative_usage": {
+                                "prompt_tokens": cum_in_tok,
+                                "cached_tokens": cum_cached_tok,
+                                "completion_tokens": cum_out_tok,
+                            },
+                            "attempts": attempt_receipts,
+                        },
+                        indent=2,
+                        ensure_ascii=False,
+                    ),
+                    encoding="utf-8",
+                )
+            except OSError:
+                pass
+
         for attempt_idx in range(4):
+            t_att0 = monotonic()
             try:
                 with _CODEX_CLI_SEMAPHORE:
                     proc = subprocess.run(
@@ -1188,21 +1254,68 @@ class FrontierCodexClient(CodexSubscriptionClient):
                     cmd[0] = self.executable
                     continue
                 raise
-            except subprocess.TimeoutExpired:
+            except subprocess.TimeoutExpired as tex:
                 timeout_retries += 1
+                t_in, t_ca, t_out, t_saw, t_mod, t_errs = _parse_stdout_usage(getattr(tex, "stdout", None) or getattr(tex, "output", None))
+                cum_in_tok += t_in
+                cum_cached_tok += t_ca
+                cum_out_tok += t_out
+                if not t_saw:
+                    usage_unknown_attempts += 1
+                if t_mod:
+                    returned_model = t_mod
+                errs.extend(t_errs)
+                attempt_receipts.append(
+                    {
+                        "attempt_index": attempt_idx + 1,
+                        "returncode": None,
+                        "timed_out": True,
+                        "wall_ms": round((monotonic() - t_att0) * 1000.0, 2),
+                        "usage_known": t_saw,
+                        "prompt_tokens": (t_in if t_saw else None),
+                        "cached_tokens": (t_ca if t_saw else None),
+                        "completion_tokens": (t_out if t_saw else None),
+                    }
+                )
                 if attempt_idx < 2:
                     sleep((4.0, 10.0)[attempt_idx] + random.uniform(0.5, 2.5))
                     continue
+                _persist_attempts_ledger()
                 return {
                     "ok": False,
                     "wall_ms": round((monotonic() - t0) * 1000.0, 2),
-                    "returned_model": self.model,
-                    "prompt_tokens": 0,
-                    "cached_tokens": 0,
-                    "completion_tokens": 0,
+                    "returned_model": returned_model,
+                    "prompt_tokens": cum_in_tok,
+                    "cached_tokens": cum_cached_tok,
+                    "completion_tokens": cum_out_tok,
+                    "attempt_count": len(attempt_receipts),
+                    "usage_unknown_attempt_count": usage_unknown_attempts,
+                    "attempt_receipts": attempt_receipts,
                     "timeout_retries": timeout_retries,
                     "error": f"codex_subscription_timeout_{self.timeout_seconds}s_after_{timeout_retries}_attempts",
                 }
+
+            a_in, a_ca, a_out, a_saw, a_mod, a_errs = _parse_stdout_usage(proc.stdout)
+            cum_in_tok += a_in
+            cum_cached_tok += a_ca
+            cum_out_tok += a_out
+            if not a_saw:
+                usage_unknown_attempts += 1
+            if a_mod:
+                returned_model = a_mod
+            errs = list(a_errs)
+            attempt_receipts.append(
+                {
+                    "attempt_index": attempt_idx + 1,
+                    "returncode": proc.returncode,
+                    "timed_out": False,
+                    "wall_ms": round((monotonic() - t_att0) * 1000.0, 2),
+                    "usage_known": a_saw,
+                    "prompt_tokens": (a_in if a_saw else None),
+                    "cached_tokens": (a_ca if a_saw else None),
+                    "completion_tokens": (a_out if a_saw else None),
+                }
+            )
             if proc.returncode == 0 and resp_wsl.is_file():
                 break
             err_probe = (proc.stdout + "\n" + proc.stderr).lower()
@@ -1217,29 +1330,10 @@ class FrontierCodexClient(CodexSubscriptionClient):
 
         assert proc is not None
         wall_ms = round((monotonic() - t0) * 1000.0, 2)
-
-        in_tok = 0
-        cached_tok = 0
-        out_tok = 0
-        returned_model = self.model
-        errs: list[str] = []
-        for ln in proc.stdout.splitlines():
-            s = ln.strip()
-            if not s:
-                continue
-            try:
-                ev = json.loads(s)
-            except json.JSONDecodeError:
-                continue
-            if ev.get("model"):
-                returned_model = str(ev["model"])
-            if ev.get("type") == "turn.completed":
-                u = ev.get("usage") or {}
-                in_tok = int(u.get("input_tokens") or 0)
-                cached_tok = int(u.get("cached_input_tokens") or 0)
-                out_tok = int(u.get("output_tokens") or 0)
-            if ev.get("type") in {"error", "turn.failed"}:
-                errs.append(str(ev.get("message") or ev.get("error") or ""))
+        _persist_attempts_ledger()
+        in_tok = cum_in_tok
+        cached_tok = cum_cached_tok
+        out_tok = cum_out_tok
 
         if proc.returncode != 0 or not resp_wsl.is_file():
             err_msg = f"rc={proc.returncode}; errs={errs}; stderr={proc.stderr[-400:]}"
@@ -1256,6 +1350,9 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
+                "attempt_count": len(attempt_receipts),
+                "usage_unknown_attempt_count": usage_unknown_attempts,
+                "attempt_receipts": attempt_receipts,
                 "error": err_msg,
             }
 
@@ -1269,6 +1366,9 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
+                "attempt_count": len(attempt_receipts),
+                "usage_unknown_attempt_count": usage_unknown_attempts,
+                "attempt_receipts": attempt_receipts,
                 "error": f"invalid_schema_json:{exc}",
             }
 
@@ -1279,6 +1379,9 @@ class FrontierCodexClient(CodexSubscriptionClient):
             "prompt_tokens": in_tok,
             "cached_tokens": cached_tok,
             "completion_tokens": out_tok,
+            "attempt_count": len(attempt_receipts),
+            "usage_unknown_attempt_count": usage_unknown_attempts,
+            "attempt_receipts": attempt_receipts,
             "parsed": parsed,
         }
 
@@ -1717,7 +1820,15 @@ def is_substantive_verification_command(cmd_str: str, declared_artifacts: tuple[
                         for alias in node.names:
                             imported_art_aliases.add(alias.asname or alias.name)
                 elif isinstance(node, _ast.Assert):
-                    has_substantive_call_or_assert = True
+                    # `M9.1.1` `C4`: `assert callable(sol.solve)` or `assert hasattr(sol, ...)` checks API existence ONLY,
+                    # NEVER counting on its own as a substantive scientific/numerical verification!
+                    is_meta_only_assert = (
+                        isinstance(node.test, _ast.Call)
+                        and isinstance(node.test.func, _ast.Name)
+                        and node.test.func.id in {"callable", "hasattr", "isinstance", "issubclass", "bool"}
+                    )
+                    if not is_meta_only_assert:
+                        has_substantive_call_or_assert = True
                 elif isinstance(node, _ast.Call):
                     if isinstance(node.func, _ast.Name):
                         if node.func.id in {"__import__", "exec", "eval"}:
@@ -2202,11 +2313,15 @@ def _build_system_and_initial_brief(
             if enable_auto_skill_packaging
             else "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
         )
-        if disclosure_mode == "demand_triggered_zero_tax" and has_dormant_on_demand_skills:
+        if disclosure_mode in {"demand_triggered_zero_tax", "on_demand_executable"} and has_dormant_on_demand_skills:
             exec_skill_rules = (
-                "5. DORMANT ON-DEMAND PRIMITIVE LIBRARY (`/tmp/hegel_wormhole_skills`, `0` Turn-1 prompt tax): "
-                "Leave untouched on straightforward or complex/indefinite tasks; ONLY if you hit a certified-bound, 3D-AMG/CG, robust-IRLS, or control-panel bottleneck "
-                "(or see `on_demand_skill_hint`), run `python3 -m hegel_wormhole_skills --search '<keywords>'` or `--describe <mod>.<fn>` (imported functions are statically bundled automatically).\n"
+                "5. ON-DEMAND VERIFIED PRIMITIVE LIBRARY (`/tmp/hegel_wormhole_skills`, zero Turn-1 skill manifest, `PYTHONPATH=/tmp`):\n"
+                "   - Whenever a subproblem involves certified box-L0 bounds, SPD AMG/CG preconditioning, Cauchy/robust IRLS, reference-panel alignment/imputation, ridge nuisance profiling, or viscoelastic relaxation — OR if expected implementation/runtime savings exceed a quick lookup — run `python3 -m hegel_wormhole_skills --search '<keywords>'` and `--describe <mod>.<fn>` (`0` module import; imported functions in target `.py` deliverables are statically bundled automatically; skip cleanly if preconditions mismatch).\n"
+            )
+        elif disclosure_mode == "on_demand_knowledge_only" and has_dormant_on_demand_skills:
+            exec_skill_rules = (
+                "5. ON-DEMAND VERIFIED REFERENCE CATALOG (`/tmp/hegel_knowledge_ref`, zero Turn-1 skill manifest, read-only mathematical notes):\n"
+                "   - Whenever a subproblem involves certified box-L0 bounds, SPD AMG/CG preconditioning, Cauchy/robust IRLS, reference-panel alignment/imputation, ridge nuisance profiling, or viscoelastic relaxation — OR if expected implementation/design savings exceed a quick lookup — run `python3 /tmp/hegel_knowledge_ref/describe_ref.py --search '<keywords>'` and `--describe <mod>.<fn>` (and read `.reference.txt` to implement self-contained functions in your target `.py`; skip cleanly if preconditions mismatch).\n"
             )
         elif staged_wormhole_manifest and is_autogenous_blank and disclosure_mode == "progressive_knowledge_only":
             exec_skill_rules = (
@@ -2269,7 +2384,7 @@ def _build_system_and_initial_brief(
             "container_initial_snapshot": env_boot_info,
             "recalled_wormhole_methodology_and_wave1_sublations": (
                 []
-                if disclosure_mode == "demand_triggered_zero_tax"
+                if disclosure_mode in {"demand_triggered_zero_tax", "on_demand_executable", "on_demand_knowledge_only"}
                 else [
                     {
                         "node_id": n["node_id"],
@@ -2281,7 +2396,11 @@ def _build_system_and_initial_brief(
                     for n in recalled_m6_notes
                 ]
             ),
-            "mounted_executable_wormhole_skills": ([] if disclosure_mode == "demand_triggered_zero_tax" else (staged_wormhole_manifest or [])),
+            "mounted_executable_wormhole_skills": (
+                []
+                if disclosure_mode in {"demand_triggered_zero_tax", "on_demand_executable", "on_demand_knowledge_only"}
+                else (staged_wormhole_manifest or [])
+            ),
             "task_instruction": task.instruction_text,
         }
         return sys_prompt, init_payload
@@ -3008,9 +3127,10 @@ def run_frontier_episode(
                 )
                 staged_skill_sources_by_stem = (
                     {}
-                    if disclosure_mode == "progressive_knowledge_only"
+                    if disclosure_mode in {"progressive_knowledge_only", "on_demand_knowledge_only"}
                     else {Path(fn).stem: src for fn, src in staged_mods_map.items()}
                 )
+                has_on_demand_catalog_mounted = bool(staged_mods_map)
                 staged_wormhole_manifest = stage_recalled_executable_wormholes_in_container(
                     agent_cid,
                     stage_notes,
@@ -3040,11 +3160,11 @@ def run_frontier_episode(
                     rejection_reasons={},
                     rationale_summary=(
                         "Stage read-only mathematical & algorithmic reference catalog into `/tmp/hegel_knowledge_ref` (`knowledge_only` isolation)."
-                        if disclosure_mode == "progressive_knowledge_only"
+                        if disclosure_mode in {"progressive_knowledge_only", "on_demand_knowledge_only"}
                         else "Stage recalled domain-general & capability-matched L1/L2 wormhole Python modules into `/tmp/hegel_wormhole_skills` (`Skill∞` telemetry enabled)."
                     ),
                 )
-                if is_m6_8 and agent_cid != "mock" and staged_wormhole_manifest and disclosure_mode != "progressive_knowledge_only":
+                if is_m6_8 and agent_cid != "mock" and staged_wormhole_manifest and disclosure_mode not in {"progressive_knowledge_only", "on_demand_knowledge_only"}:
                     qual_res = qualify_staged_wormhole_modules_in_container(agent_cid, staged_wormhole_manifest)
                     last_parent = ledger.record_decision(
                         decision_type="D1C_SKILL_BINDING_AND_SMOKE_QUALIFICATION",
@@ -3058,6 +3178,10 @@ def run_frontier_episode(
 
         l1_sel_diag_ep: dict[str, Any] = locals().get("l1_sel_diag") or {}
         demand_recommended_cards: list[str] = list(l1_sel_diag_ep.get("demand_triggered_recommended_cards") or [])
+        suppress_l2_fallback_ep = bool(
+            (bool(forest_archive.get("__autogenous_blank_seed__")) or (recalled_notes and all(bool(n.get("autogenous_only")) for n in recalled_notes)))
+            and not demand_recommended_cards
+        )
         demand_skill_hint_emitted = False
         demand_skill_hint_turn: int | None = None
 
@@ -3071,7 +3195,7 @@ def run_frontier_episode(
             cmd_timeout_sec=cmd_timeout_sec,
             enable_auto_skill_packaging=enable_auto_skill_packaging,
             disclosure_mode=disclosure_mode,
-            has_dormant_on_demand_skills=bool(staged_skill_sources_by_stem),
+            has_dormant_on_demand_skills=bool(locals().get("has_on_demand_catalog_mounted", False) or staged_skill_sources_by_stem),
         )
 
         raw_exec_observations: list[dict[str, Any]] = []
@@ -3149,30 +3273,77 @@ def run_frontier_episode(
                                 f"{m['module_import']}: {m['exported_apis']}" for m in staged_wormhole_manifest
                             ]
                         if (
-                            disclosure_mode == "demand_triggered_zero_tax"
-                            and demand_recommended_cards
+                            disclosure_mode in {"demand_triggered_zero_tax", "on_demand_executable", "on_demand_knowledge_only"}
+                            and (demand_recommended_cards or (len(nogoods_recorded) >= 1 and not locals().get("suppress_l2_fallback_ep", False)))
                             and (not demand_skill_hint_emitted)
                             and turn_idx >= 2
                         ):
-                            already_queried_skills = any(
-                                "hegel_wormhole_skills" in str(t.get("bash_command") or "") for t in turn_logs
-                            )
-                            last_cmd_failed = bool(
-                                raw_exec_observations
-                                and int(raw_exec_observations[-1].get("exit_code", 0)) != 0
-                                and str(raw_exec_observations[-1].get("command") or "") != "[ROOT_PULLBACK_PRECOMMIT_GATE]"
-                            )
+                            # `M9.1.1` `C3`: Only a SUCCEEDED `--search` / `--describe` / `--list` query counts as `already_queried_skills`
+                            # (`echo 'hegel_wormhole_skills'` or a failed typo `--describe` NEVER suppresses the hint!).
+                            already_queried_skills = False
+                            for _obs_q in raw_exec_observations:
+                                _q_cmd = str(_obs_q.get("command") or "")
+                                _q_rc = int(_obs_q.get("exit_code", 0))
+                                _q_out = str(_obs_q.get("stdout") or "")
+                                if (
+                                    _q_rc == 0
+                                    and ("hegel_wormhole_skills" in _q_cmd or "describe_ref.py" in _q_cmd)
+                                    and any(_fl in _q_cmd for _fl in ("--search", "--describe", "--list"))
+                                    and ('"ok": false' not in _q_out.lower())
+                                    and ("no matching" not in _q_out.lower())
+                                ):
+                                    already_queried_skills = True
+                                    break
+                            # Ignore routine non-solver shell probes (`grep`, `rg`, `ls`, `find`, `which`, `test`) on `exit_code != 0`!
+                            last_cmd_failed = False
+                            if raw_exec_observations:
+                                _l_obs = raw_exec_observations[-1]
+                                _l_cmd = str(_l_obs.get("command") or "").strip()
+                                _l_rc = int(_l_obs.get("exit_code", 0))
+                                _is_benign_probe = bool(
+                                    _l_rc == 1
+                                    and any(
+                                        _l_cmd.startswith(_pfx)
+                                        for _pfx in ("grep ", "rg ", "ls ", "find ", "which ", "test ", "[ ")
+                                    )
+                                )
+                                if _l_rc != 0 and _l_cmd != "[ROOT_PULLBACK_PRECOMMIT_GATE]" and (not _is_benign_probe):
+                                    last_cmd_failed = True
+                            _cur_sha_h = locals().get("current_candidate_sha256", verified_candidate_sha256)
+                            _cur_cand_verified = bool(verified_candidate_sha256 and verified_candidate_sha256 == _cur_sha_h)
                             if (not already_queried_skills) and (
                                 len(nogoods_recorded) >= 1
                                 or last_cmd_failed
-                                or (turn_idx >= 5 and not verified_candidate_sha256)
+                                or (turn_idx >= 5 and not _cur_cand_verified)
                             ):
                                 demand_skill_hint_emitted = True
                                 demand_skill_hint_turn = turn_idx
+                                _ctx_blob = " ".join(
+                                    [
+                                        str((nogoods_recorded[-1] if nogoods_recorded else {}))[:400],
+                                        str((raw_exec_observations[-1].get("stderr") or raw_exec_observations[-1].get("stdout") or "") if raw_exec_observations else "")[:400],
+                                    ]
+                                ).lower()
+                                _ctx_words = {w for w in _ctx_blob.replace("_", " ").split() if len(w) >= 3}
+                                if demand_recommended_cards:
+                                    _filtered_c = [c for c in demand_recommended_cards if "MISMATCHED_BOUNDARY" not in c and "REJECTED_" not in c]
+                                    _pool_c = _filtered_c if _filtered_c else list(demand_recommended_cards)
+                                    _ranked_c = sorted(
+                                        enumerate(_pool_c),
+                                        key=lambda ic: (-sum(1 for w in _ctx_words if w in ic[1].lower()), ic[0]),
+                                    )
+                                    _top_hint_cards = [c for _, c in _ranked_c[:3]]
+                                else:
+                                    _top_hint_cards = ["Run `python3 -m hegel_wormhole_skills --list` to inspect mounted L2 domain operators."]
+                                _cli_hint = (
+                                    "Inspect via `python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe <mod>.<fn>` (read-only reference notes)."
+                                    if disclosure_mode == "on_demand_knowledge_only"
+                                    else "Inspect via `python3 -m hegel_wormhole_skills --describe <mod>.<fn>` before importing; static closure is bundled automatically."
+                                )
                                 m6_state["on_demand_skill_hint"] = {
                                     "trigger_turn": turn_idx,
-                                    "usage": "Inspect via `python3 -m hegel_wormhole_skills --describe <mod>.<fn>` before importing; static closure is bundled automatically.",
-                                    "matching_l1_cards": demand_recommended_cards[:6],
+                                    "usage": _cli_hint,
+                                    "matching_cards": _top_hint_cards,
                                 }
                     if len(nogoods_recorded) >= 5:
                         m6_state["monotone_ratchet_guard"] = (
@@ -3743,25 +3914,48 @@ def run_frontier_episode(
                         }
                         verification_receipts_by_sha[current_candidate_sha256] = v_rec
                         validated_incumbent = v_rec
-                        # `M8.9.1` `R4`: Proposition-, `risk_kind`-, and `scope`-bound `nogood` resolution witness promotion!
+                        # `M9.1.1` `C4`: Quantitative, candidate-execution-bound `nogood` witness verification (rejects keyword/callable spoofing!)
                         if pending_nogood_resolutions and nogoods_recorded:
                             existing_ng_ids = {str(g.get("nogood_id") or "") for g in nogoods_recorded}
                             cmd_low_w = cmd_str.lower()
-                            out_low_w = str(ex_res.get("stdout") or "").lower()
+                            out_raw_w = str(ex_res.get("stdout") or "")
+                            out_low_w = out_raw_w.lower()
                             combined_w = f"{cmd_low_w} {out_low_w}"
-                            has_explicit_assertion = any(
-                                k in combined_w
-                                for k in (
-                                    "assert", "allclose", "rmse", "mae", "max_err", "max_gap", "pass", "verified",
-                                    "ok", "error", "residual", "gap", "check_", "test_", "validate_", "verify_",
+                            # Reject commands that check only `callable(...)` / `hasattr(...)` without numerical metric or candidate evaluation!
+                            is_reflection_only_spoof = bool(
+                                re.search(r"\b(?:callable|hasattr|inspect\.signature)\s*\(", cmd_low_w)
+                            ) and not bool(
+                                re.search(r"(?:==|<=|<)\s*[-+]?\d|\b(?:max_err|rel_err|rel_l2|mae|rmse|allclose|isclose)\b", combined_w)
+                            )
+                            has_inline_numeric_call_assert = bool(
+                                re.search(r"\bassert\b", cmd_low_w)
+                                and re.search(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\s*\(", cmd_low_w)
+                                and re.search(r"(?:==|<=|<|\ballclose\b|\bisclose\b)\s*[-+]?\d*", cmd_low_w)
+                            )
+                            has_numeric_measurement = (not is_reflection_only_spoof) and (
+                                bool(
+                                    re.search(
+                                        r"(?:mae|rmse|rel_err|rel_l2|max_err|max_gap|gap|residual|diff|discrepancy|score|auroc|f1|error|obj|loss)\s*[:=]\s*[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?",
+                                        out_low_w,
+                                    )
+                                )
+                                or bool(re.search(r"\"(?:strict_pass|verified|probe_passed|two_gauge_max_diff|max_gauge_diff)\"\s*:\s*true", out_low_w))
+                                or has_inline_numeric_call_assert
+                                or (
+                                    any(k in cmd_low_w for k in ("allclose", "isclose", "linalg.norm", "pytest", "/tmp/verify", "/tmp/check", "/tmp/validate", "python3 -i - <<"))
+                                    and bool(re.search(r"\b\d+\.\d+(?:e[-+]?\d+)?\b", out_low_w))
                                 )
                             )
-                            has_identifiability_witness = any(
-                                k in combined_w
-                                for k in (
-                                    "identif", "gauge", "renam", "invarian", "profile", "jacobian", "nullspace",
-                                    "rank", "anchor", "deconfound", "stratum", "control_panel", "unique_recovery",
-                                    "two_gauge", "alt_gauge", "collinear",
+                            has_real_gauge_or_anchor_probe = has_numeric_measurement and (
+                                bool(
+                                    re.search(
+                                        r"(?:two_gauge|alt_gauge|gauge_diff|renaming_diff|anchor_err|profile_diff|nullspace_rank|rank)\s*[:=]\s*[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?",
+                                        out_low_w,
+                                    )
+                                )
+                                or any(
+                                    k in combined_w
+                                    for k in ("two_gauge", "alt_gauge", "gauge", "renam", "anchor", "quotient", "equivalence", "nullspace", "svd")
                                 )
                             )
                             still_pending: list[dict[str, Any]] = []
@@ -3777,20 +3971,28 @@ def run_frontier_episode(
                                         continue
                                     r_kind = str(prior_ng.get("risk_kind") or prior_ng.get("nogood_kind") or "").strip().lower()
                                     ng_scope = str(prior_ng.get("scope") or "").strip()
+                                    refuted_txt_low = str(prior_ng.get("assumption_refuted") or "").lower()
                                     is_ident_ng = r_kind in {"target_identifiability", "parameter_non_identifiability", "underdetermined_target"} or (
-                                        "identifi" in str(prior_ng.get("assumption_refuted") or "").lower()
+                                        "identifi" in refuted_txt_low
                                     )
-                                    # Check scope/proposition compatibility:
-                                    if is_ident_ng and not has_identifiability_witness:
+                                    is_missing_info_ident = is_ident_ng and ("unanchored_missing_information" in refuted_txt_low)
+                                    has_anchor_or_quotient = any(k in combined_w for k in ("anchor", "two_gauge", "quotient", "equivalence", "reference"))
+                                    if is_ident_ng and not has_real_gauge_or_anchor_probe:
+                                        prior_ng["probe_support_status"] = "api_or_keyword_only_insufficient"
                                         unres_ids.append(pid)
-                                        reject_reasons[pid] = "identifiability_risk_requires_explicit_gauge_or_identifiability_witness"
+                                        reject_reasons[pid] = "identifiability_risk_requires_quantitative_multi_gauge_or_anchor_probe"
                                         continue
-                                    if not has_explicit_assertion:
+                                    if is_missing_info_ident and not (has_anchor_or_quotient or bool(valid_sup)):
+                                        prior_ng["probe_support_status"] = "supported_on_probe_only_unanchored_identifiability_pending"
                                         unres_ids.append(pid)
-                                        reject_reasons[pid] = "missing_quantitative_or_scientific_assertion_in_witness"
+                                        reject_reasons[pid] = "missing_information_identifiability_cannot_resolve_without_anchor_or_quotient_retarget"
+                                        continue
+                                    if not has_numeric_measurement:
+                                        prior_ng["probe_support_status"] = "missing_quantitative_numerical_measurement"
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = "missing_quantitative_numerical_measurement_in_witness"
                                         continue
                                     if ng_scope and ng_scope.lower() not in {"", "global", "all", "task"}:
-                                        # Require either explicit mention of the nogood id, scope token overlap, or explicit superseding empirical nogood
                                         scope_toks = {t for t in re.findall(r"[a-zA-Z0-9_]{4,}", ng_scope.lower()) if t not in {"all", "with", "from", "under", "only"}}
                                         if scope_toks and not (
                                             pid.lower() in combined_w
@@ -3801,6 +4003,7 @@ def run_frontier_episode(
                                             reject_reasons[pid] = f"witness_does_not_cover_nogood_scope({ng_scope[:60]})"
                                             continue
                                     prior_ng["resolved"] = True
+                                    prior_ng["probe_support_status"] = "verified_quantitative_witness_in_declared_scope"
                                     prior_ng["superseded_by"] = valid_sup
                                     prior_ng["resolved_at_turn"] = turn_idx
                                     prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
@@ -3816,7 +4019,7 @@ def run_frontier_episode(
                                             "superseded_by": valid_sup,
                                             "verified_candidate_sha256": current_candidate_sha256,
                                             "verification_command": cmd_str[:200],
-                                            "witness_kind": ("identifiability_or_gauge_probe" if has_identifiability_witness else "quantitative_assertion_probe"),
+                                            "witness_kind": ("quantitative_gauge_or_anchor_probe" if has_real_gauge_or_anchor_probe else "quantitative_numerical_probe"),
                                         }
                                     )
                                 if unres_ids:
@@ -4334,11 +4537,22 @@ def run_frontier_episode(
             },
             "saved_artifact_snapshots": saved_snapshots,
             "submitted_final_answer": submitted_final_answer if is_bm else None,
+            "turn1_request_accounting": {
+                "system_prompt_chars": len(sys_prompt),
+                "initial_user_payload_chars": len(json.dumps(init_payload, ensure_ascii=False)),
+                "turn1_staged_manifest_json_chars": len(json.dumps(staged_wormhole_manifest, ensure_ascii=False)),
+                "turn1_prompt_tokens": next(
+                    (int(r.get("prompt_tokens_delta", 0)) for r in ledger.records if str(r.get("decision_type", "")).startswith("D2_TURN_01")),
+                    0,
+                ),
+            },
             "decision_count": tots["decision_count"],
             "prompt_tokens": tots["prompt_tokens"],
             "cached_tokens": tots["cached_tokens"],
             "completion_tokens": tots["completion_tokens"],
             "total_tokens": tots["total_tokens"],
+            "token_cost_proxy": tots["effective_billed_tokens"],
+            "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
             "effective_billed_tokens": tots["effective_billed_tokens"],
             "wall_ms": total_ep_wall_ms,
             "provenance_verified": prov_check["valid"],

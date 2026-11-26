@@ -136,6 +136,7 @@ def classify_public_container_verification_state(
     nogood_count: int,
     submitted_final_answer: str | None = None,
     nogoods_recorded: list[dict[str, Any]] | None = None,
+    treatment_invariant_mode: bool = True,
 ) -> tuple[str, list[str]]:
     """Classify pre-lock primary container state into 4 honest epistemic tiers:
     `VERIFIED`, `SUPPORTED_IN_PARTIAL_SCOPE`, `UNKNOWN`, `REFUTED`.
@@ -150,9 +151,10 @@ def classify_public_container_verification_state(
         ans = str(submitted_final_answer or "").strip()
         if not ans:
             return "REFUTED", ["empty_biomystery_answer"]
-        if int(nogood_count) >= 1:
-            # Falsification nogood on open-ended text QA is partial support, NOT full domain verification!
+        if (not treatment_invariant_mode) and int(nogood_count) >= 1:
             return "SUPPORTED_IN_PARTIAL_SCOPE", ["non_empty_answer_with_in_container_falsification_nogood"]
+        if bool((public_metrics or {}).get("in_container_substantive_receipt_verified")):
+            return "SUPPORTED_IN_PARTIAL_SCOPE", ["biomystery_in_container_probe_receipt_verified"]
         return "UNKNOWN", ["unverified_single_trace_text_answer"]
 
     pub = public_metrics or {}
@@ -237,14 +239,12 @@ def classify_public_container_verification_state(
         partial_receipts.append("generic_public_checker_passed")
     if isinstance(pub.get("nano_missing_popins"), list) and len(pub["nano_missing_popins"]) == 0:
         partial_receipts.append("nano_popin_completeness_checked")
-    if int(skill_activation_count) >= 1:
-        partial_receipts.append("autogenous_skill_operator_invoked")
-    if int(nogood_count) >= 1:
-        partial_receipts.append("in_container_falsification_nogood_probed")
-    if (
-        benchmark not in {"Terminal-Bench-Science-0.1", "BioMysteryBench-Preview"}
-        and pub.get("in_container_substantive_receipt_verified") is True
-    ):
+    if not treatment_invariant_mode:
+        if int(skill_activation_count) >= 1:
+            partial_receipts.append("autogenous_skill_operator_invoked")
+        if int(nogood_count) >= 1:
+            partial_receipts.append("in_container_falsification_nogood_probed")
+    if pub.get("in_container_substantive_receipt_verified") is True:
         partial_receipts.append("in_container_substantive_verification_receipt")
 
     if partial_receipts:
@@ -262,11 +262,12 @@ def build_pre_action_feature_vector(pre_state: dict[str, Any]) -> np.ndarray:
     ng_cnt = int(pre_state["nogood_count"])
     is_bm = str(pre_state.get("benchmark") or "") == "BioMysteryBench-Preview"
     ident_risk = bool(pre_state.get("identifiability_warning") or pre_state.get("unresolved_target_identifiability_nogood"))
+    inv_mode = bool(pre_state.get("treatment_invariant_mode", True))
 
     f_refuted = 1.0 if (ver_state == "REFUTED" or not bool(pre_state["ended_by_finish"]) or bool(pre_state.get("pullback_gate_triggered"))) else 0.0
     f_unknown_code = 1.0 if ((ver_state == "UNKNOWN" and not is_bm) or ident_risk) else 0.0
     f_unknown_bm = 1.0 if (ver_state == "UNKNOWN" and is_bm) else 0.0
-    f_exhaust = max(0.0, (turns_ratio - 0.85) / 0.15) * (0.25 if sk_cnt >= 1 else 1.0)
+    f_exhaust = max(0.0, (turns_ratio - 0.85) / 0.15) * (1.0 if inv_mode else (0.25 if sk_cnt >= 1 else 1.0))
     f_grounded = (
         1.0
         if (
@@ -278,7 +279,7 @@ def build_pre_action_feature_vector(pre_state: dict[str, Any]) -> np.ndarray:
                 or (
                     ver_state == "SUPPORTED_IN_PARTIAL_SCOPE"
                     and turns_ratio < 0.96
-                    and (sk_cnt >= 1 or ng_cnt >= 1 or bool(pre_state.get("contract_accepted")))
+                    and (bool(pre_state.get("contract_accepted")) if inv_mode else (sk_cnt >= 1 or ng_cnt >= 1 or bool(pre_state.get("contract_accepted"))))
                 )
             )
         )
@@ -295,6 +296,7 @@ def build_container_pre_action_state(
     primary_summary: dict[str, Any],
     contract_check: dict[str, Any] | None = None,
     public_metrics: dict[str, Any] | None = None,
+    treatment_invariant_mode: bool = True,
 ) -> dict[str, Any]:
     """Construct strictly prefix-clean pre-action state dictionary (`T09` compliant)."""
     ended = bool(primary_summary.get("ended_by_finish", False))
@@ -321,6 +323,7 @@ def build_container_pre_action_state(
         nogood_count=ng_cnt,
         submitted_final_answer=primary_summary.get("submitted_final_answer"),
         nogoods_recorded=ng_recs,
+        treatment_invariant_mode=treatment_invariant_mode,
     )
     return {
         "task_id": task_id,
@@ -337,6 +340,7 @@ def build_container_pre_action_state(
         "identifiability_warning": has_ident_warn,
         "unresolved_target_identifiability_nogood": has_target_ng,
         "contract_accepted": chk_ok,
+        "treatment_invariant_mode": bool(treatment_invariant_mode),
         "public_verification_state": v_state,
         "public_verification_reasons": v_reasons,
     }
@@ -658,7 +662,12 @@ class M8OfflineContainerPlanner:
         import inspect as _insp
 
         src = _insp.getsource(build_pre_action_feature_vector)
-        norm = ast.dump(ast.parse(src), include_attributes=False)
+        tree = ast.parse(src)
+        # Canonicalize across Python 3.10..3.12+ by removing empty `type_params` attributes introduced in Python 3.12 AST
+        for _node in ast.walk(tree):
+            if hasattr(_node, "type_params") and not getattr(_node, "type_params"):
+                delattr(_node, "type_params")
+        norm = ast.dump(tree, include_attributes=False)
         return _hl.sha256(norm.encode("utf-8")).hexdigest()
 
     def to_json_dict(self) -> dict[str, Any]:
@@ -702,9 +711,9 @@ class M8OfflineContainerPlanner:
                     f"Router feature_names mismatch: got `{loaded_names!r}`, expected `{expected_names!r}`."
                 )
             loaded_bsha = data.get("feature_builder_sha256")
-            if loaded_bsha is not None and loaded_bsha != expected_builder_sha:
+            if not isinstance(loaded_bsha, str) or not loaded_bsha or loaded_bsha != expected_builder_sha:
                 raise ValueError(
-                    f"Router feature_builder_sha256 mismatch: got `{loaded_bsha!r}`, expected `{expected_builder_sha!r}`."
+                    f"Router feature_builder_sha256 missing or mismatch: got `{loaded_bsha!r}`, expected `{expected_builder_sha!r}`."
                 )
         nig_raw = cls._deser_nig(data["nig_fit"])
         assert nig_raw is not None
@@ -744,6 +753,7 @@ def load_historical_suite_episode_records(
     suite_dir: Path,
     *,
     apply_m7_7_traffic_contract_fix_in_replay: bool = False,
+    treatment_invariant_mode: bool = True,
 ) -> list[dict[str, Any]]:
     """Extract prefix-clean `pre_action_state` + post-lock evaluation ground-truth from a sealed historical suite.
 
@@ -796,6 +806,7 @@ def load_historical_suite_episode_records(
             primary_summary=anti_sum,
             contract_check={"accepted": chk_ok},
             public_metrics=pub_a,
+            treatment_invariant_mode=treatment_invariant_mode,
         )
         ResearchDecisionRecord(
             decision_id=f"chk_{tid}",

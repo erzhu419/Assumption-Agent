@@ -560,3 +560,180 @@ def verify_box_l0_subcube_certificate(
         "reported_gap": round(max(0.0, reported_gap), 10),
         "leaves": leaf_diagnostics,
     }
+
+
+CANONICAL_BOX_L0_CERTIFICATE_SCHEMA_VERSION = "hegel_box_l0_cert_schema_v2"
+
+
+def normalize_and_validate_box_l0_public_schema(
+    cert_dict: Any,
+    p: int,
+    *,
+    box: float | None = None,
+    max_leaves: int = 2048,
+    allow_index_list_compat: bool = False,
+) -> dict[str, Any]:
+    """Pure PUBLIC schema & partition checker for symmetric-box L0 certificates (`M9.1.1` `C1`).
+
+    Contains ZERO private data/labels and may be shipped verbatim inside `/holdout_task/` so ALL
+    experimental arms (`Bare`, `Knowledge`, `Executable`) share identical deliverable format knowledge!
+    Canonical leaf mask representation: `fixed_zero` and `fixed_active` as length-`p` boolean sequences
+    (`encoding == 'bool_mask_p'`). When `allow_index_list_compat=True` (used ONLY for explicit retrospective
+    sensitivity regrading of ambiguous v1 specs or when `encoding == 'index_list'` is declared), converts
+    unambiguous duplicate-free integer index lists in `[0, p)` into canonical `(p,)` boolean masks & index lists.
+    """
+    if not isinstance(cert_dict, dict):
+        return {"schema_valid": False, "partition_valid": False, "reason": "certificate_not_a_dict", "canonical": None}
+
+    req_top = {"weights", "objective", "certified_lower_bound", "subcube_leaves"}
+    if not (req_top <= set(cert_dict.keys())):
+        missing = sorted(req_top - set(cert_dict.keys()))
+        return {"schema_valid": False, "partition_valid": False, "reason": f"missing_keys:{missing}", "canonical": None}
+
+    raw_obj = cert_dict.get("objective")
+    raw_clb = cert_dict.get("certified_lower_bound")
+    if (
+        isinstance(raw_obj, (bool, np.bool_))
+        or isinstance(raw_clb, (bool, np.bool_))
+        or not isinstance(raw_obj, (int, float, np.number))
+        or not isinstance(raw_clb, (int, float, np.number))
+        or not (math.isfinite(float(raw_obj)) and math.isfinite(float(raw_clb)))
+    ):
+        return {"schema_valid": False, "partition_valid": False, "reason": "nonfinite_or_bool_scalars", "canonical": None}
+
+    try:
+        w = np.asarray(cert_dict["weights"], dtype=float)
+    except Exception:
+        return {"schema_valid": False, "partition_valid": False, "reason": "weights_not_numeric_array", "canonical": None}
+    if w.shape != (p,) or not bool(np.all(np.isfinite(w))):
+        return {"schema_valid": False, "partition_valid": False, "reason": f"bad_weights_shape_or_nan(expected=({p},))", "canonical": None}
+    if box is not None and (float(np.min(w)) < -float(box) - 1e-7 or float(np.max(w)) > float(box) + 1e-7):
+        return {"schema_valid": False, "partition_valid": False, "reason": "weights_exceed_box_bounds", "canonical": None}
+
+    leaves = cert_dict.get("subcube_leaves")
+    if not isinstance(leaves, list) or not (1 <= len(leaves) <= int(max_leaves)):
+        return {"schema_valid": False, "partition_valid": False, "reason": f"bad_leaf_count(expected_1_to_{max_leaves})", "canonical": None}
+
+    decl_enc = str(cert_dict.get("encoding") or "").strip()
+    canonical_leaves: list[dict[str, Any]] = []
+    encodings_seen: set[str] = set()
+    tot_measure = 0
+    parsed_sets: list[tuple[frozenset[int], frozenset[int]]] = []
+
+    def _parse_mask_or_indices(raw_seq: Any) -> tuple[bool, str, list[int], str]:
+        if isinstance(raw_seq, np.ndarray):
+            if raw_seq.ndim != 1:
+                return False, "mask_not_1d", [], ""
+            if raw_seq.dtype == np.bool_:
+                if raw_seq.shape != (p,):
+                    return False, f"bool_mask_wrong_length({len(raw_seq)}!={p})", [], ""
+                return True, "ok", [int(i) for i in np.flatnonzero(raw_seq)], "bool_mask_p"
+            seq_list = raw_seq.tolist()
+        elif isinstance(raw_seq, (list, tuple)):
+            seq_list = list(raw_seq)
+        else:
+            return False, "leaf_mask_not_sequence", [], ""
+
+        if len(seq_list) == p and all(isinstance(x, (bool, np.bool_)) for x in seq_list) and decl_enc != "index_list":
+            return True, "ok", [i for i, flag in enumerate(seq_list) if bool(flag)], "bool_mask_p"
+
+        if not (allow_index_list_compat or decl_enc == "index_list"):
+            return False, f"expected_length_{p}_bool_mask_got_non_bool_or_wrong_len", [], ""
+
+        if any(isinstance(x, (bool, np.bool_)) or not isinstance(x, (int, np.integer)) for x in seq_list):
+            return False, "non_int_in_index_list", [], ""
+        ints = [int(x) for x in seq_list]
+        if len(set(ints)) != len(ints) or any(ix < 0 or ix >= p for ix in ints):
+            return False, "duplicate_or_oob_index_in_leaf", [], ""
+        return True, "ok", sorted(ints), "index_list"
+
+    for idx_l, lf in enumerate(leaves):
+        if not isinstance(lf, dict):
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_not_dict", "canonical": None}
+        raw_fz = lf.get("fixed_zero")
+        raw_fa = lf.get("fixed_active") if "fixed_active" in lf else lf.get("fixed_nonzero")
+        raw_lb = lf.get("lb") if "lb" in lf else lf.get("leaf_lower_bound")
+        if raw_fz is None or raw_fa is None or raw_lb is None:
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_missing_required_fields", "canonical": None}
+        if isinstance(raw_lb, (bool, np.bool_)) or not isinstance(raw_lb, (int, float, np.number)) or not math.isfinite(float(raw_lb)):
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_bad_lb", "canonical": None}
+
+        ok0, rsn0, idx0, enc0 = _parse_mask_or_indices(raw_fz)
+        if not ok0:
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_fixed_zero_{rsn0}", "canonical": None}
+        ok1, rsn1, idx1, enc1 = _parse_mask_or_indices(raw_fa)
+        if not ok1:
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_fixed_active_{rsn1}", "canonical": None}
+        encodings_seen.update({enc0, enc1})
+
+        s0, s1 = frozenset(idx0), frozenset(idx1)
+        if s0 & s1:
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_overlapping_zero_and_active", "canonical": None}
+
+        has_diag = lf.get("minorant_diagonal") is not None and lf.get("minorant_center") is not None
+        has_dual = lf.get("dual_nu") is not None
+        if not (has_diag or has_dual):
+            return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_missing_witness_fields", "canonical": None}
+
+        can_lf: dict[str, Any] = {
+            "fixed_zero": idx0,
+            "fixed_nonzero": idx1,
+            "fixed_zero_bool": [j in s0 for j in range(p)],
+            "fixed_active_bool": [j in s1 for j in range(p)],
+            "leaf_lower_bound": float(raw_lb),
+        }
+        if has_diag:
+            dv = np.asarray(lf["minorant_diagonal"], dtype=float).ravel()
+            cv = np.asarray(lf["minorant_center"], dtype=float).ravel()
+            if dv.shape != (p,) or cv.shape != (p,) or not (np.all(np.isfinite(dv)) and np.all(np.isfinite(cv))):
+                return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_bad_minorant_shape_or_nan", "canonical": None}
+            can_lf["minorant_diagonal"] = dv.tolist()
+            can_lf["minorant_center"] = cv.tolist()
+        if has_dual:
+            nu = np.asarray(lf["dual_nu"], dtype=float).ravel()
+            if nu.ndim != 1 or nu.size == 0 or not np.all(np.isfinite(nu)):
+                return {"schema_valid": False, "partition_valid": False, "reason": f"leaf_{idx_l}_bad_dual_nu", "canonical": None}
+            can_lf["dual_nu"] = nu.tolist()
+
+        canonical_leaves.append(can_lf)
+        parsed_sets.append((s0, s1))
+        tot_measure += 1 << (p - len(s0) - len(s1))
+
+    if tot_measure != (1 << p):
+        return {
+            "schema_valid": True,
+            "partition_valid": False,
+            "reason": f"measure_mismatch({tot_measure}!={1 << p})",
+            "canonical": None,
+        }
+
+    if p <= 62:
+        zu = np.array([sum(1 << j for j in s0) for s0, _ in parsed_sets], dtype=np.uint64)
+        au = np.array([sum(1 << j for j in s1) for _, s1 in parsed_sets], dtype=np.uint64)
+        sep = (zu[:, None] & au[None, :]) | (au[:, None] & zu[None, :])
+        np.fill_diagonal(sep, np.uint64(1))
+        if bool(np.any(sep == 0)):
+            return {"schema_valid": True, "partition_valid": False, "reason": "overlapping_leaves", "canonical": None}
+    else:
+        for i in range(len(parsed_sets)):
+            s0_i, s1_i = parsed_sets[i]
+            for j in range(i + 1, len(parsed_sets)):
+                s0_j, s1_j = parsed_sets[j]
+                if not ((s0_i & s1_j) or (s1_i & s0_j)):
+                    return {"schema_valid": True, "partition_valid": False, "reason": f"overlapping_leaves({i},{j})", "canonical": None}
+
+    return {
+        "schema_valid": True,
+        "partition_valid": True,
+        "schema_version": CANONICAL_BOX_L0_CERTIFICATE_SCHEMA_VERSION,
+        "encodings_seen": sorted(encodings_seen),
+        "leaf_count": len(canonical_leaves),
+        "reason": "ok",
+        "canonical": {
+            "weights": w.tolist(),
+            "objective": float(raw_obj),
+            "certified_lower_bound": float(raw_clb),
+            "subcube_leaves": canonical_leaves,
+        },
+    }
+

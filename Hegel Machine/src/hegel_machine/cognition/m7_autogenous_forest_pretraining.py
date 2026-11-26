@@ -2167,23 +2167,39 @@ def enrich_and_harden_l1_primitive_contracts(
                     mod["qualification_status"] = "stale_pending_container_reverification"
                     minorant_hardened_nodes.append(nid)
 
-            # Stamp `verified_code_sha256` on already-consistent untouched `L1` receipts
+            # `M9.1.1` `C2`: NEVER silently stamp missing `verified_code_sha256` without running verification!
+            # Validate full `(code_sha256, test_sha256, verifier_protocol_version, dependency_env_digest)` identity.
             cur_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
+            ut_code_raw = str(mod.get("synthetic_unit_test_code") or "")
+            cur_ut_sha = hashlib.sha256(ut_code_raw.encode("utf-8")).hexdigest() if ut_code_raw.strip() else ""
             if mod.get("compiled_code_sha256") and mod["compiled_code_sha256"] != cur_sha:
                 mod["compiled_code_sha256"] = cur_sha
                 mod["unit_test_verified"] = False
                 mod["qualification_status"] = "stale_code_sha_changed"
             elif mod.get("unit_test_verified") and isinstance(mod.get("unit_test_receipt"), dict):
                 ut_r = mod["unit_test_receipt"]
-                if not ut_r.get("verified_code_sha256"):
-                    ut_r["verified_code_sha256"] = cur_sha
-                if ut_r["verified_code_sha256"] != cur_sha:
+                rec_c_sha = str(ut_r.get("verified_code_sha256") or "")
+                rec_t_sha = str(ut_r.get("synthetic_unit_test_sha256") or "")
+                if not rec_c_sha:
+                    mod["unit_test_verified"] = False
+                    mod["qualification_status"] = "stale_missing_verified_code_sha256"
+                elif rec_c_sha != cur_sha:
                     mod["unit_test_verified"] = False
                     mod["qualification_status"] = "stale_receipt_sha_mismatch"
+                elif rec_t_sha and cur_ut_sha and rec_t_sha != cur_ut_sha:
+                    mod["unit_test_verified"] = False
+                    mod["qualification_status"] = "stale_receipt_test_sha_mismatch"
+                elif mod.get("qualification_protocol") == "hegel_l1_qual_4tuple_v2" and (
+                    not rec_t_sha or rec_t_sha != cur_ut_sha or not ut_r.get("verifier_protocol_version") or not ut_r.get("dependency_env_digest")
+                ):
+                    mod["unit_test_verified"] = False
+                    mod["qualification_status"] = "stale_4tuple_protocol_fields"
 
     if reverify_in_clean_container:
-        # `M8.9.1` `R2`: Group stale L1 copies strictly by `(stem, actual_code_sha256, synthetic_unit_test_sha256)`
-        # and propagate receipts ONLY to copies with byte-identical actual code & test SHA!
+        # `M9.1.1` `C2`: Group stale OR legacy-untyped L1 copies strictly by `(stem, actual_code_sha256, synthetic_unit_test_sha256)`
+        # so ANY test change, missing test SHA, or protocol upgrade triggers real container verification!
+        L1_PROTOCOL_VER = "hegel_l1_qual_4tuple_v2"
+        L1_ENV_DIGEST = f"{CLEAN_SCIPY_SANDBOX_IMAGE}::numpy_scipy_sklearn_airgapped_v1"
         stale_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
         for _, rec in iter_live_archive_nodes(archive):
             for mod in rec.get("autogenous_wormhole_modules") or []:
@@ -2192,14 +2208,19 @@ def enrich_and_harden_l1_primitive_contracts(
                 if not (fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive"):
                     continue
                 cur_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
-                cur_ut_sha = hashlib.sha256(str(mod.get("synthetic_unit_test_code") or "").encode("utf-8")).hexdigest()
+                ut_raw = str(mod.get("synthetic_unit_test_code") or "")
+                cur_ut_sha = hashlib.sha256(ut_raw.encode("utf-8")).hexdigest() if ut_raw.strip() else ""
                 ut_r = mod.get("unit_test_receipt")
-                if not (
+                full_4tuple_ok = (
                     mod.get("unit_test_verified") is True
                     and isinstance(ut_r, dict)
                     and ut_r.get("passed") is True
-                    and ut_r.get("verified_code_sha256") == cur_sha
-                ):
+                    and str(ut_r.get("verified_code_sha256") or "") == cur_sha
+                    and (not cur_ut_sha or str(ut_r.get("synthetic_unit_test_sha256") or "") == cur_ut_sha)
+                    and str(ut_r.get("verifier_protocol_version") or "") == L1_PROTOCOL_VER
+                    and str(ut_r.get("dependency_env_digest") or "") == L1_ENV_DIGEST
+                )
+                if not full_4tuple_ok:
                     stale_by_key.setdefault((stem, cur_sha, cur_ut_sha), mod)
         if stale_by_key:
             ensure_clean_scipy_sandbox_image()
@@ -2219,20 +2240,26 @@ def enrich_and_harden_l1_primitive_contracts(
                     )
                     ut_res["verified_code_sha256"] = c_sha
                     ut_res["synthetic_unit_test_sha256"] = ut_sha
+                    ut_res["verifier_protocol_version"] = L1_PROTOCOL_VER
+                    ut_res["dependency_env_digest"] = L1_ENV_DIGEST
                     for _, rec2 in iter_live_archive_nodes(archive):
                         for mod2 in rec2.get("autogenous_wormhole_modules") or []:
                             if Path(str(mod2.get("filename") or "")).stem != stem:
                                 continue
                             m2_sha = hashlib.sha256(str(mod2.get("python_code") or "").encode("utf-8")).hexdigest()
-                            m2_ut_sha = hashlib.sha256(str(mod2.get("synthetic_unit_test_code") or "").encode("utf-8")).hexdigest()
+                            m2_ut_raw = str(mod2.get("synthetic_unit_test_code") or "")
+                            m2_ut_sha = hashlib.sha256(m2_ut_raw.encode("utf-8")).hexdigest() if m2_ut_raw.strip() else ""
                             if m2_sha != c_sha or m2_ut_sha != ut_sha:
                                 continue
                             mod2["compiled_code_sha256"] = c_sha
                             mod2["synthetic_unit_test_sha256"] = ut_sha
+                            mod2["qualification_protocol"] = L1_PROTOCOL_VER
                             mod2["unit_test_receipt"] = deepcopy(ut_res)
                             mod2["unit_test_verified"] = bool(ut_res.get("passed") is True)
                             mod2["qualification_status"] = (
-                                "qualified_code_and_test_sha_bound" if ut_res.get("passed") is True else "failed_container_reverification"
+                                "qualified_4tuple_code_test_protocol_env_bound"
+                                if ut_res.get("passed") is True
+                                else "failed_container_reverification"
                             )
                     if ut_res.get("passed") is True and stem not in reverified_modules:
                         reverified_modules.append(stem)
@@ -2308,15 +2335,10 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 continue
             if fname.startswith("autogenous_prim_") or mod.get("granularity_tier") == "L1_compositional_primitive":
                 used_prim_stems.add(Path(fname).stem)
-                actual_l1_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
-                ut_rec = mod.get("unit_test_receipt")
-                ut_sha_ok = (
-                    isinstance(ut_rec, dict)
-                    and (ut_rec.get("passed") is True)
-                    and str(ut_rec.get("verified_code_sha256") or "") == actual_l1_sha
-                    and str(mod.get("compiled_code_sha256") or "") == actual_l1_sha
-                )
-                if (mod.get("unit_test_verified") is True) and ut_sha_ok and mod.get("source_candidate_sha256"):
+                from .m6_4_executable_wormhole_library import verify_l1_module_qualification_record
+
+                l1_qual_ok, _, _ = verify_l1_module_qualification_record(mod)
+                if l1_qual_ok and mod.get("source_candidate_sha256"):
                     existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
                 continue
             recomputed_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()

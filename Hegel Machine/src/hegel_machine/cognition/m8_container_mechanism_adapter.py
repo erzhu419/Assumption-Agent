@@ -1078,6 +1078,7 @@ def execute_in_container_local_repair(
     stage_subdir: str = "m8_local_container_repair",
     defer_guard_commit: bool = False,
     staged_skill_sources_by_stem: dict[str, str] | None = None,
+    staged_skill_preconditions_by_stem: dict[str, list[Any]] | None = None,
 ) -> dict[str, Any]:
     """Execute 1-turn targeted `LocalContainerRepair` inside live `probe_cid` with exception-safe rollback & token preservation!"""
     _ = step_index
@@ -1120,6 +1121,7 @@ def execute_in_container_local_repair(
 
         repair_ctx = build_repair_skill_context_from_sources(
             staged_skill_sources_by_stem,
+            preconditions_by_stem=staged_skill_preconditions_by_stem,
             query_text=f"{task.instruction_text} {fam_before} {json.dumps(public_probe_before, ensure_ascii=False)}",
             max_cards=8,
             top_k_prefetched_contracts=3,

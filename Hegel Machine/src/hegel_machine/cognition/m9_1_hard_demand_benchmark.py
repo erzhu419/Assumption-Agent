@@ -71,8 +71,12 @@ HARD_DEMAND_M91_TASKS: tuple[HoldoutOODTask, ...] = (
             "   - Return `'certified_selection'` dict containing:\n"
             "     - `'weights'`: `(p,)` in `[-M, M]^p`, `'objective'`: float `F(weights)`,\n"
             "     - `'certified_lower_bound'`: float `L` (`0 <= F(weights) - L <= 1e-5`),\n"
-            "     - `'subcube_leaves'`: list (`1 <= len <= 2048`) partitioning `{0, 1}^p`, each leaf having `'fixed_zero'`, `'fixed_active'`, `'lb'`,\n"
-            "       AND EITHER `('minorant_diagonal', 'minorant_center')` (`d >= 0` with `X.T @ X - diag(d) >= 0`) OR `'dual_nu'` (`shape (n_s,)`).\n"
+            "     - `'subcube_leaves'`: list (`1 <= len <= 2048`) partitioning `{0, 1}^p`, each leaf dict having:\n"
+            "       * `'fixed_zero'`: length-`p` boolean sequence (`list[bool]` or `bool` `ndarray` of shape `(p,)`),\n"
+            "       * `'fixed_active'`: length-`p` boolean sequence (`shape (p,)`, disjoint from `'fixed_zero'`),\n"
+            "       * `'lb'`: finite float lower bound on `F(w)` over that subcube,\n"
+            "       * AND EITHER `('minorant_diagonal', 'minorant_center')` (`shape (p,)` each, `d >= 0` with `X.T @ X - diag(d) >= 0`) OR `'dual_nu'` (`shape (n_s,)`).\n"
+            "       (Minimal 1-leaf example: `[{'fixed_zero': [False]*p, 'fixed_active': [False]*p, 'lb': L, 'minorant_diagonal': d.tolist(), 'minorant_center': c.tolist()}]`.)\n"
             "- Return `{'aligned_biomarkers': (N, D), 'robust_potency_weights': (D,), 'certified_selection': dict}`.\n"
             "- Public development studies (with ground truth) are in `/holdout_task/public_multicenter_l0_studies.pkl`."
         ),
@@ -354,32 +358,56 @@ max_mae = 0.0
 max_w_err = 0.0
 max_gap = 0.0
 notes = []
+instance_diagnostics = []
 for sd, bsz in ((99301, (10, 10)), (99302, (10, 11)), (99303, (11, 11))):
     study, gt_Z, obs_m, gt_beta, exact_opt = _make_priv(sd, bsz)
     tc0 = time.monotonic()
     out = multicenter_certified_l0.solve_multicenter_certified_l0(study)
-    student_elapsed += time.monotonic() - tc0
+    el_i = time.monotonic() - tc0
+    student_elapsed += el_i
     if not isinstance(out, dict) or not {"aligned_biomarkers", "robust_potency_weights", "certified_selection"} <= set(out.keys()):
-        valid = False; notes.append(f"{sd}:missing_keys"); break
+        valid = False
+        notes.append(f"{sd}:missing_keys")
+        instance_diagnostics.append({"seed": sd, "ok": False, "reason": "missing_keys", "elapsed_sec": round(float(el_i), 4)})
+        continue
     Za = np.asarray(out["aligned_biomarkers"], dtype=float)
     bw = np.asarray(out["robust_potency_weights"], dtype=float)
     if Za.shape != gt_Z.shape or bw.shape != gt_beta.shape or not (np.all(np.isfinite(Za)) and np.all(np.isfinite(bw))):
-        valid = False; notes.append(f"{sd}:shape_or_nan"); break
-    max_mae = max(max_mae, float(np.mean(np.abs(Za[obs_m] - gt_Z[obs_m]))))
-    max_w_err = max(max_w_err, float(np.linalg.norm(bw - gt_beta) / np.linalg.norm(gt_beta)))
+        valid = False
+        notes.append(f"{sd}:shape_or_nan")
+        instance_diagnostics.append({"seed": sd, "ok": False, "reason": "shape_or_nan", "elapsed_sec": round(float(el_i), 4)})
+        continue
+    mae_i = float(np.mean(np.abs(Za[obs_m] - gt_Z[obs_m])))
+    w_err_i = float(np.linalg.norm(bw - gt_beta) / np.linalg.norm(gt_beta))
+    max_mae = max(max_mae, mae_i)
+    max_w_err = max(max_w_err, w_err_i)
     ok_c, note_c, gap_c = _verify_cert(study["sparse_selection"], out["certified_selection"], exact_opt)
     notes.append(f"{sd}:{note_c}")
-    max_gap = max(max_gap, float(gap_c))
+    if gap_c < 1e6:
+        max_gap = max(max_gap, float(gap_c))
+    else:
+        max_gap = max(max_gap, 1e9)
+    instance_diagnostics.append({
+        "seed": sd,
+        "ok": bool(ok_c and mae_i <= 0.12 and w_err_i <= 0.08),
+        "cert_status": note_c,
+        "aligned_mae": round(mae_i, 6),
+        "potency_rel_l2": round(w_err_i, 6),
+        "certified_gap": (round(float(gap_c), 9) if gap_c < 1e6 else -1.0),
+        "elapsed_sec": round(float(el_i), 4),
+    })
     if not ok_c:
-        valid = False; break
+        valid = False
 
 passed = bool(valid and max_mae <= 0.12 and max_w_err <= 0.08 and max_gap <= 1.2e-5 and student_elapsed < 22.0)
 print(json.dumps({
     "strict_pass": passed,
+    "contract_version": "hd01_explicit_bool_mask_v2",
     "max_aligned_mae": round(float(max_mae), 6),
     "max_potency_weight_rel_l2": round(float(max_w_err), 6),
     "max_certified_gap": (round(float(max_gap), 9) if max_gap < 1e6 else -1.0),
     "status_notes": notes,
+    "instance_diagnostics": instance_diagnostics,
     "student_elapsed_sec": round(float(student_elapsed), 4),
 }, allow_nan=False))
 ''',

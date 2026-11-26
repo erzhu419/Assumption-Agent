@@ -145,26 +145,69 @@ def describe_skill(target: str = "", detail_level: str = "full") -> str:
     return json.dumps({"ok": len(matches) > 0, "target": q or "*", "matches": matches}, indent=2, ensure_ascii=False)
 
 
-def search_skills(query: str = "", top_k: int = 8) -> str:
-    """Pure-data keyword search over `_skill_contracts.json` returning top-matching compact 1-line index cards (`M9.1`)."""
+def search_skills(query: str = "", top_k: int = 6) -> str:
+    """Pure-data function-level & synonym-aware search over `_skill_contracts.json` (`M9.1.1` `C3`, `0` skill import)."""
     import re as _re
     caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
-    toks = {t for t in _re.findall(r"[a-zA-Z0-9_]{2,}", str(query or "").lower())}
+    q_low = str(query or "").lower()
+    raw_words = set(_re.findall(r"[a-zA-Z0-9]{2,}", _re.sub(r"[_./-]+", " ", q_low)))
+    syn_groups = (
+        {"robust", "regression", "outlier", "outliers", "irls", "cauchy", "huber", "lorentzian", "glitch", "spikes", "residual", "weights"},
+        {"certified", "certificate", "lower", "bound", "bounds", "l0", "sparse", "box", "subcube", "cube", "minorant", "branch", "blocks"},
+        {"preconditioner", "multigrid", "amg", "galerkin", "cg", "conjugate", "spd", "elliptic", "poisson", "diffusion", "robin"},
+        {"panel", "reference", "control", "controls", "cohort", "batch", "center", "stratum", "strata", "imputation", "missing", "align", "balanced", "fill"},
+        {"nuisance", "profile", "profiled", "profiling", "whitener", "schur", "tomography", "amplitudes", "matching"},
+        {"relaxation", "creep", "viscoelastic", "memory", "hereditary", "prony", "step", "breakpoint", "tau", "trend"},
+    )
+    expanded = set(raw_words)
+    for grp in syn_groups:
+        if raw_words & grp:
+            expanded |= (grp & {"cauchy", "robust", "residual", "weights", "box", "ridge", "lower", "bound", "minorant", "blocks", "galerkin", "preconditioner", "cg", "spd", "align", "reference", "panel", "balanced", "fill", "nuisance", "profile", "amplitudes", "relaxation", "step", "trend"})
+    neg_rx = r"(?:avoid|no|not|never|without|non|exclude|excluding)\\s+[a-z0-9_\\-\\s]{0,24}"
+    query_affirms_complex_or_indef = bool(
+        (_re.search(r"\\b(?:complex128|complex|helmholtz|indefinite)\\b", q_low))
+        and not _re.search(neg_rx + r"\\b(?:complex128|complex|helmholtz|indefinite)\\b", q_low)
+        and not (raw_words & {"real", "float64", "spd"})
+    )
     if not os.path.isfile(CONTRACTS_CATALOG_PATH):
         return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
     with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
         catalog = json.load(fh)
     scored = []
+    rejected_notes = []
     for entry in catalog.get("skills", []):
-        blob = json.dumps(entry, ensure_ascii=False).lower()
-        eb_toks = set(_re.findall(r"[a-zA-Z0-9_]{2,}", blob))
-        overlap = len(toks & eb_toks) if toks else 1
-        if overlap > 0:
-            is_l1 = 1 if entry.get("granularity_tier") == "L1_compositional_primitive" else 0
-            for c in entry.get("index_cards", []):
-                c_toks = set(_re.findall(r"[a-zA-Z0-9_]{2,}", c.lower()))
-                sc = overlap + 2 * len(toks & c_toks) + is_l1
-                scored.append((sc, c))
+        m_stem = str(entry.get("module_stem") or "")
+        fn_app_map = entry.get("function_level_applicability") or {}
+        is_l1 = 1.0 if entry.get("granularity_tier") == "L1_compositional_primitive" else 0.0
+        fns = entry.get("functions", [])
+        cards = entry.get("index_cards", [])
+        for idx_f, c in enumerate(cards):
+            fn_info = fns[idx_f] if idx_f < len(fns) else {}
+            fn_nm = str(fn_info.get("function") or "")
+            app_status = str(fn_app_map.get(fn_nm) or "")
+            if query_affirms_complex_or_indef and m_stem in {
+                "autogenous_prim_conservative_spd_solve",
+                "autogenous_prim_robust_trend_decomposition",
+                "autogenous_prim_robust_affine_projection",
+                "autogenous_prim_box_ridge_bounds",
+                "autogenous_prim_reference_panel_balancing",
+            }:
+                rejected_notes.append(f"{m_stem}.{fn_nm}: REJECTED_PRECONDITION(real_or_spd_required_for_query)")
+                continue
+            if app_status.startswith("REJECTED_"):
+                rejected_notes.append(f"{m_stem}.{fn_nm}: {app_status}")
+                continue
+            fn_blob = " ".join([m_stem, fn_nm, str(fn_info.get("signature") or ""), str(fn_info.get("doc_summary") or "")]).lower()
+            fn_words = set(_re.findall(r"[a-zA-Z0-9]{2,}", _re.sub(r"[_./-]+", " ", fn_blob)))
+            direct_hit = len(raw_words & fn_words)
+            syn_hit = len(expanded & fn_words)
+            exact_id_bonus = 6.0 if (fn_nm and fn_nm.lower() in q_low) else (3.0 if m_stem.lower() in q_low else 0.0)
+            sc = 3.0 * direct_hit + 1.2 * syn_hit + exact_id_bonus + (0.5 * is_l1 if (direct_hit + syn_hit) > 0 else 0.0)
+            if not raw_words:
+                sc = 1.0 + is_l1
+            if sc > 0.0:
+                card_out = f"{c} | STATUS: {app_status}" if app_status and "STATUS:" not in c else c
+                scored.append((sc, card_out))
     scored.sort(key=lambda x: (-x[0], x[1]))
     top_cards = [c for _, c in scored[: max(1, int(top_k))]]
     _append_jsonl_path(
@@ -175,11 +218,16 @@ def search_skills(query: str = "", top_k: int = 8) -> str:
                 "event": "skill_search_executed",
                 "query": str(query or ""),
                 "returned_card_count": len(top_cards),
+                "rejected_precondition_count": len(rejected_notes),
                 "caller_role": caller_role,
             }
         ),
     )
-    return "\\n".join(top_cards) if top_cards else "No matching skill cards found."
+    if top_cards:
+        return "\\n".join(top_cards)
+    if rejected_notes:
+        return "No applicable skill cards (preconditions rejected for query): " + "; ".join(rejected_notes[:3])
+    return "No matching skill cards found."
 
 
 def _flush_buffered_skill_activations() -> None:
@@ -1916,11 +1964,16 @@ def build_compact_skill_index_cards_from_sources(
     )["index_cards"]
 
 
-def verify_l1_module_qualification_record(mod_entry: dict[str, Any]) -> tuple[bool, str, str]:
-    """Fail-closed `L1` qualification verification (`M8.9.1` `R2`):
-    Requires explicit `unit_test_verified is True`, explicit `compiled_code_sha256 == actual_sha`,
-    and a non-empty `unit_test_receipt` dict with `passed is True` and `verified_code_sha256 == actual_sha`.
-    Missing, empty, False, or stale receipts NEVER default to qualified!
+def verify_l1_module_qualification_record(
+    mod_entry: dict[str, Any],
+    *,
+    require_4tuple_protocol: bool = False,
+) -> tuple[bool, str, str]:
+    """Fail-closed `L1` qualification verification (`M8.9.1` `R2` + `M9.1.1` `C2`):
+    Verifies `(actual_code_sha256, actual_test_sha256, verifier_protocol_version, dependency_env_digest)`.
+    Whenever a receipt records `synthetic_unit_test_sha256` OR `qualification_protocol == 'hegel_l1_qual_4tuple_v2'`
+    OR `require_4tuple_protocol=True`, any change to `synthetic_unit_test_code` or missing protocol/env digest
+    immediately invalidates qualification! Missing, empty, False, or stale receipts NEVER default to qualified.
     """
     py_src = str(mod_entry.get("python_code") or "")
     if not py_src.strip():
@@ -1941,7 +1994,42 @@ def verify_l1_module_qualification_record(mod_entry: dict[str, Any]) -> tuple[bo
     rec_sha = str(ut_rec.get("verified_code_sha256") or "")
     if rec_sha != actual_sha:
         return False, "receipt_verified_code_sha256_mismatch", actual_sha
-    return True, "qualified_code_and_receipt_sha_bound", actual_sha
+
+    ut_src = str(mod_entry.get("synthetic_unit_test_code") or "")
+    actual_ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest() if ut_src.strip() else ""
+    rec_ut_sha = str(ut_rec.get("synthetic_unit_test_sha256") or "")
+    is_v2_proto = (mod_entry.get("qualification_protocol") == "hegel_l1_qual_4tuple_v2") or bool(require_4tuple_protocol)
+    if rec_ut_sha or is_v2_proto:
+        if not actual_ut_sha:
+            return False, "missing_synthetic_unit_test_code_for_4tuple_qualification", actual_sha
+        if rec_ut_sha != actual_ut_sha:
+            return False, "receipt_synthetic_unit_test_sha256_mismatch", actual_sha
+    if is_v2_proto:
+        if not str(ut_rec.get("verifier_protocol_version") or "").strip():
+            return False, "missing_verifier_protocol_version", actual_sha
+        if not str(ut_rec.get("dependency_env_digest") or "").strip():
+            return False, "missing_dependency_env_digest", actual_sha
+        return True, "qualified_4tuple_code_test_protocol_env_bound", actual_sha
+    if rec_ut_sha:
+        return True, "qualified_code_and_test_sha_bound_legacy_v1", actual_sha
+    return True, "qualified_legacy_code_sha_only_v1", actual_sha
+
+
+def _split_query_clauses_low(q_low: str) -> list[str]:
+    # Unwrap soft linebreaks inside bullets/paragraphs first so wrapped lines never split mid-clause (`M9.1.1` `C3`)!
+    unwrapped = re.sub(r"\n(?!\s*(?:\n|[-*]|\d+\.|stage\b))", " ", q_low)
+    return [c.strip() for c in re.split(r"(?:[.!?]+|\n\s*\n|\n\s*(?:[-*]|\d+\.)\s+)", unwrapped) if c.strip()]
+
+
+def _clause_has_unnegated_term(clause: str, terms: tuple[str, ...]) -> bool:
+    neg_prefix = r"(?:avoid|avoiding|no|not|never|without|exclude|excluding|reject|rejecting|forbid)\s+(?:any\s+|all\s+|using\s+)?"
+    for term in terms:
+        pat = rf"\b{re.escape(term)}\b"
+        for m in re.finditer(pat, clause):
+            prefix_slice = clause[max(0, m.start() - 42) : m.start()]
+            if not re.search(neg_prefix + r"[a-z0-9_\-\s]{0,18}$", prefix_slice):
+                return True
+    return False
 
 
 def evaluate_l1_skill_staging_net_value(
@@ -1950,24 +2038,38 @@ def evaluate_l1_skill_staging_net_value(
     recalled_nids: set[str],
     query_text: str,
 ) -> dict[str, Any]:
-    """`M8.9.1` Fail-Closed Qualification + Function-Level Applicability + Heuristic Recommendation Prior (`R2` + `R7`)."""
+    """`M9.1.1` Fail-Closed Qualification + Subproblem/Object-Scoped Preconditions + Heuristic Prior (`C2` + `C3`)."""
     fname = str(mod_entry.get("filename") or "")
     stem = Path(fname).stem
     qualified, qual_reason, actual_sha = verify_l1_module_qualification_record(mod_entry)
 
     q_low = (query_text or "").lower()
-    q_toks = set(re.findall(r"[a-zA-Z0-9_]{2,}", q_low))
+    clauses = _split_query_clauses_low(q_low)
+    q_toks = set(re.findall(r"[a-zA-Z0-9]{2,}", re.sub(r"[_./-]+", " ", q_low))) | set(re.findall(r"[a-zA-Z0-9_]{2,}", q_low))
     cap_score = _score_l1_primitive_capability_match(mod_entry, parent_nid, recalled_nids, query_text)
 
-    # Detect numeric system scale (`>= 4000 unknowns/cells/dof/nodes`) or explicit matrix-free / 3D / multigrid structure
     large_scale_nums = [
         int(m.group(1).replace(",", "").replace("_", ""))
         for m in re.finditer(r"\b(\d[\d,_]{3,})\s*(?:unknowns|dofs?|cells|nodes|grid|equations|variables)\b", q_low)
     ]
     has_large_or_matrix_free_spd = bool(
         any(v >= 4000 for v in large_scale_nums)
-        or (q_toks & {"3d", "multigrid", "amg", "matrix_free", "linearoperator", "preconditioned"})
+        or (q_toks & {"3d", "multigrid", "amg", "matrix_free", "linearoperator", "preconditioned", "continuation"})
         or ("matrix-free" in q_low)
+    )
+
+    affirms_indefinite = any(
+        _clause_has_unnegated_term(cl, ("helmholtz", "indefinite", "non_spd", "non-spd", "non-hermitian", "non_hermitian", "oscillatory_indefinite"))
+        for cl in clauses
+    )
+    affirms_real_spd_subproblem = any(
+        _clause_has_unnegated_term(cl, ("spd", "positive definite", "positive-definite", "elliptic", "diffusion", "poisson", "darcy"))
+        and not _clause_has_unnegated_term(cl, ("helmholtz", "indefinite", "non-hermitian", "non_hermitian"))
+        for cl in clauses
+    )
+    affirms_complex_stage = any(
+        _clause_has_unnegated_term(cl, ("complex128", "wrapped_phase_obs", "phasor"))
+        for cl in clauses
     )
 
     vetoes: list[str] = []
@@ -1980,9 +2082,8 @@ def evaluate_l1_skill_staging_net_value(
     if stem == "autogenous_prim_conservative_spd_solve":
         reimpl_saved = 2.1
         has_grid_pde = bool(q_toks & {"pde", "diffusion", "flux", "darcy", "poisson", "elliptic", "thermal", "conductivity", "kappa", "spd"})
-        has_indefinite = bool(q_toks & {"helmholtz", "indefinite", "non_spd", "oscillatory_indefinite"}) or ("indefinite" in q_low)
         has_robin_or_tensor = bool(q_toks & {"robin", "gamma_robin", "tensor", "k_xy", "anisotropic", "orthotropic"})
-        if has_indefinite:
+        if affirms_indefinite and not affirms_real_spd_subproblem:
             vetoes.append("indefinite_operator_violates_spd_precondition")
             reimpl_saved = 0.0
             function_applicability = {
@@ -2003,48 +2104,143 @@ def evaluate_l1_skill_staging_net_value(
             if not has_large_or_matrix_free_spd:
                 vetoes.append("direct_sparse_lu_cheaper_than_adapting_zero_ghost_amg_on_small_2d_robin_or_tensor_grid")
                 adapt_cost += 1.8
+        else:
+            function_applicability = {
+                "conservative_grid_operator": "APPLICABLE_SUBROUTINE(isotropic_positive_cell_coeff_zero_ghost)",
+                "galerkin_preconditioner": "APPLICABLE_SUBROUTINE(real_sparse_spd_operator)",
+                "solve_residual_checked_cg": "APPLICABLE_SUBROUTINE(real_spd_operator)",
+            }
+            if affirms_indefinite and affirms_real_spd_subproblem:
+                partial_subroutine_note = "applicable_only_to_real_spd_subproblem_stage; do_not_apply_to_indefinite_stage"
     elif stem == "autogenous_prim_box_ridge_bounds":
         reimpl_saved = 2.4
-        if not bool(q_toks & {"l0", "l0_penalty", "box", "certified_lower_bound", "branch", "facility", "cardinality", "sparse", "minorant"}):
+        has_box_l0 = bool(q_toks & {"l0", "l0_penalty", "box", "certified_lower_bound", "branch", "facility", "cardinality", "sparse", "minorant"})
+        has_coupled_nonseparable_card = any(
+            _clause_has_unnegated_term(cl, ("pairwise_group_penalty", "non_separable_cardinality", "coupled_cardinality"))
+            for cl in clauses
+        )
+        if not has_box_l0:
             vetoes.append("no_box_or_cardinality_certified_bound_subproblem")
+            reimpl_saved = 0.0
+        elif has_coupled_nonseparable_card:
+            vetoes.append("non_separable_coupled_cardinality_violates_additive_coordinate_l0_precondition")
             reimpl_saved = 0.0
         elif bool(q_toks & {"facility", "capacitated", "integer", "binary"}) and not bool(q_toks & {"ridge", "least", "sensor", "regression", "x"}):
             vetoes.append("linear_mip_facility_demand_mismatch_vs_quadratic_design_gram_bound")
             adapt_cost += 2.0
+        else:
+            function_applicability = {
+                "row_incidence_blocks": "APPLICABLE_SUBROUTINE(real_2d_design_matrix)",
+                "gram_diagonal_minorant": "APPLICABLE_SUBROUTINE(real_2d_design_psd_minorant)",
+                "box_ridge_cube_lower_bound": "APPLICABLE_SUBROUTINE(real_symmetric_box_separable_l0_ridge)",
+            }
+            if affirms_complex_stage:
+                partial_subroutine_note = "applicable_to_real_design_stage_only; complex_stage_arrays_must_not_be_passed"
     elif stem == "autogenous_prim_reference_panel_balancing":
         reimpl_saved = 1.7
-        if not bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "control", "controls", "reference"}):
+        has_panel_groups = bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "panel"})
+        if affirms_complex_stage and not has_panel_groups:
+            vetoes.append("complex_pilot_calibration_has_no_discrete_group_or_stratum_panel")
+            reimpl_saved = 0.0
+        elif not bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "control", "controls", "reference"}):
             vetoes.append("no_grouped_control_panel_or_stratum_balancing_structure")
             reimpl_saved = 0.0
         elif bool(q_toks & {"quadratic", "2d", "row", "col", "spatial"}) and not bool(q_toks & {"center", "centers", "site", "sites", "stratum", "strata", "missing", "nan"}):
             vetoes.append("spatial_2d_polynomial_plate_gain_mismatch_vs_scalar_group_median_alignment")
             adapt_cost += 1.3
+        else:
+            function_applicability = {
+                "align_reference_panel": "APPLICABLE_SUBROUTINE(real_2d_values_and_controls_per_group)",
+                "balanced_cell_weights": "APPLICABLE_SUBROUTINE(discrete_group_and_stratum_vectors)",
+                "weighted_column_fill": "APPLICABLE_SUBROUTINE(real_2d_matrix_with_nan_and_positive_weights)",
+            }
     elif stem == "autogenous_prim_robust_trend_decomposition":
         reimpl_saved = 1.6
-        if "complex128" in q_low or ("helmholtz" in q_toks and "wrapped_phase_obs" in q_low):
+        has_real_trend_or_irls_clause = any(
+            _clause_has_unnegated_term(cl, ("float64", "real", "panel", "cohort", "biomarker", "biomarkers", "potency", "creep", "viscoelastic", "relaxation"))
+            and _clause_has_unnegated_term(
+                cl,
+                ("irls", "cauchy", "huber", "robust", "relaxation", "creep", "viscoelastic", "step", "breakpoint", "unloading", "hereditary", "memory", "potency"),
+            )
+            and not _clause_has_unnegated_term(cl, ("complex128", "complex", "helmholtz", "wrapped_phase_obs", "phasor", "eigenvalues", "diverge"))
+            for cl in clauses
+        )
+        if affirms_complex_stage and not has_real_trend_or_irls_clause:
             vetoes.append("complex_phasor_wrapped_phase_violates_real_1d_precondition")
             reimpl_saved = 0.0
-        elif not bool(q_toks & {"relaxation", "creep", "step", "breakpoint", "unloading", "hereditary", "memory", "drift", "outlier", "spikes", "cauchy"}):
+            function_applicability = {
+                "cauchy_linear_fit": "REJECTED_HARD_PRECONDITION(real_design_and_response_required)",
+                "fit_anchored_relaxation": "REJECTED_HARD_PRECONDITION(real_1d_time_series_required)",
+                "fit_local_level_step": "REJECTED_HARD_PRECONDITION(real_1d_series_required)",
+            }
+        elif not bool(q_toks & {"relaxation", "creep", "viscoelastic", "step", "breakpoint", "unloading", "hereditary", "memory", "drift", "outlier", "outliers", "spikes", "cauchy", "irls", "robust"}):
             vetoes.append("no_robust_linear_or_relaxation_step_subproblem")
             reimpl_saved = 0.0
-        elif not bool(q_toks & {"time", "timestamps", "relaxation", "creep", "step", "memory", "tau"}):
-            reimpl_saved = 0.85
+        else:
+            has_time_series = bool(q_toks & {"time", "timestamps", "relaxation", "creep", "viscoelastic", "step", "memory", "tau"})
+            if not has_time_series:
+                reimpl_saved = 1.15
+                function_applicability = {
+                    "cauchy_linear_fit": "APPLICABLE_SUBROUTINE(real_full_rank_design_and_1d_target)",
+                    "fit_anchored_relaxation": "NOT_NEEDED_FOR_STATIC_REGRESSION(1d_monotone_time_relaxation_only)",
+                    "fit_local_level_step": "NOT_NEEDED_FOR_STATIC_REGRESSION(1d_step_split_only)",
+                }
+            else:
+                function_applicability = {
+                    "cauchy_linear_fit": "APPLICABLE_SUBROUTINE(real_full_rank_design_and_1d_target)",
+                    "fit_anchored_relaxation": "APPLICABLE_SUBROUTINE(real_1d_increasing_time_relaxation)",
+                    "fit_local_level_step": "APPLICABLE_SUBROUTINE(real_1d_step_series)",
+                }
+            if affirms_complex_stage:
+                partial_subroutine_note = "applicable_to_real_float64_subproblem_stage_only; do_not_pass_complex_stage_arrays"
     elif stem == "autogenous_prim_ridge_profiled_matching":
         reimpl_saved = 1.45
-        if "wrapped_phase_obs" in q_low and "helmholtz" in q_toks and not bool(q_toks & {"nuisance", "whitener"}):
-            vetoes.append("polar_wrapped_phase_outlier_survey_has_no_linear_nuisance_subspace_projection")
+        has_real_nuisance_clause = any(
+            _clause_has_unnegated_term(cl, ("nuisance", "whitener", "profiled", "nuisance_design", "nuisance_ridge"))
+            and not _clause_has_unnegated_term(cl, ("wrapped_phase_obs",))
+            for cl in clauses
+        )
+        if affirms_complex_stage and not has_real_nuisance_clause:
+            vetoes.append("polar_wrapped_phase_outlier_survey_has_no_real_linear_nuisance_subspace_projection")
             reimpl_saved = 0.0
-        elif not bool(q_toks & {"tomography", "plume", "anomaly", "source", "kernel", "candidate", "grid", "nuisance", "offset", "ridge", "basis"}):
+        elif not bool(q_toks & {"tomography", "plume", "anomaly", "source", "kernel", "candidate", "grid", "nuisance", "offset", "ridge", "basis", "profiled"}):
             vetoes.append("no_nuisance_projected_kernel_matching_subproblem")
             reimpl_saved = 0.0
+        else:
+            function_applicability = {
+                "fit_ridge_nuisance": "APPLICABLE_SUBROUTINE(real_design_and_observations_ridge_whitener)",
+                "profile_candidate_amplitudes": "APPLICABLE_SUBROUTINE(real_schur_complement_amplitude_profiling)",
+            }
     elif stem == "autogenous_prim_robust_affine_projection":
         reimpl_saved = 1.55
-        if "complex128" in q_low or ("helmholtz" in q_toks and "wrapped_phase_obs" in q_low):
+        has_real_affine_or_robust_clause = any(
+            _clause_has_unnegated_term(cl, ("float64", "real", "panel", "cohort", "biomarker", "biomarkers", "potency", "creep", "viscoelastic"))
+            and _clause_has_unnegated_term(
+                cl,
+                ("affine", "gain", "offset", "irls", "cauchy", "huber", "robust", "propagate", "transition", "trajectory", "memory", "potency"),
+            )
+            and not _clause_has_unnegated_term(cl, ("complex128", "complex", "helmholtz", "wrapped_phase_obs", "phasor", "eigenvalues", "diverge"))
+            for cl in clauses
+        )
+        if affirms_complex_stage and not has_real_affine_or_robust_clause:
             vetoes.append("complex_phasor_wrapped_phase_violates_real_float64_precondition")
             reimpl_saved = 0.0
-        elif not bool(q_toks & {"affine", "gain", "offset", "robust", "cauchy", "huber", "outliers", "outlier", "transition", "propagate", "trajectory", "memory"}):
+            function_applicability = {
+                "propagate_linear_basis": "REJECTED_HARD_PRECONDITION(real_state_space_required)",
+                "profile_weighted_affine": "REJECTED_HARD_PRECONDITION(real_2d_predictor_and_target_required)",
+                "robust_residual_weights": "REJECTED_HARD_PRECONDITION(real_residuals_required)",
+            }
+        elif not bool(q_toks & {"affine", "gain", "offset", "robust", "cauchy", "huber", "outliers", "outlier", "irls", "transition", "propagate", "trajectory", "memory"}):
             vetoes.append("no_affine_nuisance_or_linear_state_propagation_subproblem")
             reimpl_saved = 0.0
+        else:
+            function_applicability = {
+                "propagate_linear_basis": "APPLICABLE_SUBROUTINE(real_linear_transition_and_2d_initial_basis)",
+                "profile_weighted_affine": "APPLICABLE_SUBROUTINE(real_2d_predictor_3d_sensitivity_2d_target)",
+                "robust_residual_weights": "APPLICABLE_SUBROUTINE(real_residual_array_positive_scale)",
+            }
+            if affirms_complex_stage:
+                partial_subroutine_note = "applicable_to_real_float64_subproblem_stage_only; do_not_pass_complex_stage_arrays"
 
     heuristic_score = round((reimpl_saved + 0.08 * min(cap_score, 8.0)) - context_cost - adapt_cost, 4) if qualified else -9.99
     status = (
@@ -2107,11 +2303,19 @@ def collect_recalled_executable_wormhole_sources(
         "progressive",
         "progressive_knowledge_only",
         "demand_triggered_zero_tax",
+        "on_demand_executable",
+        "on_demand_knowledge_only",
     }, f"Invalid disclosure_mode={disclosure_mode}"
     assert staging_policy in {"all_compatible", "net_value_gated"}, f"Invalid staging_policy={staging_policy}"
-    is_knowledge_only = disclosure_mode == "progressive_knowledge_only"
-    is_demand_zero_tax = disclosure_mode == "demand_triggered_zero_tax"
-    is_progressive_like = disclosure_mode in {"progressive", "progressive_knowledge_only", "demand_triggered_zero_tax"}
+    is_knowledge_only = disclosure_mode in {"progressive_knowledge_only", "on_demand_knowledge_only"}
+    is_demand_zero_tax = disclosure_mode in {"demand_triggered_zero_tax", "on_demand_executable", "on_demand_knowledge_only"}
+    is_progressive_like = disclosure_mode in {
+        "progressive",
+        "progressive_knowledge_only",
+        "demand_triggered_zero_tax",
+        "on_demand_executable",
+        "on_demand_knowledge_only",
+    }
     is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
     allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
 
@@ -2190,10 +2394,10 @@ def collect_recalled_executable_wormhole_sources(
                 "compiled_code_sha256_8": c_sha[:8],
                 "index_cards": cards,
             }
-            if net_value_eval is not None:
+            if net_value_eval is not None and staging_policy == "net_value_gated":
                 entry["heuristic_recommendation_score"] = net_value_eval["heuristic_recommendation_score"]
-                if net_value_eval.get("function_level_applicability"):
-                    entry["function_level_applicability"] = net_value_eval["function_level_applicability"]
+                if net_value_eval.get("partial_subroutine_note"):
+                    entry["partial_subroutine_note"] = net_value_eval["partial_subroutine_note"]
         else:
             entry = {
                 "module_import": f"hegel_wormhole_skills.{stem}",
@@ -2250,7 +2454,9 @@ def collect_recalled_executable_wormhole_sources(
             l1_pool_notes.append(arch_rec)
             seen_pool_nids.add(str(arch_nid))
 
-    l1_candidates_by_fname: dict[str, tuple[float, str, dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
+    # `M9.1.1` `C2`: Collect ALL distinct `(af_name, actual_code_sha256)` L1 versions first so `notes` iteration order
+    # NEVER silently shadows a competing content version!
+    l1_versions_by_key: dict[tuple[str, str], tuple[float, float, str, dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
     for p_note in l1_pool_notes:
         p_nid = str(p_note.get("node_id") or "")
         for auto_mod in p_note.get("autogenous_wormhole_modules", []):
@@ -2263,16 +2469,42 @@ def collect_recalled_executable_wormhole_sources(
             if not is_l1:
                 continue
             nv_eval = evaluate_l1_skill_staging_net_value(auto_mod, p_nid, recalled_nid_set, task_query_text)
+            c_sha_v = str(nv_eval["compiled_code_sha256"] or hashlib.sha256(str(auto_mod.get("python_code") or "").encode("utf-8")).hexdigest())
             sc = float(nv_eval["capability_score"])
             sort_key = float(nv_eval["expected_net_value"]) if staging_policy == "net_value_gated" else sc
-            prev_c = l1_candidates_by_fname.get(af_name)
-            if prev_c is None or sort_key > prev_c[0]:
-                l1_candidates_by_fname[af_name] = (sort_key, p_nid, p_note, auto_mod, nv_eval)
+            v_key = (af_name, c_sha_v)
+            prev_v = l1_versions_by_key.get(v_key)
+            if prev_v is None or (sort_key, sc, p_nid) > (prev_v[0], prev_v[1], prev_v[2]):
+                l1_versions_by_key[v_key] = (sort_key, sc, p_nid, p_note, auto_mod, nv_eval)
+
+    selection_diagnostics["superseded_l1_versions"] = []
+    l1_candidates_by_fname: dict[str, tuple[float, str, dict[str, Any], dict[str, Any], dict[str, Any]]] = {}
+    by_fname_versions: dict[str, list[tuple[float, float, str, str, dict[str, Any], dict[str, Any], dict[str, Any]]]] = {}
+    for (af_name, c_sha_v), (sort_key, sc, p_nid, p_note, auto_mod, nv_eval) in sorted(l1_versions_by_key.items()):
+        selection_diagnostics["net_value_evaluations"].append(nv_eval)
+        by_fname_versions.setdefault(af_name, []).append((sort_key, sc, c_sha_v, p_nid, p_note, auto_mod, nv_eval))
+
+    for af_name, ver_list in sorted(by_fname_versions.items()):
+        # Order-invariant canonical winner selection: highest `sort_key`, highest `sc`, qualified first, then lexical `code_sha256`!
+        ver_list.sort(key=lambda t: (-int(bool(t[6]["qualified"])), -t[0], -t[1], t[2]))
+        win_sort, _win_sc, win_sha, win_nid, win_note, win_mod, win_nv = ver_list[0]
+        l1_candidates_by_fname[af_name] = (win_sort, win_nid, win_note, win_mod, win_nv)
+        for sup_sort, sup_sc, sup_sha, sup_nid, _sup_note, _sup_mod, _sup_nv in ver_list[1:]:
+            sup_rec = {
+                "filename": af_name,
+                "superseded_code_sha256": sup_sha,
+                "selected_winner_code_sha256": win_sha,
+                "source_node": sup_nid,
+                "score": sup_sc,
+                "expected_net_value": sup_sort,
+                "reason": "superseded_duplicate_stem_by_canonical_version_policy",
+            }
+            selection_diagnostics["superseded_l1_versions"].append(sup_rec)
+            selection_diagnostics["excluded_l1_candidates"].append(sup_rec)
 
     ranked_l1 = sorted(l1_candidates_by_fname.items(), key=lambda kv: (-kv[1][0], kv[0]))
     staged_l1_count = 0
     for af_name, (sort_val, src_nid, src_note, auto_mod, nv_eval) in ranked_l1:
-        selection_diagnostics["net_value_evaluations"].append(nv_eval)
         py_src = str(auto_mod["python_code"])
         sc = float(nv_eval["capability_score"])
         math_pre = list(auto_mod.get("mathematical_preconditions") or auto_mod.get("scope_preconditions") or [])
@@ -2510,25 +2742,58 @@ def stage_recalled_executable_wormholes_in_container(
     if not modules_to_write:
         return []
 
-    if disclosure_mode == "progressive_knowledge_only":
-        # `M9.0a` Knowledge-Only Isolation Arm: Identical contracts, preconditions, & readable reference code, ZERO importable Python package!
+    if disclosure_mode in {"progressive_knowledge_only", "on_demand_knowledge_only"}:
+        # `M9.0a` + `M9.2` Equal-Information Knowledge-Only Arm (`--list`, `--search`, `--describe`, `.reference.txt`, ZERO importable Python package!)
         describe_ref_py = (
-            "import argparse, json, os, time\n"
+            "import argparse, json, os, re, time\n"
             "from pathlib import Path\n"
             "HERE = Path(__file__).resolve().parent\n"
             "LOG = Path(os.environ.get('HEGEL_SKILL_INSPECTION_LOG', '/tmp/.hegel_skill_inspections.jsonl'))\n"
             "cat = json.loads((HERE / '_skill_contracts.json').read_text(encoding='utf-8'))\n"
             "ap = argparse.ArgumentParser()\n"
             "ap.add_argument('--list', action='store_true')\n"
+            "ap.add_argument('--search', type=str, default='')\n"
             "ap.add_argument('--describe', type=str, default='')\n"
             "args = ap.parse_args()\n"
-            "def _log(ev, tgt):\n"
+            "def _log(ev, tgt, **extra):\n"
             "    try:\n"
             "        with LOG.open('a', encoding='utf-8') as f:\n"
-            "            f.write(json.dumps({'event': ev, 'target': tgt, 'mode': 'knowledge_only_ref', 'ts': time.time()}) + '\\n')\n"
+            "            f.write(json.dumps({'event': ev, 'target': tgt, 'mode': 'knowledge_only_ref', 'ts': time.time(), **extra}) + '\\n')\n"
             "    except OSError:\n"
             "        pass\n"
-            "if args.list:\n"
+            "if args.search:\n"
+            "    ql = args.search.lower()\n"
+            "    rw = set(re.findall(r'[a-zA-Z0-9]{2,}', re.sub(r'[_./-]+', ' ', ql)))\n"
+            "    sgs = (\n"
+            "        {'robust','regression','outlier','outliers','irls','cauchy','huber','lorentzian','glitch','spikes','residual','weights'},\n"
+            "        {'certified','certificate','lower','bound','bounds','l0','sparse','box','subcube','cube','minorant','branch','blocks'},\n"
+            "        {'preconditioner','multigrid','amg','galerkin','cg','conjugate','spd','elliptic','poisson','diffusion','robin'},\n"
+            "        {'panel','reference','control','controls','cohort','batch','center','stratum','strata','imputation','missing','align','balanced','fill'},\n"
+            "        {'nuisance','profile','profiled','profiling','whitener','schur','tomography','amplitudes','matching'},\n"
+            "        {'relaxation','creep','viscoelastic','memory','hereditary','prony','step','breakpoint','tau','trend'},\n"
+            "    )\n"
+            "    ex = set(rw)\n"
+            "    for g in sgs:\n"
+            "        if rw & g: ex |= g\n"
+            "    scored = []\n"
+            "    for s in cat['skills']:\n"
+            "        mst = s['module_stem']; fmap = s.get('function_level_applicability') or {}\n"
+            "        isl1 = 1.0 if s.get('granularity_tier') == 'L1_compositional_primitive' else 0.0\n"
+            "        fns = s.get('functions', [])\n"
+            "        for ix, c in enumerate(s.get('index_cards', [])):\n"
+            "            fi = fns[ix] if ix < len(fns) else {}; fnm = str(fi.get('function') or '')\n"
+            "            astat = str(fmap.get(fnm) or '')\n"
+            "            if astat.startswith('REJECTED_'): continue\n"
+            "            fw = set(re.findall(r'[a-zA-Z0-9]{2,}', re.sub(r'[_./-]+', ' ', ' '.join([mst, fnm, str(fi.get('signature') or ''), str(fi.get('doc_summary') or '')]).lower())))\n"
+            "            dh = len(rw & fw); sh = len(ex & fw); eb = 6.0 if (fnm and fnm.lower() in ql) else (3.0 if mst.lower() in ql else 0.0)\n"
+            "            sc = 3.0*dh + 1.2*sh + eb + (0.5*isl1 if (dh+sh)>0 else 0.0)\n"
+            "            if not rw: sc = 1.0 + isl1\n"
+            "            if sc > 0: scored.append((sc, c))\n"
+            "    scored.sort(key=lambda x: (-x[0], x[1]))\n"
+            "    top = [c for _, c in scored[:6]]\n"
+            "    _log('skill_search_executed', args.search, query=args.search, returned_card_count=len(top))\n"
+            "    print('\\n'.join(top) if top else 'No matching reference cards found.')\n"
+            "elif args.list:\n"
             "    _log('skill_index_listed', '__all__')\n"
             "    print(json.dumps([{'module_stem': s['module_stem'], 'index_cards': s['index_cards']} for s in cat['skills']], indent=2))\n"
             "elif args.describe:\n"
@@ -2542,8 +2807,11 @@ def stage_recalled_executable_wormholes_in_container(
             "        print(json.dumps({'ok': False, 'error': f'unknown_reference:{q}'}))\n"
             "    else:\n"
             "        fns = [f for f in hit['functions'] if (not fn_nm or f['function'] == fn_nm)]\n"
-            "        _log('skill_contract_delivered', q)\n"
-            "        print(json.dumps({'ok': True, 'module_stem': m_st, 'compiled_code_sha256': hit['compiled_code_sha256'], 'mathematical_preconditions': hit['mathematical_preconditions'], 'function_level_applicability': hit.get('function_level_applicability', {}), 'functions': fns, 'reference_source_txt': str(HERE / (m_st + '.reference.txt'))}, indent=2))\n"
+            "        if not fns:\n"
+            "            print(json.dumps({'ok': False, 'error': f'unknown_function_in_reference:{q}'}))\n"
+            "        else:\n"
+            "            _log('skill_contract_delivered', q, matched_module_count=1)\n"
+            "            print(json.dumps({'ok': True, 'module_stem': m_st, 'compiled_code_sha256': hit['compiled_code_sha256'], 'mathematical_preconditions': hit['mathematical_preconditions'], 'function_level_applicability': hit.get('function_level_applicability', {}), 'functions': fns, 'reference_source_txt': str(HERE / (m_st + '.reference.txt'))}, indent=2))\n"
         )
         with tempfile.TemporaryDirectory(prefix="hegel_m90_knowref_") as tmp_k:
             ref_dir = Path(tmp_k) / "hegel_knowledge_ref"
@@ -3724,13 +3992,43 @@ def inspect_final_deliverable_skill_retention(
                 lhs = stmt.targets[0].id
                 if isinstance(stmt.value, ast.Call) and isinstance(stmt.value.func, ast.Name) and stmt.value.func.id in loader_fn_to_stem:
                     ns_var_to_stem[lhs] = loader_fn_to_stem[stmt.value.func.id]
+                    alias_to_mod_and_sym.pop(lhs, None)
                 elif isinstance(stmt.value, ast.Attribute) and isinstance(stmt.value.value, ast.Name) and stmt.value.value.id in ns_var_to_stem:
                     st_m = ns_var_to_stem[stmt.value.value.id]
                     alias_to_mod_and_sym[lhs] = (st_m, stmt.value.attr)
+                    ns_var_to_stem.pop(lhs, None)
                 elif isinstance(stmt.value, ast.Name) and stmt.value.id in ns_var_to_stem:
                     ns_var_to_stem[lhs] = ns_var_to_stem[stmt.value.id]
+                    alias_to_mod_and_sym.pop(lhs, None)
                 elif isinstance(stmt.value, ast.Name) and stmt.value.id in alias_to_mod_and_sym:
                     alias_to_mod_and_sym[lhs] = alias_to_mod_and_sym[stmt.value.id]
+                    ns_var_to_stem.pop(lhs, None)
+                else:
+                    # `M9.1.1` `C6`: Top-level rebinding to a non-skill value revokes prior skill/namespace alias!
+                    alias_to_mod_and_sym.pop(lhs, None)
+                    ns_var_to_stem.pop(lhs, None)
+            elif isinstance(stmt, ast.Assign):
+                for tgt_n in stmt.targets:
+                    for sub_t in ast.walk(tgt_n):
+                        if isinstance(sub_t, ast.Name) and isinstance(sub_t.ctx, ast.Store):
+                            alias_to_mod_and_sym.pop(sub_t.id, None)
+                            ns_var_to_stem.pop(sub_t.id, None)
+            elif isinstance(stmt, ast.AnnAssign) and isinstance(stmt.target, ast.Name):
+                alias_to_mod_and_sym.pop(stmt.target.id, None)
+                ns_var_to_stem.pop(stmt.target.id, None)
+            elif isinstance(stmt, ast.Delete):
+                for del_t in stmt.targets:
+                    if isinstance(del_t, ast.Name):
+                        alias_to_mod_and_sym.pop(del_t.id, None)
+                        ns_var_to_stem.pop(del_t.id, None)
+            elif isinstance(stmt, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and not stmt.name.startswith("__hegel_load_skill_"):
+                alias_to_mod_and_sym.pop(stmt.name, None)
+                ns_var_to_stem.pop(stmt.name, None)
+            elif isinstance(stmt, (ast.Import, ast.ImportFrom)):
+                for al_i in stmt.names:
+                    bound_nm = al_i.asname or al_i.name.split(".")[0]
+                    alias_to_mod_and_sym.pop(bound_nm, None)
+                    ns_var_to_stem.pop(bound_nm, None)
 
         verified_stems_in_file: set[str] = set()
         verified_symbols_in_file: set[str] = set()
@@ -3878,11 +4176,61 @@ def inspect_final_deliverable_skill_retention(
             ]
             eff_entrypoints = non_dead_pub if non_dead_pub else all_pub_funcs
 
-        def _extract_scope_calls(fn_node: ast.FunctionDef | ast.AsyncFunctionDef) -> tuple[set[str], set[tuple[str, str]]]:
-            """Collect calls executed within `fn_node` WITHOUT descending into uncalled nested `def`/`class` scopes (`R3`)!"""
+        def _extract_scope_calls(
+            fn_node: ast.FunctionDef | ast.AsyncFunctionDef,
+            outer_shadowed: frozenset[str] = frozenset(),
+        ) -> tuple[set[str], set[tuple[str, str]]]:
+            """Collect calls executed within `fn_node` WITHOUT descending into uncalled nested `def`/`class` scopes (`R3`)
+            AND excluding identifiers locally shadowed by parameters, assignments, imports, or nested defs (`M9.1.1` `C6`)!
+            """
             nested_defs: dict[str, ast.FunctionDef | ast.AsyncFunctionDef] = {}
             c_names_local: set[str] = set()
             c_attrs_local: set[tuple[str, str]] = set()
+
+            explicit_globals: set[str] = set()
+            local_bound: set[str] = {
+                *(a.arg for a in fn_node.args.posonlyargs),
+                *(a.arg for a in fn_node.args.args),
+                *(a.arg for a in fn_node.args.kwonlyargs),
+                *([fn_node.args.vararg.arg] if fn_node.args.vararg else []),
+                *([fn_node.args.kwarg.arg] if fn_node.args.kwarg else []),
+            }
+
+            class _LocalBindingScanner(ast.NodeVisitor):
+                def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
+                    local_bound.add(node.name)
+
+                def visit_AsyncFunctionDef(self, node: ast.AsyncFunctionDef) -> None:
+                    local_bound.add(node.name)
+
+                def visit_ClassDef(self, node: ast.ClassDef) -> None:
+                    local_bound.add(node.name)
+
+                def visit_Global(self, node: ast.Global) -> None:
+                    explicit_globals.update(node.names)
+
+                def visit_Name(self, node: ast.Name) -> None:
+                    if isinstance(node.ctx, (ast.Store, ast.Del)):
+                        local_bound.add(node.id)
+
+                def visit_Import(self, node: ast.Import) -> None:
+                    for al_n in node.names:
+                        local_bound.add(al_n.asname or al_n.name.split(".")[0])
+
+                def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
+                    for al_n in node.names:
+                        if al_n.name != "*":
+                            local_bound.add(al_n.asname or al_n.name)
+
+                def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
+                    if node.name:
+                        local_bound.add(node.name)
+                    self.generic_visit(node)
+
+            b_scan = _LocalBindingScanner()
+            for st_item in fn_node.body:
+                b_scan.visit(st_item)
+            eff_shadowed = frozenset((set(outer_shadowed) | local_bound) - explicit_globals)
 
             class _ScopeCallVisitor(ast.NodeVisitor):
                 def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
@@ -3907,11 +4255,14 @@ def inspect_final_deliverable_skill_retention(
 
                 def visit_Call(self, node: ast.Call) -> None:
                     if isinstance(node.func, ast.Name):
-                        c_names_local.add(node.func.id)
+                        callee_id = node.func.id
+                        if callee_id in nested_defs or callee_id not in eff_shadowed:
+                            c_names_local.add(callee_id)
                     elif (
                         isinstance(node.func, ast.Attribute)
                         and isinstance(node.func.value, ast.Name)
                         and node.func.value.id in ns_var_to_stem
+                        and node.func.value.id not in eff_shadowed
                     ):
                         c_attrs_local.add((ns_var_to_stem[node.func.value.id], node.func.attr))
                     self.generic_visit(node)
@@ -3928,14 +4279,16 @@ def inspect_final_deliverable_skill_retention(
                 if cur_n in expanded_nested:
                     continue
                 expanded_nested.add(cur_n)
-                sub_names, sub_attrs = _extract_scope_calls(nested_defs[cur_n])
+                sub_names, sub_attrs = _extract_scope_calls(nested_defs[cur_n], eff_shadowed)
                 for sn in sub_names:
-                    c_names_local.add(sn)
+                    if sn in nested_defs or sn not in eff_shadowed:
+                        c_names_local.add(sn)
                     if sn in nested_defs and sn not in expanded_nested:
                         pending_nested.append(sn)
                 c_attrs_local.update(sub_attrs)
 
-            return c_names_local, c_attrs_local
+            c_names_out = {nm_c for nm_c in c_names_local if nm_c not in eff_shadowed}
+            return c_names_out, c_attrs_local
 
         direct_calls: dict[str, list[str]] = {}
         direct_ns_attr_calls: dict[str, list[tuple[str, str]]] = {}
@@ -3997,6 +4350,8 @@ def inspect_final_deliverable_skill_retention(
         "final_retained_l1_modules": sorted(ret_l1_mods),
         "final_retained_functions": sorted(ret_fns),
         "final_retained_l1_functions": sorted(ret_l1_fns),
+        "closure_exact_present_l1_functions": sorted(ret_l1_fns),
+        "statically_potentially_reachable_l1_functions": sorted(reach_l1_fns),
         "entrypoint_reachable_functions": sorted(reach_fns),
         "entrypoint_reachable_l1_functions": sorted(reach_l1_fns),
         "any_public_function_reachable_functions": sorted(any_pub_reach_fns),

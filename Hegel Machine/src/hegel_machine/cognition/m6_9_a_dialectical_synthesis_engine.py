@@ -1982,6 +1982,7 @@ def run_m6_9_a_two_branch_episode(
                                     # `M88-REPAIR-SYNTH-PKG`: build deterministic skill source map from `forest_archive` + recalled notes so
                                     # `execute_in_container_local_repair` automatically bundles `hegel_wormhole_skills` closures before probing!
                                     repair_skill_sources: dict[str, str] = {}
+                                    repair_skill_preconditions: dict[str, list[Any]] = {}
                                     for _rnid, _rrec in (forest_archive or {}).items():
                                         if str(_rnid).startswith("__") or not isinstance(_rrec, dict):
                                             continue
@@ -1990,7 +1991,11 @@ def run_m6_9_a_two_branch_episode(
                                             if (not allow_l1_primitives) and (_rfname.startswith("autogenous_prim_") or _rmod.get("granularity_tier") == "L1_compositional_primitive"):
                                                 continue
                                             if _rfname and _rmod.get("python_code"):
-                                                repair_skill_sources.setdefault(Path(_rfname).stem, str(_rmod["python_code"]))
+                                                _rstem = Path(_rfname).stem
+                                                repair_skill_sources.setdefault(_rstem, str(_rmod["python_code"]))
+                                                _rpre = list(_rmod.get("mathematical_preconditions") or _rmod.get("scope_preconditions") or [])
+                                                if _rpre:
+                                                    repair_skill_preconditions.setdefault(_rstem, _rpre)
                                     local_repair_summary = execute_in_container_local_repair(
                                         probe_cid=probe_cid,
                                         task=task,
@@ -2002,6 +2007,7 @@ def run_m6_9_a_two_branch_episode(
                                         stage_subdir=f"{run_id}__{model}__M8LocalRepair__{task.task_id}".replace(":", "_"),
                                         defer_guard_commit=True,
                                         staged_skill_sources_by_stem=repair_skill_sources,
+                                        staged_skill_preconditions_by_stem=repair_skill_preconditions,
                                     )
                                     if local_repair_summary.get("repaired_verified"):
                                         repaired_tar = antithesis_dir / "repaired_declared_artifacts.tar"

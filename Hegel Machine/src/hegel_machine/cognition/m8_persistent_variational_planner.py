@@ -1760,15 +1760,33 @@ def _normalize_probe_observation_context(probe_item: dict[str, Any]) -> dict[str
     preserving multi-scale temporal fields (`past_driver_history`, `history_dt`, `timestamps`, `trajectory_ids`, `initial_memory_states`).
     """
     if "x" in probe_item and isinstance(probe_item["x"], dict):
-        x_map = {str(k): np.atleast_1d(np.asarray(v, dtype=float)) for k, v in probe_item["x"].items()}
+        x_map = {str(k): np.atleast_1d(np.asarray(v, dtype=float)).ravel() for k, v in probe_item["x"].items()}
         n_rows = len(next(iter(x_map.values()))) if x_map else 1
         ctx: dict[str, Any] = {"x": x_map, "y": np.zeros(n_rows, dtype=float)}
         for t_key in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states"):
             if probe_item.get(t_key) is not None:
                 ctx[t_key] = deepcopy(probe_item[t_key])
         return ctx
-    x_map = {str(k): np.array([float(v)], dtype=float) for k, v in probe_item.items()}
-    return {"x": x_map, "y": np.zeros(1, dtype=float)}
+    x_map = {str(k): np.atleast_1d(np.asarray(v, dtype=float)).ravel() for k, v in probe_item.items()}
+    n_rows = len(next(iter(x_map.values()))) if x_map else 1
+    return {"x": x_map, "y": np.zeros(n_rows, dtype=float)}
+
+
+def _evaluate_task_model_on_probe_input(
+    model: TaskModel,
+    graph: PersistentMechanismGraph,
+    probe_or_x: dict[str, Any],
+) -> np.ndarray:
+    """Unified `predict(ObservationContext | flat_x)` adapter (`M9.1.1` `C6`): never double-wraps `ObservationContext`!"""
+    ctx_ds = _normalize_probe_observation_context(probe_or_x)
+    if model.temporal_memory_id is not None and not any(
+        ctx_ds.get(tk) is not None for tk in ("past_driver_history", "timestamps")
+    ):
+        raise ValueError(
+            f"Temporal model `{model.model_id}` (`temporal_memory_id={model.temporal_memory_id}`) requires "
+            "explicit `past_driver_history` or `timestamps` in `ObservationContext`; refusing silent static fallback."
+        )
+    return np.asarray(evaluate_committed_task_model(model, graph, ctx_ds)["predictions"], dtype=float)
 
 
 def select_discriminating_observation_probe(
@@ -2173,8 +2191,8 @@ class M8VariationalPlanner:
                 sc_r = fit_and_score_task_model(m_reuse, self.graph, ds_tr, ds_va, prior_shrinkage=1e-2, commit_to_model=True)
                 gain_r = float(sc_r["val_mean_log_predictive"] - base_val_lp)
 
-                def _make_pred_r(m_snap=deepcopy(m_reuse)) -> Callable[[dict[str, np.ndarray]], np.ndarray]:
-                    return lambda x_in: evaluate_committed_task_model(m_snap, self.graph, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"]
+                def _make_pred_r(m_snap=deepcopy(m_reuse)) -> Callable[[dict[str, Any]], np.ndarray]:
+                    return lambda x_in: _evaluate_task_model_on_probe_input(m_snap, self.graph, x_in)
 
                 def _apply_reuse(g: PersistentMechanismGraph, m_new=m_reuse, mech_id=mid) -> None:
                     g.mechanisms[mech_id].dependent_task_ids.add(task_id)
@@ -2238,7 +2256,7 @@ class M8VariationalPlanner:
                     actual_cost_spent=0.05,
                     val_log_predictive_gain=gain_mr,
                     variational_free_energy_delta=float(base_fe - sc_mr["variational_free_energy"]),
-                    predict_fn=lambda x_in, ms=deepcopy(m_mreuse): evaluate_committed_task_model(ms, self.graph, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                    predict_fn=lambda x_in, ms=deepcopy(m_mreuse): _evaluate_task_model_on_probe_input(ms, self.graph, x_in),
                     apply_fn=_apply_mem_reuse,
                     metadata={
                         "recalled_mechanism_id": mid,
@@ -2391,7 +2409,7 @@ class M8VariationalPlanner:
                 actual_cost_spent=0.0,
                 val_log_predictive_gain=0.0,
                 variational_free_energy_delta=0.0,
-                predict_fn=lambda x_in: evaluate_committed_task_model(incumbent, self.graph, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                predict_fn=lambda x_in: _evaluate_task_model_on_probe_input(incumbent, self.graph, x_in),
             )
         ]
 
@@ -2462,7 +2480,7 @@ class M8VariationalPlanner:
                     actual_cost_spent=0.10,
                     val_log_predictive_gain=float(sc_refit["val_mean_log_predictive"] - base_val_lp),
                     variational_free_energy_delta=float(base_fe - sc_refit["variational_free_energy"]),
-                    predict_fn=lambda x_in, ms=deepcopy(m_refit): evaluate_committed_task_model(ms, self.graph, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                    predict_fn=lambda x_in, ms=deepcopy(m_refit): _evaluate_task_model_on_probe_input(ms, self.graph, x_in),
                     apply_fn=_apply_local_refit,
                 )
             )
@@ -2567,7 +2585,7 @@ class M8VariationalPlanner:
                         collateral_min_delta=coll_min,
                         unrelated_max_abs_drift=max(unrel_drifts) if unrel_drifts else 0.0,
                         variational_free_energy_delta=float(base_fe - sc_anc["variational_free_energy"]),
-                        predict_fn=lambda x_in, ms=deepcopy(m_anc_self), sg=sim_graph: evaluate_committed_task_model(ms, sg, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                        predict_fn=lambda x_in, ms=deepcopy(m_anc_self), sg=sim_graph: _evaluate_task_model_on_probe_input(ms, sg, x_in),
                         apply_fn=_apply_anc,
                         metadata={
                             "new_shared_weights": new_shared_weights,
@@ -2641,7 +2659,7 @@ class M8VariationalPlanner:
                             actual_cost_spent=0.20,
                             val_log_predictive_gain=gain_sp,
                             variational_free_energy_delta=float(base_fe - sc_sp["variational_free_energy"]),
-                            predict_fn=lambda x_in, ms=deepcopy(m_sp), sg=sim_g: evaluate_committed_task_model(ms, sg, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                            predict_fn=lambda x_in, ms=deepcopy(m_sp), sg=sim_g: _evaluate_task_model_on_probe_input(ms, sg, x_in),
                             apply_fn=_apply_sp,
                             metadata={"scope_guard": guard_spec, "gate_scale": fixed_g_scale},
                         )
@@ -2814,7 +2832,7 @@ class M8VariationalPlanner:
                     actual_cost_spent=(2.45 if c_src == "gpt_cli_codex" else 0.05),
                     val_log_predictive_gain=gain_lf,
                     variational_free_energy_delta=float(base_fe - sc_lf["variational_free_energy"]),
-                    predict_fn=lambda x_in, ms=deepcopy(m_lf), sg=sim_g: evaluate_committed_task_model(ms, sg, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                    predict_fn=lambda x_in, ms=deepcopy(m_lf), sg=sim_g: _evaluate_task_model_on_probe_input(ms, sg, x_in),
                     apply_fn=_apply_lf,
                     metadata={"expression": cexpr, "source": c_src, "empirical_lipschitz": cond_info["empirical_lipschitz"], **c_meta},
                 )
@@ -2875,7 +2893,7 @@ class M8VariationalPlanner:
                         actual_cost_spent=0.15,
                         val_log_predictive_gain=gain_mem,
                         variational_free_energy_delta=float(base_fe - sc_mem["variational_free_energy"]),
-                        predict_fn=lambda x_in, ms=deepcopy(m_mem), sg=sim_g: evaluate_committed_task_model(ms, sg, {"x": x_in, "y": np.zeros(len(next(iter(x_in.values()))))})["predictions"],
+                        predict_fn=lambda x_in, ms=deepcopy(m_mem), sg=sim_g: _evaluate_task_model_on_probe_input(ms, sg, x_in),
                         apply_fn=_apply_mem,
                         metadata={"temporal_tau": tau_cand, "driver_col": drv_col},
                     )
@@ -2936,17 +2954,72 @@ class M8VariationalPlanner:
 
                         def _apply_probe(g: PersistentMechanismGraph, psel=probe_sel) -> None:
                             if probe_oracle_fn is not None and psel.get("selected_probe") is not None:
-                                pt = {str(k): float(v) for k, v in psel["selected_probe"].items()}
-                                y_new = float(probe_oracle_fn(pt))
+                                raw_p = psel["selected_probe"]
+                                norm_ctx = _normalize_probe_observation_context(raw_p)
+                                is_struct_p = "x" in raw_p and isinstance(raw_p["x"], dict)
+                                oracle_arg = deepcopy(raw_p) if is_struct_p else {str(k): float(np.asarray(v).ravel()[0]) for k, v in norm_ctx["x"].items()}
+                                raw_obs = probe_oracle_fn(oracle_arg)  # type: ignore[arg-type]
+                                if isinstance(raw_obs, dict):
+                                    y_arr = np.atleast_1d(np.asarray(raw_obs["y"], dtype=float)).ravel()
+                                    for tk in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states"):
+                                        if raw_obs.get(tk) is not None:
+                                            norm_ctx[tk] = deepcopy(raw_obs[tk])
+                                else:
+                                    y_arr = np.atleast_1d(np.asarray(raw_obs, dtype=float)).ravel()
+                                n_new = len(y_arr)
+                                if n_new < 1 or not bool(np.all(np.isfinite(y_arr))):
+                                    raise ValueError("Oracle returned empty or non-finite observation y")
                                 tr_d = g.task_datasets[task_id]["train"]
-                                for k, v in pt.items():
-                                    tr_d["x"][k] = np.append(np.asarray(tr_d["x"][k], dtype=float), float(v))
-                                tr_d["y"] = np.append(np.asarray(tr_d["y"], dtype=float), y_new)
-                                obs_entry = {"step_index": self._step_counter, "probe_x": pt, "observed_y": y_new, "cost_spent": req_probe_cost}
+                                req_feats = sorted(tr_d["x"].keys())
+                                if sorted(norm_ctx["x"].keys()) != req_feats:
+                                    raise ValueError(f"Probe feature keys {sorted(norm_ctx['x'].keys())} != dataset features {req_feats}")
+                                staged_x: dict[str, np.ndarray] = {}
+                                for k in req_feats:
+                                    v_add = np.atleast_1d(np.asarray(norm_ctx["x"][k], dtype=float)).ravel()
+                                    if len(v_add) != n_new or not bool(np.all(np.isfinite(v_add))):
+                                        raise ValueError(f"Probe feature `{k}` length/nan mismatch vs y ({len(v_add)} != {n_new})")
+                                    staged_x[k] = np.concatenate([np.asarray(tr_d["x"][k], dtype=float).ravel(), v_add])
+                                staged_temporal: dict[str, Any] = {}
+                                for arr_tk in ("past_driver_history", "timestamps", "trajectory_ids", "initial_memory_states"):
+                                    has_existing = arr_tk in tr_d and tr_d[arr_tk] is not None
+                                    has_incoming = arr_tk in norm_ctx and norm_ctx[arr_tk] is not None
+                                    if has_existing and not has_incoming:
+                                        raise ValueError(f"Dataset requires temporal field `{arr_tk}` on AcquireObservation append")
+                                    if has_incoming:
+                                        inc_arr = np.asarray(norm_ctx[arr_tk])
+                                        if inc_arr.shape[0] != n_new:
+                                            raise ValueError(f"Temporal field `{arr_tk}` row count {inc_arr.shape[0]} != {n_new}")
+                                        if has_existing:
+                                            ex_arr = np.asarray(tr_d[arr_tk])
+                                            staged_temporal[arr_tk] = np.concatenate([ex_arr, inc_arr], axis=0)
+                                        else:
+                                            staged_temporal[arr_tk] = inc_arr
+                                if "history_dt" in norm_ctx and norm_ctx["history_dt"] is not None:
+                                    if tr_d.get("history_dt") is not None and abs(float(tr_d["history_dt"]) - float(norm_ctx["history_dt"])) > 1e-12:
+                                        raise ValueError("Incompatible `history_dt` on AcquireObservation append")
+                                    staged_temporal["history_dt"] = float(norm_ctx["history_dt"])
+                                # Atomic commit after all validations pass!
+                                for k, merged_col in staged_x.items():
+                                    tr_d["x"][k] = merged_col
+                                tr_d["y"] = np.concatenate([np.asarray(tr_d["y"], dtype=float).ravel(), y_arr])
+                                for tk_s, tv_s in staged_temporal.items():
+                                    tr_d[tk_s] = tv_s
+                                y_scalar_or_list = float(y_arr[0]) if n_new == 1 else y_arr.tolist()
+                                obs_entry = {
+                                    "step_index": self._step_counter,
+                                    "probe_x": ({k: v.tolist() for k, v in norm_ctx["x"].items()} if is_struct_p else oracle_arg),
+                                    "temporal_context": {
+                                        tk_c: (np.asarray(norm_ctx[tk_c]).tolist() if isinstance(norm_ctx[tk_c], np.ndarray) else norm_ctx[tk_c])
+                                        for tk_c in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states")
+                                        if tk_c in norm_ctx
+                                    },
+                                    "observed_y": y_scalar_or_list,
+                                    "cost_spent": req_probe_cost,
+                                }
                                 g.paid_observations.setdefault(task_id, []).append(obs_entry)
-                                probe_meta["observed_y"] = y_new
+                                probe_meta["observed_y"] = y_scalar_or_list
                                 if chosen_probe_cand is not None:
-                                    chosen_probe_cand.metadata["observed_y"] = y_new
+                                    chosen_probe_cand.metadata["observed_y"] = y_scalar_or_list
                                 g.sync_authoritative_state_to_forest()
 
                         chosen_probe_cand = RevisionCandidate(
