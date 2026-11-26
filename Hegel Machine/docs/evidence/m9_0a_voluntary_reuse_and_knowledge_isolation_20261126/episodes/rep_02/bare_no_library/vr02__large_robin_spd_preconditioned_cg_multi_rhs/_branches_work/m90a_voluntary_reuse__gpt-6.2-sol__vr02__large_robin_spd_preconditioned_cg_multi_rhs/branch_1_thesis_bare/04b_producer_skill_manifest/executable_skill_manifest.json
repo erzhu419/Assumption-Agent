@@ -1,0 +1,66 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_fcc8b20c0b31",
+    "source_hash": "fcc8b20c0b31abf24b0f7d29176f1a8f6c771e4468c81c5027ee57cb7a0767e2",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /pretrain_task; python - <<'PY'\nimport pickle, importlib.util\nfrom pathlib import Path\nfor name in ['numpy','scipy','pyamg']:\n print(name,importlib.util.find_spec(name) is not None)\nx=pickle.loads(Path('/holdout_task/public_robin_spd_cases.pkl').read_bytes())\ndef inspect(x, level=0):\n p='  '*level\n if level>3: return\n if isinstance(x,dict):\n  print(p,'dict:',list(x)[:30]);\n  for k,v in list(x.items())[:18]:\n   print(p,repr(k),end=' ')\n   if hasattr(v,'shape'): print(v.shape,v.dtype, 'range:',v.min() if v.size else None,v.max() if v.size else None)\n   elif isinstance(v,(dic",
+      "command -v python3; python3 - <<'PY'\nimport importlib.util, pickle\nfor name in ('numpy', 'scipy', 'pyamg'):\n    print(name, importlib.util.find_spec(name) is not None)\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f:\n    cases=pickle.load(f)\ndef inspect(obj, depth=0):\n    indent='  '*depth\n    if isinstance(obj, dict):\n        print(indent, list(obj))\n        for k,v in obj.items():\n            if hasattr(v,'shape'):\n                print(indent,k,v.shape,v.dtype, (v.min(),v.max()) if v.size else ())\n            elif isinstance(v,(dict,list,tuple)) and depth<3:\n                ",
+      "cat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Cell-centered Robin diffusion solves and nuisance-profiled source fits.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import spsolve_triangular\n\n\ndef _operator(problem):\n    k = np.asarray(problem['kappa'], dtype=float)\n    nx, ny = k.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    area = hx * hy\n    g = problem['gamma_robin']\n\n    kl, kr = k[:-1, :], k[1:, :]\n    tx = (hy / hx) * (2 * kl * kr / (kl + kr))\n    kl, kr = k[:, :-1], k[:, 1:]\n    ty = (hx / hy) * (2 * kl * kr / (kl + kr))\n\n    d",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 PYTHONDONTWRITEBYTECODE=1 timeout 20s python3 -u - <<'PY'\nimport pickle, time\nimport numpy as np, scipy\nimport robin_spd_profiler as m\nprint('scipy',scipy.__version__,flush=True)\np=pickle.load(open('public_robin_spd_cases.pkl','rb'))[0]['problem']; A,area,L,d=m._operator(p); B=area*p['candidate_sources'].reshape(10,-1).T\nu=L.T.tocsr(); t=time.perf_counter()\nfor _ in range(3):\n z=m.spsolve_triangular(L,B,lower=True,unit_diagonal=True)\n z=m.spsolve_triangular(u,z/d[:,None],lower=False,unit_diagonal=True)\nprint('triangular pair seconds'",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('robin_spd_profiler.py')\ns = p.read_text().replace('from scipy.sparse import coo_matrix','from scipy.sparse import coo_matrix, eye').replace('from scipy.sparse.linalg import spsolve_triangular','from scipy.sparse.linalg import splu')\na = s.index('    upper = lower.T.tocsr()')\nb = s.index('\\n    X =', a)\ns = s[:a] + '''    # Factor the unit triangular matrix once to reuse compiled sparse\n    # forward and transpose substitutions for every CG iteration.\n    factor = splu(lower.tocsc() + eye(A.shape[0], format='csc'),\n        "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 5597,
+        "sha256": "ed0e0b91020d1f5109d5d57d3ec6c7c3ea14707916d3e37315283600d5aa41fe",
+        "content_addressed_ref": "content_addressed_blobs/ed0e0b91020d1f5109d5d57d3ec6c7c3ea14707916d3e37315283600d5aa41fe.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "fcc8b20c0b31abf24b0f7d29176f1a8f6c771e4468c81c5027ee57cb7a0767e2",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('robin_spd_profiler.py')\ns = p.read_text().replace('from scipy.sparse import coo_matrix','from scipy.sparse import coo_matrix, eye').replace('from scipy.sparse.linalg im",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

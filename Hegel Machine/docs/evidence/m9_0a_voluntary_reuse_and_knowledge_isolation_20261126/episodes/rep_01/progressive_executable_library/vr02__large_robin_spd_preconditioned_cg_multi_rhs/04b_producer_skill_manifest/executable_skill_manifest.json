@@ -1,0 +1,96 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_c193bc8c844c",
+    "source_hash": "c193bc8c844c6274d2e0c6fe4d814cd88bc1026901996fa888c7991ee62b68b4",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/robin_connected_audit.py",
+        "archived_relpath": "producers/tmp__robin_connected_audit.py",
+        "bytes": 2021,
+        "sha256": "45366cfee01a50e8a2fd8e74ac42bb3be25b59ae77e62684a685743458edeae7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: data=pickle.load(f)\ndef inspect(x, level=0):\n if isinstance(x,dict):\n  print('  '*level,'keys:',list(x))\n  if level<3:\n   for k,v in x.items():\n    print('  '*level,k,end=': '); inspect(v,level+1)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x))\n  if level<3:\n   for v in x: inspect(v,level+1)\n elif isinstance(x,np.ndarray):\n  print(x.shape,x.dtype, (x.min(),x.max()) if x.size and np.issubdtype(x.dtype,np.number) else '')\n else: print(type(x).__nam",
+      "set -e\ncat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Conservative Robin diffusion solves and ridge-profiled sensor fits.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\n\nfrom hegel_wormhole_skills.autogenous_prim_conservative_spd_solve import (\n    galerkin_preconditioner,\n    solve_residual_checked_cg,\n)\n\n\ndef _assemble(k, sigma, gamma, hx, hy):\n    ids = np.arange(k.size).reshape(k.shape)\n    kx = (hy / hx) * (2 * k[:-1, :] * k[1:, :] / (k[:-1, :] + k[1:, :]))\n    ky = (hx / hy) * (2 * k[:, :-1] * k[:, 1:] / (k[:, :-1] + k[:, 1:]))\n    diag = (hx * hy) * sigma\n    diag[:-1, :] += kx\n  ",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', '/holdout_task/robin_spd_profiler.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef audit(name, p, gt=None):\n    start = time.perf_counter()\n    got = mod.solve_robin_spd_and_profile_sources(p)\n    u = got['basis_fields']; k = p['kappa']; g = p['gamma_robin']\n    nx, ny = k.shape; hx,",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', '/holdout_task/robin_spd_profiler.py')\nmod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\nfailed = False\nfor index, case in enumerate(cases):\n    base = case['problem']\n    i,j = np.indices(base['kappa'].shape)\n    # High-conductivity connected backbone, unlike the checkerboard and isolated islands.\n    k = n",
+      "set -e\ncat > /tmp/robin_connected_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', '/holdout_task/robin_spd_profiler.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\noriginal = mod.solve_residual_checked_cg\nfor ix, case in enumerate(cases):\n    base = case['problem']\n    i, j = np.indices(base['kappa'].shape)\n    k = np.where((i % 12 < 2) & (j % 12 < 2), 0.02, 80.)\n    fo",
+      "set -e\nsed -i 's/tol=1e-10, maxiter=500/tol=1e-9, maxiter=500/' /holdout_task/robin_spd_profiler.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', '/holdout_task/robin_spd_profiler.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef audit(name, p, gt=None):\n    out = mod.solve_robin_spd_and_profile_sources(p)\n    u = out['basis_fields']; k = p['kappa']; ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/robin_spd_profiler.py'\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\n# Isolate the weak-dissipation limit without replacing the public coefficient,\n# source, observation, or nuisance arrays by artificial ones.\nfor i, case in enumerate(cases):\n    p = case['problem']\n    hx, hy = p['L",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', '/holdout_task/robin_spd_profiler.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\nfor n, case in enumerate(cases):\n    p = case['problem']; k = p['kappa']; nx, ny = k.shape\n    hx, hy = p['Lx']/nx, p['Ly']/ny\n    sigma = 1e-3*p['sigma']; gamma = 1e-3*p['gamma_robin']\n    A = mod._assemble(k, sigma, ga",
+      "set -e\nsed -i 's/tol=1e-9, maxiter=500/tol=3e-9, maxiter=500/' /holdout_task/robin_spd_profiler.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/robin_spd_profiler.py'\nspec = importlib.util.spec_from_file_location('robin_spd_profiler', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef audit(name, p, gt=None):\n    out = mod.solve_robin_spd_and_profile_sources(p)\n    assert set(out) == {'basis_fie"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__robin_connected_audit.py",
+      "primary_producer_container_path": "/tmp/robin_connected_audit.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 9224,
+        "sha256": "c9997b1acd8cc35564a4065c8ae7ed7a1128b8eeb19a03cb022e85ba1a7747ba",
+        "content_addressed_ref": "content_addressed_blobs/c9997b1acd8cc35564a4065c8ae7ed7a1128b8eeb19a03cb022e85ba1a7747ba.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c193bc8c844c6274d2e0c6fe4d814cd88bc1026901996fa888c7991ee62b68b4",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\nsed -i 's/tol=1e-9, maxiter=500/tol=3e-9, maxiter=500/' /holdout_task/robin_spd_profiler.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/robin_spd_profiler.p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c193bc8c844c6274d2e0c6fe4d814cd88bc1026901996fa888c7991ee62b68b4",
+        "expected_candidate_sha256": "c193bc8c844c6274d2e0c6fe4d814cd88bc1026901996fa888c7991ee62b68b4",
+        "computed_candidate_sha256": "c193bc8c844c6274d2e0c6fe4d814cd88bc1026901996fa888c7991ee62b68b4",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_spd_profiler.py",
+            "bytes": 9224
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_c193bc8c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

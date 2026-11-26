@@ -1,0 +1,147 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr01_proof_carrying_box_l0_726592cf3f78",
+    "source_hash": "726592cf3f783d5b808412b2e35e7bd2ebe2a226e6576899f548987d9fc25866",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr01__proof_carrying_box_l0_minorant_bnb",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/proof_before_pair.py",
+        "archived_relpath": "producers/tmp__proof_before_pair.py",
+        "bytes": 5838,
+        "sha256": "de57b511dbcc1e7decfedb22a8d9af475bce9b2f13b6fe3bbcfc6f3b00f16c77"
+      },
+      {
+        "container_path": "/tmp/proof_pair_audit.py",
+        "archived_relpath": "producers/tmp__proof_pair_audit.py",
+        "bytes": 747,
+        "sha256": "7ddafe9d1a8e55941d60258a704879ffd70697c2ee871284eeaae6595f8db233"
+      },
+      {
+        "container_path": "/tmp/proof_pair_coupling.py",
+        "archived_relpath": "producers/tmp__proof_pair_coupling.py",
+        "bytes": 962,
+        "sha256": "04b614869579c50a733799090f7bdb224f9f131ae2e0ab22959570cc5aeeb11f"
+      },
+      {
+        "container_path": "/tmp/proof_pair_trace.py",
+        "archived_relpath": "producers/tmp__proof_pair_trace.py",
+        "bytes": 6329,
+        "sha256": "aef85c4da53dac250aad7335f6331a84e5687a6fbcd39ac4ebff63dba8c9f309"
+      },
+      {
+        "container_path": "/tmp/proof_pair_trace_run.py",
+        "archived_relpath": "producers/tmp__proof_pair_trace_run.py",
+        "bytes": 753,
+        "sha256": "6f2e22372b7c3801c5284b1a60ffbedd1f056fdf2c1effd1583be43ad99a2d88"
+      },
+      {
+        "container_path": "/tmp/proof_test.py",
+        "archived_relpath": "producers/tmp__proof_test.py",
+        "bytes": 528,
+        "sha256": "a71e2ae4f62228697704dd7a940bc7336fcbb0645eaebe83a803915b0e48b14c"
+      },
+      {
+        "container_path": "/tmp/proof_verify.py",
+        "archived_relpath": "producers/tmp__proof_verify.py",
+        "bytes": 3813,
+        "sha256": "d61574699ba917d0149d077ab5761149b11a6a057514aa2802ec4ea28d206ddf"
+      },
+      {
+        "container_path": "/tmp/proof_verify_final_slice.py",
+        "archived_relpath": "producers/tmp__proof_verify_final_slice.py",
+        "bytes": 2405,
+        "sha256": "047b2fe445fe4621c57041a056447f0c96bb67b1f9837e294c0992354dad34be"
+      },
+      {
+        "container_path": "/tmp/proof_verify_trace.py",
+        "archived_relpath": "producers/tmp__proof_verify_trace.py",
+        "bytes": 2392,
+        "sha256": "9be1521025c39ac15b0c5cd4d26dcf32a89cf87a6ccffe7a7dff0f4b6bd4fe70"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; for f in row_incidence_blocks gram_diagonal_minorant box_ridge_cube_lower_bound; do python3 -m hegel_wormhole_skills --describe autogenous_prim_box_ridge_bounds.$f; done; python3 - <<'PY'\nimport pickle,numpy as np\np='/holdout_task/public_proof_box_l0_cases.pkl'\na=pickle.load(open(p,'rb')); print(type(a),len(a))\nitems=a.items() if isinstance(a,dict) else enumerate(a)\nfor k,v in items:\n print(k,type(v), {x:(('array',q.shape) if isinstance(q,np.ndarray) else (list(q) if isinstance(q,dict) else str(q)[:160])) for x,q in v.items()} if isinstance(v,dict) else str(v)[:300])\nPY",
+      "python3 - <<'PY'\nimport pickle,numpy as np\nfrom hegel_wormhole_skills.autogenous_prim_box_ridge_bounds import gram_diagonal_minorant,row_incidence_blocks\ncases=pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl','rb'))\nfor i,case in enumerate(cases):\n q=case['problem']; X=q['X']; G=X.T@X; e=np.linalg.eigvalsh(G); d=gram_diagonal_minorant(X); rows,uncovered=row_incidence_blocks(X); w=case['gt']['exact_weights']; off=G-np.diag(np.diag(G)); print(i,X.shape,{k:q[k] for k in ('lam0','lam2','M')},'exact',case['gt']['exact_objective'],'support',np.flatnonzero(abs(w)>1e-8),'eigs',np.round(e",
+      "cat > /holdout_task/proof_box_l0.py <<'PY'\n\"\"\"Branch-and-bound with diagonal-curvature dual certificates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom hegel_wormhole_skills.autogenous_prim_box_ridge_bounds import gram_diagonal_minorant\n\n\ndef solve_proof_carrying_box_l0(problem: dict) -> dict:\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    l0, l2, M = (float(problem[k]) for k in ('lam0', 'lam2', 'M'))\n    _, p = X.shape\n    G = X.T @ X\n    xy = X.T @ y\n    d = gram_diagonal_minorant(X)\n    R = G - np.diag(d)\n    # Certify the n",
+      "sed -i 's/^    d = gram_diagonal_minorant(X)$/    d = np.asarray(gram_diagonal_minorant(X), dtype=float)/' /holdout_task/proof_box_l0.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/proof_test.py",
+      "cat > /tmp/proof_verify.py <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('proof_box_l0', '/holdout_task/proof_box_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef check(name, q, exact):\n    X,y,l0,l2,M = (q[k] for k in ('X','y','lam0','lam2','M'))\n    p = X.shape[1]\n    start = time.monotonic()\n    out = mod.solve_proof_carrying_box_l0(q)\n    w,L,leaves = (out[k] for k in ('weights','certified_lower_bound','subcube_leaves'))\n    assert w.shape == (p,) and np.all(np.abs(w) <= M+1e-12)\n    F = .5*",
+      "cat > /tmp/proof_pair_audit.py <<'PY'\nimport runpy\nimport sys\nimport numpy as np\n\ncheck = runpy.run_path('/tmp/proof_verify.py')['check']\nk = int(sys.argv[1])\nrho = float(sys.argv[2])\np = 22\nl0, l2, M = .2, .1, 1.\nG = np.eye(p)\ni = np.arange(0, 2*k, 2)\nG[i, i+1] = G[i+1, i] = rho\nif rho == 1.:\n    X = np.eye(p)\n    X[:, i+1] = X[:, i]\n    y = np.zeros(p)\n    y[i] = 1.1\nelse:\n    X = np.linalg.cholesky(G).T\n    h = np.zeros(p)\n    h[:2*k] = 1.1\n    y = np.linalg.solve(X.T, h)\n# Block-wise exact objective: compare zero, either singleton, and both active.\none = l0 - 1.1 + .5*(1+l2)\ntwo = 2*l0 - 1",
+      "cp /holdout_task/proof_box_l0.py /tmp/proof_before_pair.py\npython3 - <<'PY'\np='/holdout_task/proof_box_l0.py'\ns=open(p).read()\ns=s.replace('    xy = X.T @ y\\n','''    xy = X.T @ y\n    # Use isolated pairs only to order branches; proof validity does not\n    # depend on recognizing pairs or on treating small couplings as zero.\n    coupled = G != 0.\n    np.fill_diagonal(coupled, False)\n    degree = coupled.sum(axis=1)\n    partner = np.full(p, -1, dtype=int)\n    for j in np.flatnonzero(degree == 1):\n        k = int(np.flatnonzero(coupled[j])[0])\n        if degree[k] == 1:\n            partner[j] = ",
+      "cp /holdout_task/proof_box_l0.py /tmp/proof_pair_trace.py\npython3 - <<'PY'\np='/tmp/proof_pair_trace.py'\ns=open(p).read().replace('    leaves = []','    leaves = []\\n    print(\"pair count\",np.count_nonzero(partner>=0)//2,\"d\",np.unique(np.round(d,7)))\\n    shown = 0')\ns=s.replace('        zz, oo = z.copy(), on.copy()', '''        if shown < 28:\n            k = partner[j]\n            print('branch', 'depth', (z|on).sum(), 'gap', round(bestval-lb,7), 'j/k', j,k, 'mate z/on', (z[k],on[k]), 'fraction',round(fraction[j],5),'cost',round(cost[j],6),'finish',finish.tolist())\n            shown += 1\n     ",
+      "sed -n '40,175p' /holdout_task/proof_box_l0.py; grep -nE 'shown|branch|finish|EXCESS' /tmp/proof_pair_trace.py; python3 - <<'PY'\nfor rho,k in [(1.,7),(.95,9),(.85,10)]:\n d=1-rho; slope=.2+.5*(.1+d); x=(1.1-slope)/(2*rho)\n print('rho',rho,'unresolved pair gap', (1.1-slope)**2/(2*rho)-.35,'total root gap',k*((1.1-slope)**2/(2*rho)-.35),'relaxed coefficient',x,'both-zero penalty',.35)\nPY",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nold = '    incumbent(np.abs(xy) > slope, best)\\n'\nassert s.count(old) == 1\ns = s.replace(old, '''    initial = np.abs(xy) > slope\n    incumbent(initial, best)\n    # Try a singleton per isolated pair as a second feasible incumbent.\n    single = np.minimum(M, np.abs(xy) / diagH)\n    gain = single * (np.abs(xy) - 0.5 * diagH * single)\n    sparse = initial.copy()\n    for j, k in enumerate(partner):\n        if k > j and sparse[j] and sparse[k]:\n            sparse[k if gain[j] >= gain[k] else j] = F",
+      "cat > /tmp/proof_pair_coupling.py <<'PY'\nimport runpy\nimport numpy as np\ncheck = runpy.run_path('/tmp/proof_verify_trace.py'.replace('proof_verify_trace','proof_verify_final_slice'))['check']\np = 22\nk, rho, l0, l2, M = 10, .85, .2, .1, 1.\nG = np.eye(p)\ni = np.arange(0, 2*k, 2)\nG[i, i+1] = G[i+1, i] = rho\nh = np.r_[np.full(2*k, 1.1), np.zeros(p-2*k)]\nrng = np.random.default_rng(27)\nperm = rng.permutation(p)\n# A PSD rank-one cross-pair perturbation gives an independent objective\n# bracket: at most .5*delta*(M*sum(abs(v)))**2 over the entire box.\nv = np.resize(np.array([1., -1.]), p)\nfor delta in",
+      "set -euo pipefail\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nstart = s.index('    # Use isolated pairs')\nend = s.index('    d = np.asarray(gram_diagonal_minorant',start)\ns = s[:start] + '''    # Recognize mutually dominant pairs for search ordering only. All\n    # objectives and witnesses retain the full, unmodified design.\n    norms = np.sqrt(np.diag(G))\n    scale_pair = np.outer(norms, norms)\n    coupling = np.divide(np.abs(G), scale_pair, out=np.zeros_like(G),\n                         where=scale_pair > 0.)\n    np.fill_diagonal(coup"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__proof_pair_trace.py",
+      "primary_producer_container_path": "/tmp/proof_pair_trace.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/proof_box_l0.py",
+        "filename": "proof_box_l0.py",
+        "bytes": 7274,
+        "sha256": "4303bf3676cd7bc3ccb9eeaf3b20521f894b11ac7fc190941b9e87ec7507a07e",
+        "content_addressed_ref": "content_addressed_blobs/4303bf3676cd7bc3ccb9eeaf3b20521f894b11ac7fc190941b9e87ec7507a07e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/proof_box_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "726592cf3f783d5b808412b2e35e7bd2ebe2a226e6576899f548987d9fc25866",
+      "verified_post_package": true,
+      "verified_turn": 14,
+      "verification_command": "set -euo pipefail\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nstart = s.index('    # Use isolated pairs')\nend = s.index('    d = np.asarray(gram_diagonal_minorant',start)\ns = s[:star",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "726592cf3f783d5b808412b2e35e7bd2ebe2a226e6576899f548987d9fc25866",
+        "expected_candidate_sha256": "726592cf3f783d5b808412b2e35e7bd2ebe2a226e6576899f548987d9fc25866",
+        "computed_candidate_sha256": "726592cf3f783d5b808412b2e35e7bd2ebe2a226e6576899f548987d9fc25866",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/proof_box_l0.py",
+            "bytes": 7274
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v05_726592cf"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": []
+  }
+}

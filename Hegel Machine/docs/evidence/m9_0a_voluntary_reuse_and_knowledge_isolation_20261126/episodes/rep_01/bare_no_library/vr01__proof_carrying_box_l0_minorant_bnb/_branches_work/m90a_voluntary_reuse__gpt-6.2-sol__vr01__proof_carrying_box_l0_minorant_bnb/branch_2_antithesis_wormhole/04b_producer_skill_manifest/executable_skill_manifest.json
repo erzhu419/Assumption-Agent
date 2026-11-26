@@ -1,0 +1,115 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr01_proof_carrying_box_l0_45bd2d5f99d1",
+    "source_hash": "45bd2d5f99d1c4ac7a7d00169383bcf2329e83aebe6d9ea9b446f2822a54e918",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr01__proof_carrying_box_l0_minorant_bnb",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_proof_box.py",
+        "archived_relpath": "producers/tmp__audit_proof_box.py",
+        "bytes": 1200,
+        "sha256": "3ec2d30f631d6dbd7e59b5e06de3239a144447280e06ae3f88d6be4977c7dd71"
+      },
+      {
+        "container_path": "/tmp/probe_proof_box.py",
+        "archived_relpath": "producers/tmp__probe_proof_box.py",
+        "bytes": 1293,
+        "sha256": "b3760b0015cdca421fc193d019db6d031a26d644937810b2f5dbefcf6bab6015"
+      },
+      {
+        "container_path": "/tmp/stress_proof_box.py",
+        "archived_relpath": "producers/tmp__stress_proof_box.py",
+        "bytes": 1011,
+        "sha256": "94adc0968ce19657897bddd4b4671462ae8b9d7b9a94a86050d24e956bb9da5c"
+      },
+      {
+        "container_path": "/tmp/test_proof_box.py",
+        "archived_relpath": "producers/tmp__test_proof_box.py",
+        "bytes": 2131,
+        "sha256": "23459720b822ef9b6751be842a7b8e8d307f5c1fff5093c32caca69e83560953"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nz=pickle.load(open('public_proof_box_l0_cases.pkl','rb'))\ndef show(a, depth=0):\n print(' '*depth,type(a).__name__,getattr(a,'shape',''),list(a)[:20] if isinstance(a,dict) else (len(a) if isinstance(a,(list,tuple)) else a if np.isscalar(a) else ''))\n if depth<3:\n  if isinstance(a,dict):\n   for k,v in a.items(): print(' '*depth,k);show(v,depth+1)\n  elif isinstance(a,(list,tuple)):\n   for v in a[:4]:show(v,depth+1)\nshow(z)\nPY\npython3 - <<'PY'\nimport scipy\nprint('scipy',scipy.__version__)\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor r in pickle.load(open('public_proof_box_l0_cases.pkl','rb')):\n p=r['problem']; X=p['X']; G=X.T@X; e=np.linalg.eigvalsh(G); V=G/np.sqrt(np.outer(G.diagonal(),G.diagonal())); w=r['gt']['exact_weights']; print('shape',X.shape,'spectrum',np.round(e,4),'norms',np.round(G.diagonal(),3)); print('correlated pairs',[(int(i),int(j),round(V[i,j],3)) for i,j in zip(*np.where(np.triu(abs(V),1)>.4))]); print('reference support',np.flatnonzero(w),'box count',sum(abs(w)>p['M']-1e-7),'nonzero weights',np.round(w[w!=0],4))",
+      "cat > /holdout_task/proof_box_l0.py <<'PY'\n\"\"\"Box-constrained sparse ridge regression with a support-partition proof.\"\"\"\nimport heapq\n\nimport numpy as np\n\n\ndef solve_proof_carrying_box_l0(problem: dict) -> dict:\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    l2, l0, M = (float(problem[k]) for k in ('lam2', 'lam0', 'M'))\n    G = X.T @ X\n    h = X.T @ y\n    p = h.size\n    scale = np.sqrt(np.maximum(G.diagonal(), np.finfo(float).tiny))\n    eig = np.linalg.eigvalsh((G / scale[:, None]) / scale[None, :])[0]\n    d = max(0., eig - 1e-10) * G.diagonal()",
+      "cat > /tmp/stress_proof_box.py <<'PY'\nimport sys\nsys.path.insert(0, '/tmp')\nfrom test_proof_box import check\nimport numpy as np\n\ndef run(name, X, y, l2, l0, M, gt=None):\n    print(name, check(dict(X=X, y=y, lam2=l2, lam0=l0, M=M),gt),flush=True)\n\np=22\nv=np.linspace(-2,2,p); v[4]=0\nfor M in (.2, 1.1, 4.):\n    for l0 in (.01,.22,10.):\n        w=np.sign(v)*np.minimum(M,abs(v)/1.14)\n        gt=.5*(v@v)+np.minimum(0,l0-abs(v*w)+.57*w*w).sum()\n        run(('orthogonal',M,l0),np.eye(p),v,.14,l0,M,gt)\nfor seed in range(8):\n    rng=np.random.default_rng(seed)\n    p=19+seed%4\n    X=rng.normal(size=(44,p",
+      "cat > /tmp/probe_proof_box.py <<'PY'\nimport sys\nsys.path.insert(0, '/tmp')\nfrom test_proof_box import check\nfrom math import comb\nimport numpy as np\n\n# With identical columns any PSD minorant diagonal is zero. The best objective\n# at cardinality k is attained by equal box-constrained coefficients.\np, y, l2, l0, M = 22, 10.4, .14, .22, 1.\nk = np.arange(p + 1)\nb = np.minimum(M, y / (k + l2))\nf = .5*(y-k*b)**2 + k*(.5*l2*b*b+l0)\nj = int(np.argmin(f))\n# In a cube containing two optimal supports, an absent coordinate of either\n# support is free. Adding 0.1 on it is permitted by the linear envelope.",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\na = s.index('    def improve(')\nb = s.index('    def witness(', a)\ns = s[:a] + '''    def box_fit(support):\n        # Solve the smooth quadratic on a support. An active-set step solves\n        # for all free coefficients together, including near-null directions.\n        idx = np.flatnonzero(support)\n        w = np.zeros(p)\n        k = len(idx)\n        if not k:\n            return w\n        B = G[np.ix_(idx, idx)].copy()\n        B.flat[::k+1] += l2\n        b = h[idx]\n        v = np.linalg.solve",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/proof_box_l0.py')\ns=p.read_text().replace('import numpy as np','import numpy as np\\nfrom scipy.optimize import minimize')\na=s.index('    def node(')\ns=s[:a]+'''    def refine_envelope(w, zero, active):\n        # Split the optional coordinates into positive and negative parts.\n        # Convexity and monotonicity make cancellation unnecessary.\n        a = np.flatnonzero(active)\n        u = np.flatnonzero(~(zero | active))\n        na, nu = len(a), len(u)\n        idx = np.r_[a, u, u]\n        sign = np.r_[np.ones(na+nu), -np.ones(nu)]",
+      "OPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_proof_box.py",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nold = '        if len(leaves) + len(queue) >= 2048:'\nassert s.count(old) == 1\np.write_text(s.replace(old, '        if len(leaves) + len(queue) + 2 > 2048:'))\nPY\ncat > /tmp/audit_proof_box.py <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_proof_box import check\n\n# Keep the measured X and y; move box constraints and support prices.\ncases = pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl', 'rb'))\nresults = []\nfor i, case in enumerate(cases):\n",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_proof_box import check\nrng = np.random.default_rng(2026)\nwith open('/holdout_task/public_proof_box_l0_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\nresults = []\nfor case in cases:\n    problem = case['problem']\n    X, y = problem['X'], problem['y']\n    n, p = X.shape\n    for _ in range(8):\n        rows, cols = rng.permutation(n), rng.permutation(p)\n        row_sign = rng.choice([-1., 1.], size=n)\n        col_sign = rng.choice([-1., 1.], size=p)\n        transformed = dict(pr"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__probe_proof_box.py",
+      "primary_producer_container_path": "/tmp/probe_proof_box.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/proof_box_l0.py",
+        "filename": "proof_box_l0.py",
+        "bytes": 7671,
+        "sha256": "84179f9a57ec747403123c34ad6b091512823f8df4b26a37b591737046f8b418",
+        "content_addressed_ref": "content_addressed_blobs/84179f9a57ec747403123c34ad6b091512823f8df4b26a37b591737046f8b418.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/proof_box_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "45bd2d5f99d1c4ac7a7d00169383bcf2329e83aebe6d9ea9b446f2822a54e918",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/tmp')\nfrom test_proof_box import check\nrng = np.random.default_rng(2026)\nwith open('/holdout_task/public_proof_box_l0_cases.pkl', 'rb') as",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "45bd2d5f99d1c4ac7a7d00169383bcf2329e83aebe6d9ea9b446f2822a54e918",
+        "expected_candidate_sha256": "45bd2d5f99d1c4ac7a7d00169383bcf2329e83aebe6d9ea9b446f2822a54e918",
+        "computed_candidate_sha256": "45bd2d5f99d1c4ac7a7d00169383bcf2329e83aebe6d9ea9b446f2822a54e918",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/proof_box_l0.py",
+            "bytes": 7671
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_45bd2d5f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

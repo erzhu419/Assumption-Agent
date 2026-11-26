@@ -1,0 +1,124 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_a8fb6a8dcd30",
+    "source_hash": "a8fb6a8dcd30a3af3397a53c83121bc76845ff3802b01b79cc44d5651f9e2f98",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_visco.py",
+        "archived_relpath": "producers/tmp__audit_visco.py",
+        "bytes": 2675,
+        "sha256": "89a91aa3f6fc554a87d2e2b2f8643ede3a5bb9f91b9802d6a7a3f3c7b3b376bc"
+      },
+      {
+        "container_path": "/tmp/eval_visco.py",
+        "archived_relpath": "producers/tmp__eval_visco.py",
+        "bytes": 2557,
+        "sha256": "e8af53eb41a429d38db8d326964a083fec14b0e71a3163a23c1d2a9f11635899"
+      },
+      {
+        "container_path": "/tmp/inspect_visco.py",
+        "archived_relpath": "producers/tmp__inspect_visco.py",
+        "bytes": 2576,
+        "sha256": "ed59e8729eb5fadba040c2d4dfad2b5c359d428a82d880b60b749fc6fd694103"
+      },
+      {
+        "container_path": "/tmp/visco_mask_loco.py",
+        "archived_relpath": "producers/tmp__visco_mask_loco.py",
+        "bytes": 2017,
+        "sha256": "fbe2e2227d1dab92447aa7b9f8710daa8dc21ca637eef1e01d89be30c8be36ba"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_viscoelastic_cohort.pkl','rb') as f:\n    obj=pickle.load(f)\ndef show(x, depth=0):\n    p=' '*depth\n    if isinstance(x,dict):\n        print(p,'dict',len(x),list(x)[:18]);\n        if depth<5:\n            for k,v in list(x.items())[:18]:\n                print(p,k,end=': '); show(v,depth+1)\n    elif isinstance(x,(list,tuple)):\n        print(p,type(x).__name__,len(x));\n        if x and depth<5: show(x[0],depth+1)\n    elif hasattr(x,'shape'): print(p,type(x).__name__,x.shape,x.dtype, x if x.size<=",
+      "cat > /tmp/inspect_visco.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import logit\nP='/holdout_task/public_viscoelastic_cohort.pkl'\ndef load():\n    with open(P,'rb') as f: return pickle.load(f)\ndef design(trace,taus):\n    tp=np.asarray(trace['past_timestamps']); u=np.asarray(trace['strain_u']); t=np.asarray(trace['timestamps']); hp=np.asarray(trace['past_strain_history']); taus=np.asarray(taus)\n    x=np.r_[hp,u]; time=np.r_[tp,t]; m=np.empty((len(x),2)); m[0]=x[0]\n    for k,a in enumerate(np.exp(-np.diff(time)[:,None]/taus),1): m[k]=a*m[k-1]+(1-a)*x[k]\n    return np.column_sta",
+      "cat > /holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Recover viscoelastic moduli and calibrate risk on the control-panel scale.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _design(trace, taus):\n    past = np.asarray(trace['past_strain_history'], dtype=float)\n    strain = np.asarray(trace['strain_u'], dtype=float)\n    time = np.concatenate((trace['past_timestamps'], trace['timestamps']))\n    inputs = np.concatenate((past, strain))\n    memory = np.empty((inputs.size, taus.size))\n    memory[0] = inputs[0]\n    # This includes the brid",
+      "sed -i 's/w=counts\\[idx\\]\\*\\*-power/w=counts[idx].astype(float)**-power/' /tmp/eval_visco.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/eval_visco.py",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit, logit\nfrom sklearn.metrics import roc_auc_score\n\npath = '/holdout_task/viscoelastic_panel_calibration.py'\nspec = importlib.util.spec_from_file_location('viscoelastic_panel_calibration', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_viscoelastic_cohort.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\n# Exact reconstruction with a nonconstant prehistory, unequal gaps, and four large glitches.\nrng = np.rand",
+      "cat > /tmp/audit_visco.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_task/viscoelastic_panel_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_viscoelastic_cohort.pkl', 'rb') as f:\n    cases = pickle.load(f)\nrng = np.random.default_rng(518)\nsubsets = np.array([rng.choice(36, 4, replace=False) for _ in range(96)])\nfor k, case in enumerate(cases):\n    cohort = case['",
+      "cat > /tmp/visco_mask_loco.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_task/viscoelastic_panel_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_viscoelastic_cohort.pkl', 'rb') as f:\n    cases = pickle.load(f)\nrng = np.random.default_rng(518)\nsubsets = np.array([rng.choice(36, 4, replace=False) for _ in range(96)])\nfor j, case in enumerate(cases):\n    cohort = ca"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_visco.py",
+      "primary_producer_container_path": "/tmp/audit_visco.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4401,
+        "sha256": "0c5c0f577803733029603683e394a06562056973c27385df08e735ce9f568d47",
+        "content_addressed_ref": "content_addressed_blobs/0c5c0f577803733029603683e394a06562056973c27385df08e735ce9f568d47.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "score",
+      "design"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a8fb6a8dcd30a3af3397a53c83121bc76845ff3802b01b79cc44d5651f9e2f98",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/visco_mask_loco.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_ta",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a8fb6a8dcd30a3af3397a53c83121bc76845ff3802b01b79cc44d5651f9e2f98",
+        "expected_candidate_sha256": "a8fb6a8dcd30a3af3397a53c83121bc76845ff3802b01b79cc44d5651f9e2f98",
+        "computed_candidate_sha256": "a8fb6a8dcd30a3af3397a53c83121bc76845ff3802b01b79cc44d5651f9e2f98",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_panel_calibration.py",
+            "bytes": 4401
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_a8fb6a8d"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "score",
+        "code": "def score(y, p):\n    from sklearn.metrics import balanced_accuracy_score\n    from sklearn.metrics import roc_auc_score\n    if len(np.unique(y)) < 2:\n        return np.array([np.nan, np.mean((y - p) ** 2), np.nan])\n    return np.array([roc_auc_score(y, p), np.mean((y - p) ** 2), balanced_accuracy_score(y, p >= 0.5)])"
+      },
+      {
+        "name": "design",
+        "code": "def design(trace, taus):\n    tp = np.asarray(trace['past_timestamps'])\n    u = np.asarray(trace['strain_u'])\n    t = np.asarray(trace['timestamps'])\n    hp = np.asarray(trace['past_strain_history'])\n    taus = np.asarray(taus)\n    x = np.r_[hp, u]\n    time = np.r_[tp, t]\n    m = np.empty((len(x), 2))\n    m[0] = x[0]\n    for (k, a) in enumerate(np.exp(-np.diff(time)[:, None] / taus), 1):\n        m[k] = a * m[k - 1] + (1 - a) * x[k]\n    return np.column_stack((np.ones(len(t)), u, m[len(tp):]))"
+      }
+    ]
+  }
+}

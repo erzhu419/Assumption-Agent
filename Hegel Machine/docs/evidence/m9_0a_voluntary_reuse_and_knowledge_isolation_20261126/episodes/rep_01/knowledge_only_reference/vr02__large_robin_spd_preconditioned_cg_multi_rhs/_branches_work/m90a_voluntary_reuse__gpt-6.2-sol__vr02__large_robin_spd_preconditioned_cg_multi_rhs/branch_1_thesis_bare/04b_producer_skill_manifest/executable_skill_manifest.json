@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_ed78d8a502da",
+    "source_hash": "ed78d8a502da6774e28028e1e4068c380be37596e0d735f3f91f72a13c57d2c3",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python - <<'PY'\nimport pickle, scipy, numpy as np\nprint('SciPy',scipy.__version__)\nwith open('public_robin_spd_cases.pkl','rb') as f: d=pickle.load(f)\ndef describe(x,depth=0):\n if isinstance(x,dict):\n  print(' '*depth,'dict keys',list(x))\n  if depth<3:\n   for k,v in list(x.items())[:20]: print(' '*depth,str(k),end=': '); describe(v,depth+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x))\n  for v in x[:2]: describe(v,depth+1)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype, 'range', (x.min(),x.max()) if x.size and np.issubdtype(x.dtype,np.n",
+      "cd /holdout_task && command -v python3 && python3 - <<'PY'\nimport pickle, importlib.util\nimport numpy as np\nimport scipy\nprint('numpy', np.__version__, 'scipy', scipy.__version__, 'pyamg', bool(importlib.util.find_spec('pyamg')))\nwith open('public_robin_spd_cases.pkl','rb') as f: data=pickle.load(f)\ndef show(a, depth=0):\n    if isinstance(a, dict):\n        print('dict', list(a))\n        if depth < 3:\n            for k,v in a.items():\n                print(' '*depth+str(k)+':',end=' '); show(v,depth+1)\n    elif isinstance(a,(list,tuple)):\n        print(type(a).__name__,len(a))\n        if depth ",
+      "cd /holdout_task && cat > robin_spd_profiler.py <<'PY'\n\"\"\"Finite-volume Robin diffusion solves and nuisance-profiled source fits.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import qr\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.csgraph import reverse_cuthill_mckee\nfrom scipy.sparse.linalg import LinearOperator, cg, spilu, spsolve_triangular\n\n\ndef _assemble(kappa, sigma, gamma, hx, hy):\n    \"\"\"Assemble the integrated cell balances in C order.\"\"\"\n    cells = np.arange(kappa.size).reshape(kappa.shape)\n    diag = (hx * hy) * sigma\n\n    # Each interior face adds a symmetric two-cell flux blo",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('robin_spd_profiler.py')\ns = p.read_text().replace('from scipy.linalg import qr','from scipy.linalg import orth, qr').replace('cg, spilu, spsolve_triangular','cg, spilu, splu')\na = s.index('    lower = ilu.L')\nb = s.index('\\n    preconditioner =', a)\ns = s[:a] + '''    # Factor the triangular matrix once to use native sparse solves in\n    # both directions, without a Python-level row loop on each CG step.\n    lower = splu(ilu.L, permc_spec='NATURAL', diag_pivot_thresh=0,\n                 options={'Equil': False})\n    inv_di"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 5129,
+        "sha256": "ee112ce02d0aaa01bce2be11039574f4fbab41280982b6f0a70a1351975a6b8e",
+        "content_addressed_ref": "content_addressed_blobs/ee112ce02d0aaa01bce2be11039574f4fbab41280982b6f0a70a1351975a6b8e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ed78d8a502da6774e28028e1e4068c380be37596e0d735f3f91f72a13c57d2c3",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('robin_spd_profiler.py')\ns = p.read_text().replace('from scipy.linalg import qr','from scipy.linalg import orth, qr').replace('cg, spilu, spsolve_triangular','cg, spilu,",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

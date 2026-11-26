@@ -1,0 +1,99 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr01_proof_carrying_box_l0_6c31f8f2e0ab",
+    "source_hash": "6c31f8f2e0abeeaa20cddcae2260f9e2375b2d8d46292dd5bbead1c119aa5824",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr01__proof_carrying_box_l0_minorant_bnb",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_proof_box_l0.py",
+        "archived_relpath": "producers/tmp__audit_proof_box_l0.py",
+        "bytes": 2116,
+        "sha256": "496110211ccbcddcc6bf67e2a5f57b04d2de012ef5293a74eccaa3cb536adb1c"
+      },
+      {
+        "container_path": "/tmp/check_proof_box_l0.py",
+        "archived_relpath": "producers/tmp__check_proof_box_l0.py",
+        "bytes": 2886,
+        "sha256": "d80f5ab8509cc798e65abaeff1901552d5d8ee0ed0aa09b019d16f038e08d1a2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle, importlib.util, numpy as np\nwith open('public_proof_box_l0_cases.pkl','rb') as f: data=pickle.load(f)\nprint(type(data),list(data) if isinstance(data,dict) else len(data))\ndef walk(x,path='data',depth=0):\n if isinstance(x,dict):\n  if depth<3:\n   for k,v in x.items(): walk(v,f'{path}.{k}',depth+1)\n elif isinstance(x,(tuple,list)):\n  if depth<3:\n   for i,v in enumerate(x[:20]): walk(v,f'{path}[{i}]',depth+1)\n elif isinstance(x,np.ndarray):\n  print(path,x.shape,x.dtype)\n  if x.ndim==2:\n   G=x.T@x; e=np.linalg.eigvalsh(G); C=G/np.sqrt(np.outer(",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle,numpy as np\nfor i,c in enumerate(pickle.load(open('public_proof_box_l0_cases.pkl','rb'))):\n a=c['problem']; X=a['X']; g=X.T@X; s=X.T@a['y']; w=c['gt']['exact_weights']; print(i,'diag range',g.diagonal().min(),g.diagonal().max(),'max rhs',max(abs(s)),'box-active',sum(abs(w)>a['M']-1e-8),'support size',sum(abs(w)>1e-8)); print('abs-rhs',np.round(abs(s),3)); print('nonzero off-diagonal counts',((abs(g)>1e-10).sum(axis=0)-1).tolist())\nPY\nls -la /holdout_task",
+      "cat > /holdout_task/proof_box_l0.py <<'PY'\n\"\"\"Branch-and-bound with a separable, diagonally strengthened quadratic minorant.\"\"\"\n\nimport heapq\n\nimport numpy as np\n\n\ndef solve_proof_carrying_box_l0(problem: dict) -> dict:\n    X = np.asarray(problem['X'], dtype=float)\n    y = np.asarray(problem['y'], dtype=float)\n    l0, l2, M = (float(problem[k]) for k in ('lam0', 'lam2', 'M'))\n    p = X.shape[1]\n    G = X.T @ X\n    xy = X.T @ y\n    diag = np.diag(G).copy()\n    full = (1 << p) - 1\n    bits = [1 << j for j in range(p)]\n    # Work in column-normalized coordinates when choosing a PSD-safe diagonal.",
+      "cat > /tmp/check_proof_box_l0.py <<'PY'\nimport itertools\nimport pickle\nimport runpy\nimport time\nimport numpy as np\n\nsolve = runpy.run_path('/holdout_task/proof_box_l0.py')['solve_proof_carrying_box_l0']\n\ndef check(name, problem, expected=None):\n    start = time.perf_counter()\n    result = solve(problem)\n    X, y, l0, l2, M = (problem[k] for k in ('X','y','lam0','lam2','M'))\n    p = X.shape[1]\n    w = result['weights']\n    residual = y-X@w\n    objective = 0.5*(residual@residual + l2*(w@w)) + l0*np.count_nonzero(abs(w)>1e-8)\n    leaves = result['subcube_leaves']\n    L = result['certified_lower_b",
+      "cat > /tmp/audit_proof_box_l0.py <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\n# Reuse the independent witness and partition verifier without rerunning prior slices.\nns = {'__name__': '__main__'}\nsource = open('/tmp/check_proof_box_l0.py').read().split('\\nfor i,case in enumerate', 1)[0]\nexec(compile(source, '/tmp/check_proof_box_l0.py', 'exec'), ns)\ncheck = ns['check']\nsolve = ns['solve']\nrng = np.random.default_rng(90)\nfor i, case in enumerate(pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl', 'rb'))):\n    problem = case['problem']\n    expected = case['gt']['exact_objecti",
+      "python3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nold = '''    full = (1 << p) - 1\n    bits = [1 << j for j in range(p)]\n    # Work in column-normalized coordinates when choosing a PSD-safe diagonal.\n    norm = np.sqrt(np.where(diag > 0, diag, 1.0))\n    corr = (G / norm) / norm[:, None]\n    eig = np.linalg.eigvalsh(corr)[0]\n    d = max(0.0, eig - 1e-12) * diag\n'''\nnew = '''    bits = [1 << j for j in range(p)]\n    # Exact zero columns do not constrain the curvature of the remaining block.\n    nonzero = diag > 0\n    d = np.zeros(p)\n    if n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_proof_box_l0.py",
+      "primary_producer_container_path": "/tmp/audit_proof_box_l0.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/proof_box_l0.py",
+        "filename": "proof_box_l0.py",
+        "bytes": 5310,
+        "sha256": "0b34a9de2347c8f36b12d391602e934a9c9e4333b1871756faa0d0372a54c7e1",
+        "content_addressed_ref": "content_addressed_blobs/0b34a9de2347c8f36b12d391602e934a9c9e4333b1871756faa0d0372a54c7e1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/proof_box_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6c31f8f2e0abeeaa20cddcae2260f9e2375b2d8d46292dd5bbead1c119aa5824",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "python3 -I - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\nold = '''    full = (1 << p) - 1\n    bits = [1 << j for j in range(p)]\n    # Work in column-normalized coordinates when choosing a PSD-",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6c31f8f2e0abeeaa20cddcae2260f9e2375b2d8d46292dd5bbead1c119aa5824",
+        "expected_candidate_sha256": "6c31f8f2e0abeeaa20cddcae2260f9e2375b2d8d46292dd5bbead1c119aa5824",
+        "computed_candidate_sha256": "6c31f8f2e0abeeaa20cddcae2260f9e2375b2d8d46292dd5bbead1c119aa5824",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/proof_box_l0.py",
+            "bytes": 5310
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_6c31f8f2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

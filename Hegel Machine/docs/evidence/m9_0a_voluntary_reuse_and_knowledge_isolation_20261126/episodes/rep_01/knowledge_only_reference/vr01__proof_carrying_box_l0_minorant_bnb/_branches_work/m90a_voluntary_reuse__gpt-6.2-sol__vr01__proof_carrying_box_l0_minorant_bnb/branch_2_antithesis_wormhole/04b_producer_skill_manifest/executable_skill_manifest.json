@@ -1,0 +1,142 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr01_proof_carrying_box_l0_64c94e95410e",
+    "source_hash": "64c94e95410ebb2e1cab84d945a5689216aed6cd0f7f311bbc0bfadfb6d162d0",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr01__proof_carrying_box_l0_minorant_bnb",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_proof_box.py",
+        "archived_relpath": "producers/tmp__audit_proof_box.py",
+        "bytes": 1779,
+        "sha256": "1197d029f23d1fcb1a0966a5ebbea32c222685005dbf9db81d12addab9d85e72"
+      },
+      {
+        "container_path": "/tmp/check_near_pairs.py",
+        "archived_relpath": "producers/tmp__check_near_pairs.py",
+        "bytes": 894,
+        "sha256": "76f1635accab0fcfa0e4c8f7cf24a9d353a2440698916758db211f793d4f8d1b"
+      },
+      {
+        "container_path": "/tmp/check_proof_box.py",
+        "archived_relpath": "producers/tmp__check_proof_box.py",
+        "bytes": 2034,
+        "sha256": "931c6b6bebd9e6d127eee999c67a5f1b58849b2447eafcbc2368eaca5fe0e8d0"
+      },
+      {
+        "container_path": "/tmp/stress_proof_box.py",
+        "archived_relpath": "producers/tmp__stress_proof_box.py",
+        "bytes": 1638,
+        "sha256": "4151dd2c16d6c21df2cc70f89076a67ace1a20d9b21f6d4bcee31e0c2dc50a99"
+      },
+      {
+        "container_path": "/tmp/stress_proof_box_hard.py",
+        "archived_relpath": "producers/tmp__stress_proof_box_hard.py",
+        "bytes": 1028,
+        "sha256": "51cfb5ac7c5c5bc69ad96014e441765679d17dd6b00d29c50d01ab6bff124310"
+      },
+      {
+        "container_path": "/tmp/verify_threshold_certificate.py",
+        "archived_relpath": "producers/tmp__verify_threshold_certificate.py",
+        "bytes": 1703,
+        "sha256": "9cf7fca9507daa48631e0b2ed8951747687ba428db56b9965e7632261dd9836f"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 1676,
+        "sha256": "d8b1b03aab1990167096391857e2ad197a8d7b45cbc4ae1b6dddcda41e6d6e4d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_box_ridge_bounds.gram_diagonal_minorant; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound; python3 - <<'PY'\nimport pickle,numpy as np,scipy\nq=pickle.load(open('public_proof_box_l0_cases.pkl','rb')); print(type(q),len(q));\ndef inspect(q, depth=0):\n for k,v in (q.items() if isinstance(q,dict) else enumerate(q)):\n  if isinstance(v,dict) and depth<2:\n   print(' '*depth,k,list(v)); inspect(v, depth+1)\n  elif isinstance(v,np.ndarray):\n  ",
+      "cd /holdout_task; sed -n '1,240p' /tmp/hegel_knowledge_ref/autogenous_prim_box_ridge_bounds.reference.txt; python3 - <<'PY'\nimport pickle,numpy as np\nfor row in pickle.load(open('public_proof_box_l0_cases.pkl','rb')):\n q=row['problem']; X=q['X']; G=X.T@X; b=X.T@q['y']; off=G-np.diag(G.diagonal()); print('\\np=',len(b),'Gram diagonal range=',(min(G.diagonal()),max(G.diagonal())),'max offdiag=',abs(off).max(),'rank=',np.linalg.matrix_rank(X),'Gershgorin d=',np.round(np.maximum(G.diagonal()-abs(off).sum(1),0),5)); print('off-diagonal entries >1e-10:',np.count_nonzero(abs(off)>1e-10)); print('score",
+      "cd /holdout_task && cat > proof_box_l0.py <<'PY'\n\"\"\"Branch-and-bound for box-constrained sparse ridge, with explicit leaf witnesses.\"\"\"\nimport heapq\nimport itertools\n\nimport numpy as np\n\n\ndef _minorant(X, G):\n    \"\"\"Use one diagonal-dominance certificate, or a checked uniform shift.\"\"\"\n    xl = X.astype(np.longdouble)\n    u = np.finfo(xl.dtype).eps\n    gram = xl.T @ xl\n    err = 8 * (X.shape[0] + 2) * u * (abs(xl).T @ abs(xl))\n    off = abs(gram) + err\n    np.fill_diagonal(off, 0)\n    margin = gram.diagonal() - err.diagonal() - off.sum(axis=1)\n    margin -= 8 * (G.shape[0] + 2) * u * (abs(gram",
+      "cat >/tmp/stress_proof_box.py <<'PY'\nfrom check_proof_box import check,m\nimport numpy as np,time\n\ndef case(name,X,y,l0,l2,M,expected=None):\n q=dict(X=X,y=y,lam0=l0,lam2=l2,M=M); t=time.monotonic()\n try:\n  s=m.solve_proof_carrying_box_l0(q); stats=check(q,s)\n  if expected is not None:\n   assert abs(s['objective']-expected)<=1e-5, (s['objective'],expected)\n  print(name,stats,'objective',s['objective'],'seconds',round(time.monotonic()-t,3),flush=True)\n except Exception as e:\n  print(name,type(e).__name__,e,'seconds',round(time.monotonic()-t,3),flush=True)\n\np=22; l2=.14; l0=.22\nfor M in (.29,1.1):",
+      "cat >/tmp/stress_proof_box_hard.py <<'PY'\nfrom check_proof_box import check,m\nimport numpy as np,time\n\ndef run(name,X,y,l0,l2,M):\n    q=dict(X=X,y=y,lam0=l0,lam2=l2,M=M)\n    t=time.monotonic()\n    try:\n        s=m.solve_proof_carrying_box_l0(q)\n        print(name,check(q,s),round(time.monotonic()-t,3),flush=True)\n    except RuntimeError as e:\n        print(name,str(e),round(time.monotonic()-t,3),flush=True)\n\np=22\nfor k in (9,10,11):\n    X=np.eye(p)[:,np.arange(p)-((np.arange(p)<2*k)&(np.arange(p)%2==1))]\n    y=np.zeros(p); y[:2*k:2]=1\n    run(('duplicate pairs',k),X,y,.15,.12,1.)\nfor seed in r",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np=Path('proof_box_l0.py')\ns=p.read_text()\ns=s.replace('        self.curv = self.G.diagonal() + self.ridge\\n','''        self.curv = self.G.diagonal() + self.ridge\n        # Interchangeable columns can leave the same fractional ambiguity in\n        # many independent blocks. Resolve a duplicate pair before opening\n        # another one, so the branch excluding both can be certified early.\n        self.pair = np.full(self.p, -1, dtype=int)\n        norm2 = self.G.diagonal()\n        for j in range(self.p):\n            if norm2[j] == 0:\n",
+      "cat >/tmp/audit_proof_box.py <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nns = runpy.run_path('/tmp/check_proof_box.py')\nsolve = ns['m'].solve_proof_carrying_box_l0\ncheck = ns['check']\nfor row in pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl', 'rb')):\n    q = row['problem']\n    s = solve(q)\n    gap, count, mineig, over = check(q, s)\n    err = abs(s['objective'] - row['gt']['exact_objective'])\n    assert err <= 1e-5\n    w = s['weights']\n    X, y, l2, M = (q[k] for k in ('X', 'y', 'lam2', 'M'))\n    a = w != 0\n    if a.any():\n        ",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('proof_box_l0.py')\ns = p.read_text()\ns = s.replace('        self.breakpoint = np.minimum(self.box, np.sqrt(2 * self.lam / self.q))\\n        self.slope = self.lam / self.breakpoint + .5 * self.q * self.breakpoint', '''        self.tau = min(self.box, 1e-8)\n        self.breakpoint = np.minimum(self.box, self.tau + np.sqrt(2 * self.lam / self.q))\n        width = self.breakpoint - self.tau\n        self.slope = np.divide(self.lam, width, out=np.full_like(width, np.inf), where=width > 0)\n        self.slope += .5 * self.q * (self.",
+      "cat >/tmp/verify_threshold_certificate.py <<'PY'\nimport runpy\nimport numpy as np\nns = runpy.run_path('/tmp/check_proof_box.py')\nsolve = ns['m'].solve_proof_carrying_box_l0\ncheck = ns['check']\nfor box in (7e-9, .25, 1.1):\n    scales = np.r_[np.ones(8), np.full(7, 1e5), np.full(7, 1e8)]\n    y = np.linspace(-1.3, 1.3, scales.size)\n    q = dict(X=np.diag(scales), y=y, lam0=.22, lam2=.14, M=box)\n    tau = min(1e-8, box)\n    mag = np.abs(scales*y)/(scales**2 + q['lam2'])\n    small = np.minimum(mag, tau)\n    large = np.clip(mag, tau, box)\n    def cost(b):\n        return .5*(scales*b-np.abs(y))**2+.5*",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy\nimport time\nimport numpy as np\nns = runpy.run_path('/tmp/check_proof_box.py')\nsolve, check = ns['m'].solve_proof_carrying_box_l0, ns['check']\np = 22\nfor pairs in (9, 10):\n    for rho in (.99, .999999):\n        G = np.eye(p)\n        for j in range(0, 2*pairs, 2):\n            G[j, j+1] = G[j+1, j] = rho\n        X = np.linalg.cholesky(G).T\n        h = np.r_[np.ones(2*pairs), np.zeros(p-2*pairs)]\n        y = np.linalg.solve(X.T, h)\n        q = dict(X=X, y=y, lam0=.15, lam2=.12, M=1.)\n        # For these blocks the optimal support has one colu",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('proof_box_l0.py')\ns = p.read_text()\na = s.index('        # Interchangeable columns')\nb = s.index('\\n', s.index('                    self.pair[j] = k', a))\ns = s[:a] + '''        # Finish a strongly correlated pair before opening another one.\n        # Correlation affects branch order only, never the proof bound.\n        norm = np.sqrt(self.G.diagonal())\n        scale = norm[:, None] * norm[None, :]\n        corr = np.divide(abs(self.G), scale, out=np.zeros_like(self.G), where=scale > 0)\n        np.fill_diagonal(corr, 0.)\n  ",
+      "export OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nns = runpy.run_path('/tmp/check_proof_box.py')\nsolve, check = ns['m'].solve_proof_carrying_box_l0, ns['check']\nrng = np.random.default_rng(41)\nfor row in pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl','rb')):\n    q = row['problem']; X, y = q['X'], q['y']; p = X.shape[1]\n    for k in range(4):\n        order = rng.permutation(p); sign = rng.choice([-1.,1.],p)\n        permuted = X[:, order] * sign\n        # A residual-only row must add exactly 0.5 * extra**2 to both optima.\n        extra = 0."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_proof_box.py",
+      "primary_producer_container_path": "/tmp/audit_proof_box.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/proof_box_l0.py",
+        "filename": "proof_box_l0.py",
+        "bytes": 12601,
+        "sha256": "f2f0354224552cdea830b86dc63177d914ec05e94c3c0b08779f825e50156f3a",
+        "content_addressed_ref": "content_addressed_blobs/f2f0354224552cdea830b86dc63177d914ec05e94c3c0b08779f825e50156f3a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/proof_box_l0.py"
+    ],
+    "exported_pure_functions": [
+      "check"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "64c94e95410ebb2e1cab84d945a5689216aed6cd0f7f311bbc0bfadfb6d162d0",
+      "verified_post_package": true,
+      "verified_turn": 14,
+      "verification_command": "export OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nns = runpy.run_path('/tmp/check_proof_box.py')\nsolve, check = ns['m'].solve_proof_carrying_box_l0, ns['check']\nrng = np.random.default_rng(41)\nfor row",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "64c94e95410ebb2e1cab84d945a5689216aed6cd0f7f311bbc0bfadfb6d162d0",
+        "expected_candidate_sha256": "64c94e95410ebb2e1cab84d945a5689216aed6cd0f7f311bbc0bfadfb6d162d0",
+        "computed_candidate_sha256": "64c94e95410ebb2e1cab84d945a5689216aed6cd0f7f311bbc0bfadfb6d162d0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/proof_box_l0.py",
+            "bytes": 12601
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v04_64c94e95"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "check",
+        "code": "def check(q, s):\n    (X, y, M, l0, l2) = (q[k] for k in ('X', 'y', 'M', 'lam0', 'lam2'))\n    w = s['weights']\n    ub = s['objective']\n    lb = s['certified_lower_bound']\n    p = X.shape[1]\n    leaves = s['subcube_leaves']\n    G = X.T @ X\n    assert np.all(np.isfinite(w)) and w.shape == (p,) and (max(abs(w)) <= M + 1e-12)\n    assert abs(ub - (0.5 * np.linalg.norm(X @ w - y) ** 2 + 0.5 * l2 * (w @ w) + l0 * sum(abs(w) > 1e-08))) < 1e-09\n    assert 1 <= len(leaves) <= 2048 and 0 <= ub - lb <= 1e-05\n    cubes = []\n    vol = 0\n    max_over = -np.inf\n    min_eig = np.inf\n    for leaf in leaves:\n        (z, a) = (np.asarray(leaf[k]) for k in ('fixed_zero', 'fixed_active'))\n        assert a.shape == z.shape == (p,) and (not np.any(z & a))\n        if 'dual_nu' in leaf:\n            nu = leaf['dual_nu']\n            cst = nu @ y - 0.5 * (nu @ nu)\n            h = abs(X.T @ nu)\n            qq = l2\n        else:\n            (d, c) = (leaf['minorant_diagonal'], leaf['minorant_center'])\n            e = np.linalg.eigvalsh(G - np.diag(d))[0]\n            min_eig = min(min_eig, e)\n            assert min(d) >= 0 and e >= -1e-10\n            r = y - X @ c\n            cst = 0.5 * (r @ r) + r @ (X @ c) + 0.5 * (d * c @ c)\n            h = abs(X.T @ r + d * c)\n            qq = l2 + d\n        b = np.minimum(M, h / qq)\n        on = l0 - b * (h - 0.5 * qq * b)\n        val = cst + on[a].sum() + np.minimum(0, on[~(a | z)]).sum()\n        max_over = max(max_over, leaf['lb'] - val)\n        assert leaf['lb'] <= val + 1e-09 and lb <= leaf['lb'] + 1e-06\n        zi = sum((1 << int(j) for j in np.flatnonzero(z)))\n        ai = sum((1 << int(j) for j in np.flatnonzero(a)))\n        assert all((zi & aj or ai & zj for (zj, aj) in cubes))\n        cubes.append((zi, ai))\n        vol += 1 << p - int(sum(z | a))\n    assert vol == 1 << p\n    return (ub - lb, len(leaves), min_eig, max_over)"
+      }
+    ]
+  }
+}

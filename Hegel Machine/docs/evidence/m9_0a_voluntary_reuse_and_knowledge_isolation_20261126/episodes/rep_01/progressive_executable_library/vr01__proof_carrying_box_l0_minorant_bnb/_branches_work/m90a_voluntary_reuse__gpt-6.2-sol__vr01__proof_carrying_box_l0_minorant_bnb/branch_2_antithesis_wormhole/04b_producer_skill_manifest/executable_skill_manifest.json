@@ -1,0 +1,116 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr01_proof_carrying_box_l0_282df06fec34",
+    "source_hash": "282df06fec34334e748eba5d4dc9f488bc425e5225c2a7787dbe9bb90855bcc7",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr01__proof_carrying_box_l0_minorant_bnb",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compare_box_minorants.py",
+        "archived_relpath": "producers/tmp__compare_box_minorants.py",
+        "bytes": 1640,
+        "sha256": "ccaefe84f822296bddfce6e755c612df812b7820c9cbd2b040d0fa2c889657ac"
+      },
+      {
+        "container_path": "/tmp/verify_proof_box.py",
+        "archived_relpath": "producers/tmp__verify_proof_box.py",
+        "bytes": 3331,
+        "sha256": "26ef4f0b8d3d122ec7584b1e4396b22047adc699c7c3b93b82b9ebb6aad65d8c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_proof_box_l0_cases.pkl','rb') as f:\n    data=pickle.load(f)\ndef inspect(o,label='',depth=0):\n    p='  '*depth\n    if isinstance(o,dict):\n        print(p,label,'dict keys:',list(o)[:35])\n        if depth<3:\n            for k,v in list(o.items())[:35]: inspect(v,k,depth+1)\n    elif isinstance(o,(list,tuple)):\n        print(p,label,type(o).__name__,len(o))\n        if depth<3:\n            for i,v in enumerate(o[:24]): inspect(v,i,depth+1)\n    elif isinstance(o,np.ndarray):\n        extra=''\n        if label=='X'",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom hegel_wormhole_skills.autogenous_prim_box_ridge_bounds import gram_diagonal_minorant\nwith open('public_proof_box_l0_cases.pkl','rb') as f:\n    data=pickle.load(f)\nfor i,case in enumerate(data):\n    p=case['problem']; X=p['X']; G=X.T@X; d=gram_diagonal_minorant(X)\n    print('case',i,'eigenvalues',np.round(np.linalg.eigvalsh(G),4))\n    print('Gershgorin d',np.round(d,4),'residual min eig',np.linalg.eigvalsh(G-np.diag(d))[0])\n    print('material neighbors',[(np.flatnonzero(np.abs(row)>1e-10)).tolist() for row in G])\n    pr",
+      "cat > /holdout_task/proof_box_l0.py <<'PY'\n\"\"\"Box-constrained sparse ridge with replayable subcube certificates.\"\"\"\nimport numpy as np\n\n\ndef _diagonal(G):\n    \"\"\"Retain a spectral floor, then recover certified diagonal surplus.\"\"\"\n    p = len(G)\n    d = np.zeros(p)\n    unseen = set(range(p))\n    while unseen:\n        block = [unseen.pop()]\n        for j in block:\n            near = [k for k in unseen if G[j, k] != 0]\n            block.extend(near)\n            unseen.difference_update(near)\n        B = G[np.ix_(block, block)]\n        margin = 64 * np.finfo(float).eps * len(B) * np.max(np.abs(B)",
+      "cat >/tmp/verify_proof_box.py <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\nfrom itertools import combinations\npath='/holdout_task/proof_box_l0.py'\nspec=importlib.util.spec_from_file_location('proof_box_l0',path)\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\n\ndef verify(p,r,exact=None):\n    X,y,l0,l2,M=[p[k] for k in ('X','y','lam0','lam2','M')]\n    G=X.T@X; w=r['weights']; L=r['certified_lower_bound']; U=r['objective']; leaves=r['subcube_leaves']; n=X.shape[1]\n    assert w.shape==(n,) and np.all(np.abs(w)<=M)\n    assert abs(U-(.5*np.sum((X@w-y)**2)+.5*l2*",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\ns = s.replace('''        if v <= margin:\n            d[block] = gersch\n            continue\n        shift = np.full(len(B), max(0., v - margin))\n        test = B - np.diag(gersch)\n        extra = np.linalg.eigvalsh(test)[0] - margin\n        alt = gersch + max(0., extra)\n        d[block] = alt if alt.sum() > shift.sum() else shift''', '''        if v <= margin:\n            # A singular block can forbid positive curvature on a column\n            # even when that row is individually diagonally do",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy, numpy as np\nv=runpy.run_path('/tmp/verify_proof_box.py'); run,make=v['run'],v['make']\nfor k in (9,10):\n    X=np.kron(np.eye(k),[[1.,1.]])\n    X=np.pad(X,((0,0),(0,22-2*k)))\n    for y0 in (.92,1.,1.12):\n        l0,l2=.22,.14\n        exact=k*min(.5*y0*y0,l0+.5*y0*y0*l2/(1+l2),2*l0+.5*y0*y0*l2/(2+l2))\n        run(f'{k} duplicate pairs y={y0}',make(X,np.full(k,y0)),exact)\nfor seed in range(6):\n    rng=np.random.default_rng(seed+100); p=22\n    X=rng.normal(size=(24,p)); X/=np.linalg.norm(X,axis=0)\n    y=X@rng.uniform(-.85,.85,p)+rng.normal(sc",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom functools import lru_cache\nfrom itertools import combinations_with_replacement\nfrom scipy.optimize import minimize_scalar\n\nstates = list(combinations_with_replacement(range(3), 2))  # free, zero, active\ntransitions = []\nfor state in states:\n    transitions.append([(states.index(tuple(sorted(state[:i] + (v,) + state[i+1:]))), states.index(tuple(sorted(state[:i] + (u,) + state[i+1:])))) for i in range(2) if state[i] == 0 for v,u in [(1,2)]])\nfor y in (.92, 1., 1.12):\n    l0,l2,M = .22,.14,1.1\n    exact = l0+.5*y*y*l2/(1+l2)\n    def dual(nu,state):\n",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, numpy as np\nv = runpy.run_path('/tmp/verify_proof_box.py'); solve=v['s'].solve_proof_carrying_box_l0; verify=v['verify']\ncases=pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl','rb'))\nfor i, case in enumerate(cases):\n    p=case['problem']; X=p['X']; n=X.shape[1]\n    rng=np.random.default_rng(410+i); perm=rng.permutation(n); signs=rng.choice([-1,1],n)\n    variants=[('as supplied',p,case['gt']['exact_objective']),('signed permutation',dict(p,X=X[:,perm]*signs),case['gt']['exact_objective']),('tight box',dict(p,M=.3),No",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, time\nimport numpy as np\nv=runpy.run_path('/tmp/verify_proof_box.py'); solve=v['s'].solve_proof_carrying_box_l0; verify=v['verify']\nfor i,c in enumerate(pickle.load(open('/holdout_task/public_proof_box_l0_cases.pkl','rb'))):\n    p=c['problem']; X=p['X']; rng=np.random.default_rng(901+i); order=rng.permutation(X.shape[1]);\n    for span in (4.,16.,64.):\n        scales=np.empty(X.shape[1]); scales[order]=np.geomspace(span**-.5,span**.5,X.shape[1]); Z=X*scales\n        G=Z.T@Z; T=np.sqrt(G.diagonal()); d_scaled=np.linalg.eigvalsh(G/T[:",
+      "cat >/tmp/compare_box_minorants.py <<'PY'\nimport pickle, runpy, time\nimport numpy as np\nv=runpy.run_path('/tmp/verify_proof_box.py')\ns=v['s']; verify=v['verify']; old=s._diagonal\n\ndef candidate(G):\n    d=old(G)\n    unseen=set(range(len(G)))\n    while unseen:\n        block=[unseen.pop()]\n        for j in block:\n            near=[k for k in unseen if G[j,k]!=0]\n            block.extend(near); unseen.difference_update(near)\n        B=G[np.ix_(block,block)]\n        if np.any(B.diagonal()<=0):\n            continue\n        scale=np.sqrt(B.diagonal())\n        R=B/scale[:,None]/scale[None,:]\n        m",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\ns = s.replace('Retain a spectral floor, then recover certified diagonal surplus.', 'Choose a PSD minorant per Gram block, accounting for column scale.')\nold = '        d[block] = alt if alt.sum() > shift.sum() else shift'\nnew = '''        candidate = alt if alt.sum() > shift.sum() else shift\n        # If R - floor*I is PSD, diagonal congruence gives a PSD\n        # residual in the original coordinates without rescaling the box.\n        norms_sq = B.diagonal()\n        scale = np.sqrt(norms_sq)\n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__compare_box_minorants.py",
+      "primary_producer_container_path": "/tmp/compare_box_minorants.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/proof_box_l0.py",
+        "filename": "proof_box_l0.py",
+        "bytes": 7187,
+        "sha256": "b8730b64157c31a46b6b5bbf3962ebbae5805939ce00d1df74f9fb105feb5f62",
+        "content_addressed_ref": "content_addressed_blobs/b8730b64157c31a46b6b5bbf3962ebbae5805939ce00d1df74f9fb105feb5f62.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/proof_box_l0.py"
+    ],
+    "exported_pure_functions": [
+      "verify",
+      "make"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "282df06fec34334e748eba5d4dc9f488bc425e5225c2a7787dbe9bb90855bcc7",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/proof_box_l0.py')\ns = p.read_text()\ns = s.replace('Retain a spectral floor, then recover certified diagonal surplus.', 'Choose a PSD minorant per Gram block, accounting for c",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "282df06fec34334e748eba5d4dc9f488bc425e5225c2a7787dbe9bb90855bcc7",
+        "expected_candidate_sha256": "282df06fec34334e748eba5d4dc9f488bc425e5225c2a7787dbe9bb90855bcc7",
+        "computed_candidate_sha256": "282df06fec34334e748eba5d4dc9f488bc425e5225c2a7787dbe9bb90855bcc7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/proof_box_l0.py",
+            "bytes": 7187
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_282df06f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "verify",
+        "code": "def verify(p, r, exact=None):\n    from itertools import combinations\n    (X, y, l0, l2, M) = [p[k] for k in ('X', 'y', 'lam0', 'lam2', 'M')]\n    G = X.T @ X\n    w = r['weights']\n    L = r['certified_lower_bound']\n    U = r['objective']\n    leaves = r['subcube_leaves']\n    n = X.shape[1]\n    assert w.shape == (n,) and np.all(np.abs(w) <= M)\n    assert abs(U - (0.5 * np.sum((X @ w - y) ** 2) + 0.5 * l2 * (w @ w) + l0 * np.count_nonzero(abs(w) > 1e-08))) <= 1e-09\n    assert 0 <= U - L <= 1e-05 and 1 <= len(leaves) <= 2048\n    if exact is not None:\n        assert abs(U - exact) <= 1e-05 and L <= exact + 1e-09, (U, L, exact)\n    zmas = []\n    amas = []\n    volume = 0\n    slack = np.inf\n    eig = np.inf\n    for leaf in leaves:\n        (z, A) = (np.asarray(leaf['fixed_zero']), np.asarray(leaf['fixed_active']))\n        assert z.shape == A.shape == (n,) and z.dtype == A.dtype == bool and (not np.any(z & A))\n        F = ~(z | A)\n        volume += 1 << int(F.sum())\n        zmas.append(sum((1 << i for i in np.flatnonzero(z).tolist())))\n        amas.append(sum((1 << i for i in np.flatnonzero(A).tolist())))\n        (d, c) = (leaf['minorant_diagonal'], leaf['minorant_center'])\n        rr = y - X @ c\n        v = np.linalg.eigvalsh(G - np.diag(d))[0]\n        eig = min(eig, v)\n        assert d.shape == c.shape == (n,) and np.all(d >= 0) and (v >= -1e-10), (v, d)\n        g = np.abs(X.T @ rr + d * c)\n        b = np.clip(g / (l2 + d), 0.0, M)\n        a = l0 - g * b + 0.5 * (l2 + d) * b * b\n        lb = 0.5 * np.sum(rr ** 2) + rr @ X @ c + 0.5 * np.sum(d * c * c) + sum(a[A]) + sum(np.minimum(a[F], 0.0))\n        slack = min(slack, lb - leaf['lb'])\n        assert L <= leaf['lb'] + 1e-06 and leaf['lb'] <= lb + 1e-10, (lb, leaf['lb'])\n    assert volume == 1 << n and all((zmas[i] & amas[j] or zmas[j] & amas[i] for (i, j) in combinations(range(len(leaves)), 2)))\n    return (len(leaves), U - L, eig, slack)"
+      },
+      {
+        "name": "make",
+        "code": "def make(X, y, l0=0.22, l2=0.14, M=1.1):\n    return dict(X=X, y=y, lam0=l0, lam2=l2, M=M)"
+      }
+    ]
+  }
+}

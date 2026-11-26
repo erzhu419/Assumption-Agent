@@ -1,0 +1,64 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_efca90afda75",
+    "source_hash": "efca90afda757fdb9548bac38930de8fd4129deb9d4dc385746e631d50896ae1",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python - <<'PY'\nimport pickle, importlib.util\nimport numpy as np\nfor name in ('scipy','pyamg','threadpoolctl'):\n print(name, bool(importlib.util.find_spec(name)))\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: data=pickle.load(f)\ndef show(obj,depth=0):\n if isinstance(obj,dict):\n  for k,v in obj.items():\n   print(' '*depth,k,end=': '); show(v,depth+1)\n elif isinstance(obj,(tuple,list)):\n  print(type(obj).__name__,len(obj))\n  for v in obj[:4]: show(v,depth+1)\n elif isinstance(obj,np.ndarray):\n  print(obj.shape,obj.dtype, (obj.min(),obj.max()) if obj.size a",
+      "command -v python3; ls -la /holdout_task /pretrain_task; python3 - <<'PY'\nimport sys, pickle, importlib.util\nprint(sys.executable, sys.version)\nfor name in ('numpy','scipy','pyamg'):\n print(name, bool(importlib.util.find_spec(name)))\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: data=pickle.load(f)\ndef show(obj,depth=0):\n if isinstance(obj,dict):\n  for k,v in obj.items():\n   print(' '*depth,k,end=': '); show(v,depth+1)\n elif isinstance(obj,(tuple,list)):\n  print(type(obj).__name__,len(obj))\n  for v in obj[:4]: show(v,depth+1)\n elif hasattr(obj,'shape'):\n  print(obj.shape,obj",
+      "cat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Cell-centered Robin finite volumes and nuisance-profiled source fitting.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import LinearOperator, cg, splu\n\n\ndef _assemble(problem):\n    k = np.asarray(problem['kappa'], dtype=float)\n    nx, ny = k.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    area = hx * hy\n    robin = problem['gamma_robin']\n    ids = np.arange(k.size).reshape(k.shape)\n\n    kx = (2 * hy / hx) * k[:-1, :] * k[1:, :] / (k[:-1, :] + k[1:, :])\n    ky = (2 * hx / hy) * k[:, :-1] * k["
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 4949,
+        "sha256": "c0a8239003fd6112ad599e6fc583b5044281512c994b51ff06de29fa978fbbdb",
+        "content_addressed_ref": "content_addressed_blobs/c0a8239003fd6112ad599e6fc583b5044281512c994b51ff06de29fa978fbbdb.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "efca90afda757fdb9548bac38930de8fd4129deb9d4dc385746e631d50896ae1",
+      "verified_post_package": true,
+      "verified_turn": 3,
+      "verification_command": "cat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Cell-centered Robin finite volumes and nuisance-profiled source fitting.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import LinearOperator, cg, splu",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

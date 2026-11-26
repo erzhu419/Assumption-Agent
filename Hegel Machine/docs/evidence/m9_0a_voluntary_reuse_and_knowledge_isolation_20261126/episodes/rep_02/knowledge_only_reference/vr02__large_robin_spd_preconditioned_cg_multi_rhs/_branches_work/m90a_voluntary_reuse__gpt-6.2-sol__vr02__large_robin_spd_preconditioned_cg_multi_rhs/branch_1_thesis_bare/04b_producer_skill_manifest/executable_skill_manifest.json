@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_d720881f5953",
+    "source_hash": "d720881f5953979cd14d3a3e9a67b983c2fa3e219a60ab9ff40fb16e0acf29a6",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport pickle,numpy,scipy,importlib.util\nprint('numpy scipy pyamg',numpy.__version__,scipy.__version__,importlib.util.find_spec('pyamg'))\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: x=pickle.load(f)\ndef show(x,d=0):\n if isinstance(x,dict):\n  print('  '*d, 'keys:',list(x))\n  if d<3:\n   for k,v in x.items(): print('  '*d,k,end=': '); show(v,d+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x));\n  if x and d<3: show(x[0],d+1)\n elif isinstance(x,numpy.ndarray): print(x.shape,x.dtype, (x.min(),x.max()) if x.size and x.dtyp",
+      "command -v python3; python3 - <<'PY'\nimport sys, pickle, importlib.util\nprint(sys.version)\nfor name in ('numpy','scipy','pyamg'):\n print(name, importlib.util.find_spec(name))\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: cases=pickle.load(f)\ndef show(x, d=0):\n if isinstance(x,dict):\n  print('dict',list(x))\n  if d<4:\n   for k,v in x.items(): print('  '*d,k, end=': '); show(v,d+1)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x))\n  if x and d<4: show(x[0],d+1)\n elif hasattr(x,'shape'): print(x.shape,x.dtype)\n else: print(repr(x)[:200])\nshow(cases)\nPY",
+      "cat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Finite-volume Robin diffusion solver and ridge-profiled source fits.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.csgraph import reverse_cuthill_mckee\nfrom scipy.sparse.linalg import LinearOperator, cg, spilu, splu, spsolve_triangular\n\n\ndef _robin_matrix(kappa, sigma, gamma, hx, hy):\n    \"\"\"Assemble the integrated cell balances in C-order.\"\"\"\n    ids = np.arange(kappa.size).reshape(kappa.shape)\n    kx0, kx1 = kappa[:-1, :], kappa[1:, :]\n    ky0, ky1 = kappa[:, :-1], kappa[:, 1:]\n    tx = (hy / hx) * (2 * kx0 * kx1 / (kx0 ",
+      "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport robin_spd_profiler as r\n\ncg = r.cg\ndef count(*args, **kwargs):\n    n = 0\n    def tick(_):\n        nonlocal n\n        n += 1\n    u, info = cg(*args, **kwargs, callback=tick)\n    counts.append((n, info))\n    return u, info\nr.cg = count\nwith open('public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\nfor idx, case in enumerate(cases):\n    counts = []\n    p = case['problem']\n    u = r.solve_robin_spd_and_profile_sources(p)['basis_fields']\n    k = p['kappa']; nx, ny = k.shape\n    hx,"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 4836,
+        "sha256": "2918bb43c4ce891cb2ab7b755f0c9605c0e6f8bdaa6010a5e78076d608de3534",
+        "content_addressed_ref": "content_addressed_blobs/2918bb43c4ce891cb2ab7b755f0c9605c0e6f8bdaa6010a5e78076d608de3534.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d720881f5953979cd14d3a3e9a67b983c2fa3e219a60ab9ff40fb16e0acf29a6",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cd /holdout_task && PYTHONDONTWRITEBYTECODE=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nimport robin_spd_profiler as r\n\ncg = r.cg\ndef count(*args, **kwargs):\n    n = 0\n    def tick(_):\n        nonlocal n\n        n += 1\n    u, info =",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,137 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_9ab8f82b96a0",
+    "source_hash": "9ab8f82b96a033341b961e1a5e9204821b38f2a8903b215e03cf642bd021b871",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/visco_affine_audit.py",
+        "archived_relpath": "producers/tmp__visco_affine_audit.py",
+        "bytes": 1180,
+        "sha256": "cd58d85faf7b21e3bd8a79d373a8bdc53af33983ec63a73e24e398d39102ab47"
+      },
+      {
+        "container_path": "/tmp/visco_audit.py",
+        "archived_relpath": "producers/tmp__visco_audit.py",
+        "bytes": 1550,
+        "sha256": "acf50b7081bb4bd0da6d871a7f0914ed63d37747e2f2d8f5be9346b0dc32746e"
+      },
+      {
+        "container_path": "/tmp/visco_gate.py",
+        "archived_relpath": "producers/tmp__visco_gate.py",
+        "bytes": 2012,
+        "sha256": "4edd63607e060b676dc6713edb7e125691d6396119bb48b11239d4ba23754d2e"
+      },
+      {
+        "container_path": "/tmp/visco_risk_compare.py",
+        "archived_relpath": "producers/tmp__visco_risk_compare.py",
+        "bytes": 1273,
+        "sha256": "c0d75d637b4dc63faab9a7341a0373ec65ddd94f3d6855011dc99ed449d68f70"
+      },
+      {
+        "container_path": "/tmp/visco_transfer.py",
+        "archived_relpath": "producers/tmp__visco_transfer.py",
+        "bytes": 1843,
+        "sha256": "1f75bf7ee271fc42a235a8b6d6b38bf2ac7779d2f98057b1051d63a727375585"
+      },
+      {
+        "container_path": "/tmp/visco_verify.py",
+        "archived_relpath": "producers/tmp__visco_verify.py",
+        "bytes": 2863,
+        "sha256": "a37d60a788bf6d252fd7f7c60750beb3f0de5144a41ba2af5bbae8ef48ba268c"
+      },
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 1676,
+        "sha256": "d8b1b03aab1990167096391857e2ad197a8d7b45cbc4ae1b6dddcda41e6d6e4d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_viscoelastic_cohort.pkl','rb') as f: x=pickle.load(f)\ndef show(x, depth=0):\n if isinstance(x,dict) and depth<4:\n  for k,v in x.items():\n   print(' '*depth, k, end=': '); show(v,depth+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x));\n  if len(x) and depth<3: show(x[0],depth+1)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype, x if x.size<=9 else '')\n else: print(type(x).__name__,str(x)[:80])\nshow(x)\nPY\nfor m in autogenous_prim_reference_panel_balancing autogenous_prim_robus",
+      "cat > /holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Prehistory-aware viscoelastic calibration and control-referenced risk.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _stress_design(trace, taus):\n    t = np.asarray(trace['timestamps'], dtype=float)\n    past_t = np.asarray(trace['past_timestamps'], dtype=float)\n    past_u = np.asarray(trace['past_strain_history'], dtype=float)\n    u = np.asarray(trace['strain_u'], dtype=float)\n    times = np.r_[past_t, t]\n    history = np.r_[past_u, u]\n    step = -np.expm1(-np.diff(times)[:, None]",
+      "cat > /tmp/visco_transfer.py <<'PY'\nexec(open('/tmp/visco_audit.py').read().split('for i,d in enumerate(data):')[0])\nfor i,d in enumerate(data):\n    co,gt=d['cohort'],d['gt']\n    t,q=co['train'],co['query']\n    X,Z=[m._aligned_moduli(s,np.asarray(co['taus'])) for s in (t,q)]\n    c,s,y=(t[k] for k in ('center_id','stratum','y'))\n    cq,sq=q['center_id'],q['stratum']\n    yq=gt['y_query']\n    mask=q['missing_channel_mask']\n    err=Z-gt['Z_query']\n    print('cohort',i,'observed MAE per channel',np.round(np.nanmean(abs(err),axis=0),4))\n    print('train stratum counts/prevalences',[(int(j),int(k),in",
+      "cat > /tmp/visco_risk_compare.py <<'PY'\nexec(open('/tmp/visco_audit.py').read().split('for i,d in enumerate(data):')[0])\nfrom scipy.special import expit\nfrom scipy.optimize import minimize\nfor i,d in enumerate(data):\n    co=d['cohort']; t=co['train']\n    x=m._aligned_moduli(t,np.asarray(co['taus']))\n    c,s,y=[t[k] for k in ('center_id','stratum','y')]\n    print('cohort',i)\n    for coefficient_ridge,stratum_ridge in [(1/3,0),(1/3,0.5),(1/3,1),(1/3,2),(0.1,0.5),(1,0.5)]:\n        out=[]\n        for j in np.unique(c):\n            h=c==j\n            w=m._cell_weights(c[~h],s[~h]); z=x[~h]; ok=np.i",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/viscoelastic_panel_calibration.py')\ns = p.read_text()\ns = s.replace('def _risk(x, y, center, strata, query, query_strata, center_effect=True):', 'def _risk(x, y, center, strata, query, query_strata):')\nstart = s.index('    p = a.shape[1]\\n')\nend = s.index('    penalty =', start)\ns = s[:start] + s[end:]\ns = s.replace('expit(aq @ fit.x[:p])', 'expit(aq @ fit.x)')\np.write_text(s)\nPY\ncat > /tmp/visco_verify.py <<'PY'\nexec(open('/tmp/visco_audit.py').read().split('for i,d in enumerate(data):')[0])\nfrom copy import deepcopy\nfor i, d i",
+      "cat > /tmp/visco_gate.py <<'PY'\nexec(open('/tmp/visco_audit.py').read().split('for i,d in enumerate(data):')[0])\nfrom sklearn.metrics import balanced_accuracy_score\n\ndef unalign(z, t):\n    raw = z.copy()\n    c = t['center_id']\n    for j in np.unique(c):\n        h = c == j\n        panel = t['controls'][h]\n        spread = np.nanstd(panel, axis=0)\n        ok = (np.isfinite(panel).sum(axis=0) >= 2) & (spread > 0)\n        raw[h] = z[h] * np.median(spread[ok]) + np.median(np.nanmean(panel[:,ok],axis=0))\n    return raw\n\nfor i,d in enumerate(data):\n    co,gt=d['cohort'],d['gt']\n    t,q=co['train'],co",
+      "cat > /tmp/visco_affine_audit.py <<'PY'\nexec(open('/tmp/visco_audit.py').read().split('for i,d in enumerate(data):')[0])\nfrom copy import deepcopy\n\nfor i, entry in enumerate(data):\n    co, gt = entry['cohort'], entry['gt']\n    base = m.calibrate_viscoelastic_cohort(co)\n    changed = deepcopy(co)\n    taus = np.asarray(co['taus'])\n    for name in ('train', 'query'):\n        block = changed[name]\n        for c in np.unique(block['center_id']):\n            gain = (0.50, 1.8, 0.75, 2.2, 0.65, 1.6)[c]\n            offset = (-5.0, 4.0, 2.0, -3.0, 5.0, -4.0)[c]\n            rows = block['center_id'] == "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__visco_verify.py",
+      "primary_producer_container_path": "/tmp/visco_verify.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4946,
+        "sha256": "450556dd400f18b235b477ed6b790f8f3332a203957735d330eeafa4b064167a",
+        "content_addressed_ref": "content_addressed_blobs/450556dd400f18b235b477ed6b790f8f3332a203957735d330eeafa4b064167a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "unalign"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9ab8f82b96a033341b961e1a5e9204821b38f2a8903b215e03cf642bd021b871",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/viscoelastic_panel_calibration.py')\ns = p.read_text()\ns = s.replace('def _risk(x, y, center, strata, query, query_strata, center_effect=True):', 'def _risk(x, y, center, stra",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9ab8f82b96a033341b961e1a5e9204821b38f2a8903b215e03cf642bd021b871",
+        "expected_candidate_sha256": "9ab8f82b96a033341b961e1a5e9204821b38f2a8903b215e03cf642bd021b871",
+        "computed_candidate_sha256": "9ab8f82b96a033341b961e1a5e9204821b38f2a8903b215e03cf642bd021b871",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_panel_calibration.py",
+            "bytes": 4946
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_9ab8f82b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": [
+      {
+        "name": "unalign",
+        "code": "def unalign(z, t):\n    raw = z.copy()\n    c = t['center_id']\n    for j in np.unique(c):\n        h = c == j\n        panel = t['controls'][h]\n        spread = np.nanstd(panel, axis=0)\n        ok = (np.isfinite(panel).sum(axis=0) >= 2) & (spread > 0)\n        raw[h] = z[h] * np.median(spread[ok]) + np.median(np.nanmean(panel[:, ok], axis=0))\n    return raw"
+      }
+    ]
+  }
+}

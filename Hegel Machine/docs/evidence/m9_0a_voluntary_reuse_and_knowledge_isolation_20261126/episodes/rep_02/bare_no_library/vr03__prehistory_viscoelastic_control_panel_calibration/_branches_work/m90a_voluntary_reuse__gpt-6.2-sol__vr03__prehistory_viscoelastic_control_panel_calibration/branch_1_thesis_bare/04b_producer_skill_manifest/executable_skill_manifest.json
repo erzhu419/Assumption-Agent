@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_a69c5b511b41",
+    "source_hash": "a69c5b511b41e14417774fc78bf346bc3d223aa74347e38acd4c3f39363ed9d2",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_visco.py",
+        "archived_relpath": "producers/tmp__verify_visco.py",
+        "bytes": 1042,
+        "sha256": "def59f70df8cd9a7890cbf5359553fb1f93db667beeb06ad374817ca91df4081"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && python - <<'PY'\nimport pickle, numpy as np\np=pickle.load(open('public_viscoelastic_cohort.pkl','rb'))\ndef show(x, d=0):\n if isinstance(x,dict) and d<5:\n  for k,v in x.items():\n   print(' '*d, k, end=': ')\n   if isinstance(v,dict): print()\n   show(v,d+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x));\n  if len(x): show(x[0],d+1)\n else:\n  print(type(x).__name__,getattr(x,'shape',''),getattr(x,'dtype',''), repr(x)[:120] if not isinstance(x,np.ndarray) or x.size<20 else '')\nshow(p)\nimport importlib.util\nfor name in ('numpy','scipy','sklearn'): prin",
+      "cd /holdout_task; command -v python3; ls -d /opt/*; python3 - <<'PY'\nimport pickle, importlib.util\nfor name in ('numpy','scipy','sklearn'): print(name, bool(importlib.util.find_spec(name)))\np=pickle.load(open('public_viscoelastic_cohort.pkl','rb'))\ndef show(x,d=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*d,k,end=': ')\n   if isinstance(v,dict): print()\n   show(v,d+1)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x));\n  if x:\n   if isinstance(x[0],dict): show(x[0],d+1)\n   else: print(str(x[:3])[:120])\n else: print(type(x).__name__,getattr(x,'shape',''),getat",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nfor j,d in enumerate(pickle.load(open('public_viscoelastic_cohort.pkl','rb'))):\n print('case',j,'beta',d['gt']['beta']); co=d['cohort']\n for split in ['train','query']:\n  a=co[split]; y=a.get('y',d['gt']['y_query']); print(split)\n  for k in np.unique(a['center_id']):\n   m=a['center_id']==k; x=a['controls'][m]; print(k,[(int(sum(ms:=m&(a['stratum']==s))),round(y[ms].mean(),2)) for s in range(3)],np.round(np.nanmean(x,axis=0),2),np.round(np.nanstd(x,axis=0),2))\n for t in co['train']['traces'][:4]:\n  print('obs range',np.round(np.quan",
+      "cd /holdout_task && cat > viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Extract hereditary moduli and fit risk in the control-aligned coordinates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _design(trace, taus):\n    past_t = np.asarray(trace['past_timestamps'], dtype=float)\n    past_u = np.asarray(trace['past_strain_history'], dtype=float)\n    t = np.asarray(trace['timestamps'], dtype=float)\n    u = np.asarray(trace['strain_u'], dtype=float)\n    times = np.concatenate((past_t, t))\n    strain = np.concatenate((past_u, u))\n    fraction = -np.ex"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_visco.py",
+      "primary_producer_container_path": "/tmp/verify_visco.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4898,
+        "sha256": "454ad38effe39e028cb938826c2cbbf47cc05121050019630a415ea9ac34ba02",
+        "content_addressed_ref": "content_addressed_blobs/454ad38effe39e028cb938826c2cbbf47cc05121050019630a415ea9ac34ba02.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a69c5b511b41e14417774fc78bf346bc3d223aa74347e38acd4c3f39363ed9d2",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cd /holdout_task && cat > viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Extract hereditary moduli and fit risk in the control-aligned coordinates.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\nde",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

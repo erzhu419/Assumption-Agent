@@ -1,0 +1,234 @@
+{
+  "task_id": "vr04__indefinite_helmholtz_wrapped_phase_inversion",
+  "short_name": "vr04_indefinite_helmholtz_phase",
+  "benchmark": "Hegel-M90a-VoluntaryReuse-4",
+  "wave": "m90a_voluntary_reuse",
+  "scientific_domain": "Indefinite Acoustic Helmholtz Scattering & Wrapped-Phase Receiver Calibration",
+  "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "progressive",
+  "staging_policy": "net_value_gated",
+  "strict_pass": false,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 8,
+  "max_turns": 28,
+  "final_candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+  "validated_incumbent_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport helmholtz_phase_inversion as h\n\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+        "expected_candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+        "computed_candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/helmholtz_phase_inversion.py",
+            "bytes": 3576
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_678dad57"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 0,
+  "nogoods_recorded": [],
+  "nogood_resolution_events": [],
+  "recalled_node_ids": [
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_robust_affine_projection",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "abc35d3d",
+      "index_cards": [
+        "autogenous_prim_robust_affine_projection@abc35d3d | propagate_linear_basis(transition: np.ndarray, initial: np.ndarray, increments: np.ndarray) -> np.ndarray | Return a trajectory of shape (steps+1, n, k) from transition (n, n), initial ( | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.propagate_linear_basis",
+        "autogenous_prim_robust_affine_projection@abc35d3d | profile_weighted_affine(predictor: np.ndarray, sensitivity: np.ndarray, target: np.ndarray, *, weights: np.ndarray | None=None, gain_floor: float=0.0) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray] | For predictor, target and optional weights (n, m) and predictor sensitivity (n | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.profile_weighted_affine",
+        "autogenous_prim_robust_affine_projection@abc35d3d | robust_residual_weights(residual: np.ndarray, scale: float | np.ndarray, *, loss: str='cauchy') -> np.ndarray | For residuals of shape S and a positive scalar or scale array broadcastable to | REQ: initial=(n,k) 2D cols; predictor/target=(n,m) 2D, sensitivity=(n,m,p) 3D; scale>0 | --describe autogenous_prim_robust_affine_projection.robust_residual_weights"
+      ],
+      "heuristic_recommendation_score": 0.858
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_robust_trend_decomposition",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "1f45421a",
+      "index_cards": [
+        "autogenous_prim_robust_trend_decomposition@1f45421a | cauchy_linear_fit(design: np.ndarray, values: np.ndarray, *, scale: float | None=None, noise_floor: float=1e-08) -> tuple[np.ndarray, float] | Fit finite design (n,p) and values (n,) with n >= p >= 1, full column rank bef | REQ: 1D strictly increasing t>=0 (n>=4), full-rank design, scale>0, >=3 pts/side for step | --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit",
+        "autogenous_prim_robust_trend_decomposition@1f45421a | fit_anchored_relaxation(time: np.ndarray, predictor: np.ndarray, values: np.ndarray, *, onset_rate: float, noise_scale: float, curvature_ratio: float, bins: int, tau_bounds: tuple[float, float]) -> tuple[float, float, float | None] | Fit finite vectors time, predictor, and values (n,) with n >= 4, increasing no | REQ: 1D strictly increasing t>=0 (n>=4), full-rank design, scale>0, >=3 pts/side for step | --describe autogenous_prim_robust_trend_decomposition.fit_anchored_relaxation",
+        "autogenous_prim_robust_trend_decomposition@1f45421a | fit_local_level_step(predictor: np.ndarray, values: np.ndarray, splits: np.ndarray, *, scale: float, loss_clip: float) -> tuple[int, float] | Fit finite predictor and values (n,) and integer splits (k,) with k >= 1, at l | REQ: 1D strictly increasing t>=0 (n>=4), full-rank design, scale>0, >=3 pts/side for step | --describe autogenous_prim_robust_trend_decomposition.fit_local_level_step"
+      ],
+      "heuristic_recommendation_score": 0.848
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_prim_ridge_profiled_matching",
+      "granularity_tier": "L1_compositional_primitive",
+      "compiled_code_sha256_8": "dfdf7838",
+      "index_cards": [
+        "autogenous_prim_ridge_profiled_matching@dfdf7838 | fit_ridge_nuisance(design: np.ndarray, values: np.ndarray, *, ridge: float | np.ndarray=1e-06) -> tuple[np.ndarray, np.ndarray, np.ndarray] | Fit design (n, p) to values (n,) or (n, q) with scalar or (p,) ridge and retur | REQ: ridge>=0; whitener must match SVD Gram of same weighted design | --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance",
+        "autogenous_prim_ridge_profiled_matching@dfdf7838 | profile_candidate_amplitudes(residual_dot: np.ndarray, candidate_energy: np.ndarray, nuisance_cross: np.ndarray, whitener: np.ndarray, *, rtol: float=1e-12) -> tuple[np.ndarray, np.ndarray] | Profile residual inner products (m,), raw energies (m,), and nuisance cross-pr | REQ: ridge>=0; whitener must match SVD Gram of same weighted design | --describe autogenous_prim_ridge_profiled_matching.profile_candidate_amplitudes"
+      ],
+      "heuristic_recommendation_score": 0.69
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_conservative_elliptic_multigrid",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "92bea017",
+      "index_cards": [
+        "autogenous_conservative_elliptic_multigrid@92bea017 | solve_darcy_pressure(permeability_2d: np.ndarray, source_rhs: np.ndarray, h: float, tol: float=1e-08) -> np.ndarray | Solve -div(K grad(p)) = source on a uniform cell-centered 2D grid | REQ: {'field': 'minimum_grid_axis_length', 'op': '>=', 'value': 2}; {'field': 'minimum_permea | --describe autogenous_conservative_elliptic_multigrid.solve_darcy_pressure"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_robust_network_assimilation",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "2262dea7",
+      "index_cards": [
+        "autogenous_robust_network_assimilation@2262dea7 | assimilate_diffusive_network(laplacian: np.ndarray, damping: np.ndarray, inlet: np.ndarray, initial_state: np.ndarray, sensor_nodes: np.ndarray, observations: np.ndarray, horizon: int, dt: float, *, harmonics: int=5, valve_levels: tuple[float, float]=(0.35, 1.0), gain_floor: float=0.2) -> tuple[bool, np.ndarray, np.ndarray, np.ndarray, np.ndarray] | Infer constant transmission and forecast a forward-Euler network | REQ: {'field': 'dt', 'op': '>', 'value': 0}; {'field': 'observation_sample_count', 'op': '>=' | --describe autogenous_robust_network_assimilation.assimilate_diffusive_network"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_sparse_ridge_certification",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "770f6644",
+      "index_cards": [
+        "autogenous_sparse_ridge_certification@770f6644 | solve_and_certify_l0(X: np.ndarray, y: np.ndarray, lam0: float, lam2: float, M: float, eps: float=1e-06, *, max_leaves: int=90) -> dict | Certify boxed sparse ridge regression with at most 16 real predictors | REQ: {'field': 'n_samples', 'op': '>=', 'value': 1}; {'field': 'n_features', 'op': '<=', 'val | --describe autogenous_sparse_ridge_certification.solve_and_certify_l0"
+      ]
+    },
+    {
+      "module_import": "hegel_wormhole_skills.autogenous_creep_corrected_retraction_calibration",
+      "granularity_tier": "L2_domain_operator",
+      "compiled_code_sha256_8": "cab6fbef",
+      "index_cards": [
+        "autogenous_creep_corrected_retraction_calibration@cab6fbef | first_loading_slip(force_N: np.ndarray, specimen_displacement_um: np.ndarray, hold_start: int, hold_end: int, *, threshold_um: float=0.35) -> float | None | Return force at the first persistent positive loading step, or None | REQ: {'field': 'specimen_count', 'op': '>=', 'value': 1}; {'field': 'hold_sample_count', 'op' | --describe autogenous_creep_corrected_retraction_calibration.first_loading_slip",
+        "autogenous_creep_corrected_retraction_calibration@cab6fbef | calibrate_retraction(times_s: list[np.ndarray], forces_N: list[np.ndarray], raw_displacements_um: list[np.ndarray], frame_compliance_um_per_N: float, *, transition_window_s: float=0.015, curvature_to_noise: float=0.8, slip_threshold_um: float=0.35) -> tuple[float, list[float | None]] | Return median elastic stiffness (N/µm) and first loading slip forces (N) | REQ: {'field': 'specimen_count', 'op': '>=', 'value': 1}; {'field': 'hold_sample_count', 'op' | --describe autogenous_creep_corrected_retraction_calibration.calibrate_retraction"
+      ]
+    }
+  ],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_vr04_indefinite_helmholtz_phase_678dad5702ca",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "progressive",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 7,
+    "staged_l1_primitive_count": 3,
+    "recommended_turn1_l1_count": 3,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 13,
+      "min_chars": 404,
+      "median_chars": 443.0,
+      "mean_chars": 474.46,
+      "max_chars": 643
+    },
+    "describe_skill_inspection_count": 0,
+    "describe_skill_queries": [],
+    "inspected_in_bash": false,
+    "inspected_source_in_bash": false,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "678dad5702cac3bee7c38996af18a61601dc156a34bcfbf705faef8069f6f06b",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "invert_helmholtz_sources_and_phase"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "helmholtz_phase_inversion.py",
+          "final_file_sha256": "8c0747697cdb08d59f4bf150f6f2417db277ab457a4f5aae91b7a1e14bf0c488",
+          "public_entrypoints": [
+            "invert_helmholtz_sources_and_phase"
+          ],
+          "effective_entrypoints": [
+            "invert_helmholtz_sources_and_phase"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "helmholtz_phase_inversion.py"
+  ],
+  "submitted_final_answer": null,
+  "decision_count": 23,
+  "prompt_tokens": 204408,
+  "cached_tokens": 43136,
+  "completion_tokens": 7429,
+  "total_tokens": 211837,
+  "effective_billed_tokens": 179485,
+  "wall_ms": 243740.33,
+  "provenance_verified": true,
+  "terminal_record_sha256": "18355db8b5af98e4fb8cea06958c875c65f2356c24632419ab60e43c80d76598"
+}

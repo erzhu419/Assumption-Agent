@@ -1,0 +1,136 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_5b736cb34e04",
+    "source_hash": "5b736cb34e04f7ca9959bc2c880731be778871d115c3d723e6032d2c938e750a",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_visco.py",
+        "archived_relpath": "producers/tmp__verify_visco.py",
+        "bytes": 3180,
+        "sha256": "7a95f727f763fb6c5aecb4b31fa1e5c0cbf1e810b4ba464d5b62c74f5c710a72"
+      },
+      {
+        "container_path": "/tmp/visco_center_audit.py",
+        "archived_relpath": "producers/tmp__visco_center_audit.py",
+        "bytes": 2048,
+        "sha256": "b4cb757b95c0446db6f4bf01ac2428b8323e83263088fa2beb4709ed8af9da54"
+      },
+      {
+        "container_path": "/tmp/visco_eval.py",
+        "archived_relpath": "producers/tmp__visco_eval.py",
+        "bytes": 1961,
+        "sha256": "dcd6dcb20541ffa8f3bbddf70479550d98cce6fed9ed17fc3e53945685571d90"
+      },
+      {
+        "container_path": "/tmp/visco_margin_audit.py",
+        "archived_relpath": "producers/tmp__visco_margin_audit.py",
+        "bytes": 1312,
+        "sha256": "dcac3275d2d049cea2e76d88f5249a522b73436d0af1c9a37d482ee256c536f3"
+      },
+      {
+        "container_path": "/tmp/visco_missing_check.py",
+        "archived_relpath": "producers/tmp__visco_missing_check.py",
+        "bytes": 1540,
+        "sha256": "6f6687e5384071691fe38bda351454cde94f5485f996d850ad32d13fa0a3dc99"
+      },
+      {
+        "container_path": "/tmp/visco_risk_compare.py",
+        "archived_relpath": "producers/tmp__visco_risk_compare.py",
+        "bytes": 1907,
+        "sha256": "446db31c465456b2c376a613acc1ba784b2749519942b6a13d15316871f928d1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 -I - <<'PY'\nimport pickle\nfrom collections import Counter\nimport numpy as np\nwith open('public_viscoelastic_cohort.pkl','rb') as f:\n    data = pickle.load(f)\ndef inspect(x, name='root', depth=0):\n    if isinstance(x, dict):\n        print(name, 'keys', list(x)[:25])\n        if depth < 3:\n            for k,v in list(x.items())[:20]: inspect(v, f'{name}.{k}', depth+1)\n    elif isinstance(x, (list,tuple)):\n        print(name, type(x).__name__, len(x))\n        if x and depth < 3: inspect(x[0], name+'[0]', depth+1)\n    elif isinstance(x,np.ndarray):\n        details = ''\n ",
+      "cat >/holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Hereditary stress extraction and control-panel risk calibration.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _design(trace, taus):\n    t = np.r_[trace['past_timestamps'], trace['timestamps']]\n    u = np.r_[trace['past_strain_history'], trace['strain_u']]\n    past = len(trace['past_timestamps'])\n    alpha = -np.expm1(-np.diff(t)[:, None] / taus)\n    state = np.full(len(taus), u[0])\n    x = np.empty((len(t) - past, 1 + len(taus)))\n    for k, a in enumerate(alpha, start=1):\n        ",
+      "cat >/tmp/visco_risk_compare.py <<'PY'\nimport contextlib, io, runpy\nwith contextlib.redirect_stdout(io.StringIO()):\n    env = runpy.run_path('/tmp/visco_eval.py')\nimport numpy as np\nfrom scipy.special import expit\nm, data, auc = (env[k] for k in ('m','data','auc'))\nfor i, case in enumerate(data):\n    co,g = case['cohort'],case['gt']; tr,q = co['train'],co['query']\n    x,xq = [m._aligned(d,np.asarray(co['taus'])) for d in (tr,q)]\n    c,s,y = [np.asarray(tr[k]) for k in ('center_id','stratum','y')]\n    cq,sq = [np.asarray(q[k]) for k in ('center_id','stratum')]\n    print('cohort',i,'missing trai",
+      "cat >/tmp/visco_missing_check.py <<'PY'\nimport contextlib, io, runpy\nimport numpy as np\nfrom scipy.special import expit\nwith contextlib.redirect_stdout(io.StringIO()):\n    e = runpy.run_path('/tmp/visco_eval.py')\nm, data, auc = (e[k] for k in ('m', 'data', 'auc'))\n# Integrate missing predictor uncertainty around the mandated mean, without changing the imputed moduli.\nnodes, ghw = np.polynomial.hermite.hermgauss(16)\nfor i, case in enumerate(data):\n    co = case['cohort']; tr = co['train']\n    x = m._aligned(tr, np.asarray(co['taus']))\n    c,s,y = [np.asarray(tr[k]) for k in ('center_id','stratu",
+      "cat >/tmp/verify_visco.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.stats import rankdata\n\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('viscoelastic_panel_calibration', p+'viscoelastic_panel_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open(p+'public_viscoelastic_cohort.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef auc(y, v):\n    n = int(y.sum())\n    return (rankdata(v)[y == 1].sum() - n*(n+1)/2)/(n*(len(y)-n))\n\nrng = np.random.default_rng(821)\nerrors = []\nfor i, case in enumerate(cases):\n  ",
+      "cat >/tmp/visco_center_audit.py <<'PY'\nimport contextlib, io, runpy\nimport numpy as np\nfrom scipy.special import expit\nwith contextlib.redirect_stdout(io.StringIO()):\n    env = runpy.run_path('/tmp/visco_eval.py')\nm, data, auc = (env[k] for k in ('m','data','auc'))\n\ndef metrics(y,p):\n    return np.array([auc(y,p), np.mean((p-y)**2), np.mean(p[y==1]>=.5), np.mean(p[y==0]<.5)])\n\nfor i, case in enumerate(data):\n    co = case['cohort']; tr = co['train']; taus = np.asarray(co['taus'])\n    x = m._aligned(tr, taus)\n    c,s,y = [np.asarray(tr[k]) for k in ('center_id','stratum','y')]\n    raw = x.copy(",
+      "cat >/tmp/visco_margin_audit.py <<'PY'\nimport pickle\nimport runpy\nimport contextlib\nimport io\nimport numpy as np\nfrom scipy.special import expit, logit\nwith contextlib.redirect_stdout(io.StringIO()):\n    env = runpy.run_path('/tmp/visco_eval.py')\nm, cases, auc = (env[k] for k in ('m', 'data', 'auc'))\nfor i, case in enumerate(cases):\n    co, gt = case['cohort'], case['gt']\n    q = co['query']\n    r = m.calibrate_viscoelastic_cohort(co)\n    x, pred = r['aligned_query_moduli'], r['query_probabilities']\n    z, y, p = (gt[k] for k in ('Z_query', 'y_query', 'prob_query'))\n    mask = q['missing_chann"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__visco_center_audit.py",
+      "primary_producer_container_path": "/tmp/visco_center_audit.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4189,
+        "sha256": "85386e8748eaa88e3867037b47c4b054870bd9a83bb3bd3094eb814165a7d397",
+        "content_addressed_ref": "content_addressed_blobs/85386e8748eaa88e3867037b47c4b054870bd9a83bb3bd3094eb814165a7d397.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "auc",
+      "metrics"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "5b736cb34e04f7ca9959bc2c880731be778871d115c3d723e6032d2c938e750a",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat >/tmp/visco_center_audit.py <<'PY'\nimport contextlib, io, runpy\nimport numpy as np\nfrom scipy.special import expit\nwith contextlib.redirect_stdout(io.StringIO()):\n    env = runpy.run_path('/tmp/visco_eval.py')\nm, data, auc = (env[k] for",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "5b736cb34e04f7ca9959bc2c880731be778871d115c3d723e6032d2c938e750a",
+        "expected_candidate_sha256": "5b736cb34e04f7ca9959bc2c880731be778871d115c3d723e6032d2c938e750a",
+        "computed_candidate_sha256": "5b736cb34e04f7ca9959bc2c880731be778871d115c3d723e6032d2c938e750a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_panel_calibration.py",
+            "bytes": 4189
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_5b736cb3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "auc",
+        "code": "def auc(y, v):\n    from scipy.stats import rankdata\n    n = int(y.sum())\n    return (rankdata(v)[y == 1].sum() - n * (n + 1) / 2) / (n * (len(y) - n))"
+      },
+      {
+        "name": "metrics",
+        "code": "def metrics(y, p):\n    return np.array([auc(y, p), np.mean((p - y) ** 2), np.mean(p[y == 1] >= 0.5), np.mean(p[y == 0] < 0.5)])"
+      }
+    ]
+  }
+}

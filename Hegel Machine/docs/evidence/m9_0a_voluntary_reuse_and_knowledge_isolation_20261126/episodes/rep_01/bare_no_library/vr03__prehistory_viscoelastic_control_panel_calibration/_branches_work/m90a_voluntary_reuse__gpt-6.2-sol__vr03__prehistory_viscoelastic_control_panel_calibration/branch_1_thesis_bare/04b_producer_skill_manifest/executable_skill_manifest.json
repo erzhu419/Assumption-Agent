@@ -1,0 +1,65 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_3deb87ef1797",
+    "source_hash": "3deb87ef17974ce7ea5b25bde688d4bf36f49d98419dd100d221208e81cbfd11",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python - <<'PY'\nimport pickle,numpy as np\np='/holdout_task/public_viscoelastic_cohort.pkl'\nx=pickle.load(open(p,'rb'))\ndef show(a,depth=0):\n if depth>4:return\n print(' '*depth,type(a).__name__,getattr(a,'shape',''),getattr(a,'dtype',''),len(a) if isinstance(a,(list,tuple,dict)) else (a if np.isscalar(a) else ''))\n if isinstance(a,dict):\n  for k,v in a.items():\n   print(' '*depth,k); show(v,depth+1)\n if isinstance(a,(list,tuple)) and len(a):show(a[0],depth+1)\nshow(x)\ntry: import scipy; print('scipy',scipy.__version__)\nexcept ImportError: pass\nPY",
+      "command -v python3; ls -la /pretrain_task; python3 - <<'PY'\nimport pickle, importlib.util\nx=pickle.load(open('/holdout_task/public_viscoelastic_cohort.pkl','rb'))\ndef show(a,depth=0):\n if depth>5:return\n print(' '*depth,type(a).__name__,getattr(a,'shape',''),getattr(a,'dtype',''), len(a) if isinstance(a,(list,tuple,dict)) else '')\n if isinstance(a,dict):\n  for k,v in a.items():\n   print(' '*depth,k); show(v,depth+1)\n if isinstance(a,(list,tuple)) and a: show(a[0],depth+1)\nshow(x)\nprint('scipy',importlib.util.find_spec('scipy') is not None)\nPY",
+      "cat > /holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\"\"\"Fit hereditary moduli and calibrate failure risk across rheometry centers.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import minimize\nfrom scipy.special import expit\n\n\ndef _design(trace, taus):\n    t = np.concatenate((trace['past_timestamps'], trace['timestamps']))\n    u = np.concatenate((trace['past_strain_history'], trace['strain_u']))\n    start = len(trace['past_timestamps'])\n    fraction = -np.expm1(-np.diff(t)[:, None] / taus)\n    memory = np.full_like(taus, u[0])\n    design = np.empty((len(t) - start, 4))\n    design[:, 0] = ",
+      "cat >> /holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\n\ndef _risk_design(z, strata):\n    # Reference-code stratum 0; the slopes are shared by all strata and centers.\n    return np.column_stack((np.ones(len(z)), strata == 1, strata == 2, z))\n\n\ndef calibrate_viscoelastic_cohort(cohort: dict) -> dict:\n    \"\"\"Return aligned query moduli, failure probabilities, and fitted slopes.\"\"\"\n    train, query = cohort['train'], cohort['query']\n    taus = np.asarray(cohort['taus'], dtype=float)\n    z_train, z_query = _aligned(train, taus), _aligned(query, taus)\n    strata = np.asarray(train['stratum']"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4588,
+        "sha256": "21b99b24398b0c520c0815d9af19aee44428e1485e03edd8be32c49fee2ad440",
+        "content_addressed_ref": "content_addressed_blobs/21b99b24398b0c520c0815d9af19aee44428e1485e03edd8be32c49fee2ad440.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3deb87ef17974ce7ea5b25bde688d4bf36f49d98419dd100d221208e81cbfd11",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "cat >> /holdout_task/viscoelastic_panel_calibration.py <<'PY'\n\n\ndef _risk_design(z, strata):\n    # Reference-code stratum 0; the slopes are shared by all strata and centers.\n    return np.column_stack((np.ones(len(z)), strata == 1, strata =",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

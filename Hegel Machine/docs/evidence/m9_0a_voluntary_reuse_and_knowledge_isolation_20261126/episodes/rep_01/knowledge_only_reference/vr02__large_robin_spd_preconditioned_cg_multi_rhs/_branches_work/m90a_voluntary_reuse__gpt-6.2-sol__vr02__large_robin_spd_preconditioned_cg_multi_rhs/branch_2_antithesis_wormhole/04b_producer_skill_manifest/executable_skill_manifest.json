@@ -1,0 +1,91 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_e425330b63a4",
+    "source_hash": "e425330b63a4d4e7c26385dd50d882e3018630c457f08312d0503e985e096e6d",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+        "archived_relpath": "producers/tmp__hegel_knowledge_ref__describe_ref.py",
+        "bytes": 1676,
+        "sha256": "d8b1b03aab1990167096391857e2ad197a8d7b45cbc4ae1b6dddcda41e6d6e4d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_conservative_spd_solve.galerkin_preconditioner; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_conservative_spd_solve.solve_residual_checked_cg; python3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: root=pickle.load(f)\nprint('scipy',scipy.__version__)\ndef inspect(x,depth=0):\n    if isinstan",
+      "set -e\npython3 /tmp/hegel_knowledge_ref/describe_ref.py --describe autogenous_prim_ridge_profiled_matching.profile_candidate_amplitudes\ncat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Conservative Robin diffusion-reaction solves and ridge-profiled source fits.\"\"\"\n\nimport numpy as np\nfrom scipy import linalg, sparse\nfrom scipy.sparse.linalg import LinearOperator, cg\n\n\ndef _assemble(k, sigma, gamma, hx, hy):\n    \"\"\"Assemble one shared conductance per interior face in C-order.\"\"\"\n    nodes = np.arange(k.size).reshape(k.shape)\n    ax, bx = k[:-1, :], k[1:, :]\n    ay, by = k[:, :-1], k[:, 1:]\n ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, time\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.linalg import lstsq\nfrom scipy.sparse.linalg import splu\nf = runpy.run_path('/holdout_task/robin_spd_profiler.py')['solve_robin_spd_and_profile_sources']\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as file:\n    public = pickle.load(file)\ni, j = np.indices((72, 72))\nrng = np.random.default_rng(29)\nvariants = [\n    ('layered weak Robin', np.where((i // 4) % 2, 80., 0.02), 2.4, 0.6, 0.025),\n    ('checkerboard strong Robin', np.where((i + j) % 2, 80., 0.02), ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.linalg import lstsq\nsolve = runpy.run_path('/holdout_task/robin_spd_profiler.py')['solve_robin_spd_and_profile_sources']\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef scaled_stationarity(design, residual, ridge_term):\n    gradient = design.T @ residual + ridge_term\n    scale = np.linalg.norm(design, axis=0)[:, None] * np.linalg.norm(residual, axis=0) + abs(ridge_term)\n    return np.max(abs(gradient) / np.maximum(scale, np.finfo(float).tiny))\n\nfor cas"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_knowledge_ref__describe_ref.py",
+      "primary_producer_container_path": "/tmp/hegel_knowledge_ref/describe_ref.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 6608,
+        "sha256": "8efd682021e2a37c009e8837381df1b6d8a1e755032603c40b08bd93dd8bb7e4",
+        "content_addressed_ref": "content_addressed_blobs/8efd682021e2a37c009e8837381df1b6d8a1e755032603c40b08bd93dd8bb7e4.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e425330b63a4d4e7c26385dd50d882e3018630c457f08312d0503e985e096e6d",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.linalg import lstsq\nsolve = runpy.run_path('/holdout_task/robin_spd_profiler.py')['solve_robin_spd_and_profile_sources']\nwith open('/holdout_task/",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e425330b63a4d4e7c26385dd50d882e3018630c457f08312d0503e985e096e6d",
+        "expected_candidate_sha256": "e425330b63a4d4e7c26385dd50d882e3018630c457f08312d0503e985e096e6d",
+        "computed_candidate_sha256": "e425330b63a4d4e7c26385dd50d882e3018630c457f08312d0503e985e096e6d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_spd_profiler.py",
+            "bytes": 6608
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_e425330b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

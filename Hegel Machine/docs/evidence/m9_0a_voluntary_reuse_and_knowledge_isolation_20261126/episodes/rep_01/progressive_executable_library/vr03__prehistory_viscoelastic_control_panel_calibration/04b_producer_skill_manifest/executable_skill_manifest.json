@@ -1,0 +1,159 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr03_prehistory_viscoelastic_panel_f2aa636eca50",
+    "source_hash": "f2aa636eca504e70ad6c6a7f9a55d9c51a0d72b6abe7ec92d968c5f93faf5a89",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr03__prehistory_viscoelastic_control_panel_calibration",
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_visco.py",
+        "archived_relpath": "producers/tmp__audit_visco.py",
+        "bytes": 3246,
+        "sha256": "48ebeb88442fa23f90d34c7a677cefa47dfb4f7c01ad060892e89a3fb9804a0f"
+      },
+      {
+        "container_path": "/tmp/verify_viscoelastic.py",
+        "archived_relpath": "producers/tmp__verify_viscoelastic.py",
+        "bytes": 3973,
+        "sha256": "644c40a63ef55617743dec73e7983a349b83c193e454dadf02e56e52534fd6d1"
+      },
+      {
+        "container_path": "/tmp/visco_compare.py",
+        "archived_relpath": "producers/tmp__visco_compare.py",
+        "bytes": 2023,
+        "sha256": "2d354798e4074d8ab57ec5a6d3263f60b8c6d2a37aa53bfceb2d5fd4a6199c7b"
+      },
+      {
+        "container_path": "/tmp/visco_panel_jackknife.py",
+        "archived_relpath": "producers/tmp__visco_panel_jackknife.py",
+        "bytes": 1488,
+        "sha256": "ce3345497f8d62cf056df861e7f2813bf6cfbf69a27a2770af4af599e0abf423"
+      },
+      {
+        "container_path": "/tmp/visco_probe.py",
+        "archived_relpath": "producers/tmp__visco_probe.py",
+        "bytes": 4195,
+        "sha256": "025f754605f163f0326c8c23ff4ed9c25966975d9d0764024c95b955ea851c43"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_viscoelastic_cohort.pkl','rb') as f: data=pickle.load(f)\ndef inspect(x,path='data',depth=0):\n    if isinstance(x,dict):\n        print(path, 'dict keys', list(x)[:30]);\n        if depth<5:\n            for k,v in list(x.items())[:20]: inspect(v,path+'.'+str(k),depth+1)\n    elif isinstance(x,(list,tuple)):\n        print(path,type(x).__name__,len(x))\n        if x and depth<5: inspect(x[0],path+'[0]',depth+1)\n    elif isinstance(x,np.ndarray):\n        print(path,x.shape,x.dtype, x.ravel()[:8] if x.dtype!=object ",
+      "cd /holdout_task && cat > /tmp/visco_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.special import expit\nfrom sklearn.metrics import roc_auc_score\nfrom sklearn.linear_model import LogisticRegression\n\ndef design(tr, taus):\n    p,u = np.asarray(tr['past_timestamps']), np.asarray(tr['past_strain_history'])\n    t,x = np.asarray(tr['timestamps']), np.asarray(tr['strain_u'])\n    m = np.full(len(taus),u[0],dtype=float)\n    out = np.empty((len(t),len(taus)))\n    dec = -np.expm1(-np.diff(np.r_[p,t])[:,None]/taus)\n    for d,v in zip(dec[:len(p)-1],u[1:]): m += d*(v-m)\n    for k,(d,v) in enu",
+      "cat > /tmp/visco_compare.py <<'PY'\nfrom visco_probe import *\n\ndef extract_refit(part, taus):\n    out=[]\n    for trace in part['traces']:\n        a=design(trace,taus); y=np.asarray(trace['stress_obs']); b=fit(a,y)\n        r=y-a@b; med=np.median(r); mad=1.4826*np.median(abs(r-med))\n        keep=abs(r-med) <= max(.12, 7*mad)\n        out.append(np.linalg.lstsq(a[keep],y[keep],rcond=None)[0][1:])\n    return np.asarray(out)\n\ndef eval_fit(z,s,c,y,q,sq,penalty):\n    _,inv,n=np.unique(np.c_[c,s],axis=0,return_inverse=True,return_counts=True)\n    w=1/n[inv]; w/=w.mean()\n    f=np.nansum(z*w[:,None],axis=",
+      "cat > /tmp/verify_viscoelastic.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.metrics import roc_auc_score\n\npath = '/holdout_task/viscoelastic_panel_calibration.py'\nspec = importlib.util.spec_from_file_location('viscoelastic_panel_calibration', path)\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nrun = solver.calibrate_viscoelastic_cohort\n\n# A constant history followed by a step gives a closed-form memory trajectory,\n# including the gap between the prehistory and observation windows.\ntaus = np.array([0.41, 1.67])\nt = np.cumsum(np.l",
+      "cat > /tmp/audit_visco.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_task/viscoelastic_panel_calibration.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef features(z, s, basis):\n    pair = np.column_stack([z[:, i]*z[:, j] for i, j in ((0,1),(0,2),(1,2))])\n    extra = {'linear': (), 'quadratic': (z*z, pair),\n             'rational': (z/(1+0.25*z*z), pair/(1+0.25*np.sum(z*z,axis=1,keep",
+      "cat > /tmp/visco_panel_jackknife.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_task/viscoelastic_panel_calibration.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nrun = solver.calibrate_viscoelastic_cohort\nwith open('/holdout_task/public_viscoelastic_cohort.pkl', 'rb') as handle:\n    data = pickle.load(handle)\n\nfor k, item in enumerate(data):\n    co, gt = item['cohort'], item['gt']\n    runs = []\n    for omitted in (-1, 0, 1, 2,"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__visco_probe.py",
+      "primary_producer_container_path": "/tmp/visco_probe.py",
+      "selected_channels": [
+        "fam_cohort_deconfounding_and_reference_balancing"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/viscoelastic_panel_calibration.py",
+        "filename": "viscoelastic_panel_calibration.py",
+        "bytes": 4285,
+        "sha256": "1437359f9ecf670ab4276ef32a7a553e00b3561bb681f7011b772a1c35fe163f",
+        "content_addressed_ref": "content_addressed_blobs/1437359f9ecf670ab4276ef32a7a553e00b3561bb681f7011b772a1c35fe163f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/viscoelastic_panel_calibration.py"
+    ],
+    "exported_pure_functions": [
+      "features",
+      "eval_fit",
+      "design",
+      "fit",
+      "extract",
+      "aligned",
+      "predict",
+      "extract_refit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_cohort_deconfounding_and_reference_balancing",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f2aa636eca504e70ad6c6a7f9a55d9c51a0d72b6abe7ec92d968c5f93faf5a89",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "cat > /tmp/visco_panel_jackknife.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom sklearn.metrics import roc_auc_score\n\nspec = importlib.util.spec_from_file_location('calibration', '/holdout_task/viscoelastic_panel_cali",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f2aa636eca504e70ad6c6a7f9a55d9c51a0d72b6abe7ec92d968c5f93faf5a89",
+        "expected_candidate_sha256": "f2aa636eca504e70ad6c6a7f9a55d9c51a0d72b6abe7ec92d968c5f93faf5a89",
+        "computed_candidate_sha256": "f2aa636eca504e70ad6c6a7f9a55d9c51a0d72b6abe7ec92d968c5f93faf5a89",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/viscoelastic_panel_calibration.py",
+            "bytes": 4285
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_f2aa636e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "features",
+        "code": "def features(z, s, basis):\n    pair = np.column_stack([z[:, i] * z[:, j] for (i, j) in ((0, 1), (0, 2), (1, 2))])\n    extra = {'linear': (), 'quadratic': (z * z, pair), 'rational': (z / (1 + 0.25 * z * z), pair / (1 + 0.25 * np.sum(z * z, axis=1, keepdims=True)))}[basis]\n    return np.column_stack((z, np.eye(3)[s], *extra))"
+      },
+      {
+        "name": "eval_fit",
+        "code": "def eval_fit(z, s, c, y, q, sq, penalty):\n    from sklearn.linear_model import LogisticRegression\n    (_, inv, n) = np.unique(np.c_[c, s], axis=0, return_inverse=True, return_counts=True)\n    w = 1 / n[inv]\n    w /= w.mean()\n    f = np.nansum(z * w[:, None], axis=0) / np.sum(np.isfinite(z) * w[:, None], axis=0)\n    x = np.where(np.isfinite(z), z, f)\n    q = np.where(np.isfinite(q), q, f)\n    a = np.c_[x, np.eye(3)[s] * penalty]\n    b = np.c_[q, np.eye(3)[sq] * penalty]\n    m = LogisticRegression(C=10, max_iter=500, tol=1e-08).fit(a, y, sample_weight=w)\n    return (m.predict_proba(b)[:, 1], q)"
+      },
+      {
+        "name": "design",
+        "code": "def design(tr, taus):\n    (p, u) = (np.asarray(tr['past_timestamps']), np.asarray(tr['past_strain_history']))\n    (t, x) = (np.asarray(tr['timestamps']), np.asarray(tr['strain_u']))\n    m = np.full(len(taus), u[0], dtype=float)\n    out = np.empty((len(t), len(taus)))\n    dec = -np.expm1(-np.diff(np.r_[p, t])[:, None] / taus)\n    for (d, v) in zip(dec[:len(p) - 1], u[1:]):\n        m += d * (v - m)\n    for (k, (d, v)) in enumerate(zip(dec[len(p) - 1:], x)):\n        m += d * (v - m)\n        out[k] = m\n    return np.column_stack((np.ones(len(t)), x, out))"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(A, y):\n    b = np.linalg.lstsq(A, y, rcond=None)[0]\n    for _ in range(14):\n        r = y - A @ b\n        s = max(0.015, 1.4826 * np.median(abs(r - np.median(r))))\n        w = 1 / np.hypot(1, r / (2 * s))\n        b = np.linalg.lstsq(w[:, None] * A, w * y, rcond=None)[0]\n    return b"
+      },
+      {
+        "name": "extract",
+        "code": "def extract(part, taus):\n    (raw, ols, details) = ([], [], [])\n    for tr in part['traces']:\n        A = design(tr, taus)\n        y = np.asarray(tr['stress_obs'])\n        b = fit(A, y)\n        raw.append(b[1:])\n        ols.append(np.linalg.lstsq(A, y, rcond=None)[0][1:])\n        r = y - A @ b\n        details.append([np.linalg.cond(A), np.median(abs(r)), np.sum(abs(r) > 1)])\n    return (np.array(raw), np.array(ols), np.array(details))"
+      },
+      {
+        "name": "aligned",
+        "code": "def aligned(raw, part):\n    z = raw.copy()\n    z[part['missing_channel_mask']] = np.nan\n    for c in np.unique(part['center_id']):\n        i = part['center_id'] == c\n        ctl = part['controls'][i]\n        z[i] = (z[i] - np.nanmedian(np.nanmean(ctl, axis=0))) / np.nanmedian(np.nanstd(ctl, axis=0))\n    return z"
+      },
+      {
+        "name": "predict",
+        "code": "def predict(z, s, c, y, q, sq, nuisance=False):\n    from sklearn.linear_model import LogisticRegression\n    (_, inv, cnt) = np.unique(np.c_[c, s], axis=0, return_inverse=True, return_counts=True)\n    w = 1 / cnt[inv]\n    w /= w.mean()\n    f = np.nansum(z * w[:, None], axis=0) / np.sum(np.isfinite(z) * w[:, None], axis=0)\n    x = np.where(np.isfinite(z), z, f)\n    q = np.where(np.isfinite(q), q, f)\n    a = features(x, s, None, False)\n    b = features(q, sq, None, False)\n    if nuisance:\n        G = np.eye(4)[c]\n        g = np.unique(c)\n        a = np.c_[a, G]\n        b = np.c_[b, np.tile(np.isin(np.arange(4), g) / len(g), (len(q), 1))]\n    m = LogisticRegression(C=10, max_iter=500).fit(a, y, sample_weight=w)\n    return (m.predict_proba(b)[:, 1], q, m.coef_[0], m.intercept_[0])"
+      },
+      {
+        "name": "extract_refit",
+        "code": "def extract_refit(part, taus):\n    out = []\n    for trace in part['traces']:\n        a = design(trace, taus)\n        y = np.asarray(trace['stress_obs'])\n        b = fit(a, y)\n        r = y - a @ b\n        med = np.median(r)\n        mad = 1.4826 * np.median(abs(r - med))\n        keep = abs(r - med) <= max(0.12, 7 * mad)\n        out.append(np.linalg.lstsq(a[keep], y[keep], rcond=None)[0][1:])\n    return np.asarray(out)"
+      }
+    ]
+  }
+}

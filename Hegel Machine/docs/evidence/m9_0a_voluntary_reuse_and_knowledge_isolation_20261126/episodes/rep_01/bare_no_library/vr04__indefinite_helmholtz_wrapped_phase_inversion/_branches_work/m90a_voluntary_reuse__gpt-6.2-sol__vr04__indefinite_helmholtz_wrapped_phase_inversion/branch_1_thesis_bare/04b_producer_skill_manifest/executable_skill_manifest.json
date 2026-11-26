@@ -1,0 +1,64 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr04_indefinite_helmholtz_phase_47ddb3f75508",
+    "source_hash": "47ddb3f7550828aa8f1242e73edbe5a5b794d6e7f2f9bf7c00d2f343ed996be0",
+    "parent_ids": [],
+    "source_episode_id": "branch_1_thesis_bare",
+    "task_id": "vr04__indefinite_helmholtz_wrapped_phase_inversion",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -lh && python - <<'PY'\nimport pickle, numpy as np, scipy\nx=pickle.load(open('public_helmholtz_cases.pkl','rb'))\nprint('scipy',scipy.__version__)\ndef describe(x,d=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*d,k,end=': '); describe(v,d+2)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x));\n  if x: describe(x[0],d+2)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype)\n else: print(repr(x)[:250])\ndescribe(x)\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\ntry:\n import scipy\n print('scipy',scipy.__version__)\nexcept ImportError:\n print('no scipy')\ndef describe(x,d=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*d,k,end=': '); describe(v,d+2)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x))\n  if x: describe(x[0],d+2)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype)\n else: print(repr(x)[:200])\ndescribe(pickle.load(open('public_helmholtz_cases.pkl','rb')))\nPY",
+      "cd /holdout_task && cat > helmholtz_phase_inversion.py <<'PY'\n\"\"\"Finite-volume Helmholtz source inversion from polar receiver data.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _path_laplacian(n):\n    edges = -np.ones(n - 1)\n    degree = np.zeros(n)\n    degree[:-1] += 1\n    degree[1:] += 1\n    return diags((edges, degree, edges), (-1, 0, 1), shape=(n, n))\n\n\ndef _unit_source_fields(problem):\n    n_sq = np.asarray(problem['n_sq'])\n    basis = np.asarray(problem['basis'])\n    nx, ny = n_sq.shape\n    hx, hy = problem['Lx'] / nx, proble"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/helmholtz_phase_inversion.py",
+        "filename": "helmholtz_phase_inversion.py",
+        "bytes": 3840,
+        "sha256": "3000746d2b2682a3e603238cd4ed17774d7ddb79ba0d5773446b39a17c0f6fcf",
+        "content_addressed_ref": "content_addressed_blobs/3000746d2b2682a3e603238cd4ed17774d7ddb79ba0d5773446b39a17c0f6fcf.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/helmholtz_phase_inversion.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "47ddb3f7550828aa8f1242e73edbe5a5b794d6e7f2f9bf7c00d2f343ed996be0",
+      "verified_post_package": true,
+      "verified_turn": 3,
+      "verification_command": "cd /holdout_task && cat > helmholtz_phase_inversion.py <<'PY'\n\"\"\"Finite-volume Helmholtz source inversion from polar receiver data.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef ",
+      "contract_check": {
+        "accepted": true,
+        "reasons": []
+      },
+      "archive_path": null
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}
