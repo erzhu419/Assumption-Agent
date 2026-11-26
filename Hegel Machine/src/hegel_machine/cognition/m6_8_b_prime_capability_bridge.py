@@ -1198,6 +1198,43 @@ def lift_python_scientific_expressions_to_programs(
                             module_shadowed.add(bound_nm)
                             valid_mod_aliases.discard(bound_nm)
 
+        def _lift_bool_guard_expr(
+            cond_node: ast.AST,
+            env: dict[str, Program],
+            shadowed_bare: set[str],
+            valid_mod_aliases: set[str],
+            module_fn_progs: dict[str, tuple[int, Program]],
+        ) -> Program | None:
+            if isinstance(cond_node, ast.UnaryOp) and isinstance(cond_node.op, ast.Not):
+                sub_b = _lift_bool_guard_expr(cond_node.operand, env, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                return Program("not", children=(sub_b,)) if sub_b is not None else None
+            if isinstance(cond_node, ast.BoolOp) and isinstance(cond_node.op, (ast.And, ast.Or)) and len(cond_node.values) >= 2:
+                parts = [_lift_bool_guard_expr(v, env, shadowed_bare, valid_mod_aliases, module_fn_progs) for v in cond_node.values]
+                if any(p is None for p in parts):
+                    return None
+                op_nm = "and" if isinstance(cond_node.op, ast.And) else "or"
+                acc = parts[0]
+                assert acc is not None
+                for nxt in parts[1:]:
+                    assert nxt is not None
+                    acc = Program(op_nm, children=(acc, nxt))
+                return acc
+            if isinstance(cond_node, ast.Compare) and len(cond_node.ops) == 1 and len(cond_node.comparators) == 1:
+                cl = _lift_expr(cond_node.left, env, 0, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                cr = _lift_expr(cond_node.comparators[0], env, 0, shadowed_bare, valid_mod_aliases, module_fn_progs)
+                if cl is None or cr is None:
+                    return None
+                cop = cond_node.ops[0]
+                if isinstance(cop, ast.GtE):
+                    return Program("ge", children=(cl, cr))
+                if isinstance(cop, ast.Gt):
+                    return Program("lt", children=(cr, cl))
+                if isinstance(cop, ast.Lt):
+                    return Program("lt", children=(cl, cr))
+                if isinstance(cop, ast.LtE):
+                    return Program("ge", children=(cr, cl))
+            return None
+
         module_fn_progs: dict[str, tuple[int, Program]] = {}
         for stmt in tree.body:
             if not isinstance(stmt, ast.FunctionDef):
@@ -1222,6 +1259,7 @@ def lift_python_scientific_expressions_to_programs(
             best_fn_prog: Program | None = None
             aborted_imperative = False
             fn_sep_guards: list[str] = []
+            fn_valid_guard_progs: list[Program] = []
             for b_stmt in stmt.body:
                 if isinstance(b_stmt, ast.Expr) and isinstance(b_stmt.value, ast.Constant) and isinstance(b_stmt.value.value, str):
                     continue
@@ -1229,6 +1267,11 @@ def lift_python_scientific_expressions_to_programs(
                     continue
                 if _is_pure_input_guard_raise_if(b_stmt) and best_fn_prog is None:
                     fn_sep_guards.append(ast.unparse(b_stmt.test))
+                    rej_g = _lift_bool_guard_expr(b_stmt.test, env, module_shadowed, valid_mod_aliases, module_fn_progs)
+                    if rej_g is None:
+                        aborted_imperative = True
+                        break
+                    fn_valid_guard_progs.append(Program("not", children=(rej_g,)))
                     continue
                 if isinstance(b_stmt, ast.Assign):
                     if len(b_stmt.targets) != 1 or not isinstance(b_stmt.targets[0], ast.Name):
@@ -1259,6 +1302,11 @@ def lift_python_scientific_expressions_to_programs(
                 diag_counts["separated_input_guards_by_fn"][stmt.name] = list(fn_sep_guards)
             if aborted_imperative or best_fn_prog is None:
                 diag_counts["aborted_imperative_or_unsupported"] += 1
+            if (not aborted_imperative) and best_fn_prog is not None and fn_valid_guard_progs:
+                comb_g = fn_valid_guard_progs[0]
+                for extra_g in fn_valid_guard_progs[1:]:
+                    comb_g = Program("and", children=(comb_g, extra_g))
+                best_fn_prog = Program("domain_guard", children=(comb_g, best_fn_prog))
             if (not aborted_imperative) and best_fn_prog is not None:
                 # Pure side-effect-free AST scalar differential check (`M8.4` Fix: ZERO host `exec`/`eval`!)
                 uses_idx_subscript = "_idx" in json.dumps(best_fn_prog.to_dict())
@@ -1436,15 +1484,33 @@ def lift_python_scientific_expressions_to_programs(
                                     raise ValueError("imperative_stmt")
                             raise ValueError("missing_return")
 
-                        for probe_base in (0.35, 0.85):
+                        valid_interior_hits = 0
+                        for probe_base in (0.35, 0.85, 1.55, 3.25, -0.45, 12.0):
                             p_vals = [probe_base + 0.17 * j for j in range(len(all_args))]
-                            py_out = float(_eval_pure_ast_fn(stmt, p_vals))
                             obs_p = Observation({f"x_{j}": p_vals[j] for j in range(len(all_args))}, 0.0)
+                            try:
+                                py_out = float(_eval_pure_ast_fn(stmt, p_vals))
+                            except ValueError as py_ve:
+                                if str(py_ve) == "input_guard_triggered_on_interior_probe":
+                                    try:
+                                        EvaluationContext(obs_p).evaluate(best_fn_prog)
+                                        best_fn_prog = None
+                                        diag_counts["failed_interior_probe_verification"] += 1
+                                        break
+                                    except ValueError:
+                                        continue
+                                raise
                             ir_out = float(EvaluationContext(obs_p).evaluate(best_fn_prog))
                             if not (math.isfinite(py_out) and math.isfinite(ir_out) and math.isclose(py_out, ir_out, rel_tol=1e-4, abs_tol=1e-4)):
                                 best_fn_prog = None
                                 diag_counts["failed_interior_probe_verification"] += 1
                                 break
+                            valid_interior_hits += 1
+                            if valid_interior_hits >= 2:
+                                break
+                        if best_fn_prog is not None and valid_interior_hits < 1:
+                            best_fn_prog = None
+                            diag_counts["failed_interior_probe_verification"] += 1
                     except Exception:
                         best_fn_prog = None
                         diag_counts["failed_interior_probe_verification"] += 1

@@ -20,6 +20,10 @@ class MissingHistory(ValueError):
     """The branch being executed requires an unavailable past observation."""
 
 
+class DomainViolationError(ValueError):
+    """The observation violates an explicit domain guard of an executable Program."""
+
+
 @dataclass(frozen=True)
 class Definition:
     """A reusable body with lexical arguments and previously learned calls."""
@@ -376,6 +380,10 @@ class EvaluationContext:
                 self.call_evaluations += local.call_evaluations
                 self.cache_hits += local.cache_hits
             return program.value * state + self._evaluate(drive, bindings)
+        if program.op == "domain_guard":
+            if not self._evaluate(program.children[0], bindings):
+                raise DomainViolationError(f"input violates domain guard: {program.children[0].describe()}")
+            return self._evaluate(program.children[1], bindings)
         if program.op == "if":
             condition = self._evaluate(program.children[0], bindings)
             return self._evaluate(program.children[1 if condition else 2], bindings)
@@ -434,7 +442,7 @@ class Program:
             "const": 0, "feature": 0, "lag": 0, "available": 0, "arg": 0,
             "abs": 1, "neg": 1, "sin": 1, "cos": 1, "tanh": 1, "exp": 1, "log": 1, "sqrt": 1, "not": 1,
             "add": 2, "sub": 2, "mul": 2, "div": 2, "min": 2, "max": 2,
-            "ge": 2, "lt": 2, "and": 2, "or": 2, "if": 3,
+            "ge": 2, "lt": 2, "and": 2, "or": 2, "domain_guard": 2, "if": 3,
             "accumulate": 3 if self.name in {"vdp", "vdp_lag1"} else 2,
             "window_sum": 1, "event_delta": 1, "state_replay": 1,
             "object_sum": len(self.children),

@@ -56,9 +56,23 @@ M94_BINDINGS_FOREST_KEY = "__m9_4_mechanism_executable_bindings__"
 # ============================================================================
 
 
+VALID_BINDING_QUALIFICATION_IDS: frozenset[str] = frozenset(
+    {
+        "hegel_l1_qual_4tuple_v2",
+        "hegel_l1_qual_4tuple_v3",
+        "hegel_l2_aufhebung_v2",
+        "hegel_public_scientific_gate_v4",
+        "unit_test_synthetic_fixture_v1",
+    }
+)
+VALID_EXECUTABLE_KINDS: frozenset[str] = frozenset(
+    {"raw_source", "compiled_L2", "primitive_L1", "bound_adapter"}
+)
+
+
 @dataclass
 class MechanismExecutableBinding:
-    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable."""
+    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable (`M9.4.1` `Gate B`)."""
 
     binding_id: str
     chain_id: str  # 'alpha' | 'beta'
@@ -75,6 +89,13 @@ class MechanismExecutableBinding:
     qualification_id: str
     parameter_mechanism_id: str
     parameter_version: int
+    executable_kind: str = "raw_source"
+    source_artifact_sha256: str = ""
+    compiled_skill_sha256: str = ""
+    adapter_code_sha256: str = ""
+    parameter_epoch_sha256: str = ""
+    contract_schema_sha256: str = ""
+    environment_digest: str = ""
     input_role_map: dict[str, str] = field(default_factory=dict)
     units: dict[str, str] = field(default_factory=dict)
     shapes: dict[str, str] = field(default_factory=dict)
@@ -92,7 +113,42 @@ class MechanismExecutableBinding:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> MechanismExecutableBinding:
-        return cls(**deepcopy(data))
+        allowed = {f.name for f in cls.__dataclass_fields__.values()}
+        return cls(**{k: deepcopy(v) for k, v in data.items() if k in allowed})
+
+
+def verify_binding_identity_and_foreign_keys(
+    binding: MechanismExecutableBinding,
+    *,
+    graph: PersistentMechanismGraph | None = None,
+    require_closure_code: bool = False,
+) -> None:
+    """Fail-closed identity, digest, qualification, and foreign-key verifier (`M9.4.1` `Gate B` / `A05`)."""
+    if binding.executable_kind not in VALID_EXECUTABLE_KINDS:
+        raise ValueError(f"Invalid executable_kind `{binding.executable_kind}` on `{binding.binding_id}`")
+    if binding.qualification_id not in VALID_BINDING_QUALIFICATION_IDS:
+        raise ValueError(f"Unqualified or unrecognized qualification_id `{binding.qualification_id}` on `{binding.binding_id}`")
+    if require_closure_code and (not binding.parameterized_closure_code.strip() or not binding.parameterized_entrypoint.strip()):
+        raise ValueError(f"Missing executable closure code/entrypoint on `{binding.binding_id}`")
+    if binding.parameterized_closure_code:
+        actual_sha = hashlib.sha256(binding.parameterized_closure_code.encode("utf-8")).hexdigest()
+        if binding.parameterized_closure_sha256 and binding.parameterized_closure_sha256 != actual_sha:
+            raise ValueError(
+                f"Declared closure SHA-256 mismatch on `{binding.binding_id}`: "
+                f"declared={binding.parameterized_closure_sha256[:16]} != actual={actual_sha[:16]}"
+            )
+        if binding.source_artifact_sha256 and binding.source_artifact_sha256 != actual_sha:
+            raise ValueError(f"Source artifact SHA-256 mismatch on `{binding.binding_id}`")
+    if graph is not None:
+        if binding.parameter_mechanism_id not in graph.mechanisms:
+            raise ValueError(f"Missing parameter_mechanism_id `{binding.parameter_mechanism_id}` in PersistentMechanismGraph")
+        if int(binding.parameter_version) != int(graph.mechanisms[binding.parameter_mechanism_id].version):
+            raise ValueError(
+                f"Stale/mismatched parameter_version on `{binding.binding_id}`: "
+                f"binding={binding.parameter_version} != graph={graph.mechanisms[binding.parameter_mechanism_id].version}"
+            )
+        if binding.mechanism_id not in graph.mechanisms:
+            raise ValueError(f"Dangling mechanism_id `{binding.mechanism_id}` not registered in PersistentMechanismGraph.mechanisms")
 
 
 class M94BindingRegistry:
@@ -105,19 +161,38 @@ class M94BindingRegistry:
         self.binding_events: list[dict[str, Any]] = []
         self._hydrate()
 
+    def _ensure_typed_mechanism_registered(self, binding: MechanismExecutableBinding) -> None:
+        if binding.mechanism_id not in self.graph.mechanisms:
+            parent_mech = binding.parameter_mechanism_id if binding.parameter_mechanism_id in self.graph.mechanisms else None
+            feat_nms = tuple(sorted(binding.input_role_map.keys())) if binding.input_role_map else (binding.component_id,)
+            self.graph.register_mechanism(
+                TypedMechanism(
+                    mechanism_id=binding.mechanism_id,
+                    parent_id=parent_mech,
+                    role="bound_constitutive_executable",
+                    feature_names=feat_nms,
+                    version=int(binding.mechanism_version),
+                    shared_weights={},
+                    provenance_note=f"Bound executable `{binding.binding_id}` ({binding.executable_kind}) on `{binding.forest_node_id}`.",
+                ),
+                tree_id=f"tree_m94_chain_{binding.chain_id}",
+            )
+
     def _hydrate(self) -> None:
         blob = self.graph.forest.questions.get(M94_BINDINGS_FOREST_KEY)
-        if isinstance(blob, dict) and blob.get("schema") == "hegel_m9_4_bindings_v1":
-            self.bindings = {
-                str(k): MechanismExecutableBinding.from_dict(v)
-                for k, v in (blob.get("bindings") or {}).items()
-            }
+        if isinstance(blob, dict) and blob.get("schema") in {"hegel_m9_4_bindings_v1", "hegel_m9_4_1_bindings_v2"}:
             self.parameter_epochs = deepcopy(blob.get("parameter_epochs") or {})
             self.binding_events = list(blob.get("binding_events") or [])
+            self.bindings = {}
+            for k, v in (blob.get("bindings") or {}).items():
+                b = MechanismExecutableBinding.from_dict(v)
+                self._ensure_typed_mechanism_registered(b)
+                verify_binding_identity_and_foreign_keys(b, graph=self.graph, require_closure_code=False)
+                self.bindings[str(k)] = b
 
     def sync_to_graph(self) -> None:
         self.graph.forest.questions[M94_BINDINGS_FOREST_KEY] = {
-            "schema": "hegel_m9_4_bindings_v1",
+            "schema": "hegel_m9_4_1_bindings_v2",
             "bindings": {k: b.to_dict() for k, b in sorted(self.bindings.items())},
             "parameter_epochs": deepcopy(self.parameter_epochs),
             "binding_events": deepcopy(self.binding_events),
@@ -125,18 +200,30 @@ class M94BindingRegistry:
         self.graph.sync_authoritative_state_to_forest()
 
     def register_binding(self, binding: MechanismExecutableBinding, *, reason: str = "registered") -> None:
+        if binding.parameterized_closure_code and not binding.parameterized_closure_sha256:
+            binding.parameterized_closure_sha256 = hashlib.sha256(binding.parameterized_closure_code.encode("utf-8")).hexdigest()
+        if binding.parameterized_closure_sha256 and not binding.source_artifact_sha256:
+            binding.source_artifact_sha256 = binding.parameterized_closure_sha256
+        if binding.module_digest and not binding.compiled_skill_sha256:
+            binding.compiled_skill_sha256 = binding.module_digest
+        if not binding.contract_schema_sha256 and binding.output_schema_keys:
+            binding.contract_schema_sha256 = hashlib.sha256(json.dumps(sorted(binding.output_schema_keys)).encode("utf-8")).hexdigest()
+        self._ensure_typed_mechanism_registered(binding)
+        verify_binding_identity_and_foreign_keys(binding, graph=self.graph, require_closure_code=False)
         self.bindings[binding.binding_id] = binding
         self.binding_events.append(
             {
                 "event": reason,
                 "binding_id": binding.binding_id,
+                "executable_kind": binding.executable_kind,
                 "chain_id": binding.chain_id,
                 "branch_tag": binding.branch_tag,
                 "mechanism_id": binding.mechanism_id,
                 "mechanism_version": binding.mechanism_version,
                 "parameter_mechanism_id": binding.parameter_mechanism_id,
                 "parameter_version": binding.parameter_version,
-                "closure_sha256": binding.parameterized_closure_sha256[:16],
+                "source_artifact_sha256": binding.source_artifact_sha256[:16],
+                "compiled_skill_sha256": binding.compiled_skill_sha256[:16],
             }
         )
         self.sync_to_graph()
@@ -423,6 +510,8 @@ def extract_guard_observables_from_m94_public_item(chain_id: str, public_item: d
         }
         if "yield_stress" in ds:
             obs["yield_stress"] = float(ds["yield_stress"])
+        elif ds.get("pure_linear_no_yield_declared") is True:
+            obs["pure_linear_no_yield_declared"] = True
         if "residual_plastic_state" in ds.get("test", {}):
             obs["residual_plastic_state"] = np.asarray(ds["test"]["residual_plastic_state"], dtype=float)
         return obs
@@ -897,6 +986,8 @@ def _gen_m94_alpha_cohort(
         ds["test"]["critical_strain"] = te_cr
     if yield_stress is not None:
         ds["yield_stress"] = float(yield_stress)
+    else:
+        ds["pure_linear_no_yield_declared"] = True
     if include_reset_metadata:
         ds["specimen_reset"] = True
         ds["test"]["residual_plastic_state"] = np.zeros(len(te_lab), dtype=float)
@@ -1218,6 +1309,8 @@ for sd, ds, gt in cases:
     rem_r = ir - (hw[0] * gap_m[:, 0] / et[0] + hw[1] * gap_m[:, 1] / et[1])
     if float(np.max(np.abs(rem_c - rem_r[:, None] * ds["eval_times"][None, :]))) > 0.08:
         valid = False; rows.append({{"seed": sd, "error": "weights_prediction_handoff_mismatch"}}); continue
+    if float(np.max(np.abs(hw - gt["theta"]))) > 0.14:
+        valid = False; rows.append({{"seed": sd, "error": "tail_coefficients_gt_handoff_mismatch"}}); continue
     tau_rel = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
     s_mae = float(np.mean(np.abs(ps - gt["te_clean"])))
     tw_mae = float(np.mean(np.abs(ps[-16:] - gt["te_clean"][-16:])))
@@ -1838,24 +1931,23 @@ def render_bound_executable_adapter(
     binding: MechanismExecutableBinding,
     target_entrypoint: str,
     param_payload: dict[str, Any],
+    graph: PersistentMechanismGraph | None = None,
 ) -> str:
     """Bind the ACTUAL agent-synthesized Python module (`binding.parameterized_closure_code` from `Stage S` or `C1`)
     to the current `PersistentMechanismGraph` `param_payload` (`AncestorReweight` epoch) via a pure input-role adapter.
 
-    CRITICAL AUDIT INVARIANT: Zero numerical solver logic (zero IRLS, zero Nelder-Mead, zero PDE stencil, zero Sylvester,
-    zero KKT solver) is emitted here — 100% of the scientific computation executes inside `binding.parameterized_closure_code`!
+    CRITICAL AUDIT INVARIANT (`M9.4.1` `Gate B`):
+      1. Zero numerical solver logic is emitted here — 100% of scientific computation runs inside `binding.parameterized_closure_code`!
+      2. Strictly verifies declared SHA-256, qualification_id, and (when `graph` is provided) foreign keys & parameter epoch BEFORE rendering!
     """
     import base64
 
+    verify_binding_identity_and_foreign_keys(binding, graph=graph, require_closure_code=True)
     src_code = str(binding.parameterized_closure_code or "")
     src_ep = str(binding.parameterized_entrypoint or "")
-    if not src_code.strip() or not src_ep.strip():
-        raise ValueError(
-            f"MechanismExecutableBinding `{binding.binding_id}` is missing `parameterized_closure_code` / `parameterized_entrypoint`; "
-            "refusing any host fallback template!"
-        )
     b64_src = base64.b64encode(src_code.encode("utf-8")).decode("ascii")
     src_sha = hashlib.sha256(src_code.encode("utf-8")).hexdigest()
+    param_sha = hashlib.sha256(json.dumps(param_payload, sort_keys=True).encode("utf-8")).hexdigest()
 
     if binding.chain_id == "alpha":
         gains_lit = [round(float(x), 8) for x in param_payload["stress_gains"]]
@@ -2005,7 +2097,10 @@ def evaluate_bound_mechanism_candidate_in_container(
         binding=chosen_b,
         target_entrypoint=entry_nm,
         param_payload=param_payload,
+        graph=graph,
     )
+    chosen_b.adapter_code_sha256 = hashlib.sha256(cand_src.encode("utf-8")).hexdigest()
+    chosen_b.parameter_epoch_sha256 = hashlib.sha256(json.dumps(param_payload, sort_keys=True).encode("utf-8")).hexdigest()
 
     ft = m94_task_to_frontier_task(task)
     cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")

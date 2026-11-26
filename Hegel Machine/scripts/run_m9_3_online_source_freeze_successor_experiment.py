@@ -55,7 +55,7 @@ from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import (
     ensure_clean_scipy_sandbox_image,
 )
 from hegel_machine.cognition.m9_3_online_lifecycle_benchmark import (
-    evaluate_direct_source_float_plugin_controls,
+    evaluate_post_freeze_dev_seed_plugin_controls,
     get_m93_recovery_frontier_tasks,
     get_m93_source_frontier_tasks,
     get_m93_successor_frontier_tasks,
@@ -438,18 +438,23 @@ def main() -> None:
                 "newly_compiled_online_l1_stems": sorted(new_online_l1_stems),
             },
         )
-        float_plugin_ctrl = evaluate_direct_source_float_plugin_controls()
-        assert float_plugin_ctrl["direct_source_float_plugin_fails_all_successors"] is True
+        float_plugin_ctrl = evaluate_post_freeze_dev_seed_plugin_controls()
+        assert float_plugin_ctrl["dev_seed_direct_float_plugin_fails_all_successors"] is True
+        source_node_by_short = {
+            ev["l2_compilation"]["source_slug"]: str(ev["consolidation"]["target_node_id"])
+            for ev in l2_comp_events
+        }
 
         freeze_receipt = {
-            "schema_version": "hegel_m9_3_pre_target_qualification_freeze_v1",
+            "schema_version": "hegel_m9_3_pre_target_qualification_freeze_v2_devseed",
             "freeze_completed_timestamp_utc": datetime.now(timezone.utc).isoformat(),
             "parent_v7_bundle_sha256": v7_sha,
             "frozen_post_source_v8_bundle_sha256": ser_v8["bundle_sha256"],
             "dependency_env_digest": env_dig,
+            "source_node_by_short": source_node_by_short,
             "newly_compiled_online_l1_stems": sorted(new_online_l1_stems),
             "newly_compiled_online_l1_details": new_l1_details,
-            "direct_source_float_plugin_controls": float_plugin_ctrl,
+            "post_freeze_dev_seed_plugin_controls": float_plugin_ctrl,
             "c_source_ledger": c_source_ledger,
             "c_qualification_ledger": c_qual_ledger,
             "l1_sublation_events": l1_sub["events"],
@@ -614,12 +619,22 @@ def main() -> None:
                 bif_ou += int(ltc.get("completion", 0)); bif_wall += float(ltc.get("wall_ms", 0.0))
                 if comp_c.get("compiled_ok"):
                     # Enforce explicit precondition-gated regime split so generation=0 linear/separable L1 is NEVER overwritten!
-                    axis_nm = "overstress_ratio" if "suc01_C" in c_task.task_id else "nonseparable_vortex_norm"
+                    is_c1_alpha = "suc01_C" in c_task.task_id
+                    axis_nm = "overstress_excess_max_history_and_hold" if is_c1_alpha else "nonseparable_2d_additive_residual_ratio"
+                    src_map = freeze_receipt.get("source_node_by_short") or {}
+                    src_parent_nid = str(src_map.get("src01" if is_c1_alpha else "src02") or "")
+                    guard_override = m7a.ObservablePreconditionGuard(
+                        guard_id=f"guard_m93_{c_task.short_name}",
+                        observable_extractor=axis_nm,
+                        op=">",
+                        value=(0.0 if is_c1_alpha else 1e-6),
+                        applies_to_component_id=("linear_viscoelastic_memory" if is_c1_alpha else "separable_kronecker_transport"),
+                    )
                     comp_c["regime_bifurcation"] = {
                         "should_split_node": True,
                         "regime_axis": axis_nm,
                         "branch_guard_op": ">",
-                        "branch_guard_value": 0.0,
+                        "branch_guard_value": (0.0 if is_c1_alpha else 1e-6),
                         "counter_regime_warning": f"Localized nonlinear/non-separable regime `{axis_nm} > 0`; preserve generation=0 linear/separable L1 when `{axis_nm} <= 0`.",
                     }
                     cons_c = m7a.consolidate_autogenous_episode_into_forest(
@@ -628,6 +643,15 @@ def main() -> None:
                         compilation=comp_c,
                         nogoods_recorded=list(win_c_sum.get("nogoods_recorded") or []),
                         allow_horizontal_wormholes=True,
+                        source_node_id=(src_parent_nid or None),
+                        source_version=1,
+                        violated_component_id=("linear_viscoelastic_memory" if is_c1_alpha else "separable_kronecker_transport"),
+                        preserved_component_ids=(
+                            ["reference_panel_calibration", "variable_step_gap_recursion"]
+                            if is_c1_alpha
+                            else ["nuisance_profiling", "box_simplex_kkt_certification"]
+                        ),
+                        guard_spec_override=guard_override,
                     )
                     bif_events.append({"task_id": c_task.task_id, "consolidation": cons_c})
         finally:

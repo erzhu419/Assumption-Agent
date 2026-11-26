@@ -2142,7 +2142,13 @@ def classify_source_aware_adoption_funnel(
     retained_mods = {Path(str(m)).stem for m in (ret.get("final_retained_modules") or [])}
     reachable_fns = [str(f) for f in (ret.get("entrypoint_reachable_functions") or [])]
     reachable_stems = {f.split(".", 1)[0] for f in reachable_fns if "." in f}
-    all_ast_exact = bool(ret.get("all_retained_ast_match_source", True))
+    has_explicit_ast_flag = "all_retained_ast_match_source" in ret
+    all_ast_exact: bool | None = (
+        bool(ret["all_retained_ast_match_source"]) if has_explicit_ast_flag and ret["all_retained_ast_match_source"] is not None else None
+    )
+    per_fn_exact_map: dict[str, bool] = {
+        str(k): bool(v) for k, v in (ret.get("per_function_ast_exact") or {}).items()
+    }
 
     def _tier_slice(stems: set[str], available: bool) -> dict[str, Any]:
         if not available or not stems:
@@ -2153,14 +2159,36 @@ def classify_source_aware_adoption_funnel(
                 "dev_executed": False,
                 "dev_call_count": 0,
                 "dev_called_functions": {},
+                "present_in_final_artifact": False,
                 "exact_ast_closure_retained": False,
+                "exact_retention_status": "not_available",
+                "adapted_or_modified_retained": False,
                 "entrypoint_reachable": False,
                 "entrypoint_reachable_functions": [],
+                "exact_and_reachable": False,
+                "exact_and_reachable_functions": [],
             }
         dev_cnt = sum(c for st, c in calls_by_stem.items() if st in stems)
         dev_fns = {k: v for k, v in sorted(calls_by_fn.items()) if k.split(".", 1)[0] in stems}
-        ret_hit = bool((retained_mods & stems) and all_ast_exact)
+        present_hit = bool(retained_mods & stems)
         reach_fns = [f for f in reachable_fns if f.split(".", 1)[0] in stems]
+        exact_reach_fns: list[str] = []
+        if per_fn_exact_map:
+            exact_reach_fns = [f for f in reach_fns if per_fn_exact_map.get(f) is True]
+            ret_hit = bool(present_hit and (len(exact_reach_fns) > 0 or any(per_fn_exact_map.get(f) is True for f in per_fn_exact_map if f.split(".", 1)[0] in stems)))
+            exact_status = "exact" if ret_hit else ("adapted" if present_hit else "absent")
+        elif all_ast_exact is True:
+            ret_hit = bool(present_hit)
+            exact_reach_fns = list(reach_fns) if ret_hit else []
+            exact_status = "exact" if ret_hit else "absent"
+        elif all_ast_exact is False:
+            ret_hit = False
+            exact_reach_fns = []
+            exact_status = "adapted" if present_hit else "absent"
+        else:
+            ret_hit = False
+            exact_reach_fns = []
+            exact_status = "unknown" if present_hit else "absent"
         return {
             "assets_available": True,
             "search_disclosed": bool(search_returned_stems & stems),
@@ -2168,16 +2196,31 @@ def classify_source_aware_adoption_funnel(
             "dev_executed": dev_cnt > 0,
             "dev_call_count": int(dev_cnt),
             "dev_called_functions": dev_fns,
+            "present_in_final_artifact": present_hit,
             "exact_ast_closure_retained": ret_hit,
+            "exact_retention_status": exact_status,
+            "adapted_or_modified_retained": bool(present_hit and exact_status == "adapted"),
             "entrypoint_reachable": len(reach_fns) > 0,
             "entrypoint_reachable_functions": reach_fns,
+            "exact_and_reachable": bool(ret_hit and len(exact_reach_fns) > 0),
+            "exact_and_reachable_functions": exact_reach_fns,
         }
 
     ns_l2 = _tier_slice(new_source_l2_stems, arm_has_new_source_assets)
     ns_l1 = _tier_slice(new_source_l1_stems, arm_has_new_source_assets)
     pr_l1 = _tier_slice(prior_stems, bool(prior_stems))
     any_exact_retained = bool(
-        ns_l2["entrypoint_reachable"] or ns_l1["entrypoint_reachable"] or pr_l1["entrypoint_reachable"]
+        ns_l2["exact_and_reachable"] or ns_l1["exact_and_reachable"] or pr_l1["exact_and_reachable"]
+    )
+    any_adapted_reachable = bool(
+        (ns_l2["entrypoint_reachable"] and ns_l2["exact_retention_status"] == "adapted")
+        or (ns_l1["entrypoint_reachable"] and ns_l1["exact_retention_status"] == "adapted")
+        or (pr_l1["entrypoint_reachable"] and pr_l1["exact_retention_status"] == "adapted")
+    )
+    any_unknown_reachable = bool(
+        (ns_l2["entrypoint_reachable"] and ns_l2["exact_retention_status"] == "unknown")
+        or (ns_l1["entrypoint_reachable"] and ns_l1["exact_retention_status"] == "unknown")
+        or (pr_l1["entrypoint_reachable"] and pr_l1["exact_retention_status"] == "unknown")
     )
     return {
         "any_catalog_accessed": any_catalog_accessed,
@@ -2186,12 +2229,21 @@ def classify_source_aware_adoption_funnel(
         "prior_v7_L1": pr_l1,
         "total_dynamic_skill_calls_all_tiers": int(sum(calls_by_stem.values())),
         "any_new_source_executed": bool(ns_l2["dev_executed"] or ns_l1["dev_executed"]),
-        "any_new_source_exact_retained_and_reachable": bool(ns_l2["entrypoint_reachable"] or ns_l1["entrypoint_reachable"]),
+        "any_new_source_reachable": bool(ns_l2["entrypoint_reachable"] or ns_l1["entrypoint_reachable"]),
+        "any_new_source_exact_retained_and_reachable": bool(ns_l2["exact_and_reachable"] or ns_l1["exact_and_reachable"]),
         "catalog_seen_without_retained_L1": bool(any_catalog_accessed and not ns_l1["entrypoint_reachable"] and not pr_l1["entrypoint_reachable"]),
         "derivation_provenance_status": (
             "exact_ast_closure_retained"
             if any_exact_retained
-            else ("no_new_source_assets_exposed" if not arm_has_new_source_assets else "unverified_without_exact_closure")
+            else (
+                "adapted_closure_reachable"
+                if any_adapted_reachable
+                else (
+                    "unknown_ast_provenance"
+                    if any_unknown_reachable
+                    else ("no_new_source_assets_exposed" if not arm_has_new_source_assets else "unverified_without_exact_closure")
+                )
+            )
         ),
     }
 

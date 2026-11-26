@@ -544,14 +544,46 @@ def discover_cross_tree_operator_wormholes(
             if tree_a == tree_b:
                 continue
 
-            # Tier 1: Try genuine Python-AST-lifted `Program` anti-unification first!
+            # Tier 1: Try genuine Python-AST-lifted `Program` anti-unification first (`M9.4.1` `Gate B`: preserve domain guards!)
+            def _split_guard_and_body(p: Program) -> tuple[Program | None, Program]:
+                if p.op == "domain_guard" and len(p.children) == 2:
+                    return p.children[0], p.children[1]
+                return None, p
+
             best_real: tuple[Program, list[dict[str, Any]]] | None = None
+            best_guard_meta: dict[str, Any] = {"has_domain_guard": False, "domain_guard_status": "unconstrained"}
             for lpa in ea["lifted_progs"]:
+                ga, ba = _split_guard_and_body(lpa)
                 for lpb in eb["lifted_progs"]:
-                    cand_r = anti_unify_programs(lpa, lpb)
+                    gb, bb = _split_guard_and_body(lpb)
+                    cand_r = anti_unify_programs(ba, bb)
                     if cand_r is not None and cand_r[0].size >= 4 and _program_has_nontrivial_sensitivity(cand_r[0], cand_r[1]):
-                        if best_real is None or cand_r[0].size > best_real[0].size:
-                            best_real = cand_r
+                        skel_body, skel_slots = cand_r
+                        body_feats = skel_body.required_features()
+                        comb_guard: Program | None = None
+                        guard_compatible = True
+                        if ga is not None and gb is not None:
+                            comb_guard = Program("and", children=(ga, gb))
+                            guard_compatible = comb_guard.required_features().issubset(body_feats)
+                        elif ga is not None:
+                            comb_guard = ga
+                            guard_compatible = ga.required_features().issubset(body_feats)
+                        elif gb is not None:
+                            comb_guard = gb
+                            guard_compatible = gb.required_features().issubset(body_feats)
+                        wrapped_skel = (
+                            Program("domain_guard", children=(comb_guard, skel_body))
+                            if comb_guard is not None
+                            else skel_body
+                        )
+                        if best_real is None or wrapped_skel.size > best_real[0].size:
+                            best_real = (wrapped_skel, skel_slots)
+                            best_guard_meta = {
+                                "has_domain_guard": comb_guard is not None,
+                                "domain_guard_compatible": guard_compatible,
+                                "domain_guard_intersection": (comb_guard.to_dict() if comb_guard is not None else None),
+                                "domain_guard_describe": (comb_guard.describe() if comb_guard is not None else ""),
+                            }
 
             verification_tier = ""
             mech_verified = False
@@ -560,8 +592,12 @@ def discover_cross_tree_operator_wormholes(
 
             if best_real is not None:
                 best_anti = best_real
-                verification_tier = "ast_differential_verified"
-                mech_verified = True
+                if best_guard_meta.get("has_domain_guard") and not best_guard_meta.get("domain_guard_compatible", True):
+                    verification_tier = "candidate_unverified_domain_guard_alignment"
+                    mech_verified = False
+                else:
+                    verification_tier = "ast_differential_verified"
+                    mech_verified = True
             elif ea["stage_prog"] is not None and eb["stage_prog"] is not None:
                 pa, pb = ea["stage_prog"], eb["stage_prog"]
                 cand_s = anti_unify_programs(pa, pb)
@@ -616,6 +652,7 @@ def discover_cross_tree_operator_wormholes(
                         "kind": "typed_scientific_operator_dag",
                         "verification_tier": verification_tier,
                         "source_code_ast_digests": [ea["code_ast_digest"], eb["code_ast_digest"]],
+                        "domain_guard": best_guard_meta,
                     },
                     open_completion_slots=[{"slot": s["slot"], "path": list(s["path"])} for s in slots],
                     supporting_sources=[
@@ -926,7 +963,7 @@ def issue_4tuple_l1_qualification_receipt(
         "    if isinstance(v, (list, tuple)): return {'t': 'seq', 'v': [_canon(x) for x in v]}\n"
         "    if isinstance(v, dict): return {'t': 'd', 'v': {str(k): _canon(val) for k, val in sorted(v.items())}}\n"
         "    return {'t': type(v).__name__, 'v': repr(v)}\n"
-        "calls = []\n"
+        "calls_by_fn = {fn_nm: [] for fn_nm in fns}\n"
         "for fn_nm in fns:\n"
         "    orig_fn = getattr(m, fn_nm)\n"
         "    def _make_wrap(_nm, _f):\n"
@@ -937,10 +974,10 @@ def issue_4tuple_l1_qualification_receipt(
         "            post_in = _canon([args, kwargs])\n"
         "            if pre_in != post_in:\n"
         "                raise AssertionError(f'input_mutated_in_place:{_nm}')\n"
-        "            if len(calls) < 24:\n"
+        "            if len(calls_by_fn[_nm]) < 16:\n"
         "                try:\n"
         "                    pickle.dumps((_nm, c_args, c_kw))\n"
-        "                    calls.append((_nm, c_args, c_kw))\n"
+        "                    calls_by_fn[_nm].append((_nm, c_args, c_kw))\n"
         "                except Exception:\n"
         "                    pass\n"
         "            return res\n"
@@ -949,7 +986,12 @@ def issue_4tuple_l1_qualification_receipt(
         "ut_src = open(os.path.join(root, '_run_ut.py'), encoding='utf-8').read()\n"
         "ns = {fn_nm: getattr(m, fn_nm) for fn_nm in fns}\n"
         "exec(compile(ut_src, '<det_capture>', 'exec'), ns)\n"
+        "uncovered = [fn_nm for fn_nm in fns if len(calls_by_fn.get(fn_nm, [])) == 0]\n"
+        "if uncovered:\n"
+        "    raise AssertionError(f'uncovered_public_functions_in_determinism_capture:{uncovered}')\n"
+        "calls = [item for fn_nm in fns for item in calls_by_fn[fn_nm]]\n"
         "open(os.path.join(root, '_captured_calls.pkl'), 'wb').write(pickle.dumps(calls))\n"
+        "open(os.path.join(root, '_covered_fns.json'), 'w', encoding='utf-8').write(json.dumps({fn_nm: len(calls_by_fn[fn_nm]) for fn_nm in fns}, sort_keys=True))\n"
         "'''\n"
         "REPLAY = '''\n"
         "import copy, hashlib, json, os, pickle, sys\n"
@@ -1076,11 +1118,24 @@ def issue_4tuple_l1_qualification_receipt(
     ut_res["candidate_self_test_passed"] = self_test_ok
     ut_res["host_reexecution_passed"] = host_reexec_ok
     ut_res["determinism_and_input_immutability_verified"] = det_immut_ok
+    ut_res["all_public_functions_covered_in_replay"] = bool(det_immut_ok)
+    ut_res["covered_public_functions"] = (sorted(public_fn_names) if det_immut_ok else [])
     ut_res["independent_reference_properties_verified"] = indep_prop_ok
     ut_res["host_independent_repeatability_verified"] = host_indep_ok
+    ut_res["qualification_capabilities"] = [
+        cap
+        for cap, ok_c in (
+            ("container_self_test", self_test_ok),
+            ("two_process_per_fn_determinism", det_immut_ok),
+            ("input_immutability", det_immut_ok),
+            ("independent_reference_properties", indep_prop_ok),
+        )
+        if ok_c
+    ]
     ut_res["verified_code_sha256"] = c_sha
     ut_res["synthetic_unit_test_sha256"] = ut_sha
     ut_res["verifier_protocol_version"] = protocol_version
+    ut_res["qualification_tier"] = "hegel_l1_qual_4tuple_v3_stratified" if det_immut_ok else protocol_version
     ut_res["dependency_env_digest"] = env_digest
     ut_res["environment_manifest"] = env_manifest
     return passed_all, ut_res
@@ -1774,47 +1829,87 @@ def evaluate_observable_precondition_guard(
     if fld in ctx and isinstance(ctx[fld], (int, float)) and not isinstance(ctx[fld], bool) and math.isfinite(float(ctx[fld])):
         measured_val = float(ctx[fld])
     elif obs_kind == "overstress_excess_max_history_and_hold":
-        # Inspect observable train/test or flat stress histories + yield_stress + optional residual_plastic_state
+        # Strict 3-valued fail-closed check (`M9.4.1` `Gate B`):
+        # 1. Require finite `past_stress` AND finite `stress_hold_0` (unless `history_free_protocol_declared is True`).
+        # 2. Require finite positive `yield_stress` (unless `pure_linear_no_yield_declared is True`).
+        # 3. Any `NaN`/`Inf` in `past_stress`, `stress_hold_0`, `yield_stress`, or `residual_plastic_state` -> `UNKNOWN`!
         ys = ctx.get("yield_stress")
         res_pl = ctx.get("residual_plastic_state")
         if res_pl is None and isinstance(ctx.get("test"), dict):
             res_pl = ctx["test"].get("residual_plastic_state")
+        res_pl_ok = True
         res_pl_norm = 0.0
         if res_pl is not None:
             try:
-                res_pl_norm = float(np.max(np.abs(np.asarray(res_pl, dtype=float))))
+                rp_arr = np.asarray(res_pl, dtype=float)
+                if rp_arr.size == 0 or not bool(np.all(np.isfinite(rp_arr))):
+                    res_pl_ok = False
+                else:
+                    res_pl_norm = float(np.max(np.abs(rp_arr)))
             except Exception:
-                res_pl_norm = float("nan")
+                res_pl_ok = False
+
+        has_past = False
+        has_hold = False
+        all_finite_stress = True
         peaks: list[float] = []
-        try:
-            for sk_top in ("past_stress", "stress_hold_0"):
-                if sk_top in ctx:
-                    peaks.append(float(np.max(np.abs(np.asarray(ctx[sk_top], dtype=float)))))
-            for split_k in ("train", "test"):
-                sp_d = ctx.get(split_k)
-                if isinstance(sp_d, dict):
-                    for sk in ("past_stress", "stress_hold_0"):
-                        if sk in sp_d:
-                            peaks.append(float(np.max(np.abs(np.asarray(sp_d[sk], dtype=float)))))
-        except Exception:
-            peaks = []
-        if ys is None:
-            if ctx.get("pure_linear_no_yield_declared") is True or bool(peaks):
-                measured_val = max(0.0, res_pl_norm) if math.isfinite(res_pl_norm) else None
+
+        def _collect_stress_arr(raw_v: Any, kind_tag: str) -> None:
+            nonlocal has_past, has_hold, all_finite_stress
+            try:
+                arr = np.asarray(raw_v, dtype=float)
+                if arr.size == 0 or not bool(np.all(np.isfinite(arr))):
+                    all_finite_stress = False
+                    return
+                peaks.append(float(np.max(np.abs(arr))))
+                if kind_tag == "past_stress":
+                    has_past = True
+                else:
+                    has_hold = True
+            except Exception:
+                all_finite_stress = False
+
+        if "past_stress" in ctx:
+            _collect_stress_arr(ctx["past_stress"], "past_stress")
+        if "stress_hold_0" in ctx:
+            _collect_stress_arr(ctx["stress_hold_0"], "stress_hold_0")
+        for split_k in ("train", "test"):
+            sp_d = ctx.get(split_k)
+            if isinstance(sp_d, dict):
+                if "past_stress" in sp_d:
+                    _collect_stress_arr(sp_d["past_stress"], "past_stress")
+                if "stress_hold_0" in sp_d:
+                    _collect_stress_arr(sp_d["stress_hold_0"], "stress_hold_0")
+
+        history_req_met = has_hold and (has_past or ctx.get("history_free_protocol_declared") is True)
+        if not (res_pl_ok and all_finite_stress and history_req_met and peaks):
+            measured_val = None
+        elif ys is None:
+            if ctx.get("pure_linear_no_yield_declared") is True:
+                measured_val = max(0.0, res_pl_norm)
             else:
                 measured_val = None
         else:
             try:
                 ys_f = float(ys)
-                if ys_f > 0.0 and peaks and math.isfinite(res_pl_norm):
+                if math.isfinite(ys_f) and ys_f > 0.0:
                     measured_val = max(0.0, max(peaks) / ys_f - 1.0, res_pl_norm)
+                else:
+                    measured_val = None
             except Exception:
                 measured_val = None
     elif obs_kind == "nonseparable_2d_additive_residual_ratio":
-        v_key = next((k for k in ("V_pocket_channel_b", "V_potential_2d", "reaction_potential_2d") if k in ctx), None)
+        v_key = next((k for k in ("V_pocket_channel_b", "V_potential_2d", "reaction_potential_2d", "V_background") if k in ctx and ctx[k] is not None), None)
         if v_key is None:
-            if "source_modes" in ctx and "mu_shifts" in ctx:
+            if ctx.get("zero_reaction_potential_declared") is True:
                 measured_val = 0.0
+            elif "source_modes" in ctx and "mu_shifts" in ctx:
+                try:
+                    sm = np.asarray(ctx["source_modes"], dtype=float)
+                    ms = np.asarray(ctx["mu_shifts"], dtype=float)
+                    measured_val = 0.0 if (sm.size > 0 and ms.size > 0 and bool(np.all(np.isfinite(sm))) and bool(np.all(np.isfinite(ms)))) else None
+                except Exception:
+                    measured_val = None
             else:
                 measured_val = None
         else:
@@ -1824,6 +1919,8 @@ def evaluate_observable_precondition_guard(
                     r_add = v_arr - np.mean(v_arr, axis=1, keepdims=True) - np.mean(v_arr, axis=0, keepdims=True) + float(np.mean(v_arr))
                     denom = max(float(np.linalg.norm(v_arr)), 1.0)
                     measured_val = float(np.linalg.norm(r_add) / denom)
+                else:
+                    measured_val = None
             except Exception:
                 measured_val = None
 

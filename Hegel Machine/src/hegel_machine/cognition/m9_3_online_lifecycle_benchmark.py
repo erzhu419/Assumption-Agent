@@ -1409,36 +1409,16 @@ def verify_m93_output_contract_and_handoff(
             if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
                 errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
         if not errs:
-            et = np.asarray(out["estimated_taus"], dtype=float)
-            hw = np.asarray(out["hereditary_weights"], dtype=float)
-            ps = np.asarray(out["predicted_strain"], dtype=float)
-            ir = np.asarray(out["initial_rate_pred"], dtype=float)
-            if not (0.05 < et[0] < et[1] < 25.0):
-                errs.append("taus_not_positive_ordered")
-            if float(np.linalg.norm(hw[:2])) <= 1e-4 or float(np.min(hw[:2])) <= 1e-4:
-                errs.append("degenerate_or_zero_prony_branch_weights")
-            # Algebraic curve-increment vs `hereditary_weights[:3]` + `estimated_taus` handoff check:
-            # At `eval_times`, `Delta_eps(i, k) - [g1*(h0-z1)*(1-e^{-t_k/tau1}) + g2*(h0-z2)*(1-e^{-t_k/tau2})]` must be linear in `t_k`
-            # (`slope_i * t_k`), AND `ir[i] - [g1*(h0-z1)/tau1 + g2*(h0-z2)/tau2]` must equal that exact per-specimen drift `slope_i`!
-            p_dt = np.asarray(dataset_or_study["past_dt"], dtype=float)
-            p_st = np.asarray(dataset_or_study["test"]["past_stress"], dtype=float)
-            h0 = np.asarray(dataset_or_study["test"]["stress_hold_0"], dtype=float)
-            s0 = np.asarray(dataset_or_study["test"]["strain_0"], dtype=float)
-            t_ev = np.asarray(dataset_or_study["eval_times"], dtype=float)
-            z_mem = np.zeros((n_te, 2), dtype=float)
-            for s_i, dts in enumerate(p_dt):
-                dec = np.exp(-dts / et)
-                z_mem = z_mem * dec[None, :] + (1.0 - dec[None, :]) * p_st[:, s_i : s_i + 1]
-            gap = h0[:, None] - z_mem
-            prony_part = (
-                hw[0] * gap[:, 0:1] * (-np.expm1(-t_ev[None, :] / et[0]))
-                + hw[1] * gap[:, 1:2] * (-np.expm1(-t_ev[None, :] / et[1]))
+            from .m9_4_1_shared_verification_kernel import verify_alpha_candidate_handoff_and_invariants
+
+            k_res = verify_alpha_candidate_handoff_and_invariants(
+                dataset=dataset_or_study,
+                out=out,
+                gt=None,
+                require_gt_accuracy=False,
             )
-            rem_curve = (ps - s0[:, None]) - prony_part
-            rem_rate = ir - (hw[0] * gap[:, 0] / et[0] + hw[1] * gap[:, 1] / et[1])
-            handoff_curve_max = float(np.max(np.abs(rem_curve - rem_rate[:, None] * t_ev[None, :])))
-            if handoff_curve_max > 0.08:
-                errs.append(f"weights_to_prediction_handoff_inconsistent:{handoff_curve_max:.6f}")
+            if not k_res["ok"]:
+                errs.extend(k_res["errors"])
 
     elif short == "suc01_T":
         n_te = len(dataset_or_study["test"]["lab_id"])
