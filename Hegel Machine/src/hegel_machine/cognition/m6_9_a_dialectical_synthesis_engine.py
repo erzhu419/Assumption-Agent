@@ -953,7 +953,7 @@ def should_spawn_dialectical_second_branch(
     pub = public_metrics or {}
     if not bool(chk.get("accepted", True)):
         triggers.append("failed_public_artifact_contract")
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"}:
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"}:
         max_t = int(primary_summary.get("max_turns") or 28)
         used_t = int(primary_summary.get("turns_used") or 0)
         if used_t >= max(1, max_t - 3):
@@ -1701,6 +1701,10 @@ def grade_archived_branch_post_lock(
         from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_by_id
 
         return run_hard_stress_private_verifier_by_id(task.task_id, branch_tar)
+    if task.benchmark == "Hegel-M90a-VoluntaryReuse-4":
+        from .m9_0_voluntary_reuse_benchmark import run_voluntary_reuse_private_verifier_by_id
+
+        return run_voluntary_reuse_private_verifier_by_id(task.task_id, branch_tar)
 
     cid: str | None = None
     try:
@@ -1729,7 +1733,7 @@ def grade_archived_branch_post_lock(
 
 
 def _init_holdout_public_env_if_needed(cid: str, task: m6f.FrontierBenchmarkTask) -> None:
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"} and task.holdout_public_setup_py:
+    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"} and task.holdout_public_setup_py:
         subprocess.run(["docker", "exec", cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
         with tempfile.TemporaryDirectory(prefix="hegel_ho_syn_") as td_h:
             setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -2497,6 +2501,12 @@ def run_m6_9_a_two_branch_episode(
             from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_for_container
 
             verifier_report = run_hard_stress_private_verifier_for_container(task.task_id, synth_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M90a-VoluntaryReuse-4":
+            assert synth_cid is not None
+            from .m9_0_voluntary_reuse_benchmark import run_voluntary_reuse_private_verifier_for_container
+
+            verifier_report = run_voluntary_reuse_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None

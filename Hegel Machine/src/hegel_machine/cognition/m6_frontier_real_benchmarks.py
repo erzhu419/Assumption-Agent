@@ -115,6 +115,7 @@ class FrontierBenchmarkTask:
     biomystery_allowed_domains: tuple[str, ...] = ()
     biomystery_human_solvable: bool = True
     holdout_public_setup_py: str | None = None
+    declared_callable_entrypoints: tuple[str, ...] = ()
 
 
 TB_WAVE_ASSIGNMENTS: tuple[tuple[str, str, str, str, str, int], ...] = (
@@ -2831,7 +2832,7 @@ def run_frontier_episode(
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
             subprocess.run(["docker", "exec", agent_cid, "chmod", "-R", "a-w", "/workspace/data"], capture_output=True, timeout=15)
-        elif task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4"} and task.holdout_public_setup_py:
+        elif task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"} and task.holdout_public_setup_py:
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
             with tempfile.TemporaryDirectory(prefix="hegel_ho_boot_") as td_h:
                 setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -4051,6 +4052,11 @@ def run_frontier_episode(
             from .m8_9_hard_stress_benchmark import run_hard_stress_private_verifier_for_container
 
             verifier_report = run_hard_stress_private_verifier_for_container(task.task_id, agent_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M90a-VoluntaryReuse-4":
+            from .m9_0_voluntary_reuse_benchmark import run_voluntary_reuse_private_verifier_for_container
+
+            verifier_report = run_voluntary_reuse_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             verifier_report = run_tb_separate_verifier(task, agent_cid)

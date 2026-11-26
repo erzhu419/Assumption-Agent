@@ -1107,6 +1107,7 @@ def hard_stress_task_to_frontier_task(ht: HoldoutOODTask) -> m6f.FrontierBenchma
         agent_image_tag=CLEAN_SCIPY_SANDBOX_IMAGE,
         verifier_image_tag=CLEAN_SCIPY_SANDBOX_IMAGE,
         declared_artifacts=ht.declared_artifacts,
+        declared_callable_entrypoints=ht.declared_callable_entrypoints,
         holdout_public_setup_py=ht.public_setup_py,
         agent_cpus=2,
         agent_memory_mb=2048,
