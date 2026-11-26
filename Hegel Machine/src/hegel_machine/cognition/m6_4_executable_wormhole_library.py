@@ -2050,6 +2050,152 @@ def register_verified_l1_env_digest(env_digest: str) -> None:
         _REGISTERED_VERIFIED_ENV_DIGESTS.add(s)
 
 
+def clear_verified_l1_env_digests_for_testing() -> None:
+    """Reset in-process verified environment registry (used by cold-start isolation tests)."""
+    _REGISTERED_VERIFIED_ENV_DIGESTS.clear()
+
+
+def ensure_runtime_qualification_context(
+    *,
+    sandbox_cid: str | None = None,
+    image_tag: str = "hegel_clean_scipy_sandbox:v1",
+    strict_require_initialized: bool = False,
+) -> dict[str, Any]:
+    """Initialize & return explicit `QualificationContext` (`M9.3.1` `F08` / `A9` cold-process safety).
+
+    Ensures both normal recall and standalone `LocalContainerRepair` entrypoints bind to the measured
+    immutable container environment rather than silently returning `0` qualified skills on cold start.
+    """
+    if strict_require_initialized and not _REGISTERED_VERIFIED_ENV_DIGESTS and sandbox_cid is None:
+        raise RuntimeError(
+            "runtime_env_not_initialized: call `ensure_runtime_qualification_context(sandbox_cid=...)` "
+            "or `compute_runtime_sandbox_env_digest(...)` before querying 4-tuple L1 primitives."
+        )
+    if _REGISTERED_VERIFIED_ENV_DIGESTS and sandbox_cid is None:
+        return {
+            "initialized": True,
+            "registered_env_digests": sorted(_REGISTERED_VERIFIED_ENV_DIGESTS),
+        }
+    from .m7_autogenous_forest_pretraining import compute_runtime_sandbox_env_digest
+
+    dig, man = compute_runtime_sandbox_env_digest(sandbox_cid=sandbox_cid, image_tag=image_tag)
+    return {
+        "initialized": True,
+        "env_digest": dig,
+        "manifest": man,
+        "registered_env_digests": sorted(_REGISTERED_VERIFIED_ENV_DIGESTS),
+    }
+
+
+def classify_source_aware_adoption_funnel(
+    *,
+    episode_summary: dict[str, Any],
+    full_skill_activations: list[dict[str, Any]],
+    skill_inspections: list[dict[str, Any]],
+    new_source_l2_stems: set[str],
+    new_source_l1_stems: set[str],
+    prior_l1_stems: set[str] | None = None,
+    arm_has_new_source_assets: bool = True,
+) -> dict[str, Any]:
+    """Multi-label, source-and-tier-aware adoption funnel (`M9.3.1` `F05`).
+
+    Cleanly separates `new_source_L2`, `new_source_L1`, and `prior_v7_L1_L2` across:
+      `assets_available -> search_disclosed -> contract_or_source_inspected -> dev_executed -> exact_ast_retained -> entrypoint_reachable`
+    NEVER conflating `B` (no new source assets) or exact `L2` retention (`E/rep_01/suc01_C`: 1,018 calls!) with `derived_manual_rewrite`!
+    """
+    prior_stems = set(prior_l1_stems or set())
+    funnel_raw = episode_summary.get("skill_adoption_funnel") or {}
+    ret = funnel_raw.get("final_selected_artifact_retention") or {}
+
+    search_returned_stems: set[str] = set()
+    described_stems: set[str] = set()
+    any_catalog_accessed = bool(
+        int(funnel_raw.get("search_skill_query_count", 0) or 0) > 0
+        or int(funnel_raw.get("describe_skill_inspection_count", 0) or 0) > 0
+        or bool(funnel_raw.get("inspected_knowledge_ref_in_bash"))
+        or bool(skill_inspections)
+    )
+    for ev in skill_inspections:
+        ev_t = str(ev.get("event") or "")
+        if ev_t == "skill_search_executed":
+            for fid in ev.get("ranked_function_ids") or []:
+                search_returned_stems.add(str(fid).split(".", 1)[0])
+        elif ev_t in {"skill_contract_delivered", "skill_contract_requested"}:
+            tgt = str(ev.get("target") or "").strip()
+            if tgt and tgt != "*":
+                described_stems.add(tgt.split(".", 1)[0])
+            for m_nm in ev.get("matched_modules") or []:
+                described_stems.add(str(m_nm))
+
+    calls_by_stem: dict[str, int] = {}
+    calls_by_fn: dict[str, int] = {}
+    for act in full_skill_activations:
+        mod_nm = Path(str(act.get("module") or act.get("module_stem") or "")).stem
+        fn_nm = str(act.get("function") or "")
+        cnt = int(act.get("call_count", 1) or 1)
+        if mod_nm:
+            calls_by_stem[mod_nm] = calls_by_stem.get(mod_nm, 0) + cnt
+            if fn_nm:
+                qfn = f"{mod_nm}.{fn_nm}"
+                calls_by_fn[qfn] = calls_by_fn.get(qfn, 0) + cnt
+
+    retained_mods = {Path(str(m)).stem for m in (ret.get("final_retained_modules") or [])}
+    reachable_fns = [str(f) for f in (ret.get("entrypoint_reachable_functions") or [])]
+    reachable_stems = {f.split(".", 1)[0] for f in reachable_fns if "." in f}
+    all_ast_exact = bool(ret.get("all_retained_ast_match_source", True))
+
+    def _tier_slice(stems: set[str], available: bool) -> dict[str, Any]:
+        if not available or not stems:
+            return {
+                "assets_available": False,
+                "search_disclosed": False,
+                "contract_described": False,
+                "dev_executed": False,
+                "dev_call_count": 0,
+                "dev_called_functions": {},
+                "exact_ast_closure_retained": False,
+                "entrypoint_reachable": False,
+                "entrypoint_reachable_functions": [],
+            }
+        dev_cnt = sum(c for st, c in calls_by_stem.items() if st in stems)
+        dev_fns = {k: v for k, v in sorted(calls_by_fn.items()) if k.split(".", 1)[0] in stems}
+        ret_hit = bool((retained_mods & stems) and all_ast_exact)
+        reach_fns = [f for f in reachable_fns if f.split(".", 1)[0] in stems]
+        return {
+            "assets_available": True,
+            "search_disclosed": bool(search_returned_stems & stems),
+            "contract_described": bool(described_stems & stems),
+            "dev_executed": dev_cnt > 0,
+            "dev_call_count": int(dev_cnt),
+            "dev_called_functions": dev_fns,
+            "exact_ast_closure_retained": ret_hit,
+            "entrypoint_reachable": len(reach_fns) > 0,
+            "entrypoint_reachable_functions": reach_fns,
+        }
+
+    ns_l2 = _tier_slice(new_source_l2_stems, arm_has_new_source_assets)
+    ns_l1 = _tier_slice(new_source_l1_stems, arm_has_new_source_assets)
+    pr_l1 = _tier_slice(prior_stems, bool(prior_stems))
+    any_exact_retained = bool(
+        ns_l2["entrypoint_reachable"] or ns_l1["entrypoint_reachable"] or pr_l1["entrypoint_reachable"]
+    )
+    return {
+        "any_catalog_accessed": any_catalog_accessed,
+        "new_source_L2": ns_l2,
+        "new_source_L1": ns_l1,
+        "prior_v7_L1": pr_l1,
+        "total_dynamic_skill_calls_all_tiers": int(sum(calls_by_stem.values())),
+        "any_new_source_executed": bool(ns_l2["dev_executed"] or ns_l1["dev_executed"]),
+        "any_new_source_exact_retained_and_reachable": bool(ns_l2["entrypoint_reachable"] or ns_l1["entrypoint_reachable"]),
+        "catalog_seen_without_retained_L1": bool(any_catalog_accessed and not ns_l1["entrypoint_reachable"] and not pr_l1["entrypoint_reachable"]),
+        "derivation_provenance_status": (
+            "exact_ast_closure_retained"
+            if any_exact_retained
+            else ("no_new_source_assets_exposed" if not arm_has_new_source_assets else "unverified_without_exact_closure")
+        ),
+    }
+
+
 def build_knowledge_only_describe_ref_script() -> str:
     """Return the `describe_ref.py` script for `K` (`on_demand_knowledge_only` / `progressive_knowledge_only`),
     generated from the EXACT SAME `_SHARED_CATALOG_READER_CORE_PY` as `E`'s `SKILL_INIT_PY` (`M9.2.1` `A3`)!
@@ -2150,6 +2296,8 @@ def verify_l1_module_qualification_record(
         if expected_env_digests is not None:
             eff_envs = set(expected_env_digests)
         else:
+            if not _REGISTERED_VERIFIED_ENV_DIGESTS and (not allow_v6_legacy_env_label or env_val != LEGACY_V6_SANDBOX_ENV_DIGEST):
+                return False, "runtime_env_not_initialized", actual_sha
             eff_envs = set(_REGISTERED_VERIFIED_ENV_DIGESTS)
             if allow_v6_legacy_env_label:
                 eff_envs.add(LEGACY_V6_SANDBOX_ENV_DIGEST)

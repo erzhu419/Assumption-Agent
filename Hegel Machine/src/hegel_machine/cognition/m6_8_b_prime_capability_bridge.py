@@ -932,12 +932,23 @@ _BINARY_CALL_MAP = {
 }
 
 
+def _is_pure_input_guard_raise_if(stmt: ast.AST) -> bool:
+    """Return True iff `stmt` is `if <cond>: raise <Err>(...)` with empty `orelse` (`M9.3.1` AST guard separation)."""
+    return (
+        isinstance(stmt, ast.If)
+        and not stmt.orelse
+        and len(stmt.body) == 1
+        and isinstance(stmt.body[0], ast.Raise)
+    )
+
+
 def lift_python_scientific_expressions_to_programs(
     closures: list[dict[str, str]],
     *,
     max_programs: int = 4,
+    funnel_diagnostics_out: dict[str, Any] | None = None,
 ) -> list[tuple[str, Program]]:
-    """Lift pure-Python mathematical expressions into safe-totalized domain-interior `Program` skeletons (`K02` + `M7.7` Fix).
+    """Lift pure-Python mathematical expressions into safe-totalized domain-interior `Program` skeletons (`K02` + `M7.7` + `M9.3.1` Fix).
 
     Guarantees & explicit domain scope:
       - `EvaluationContext` evaluates `Program` trees with totalized safe operators on moderate interior probes
@@ -947,11 +958,22 @@ def lift_python_scientific_expressions_to_programs(
       - Module & lexical symbol resolution (`M7.7` `shadowed_sin` fix): tracks module-level `def`/`class`/assignment/import
         bindings and local variables so user-redefined primitives (e.g. `def sin(x): return x + 100`) inline their lifted
         definition or abort cleanly, NEVER colliding with standard `math`/`numpy` primitives!
-      - Rejects imperative loops/mutations (`For`, `While`, `AugAssign`, `If`, `Try`, `With`).
+      - Separates leading pure input-validation guards (`if <cond>: raise ValueError(...)`) into `separated_input_guards`
+        and verifies the guard does NOT reject interior test probes before lifting the mathematical body (`M9.3.1`).
+      - Rejects imperative loops/mutations (`For`, `While`, `AugAssign`, non-guard `If`, `Try`, `With`).
     """
     import math
 
     lifted: list[tuple[str, Program]] = []
+    diag_counts: dict[str, Any] = {
+        "closures_scanned": len(closures),
+        "functions_scanned": 0,
+        "functions_with_separated_input_guards": 0,
+        "separated_input_guards_by_fn": {},
+        "aborted_imperative_or_unsupported": 0,
+        "failed_interior_probe_verification": 0,
+        "lifted_program_count": 0,
+    }
 
     def _subst_arg_features(prog: Program, bound_args: list[Program]) -> Program:
         if prog.op == "feature" and prog.name and prog.name.startswith("x_") and "_idx" not in prog.name:
@@ -1132,6 +1154,9 @@ def lift_python_scientific_expressions_to_programs(
                         return Program("if", children=(Program("ge", children=(cr, cl)), body_p, else_p))
         return None
 
+    if isinstance(closures, str):
+        closures = [{"name": "inline", "code": closures}]
+
     for cl in closures:
         fn_name = str(cl.get("name") or "fn")
         code_str = str(cl.get("code") or "")
@@ -1189,16 +1214,21 @@ def lift_python_scientific_expressions_to_programs(
                     break
             if has_unknown_decorator:
                 continue
+            diag_counts["functions_scanned"] += 1
             env: dict[str, Program] = {}
             all_args = [*stmt.args.posonlyargs, *stmt.args.args, *stmt.args.kwonlyargs]
             for idx, arg in enumerate(all_args):
                 env[arg.arg] = Program("feature", name=f"x_{idx}")
             best_fn_prog: Program | None = None
             aborted_imperative = False
+            fn_sep_guards: list[str] = []
             for b_stmt in stmt.body:
                 if isinstance(b_stmt, ast.Expr) and isinstance(b_stmt.value, ast.Constant) and isinstance(b_stmt.value.value, str):
                     continue
                 if isinstance(b_stmt, ast.Pass):
+                    continue
+                if _is_pure_input_guard_raise_if(b_stmt) and best_fn_prog is None:
+                    fn_sep_guards.append(ast.unparse(b_stmt.test))
                     continue
                 if isinstance(b_stmt, ast.Assign):
                     if len(b_stmt.targets) != 1 or not isinstance(b_stmt.targets[0], ast.Name):
@@ -1223,6 +1253,12 @@ def lift_python_scientific_expressions_to_programs(
                 else:
                     aborted_imperative = True
                     break
+            if fn_sep_guards:
+                diag_counts["functions_with_separated_input_guards"] += 1
+                diag_counts["separated_input_guards_by_fn"][f"{fn_name}::{stmt.name}"] = list(fn_sep_guards)
+                diag_counts["separated_input_guards_by_fn"][stmt.name] = list(fn_sep_guards)
+            if aborted_imperative or best_fn_prog is None:
+                diag_counts["aborted_imperative_or_unsupported"] += 1
             if (not aborted_imperative) and best_fn_prog is not None:
                 # Pure side-effect-free AST scalar differential check (`M8.4` Fix: ZERO host `exec`/`eval`!)
                 uses_idx_subscript = "_idx" in json.dumps(best_fn_prog.to_dict())
@@ -1358,6 +1394,24 @@ def lift_python_scientific_expressions_to_programs(
                                         return min(max(c_args[0], c_args[1]), c_args[2])
                             raise ValueError("unsupported_ast_call_or_node")
 
+                        def _eval_pure_ast_guard_bool(cond: ast.AST, loc_env: dict[str, float]) -> bool:
+                            if isinstance(cond, ast.BoolOp):
+                                sub_vals = [_eval_pure_ast_guard_bool(v, loc_env) for v in cond.values]
+                                return all(sub_vals) if isinstance(cond.op, ast.And) else any(sub_vals)
+                            if isinstance(cond, ast.UnaryOp) and isinstance(cond.op, ast.Not):
+                                return not _eval_pure_ast_guard_bool(cond.operand, loc_env)
+                            if isinstance(cond, ast.Compare) and len(cond.ops) == 1 and len(cond.comparators) == 1:
+                                cl = _eval_pure_ast_expr(cond.left, loc_env, 0)
+                                cr = _eval_pure_ast_expr(cond.comparators[0], loc_env, 0)
+                                cop = cond.ops[0]
+                                if isinstance(cop, ast.Gt): return cl > cr
+                                if isinstance(cop, ast.GtE): return cl >= cr
+                                if isinstance(cop, ast.Lt): return cl < cr
+                                if isinstance(cop, ast.LtE): return cl <= cr
+                                if isinstance(cop, ast.Eq): return cl == cr
+                                if isinstance(cop, ast.NotEq): return cl != cr
+                            raise ValueError("unsupported_guard_cond")
+
                         def _eval_pure_ast_fn(fdef: ast.FunctionDef, vals: list[float], depth: int = 0) -> float:
                             f_args = [*fdef.args.posonlyargs, *fdef.args.args]
                             if len(f_args) != len(vals):
@@ -1367,6 +1421,10 @@ def lift_python_scientific_expressions_to_programs(
                                 if isinstance(bs, ast.Expr) and isinstance(bs.value, ast.Constant) and isinstance(bs.value.value, str):
                                     continue
                                 if isinstance(bs, ast.Pass):
+                                    continue
+                                if _is_pure_input_guard_raise_if(bs):
+                                    if _eval_pure_ast_guard_bool(bs.test, loc):
+                                        raise ValueError("input_guard_triggered_on_interior_probe")
                                     continue
                                 if isinstance(bs, ast.Assign) and len(bs.targets) == 1 and isinstance(bs.targets[0], ast.Name):
                                     loc[bs.targets[0].id] = _eval_pure_ast_expr(bs.value, loc, depth + 1)
@@ -1385,15 +1443,23 @@ def lift_python_scientific_expressions_to_programs(
                             ir_out = float(EvaluationContext(obs_p).evaluate(best_fn_prog))
                             if not (math.isfinite(py_out) and math.isfinite(ir_out) and math.isclose(py_out, ir_out, rel_tol=1e-4, abs_tol=1e-4)):
                                 best_fn_prog = None
+                                diag_counts["failed_interior_probe_verification"] += 1
                                 break
                     except Exception:
                         best_fn_prog = None
+                        diag_counts["failed_interior_probe_verification"] += 1
             if (not aborted_imperative) and best_fn_prog is not None:
                 if not stmt.args.vararg and not stmt.args.kwarg and not stmt.args.defaults:
                     module_fn_progs[stmt.name] = (len(all_args), best_fn_prog)
                 lifted.append((fn_name, best_fn_prog))
+                diag_counts["lifted_program_count"] = len(lifted)
+                diag_counts["lifted_to_program_tree"] = len(lifted)
                 if len(lifted) >= max_programs:
+                    if funnel_diagnostics_out is not None:
+                        funnel_diagnostics_out.update(diag_counts)
                     return lifted
+    if funnel_diagnostics_out is not None:
+        funnel_diagnostics_out.update(diag_counts)
     return lifted
 
 

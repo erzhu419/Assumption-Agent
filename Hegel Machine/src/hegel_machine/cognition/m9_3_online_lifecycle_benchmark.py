@@ -38,6 +38,7 @@ Zero artificial solver bans; every task ships a real `public_setup_py` + `/holdo
 
 from __future__ import annotations
 
+import math
 from pathlib import Path
 import tempfile
 from typing import Any
@@ -606,6 +607,17 @@ for sd, taus_t, th_t in cases:
         valid = False; rows.append({"seed": sd, "error": "shape_mismatch"}); continue
     if not (np.all(np.isfinite(et)) and np.all(np.isfinite(hw)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir)) and 0.05 < et[0] < et[1]):
         valid = False; rows.append({"seed": sd, "error": "non_finite_or_unordered_taus"}); continue
+    if float(np.linalg.norm(hw[:2])) <= 1e-4 or float(np.min(hw[:2])) <= 1e-4:
+        valid = False; rows.append({"seed": sd, "error": "degenerate_prony_weights"}); continue
+    z_m = np.zeros((len(ds["test"]["lab_id"]), 2), dtype=float)
+    for s_i, dts in enumerate(ds["past_dt"]):
+        dec = np.exp(-dts / et); z_m = z_m * dec[None, :] + (1.0 - dec[None, :]) * ds["test"]["past_stress"][:, s_i:s_i+1]
+    gap_m = ds["test"]["stress_hold_0"][:, None] - z_m
+    pr_p = hw[0] * gap_m[:, 0:1] * (-np.expm1(-ds["eval_times"][None, :] / et[0])) + hw[1] * gap_m[:, 1:2] * (-np.expm1(-ds["eval_times"][None, :] / et[1]))
+    rem_c = (ps - ds["test"]["strain_0"][:, None]) - pr_p
+    rem_r = ir - (hw[0] * gap_m[:, 0] / et[0] + hw[1] * gap_m[:, 1] / et[1])
+    if float(np.max(np.abs(rem_c - rem_r[:, None] * ds["eval_times"][None, :]))) > 0.08:
+        valid = False; rows.append({"seed": sd, "error": "weights_prediction_handoff_mismatch"}); continue
     tau_rel = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
     s_mae = float(np.mean(np.abs(ps - gt["te_clean"])))
     tw_mae = float(np.mean(np.abs(ps[-16:] - gt["te_clean"][-16:])))
@@ -696,6 +708,21 @@ for sd, taus_t, th_t in cases:
         valid = False; rows.append({"seed": sd, "error": "shape_mismatch"}); continue
     if not (np.all(np.isfinite(et)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(sc)) and np.all(np.isfinite(cx)) and 0.05 < et[0] < et[1]):
         valid = False; rows.append({"seed": sd, "error": "non_finite"}); continue
+    sec_exp = (ps[:, -1] - ds["test"]["strain_0"]) / np.maximum(np.abs(ds["test"]["stress_hold_0"]), 0.5)
+    if float(np.max(np.abs(sc - sec_exp))) > 1e-5:
+        valid = False; rows.append({"seed": sd, "error": "secant_compliance_handoff_mismatch"}); continue
+    ts_f = np.concatenate([[0.0], ds["eval_times"]]); ys_f = np.column_stack([ds["test"]["strain_0"], ps])
+    cx_exp = np.full(len(ds["test"]["strain_0"]), float(ds["eval_times"][-1]), dtype=float)
+    for _ii in range(len(cx_exp)):
+        _c_th = float(ds["test"]["critical_strain"][_ii])
+        if ys_f[_ii, 0] >= _c_th:
+            cx_exp[_ii] = 0.0; continue
+        for _ki in range(len(ts_f) - 1):
+            if ys_f[_ii, _ki + 1] >= _c_th:
+                _dy = max(float(ys_f[_ii, _ki + 1] - ys_f[_ii, _ki]), 1e-12)
+                cx_exp[_ii] = float(ts_f[_ki] + (_c_th - ys_f[_ii, _ki]) / _dy * (ts_f[_ki + 1] - ts_f[_ki])); break
+    if float(np.max(np.abs(cx - cx_exp))) > 1e-4:
+        valid = False; rows.append({"seed": sd, "error": "hazard_crossing_handoff_mismatch"}); continue
     tr = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
     sm = float(np.mean(np.abs(ps - gt["te_clean"])))
     scm = float(np.mean(np.abs(sc - gt["te_secant"])))
@@ -863,10 +890,22 @@ for sd, taus_t, th_t in cases:
     if not isinstance(out, dict) or not {"estimated_taus", "hereditary_weights", "predicted_strain", "initial_rate_pred"} <= set(out.keys()):
         valid = False; rows.append({"seed": sd, "error": "missing_keys"}); continue
     et = np.asarray(out["estimated_taus"], dtype=float)
+    hw = np.asarray(out["hereditary_weights"], dtype=float)
     ps = np.asarray(out["predicted_strain"], dtype=float)
     ir = np.asarray(out["initial_rate_pred"], dtype=float)
-    if et.shape != (2,) or ps.shape != gt["te_clean"].shape or ir.shape != gt["te_true_rate0"].shape or not (np.all(np.isfinite(et)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir)) and 0.05 < et[0] < et[1]):
+    if et.shape != (2,) or hw.shape != (7,) or ps.shape != gt["te_clean"].shape or ir.shape != gt["te_true_rate0"].shape or not (np.all(np.isfinite(et)) and np.all(np.isfinite(hw)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir)) and 0.05 < et[0] < et[1]):
         valid = False; rows.append({"seed": sd, "error": "bad_output"}); continue
+    if float(np.linalg.norm(hw[:2])) <= 1e-4 or float(np.min(hw[:2])) <= 1e-4:
+        valid = False; rows.append({"seed": sd, "error": "degenerate_prony_weights"}); continue
+    z_m = np.zeros((len(ds["test"]["lab_id"]), 2), dtype=float)
+    for s_i, dts in enumerate(ds["past_dt"]):
+        dec = np.exp(-dts / et); z_m = z_m * dec[None, :] + (1.0 - dec[None, :]) * ds["test"]["past_stress"][:, s_i:s_i+1]
+    gap_m = ds["test"]["stress_hold_0"][:, None] - z_m
+    pr_p = hw[0] * gap_m[:, 0:1] * (-np.expm1(-ds["eval_times"][None, :] / et[0])) + hw[1] * gap_m[:, 1:2] * (-np.expm1(-ds["eval_times"][None, :] / et[1]))
+    rem_c = (ps - ds["test"]["strain_0"][:, None]) - pr_p
+    rem_r = ir - (hw[0] * gap_m[:, 0] / et[0] + hw[1] * gap_m[:, 1] / et[1])
+    if float(np.max(np.abs(rem_c - rem_r[:, None] * ds["eval_times"][None, :]))) > 0.08:
+        valid = False; rows.append({"seed": sd, "error": "weights_prediction_handoff_mismatch"}); continue
     tau_rel = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
     s_mae = float(np.mean(np.abs(ps - gt["te_clean"])))
     r_mae = float(np.mean(np.abs(ir - gt["te_true_rate0"])))
@@ -959,6 +998,8 @@ for sd in (99601, 99602):
     chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"])
     if not chk["valid"]:
         valid = False; rows.append({"seed": sd, "error": f"kkt:{chk['reason']}"}); continue
+    if float(np.max(np.abs(w - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-6:
+        valid = False; rows.append({"seed": sd, "error": "weights_kkt_certificate_handoff_mismatch"}); continue
     wr = float(np.linalg.norm(w - gt["w_opt"]) / np.linalg.norm(gt["w_opt"]))
     fr = float(np.linalg.norm(tf - gt["terminal_field_A"]) / np.linalg.norm(gt["terminal_field_A"]))
     max_w_rel = max(max_w_rel, wr); max_f_rel = max(max_f_rel, fr); max_gap = max(max_gap, float(chk["gap"]))
@@ -1049,6 +1090,8 @@ for sd in (99611, 99612):
         chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], float(bg), certs[bi])
         if not chk["valid"]:
             ok_all = False; rows.append({"seed": sd, "error": f"kkt_b{bi}:{chk['reason']}"}); break
+        if float(np.max(np.abs(wb[bi] - np.asarray(certs[bi]["weights"], dtype=float)))) > 1e-6:
+            ok_all = False; rows.append({"seed": sd, "error": f"weights_cert_handoff_b{bi}"}); break
         max_gap = max(max_gap, float(chk["gap"]))
     if not ok_all:
         valid = False; continue
@@ -1139,6 +1182,8 @@ for sd in (99621, 99622):
     chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"])
     if not chk["valid"]:
         valid = False; rows.append({"seed": sd, "error": f"kkt:{chk['reason']}"}); continue
+    if float(np.max(np.abs(w - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-6:
+        valid = False; rows.append({"seed": sd, "error": "weights_kkt_certificate_handoff_mismatch"}); continue
     wr = float(np.linalg.norm(w - gt["w_opt"]) / np.linalg.norm(gt["w_opt"]))
     far = float(np.linalg.norm(fa - gt["terminal_field_A"]) / np.linalg.norm(gt["terminal_field_A"]))
     fbr = float(np.linalg.norm(fb - gt["terminal_field_B"]) / np.linalg.norm(gt["terminal_field_B"]))
@@ -1213,6 +1258,8 @@ for sd in (99691, 99692):
     chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"])
     if not chk["valid"]:
         valid = False; rows.append({"seed": sd, "error": f"kkt:{chk['reason']}"}); continue
+    if float(np.max(np.abs(w - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-6:
+        valid = False; rows.append({"seed": sd, "error": "weights_kkt_certificate_handoff_mismatch"}); continue
     wr = float(np.linalg.norm(w - gt["w_opt"]) / np.linalg.norm(gt["w_opt"]))
     fr = float(np.linalg.norm(tf - gt["terminal_field_A"]) / np.linalg.norm(gt["terminal_field_A"]))
     max_w_rel = max(max_w_rel, wr); max_f_rel = max(max_f_rel, fr); max_gap = max(max_gap, float(chk["gap"]))
@@ -1319,6 +1366,307 @@ def run_m93_lifecycle_private_verifier_for_container(task_id: str, agent_cid: st
         rep = run_holdout_private_verifier(ht, tar_p)
         rep["benchmark"] = "Hegel-M93-Lifecycle"
         return rep
+
+
+def verify_m93_output_contract_and_handoff(
+    task_id: str,
+    dataset_or_study: dict[str, Any],
+    out: Any,
+    *,
+    gt_bundle: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Unified `M9.3.1` `F04` typed output schema & cross-stage algebraic handoff verifier shared by public & private checks!
+
+    Closes both reproducible gaps identified in `Hegel_M9_3_Audit`:
+      1. `src01` / `rec01_R` `hereditary_weights`: rejects non-finite (`np.array([np.nan])`), wrong-shape, all-zero (`np.zeros(7)`),
+         or algebraically inconsistent `[g_1, g_2, c_0, beta_1..beta_4]` weights relative to `predicted_strain` & `initial_rate_pred`!
+      2. `suc01_T`: enforces algebraic handoff consistency between `predicted_strain` and derived `secant_compliance` + `hazard_crossing_times`.
+      3. `src02` / `suc02_T` / `suc02_C` / `rec02_R`: enforces exact equality between top-level `weights` (`weights_by_budget[b]`)
+         and `kkt_certificate['weights']` (`kkt_certificates[b]['weights']`) plus shared KKT duality verification when `gt_bundle` is supplied.
+    """
+    errs: list[str] = []
+    if not isinstance(out, dict):
+        return {"valid": False, "errors": ["output_not_dict"]}
+
+    short = task_id.split("__", 1)[0]
+    if short in {"src01", "rec01_R"}:
+        n_te = len(dataset_or_study["test"]["lab_id"])
+        k_t = len(dataset_or_study["eval_times"])
+        for k, shp in (
+            ("estimated_taus", (2,)),
+            ("hereditary_weights", (7,)),
+            ("predicted_strain", (n_te, k_t)),
+            ("initial_rate_pred", (n_te,)),
+        ):
+            if k not in out:
+                errs.append(f"missing:{k}")
+                continue
+            try:
+                arr = np.asarray(out[k], dtype=float)
+            except Exception:
+                errs.append(f"non_numeric:{k}")
+                continue
+            if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
+        if not errs:
+            et = np.asarray(out["estimated_taus"], dtype=float)
+            hw = np.asarray(out["hereditary_weights"], dtype=float)
+            ps = np.asarray(out["predicted_strain"], dtype=float)
+            ir = np.asarray(out["initial_rate_pred"], dtype=float)
+            if not (0.05 < et[0] < et[1] < 25.0):
+                errs.append("taus_not_positive_ordered")
+            if float(np.linalg.norm(hw[:2])) <= 1e-4 or float(np.min(hw[:2])) <= 1e-4:
+                errs.append("degenerate_or_zero_prony_branch_weights")
+            # Algebraic curve-increment vs `hereditary_weights[:3]` + `estimated_taus` handoff check:
+            # At `eval_times`, `Delta_eps(i, k) - [g1*(h0-z1)*(1-e^{-t_k/tau1}) + g2*(h0-z2)*(1-e^{-t_k/tau2})]` must be linear in `t_k`
+            # (`slope_i * t_k`), AND `ir[i] - [g1*(h0-z1)/tau1 + g2*(h0-z2)/tau2]` must equal that exact per-specimen drift `slope_i`!
+            p_dt = np.asarray(dataset_or_study["past_dt"], dtype=float)
+            p_st = np.asarray(dataset_or_study["test"]["past_stress"], dtype=float)
+            h0 = np.asarray(dataset_or_study["test"]["stress_hold_0"], dtype=float)
+            s0 = np.asarray(dataset_or_study["test"]["strain_0"], dtype=float)
+            t_ev = np.asarray(dataset_or_study["eval_times"], dtype=float)
+            z_mem = np.zeros((n_te, 2), dtype=float)
+            for s_i, dts in enumerate(p_dt):
+                dec = np.exp(-dts / et)
+                z_mem = z_mem * dec[None, :] + (1.0 - dec[None, :]) * p_st[:, s_i : s_i + 1]
+            gap = h0[:, None] - z_mem
+            prony_part = (
+                hw[0] * gap[:, 0:1] * (-np.expm1(-t_ev[None, :] / et[0]))
+                + hw[1] * gap[:, 1:2] * (-np.expm1(-t_ev[None, :] / et[1]))
+            )
+            rem_curve = (ps - s0[:, None]) - prony_part
+            rem_rate = ir - (hw[0] * gap[:, 0] / et[0] + hw[1] * gap[:, 1] / et[1])
+            handoff_curve_max = float(np.max(np.abs(rem_curve - rem_rate[:, None] * t_ev[None, :])))
+            if handoff_curve_max > 0.08:
+                errs.append(f"weights_to_prediction_handoff_inconsistent:{handoff_curve_max:.6f}")
+
+    elif short == "suc01_T":
+        n_te = len(dataset_or_study["test"]["lab_id"])
+        k_t = len(dataset_or_study["eval_times"])
+        for k, shp in (
+            ("estimated_taus", (2,)),
+            ("predicted_strain", (n_te, k_t)),
+            ("secant_compliance", (n_te,)),
+            ("hazard_crossing_times", (n_te,)),
+        ):
+            if k not in out:
+                errs.append(f"missing:{k}")
+                continue
+            try:
+                arr = np.asarray(out[k], dtype=float)
+            except Exception:
+                errs.append(f"non_numeric:{k}")
+                continue
+            if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
+        if not errs:
+            et = np.asarray(out["estimated_taus"], dtype=float)
+            ps = np.asarray(out["predicted_strain"], dtype=float)
+            sc = np.asarray(out["secant_compliance"], dtype=float)
+            cx = np.asarray(out["hazard_crossing_times"], dtype=float)
+            if not (0.05 < et[0] < et[1] < 25.0):
+                errs.append("taus_not_positive_ordered")
+            s0 = np.asarray(dataset_or_study["test"]["strain_0"], dtype=float)
+            h0 = np.asarray(dataset_or_study["test"]["stress_hold_0"], dtype=float)
+            crit = np.asarray(dataset_or_study["test"]["critical_strain"], dtype=float)
+            t_ev = np.asarray(dataset_or_study["eval_times"], dtype=float)
+            expected_sc = (ps[:, -1] - s0) / np.maximum(np.abs(h0), 0.5)
+            if float(np.max(np.abs(sc - expected_sc))) > 1e-4:
+                errs.append("secant_compliance_inconsistent_with_predicted_strain")
+            expected_cx = np.full(n_te, float(t_ev[-1]), dtype=float)
+            t_nodes = np.r_[0.0, t_ev]
+            for i_r in range(n_te):
+                y_nodes = np.r_[s0[i_r], ps[i_r]]
+                if y_nodes[0] >= crit[i_r]:
+                    expected_cx[i_r] = 0.0
+                else:
+                    for j_s in range(len(t_ev)):
+                        if y_nodes[j_s + 1] >= crit[i_r]:
+                            dy = max(float(y_nodes[j_s + 1] - y_nodes[j_s]), 1e-15)
+                            frac = float(np.clip((crit[i_r] - y_nodes[j_s]) / dy, 0.0, 1.0))
+                            expected_cx[i_r] = float(t_nodes[j_s] + frac * (t_nodes[j_s + 1] - t_nodes[j_s]))
+                            break
+            if float(np.max(np.abs(cx - expected_cx))) > 1e-3:
+                errs.append("hazard_crossing_inconsistent_with_predicted_strain")
+
+    elif short == "suc01_C":
+        n_te = len(dataset_or_study["test"]["lab_id"])
+        k_t = len(dataset_or_study["eval_times"])
+        for k, shp in (("estimated_taus", (2,)), ("viscoplastic_weights", (2,)), ("predicted_strain", (n_te, k_t))):
+            if k not in out:
+                errs.append(f"missing:{k}")
+                continue
+            try:
+                arr = np.asarray(out[k], dtype=float)
+            except Exception:
+                errs.append(f"non_numeric:{k}")
+                continue
+            if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
+
+    elif short in {"src02", "rec02_R", "suc02_C"}:
+        M, nx, ny = dataset_or_study["source_modes"].shape
+        req_f = (
+            (("weights", (M,)), ("terminal_field_channel_a", (nx, ny)), ("terminal_field_channel_b", (nx, ny)))
+            if short == "suc02_C"
+            else (("weights", (M,)), ("terminal_field", (nx, ny)))
+        )
+        for k, shp in req_f:
+            if k not in out:
+                errs.append(f"missing:{k}")
+                continue
+            try:
+                arr = np.asarray(out[k], dtype=float)
+            except Exception:
+                errs.append(f"non_numeric:{k}")
+                continue
+            if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
+        cert = out.get("kkt_certificate")
+        if not isinstance(cert, dict) or "weights" not in cert:
+            errs.append("missing_kkt_certificate_weights")
+        elif not errs:
+            w_top = np.asarray(out["weights"], dtype=float)
+            w_cert = np.asarray(cert["weights"], dtype=float)
+            if w_cert.shape != (M,) or not bool(np.all(np.isfinite(w_cert))) or float(np.max(np.abs(w_top - w_cert))) > 1e-6:
+                errs.append("top_level_weights_mismatch_kkt_certificate")
+            if gt_bundle is not None:
+                ns_k: dict[str, Any] = {"np": np, "math": math}
+                exec(compile(_SHARED_BOX_SIMPLEX_KKT_CHECKER_PY, "<kkt_chk>", "exec"), ns_k)
+                chk = ns_k["verify_box_simplex_kkt_certificate"](
+                    gt_bundle["S_tilde"],
+                    gt_bundle["r_y"],
+                    dataset_or_study["source_ridge"],
+                    dataset_or_study["u_box"],
+                    dataset_or_study["total_budget"],
+                    cert,
+                )
+                if not chk["valid"]:
+                    errs.append(f"kkt_invalid:{chk['reason']}")
+
+    elif short == "suc02_T":
+        M, nx, ny = dataset_or_study["source_modes"].shape
+        B = len(dataset_or_study["budget_grid"])
+        for k, shp in (("weights_by_budget", (B, M)), ("terminal_field_mid_budget", (nx, ny))):
+            if k not in out:
+                errs.append(f"missing:{k}")
+                continue
+            try:
+                arr = np.asarray(out[k], dtype=float)
+            except Exception:
+                errs.append(f"non_numeric:{k}")
+                continue
+            if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                errs.append(f"bad_shape_or_nonfinite:{k}:{arr.shape}")
+        certs = out.get("kkt_certificates")
+        if not isinstance(certs, list) or len(certs) != B:
+            errs.append("bad_kkt_certificates_list")
+        elif not errs:
+            wb = np.asarray(out["weights_by_budget"], dtype=float)
+            ns_k2: dict[str, Any] = {"np": np, "math": math}
+            if gt_bundle is not None:
+                exec(compile(_SHARED_BOX_SIMPLEX_KKT_CHECKER_PY, "<kkt_chk2>", "exec"), ns_k2)
+            for bi, bg in enumerate(dataset_or_study["budget_grid"]):
+                c_i = certs[bi]
+                if not isinstance(c_i, dict) or "weights" not in c_i:
+                    errs.append(f"missing_cert_weights_b{bi}")
+                    continue
+                wc_i = np.asarray(c_i["weights"], dtype=float)
+                if wc_i.shape != (M,) or not bool(np.all(np.isfinite(wc_i))) or float(np.max(np.abs(wb[bi] - wc_i))) > 1e-6:
+                    errs.append(f"weights_by_budget_mismatch_cert_b{bi}")
+                if gt_bundle is not None:
+                    chk_i = ns_k2["verify_box_simplex_kkt_certificate"](
+                        gt_bundle["S_tilde"],
+                        gt_bundle["r_y"],
+                        dataset_or_study["source_ridge"],
+                        dataset_or_study["u_box"],
+                        float(bg),
+                        c_i,
+                    )
+                    if not chk_i["valid"]:
+                        errs.append(f"kkt_invalid_b{bi}:{chk_i['reason']}")
+
+    return {"valid": len(errs) == 0, "errors": errs}
+
+
+def evaluate_post_freeze_dev_seed_plugin_controls(
+    *,
+    locked_src01_out: dict[str, Any] | None = None,
+    locked_src02_out: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """`M9.3.1` `F09` Post-Freeze Non-Oracle Sensitivity Control:
+    1. Uses dedicated independent development seeds (`88512, 88521, 88611, 88621`), NEVER touching formal private seeds (`995xx/996xx`).
+    2. Accepts actual locked `Stage S` candidate outputs (`estimated_taus`, `hereditary_weights`, `weights`) when available,
+       explicitly labeling fallback source-generator parameters as `oracle_source_parameter_fallback`.
+    """
+    import math as _math
+
+    ns1: dict[str, Any] = {"np": np, "math": _math}
+    exec(compile(_CHAIN1_CORE_GEN_PY, "<chain1_dev_ctrl>", "exec"), ns1)
+    if locked_src01_out is not None:
+        taus_s = np.asarray(locked_src01_out["estimated_taus"], dtype=float)
+        th_s = np.asarray(locked_src01_out["hereditary_weights"], dtype=float)
+        src01_param_origin = "locked_stage_S_candidate_output"
+    else:
+        _, src01_gt = ns1["_gen_chain1_cohort"](88301, (0.60, 4.00), [0.68, 0.54, 0.09, 0.16, -0.13, 0.11, -0.09])
+        taus_s = src01_gt["taus"]
+        th_s = src01_gt["theta"]
+        src01_param_origin = "oracle_source_parameter_fallback"
+
+    suc01_t_ds, suc01_t_gt = ns1["_gen_chain1_cohort"](
+        88512, (0.78, 5.10), [0.62, 0.60, 0.07, 0.14, -0.15, 0.11, -0.09], H=22, K=12, dt_mode="geom_var", preload_scale=2.20
+    )
+    suc01_c_ds, suc01_c_gt = ns1["_gen_chain1_cohort"](
+        88521, (0.52, 3.65), [0.70, 0.55, 0.09, 0.16, -0.13, 0.10, -0.08], yield_stress=1.50, vp_theta=(0.26, 0.18)
+    )
+
+    def _plug_c1(ds: dict[str, Any], te_Z: np.ndarray) -> np.ndarray:
+        z = np.zeros((len(te_Z), 2), dtype=float)
+        for s, dts in enumerate(ds["past_dt"]):
+            dec = np.exp(-dts / taus_s)
+            z = z * dec[None, :] + (1.0 - dec[None, :]) * ds["test"]["past_stress"][:, s : s + 1]
+        et = ds["eval_times"]
+        h0 = ds["test"]["stress_hold_0"]
+        s0 = ds["test"]["strain_0"]
+        return (
+            s0[:, None]
+            + th_s[0] * (h0 - z[:, 0])[:, None] * (1.0 - np.exp(-et / taus_s[0]))[None, :]
+            + th_s[1] * (h0 - z[:, 1])[:, None] * (1.0 - np.exp(-et / taus_s[1]))[None, :]
+            + (th_s[2] + te_Z @ th_s[3:7])[:, None] * et[None, :]
+        )
+
+    mae_t = float(np.mean(np.abs(_plug_c1(suc01_t_ds, suc01_t_gt["te_Z"]) - suc01_t_gt["te_clean"])))
+    mae_c = float(np.mean(np.abs(_plug_c1(suc01_c_ds, suc01_c_gt["te_Z"]) - suc01_c_gt["te_clean"])))
+
+    ns2: dict[str, Any] = {"np": np, "math": _math}
+    exec(compile(_CHAIN2_CORE_GEN_PY, "<chain2_dev_ctrl>", "exec"), ns2)
+    if locked_src02_out is not None:
+        w_src2 = np.asarray(locked_src02_out["weights"], dtype=float)
+        src02_param_origin = "locked_stage_S_candidate_output"
+    else:
+        _, src02_gt = ns2["_gen_chain2_study"](88331)
+        w_src2 = src02_gt["w_opt"]
+        src02_param_origin = "oracle_source_parameter_fallback"
+
+    _, suc02_t_gt = ns2["_gen_chain2_study"](
+        88611, nx=48, ny=36, K_mu=12, M=16, vel_sign=-1.15, robin_pair=(0.75, 2.05), multi_budget=True
+    )
+    _, suc02_c_gt = ns2["_gen_chain2_study"](88621, nx=36, ny=32, K_mu=8, M=12, nonseparable_channel_b=True)
+    w_pad = np.zeros(16, dtype=float)
+    w_pad[: min(16, len(w_src2))] = w_src2[: min(16, len(w_src2))]
+    rel_t = float(np.linalg.norm(np.tile(w_pad, (3, 1)) - suc02_t_gt["weights_by_budget"]) / np.linalg.norm(suc02_t_gt["weights_by_budget"]))
+    rel_c = float(np.linalg.norm(w_src2[:12] - suc02_c_gt["w_opt"]) / np.linalg.norm(suc02_c_gt["w_opt"]))
+    return {
+        "uses_private_verifier_seeds": False,
+        "dev_seeds_used": [88512, 88521, 88611, 88621],
+        "src01_param_origin": src01_param_origin,
+        "src02_param_origin": src02_param_origin,
+        "direct_locked_float_plugin_fails_all_successors": bool(mae_t > 0.15 and mae_c > 0.25 and rel_t > 0.10 and rel_c > 0.10),
+        "suc01_T_dev_strain_mae": round(mae_t, 6),
+        "suc01_C_dev_strain_mae": round(mae_c, 6),
+        "suc02_T_dev_weights_rel_l2": round(rel_t, 6),
+        "suc02_C_dev_weights_rel_l2": round(rel_c, 6),
+    }
 
 
 def evaluate_direct_source_float_plugin_controls() -> dict[str, Any]:

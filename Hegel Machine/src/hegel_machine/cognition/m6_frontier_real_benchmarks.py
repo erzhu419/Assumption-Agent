@@ -1123,11 +1123,18 @@ class FrontierCodexClient(CodexSubscriptionClient):
         with _CODEX_SEQ_LOCK:
             self._call_seq += 1
             call_seq = self._call_seq
+        import datetime as _dt_mod
+        import uuid as _uuid_mod
+
+        call_uuid = _uuid_mod.uuid4().hex
+        run_uuid = str(getattr(self, "run_uuid", "") or "")
+        started_at_utc = _dt_mod.datetime.now(_dt_mod.timezone.utc).isoformat()
         ep_wsl = self.stage_root_wsl / stage_subdir
         ep_wsl.mkdir(parents=True, exist_ok=True)
 
         schema_name = f"schema_{call_seq:03d}.json"
         instr_name = f"sys_{call_seq:03d}.txt"
+        attempts_fname = f"attempts_{call_seq:03d}_{call_uuid[:8]}.json"
 
         stdin_payload = json.dumps({"conversation_history": conversation_turns}, ensure_ascii=False)
         (ep_wsl / schema_name).write_text(json.dumps(output_schema, ensure_ascii=False), encoding="utf-8")
@@ -1208,12 +1215,20 @@ class FrontierCodexClient(CodexSubscriptionClient):
                     a_errs.append(str(ev_a.get("message") or ev_a.get("error") or ""))
             return a_in, a_ca, a_out, saw_u, rmod, a_errs
 
-        def _persist_attempts_ledger() -> None:
+        def _persist_attempts_ledger(status_tag: str = "completed") -> None:
             try:
-                (ep_wsl / f"attempts_{call_seq:03d}.json").write_text(
+                ended_utc = _dt_mod.datetime.now(_dt_mod.timezone.utc).isoformat()
+                raw_resp_txt = resp_wsl.read_text(encoding="utf-8", errors="replace") if resp_wsl.is_file() else None
+                (ep_wsl / attempts_fname).write_text(
                     json.dumps(
                         {
+                            "run_uuid": run_uuid,
+                            "call_uuid": call_uuid,
                             "call_seq": call_seq,
+                            "stage_subdir": stage_subdir,
+                            "status": status_tag,
+                            "started_at_utc": started_at_utc,
+                            "ended_at_utc": ended_utc,
                             "request_sha256": req_sha256,
                             "system_prompt_chars": len(system_prompt),
                             "stdin_payload_chars": len(stdin_payload),
@@ -1224,6 +1239,7 @@ class FrontierCodexClient(CodexSubscriptionClient):
                                 "cached_tokens": cum_cached_tok,
                                 "completion_tokens": cum_out_tok,
                             },
+                            "raw_response_text": raw_resp_txt,
                             "attempts": attempt_receipts,
                         },
                         indent=2,
@@ -1235,6 +1251,7 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 pass
 
         resp_wsl = ep_wsl / f"resp_{call_seq:03d}_att0.json"
+        _persist_attempts_ledger("in_progress")
         for attempt_idx in range(4):
             # `M9.2.1` `A7`: Dedicated per-attempt response file prevents any stale response bleed across retries!
             att_resp_name = f"resp_{call_seq:03d}_att{attempt_idx}.json"
@@ -1287,13 +1304,15 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 if attempt_idx < 2:
                     sleep((4.0, 10.0)[attempt_idx] + random.uniform(0.5, 2.5))
                     continue
-                _persist_attempts_ledger()
+                _persist_attempts_ledger("failed_timeout")
                 return {
                     "ok": False,
+                    "call_uuid": call_uuid,
                     "wall_ms": round((monotonic() - t0) * 1000.0, 2),
                     "returned_model": returned_model,
                     "request_sha256": req_sha256,
-                    "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
+                    "attempts_ledger_filename": attempts_fname,
+                    "attempts_ledger_path": str(ep_wsl / attempts_fname),
                     "prompt_tokens": cum_in_tok,
                     "cached_tokens": cum_cached_tok,
                     "completion_tokens": cum_out_tok,
@@ -1343,13 +1362,13 @@ class FrontierCodexClient(CodexSubscriptionClient):
 
         assert proc is not None
         wall_ms = round((monotonic() - t0) * 1000.0, 2)
-        _persist_attempts_ledger()
         in_tok = cum_in_tok
         cached_tok = cum_cached_tok
         out_tok = cum_out_tok
         cost_status = "partial_unknown_usage" if usage_unknown_attempts > 0 else "complete"
 
         if proc.returncode != 0 or not resp_wsl.is_file():
+            _persist_attempts_ledger("failed_nonzero")
             err_msg = f"rc={proc.returncode}; errs={errs}; stderr={proc.stderr[-400:]}"
             low_err = err_msg.lower()
             if any(
@@ -1359,10 +1378,12 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 raise SubscriptionQuotaPausedError(f"[{self.model}] {err_msg}")
             return {
                 "ok": False,
+                "call_uuid": call_uuid,
                 "wall_ms": wall_ms,
                 "returned_model": returned_model,
                 "request_sha256": req_sha256,
-                "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
+                "attempts_ledger_filename": attempts_fname,
+                "attempts_ledger_path": str(ep_wsl / attempts_fname),
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
@@ -1376,12 +1397,15 @@ class FrontierCodexClient(CodexSubscriptionClient):
         try:
             parsed = json.loads(resp_wsl.read_text(encoding="utf-8"))
         except Exception as exc:
+            _persist_attempts_ledger("failed_invalid_json")
             return {
                 "ok": False,
+                "call_uuid": call_uuid,
                 "wall_ms": wall_ms,
                 "returned_model": returned_model,
                 "request_sha256": req_sha256,
-                "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
+                "attempts_ledger_filename": attempts_fname,
+                "attempts_ledger_path": str(ep_wsl / attempts_fname),
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
@@ -1392,12 +1416,15 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 "error": f"invalid_schema_json:{exc}",
             }
 
+        _persist_attempts_ledger("completed")
         return {
             "ok": True,
+            "call_uuid": call_uuid,
             "wall_ms": wall_ms,
             "returned_model": returned_model,
             "request_sha256": req_sha256,
-            "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
+            "attempts_ledger_filename": attempts_fname,
+            "attempts_ledger_path": str(ep_wsl / attempts_fname),
             "prompt_tokens": in_tok,
             "cached_tokens": cached_tok,
             "completion_tokens": out_tok,
@@ -3008,6 +3035,43 @@ def run_frontier_episode(
                 )
             import shlex as _shlex_boot
 
+            # `M9.3.1` `F10`: Deterministically generate compact equal-information `/holdout_task/public_asset_index.json`
+            # identically across ALL arms (`B`, `K`, `E`, `A_raw`, `M_hegel`) before Turn 1 so agents never waste turns
+            # recovering from truncated `pickle` / schema `stdout` dumps!
+            _asset_idx_py = (
+                "import glob, json, os, pickle\n"
+                "import numpy as np\n"
+                "def _summ(v, depth=0):\n"
+                "    if depth > 4: return type(v).__name__\n"
+                "    if isinstance(v, np.ndarray): return {'type': 'ndarray', 'shape': list(v.shape), 'dtype': str(v.dtype)}\n"
+                "    if isinstance(v, (bool, int, float, str)) or v is None:\n"
+                "        return v if not isinstance(v, str) or len(v) <= 120 else (v[:117] + '...')\n"
+                "    if isinstance(v, dict): return {str(k): _summ(val, depth + 1) for k, val in sorted(v.items(), key=lambda x: str(x[0]))[:40]}\n"
+                "    if isinstance(v, (list, tuple)):\n"
+                "        return {'type': type(v).__name__, 'len': len(v), 'first': (_summ(v[0], depth + 1) if len(v) > 0 else None)}\n"
+                "    return type(v).__name__\n"
+                "idx_out = {'schema': 'hegel_public_asset_index_v1', 'files': {}}\n"
+                "for fp in sorted(glob.glob('/holdout_task/*')):\n"
+                "    bn = os.path.basename(fp)\n"
+                "    if bn == 'public_asset_index.json' or not os.path.isfile(fp): continue\n"
+                "    info = {'bytes': os.path.getsize(fp)}\n"
+                "    if fp.endswith('.pkl'):\n"
+                "        try:\n"
+                "            obj = pickle.load(open(fp, 'rb'))\n"
+                "            info['summary'] = _summ(obj)\n"
+                "        except Exception as e:\n"
+                "            info['load_error'] = str(e)[:120]\n"
+                "    elif fp.endswith('.json'):\n"
+                "        try:\n"
+                "            obj = json.loads(open(fp, encoding='utf-8').read())\n"
+                "            info['summary'] = _summ(obj)\n"
+                "        except Exception as e:\n"
+                "            info['load_error'] = str(e)[:120]\n"
+                "    idx_out['files'][fp] = info\n"
+                "open('/holdout_task/public_asset_index.json', 'w', encoding='utf-8').write(json.dumps(idx_out, indent=2, sort_keys=True))\n"
+            )
+            exec_container_bash(agent_cid, "python3 -I -c " + _shlex_boot.quote(_asset_idx_py), timeout_sec=20)
+
             hash_probe = exec_container_bash(
                 agent_cid,
                 "python3 -I -c "
@@ -3040,6 +3104,9 @@ def run_frontier_episode(
                 "required_public_assets": req_assets,
                 "files_sha256": {k: v["sha256"] for k, v in files_map.items()},
                 "shared_public_schema_validator_present": "/holdout_task/validate_public_schema.py" in files_map,
+                "public_asset_index_path": (
+                    "/holdout_task/public_asset_index.json" if "/holdout_task/public_asset_index.json" in files_map else None
+                ),
             }
 
         boot_probe = exec_container_bash(
@@ -3488,7 +3555,15 @@ def run_frontier_episode(
                     parent_decision_id=last_parent,
                     evidence_inputs={"turn_idx": turn_idx, "llm_infra_retries": llm_infra_retries},
                     candidates_evaluated=[],
-                    chosen_option={"error": llm_res.get("error")},
+                    chosen_option={
+                        "error": llm_res.get("error"),
+                        "call_uuid": str(llm_res.get("call_uuid") or ""),
+                        "attempts_ledger_filename": str(llm_res.get("attempts_ledger_filename") or ""),
+                        "provider_attempt_count": int(llm_res.get("attempt_count", 1)),
+                        "usage_unknown_attempt_count": int(llm_res.get("usage_unknown_attempt_count", 0)),
+                        "cost_accounting_status": str(llm_res.get("cost_accounting_status") or "partial_unknown_usage"),
+                        "request_sha256": str(llm_res.get("request_sha256") or ""),
+                    },
                     rejection_reasons={},
                     rationale_summary=f"LLM call failed on turn {turn_idx}: {llm_res.get('error')} (retry #{llm_infra_retries})",
                     prompt_tokens_delta=int(llm_res.get("prompt_tokens", 0)),
@@ -3590,6 +3665,8 @@ def run_frontier_episode(
                     "action_type": act_type,
                     "bash_command_preview": (str(bash_cmd)[:300] if bash_cmd else None),
                     "final_answer": fin_ans,
+                    "call_uuid": str(llm_res.get("call_uuid") or ""),
+                    "attempts_ledger_filename": str(llm_res.get("attempts_ledger_filename") or ""),
                     "provider_attempt_count": int(llm_res.get("attempt_count", 1)),
                     "usage_unknown_attempt_count": int(llm_res.get("usage_unknown_attempt_count", 0)),
                     "cost_accounting_status": str(llm_res.get("cost_accounting_status") or "complete"),
@@ -3992,52 +4069,134 @@ def run_frontier_episode(
                         }
                         verification_receipts_by_sha[current_candidate_sha256] = v_rec
                         validated_incumbent = v_rec
-                        # `M9.2.1` `A5`: Host-controlled typed `HostControlledProbeReceipt` vs `agent_claimed_unverified` separation!
-                        # Agent stdout/inline assertions (e.g., `assert 1 == 1; print('gauge scale residual=0.0')`) are NEVER
-                        # promoted to `resolved = True`; only an explicit host-signed probe receipt (`signed_by_host_probe_executor == True`)
-                        # executed against the immutable `current_candidate_sha256` on host-controlled public inputs can promote a risk!
+                        # `M9.2.1` `A5` + `M9.3.1` `F03`: Strict `PublicSchemaReceipt` vs `ScientificProbeReceipt` separation!
+                        # 1. Agent stdout/inline assertions are NEVER promoted to `resolved = True`.
+                        # 2. `/holdout_task/validate_public_schema.py` is re-hashed at runtime against `public_setup_receipt["files_sha256"]`
+                        #    (rejecting agent-mutated validators!) and emits ONLY `receipt_kind == "public_schema_receipt"`, which can
+                        #    ONLY promote `schema_contract` / `output_format` / `interface_schema` nogoods — NEVER scientific, numerical,
+                        #    forward-model, or identifiability nogoods!
+                        # 3. Scientific nogoods require a genuine `receipt_kind == "scientific_probe_receipt"` with explicit non-empty
+                        #    `verified_scope` (NEVER back-filled from `ng_scope`!), `public_input_digest`, and `probe_code_digest`.
                         if pending_nogood_resolutions and nogoods_recorded:
+                            _SCHEMA_ONLY_RISK_KINDS = {"schema_contract", "output_format", "interface_schema"}
                             existing_ng_ids = {str(g.get("nogood_id") or "") for g in nogoods_recorded}
                             out_raw_w = str(ex_res.get("stdout") or "")
-                            host_probe_receipt: dict[str, Any] | None = globals().get("_HOST_INJECTED_PROBE_RECEIPT")
+                            injected_rec: dict[str, Any] | None = globals().get("_HOST_INJECTED_PROBE_RECEIPT")
+                            public_schema_receipt: dict[str, Any] | None = None
+                            scientific_probe_receipt: dict[str, Any] | None = None
+                            tampered_public_assets: list[str] = []
+
+                            if isinstance(injected_rec, dict):
+                                _inj_kind = str(injected_rec.get("receipt_kind") or "").strip()
+                                if not _inj_kind:
+                                    _inj_kind = (
+                                        "scientific_probe_receipt"
+                                        if bool(
+                                            injected_rec.get("scientific_invariants_verified")
+                                            or injected_rec.get("gauge_invariance_verified")
+                                            or injected_rec.get("quotient_or_anchor_verified")
+                                            or injected_rec.get("measured_scientific_metrics")
+                                        )
+                                        else "public_schema_receipt"
+                                    )
+                                _norm_inj = {**deepcopy(injected_rec), "receipt_kind": _inj_kind}
+                                if _inj_kind == "scientific_probe_receipt":
+                                    scientific_probe_receipt = _norm_inj
+                                else:
+                                    public_schema_receipt = _norm_inj
+
                             _live_cid = locals().get("agent_cid")
                             _live_task = locals().get("task")
+                            _psr_live = locals().get("public_setup_receipt") or {}
                             if (
-                                host_probe_receipt is None
+                                injected_rec is None
                                 and isinstance(_live_cid, str)
                                 and _live_cid not in {"", "mock"}
                                 and _live_task is not None
                             ):
-                                # Host-executed isolated `python3 -I /holdout_task/validate_public_schema.py` check
-                                _hp_run = exec_container_bash(
-                                    _live_cid,
-                                    "if [ -f /holdout_task/validate_public_schema.py ]; then "
-                                    "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py; "
-                                    "else echo '{\"host_probe_unavailable\": true}'; fi",
-                                    timeout_sec=45,
-                                )
-                                _post_hp_sha = compute_declared_artifacts_digest(_live_cid, _live_task.declared_artifacts)
-                                _hp_json: dict[str, Any] = {}
-                                if _hp_run["exit_code"] == 0 and _hp_run["stdout"].strip():
-                                    try:
-                                        _hp_json = json.loads(_hp_run["stdout"].strip().splitlines()[-1])
-                                    except Exception:
-                                        _hp_json = {}
-                                if _post_hp_sha == current_candidate_sha256 and _hp_json.get("schema_valid") is True:
-                                    host_probe_receipt = {
-                                        "signed_by_host_probe_executor": True,
-                                        "probe_protocol_version": "hegel_host_public_probe_v2",
-                                        "candidate_bundle_sha256": current_candidate_sha256,
-                                        "public_setup_files_sha256": dict((locals().get("public_setup_receipt") or {}).get("files_sha256") or {}),
-                                        "schema_valid": True,
-                                        "measured_metrics": _hp_json,
-                                        "gauge_invariance_verified": bool(_hp_json.get("gauge_invariance_verified") is True),
-                                        "result": (
-                                            "verified_gauge_and_public_probe_in_scope"
-                                            if _hp_json.get("gauge_invariance_verified") is True
-                                            else "supported_on_host_public_probe"
-                                        ),
-                                    }
+                                _expected_pub_shas = dict((_psr_live.get("files_sha256") or {}) if isinstance(_psr_live, dict) else {})
+                                if _expected_pub_shas:
+                                    import shlex as _shlex_hp
+
+                                    _chk_shas_py = (
+                                        "import hashlib, json, os\n"
+                                        f"paths = {json.dumps(sorted(_expected_pub_shas.keys()))}\n"
+                                        "out = {}\n"
+                                        "for p in paths:\n"
+                                        "    out[p] = hashlib.sha256(open(p, 'rb').read()).hexdigest() if os.path.isfile(p) else 'MISSING'\n"
+                                        "print(json.dumps(out, sort_keys=True))\n"
+                                    )
+                                    _sha_run = exec_container_bash(_live_cid, "python3 -I -c " + _shlex_hp.quote(_chk_shas_py), timeout_sec=15)
+                                    _cur_pub_shas: dict[str, str] = {}
+                                    if _sha_run["exit_code"] == 0 and _sha_run["stdout"].strip():
+                                        try:
+                                            _cur_pub_shas = json.loads(_sha_run["stdout"].strip().splitlines()[-1])
+                                        except Exception:
+                                            _cur_pub_shas = {}
+                                    for _pp, _exp_h in sorted(_expected_pub_shas.items()):
+                                        if _cur_pub_shas.get(_pp) != _exp_h:
+                                            tampered_public_assets.append(_pp)
+
+                                if not tampered_public_assets:
+                                    _hp_run = exec_container_bash(
+                                        _live_cid,
+                                        "if [ -f /holdout_task/validate_public_schema.py ]; then "
+                                        "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py; "
+                                        "else echo '{\"host_probe_unavailable\": true}'; fi",
+                                        timeout_sec=45,
+                                    )
+                                    _post_hp_sha = compute_declared_artifacts_digest(_live_cid, _live_task.declared_artifacts)
+                                    _hp_json: dict[str, Any] = {}
+                                    if _hp_run["exit_code"] == 0 and _hp_run["stdout"].strip():
+                                        try:
+                                            _hp_json = json.loads(_hp_run["stdout"].strip().splitlines()[-1])
+                                        except Exception:
+                                            _hp_json = {}
+                                    if _post_hp_sha == current_candidate_sha256 and _hp_json.get("schema_valid") is True:
+                                        public_schema_receipt = {
+                                            "signed_by_host_probe_executor": True,
+                                            "receipt_kind": "public_schema_receipt",
+                                            "probe_protocol_version": "hegel_host_public_schema_v3",
+                                            "candidate_bundle_sha256": current_candidate_sha256,
+                                            "public_setup_files_sha256": _expected_pub_shas,
+                                            "public_setup_files_sha256_reverified": bool(_expected_pub_shas),
+                                            "verified_scope": "public_delivery_schema",
+                                            "supported_risk_kinds": sorted(_SCHEMA_ONLY_RISK_KINDS),
+                                            "schema_valid": True,
+                                            "measured_metrics": _hp_json,
+                                            "result": "supported_on_public_schema_validator",
+                                        }
+                                        _needs_sci_probe = any(
+                                            str(g.get("risk_kind") or g.get("nogood_kind") or "").strip().lower() not in _SCHEMA_ONLY_RISK_KINDS
+                                            for g in nogoods_recorded
+                                            if not g.get("resolved")
+                                        )
+                                        if _hp_json.get("gauge_invariance_verified") is True or _hp_json.get("scientific_invariants_verified") is True:
+                                            scientific_probe_receipt = {
+                                                "signed_by_host_probe_executor": True,
+                                                "receipt_kind": "scientific_probe_receipt",
+                                                "probe_protocol_version": "hegel_host_scientific_probe_v3",
+                                                "candidate_bundle_sha256": current_candidate_sha256,
+                                                "public_setup_files_sha256": _expected_pub_shas,
+                                                "verified_scope": str(_hp_json.get("verified_scope") or "task_scientific_invariants"),
+                                                "scientific_invariants_verified": True,
+                                                "gauge_invariance_verified": bool(_hp_json.get("gauge_invariance_verified") is True),
+                                                "measured_scientific_metrics": _hp_json,
+                                                "result": (
+                                                    "verified_gauge_and_public_probe_in_scope"
+                                                    if _hp_json.get("gauge_invariance_verified") is True
+                                                    else "verified_on_host_scientific_probe"
+                                                ),
+                                            }
+                                        else:
+                                            _sci_probe_fn = globals().get("execute_host_trusted_scientific_probe")
+                                            if _needs_sci_probe and callable(_sci_probe_fn):
+                                                scientific_probe_receipt = _sci_probe_fn(
+                                                    agent_cid=_live_cid,
+                                                    task=_live_task,
+                                                    current_candidate_sha256=current_candidate_sha256,
+                                                    public_setup_files_sha256=_expected_pub_shas,
+                                                )
 
                             still_pending: list[dict[str, Any]] = []
                             for pend in pending_nogood_resolutions:
@@ -4055,6 +4214,12 @@ def run_frontier_episode(
                                         "command_preview": cmd_str[:200],
                                         "stdout_preview": out_raw_w[:240],
                                     }
+                                    if tampered_public_assets:
+                                        prior_ng["probe_support_status"] = "rejected_public_validator_or_fixture_tampered"
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = f"public_assets_tampered:{tampered_public_assets}"
+                                        continue
+
                                     r_kind = str(prior_ng.get("risk_kind") or prior_ng.get("nogood_kind") or "").strip().lower()
                                     ng_scope = str(prior_ng.get("scope") or "").strip()
                                     refuted_txt_low = str(prior_ng.get("assumption_refuted") or "").lower()
@@ -4062,40 +4227,68 @@ def run_frontier_episode(
                                         "identifi" in refuted_txt_low
                                     )
                                     is_missing_info_ident = is_ident_ng and ("unanchored_missing_information" in refuted_txt_low)
-                                    is_valid_host_rec = (
-                                        isinstance(host_probe_receipt, dict)
-                                        and host_probe_receipt.get("signed_by_host_probe_executor") is True
-                                        and str(host_probe_receipt.get("candidate_bundle_sha256") or "") == current_candidate_sha256
+                                    is_schema_ng = (r_kind in _SCHEMA_ONLY_RISK_KINDS) and (not is_ident_ng)
+
+                                    active_rec = (
+                                        (scientific_probe_receipt or public_schema_receipt)
+                                        if is_schema_ng
+                                        else scientific_probe_receipt
                                     )
-                                    if not is_valid_host_rec:
-                                        prior_ng["probe_support_status"] = "agent_claimed_unverified"
-                                        unres_ids.append(pid)
-                                        reject_reasons[pid] = "agent_stdout_claim_cannot_promote_without_host_signed_probe_receipt"
+                                    is_valid_active_rec = (
+                                        isinstance(active_rec, dict)
+                                        and active_rec.get("signed_by_host_probe_executor") is True
+                                        and str(active_rec.get("candidate_bundle_sha256") or "") == current_candidate_sha256
+                                    )
+                                    if not is_valid_active_rec:
+                                        if (
+                                            (not is_schema_ng)
+                                            and isinstance(public_schema_receipt, dict)
+                                            and public_schema_receipt.get("signed_by_host_probe_executor") is True
+                                            and str(public_schema_receipt.get("candidate_bundle_sha256") or "") == current_candidate_sha256
+                                        ):
+                                            prior_ng["probe_support_status"] = "supported_on_public_schema_only_scientific_witness_pending"
+                                            prior_ng["public_schema_receipt"] = deepcopy(public_schema_receipt)
+                                            unres_ids.append(pid)
+                                            reject_reasons[pid] = "public_schema_receipt_cannot_promote_scientific_nogood"
+                                        else:
+                                            prior_ng["probe_support_status"] = "agent_claimed_unverified"
+                                            unres_ids.append(pid)
+                                            reject_reasons[pid] = "agent_stdout_claim_cannot_promote_without_host_signed_probe_receipt"
                                         continue
-                                    assert isinstance(host_probe_receipt, dict)
-                                    rec_scope = str(host_probe_receipt.get("verified_scope") or "").strip()
-                                    if ng_scope and ng_scope.lower() not in {"", "global", "all", "task"} and rec_scope and rec_scope.lower() != ng_scope.lower():
+
+                                    assert isinstance(active_rec, dict)
+                                    rec_scope = str(active_rec.get("verified_scope") or "").strip()
+                                    if not rec_scope:
+                                        prior_ng["probe_support_status"] = "host_probe_missing_verified_scope"
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = "scientific_probe_receipt_must_declare_non_empty_verified_scope"
+                                        continue
+                                    if (
+                                        ng_scope
+                                        and ng_scope.lower() not in {"", "global", "all", "task"}
+                                        and rec_scope.lower() not in {"all_scientific_components", "task_scientific_invariants", ng_scope.lower()}
+                                    ):
                                         prior_ng["probe_support_status"] = "host_probe_scope_mismatch"
                                         unres_ids.append(pid)
                                         reject_reasons[pid] = f"host_probe_scope({rec_scope})!=nogood_scope({ng_scope})"
                                         continue
-                                    if is_missing_info_ident and not bool(valid_sup and host_probe_receipt.get("quotient_or_anchor_verified") is True):
+                                    if is_missing_info_ident and not bool(valid_sup and active_rec.get("quotient_or_anchor_verified") is True):
                                         prior_ng["probe_support_status"] = "conditional_unanchored_identifiability_pending"
                                         unres_ids.append(pid)
                                         reject_reasons[pid] = "missing_information_identifiability_requires_host_verified_anchor_or_quotient"
                                         continue
-                                    if is_ident_ng and not bool(host_probe_receipt.get("gauge_invariance_verified") is True):
+                                    if is_ident_ng and not bool(active_rec.get("gauge_invariance_verified") is True):
                                         prior_ng["probe_support_status"] = "supported_on_public_schema_only_identifiability_pending"
                                         unres_ids.append(pid)
                                         reject_reasons[pid] = "identifiability_risk_requires_host_executed_gauge_or_anchor_probe"
                                         continue
                                     prior_ng["resolved"] = True
-                                    prior_ng["probe_support_status"] = str(host_probe_receipt.get("result") or "supported_on_host_public_probe")
+                                    prior_ng["probe_support_status"] = str(active_rec.get("result") or "verified_on_host_scientific_probe")
                                     prior_ng["superseded_by"] = valid_sup
                                     prior_ng["resolved_at_turn"] = turn_idx
                                     prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
-                                    prior_ng["host_probe_receipt"] = deepcopy(host_probe_receipt)
-                                    prior_ng["resolution_witness_scope_verified"] = rec_scope or ng_scope or "public_probe_scope"
+                                    prior_ng["host_probe_receipt"] = deepcopy(active_rec)
+                                    prior_ng["resolution_witness_scope_verified"] = rec_scope
                                     resolved_now.append(pid)
                                 if resolved_now:
                                     nogood_resolution_events.append(
@@ -4105,7 +4298,7 @@ def run_frontier_episode(
                                             "resolved_nogood_ids": resolved_now,
                                             "superseded_by": valid_sup,
                                             "verified_candidate_sha256": current_candidate_sha256,
-                                            "host_probe_receipt": deepcopy(host_probe_receipt),
+                                            "host_probe_receipt": deepcopy(scientific_probe_receipt or public_schema_receipt),
                                             "witness_kind": "host_controlled_typed_probe_receipt",
                                         }
                                     )
@@ -4647,28 +4840,37 @@ def run_frontier_episode(
                 ),
             },
             "provider_attempt_accounting": {
+                "logical_llm_calls_total": sum(
+                    1 for r in ledger.records if str(r.get("decision_type", "")).endswith(("_AGENT_DECISION", "_LLM_ERROR"))
+                ),
                 "logical_agent_decision_calls": sum(
                     1 for r in ledger.records if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                ),
+                "logical_llm_error_calls": sum(
+                    1 for r in ledger.records if str(r.get("decision_type", "")).endswith("_LLM_ERROR")
                 ),
                 "total_provider_attempts": sum(
                     int((r.get("chosen_option") or {}).get("provider_attempt_count", 1))
                     for r in ledger.records
-                    if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                    if str(r.get("decision_type", "")).endswith(("_AGENT_DECISION", "_LLM_ERROR"))
                 ),
                 "usage_unknown_attempt_count": sum(
                     int((r.get("chosen_option") or {}).get("usage_unknown_attempt_count", 0))
                     for r in ledger.records
-                    if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                    if str(r.get("decision_type", "")).endswith(("_AGENT_DECISION", "_LLM_ERROR"))
                 ),
                 "cost_accounting_status": (
                     "partial_unknown_usage"
                     if any(
                         int((r.get("chosen_option") or {}).get("usage_unknown_attempt_count", 0)) > 0
+                        or str(r.get("decision_type", "")).endswith("_LLM_ERROR")
                         for r in ledger.records
-                        if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                        if str(r.get("decision_type", "")).endswith(("_AGENT_DECISION", "_LLM_ERROR"))
                     )
                     else "complete"
                 ),
+                "archived_attempt_files": [],
+                "quarantined_unmatched_attempt_files": [],
             },
             "decision_count": tots["decision_count"],
             "prompt_tokens": tots["prompt_tokens"],
@@ -4683,16 +4885,44 @@ def run_frontier_episode(
             "terminal_record_sha256": prov_check["terminal_record_sha256"],
         }
 
-        # `M9.2.1` `A7`: Seal raw per-attempt provider ledgers (`attempts_*.json`) directly into `episode_out_dir/01b_provider_attempts/`
+        # `M9.2.1` `A7` + `M9.3.1` `F06`: Seal ONLY whitelisted per-attempt provider ledgers (`attempts_<seq>_<uuid8>.json`)
+        # belonging to THIS episode's `ledger.records` into `episode_out_dir/01b_provider_attempts/`!
+        # Any leftover/unmatched staging files are explicitly quarantined in `quarantined_unmatched_attempt_files`
+        # instead of polluting `01b_provider_attempts/`!
+        _expected_att_names = {
+            str((r.get("chosen_option") or {}).get("attempts_ledger_filename") or "")
+            for r in ledger.records
+            if str((r.get("chosen_option") or {}).get("attempts_ledger_filename") or "")
+        }
+        _expected_req_shas = {
+            str((r.get("chosen_option") or {}).get("request_sha256") or "")
+            for r in ledger.records
+            if str((r.get("chosen_option") or {}).get("request_sha256") or "")
+        }
         _stage_root_ep = getattr(client, "stage_root_wsl", None)
         _stage_dir_ep = (Path(_stage_root_ep) / stage_subdir) if _stage_root_ep else None
         if _stage_dir_ep is not None and _stage_dir_ep.is_dir():
             _att_files = sorted(_stage_dir_ep.glob("attempts_*.json"))
             if _att_files:
                 _att_dest = episode_out_dir / "01b_provider_attempts"
-                _att_dest.mkdir(parents=True, exist_ok=True)
+                _archived_names: list[str] = []
+                _quarantined_names: list[str] = []
                 for _afp in _att_files:
-                    shutil.copy2(_afp, _att_dest / _afp.name)
+                    _is_match = _afp.name in _expected_att_names
+                    if (not _is_match) and (not _expected_att_names) and _expected_req_shas:
+                        try:
+                            _af_json = json.loads(_afp.read_text(encoding="utf-8"))
+                            _is_match = str(_af_json.get("request_sha256") or "") in _expected_req_shas
+                        except Exception:
+                            _is_match = False
+                    if _is_match:
+                        _att_dest.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(_afp, _att_dest / _afp.name)
+                        _archived_names.append(_afp.name)
+                    else:
+                        _quarantined_names.append(_afp.name)
+                summary["provider_attempt_accounting"]["archived_attempt_files"] = _archived_names
+                summary["provider_attempt_accounting"]["quarantined_unmatched_attempt_files"] = _quarantined_names
 
         # Write all forensic files to `episode_out_dir`
         (episode_out_dir / "00_episode_summary.json").write_text(
@@ -4715,3 +4945,157 @@ def run_frontier_episode(
         return summary
     finally:
         stop_container_safely(agent_cid)
+
+
+def execute_host_trusted_scientific_probe(
+    *,
+    agent_cid: str,
+    task: FrontierBenchmarkTask,
+    current_candidate_sha256: str,
+    public_setup_files_sha256: dict[str, str],
+) -> dict[str, Any] | None:
+    """Execute a host-authored read-only scientific invariant/residual probe (`M9.3.1` `F03`).
+
+    Copies a fresh host-signed Python probe into `/tmp/_hegel_host_sci_probe_<nonce>.py`, re-verifies public
+    input dataset SHA-256 inside the isolated `python3 -I` probe, checks quantitative physical/mathematical
+    residuals or KKT convex duality bounds (beyond shape/finiteness!), verifies candidate artifact immutability,
+    and returns a `scientific_probe_receipt` ONLY when the scientific invariants hold.
+    """
+    import uuid as _uuid_mod
+
+    decl_arts = tuple(task.declared_artifacts or ())
+    entry_fns = tuple(getattr(task, "declared_callable_entrypoints", ()) or ())
+    if not decl_arts:
+        return None
+
+    probe_py = (
+        "import glob, hashlib, importlib.util, json, math, os, pickle, sys\n"
+        "import numpy as np\n"
+        f"expected_shas = {json.dumps(dict(public_setup_files_sha256), sort_keys=True)}\n"
+        "for p, exp_h in expected_shas.items():\n"
+        "    if not os.path.isfile(p) or hashlib.sha256(open(p, 'rb').read()).hexdigest() != exp_h:\n"
+        "        print(json.dumps({'ok': False, 'reason': f'public_asset_tampered:{p}'})); sys.exit(0)\n"
+        f"cand_path = {json.dumps(str(decl_arts[0]))}\n"
+        f"entry_hints = {json.dumps(list(entry_fns))}\n"
+        "if not os.path.isfile(cand_path) or not cand_path.endswith('.py'):\n"
+        "    print(json.dumps({'ok': False, 'reason': 'non_python_or_missing_candidate'})); sys.exit(0)\n"
+        "sys.path.insert(0, os.path.dirname(cand_path))\n"
+        "spec = importlib.util.spec_from_file_location('_host_sci_cand', cand_path)\n"
+        "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n"
+        "fn = None\n"
+        "for nm in entry_hints:\n"
+        "    if callable(getattr(mod, nm, None)): fn = getattr(mod, nm); break\n"
+        "if fn is None:\n"
+        "    for nm in sorted(dir(mod)):\n"
+        "        if nm.startswith('solve') and callable(getattr(mod, nm, None)): fn = getattr(mod, nm); break\n"
+        "if fn is None:\n"
+        "    print(json.dumps({'ok': False, 'reason': 'no_callable_entrypoint'})); sys.exit(0)\n"
+        "pkls = sorted(glob.glob('/holdout_task/public_*.pkl'))\n"
+        "if not pkls:\n"
+        "    print(json.dumps({'ok': False, 'reason': 'no_public_pickle_dataset'})); sys.exit(0)\n"
+        "pkl_p = pkls[0]\n"
+        "pub_sha = hashlib.sha256(open(pkl_p, 'rb').read()).hexdigest()\n"
+        "raw_items = pickle.load(open(pkl_p, 'rb'))\n"
+        "item0 = raw_items[0] if isinstance(raw_items, list) and raw_items else raw_items\n"
+        "metrics = {}\n"
+        "sci_ok = False\n"
+        "gauge_ok = False\n"
+        "scope = ''\n"
+        "if isinstance(item0, dict) and 'dataset' in item0:\n"
+        "    import copy\n"
+        "    ds = copy.deepcopy(item0['dataset'])\n"
+        "    gt = item0.get('gt') or {}\n"
+        "    out = fn(copy.deepcopy(ds))\n"
+        "    ps = np.asarray(out.get('predicted_strain', []), dtype=float)\n"
+        "    et = np.asarray(out.get('estimated_taus', []), dtype=float)\n"
+        "    mae_ok = True\n"
+        "    if 'te_clean' in gt and ps.shape == np.asarray(gt['te_clean']).shape:\n"
+        "        s_mae = float(np.mean(np.abs(ps - np.asarray(gt['te_clean'], dtype=float))))\n"
+        "        metrics['public_strain_mae'] = round(s_mae, 6)\n"
+        "        mae_ok = s_mae <= 0.085\n"
+        "    if 'taus' in gt and et.shape == (2,):\n"
+        "        t_rel = float(np.max(np.abs(et - np.asarray(gt['taus'], dtype=float)) / np.asarray(gt['taus'], dtype=float)))\n"
+        "        metrics['public_tau_rel_err'] = round(t_rel, 6)\n"
+        "        mae_ok = mae_ok and (t_rel <= 0.12)\n"
+        "    # Gauge/panel affine shift invariance witness on coupon_features_raw + ref_coupons!\n"
+        "    if 'train' in ds and 'ref_coupons' in ds['train'] and 'coupon_features_raw' in ds['train']:\n"
+        "        ds_g = copy.deepcopy(ds)\n"
+        "        for sp_k in ('train', 'test'):\n"
+        "            ds_g[sp_k]['ref_coupons'] = ds_g[sp_k]['ref_coupons'] * 1.75 + 0.65\n"
+        "            ds_g[sp_k]['coupon_features_raw'] = ds_g[sp_k]['coupon_features_raw'] * 1.75 + 0.65\n"
+        "        out_g = fn(ds_g)\n"
+        "        ps_g = np.asarray(out_g.get('predicted_strain', []), dtype=float)\n"
+        "        g_diff = float(np.max(np.abs(ps_g - ps))) if ps_g.shape == ps.shape and ps.size else 1e9\n"
+        "        metrics['panel_affine_gauge_max_diff'] = round(g_diff, 8)\n"
+        "        gauge_ok = g_diff <= 1e-4\n"
+        "    sci_ok = bool(mae_ok and ps.size > 0 and np.all(np.isfinite(ps)))\n"
+        "    scope = 'task_scientific_invariants'\n"
+        "elif isinstance(item0, dict) and 'study' in item0:\n"
+        "    import copy\n"
+        "    st = copy.deepcopy(item0['study'])\n"
+        "    gt = item0.get('gt') or {}\n"
+        "    out = fn(copy.deepcopy(st))\n"
+        "    if 'w_opt' in gt and 'weights' in out:\n"
+        "        w = np.asarray(out['weights'], dtype=float)\n"
+        "        w_rel = float(np.linalg.norm(w - np.asarray(gt['w_opt'], dtype=float)) / max(float(np.linalg.norm(gt['w_opt'])), 1e-12))\n"
+        "        cert = out.get('kkt_certificate') or {}\n"
+        "        gap = float(cert.get('primal_objective', 1e9)) - float(cert.get('dual_lower_bound', -1e9))\n"
+        "        cw_diff = float(np.max(np.abs(w - np.asarray(cert.get('weights', w + 1.0), dtype=float)))) if isinstance(cert, dict) and 'weights' in cert else 1e9\n"
+        "        metrics.update({'public_w_rel_l2': round(w_rel, 8), 'kkt_duality_gap': round(gap, 10), 'cert_weight_diff': round(cw_diff, 10)})\n"
+        "        sci_ok = bool(w_rel <= 1e-3 and 0.0 <= gap <= 1e-5 and cw_diff <= 1e-6)\n"
+        "        gauge_ok = sci_ok\n"
+        "        scope = 'task_scientific_invariants'\n"
+        "    elif 'weights_by_budget' in gt and 'weights_by_budget' in out:\n"
+        "        wb = np.asarray(out['weights_by_budget'], dtype=float)\n"
+        "        wb_rel = float(np.linalg.norm(wb - np.asarray(gt['weights_by_budget'], dtype=float)) / max(float(np.linalg.norm(gt['weights_by_budget'])), 1e-12))\n"
+        "        certs = out.get('kkt_certificates') or []\n"
+        "        gaps = [float(c.get('primal_objective', 1e9)) - float(c.get('dual_lower_bound', -1e9)) for c in certs] if isinstance(certs, list) and certs else [1e9]\n"
+        "        metrics.update({'public_wb_rel_l2': round(wb_rel, 8), 'max_kkt_duality_gap': round(max(gaps), 10)})\n"
+        "        sci_ok = bool(wb_rel <= 1e-3 and all(0.0 <= gp <= 1e-5 for gp in gaps))\n"
+        "        gauge_ok = sci_ok\n"
+        "        scope = 'task_scientific_invariants'\n"
+        "print(json.dumps({'ok': sci_ok, 'public_input_digest': pub_sha, 'verified_scope': scope, 'gauge_invariance_verified': gauge_ok, 'metrics': metrics}, sort_keys=True))\n"
+    )
+    probe_code_sha = hashlib.sha256(probe_py.encode("utf-8")).hexdigest()
+    nonce = _uuid_mod.uuid4().hex[:10]
+    remote_p = f"/tmp/_hegel_host_sci_probe_{nonce}.py"
+    with tempfile.TemporaryDirectory(prefix="hegel_sci_pr_") as td:
+        lp = Path(td) / "probe.py"
+        lp.write_text(probe_py, encoding="utf-8")
+        subprocess.run(["docker", "cp", str(lp), f"{agent_cid}:{remote_p}"], capture_output=True, timeout=15)
+    try:
+        pr_run = exec_container_bash(
+            agent_cid,
+            f"OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I {remote_p}",
+            timeout_sec=45,
+        )
+    finally:
+        exec_container_bash(agent_cid, f"rm -f {remote_p}", timeout_sec=10)
+
+    post_sha = compute_declared_artifacts_digest(agent_cid, decl_arts)
+    if post_sha != current_candidate_sha256 or pr_run["exit_code"] != 0 or not pr_run["stdout"].strip():
+        return None
+    try:
+        pr_json = json.loads(pr_run["stdout"].strip().splitlines()[-1])
+    except Exception:
+        return None
+    if not pr_json.get("ok") or not str(pr_json.get("verified_scope") or "").strip():
+        return None
+    return {
+        "signed_by_host_probe_executor": True,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_scientific_probe_v3",
+        "probe_code_digest": probe_code_sha,
+        "public_input_digest": str(pr_json.get("public_input_digest") or ""),
+        "candidate_bundle_sha256": current_candidate_sha256,
+        "public_setup_files_sha256": dict(public_setup_files_sha256),
+        "verified_scope": str(pr_json["verified_scope"]),
+        "scientific_invariants_verified": True,
+        "gauge_invariance_verified": bool(pr_json.get("gauge_invariance_verified") is True),
+        "measured_scientific_metrics": dict(pr_json.get("metrics") or {}),
+        "result": (
+            "verified_gauge_and_scientific_probe_in_scope"
+            if pr_json.get("gauge_invariance_verified") is True
+            else "verified_on_host_scientific_probe"
+        ),
+    }

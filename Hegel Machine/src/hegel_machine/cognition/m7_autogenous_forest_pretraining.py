@@ -52,6 +52,8 @@ import tempfile
 from time import monotonic
 from typing import Any
 
+import numpy as np
+
 from . import m6_frontier_real_benchmarks as m6f
 from .branch_reconciliation import FORBIDDEN_SCOPE_TOKENS, anti_unify_programs
 from .hipporag_wormhole_index import HippoRAGWormholeIndex
@@ -756,7 +758,7 @@ def compute_runtime_sandbox_env_digest(
     sandbox_cid: str | None = None,
     image_tag: str = CLEAN_SCIPY_SANDBOX_IMAGE,
 ) -> tuple[str, dict[str, Any]]:
-    """Compute immutable 4-tuple runtime environment digest (`M9.2.1` `A4`) binding Docker ImageId + exact package versions."""
+    """Compute immutable 4-tuple runtime environment digest (`M9.2.1` `A4` + `M9.3.1` `F08`) binding actual container `.Image` + package versions."""
     from .m6_4_executable_wormhole_library import register_verified_l1_env_digest
 
     if sandbox_cid == "mock-cid":
@@ -772,26 +774,37 @@ def compute_runtime_sandbox_env_digest(
         register_verified_l1_env_digest(mock_dig)
         return mock_dig, mock_manifest
 
-    cache_k = f"{image_tag}::{sandbox_cid or ''}"
-    if cache_k in _SANDBOX_ENV_DIGEST_CACHE:
-        return _SANDBOX_ENV_DIGEST_CACHE[cache_k]
-
     img_id = ""
-    try:
-        insp = subprocess.run(
-            ["docker", "image", "inspect", "--format", "{{.Id}}", image_tag],
-            capture_output=True,
-            text=True,
-            timeout=15,
-        )
-        if insp.returncode == 0:
-            img_id = insp.stdout.strip()
-    except Exception:
-        img_id = ""
+    # `M9.3.1` `F08`: Always inspect the actual running container `.Image` first (when `sandbox_cid` is given)
+    # and NEVER bypass `docker image inspect` via a mutable `image_tag` cache key!
+    if sandbox_cid:
+        try:
+            insp_c = subprocess.run(
+                ["docker", "inspect", "--format", "{{.Image}}", sandbox_cid],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if insp_c.returncode == 0 and insp_c.stdout.strip():
+                img_id = insp_c.stdout.strip()
+        except Exception:
+            img_id = ""
+    if not img_id:
+        try:
+            insp = subprocess.run(
+                ["docker", "image", "inspect", "--format", "{{.Id}}", image_tag],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if insp.returncode == 0:
+                img_id = insp.stdout.strip()
+        except Exception:
+            img_id = ""
 
-    if img_id and f"{image_tag}::IMG::{img_id}" in _SANDBOX_ENV_DIGEST_CACHE:
-        res_cached = _SANDBOX_ENV_DIGEST_CACHE[f"{image_tag}::IMG::{img_id}"]
-        _SANDBOX_ENV_DIGEST_CACHE[cache_k] = res_cached
+    if (not sandbox_cid) and img_id and f"IMG_IMMUTABLE::{img_id}" in _SANDBOX_ENV_DIGEST_CACHE:
+        res_cached = _SANDBOX_ENV_DIGEST_CACHE[f"IMG_IMMUTABLE::{img_id}"]
+        register_verified_l1_env_digest(res_cached[0])
         return res_cached
 
     pkg_vers: dict[str, str] = {}
@@ -807,16 +820,21 @@ def compute_runtime_sandbox_env_digest(
         "print(json.dumps(v, sort_keys=True))\n"
     )
     if sandbox_cid:
-        pr = m6f.exec_container_bash(sandbox_cid, f"python3 -I -c {json.dumps(probe_py)}", timeout_sec=15)
-        if pr["exit_code"] == 0 and pr["stdout"].strip():
-            try:
-                pkg_vers = json.loads(pr["stdout"].strip().splitlines()[-1])
-            except Exception:
-                pkg_vers = {}
+        try:
+            pr = subprocess.run(
+                ["docker", "exec", sandbox_cid, "python3", "-I", "-c", probe_py],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+            if pr.returncode == 0 and pr.stdout.strip():
+                pkg_vers = json.loads(pr.stdout.strip().splitlines()[-1])
+        except Exception:
+            pkg_vers = {}
     elif img_id:
         try:
             pr2 = subprocess.run(
-                ["docker", "run", "--rm", "--network", "none", image_tag, "python3", "-I", "-c", probe_py],
+                ["docker", "run", "--rm", "--network", "none", img_id, "python3", "-I", "-c", probe_py],
                 capture_output=True,
                 text=True,
                 timeout=30,
@@ -840,8 +858,10 @@ def compute_runtime_sandbox_env_digest(
         json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
     ).hexdigest()[:32]
     register_verified_l1_env_digest(digest)
-    _SANDBOX_ENV_DIGEST_CACHE[cache_k] = (digest, manifest)
-    _SANDBOX_ENV_DIGEST_CACHE[f"{image_tag}::IMG::{img_id}"] = (digest, manifest)
+    pkg_fp = json.dumps(pkg_vers, sort_keys=True, separators=(",", ":"))
+    _SANDBOX_ENV_DIGEST_CACHE[f"IMG_PKG::{img_id}::{pkg_fp}"] = (digest, manifest)
+    if not sandbox_cid:
+        _SANDBOX_ENV_DIGEST_CACHE[f"IMG_IMMUTABLE::{img_id}"] = (digest, manifest)
     return digest, manifest
 
 
@@ -853,12 +873,18 @@ def issue_4tuple_l1_qualification_receipt(
     synthetic_unit_test_code: str,
     public_fn_names: list[str],
     protocol_version: str = "hegel_l1_qual_4tuple_v2",
+    independent_property_test_code: str = "",
 ) -> tuple[bool, dict[str, Any]]:
-    """Central `M9.2.1` `A4` qualification issuer shared by offline migration AND online `L1` compilation!
+    """Central `M9.2.1` `A4` + `M9.3.1` `F08` qualification issuer shared by offline migration AND online `L1` compilation!
 
-    Runs clean-container `python3 -I` unit tests (`require_all_public_fns_called=True`) PLUS an independent
-    host-authored purity/repeatability check (verifying module re-import isolation and deterministic double-execution),
-    and stamps `(verified_code_sha256, synthetic_unit_test_sha256, verifier_protocol_version, dependency_env_digest)`.
+    Separately verifies and reports:
+      1. `candidate_self_test_passed`: clean-container `python3 -I` unit tests (`require_all_public_fns_called=True`),
+      2. `host_reexecution_passed` + `determinism_and_input_immutability_verified`: executes across TWO genuinely separate
+         fresh `python3 -I` OS processes, intercepting every public-function call to assert (a) zero in-place mutation of
+         NumPy array arguments and (b) exact bitwise/numerical output equality across the two fresh processes (rejecting
+         unseeded stochastic shape-only functions like `np.random.default_rng().normal()`!),
+      3. `independent_reference_properties_verified`: True ONLY when an explicit host-authored `independent_property_test_code`
+         is supplied and passes cleanly (`False` otherwise — never overclaiming self-test replay as independent proof!).
     """
     c_sha = hashlib.sha256(packaged_module_code.encode("utf-8")).hexdigest()
     ut_sha = hashlib.sha256(synthetic_unit_test_code.encode("utf-8")).hexdigest() if synthetic_unit_test_code.strip() else ""
@@ -873,52 +899,184 @@ def issue_4tuple_l1_qualification_receipt(
     if not isinstance(ut_res, dict):
         ut_res = {"passed": False, "error": "invalid_verifier_return"}
 
-    host_indep_ok = False
-    if ut_res.get("passed") is True:
-        if sandbox_cid == "mock-cid":
-            host_indep_ok = True
-        else:
-            # Host-authored independent repeatability & import-purity probe (`python3 -I`)
-            indep_py = (
-                "import copy, importlib.util, json, os, sys\n"
-                "sys.path.insert(0, '/tmp/ut_sandbox')\n"
-                f"import hegel_wormhole_skills.{mod_stem} as m\n"
-                f"fns = {json.dumps(list(public_fn_names))}\n"
-                "assert all(callable(getattr(m, fn, None)) for fn in fns), 'missing_callable'\n"
-                "ns1 = {fn: getattr(m, fn) for fn in fns}\n"
-                "ns2 = {fn: getattr(m, fn) for fn in fns}\n"
-                "ut_src = open('/tmp/ut_sandbox/_run_ut.py', encoding='utf-8').read()\n"
-                "# Execute twice in independent namespaces to verify deterministic side-effect-free behavior\n"
-                "exec(compile(ut_src, '<host_repeat_1>', 'exec'), dict(ns1))\n"
-                "exec(compile(ut_src, '<host_repeat_2>', 'exec'), dict(ns2))\n"
-                "print('HOST_INDEP_REPEATABILITY_OK')\n"
-            )
-            # Re-run cleanly on temporary copy inside `sandbox_cid`
-            with tempfile.TemporaryDirectory(prefix="hegel_indep_q_") as td_q:
-                td_p = Path(td_q) / "ut_sandbox"
-                pkg_p = td_p / "hegel_wormhole_skills"
-                pkg_p.mkdir(parents=True, exist_ok=True)
-                from .m6_4_executable_wormhole_library import SKILL_INIT_PY
+    self_test_ok = bool(ut_res.get("passed") is True)
+    host_reexec_ok = False
+    det_immut_ok = False
+    indep_prop_ok = False
 
-                (pkg_p / "__init__.py").write_text(SKILL_INIT_PY, encoding="utf-8")
-                (pkg_p / f"{mod_stem}.py").write_text(packaged_module_code, encoding="utf-8")
-                (td_p / "_run_ut.py").write_text(synthetic_unit_test_code, encoding="utf-8")
-                (td_p / "_host_indep.py").write_text(indep_py, encoding="utf-8")
+    _TWO_PROC_DETERMINISM_HARNESS_PY = (
+        "import copy, hashlib, json, math, os, pickle, subprocess, sys\n"
+        "import numpy as np\n"
+        "CAPTURE = '''\n"
+        "import copy, hashlib, json, os, pickle, sys\n"
+        "import numpy as np\n"
+        "root = os.environ['HEGEL_UT_ROOT']\n"
+        "sys.path.insert(0, root)\n"
+        f"import hegel_wormhole_skills.{mod_stem} as m\n"
+        f"sys.modules[{mod_stem!r}] = m\n"
+        f"fns = {json.dumps(list(public_fn_names))}\n"
+        "def _canon(v):\n"
+        "    if isinstance(v, np.ndarray):\n"
+        "        a = np.ascontiguousarray(v)\n"
+        "        raw_b = repr([str(x) for x in a.ravel()]).encode() if a.dtype == np.longdouble else a.tobytes()\n"
+        "        return {'t': 'nd', 'dt': str(a.dtype), 'sh': list(a.shape), 'h': hashlib.sha256(raw_b).hexdigest()}\n"
+        "    if isinstance(v, (bool, np.bool_)): return {'t': 'b', 'v': bool(v)}\n"
+        "    if isinstance(v, (int, np.integer)): return {'t': 'i', 'v': int(v)}\n"
+        "    if isinstance(v, (float, np.floating)): return {'t': 'f', 'v': repr(float(v))}\n"
+        "    if isinstance(v, (list, tuple)): return {'t': 'seq', 'v': [_canon(x) for x in v]}\n"
+        "    if isinstance(v, dict): return {'t': 'd', 'v': {str(k): _canon(val) for k, val in sorted(v.items())}}\n"
+        "    return {'t': type(v).__name__, 'v': repr(v)}\n"
+        "calls = []\n"
+        "for fn_nm in fns:\n"
+        "    orig_fn = getattr(m, fn_nm)\n"
+        "    def _make_wrap(_nm, _f):\n"
+        "        def _w(*args, **kwargs):\n"
+        "            c_args, c_kw = copy.deepcopy(args), copy.deepcopy(kwargs)\n"
+        "            pre_in = _canon([args, kwargs])\n"
+        "            res = _f(*args, **kwargs)\n"
+        "            post_in = _canon([args, kwargs])\n"
+        "            if pre_in != post_in:\n"
+        "                raise AssertionError(f'input_mutated_in_place:{_nm}')\n"
+        "            if len(calls) < 24:\n"
+        "                try:\n"
+        "                    pickle.dumps((_nm, c_args, c_kw))\n"
+        "                    calls.append((_nm, c_args, c_kw))\n"
+        "                except Exception:\n"
+        "                    pass\n"
+        "            return res\n"
+        "        return _w\n"
+        "    setattr(m, fn_nm, _make_wrap(fn_nm, orig_fn))\n"
+        "ut_src = open(os.path.join(root, '_run_ut.py'), encoding='utf-8').read()\n"
+        "ns = {fn_nm: getattr(m, fn_nm) for fn_nm in fns}\n"
+        "exec(compile(ut_src, '<det_capture>', 'exec'), ns)\n"
+        "open(os.path.join(root, '_captured_calls.pkl'), 'wb').write(pickle.dumps(calls))\n"
+        "'''\n"
+        "REPLAY = '''\n"
+        "import copy, hashlib, json, os, pickle, sys\n"
+        "import numpy as np\n"
+        "root = os.environ['HEGEL_UT_ROOT']\n"
+        "sys.path.insert(0, root)\n"
+        f"import hegel_wormhole_skills.{mod_stem} as m\n"
+        f"sys.modules[{mod_stem!r}] = m\n"
+        "def _canon(v):\n"
+        "    if isinstance(v, np.ndarray):\n"
+        "        a = np.ascontiguousarray(v)\n"
+        "        raw_b = repr([str(x) for x in a.ravel()]).encode() if a.dtype == np.longdouble else a.tobytes()\n"
+        "        return {'t': 'nd', 'dt': str(a.dtype), 'sh': list(a.shape), 'h': hashlib.sha256(raw_b).hexdigest()}\n"
+        "    if isinstance(v, (bool, np.bool_)): return {'t': 'b', 'v': bool(v)}\n"
+        "    if isinstance(v, (int, np.integer)): return {'t': 'i', 'v': int(v)}\n"
+        "    if isinstance(v, (float, np.floating)): return {'t': 'f', 'v': repr(float(v))}\n"
+        "    if isinstance(v, (list, tuple)): return {'t': 'seq', 'v': [_canon(x) for x in v]}\n"
+        "    if isinstance(v, dict): return {'t': 'd', 'v': {str(k): _canon(val) for k, val in sorted(v.items())}}\n"
+        "    return {'t': type(v).__name__, 'v': repr(v)}\n"
+        "calls = pickle.loads(open(os.path.join(root, '_captured_calls.pkl'), 'rb').read())\n"
+        "trace = []\n"
+        "for fn_nm, c_args, c_kw in calls:\n"
+        "    a_in, k_in = copy.deepcopy(c_args), copy.deepcopy(c_kw)\n"
+        "    pre_in = _canon([a_in, k_in])\n"
+        "    res = getattr(m, fn_nm)(*a_in, **k_in)\n"
+        "    if _canon([a_in, k_in]) != pre_in:\n"
+        "        raise AssertionError(f'input_mutated_in_place:{fn_nm}')\n"
+        "    trace.append({'fn': fn_nm, 'out': _canon(res)})\n"
+        "open(os.environ['HEGEL_TRACE_OUT'], 'w', encoding='utf-8').write(json.dumps(trace, sort_keys=True))\n"
+        "'''\n"
+        "root = sys.argv[1]\n"
+        "rc0 = subprocess.run([sys.executable, '-I', '-c', CAPTURE], env=dict(os.environ, HEGEL_UT_ROOT=root, PYTHONHASHSEED='99'), capture_output=True, text=True, timeout=30)\n"
+        "if rc0.returncode != 0:\n"
+        "    sys.stderr.write(f'capture_failed:{rc0.stderr[-300:]}\\n'); sys.exit(2)\n"
+        "for idx in (1, 2):\n"
+        "    tr_p = os.path.join(root, f'_trace_{idx}.json')\n"
+        "    env = dict(os.environ, HEGEL_UT_ROOT=root, HEGEL_TRACE_OUT=tr_p, PYTHONHASHSEED=str(100 + idx))\n"
+        "    r = subprocess.run([sys.executable, '-I', '-c', REPLAY], env=env, capture_output=True, text=True, timeout=30)\n"
+        "    if r.returncode != 0:\n"
+        "        sys.stderr.write(f'worker_{idx}_failed:{r.stderr[-300:]}\\n'); sys.exit(2)\n"
+        "t1 = json.loads(open(os.path.join(root, '_trace_1.json'), encoding='utf-8').read())\n"
+        "t2 = json.loads(open(os.path.join(root, '_trace_2.json'), encoding='utf-8').read())\n"
+        "if not t1 or t1 != t2:\n"
+        "    sys.stderr.write('nondeterministic_output_mismatch_across_fresh_processes\\n'); sys.exit(3)\n"
+        "print('TWO_PROCESS_DETERMINISM_AND_IMMUTABILITY_OK')\n"
+    )
+
+    if self_test_ok:
+        with tempfile.TemporaryDirectory(prefix="hegel_indep_q_") as td_q:
+            td_p = Path(td_q) / "ut_sandbox"
+            pkg_p = td_p / "hegel_wormhole_skills"
+            pkg_p.mkdir(parents=True, exist_ok=True)
+            from .m6_4_executable_wormhole_library import SKILL_INIT_PY
+
+            (pkg_p / "__init__.py").write_text(SKILL_INIT_PY, encoding="utf-8")
+            (pkg_p / f"{mod_stem}.py").write_text(packaged_module_code, encoding="utf-8")
+            (td_p / "_run_ut.py").write_text(synthetic_unit_test_code, encoding="utf-8")
+            (td_p / "_host_indep.py").write_text(_TWO_PROC_DETERMINISM_HARNESS_PY, encoding="utf-8")
+            if independent_property_test_code.strip():
+                (td_p / "_indep_prop.py").write_text(independent_property_test_code, encoding="utf-8")
+
+            if sandbox_cid == "mock-cid":
+                import sys as _sys_local
+
+                chk_local = subprocess.run(
+                    [_sys_local.executable, "-I", str(td_p / "_host_indep.py"), str(td_p)],
+                    capture_output=True,
+                    text=True,
+                    timeout=35,
+                )
+                host_reexec_ok = chk_local.returncode != 2
+                det_immut_ok = bool(chk_local.returncode == 0 and "TWO_PROCESS_DETERMINISM_AND_IMMUTABILITY_OK" in chk_local.stdout)
+                if not det_immut_ok:
+                    ut_res["passed"] = False
+                    ut_res["host_independent_check_error"] = (chk_local.stderr or chk_local.stdout)[-400:]
+                elif independent_property_test_code.strip():
+                    env_p = dict(os.environ, PYTHONPATH=str(td_p))
+                    pr_loc = subprocess.run(
+                        [_sys_local.executable, "-I", str(td_p / "_indep_prop.py")],
+                        env=env_p,
+                        capture_output=True,
+                        text=True,
+                        timeout=30,
+                    )
+                    indep_prop_ok = pr_loc.returncode == 0
+                    if not indep_prop_ok:
+                        ut_res["passed"] = False
+                        ut_res["independent_property_error"] = (pr_loc.stderr or pr_loc.stdout)[-400:]
+            else:
                 subprocess.run(["docker", "exec", sandbox_cid, "rm", "-rf", "/tmp/ut_sandbox"], capture_output=True, timeout=15)
                 subprocess.run(["docker", "cp", str(td_p), f"{sandbox_cid}:/tmp/ut_sandbox"], check=True, timeout=20)
                 chk_r = m6f.exec_container_bash(
                     sandbox_cid,
-                    "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/ut_sandbox/_host_indep.py && rm -rf /tmp/ut_sandbox",
-                    timeout_sec=45,
+                    "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/ut_sandbox/_host_indep.py /tmp/ut_sandbox",
+                    timeout_sec=50,
                 )
-                host_indep_ok = bool(chk_r["exit_code"] == 0 and "HOST_INDEP_REPEATABILITY_OK" in chk_r["stdout"])
-                if not host_indep_ok:
+                host_reexec_ok = chk_r["exit_code"] != 2
+                det_immut_ok = bool(chk_r["exit_code"] == 0 and "TWO_PROCESS_DETERMINISM_AND_IMMUTABILITY_OK" in chk_r["stdout"])
+                if not det_immut_ok:
                     ut_res["passed"] = False
                     ut_res["host_independent_check_error"] = (chk_r["stderr"] or chk_r["stdout"])[-400:]
+                elif independent_property_test_code.strip():
+                    pr_c = m6f.exec_container_bash(
+                        sandbox_cid,
+                        "PYTHONPATH=/tmp/ut_sandbox OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/ut_sandbox/_indep_prop.py",
+                        timeout_sec=40,
+                    )
+                    indep_prop_ok = pr_c["exit_code"] == 0
+                    if not indep_prop_ok:
+                        ut_res["passed"] = False
+                        ut_res["independent_property_error"] = (pr_c["stderr"] or pr_c["stdout"])[-400:]
+                subprocess.run(["docker", "exec", sandbox_cid, "rm", "-rf", "/tmp/ut_sandbox"], capture_output=True, timeout=15)
 
     env_digest, env_manifest = compute_runtime_sandbox_env_digest(sandbox_cid=sandbox_cid)
-    passed_all = bool(ut_res.get("passed") is True and ut_res.get("telemetry_verified", True) and host_indep_ok and bool(ut_sha))
+    host_indep_ok = bool(host_reexec_ok and det_immut_ok)
+    passed_all = bool(
+        ut_res.get("passed") is True
+        and ut_res.get("telemetry_verified", True)
+        and host_indep_ok
+        and bool(ut_sha)
+        and (indep_prop_ok if independent_property_test_code.strip() else True)
+    )
     ut_res["passed"] = passed_all
+    ut_res["candidate_self_test_passed"] = self_test_ok
+    ut_res["host_reexecution_passed"] = host_reexec_ok
+    ut_res["determinism_and_input_immutability_verified"] = det_immut_ok
+    ut_res["independent_reference_properties_verified"] = indep_prop_ok
     ut_res["host_independent_repeatability_verified"] = host_indep_ok
     ut_res["verified_code_sha256"] = c_sha
     ut_res["synthetic_unit_test_sha256"] = ut_sha
@@ -1345,6 +1503,7 @@ def compile_episode_dialectical_sublation(
     ]
 
     tok_totals = {"prompt": 0, "cached": 0, "completion": 0, "wall_ms": 0.0}
+    provider_call_receipts: list[dict[str, Any]] = []
     last_err = "not_run"
 
     for attempt_idx in (1, 2):
@@ -1358,6 +1517,24 @@ def compile_episode_dialectical_sublation(
         tok_totals["cached"] += int(llm_res.get("cached_tokens", 0))
         tok_totals["completion"] += int(llm_res.get("completion_tokens", 0))
         tok_totals["wall_ms"] += float(llm_res.get("wall_ms", 0.0))
+        provider_call_receipts.append(
+            {
+                "compiler_stage": "aufhebung_l2",
+                "attempt_idx": attempt_idx,
+                "ok": bool(llm_res.get("ok")),
+                "call_uuid": str(llm_res.get("call_uuid") or ""),
+                "attempts_ledger_filename": str(llm_res.get("attempts_ledger_filename") or ""),
+                "attempts_ledger_path": str(llm_res.get("attempts_ledger_path") or ""),
+                "provider_attempt_count": int(llm_res.get("attempt_count", 1) or 1),
+                "usage_unknown_attempt_count": int(llm_res.get("usage_unknown_attempt_count", 0) or 0),
+                "cost_accounting_status": str(llm_res.get("cost_accounting_status") or ("complete" if llm_res.get("ok") else "partial_unknown_usage")),
+                "request_sha256": str(llm_res.get("request_sha256") or ""),
+                "prompt_tokens": int(llm_res.get("prompt_tokens", 0) or 0),
+                "cached_tokens": int(llm_res.get("cached_tokens", 0) or 0),
+                "completion_tokens": int(llm_res.get("completion_tokens", 0) or 0),
+                "wall_ms": float(llm_res.get("wall_ms", 0.0) or 0.0),
+            }
+        )
         if not llm_res.get("ok"):
             last_err = f"llm_error:{llm_res.get('error')}"
             break
@@ -1442,6 +1619,7 @@ def compile_episode_dialectical_sublation(
                 "regime_bifurcation": dict(parsed["regime_bifurcation"]),
                 "operator_pipeline_stages": list(parsed["operator_pipeline_stages"]),
                 "llm_tokens": tok_totals,
+                "provider_attempt_receipts": provider_call_receipts,
             }
 
         last_err = f"unit_test_failed(rc={ut_res['exit_code']}):{ut_res['stderr'][-500:]}"
@@ -1527,6 +1705,158 @@ def _select_axiomatic_root_for_signatures(
     return best_root
 
 
+@dataclass
+class ObservablePreconditionGuard:
+    """Single authoritative executable 3-valued (`TRUE` / `FALSE` / `UNKNOWN`) regime guard (`M9.3.1` `F02`).
+
+    Shared across `PhilosophicalForest` (`ClaimContract.preconditions`), `archive[nid]["counter_regime_guards"]`,
+    catalog disclosure, and runtime mechanism selection!
+    """
+
+    field: str = ""
+    op: str = ">"
+    value: float = 0.0
+    observable_kind: str = "direct_scalar_field"
+    observable_extractor: str = ""
+    guard_id: str = ""
+    units: str = "dimensionless"
+    normalization: str = "identity"
+    applies_to_component_id: str = ""
+    counterpart_child_id: str = ""
+
+    def __post_init__(self) -> None:
+        if self.observable_extractor and self.observable_kind == "direct_scalar_field":
+            self.observable_kind = self.observable_extractor
+        if not self.field:
+            self.field = self.observable_kind if self.observable_kind != "direct_scalar_field" else (self.guard_id or "guard_metric")
+
+    def to_dict(self) -> dict[str, Any]:
+        d: dict[str, Any] = {
+            "field": self.field,
+            "op": self.op,
+            "value": float(self.value),
+            "observable_kind": self.observable_kind,
+            "units": self.units,
+            "normalization": self.normalization,
+        }
+        if self.guard_id:
+            d["guard_id"] = self.guard_id
+        if self.applies_to_component_id:
+            d["applies_to_component_id"] = self.applies_to_component_id
+        if self.counterpart_child_id:
+            d["counterpart_child_id"] = self.counterpart_child_id
+        return d
+
+
+def evaluate_observable_precondition_guard(
+    guard: dict[str, Any] | ObservablePreconditionGuard,
+    dataset_or_features: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Evaluate a unified `ObservablePreconditionGuard` on raw observable inputs (`TRUE` / `FALSE` / `UNKNOWN`).
+
+    Crucial physical guarantees (`M9.3.1` `F02`):
+      1. `overstress_excess_max_history_and_hold`: measures BOTH historical (`past_stress`) AND current (`stress_hold_0`)
+         peak stress relative to `yield_stress` (`max_abs / yield_stress - 1.0` clipped at `0.0`), PLUS any nonzero
+         `residual_plastic_state` if present! Unloading current stress below yield does NOT erase historical plastic state!
+         Missing observable keys return `"UNKNOWN"` (NEVER silently coerced to `"FALSE"`).
+      2. `nonseparable_2d_additive_residual_ratio`: computes `||V - mean_x(V) - mean_y(V) + mean(V)||_F / max(||V||_F, 1e-12)`
+         so a nonzero ADDITIVELY SEPARABLE potential `V(x,y) = a(x) + b(y)` yields `0.0` (preserving Kronecker separability!),
+         whereas a genuinely cross-coupled 2D potential yields `> 0.0`!
+    """
+    from .wormhole_forest import evaluate_predicate_rule
+
+    g_dict = guard.to_dict() if isinstance(guard, ObservablePreconditionGuard) else dict(guard)
+    obs_kind = str(g_dict.get("observable_kind") or "direct_scalar_field")
+    fld = str(g_dict.get("field") or "")
+    ctx = dataset_or_features if isinstance(dataset_or_features, dict) else {}
+
+    measured_val: float | None = None
+    if fld in ctx and isinstance(ctx[fld], (int, float)) and not isinstance(ctx[fld], bool) and math.isfinite(float(ctx[fld])):
+        measured_val = float(ctx[fld])
+    elif obs_kind == "overstress_excess_max_history_and_hold":
+        # Inspect observable train/test or flat stress histories + yield_stress + optional residual_plastic_state
+        ys = ctx.get("yield_stress")
+        res_pl = ctx.get("residual_plastic_state")
+        if res_pl is None and isinstance(ctx.get("test"), dict):
+            res_pl = ctx["test"].get("residual_plastic_state")
+        res_pl_norm = 0.0
+        if res_pl is not None:
+            try:
+                res_pl_norm = float(np.max(np.abs(np.asarray(res_pl, dtype=float))))
+            except Exception:
+                res_pl_norm = float("nan")
+        peaks: list[float] = []
+        try:
+            for sk_top in ("past_stress", "stress_hold_0"):
+                if sk_top in ctx:
+                    peaks.append(float(np.max(np.abs(np.asarray(ctx[sk_top], dtype=float)))))
+            for split_k in ("train", "test"):
+                sp_d = ctx.get(split_k)
+                if isinstance(sp_d, dict):
+                    for sk in ("past_stress", "stress_hold_0"):
+                        if sk in sp_d:
+                            peaks.append(float(np.max(np.abs(np.asarray(sp_d[sk], dtype=float)))))
+        except Exception:
+            peaks = []
+        if ys is None:
+            if ctx.get("pure_linear_no_yield_declared") is True or bool(peaks):
+                measured_val = max(0.0, res_pl_norm) if math.isfinite(res_pl_norm) else None
+            else:
+                measured_val = None
+        else:
+            try:
+                ys_f = float(ys)
+                if ys_f > 0.0 and peaks and math.isfinite(res_pl_norm):
+                    measured_val = max(0.0, max(peaks) / ys_f - 1.0, res_pl_norm)
+            except Exception:
+                measured_val = None
+    elif obs_kind == "nonseparable_2d_additive_residual_ratio":
+        v_key = next((k for k in ("V_pocket_channel_b", "V_potential_2d", "reaction_potential_2d") if k in ctx), None)
+        if v_key is None:
+            if "source_modes" in ctx and "mu_shifts" in ctx:
+                measured_val = 0.0
+            else:
+                measured_val = None
+        else:
+            try:
+                v_arr = np.asarray(ctx[v_key], dtype=float)
+                if v_arr.ndim == 2 and v_arr.size > 0 and bool(np.all(np.isfinite(v_arr))):
+                    r_add = v_arr - np.mean(v_arr, axis=1, keepdims=True) - np.mean(v_arr, axis=0, keepdims=True) + float(np.mean(v_arr))
+                    denom = max(float(np.linalg.norm(v_arr)), 1.0)
+                    measured_val = float(np.linalg.norm(r_add) / denom)
+            except Exception:
+                measured_val = None
+
+    eval_features = dict(ctx)
+    if measured_val is not None and math.isfinite(measured_val):
+        eval_features[fld] = measured_val
+    else:
+        eval_features.pop(fld, None)
+
+    status = evaluate_predicate_rule(
+        {"field": fld, "op": str(g_dict.get("op", ">")), "value": g_dict.get("value", 0.0)},
+        eval_features,
+    )
+    rec_payload = {
+        "guard": g_dict,
+        "measured_value": measured_val,
+        "status": status,
+    }
+    rec_sha = hashlib.sha256(json.dumps(rec_payload, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+    return {
+        "status": status,
+        "state": status,
+        "measured_value": measured_val,
+        "statistic": measured_val,
+        "observable_kind": obs_kind,
+        "units": str(g_dict.get("units") or "dimensionless"),
+        "normalization": str(g_dict.get("normalization") or "identity"),
+        "applies_to_component_id": str(g_dict.get("applies_to_component_id") or ""),
+        "guard_spec": g_dict,
+        "guard_receipt_sha256": rec_sha,
+    }
+
+
 def consolidate_autogenous_episode_into_forest(
     *,
     forest: PhilosophicalForest,
@@ -1534,9 +1864,23 @@ def consolidate_autogenous_episode_into_forest(
     compilation: dict[str, Any],
     nogoods_recorded: list[dict[str, Any]],
     allow_horizontal_wormholes: bool = True,
+    source_node_id: str | None = None,
+    source_version: str | int | None = None,
+    violated_component_id: str | None = None,
+    preserved_component_ids: list[str] | tuple[str, ...] | None = None,
+    guard_spec_override: dict[str, Any] | ObservablePreconditionGuard | None = None,
 ) -> dict[str, Any]:
     """Grow a new mid-layer `PhilosophicalNode` or bifurcate (`split`) an existing node on regime preconditions,
     wire `ClaimContract` empirical support receipts, and run cross-tree operator anti-unification!
+
+    `M9.3.1` `F01` + `F02` Upgrades:
+      - When `source_node_id` is supplied, binds directly to that exact registered parent mechanism node
+        (NEVER allowing signature-equality coincidence to mis-attach `C1` onto an unrelated calibration node!).
+      - Records component-scoped revision status (`violated_component_id` vs `preserved_component_ids`) so
+        unaffected shared components (e.g. `reference_panel_calibration`, `channel_A_separable`, `box_simplex_qp`)
+        are NEVER falsely restricted by counter-regime guards!
+      - Synchronizes `ObservablePreconditionGuard` identically across `archive[parent]["counter_regime_guards"]`
+        AND `forest.nodes[parent]["claim_contract"]["preconditions"]`!
     """
     if not compilation.get("compiled_ok"):
         return {"consolidated": False, "reason": compilation.get("error", "compilation_failed")}
@@ -1544,27 +1888,44 @@ def consolidate_autogenous_episode_into_forest(
     sigs = list(compilation["routed_signatures"])
     ep_id = str(compilation["episode_id"])
     code_sha16 = str(compilation["compiled_code_sha256"])[:16]
-    root_nid = _select_axiomatic_root_for_signatures(archive, sigs)
-    root_rec = archive[root_nid]
-    tree_id = str(root_rec["tree_id"])
 
-    # Check if an autogenous mid-layer child already exists under `tree_id` with overlapping signature
     existing_mid_nid: str | None = None
-    for nid, rec in iter_live_archive_nodes(archive):
-        if rec.get("tree_id") == tree_id and rec.get("layer_role") == "mid":
-            if set(rec.get("signatures", [])) == set(sigs):
-                existing_mid_nid = nid
-                break
+    if source_node_id is not None:
+        if source_node_id not in archive or not isinstance(archive[source_node_id], dict):
+            raise ValueError(f"Explicit `source_node_id={source_node_id!r}` does not exist in `archive`!")
+        src_rec = archive[source_node_id]
+        if src_rec.get("layer_role") not in {"mid", "fine"}:
+            raise ValueError(f"Explicit `source_node_id={source_node_id!r}` must be a `mid` or `fine` mechanism node!")
+        existing_mid_nid = source_node_id
+        tree_id = str(src_rec["tree_id"])
+        # Walk up to axiomatic root
+        cur_p = str(src_rec.get("parent_node_id") or "")
+        while cur_p and cur_p in archive and archive[cur_p].get("layer_role") != "root":
+            cur_p = str(archive[cur_p].get("parent_node_id") or "")
+        root_nid = cur_p if (cur_p and cur_p in archive) else _select_axiomatic_root_for_signatures(archive, sigs)
+    else:
+        root_nid = _select_axiomatic_root_for_signatures(archive, sigs)
+        root_rec = archive[root_nid]
+        tree_id = str(root_rec["tree_id"])
+        for nid, rec in iter_live_archive_nodes(archive):
+            if rec.get("tree_id") == tree_id and rec.get("layer_role") == "mid":
+                if set(rec.get("signatures", [])) == set(sigs):
+                    existing_mid_nid = nid
+                    break
 
     bif = compilation.get("regime_bifurcation") or {}
-    should_split = bool(bif.get("should_split_node")) and str(bif.get("regime_axis") or "").strip() not in {"", "none"}
+    should_split = bool(bif.get("should_split_node")) and (
+        str(bif.get("regime_axis") or "").strip() not in {"", "none"} or guard_spec_override is not None
+    )
+    preserved_list = [str(c) for c in (preserved_component_ids or ()) if str(c).strip()]
+    violated_comp = str(violated_component_id or "").strip()
 
     ut_rec = compilation.get("unit_test_receipt") or {}
     ut_verified = bool(ut_rec.get("passed")) and str(ut_rec.get("mode") or "") != "static_compile_only_unverified"
     mod_entry = {
         "filename": compilation["filename"],
         "granularity_tier": str(compilation.get("granularity_tier") or "L2_domain_operator"),
-        "origin": compilation["compilation_mode"],
+        "origin": str(compilation.get("compilation_mode") or "llm_aufhebung_container_verified"),
         "unit_test_verified": ut_verified,
         "source_qualification_status": str(compilation.get("source_qualification_status") or "public_episode"),
         "source_candidate_sha256": compilation.get("source_candidate_sha256"),
@@ -1641,6 +2002,7 @@ def consolidate_autogenous_episode_into_forest(
             "tree_id": tree_id,
             "parent_node_id": root_nid,
             "layer_role": "mid",
+            "version": 1,
             "family_tag": f"fam_auto_{slug_tail}",
             "signatures": sigs,
             "epistemic_rung": "L2_AUTOGENOUS_SUBLATED_MECHANISM",
@@ -1658,12 +2020,33 @@ def consolidate_autogenous_episode_into_forest(
 
     elif should_split:
         # Precondition-Gated Node Bifurcation (`Split` into a specialized regime child node + update parent guard!)
-        axis_nm = re.sub(r"[^a-zA-Z0-9_]", "_", str(bif["regime_axis"]))[:40]
-        guard_rule = (
-            [{"field": axis_nm, "op": str(bif.get("branch_guard_op", ">=")), "value": float(bif.get("branch_guard_value", 0.0))}]
-            if axis_nm not in FORBIDDEN_SCOPE_TOKENS
-            else []
-        )
+        raw_axis = str(bif.get("regime_axis") or "").strip()
+        if raw_axis in {"", "none"} and guard_spec_override is not None:
+            g_tmp = guard_spec_override.to_dict() if isinstance(guard_spec_override, ObservablePreconditionGuard) else dict(guard_spec_override)
+            raw_axis = str(g_tmp.get("field") or g_tmp.get("observable_kind") or "observable_guard")
+        axis_nm = re.sub(r"[^a-zA-Z0-9_]", "_", raw_axis)[:40]
+        if guard_spec_override is not None:
+            g_obj = (
+                guard_spec_override.to_dict()
+                if isinstance(guard_spec_override, ObservablePreconditionGuard)
+                else dict(guard_spec_override)
+            )
+            if violated_comp and not g_obj.get("applies_to_component_id"):
+                g_obj["applies_to_component_id"] = violated_comp
+            guard_rule = [g_obj]
+        else:
+            guard_rule = (
+                [
+                    ObservablePreconditionGuard(
+                        field=axis_nm,
+                        op=str(bif.get("branch_guard_op", ">=")),
+                        value=float(bif.get("branch_guard_value", 0.0)),
+                        applies_to_component_id=violated_comp,
+                    ).to_dict()
+                ]
+                if axis_nm not in FORBIDDEN_SCOPE_TOKENS
+                else []
+            )
         split_nid = f"node_auto_{live_count:02d}_split_{slug_tail}"
         parent_rec = archive[existing_mid_nid]
         merged_sigs = sorted(set(parent_rec.get("signatures", [])) | set(sigs))
@@ -1673,6 +2056,11 @@ def consolidate_autogenous_episode_into_forest(
         )
         if bif.get("counter_regime_warning"):
             principle_txt += f" (Counter-regime `{axis_nm}` warning: {bif['counter_regime_warning']})"
+
+        comp_status = {
+            **({violated_comp: "violated_and_extended_in_child"} if violated_comp else {}),
+            **{pc: "preserved_across_regimes" for pc in preserved_list},
+        }
 
         forest.register_node(
             node_id=split_nid,
@@ -1690,10 +2078,14 @@ def consolidate_autogenous_episode_into_forest(
                     "schema_tag": parent_rec["family_tag"],
                     "epistemic_rung": "L3_BIFURCATED_REGIME_LAW",
                     "supported_by": [ep_id, f"sha256:{code_sha16}"],
+                    "component_status": comp_status,
                 },
                 protocol_spec={
                     "epistemic_rung": "L3_BIFURCATED_REGIME_LAW",
                     "bifurcated_from": existing_mid_nid,
+                    "bifurcated_from_version": source_version if source_version is not None else parent_rec.get("version", 1),
+                    "violated_component_id": violated_comp or None,
+                    "preserved_component_ids": preserved_list,
                     "unit_test_verified": ut_verified,
                 },
                 tolerance=1.0,
@@ -1706,25 +2098,40 @@ def consolidate_autogenous_episode_into_forest(
         forest.add_local_implication_edge(
             stronger_node_id=split_nid,
             weaker_node_id=existing_mid_nid,
-            preserved_contract={"query": "scientific_terminal_discovery", "bifurcated_axis": axis_nm},
+            preserved_contract={
+                "query": "scientific_terminal_discovery",
+                "bifurcated_axis": axis_nm,
+                "violated_component_id": violated_comp or None,
+                "preserved_component_ids": preserved_list,
+            },
             scope={"preconditions": guard_rule},
             evidence_status="derived",
         )
-        # Record explicit complementary counter-regime guard on parent alongside counter-regime note!
+        # Record explicit complementary counter-regime guard on BOTH `archive` AND `forest.nodes[existing_mid_nid].claim_contract`!
         _COMPLEMENT_OP = {">": "<=", ">=": "<", "<": ">=", "<=": ">", "==": "!=", "!=": "=="}
         if guard_rule:
-            g0 = guard_rule[0]
+            g0 = dict(guard_rule[0])
             comp_guard = {
-                "field": g0["field"],
+                **g0,
                 "op": _COMPLEMENT_OP.get(str(g0["op"]), "!="),
-                "value": g0["value"],
                 "counterpart_child_id": split_nid,
             }
             parent_rec.setdefault("counter_regime_guards", []).append(comp_guard)
+            parent_rec.setdefault("scope_preconditions", []).append(comp_guard)
+            if existing_mid_nid in forest.nodes and isinstance(forest.nodes[existing_mid_nid].get("claim_contract"), dict):
+                forest.nodes[existing_mid_nid]["claim_contract"].setdefault("preconditions", []).append(comp_guard)
         parent_rec["signatures"] = merged_sigs
         parent_rec.setdefault("supported_by", []).append(ep_id)
-        if all(m["filename"] != mod_entry["filename"] for m in parent_rec.setdefault("autogenous_wormhole_modules", [])):
-            parent_rec["autogenous_wormhole_modules"].append(mod_entry)
+        parent_rec.setdefault("bifurcated_child_node_ids", []).append(split_nid)
+        if comp_status:
+            parent_rec.setdefault("component_revision_history", []).append(
+                {"child_node_id": split_nid, "episode_id": ep_id, "component_status": comp_status}
+            )
+        # Only attach counterexample module directly onto parent when component-scoped isolation is NOT active (legacy mode);
+        # when `source_node_id` / `violated_component_id` is explicitly provided, keep parent's original regime module pure!
+        if source_node_id is None and not violated_comp:
+            if all(m["filename"] != mod_entry["filename"] for m in parent_rec.setdefault("autogenous_wormhole_modules", [])):
+                parent_rec["autogenous_wormhole_modules"].append(mod_entry)
         parent_rec.setdefault("wave1_consolidated_nogoods", []).extend(ng_lessons)
         if bif.get("counter_regime_warning"):
             parent_rec["methodology_principle"] = (
@@ -1732,11 +2139,18 @@ def consolidate_autogenous_episode_into_forest(
                 + f" | [BIFURCATION `{split_nid}` (`{axis_nm}`)]: {compilation['sublated_methodology_principle']}"
             )
 
+        child_mods = [*parent_rec.get("autogenous_wormhole_modules", [])]
+        if all(m["filename"] != mod_entry["filename"] for m in child_mods):
+            child_mods.append(mod_entry)
         archive[split_nid] = {
             "node_id": split_nid,
             "tree_id": tree_id,
             "parent_node_id": existing_mid_nid,
+            "source_parent_version": source_version if source_version is not None else parent_rec.get("version", 1),
+            "violated_component_id": violated_comp or None,
+            "preserved_component_ids": preserved_list,
             "layer_role": "fine",
+            "version": 1,
             "family_tag": parent_rec["family_tag"],
             "signatures": merged_sigs,
             "epistemic_rung": "L3_BIFURCATED_REGIME_LAW",
@@ -1744,7 +2158,7 @@ def consolidate_autogenous_episode_into_forest(
             "scope_preconditions": [*compilation.get("scope_preconditions", []), *guard_rule],
             "supported_by": [ep_id, f"sha256:{code_sha16}"],
             "autogenous_only": True,
-            "autogenous_wormhole_modules": [*parent_rec.get("autogenous_wormhole_modules", [])],
+            "autogenous_wormhole_modules": child_mods,
             "wave1_executable_modules": [],
             "wave1_consolidated_nogoods": ng_lessons,
             "operator_pipeline_stages": list(compilation.get("operator_pipeline_stages", [])),
@@ -2449,6 +2863,47 @@ def enrich_and_harden_l1_primitive_contracts(
     }
 
 
+def build_box_simplex_kkt_certificate_from_weights(
+    S_tilde: np.ndarray,
+    r_y: np.ndarray,
+    lam_w: float,
+    u_box: float,
+    total_budget: float,
+    weights: np.ndarray,
+) -> dict[str, Any]:
+    """Canonical optional-witness companion helper (`M9.3.1` `F07`) turning any box-simplex primal vector `w`
+    into an exact supporting-hyperplane dual KKT certificate with canonical keys:
+    `('weights', 'nu_sum', 'lam_lower', 'lam_upper', 'primal_objective', 'dual_lower_bound')`.
+    """
+    S = np.asarray(S_tilde, dtype=float)
+    r = np.asarray(r_y, dtype=float).ravel()
+    w = np.asarray(weights, dtype=float).ravel()
+    lw = float(lam_w)
+    ub = float(u_box)
+    bt = float(total_budget)
+    res_vec = S @ w - r
+    j_val = 0.5 * float(res_vec @ res_vec) + 0.5 * lw * float(w @ w)
+    g = S.T @ res_vec + lw * w
+    cand_nus = np.unique(g)
+    best_nu = float(cand_nus[0]) if cand_nus.size else 0.0
+    best_lb = -1e300
+    for nu_c in cand_nus:
+        lb_c = j_val - float(g @ w) + float(nu_c) * bt + ub * float(np.sum(np.minimum(0.0, g - float(nu_c))))
+        if lb_c > best_lb:
+            best_lb = lb_c
+            best_nu = float(nu_c)
+    ll = np.maximum(0.0, g - best_nu)
+    lu = np.maximum(0.0, best_nu - g)
+    return {
+        "weights": w.tolist(),
+        "nu_sum": float(best_nu),
+        "lam_lower": ll.tolist(),
+        "lam_upper": lu.tolist(),
+        "primal_objective": float(j_val),
+        "dual_lower_bound": float(min(best_lb, j_val)),
+    }
+
+
 def sublate_autogenous_forest_into_compositional_primitives(
     *,
     forest: PhilosophicalForest,
@@ -2460,6 +2915,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
     skip_already_compiled_sources: bool = True,
     max_workers: int = 8,
     include_executable_checker_guidance: bool = False,
+    include_optional_witness_guidance: bool = False,
     only_source_episode_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """`M8.7` + `M8.8` Parallel, Replay-Auditable Two-Tier Compositional Primitive Sublation (`L2 -> L1_compositional_primitive`):
@@ -2610,12 +3066,22 @@ def sublate_autogenous_forest_into_compositional_primitives(
         if include_executable_checker_guidance
         else ""
     )
+    _witness_clause = (
+        "\n6. OPTIONAL WITNESS / DUAL CERTIFICATE MODE (`F07` Dual-Return Contract): For constrained optimization / KKT / spectral "
+        "primitives, keep the fast default `solve(..., return_witness: bool = False) -> np.ndarray`, AND when `return_witness=True` "
+        "(or via an exported companion `certificate_from_solution(...)`), return `(weights, cert_dict)` where `cert_dict` uses the "
+        "canonical keys `('weights', 'nu_sum', 'lam_lower', 'lam_upper', 'primal_objective', 'dual_lower_bound')` so certificate-bearing "
+        "tasks never have to re-derive dual multipliers by hand!"
+        if include_optional_witness_guidance
+        else ""
+    )
     sys_prompt = (
         "You are the `Hegel-M8.8` Compositional Numerical Primitive Compiler (`L1` Mathematical Operator Pass).\n"
         "You are given ONE autogenously discovered scientific Python module (`L2` episode operator) plus its empirical falsification "
         "lessons (`nogoods`). Refactor its reusable inner numerical mechanisms into 2 to 3 compact (15-45 lines each), general-purpose, "
         "array-level `L1` functions in `canonical_python_code`:\n"
-        "1. Use ONLY `math`, `numpy`, and `scipy` (`ZERO sklearn`, `ZERO file I/O`, `ZERO task-specific dict keys`, `ZERO fixed column counts`).\n"
+        "1. Use ONLY `math`, `numpy`, and `scipy` (`ZERO sklearn`, `ZERO file I/O`, `ZERO task-specific dict keys`, `ZERO fixed column counts`, "
+        "and NEVER raise `ValueError` on ordinary signed array values unless mathematically undefined!).\n"
         "2. State explicit `mathematical_preconditions` (positive scales/weights, SPD/PSD minorant requirements, rank/identifiability conditions) "
         "AND raise `ValueError` on invalid shapes, non-positive scales, or violated cheap preconditions!\n"
         "3. Start EVERY exported function with a crisp 1-sentence docstring stating exact input shapes, preconditions, and return value.\n"
@@ -2623,6 +3089,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
         "(they are pre-imported in scope, or `from hegel_wormhole_skills.<primitive_module_stem> import ...`) across >= 2 distinct shapes "
         "and asserting exact reference solutions via `np.testing.assert_allclose`!"
         + _checker_clause
+        + _witness_clause
     )
 
     stem_lock = _th.Lock()
@@ -2672,6 +3139,17 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     "completion": int(llm_res.get("completion_tokens", 0) or 0),
                     "wall_ms": float(llm_res.get("wall_ms", 0.0) or 0.0),
                 }
+                att_prov_meta = {
+                    "call_uuid": str(llm_res.get("call_uuid") or ""),
+                    "attempts_ledger_filename": str(llm_res.get("attempts_ledger_filename") or ""),
+                    "attempts_ledger_path": str(llm_res.get("attempts_ledger_path") or ""),
+                    "provider_attempt_count": int(llm_res.get("attempt_count", 1) or 1),
+                    "usage_unknown_attempt_count": int(llm_res.get("usage_unknown_attempt_count", 0) or 0),
+                    "cost_accounting_status": str(
+                        llm_res.get("cost_accounting_status") or ("complete" if llm_res.get("ok") else "partial_unknown_usage")
+                    ),
+                    "request_sha256": str(llm_res.get("request_sha256") or ""),
+                }
                 for tk_k in ("prompt", "cached", "completion", "wall_ms"):
                     mod_tok[tk_k] += att_tok[tk_k]
 
@@ -2683,6 +3161,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
                             "llm_ok": False,
                             "error": last_err,
                             "llm_tokens": att_tok,
+                            "provider_attempt_receipt": att_prov_meta,
                         }
                     )
                     break
@@ -2769,6 +3248,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
                         "mathematical_preconditions": math_pre,
                         "unit_test_receipt": ut_res,
                         "llm_tokens": att_tok,
+                        "provider_attempt_receipt": att_prov_meta,
                     }
                 )
                 if passed_4t and ut_res.get("telemetry_verified"):

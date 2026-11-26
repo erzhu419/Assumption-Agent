@@ -1983,8 +1983,14 @@ def run_m6_9_a_two_branch_episode(
                                     # `M88-REPAIR-SYNTH-PKG` + `M9.2.1` `A9`: derive repair skill sources & preconditions
                                     # through the unified 4-tuple qualification gate and order-invariant version selector
                                     # (`collect_recalled_executable_wormhole_sources`), NEVER via raw `setdefault` archive scans!
-                                    from .m6_4_executable_wormhole_library import collect_recalled_executable_wormhole_sources
+                                    from .m6_4_executable_wormhole_library import (
+                                        collect_recalled_executable_wormhole_sources,
+                                        ensure_runtime_qualification_context,
+                                    )
 
+                                    ensure_runtime_qualification_context(
+                                        sandbox_cid=(probe_cid if isinstance(probe_cid, str) and probe_cid not in {"", "mock"} else None),
+                                    )
                                     _rep_mods, _, _rep_diag = collect_recalled_executable_wormhole_sources(
                                         recalled_notes,
                                         include_foundational_skills=False,
