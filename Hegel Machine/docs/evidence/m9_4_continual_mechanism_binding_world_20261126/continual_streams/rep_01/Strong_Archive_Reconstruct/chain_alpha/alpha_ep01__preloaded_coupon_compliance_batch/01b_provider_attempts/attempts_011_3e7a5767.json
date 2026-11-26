@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e7a57672f2b4cd4b46673493558aaa2",
+  "call_seq": 11,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:58:08.591965+00:00",
+  "ended_at_utc": "2026-11-26T14:59:14.261835+00:00",
+  "request_sha256": "000d4d0358c1fed97a115bc69e57fae55caf7b8593109c4bfa63c6f83ddcf7b6",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 64195,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33474,
+    "cached_tokens": 11136,
+    "completion_tokens": 1732
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_ep01_solver.py')\\ns = p.read_text()\\nanchor = 'def _crossing(times, initial, strain, critical):'\\nassert anchor in s\\ns = s.replace(anchor, '''def _lab_drift(train, times, residual, train_score, test_labs, test_score, complete):\\n    # Long-baseline differences cancel an additive strain measurement offset.\\n    j, k = np.triu_indices(len(times), 1)\\n    span = times[k] - times[j]\\n    across_hold = span > 1.5\\n    j, k, span = j[across_hold], k[across_hold], span[across_hold]\\n    correction = np.zeros(len(test_labs))\\n    for lab in np.unique(test_labs):\\n        rows = (train['lab_id'] == lab) & complete\\n        if not rows.any():\\n            continue\\n        r = residual[rows]\\n        slope = np.median((r[:, k] - r[:, j]) / span, axis=1)\\n        center = np.median(train_score[rows])\\n        median_slope = np.median(slope)\\n        design = np.column_stack((np.ones(rows.sum()), train_score[rows] - center))\\n        bias, scale = np.linalg.lstsq(design, np.clip(slope, median_slope - 0.04, median_slope + 0.04), rcond=None)[0]\\n        test_rows = test_labs == lab\\n        correction[test_rows] = bias + scale * (test_score[test_rows] - center)\\n    return correction\\n\\n\\n''' + anchor)\\nold = '    drift_update = np.where(complete[n:], 0.15, 1.0) * innovation\\\\n'\\nassert old in s\\ns = s.replace(old, '''    rate_weight = np.where(complete[n:], 0.15, 1.0)\\n    residual = y[:, :-1] - (a.matrix(log_tau) @ weights)[:, :-1]\\n    feature_score = x @ weights[3:]\\n    lab_update = _lab_drift(train, times, residual, feature_score[:n],\\n                            np.asarray(test['lab_id']), feature_score[n:], complete[:n])\\n    drift_update = rate_weight * innovation + (1 - rate_weight) * lab_update\\n''')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nf = '/holdout_task/alpha_ep01_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', f)\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ncase = pickle.load(open('/holdout_task/public_alpha_ep01.pkl','rb'))[0]\\nd, gt = case['dataset'], case['gt']; tr, te = d['train'], d['test']; t = d['eval_times']\\nx, complete = m._aligned(d); n = len(tr['lab_id']); out = m.solve_alpha_ep01(d)\\npast, hold = m._physical(d, te); tau = out['estimated_taus']; dt = d['past_dt']\\nz = te['initial_memory_states'].copy()\\nfor j, step in enumerate(dt):\\n    w = -np.expm1(-step / tau)\\n    z += (past[:, j, None] - z) * w\\nmem = (hold[:, None, None] - z[:, None]) * -np.expm1(-t[:, None] / tau)\\na = m._Design(past, hold, dt, t, x[n:], te['initial_memory_states'])\\nnp.testing.assert_allclose(a.matrix(np.log(tau))[:, :-1, :2], mem, rtol=1e-11, atol=1e-12)\\nstrain = out['predicted_strain']; s0 = te['strain_0']; crit = te['critical_strain']\\nnp.testing.assert_allclose(out['secant_compliance'], (strain[:, -1] - s0) / np.maximum(abs(hold), 0.5))\\nexpected = []\\nfor row, start, level in zip(strain, s0, crit):\\n    time, value = 0., start\\n    crossing = 0. if start >= level else t[-1]\\n    if start < level:\\n        for next_time, next_value in zip(t, row):\\n            if next_value >= level:\\n                crossing = time + (next_time-time)*(level-value)/(next_value-value)\\n                break\\n            time, value = next_time, next_value\\n    expected.append(crossing)\\nnp.testing.assert_allclose(out['hazard_crossing_times'], expected)\\nnp.testing.assert_allclose(m._crossing(np.array([1., 2., 4.]), np.array([1., 0., 0., 0.]), np.array([[0., 0., 0.], [0., 1., 0.], [0., 0., 0.], [2., 0., 2.]]), np.array([1., 1., 1., 1.])), [0., 2., 4., 0.5])\\nrmse = lambda e: np.sqrt(np.mean(e**2))\\nfor key, ref in [('estimated_taus','taus'), ('predicted_strain','te_clean'), ('secant_compliance','te_secant'), ('hazard_crossing_times','te_cross')]:\\n    e = out[key] - gt[ref]; assert np.isfinite(e).all()\\n    print(key, 'RMSE', round(rmse(e), 6))\\n    if key != 'estimated_taus':\\n        labs = te['lab_id']; masks = [labs==l for l in np.unique(labs)]\\n        cross = [mask & s for mask in masks for s in (complete[n:], ~complete[n:])]\\n        print('  worst lab', round(max(rmse(e[mask]) for mask in masks), 6), 'worst lab/completeness', round(max(rmse(e[mask]) for mask in cross if mask.any()), 6))\\nprint('Recurrence, calibrated secant, and crossing checks passed.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pooled drift → H2 lab-specific affine correction: experimental worst-lab secant RMSE fell from 0.06308 to 0.02773, while the worst missing-feature lab slice remained at 0.06215.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a lab-specific rate-bias correction\",\"rejected_reason\":\"It increased overall strain, secant, and crossing RMSE relative to the affine correction alone.\"}],\"rationale\":\"Promote the affine drift correction because it improves held-out complete-feature endpoint estimates and substantially reduces the worst-lab secant error. Verify the exact artifact in an isolated process against a stepwise memory recurrence and independent secant and crossing calculations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ebffcaa668ab7216d3b9af97504e568f49912f1704481ed3f83f74a1f45e68ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 66611.59,
+      "usage_known": true,
+      "prompt_tokens": 33474,
+      "cached_tokens": 11136,
+      "completion_tokens": 1732
+    }
+  ]
+}

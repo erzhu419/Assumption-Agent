@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82c9df4b9b104a659a236b220509d0c9",
+  "call_seq": 8,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep04__standard_load_fresh_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:30:05.399393+00:00",
+  "ended_at_utc": "2026-11-26T15:31:01.640696+00:00",
+  "request_sha256": "c1cd6d6782f6bfcf1dd0aee5a948dba441029540f1e24b4f9585219002a295c4",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 49943,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28377,
+    "cached_tokens": 6784,
+    "completion_tokens": 1450
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, io, runpy, numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    s = runpy.run_path('/tmp/alpha_ep04_validate.py')\\nm,d,n,past,hold,x,complete,Y,t,dt,tr = [s[k] for k in ('m','d','n','past','hold','x','complete','Y','t','dt','tr')]\\nlabs = tr['lab_id']; strata = tr['stratum']; good = complete[:n]\\nx,past,hold = x[:n],past[:n],hold[:n]\\nD = m._Design(past,hold,dt,t,x)\\n# A segment split leaves the exponential memory unchanged.\\nk = len(dt)//2\\nsplit_dt = np.r_[dt[:k],dt[k]/2,dt[k]/2,dt[k+1:]]\\nsplit_past = np.column_stack((past[:,:k],past[:,k],past[:,k],past[:,k+1:]))\\nq,w = m._fit(D,Y) if good.all() else m._fit(m._Design(past[good],hold[good],dt,t,x[good]),Y[good])\\ngauge = np.max(np.abs(D(q)-m._Design(split_past,hold,split_dt,t,x)(q)))\\nprint('history subdivision max design difference', gauge)\\nassert gauge < 1e-12\\n# Compare small, identifiable extensions of the seven-term law on held-out labs.\\ndef extra(a,name):\\n    if name == 'coupon interactions':\\n        z = np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)] + [x[:,0]*x[:,1]*x[:,2]])\\n        return z[:,None,:]*np.r_[t,1.][None,:,None]\\n    if name == 'paired-stress saturation':\\n        z = (hold-past[:,-1])**2\\n        return a[:,:,:2]*(1/(1+z[:,None,None])-1)\\n    return a[:,:,:0]\\nnames = ('baseline','coupon interactions','paired-stress saturation')\\ne = {name:np.full_like(Y,np.nan) for name in names}\\nfor lab in np.unique(labs):\\n    fit = good & (labs!=lab); val = good & (labs==lab)\\n    q,w = m._fit(m._Design(past[fit],hold[fit],dt,t,x[fit]),Y[fit]); a = D(q)\\n    base = a@w\\n    residual = Y[fit]-base[fit]\\n    scale = np.r_[np.repeat(1.4826*np.median(np.abs(residual[:,:-1]-np.median(residual[:,:-1]))),len(t)),1.4826*np.median(np.abs(residual[:,-1]-np.median(residual[:,-1])))]\\n    for name in names:\\n        z=extra(a,name)\\n        if z.shape[-1]:\\n            b=np.concatenate((a,z),axis=-1)\\n            width=b.shape[-1]\\n            af=(b[fit]/scale[None,:,None]).reshape(-1,width)\\n            yf=(Y[fit]/scale).ravel()\\n            p=m.least_squares(lambda p:af@p-yf,np.r_[w,np.zeros(width-7)],jac=lambda p:af,loss='soft_l1',f_scale=2.).x\\n            pred=b[val]@p\\n        else:\\n            pred=base[val]\\n        e[name][val]=Y[val]-pred\\nfor name,v in e.items():\\n    print(name,'complete-coupon worst-lab median abs curve/rate residual',*[max(np.median(np.abs(v[good&(labs==lab),col])) for lab in np.unique(labs)) for col in (slice(None,-1),-1)])\\nv=e['baseline']; ramp=v[:,:-1]@t/(t@t)\\nfor lab in np.unique(labs):\\n    a=good&(labs==lab)\\n    print('lab',lab,'median signed onset/drift residual',np.median(v[a,-1]),np.median(ramp[a]),'within-lab drift medians by stratum',[round(float(np.median(ramp[a&(strata==j)])),6) for j in np.unique(strata[a])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated two-branch creep with missing-feature onset correction -> test whether nonlinear terms or facility drift explain remaining error; public worst lab–stratum strain RMSE is 0.026870.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, HJB, or classification diagnostics\",\n      \"rejected_reason\": \"This episode has prescribed stress histories and continuous strain and rate targets; it has no relay state, control objective, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Check whether splitting a constant-stress interval preserves memory, whether interaction or saturation terms improve held-out lab errors, and whether signed residuals point to a facility offset within strata. These checks distinguish a history implementation error or omitted mechanism from measurement noise without changing the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ed68e6efc9c79ef498e43c07a5c5ccc927861f89d7829595e77a8678dc07966e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 57279.62,
+      "usage_known": true,
+      "prompt_tokens": 28377,
+      "cached_tokens": 6784,
+      "completion_tokens": 1450
+    }
+  ]
+}

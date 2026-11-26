@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "235d8df3ed8740318885d3d8a95cf510",
+  "call_seq": 5,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:02:03.784102+00:00",
+  "ended_at_utc": "2026-11-26T15:02:41.804487+00:00",
+  "request_sha256": "daf1324cd1d5319cfb04004f20d05bb64ff2915ed6dd3d8878f1873a3e170bd3",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 38234,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25233,
+    "cached_tokens": 11136,
+    "completion_tokens": 1121
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha_ep03_cv.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, _, y, complete = s._prepare(d)\\ncomplete = complete[:len(y)]\\nlab = d['train']['lab_id']\\nstratum = d['train']['stratum']\\nt = tr.times\\npred = np.empty_like(y)\\nfor c in np.unique(lab):\\n    fit = (lab != c) & complete\\n    logs, theta = s._fit(tr, y, fit)\\n    pred[lab == c] = (tr.matrix(logs) @ theta)[lab == c]\\n    print('held-out lab', c, 'taus', np.exp(logs), 'plastic weights', theta[-2:])\\nlogs, theta = s._fit(tr, y, complete)\\nprint('full fit', 'taus', np.exp(logs), 'weights', theta)\\n_, dm, dh = tr.matrix(logs, True)\\nfor j in range(2):\\n    delta = np.eye(2)[j] * 1e-5\\n    fd = (tr.matrix(logs+delta) @ theta - tr.matrix(logs-delta) @ theta) / 2e-5\\n    analytic = dm[...,j] * theta[j] + (dh * theta[-1] if j == 0 else 0)\\n    np.testing.assert_allclose(fd, analytic, rtol=1e-6, atol=1e-8)\\nrate_error = y[:, -1] - pred[:, -1]\\nresid = y[:,:-1] - pred[:,:-1]\\nslices = {'all': np.ones(len(y), dtype=bool), 'missing': ~complete, 'complete': complete,\\n          'below_hold_yield': tr.over == 0, 'positive_hold_yield': tr.over > 0,\\n          'negative_hold_yield': tr.over < 0, 'top_history_work': np.abs(tr.work) >= np.quantile(np.abs(tr.work), .9),\\n          **{f'lab{c}': lab == c for c in np.unique(lab)},\\n          **{f'stratum{c}': stratum == c for c in np.unique(stratum)}}\\ncorrection = np.where(complete, .25, 1.)\\nraw = resid\\nadj = resid - (correction * rate_error)[:, None] * t\\nfor key, rows in slices.items():\\n    if rows.any():\\n        print(key, rows.sum(), 'rate_MAE/RMSE', np.round([np.mean(abs(rate_error[rows])), np.sqrt(np.mean(rate_error[rows]**2))], 6), 'curve_MAE raw/adjusted', np.round([np.mean(abs(r[rows])) for r in (raw, adj)], 6), 'curve_RMSE raw/adjusted', np.round([np.sqrt(np.mean(r[rows]**2)) for r in (raw, adj)], 6), 'horizon_MAE adjusted', np.round(np.mean(abs(adj[rows]), axis=0), 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_ep03_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: calibrated linear memory retains its two branches and gains two high-load terms; isolated schema validation passed, and leave-one-lab-out error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Hold out each lab’s strain and rate labels to detect unstable coefficients or poor high-load transfer. Compare the existing onset-rate correction with no correction by missingness, loading direction, and horizon; revise it if it worsens held-out predictions. A derivative mismatch would trigger a fix to the optimizer Jacobian.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "65ae276fb6c43481a1b7fb2aa4e44465bc427190e137e5c50d04a55b05d83807",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38354.94,
+      "usage_known": true,
+      "prompt_tokens": 25233,
+      "cached_tokens": 11136,
+      "completion_tokens": 1121
+    }
+  ]
+}

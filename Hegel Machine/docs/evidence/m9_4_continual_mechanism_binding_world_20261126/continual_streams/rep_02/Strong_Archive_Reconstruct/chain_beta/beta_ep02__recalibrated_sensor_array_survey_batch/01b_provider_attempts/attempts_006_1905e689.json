@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1905e68934e04eb3adbe102ea933d17f",
+  "call_seq": 6,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__beta__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_ep02__recalibrated_sensor_array_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:01:16.143195+00:00",
+  "ended_at_utc": "2026-11-26T15:01:58.693370+00:00",
+  "request_sha256": "7b9e5f1d88d59be6493749d6fad567d1fd5f73066ffb4f7fed413d01797715d7",
+  "system_prompt_chars": 5293,
+  "stdin_payload_chars": 32364,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21889,
+    "cached_tokens": 6784,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'beta_ep02_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\na=pickle.load(open(p+'public_beta_ep02.pkl','rb'))[0]; st,gt=a['study'],a['gt']\\nsw=st['sensor_calibration_sweeps']; x=sw['ref_signal']; z=sw['raw_readout']; banks=sw['bank_id']; worst=0.\\nfor k in range(len(x)):\\n    keep=(banks==banks[k]) & (np.arange(len(x))!=k)\\n    gain,offset=np.linalg.lstsq(np.c_[x[keep],np.ones(keep.sum())],z[keep],rcond=None)[0]\\n    worst=max(worst,abs((z[k]-offset)/gain-x[k]))\\nassert worst<1e-5, worst\\nprint('worst leave-one-calibration-point-out reference error',worst)\\ndef axis(a):\\n    n=st['n'+a]; h=st['L'+a]/n; k=st['kappa_'+a]; v=st['vel_'+a]; rg=st['robin_'+a]\\n    A=np.diag(st['reaction_'+a].copy())\\n    for i in range(n):\\n        for j in (i-1,i+1):\\n            if 0<=j<n:\\n                d=2/(1/k[i]+1/k[j])/h**2\\n                A[i,i]+=d; A[i,j]-=d\\n        if i in (0,n-1): A[i,i]+=rg*k[i]/(h*(rg*h/2+k[i]))\\n        j=i-1 if v[i]>=0 else i+1\\n        A[i,i]+=abs(v[i])/h\\n        if 0<=j<n: A[i,j]-=abs(v[i])/h\\n    return A\\nA,B=axis('x'),axis('y'); modes=st['source_modes']; cap=st['u_box']; lw=st['source_ridge']; n=len(modes)\\nS,y=gt['S_tilde'],gt['r_y']; max_gap=max_field=0.\\nfor budget in (0.,0.01,st['total_budget'],n*cap-0.01,n*cap):\\n    out=m.solve_beta_ep02(dict(st,total_budget=budget)); w=out['weights']; u=out['terminal_field']; c=out['kkt_certificate']\\n    r=S@w-y; J=(r@r+lw*(w@w))/2; g=S.T@r+lw*w\\n    # Independently minimize the supporting affine objective by filling cheapest coordinates.\\n    fill=np.clip(budget-cap*np.arange(n),0,cap); gap=g@w-np.sort(g)@fill\\n    rhs=np.tensordot(w,modes,axes=1); err=np.linalg.norm(A@u+u@B.T+st['mu_shifts'][-1]*u-rhs)/max(1.,np.linalg.norm(rhs))\\n    assert np.allclose(w,c['weights'],atol=1e-12,rtol=0) and min(w)>=-1e-12 and max(w)<=cap+1e-12 and abs(sum(w)-budget)<1e-10\\n    assert abs(c['primal_objective']-J)<1e-7 and abs(c['primal_objective']-c['dual_lower_bound'])<1e-10\\n    assert -1e-12<=gap<1e-7 and err<1e-10\\n    max_gap=max(max_gap,gap); max_field=max(max_field,err)\\n    print('budget',budget,'at lower/upper',sum(w<1e-10),sum(w>cap-1e-10),'independent gap',gap,'terminal PDE residual',err)\\nprint('max independent gap',max_gap,'max terminal residual',max_field)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived transport and residual profiling → calibrated single-budget reconstruction; public relative errors are 4.35e-8 for weights and 1.43e-8 for the terminal field, with a 9.02e-17 certificate gap.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validator alone.\",\n      \"rejected_reason\": \"The public validator checks terminal field shape but not its transport residual, and tests only a single budget.\"\n    }\n  ],\n  \"rationale\": \"Test calibration on held-out sweep points and verify the final artifact at both budget extremes and near them. A failed sweep check would point to bank fitting; a failed independent gap or terminal equation would isolate a constrained-solver or transport error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a8aff1a066d655837b6bf57e12f97f120a830c5fc3c6c6ddd2620da0a0530b88",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42485.21,
+      "usage_known": true,
+      "prompt_tokens": 21889,
+      "cached_tokens": 6784,
+      "completion_tokens": 1319
+    }
+  ]
+}

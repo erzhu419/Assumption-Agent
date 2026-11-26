@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d358182f32b442edbb71de86f15ef20d",
+  "call_seq": 7,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:55:08.228368+00:00",
+  "ended_at_utc": "2026-11-26T14:55:55.640906+00:00",
+  "request_sha256": "305a61f980bd3d8674b27170eee1e46bb8b7b0148a56a7326e072f67153bda23",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 52444,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30437,
+    "cached_tokens": 11136,
+    "completion_tokens": 1513
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/alpha_verify.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom time import perf_counter\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep01_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\ncases = pickle.load(open('/holdout_task/public_alpha_ep01.pkl', 'rb'))\\n\\ndef independent_crossing(start, path, crit, times):\\n    if start >= crit:\\n        return 0.\\n    for i, end in enumerate(path):\\n        if end >= crit:\\n            xp = [start if i == 0 else path[i-1], end]\\n            fp = [0. if i == 0 else times[i-1], times[i]]\\n            return np.interp(crit, xp, fp)\\n    return times[-1]\\n\\nfor k, case in enumerate(cases):\\n    d = case['dataset']; train, test = d['train'], d['test']; times = d['eval_times']; dt = d['past_dt']\\n    clock = perf_counter(); result = s.solve_alpha_ep01(d); elapsed = perf_counter() - clock\\n    tau = result['estimated_taus']; assert np.all(tau > 0) and np.all(np.diff(tau) > 0)\\n    p = result['predicted_strain']; c = d['calibration_load_cells']; lab = test['lab_id']\\n    fits = np.array([np.polyfit(c['cmd_stress'][c['lab_id']==j], c['true_stress'][c['lab_id']==j], 1) for j in range(4)])\\n    hold = fits[lab,0] * test['stress_hold_cmd'] + fits[lab,1]\\n    np.testing.assert_allclose(result['secant_compliance'], (p[:,-1]-test['strain_0']) / np.maximum(abs(hold), .5), atol=1e-12)\\n    cross = np.array([independent_crossing(a,b,c,times) for a,b,c in zip(test['strain_0'],p,test['critical_strain'])])\\n    np.testing.assert_allclose(result['hazard_crossing_times'], cross, atol=1e-12)\\n    x, complete = s._align(d); n=len(train['lab_id']); gain,bias = s._calibrate(c)\\n    rec = test['initial_memory_states'].copy()\\n    past = fits[lab,0,None] * test['past_stress_cmd'] + fits[lab,1,None]\\n    for stress, step in zip(past.T, dt):\\n        rec += -np.expm1(-step/tau) * (stress[:,None] - rec)\\n    mat = s._Design(test,x[n:],gain,bias,dt,times).matrix(np.log(tau))\\n    np.testing.assert_allclose(mat[:,:-1,:2], (hold[:,None]-rec)[:,None,:] * -np.expm1(-times[:,None]/tau), atol=1e-12)\\n    print('case',k,'tau',tau.round(6),'runtime_s',round(elapsed,3),'crossing_initial/interpolated/final',[(cross==0).sum(),((cross>0)&(cross<times[-1])).sum(),(cross==times[-1]).sum()])\\n    y=np.column_stack((train['strain_curves_obs']-train['strain_0'][:,None],train['instant_rate_obs']))\\n    for j in range(4):\\n        val=train['lab_id']==j; mask=complete[:n] & ~val\\n        log_t,coef=s._fit(s._Design(train,x[:n],gain,bias,dt,times,mask),y[mask]); panel={key: v[val] for key,v in train.items()}\\n        design=s._Design(panel,x[:n][val],gain,bias,dt,times)\\n        pred=s._predict(design,log_t,coef,panel,complete[:n][val],times)\\n        obs=panel['strain_curves_obs']; err=abs(pred-obs)\\n        subsets=[complete[:n][val],~complete[:n][val]]\\n        print('  lab',j,'fold_tau',np.exp(log_t).round(5),'capped curve MAE complete / missing',*[round(np.minimum(err[m],.10).mean(),5) if m.any() else None for m in subsets],'secant median AE',round(np.median(err[:,-1]/np.maximum(abs(design.hold),.5)),5))\\n\\nstart=np.array([1., 0., 0., 0., 0.]); times=np.array([1., 2., 4.]); paths=np.array([[0,0,0],[2,0,2],[0,1,0],[0,0,0],[0,0,1]])\\nnp.testing.assert_allclose(s._crossings(start, paths, np.ones(5), times), [0.,.5,2.,4.,4.])\\nprint('Independent recurrence, all readouts, and crossing edge cases passed.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_verify.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (feature-only drift) → H2 (rate-informed drift with exact preloaded memory); the host reports public strain MAE 0.006337 and relative tau error 0.001508, with exact-artifact worst-lab readout checks pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema validator alone\",\"rejected_reason\":\"The schema validator does not establish that the calibrated denominator, propagated preload, and first crossing are numerically correct.\"}],\"rationale\":\"Check the installed solver against an independent stepwise recurrence and scalar crossing calculation, including nonmonotonic and exact-threshold paths. Leave-one-lab-out strain and secant errors will reveal whether the delivered rate update materially worsens any observed slice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "847dad2129d395f7801aca90bfae0ded3450b14559f87c99a9613fdfb69f6ec8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47812.32,
+      "usage_known": true,
+      "prompt_tokens": 30437,
+      "cached_tokens": 11136,
+      "completion_tokens": 1513
+    }
+  ]
+}

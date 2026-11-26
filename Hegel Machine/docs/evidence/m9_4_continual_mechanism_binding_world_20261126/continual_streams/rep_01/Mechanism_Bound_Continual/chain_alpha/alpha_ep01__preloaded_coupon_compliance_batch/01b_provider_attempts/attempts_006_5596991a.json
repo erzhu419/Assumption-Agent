@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5596991aec204fdb890b0844eee9b306",
+  "call_seq": 6,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:53:31.281642+00:00",
+  "ended_at_utc": "2026-11-26T14:54:22.740029+00:00",
+  "request_sha256": "e2d183096e7a2eea191ffb6cfaa3f03397772c7095f02eda57ce6f75434649e7",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 38537,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26308,
+    "cached_tokens": 6784,
+    "completion_tokens": 1844
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat validate_public_schema.py && cp /tmp/ep01_baseline.py alpha_ep01_solver.py && python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('alpha_ep01_solver.py'); s=p.read_text(); s=s.replace('Facility calibration and two-branch hereditary creep regression.','Calibrated two-branch hereditary creep with preloaded memory.'); s=s.split('def _update_drift')[0]; s=s.replace('    if p[0] > p[1]:\\\\n        raise RuntimeError(\\\"Fit reversed branch identities\\\")\\\\n',''); p.write_text(s)\\nPY\\ncat >> alpha_ep01_solver.py <<'PY'\\ndef _rate_weights(residual, complete, times):\\n    # The initial rate measures the same drift as the slope across hold times.\\n    # Estimate its reliability from a late-time slope resistant to isolated spikes.\\n    late = slice(len(times) // 2, None)\\n    slope = np.median(residual[:, :-1][:, late] / times[late], axis=1)\\n    noise = _mad((residual[:, -1] - slope)[complete])\\n    weights = []\\n    for group in (complete, ~complete):\\n        # Estimate the variance attributable to drift in the rate innovation.\\n        spread = _mad(residual[group, -1]) if group.sum() >= 5 else noise\\n        weights.append(max(0.0, 1.0 - (noise / spread)**2))\\n    return weights\\n\\n\\ndef _update_drift(pred, observed_rate, complete, times, weights):\\n    delta = np.asarray(observed_rate) - pred[:, -1]\\n    correction = np.where(complete, weights[0], weights[1]) * np.where(np.isfinite(delta), delta, 0.0)\\n    return pred + correction[:, None] * np.r_[times, 1.0]\\n\\n\\ndef _crossing_times(strain_0, curves, critical_strain, times):\\n    values = np.column_stack([strain_0, curves])\\n    t = np.r_[0.0, times]\\n    hit = values >= np.asarray(critical_strain)[:, None]\\n    first = np.argmax(hit, axis=1)\\n    result = np.full(len(values), times[-1], dtype=float)\\n    result[hit[:, 0]] = 0.0\\n    rows = np.flatnonzero(first > 0)\\n    j = first[rows]\\n    lo, hi = values[rows, j - 1], values[rows, j]\\n    fraction = (np.asarray(critical_strain)[rows] - lo) / (hi - lo)\\n    result[rows] = t[j - 1] + fraction * (t[j] - t[j - 1])\\n    return result\\n\\n\\ndef solve_alpha_ep01(dataset: dict) -> dict:\\n    train, test, y, complete = _prepare(dataset)\\n    tau, theta = _fit(train, y, complete)\\n    log_tau = np.log(tau)\\n    times = np.asarray(dataset['eval_times'])\\n    weights = _rate_weights(y - train.matrix(log_tau) @ theta, complete, times)\\n    panel = dataset['test']\\n    initial = np.asarray(panel['strain_0'])\\n    test_complete = np.isfinite(panel['coupon_features_raw']).all(axis=1)\\n    pred = test.matrix(log_tau) @ theta\\n    if 'instant_rate_obs' in panel:\\n        pred = _update_drift(pred, panel['instant_rate_obs'], test_complete, times, weights)\\n    delta = pred[:, :-1]\\n    curves = initial[:, None] + delta\\n    return {\\n        'estimated_taus': tau,\\n        'predicted_strain': curves,\\n        'secant_compliance': (curves[:, -1] - initial) / np.maximum(np.abs(test.hold), 0.5),\\n        'hazard_crossing_times': _crossing_times(initial, curves, panel['critical_strain'], times),\\n    }\\nPY\\ncat > /tmp/ep01_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_ep01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_alpha_ep01.pkl','rb'))[0]['dataset']; a,_,y,c=m._prepare(d); t=d['eval_times']; labs=d['train']['lab_id'];\\nfor lab in np.unique(labs):\\n    hold=labs==lab; fit=~hold\\n    tau,b=m._fit(a,y,fit&c); pred=a.matrix(np.log(tau))@b\\n    weights=m._rate_weights((y-pred)[fit],c[fit],t)\\n    print('fold',lab,'tau',tau,'weights',np.round(weights,4))\\n    for scheme,w in [('none',(0,0)),('fixed',(.25,1)),('adaptive',weights)]:\\n        r=(m._update_drift(pred,y[:,-1],c,t,w)-y)[:,:-1]; vals=[]\\n        for sel in (hold&c,hold&~c):\\n            e=abs(r[sel]); vals.append(np.round([np.sqrt(np.mean(e**2)),np.median(e),np.median(e[:,-1]),np.mean(np.minimum(e,.2))],5))\\n        print(scheme,vals)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I /tmp/ep01_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain the calibrated preload law and estimate rate shrinkage separately by feature completeness; the previous worst lab/completeness curve RMSE was 0.30617 at 0.75 correction.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relaxation branches to reduce raw curve RMSE\",\n      \"rejected_reason\": \"The largest residuals are isolated spikes between well-predicted measurements; extra smooth branches would not explain them.\"\n    }\n  ],\n  \"rationale\": \"Write the solver and compare adaptive shrinkage with fixed and zero corrections on held-out labs, estimating adaptive weights only from each training fold. Median and capped errors distinguish improvements in drift prediction from the effect of isolated measurement spikes on RMSE.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1c063e992f4613feba0ea2299a6c4e6f1373eeec387cb5f33f493d3dc7ba91be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51859.38,
+      "usage_known": true,
+      "prompt_tokens": 26308,
+      "cached_tokens": 6784,
+      "completion_tokens": 1844
+    }
+  ]
+}

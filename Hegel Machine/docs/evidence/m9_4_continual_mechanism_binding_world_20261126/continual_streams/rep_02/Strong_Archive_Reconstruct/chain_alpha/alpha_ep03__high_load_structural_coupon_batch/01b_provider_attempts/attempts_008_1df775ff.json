@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1df775ffde5b4714b6dbad84f8180ccb",
+  "call_seq": 8,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:18:49.104183+00:00",
+  "ended_at_utc": "2026-11-26T15:19:43.582375+00:00",
+  "request_sha256": "53fd88c9c139845f1a20426406d73b94db9c9e1cadae48d60abb3ee2933ee9c5",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 43859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26508,
+    "cached_tokens": 6784,
+    "completion_tokens": 1753
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/alpha_ep03_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('alpha_ep03', '/holdout_task/alpha_ep03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, _, y, complete = m._prepare(d)\\nx = m._aligned_panels(d)[0][:len(y)]\\nc = complete[:len(y)]\\nlab = d['train']['lab_id']\\nstratum = d['train']['stratum']\\nsigma = d['yield_stress']\\nhigh = (np.abs(tr.past).max(axis=1) > sigma) | (np.abs(tr.hold) > sigma)\\npositive = tr.hold > 0\\noverstress = np.sign(tr.hold) * np.maximum(np.abs(tr.hold) - sigma, 0)**2\\nsaturation = 1 + (tr.hold / sigma)**2\\nfeatures = {\\n    'coupon_products': np.column_stack([x[:, i]*x[:, j] for i, j in combinations(range(4), 2)] + [x[:, i]*x[:, j]*x[:, k] for i, j, k in combinations(range(4), 3)]),\\n    'stress_saturation': np.column_stack([tr.hold/saturation, overstress/saturation, tr.plastic_memory/saturation]),\\n}\\n# Linear sums/differences are already in the span of the four aligned features.\\n# These fixed challenger families add genuinely different drift columns.\\nerrors = {name: np.empty_like(y[:, :-1]) for name in ('baseline', *features)}\\nrates = np.empty(len(y))\\nfor k in np.unique(lab):\\n    held = lab == k\\n    fit = c & ~held\\n    tau, beta = m._fit(tr, y, fit)\\n    a = tr.matrix(np.log(tau))\\n    for name, out in errors.items():\\n        if name == 'baseline':\\n            p = a[held] @ beta\\n            rates[held] = p[:, -1] - y[held, -1]\\n        else:\\n            ae = np.concatenate([a, features[name][:, None, :] * tr.linear_time[None, :, None]], axis=2)\\n            scale = m._noise(a[fit] @ beta - y[fit])\\n            mat = (ae[fit] / scale[None, :, None]).reshape(-1, ae.shape[2])\\n            obs = (y[fit] / scale).ravel()\\n            b = least_squares(lambda b: mat @ b - obs, np.r_[beta, np.zeros(features[name].shape[1])], jac=lambda b: mat, loss='cauchy', f_scale=2, x_scale='jac').x\\n            p = ae[held] @ b\\n        innovation = y[held, -1] - p[:, -1]\\n        out[held] = p[:, :-1] + np.where(c[held], .25, 1.)[:, None]*innovation[:, None]*tr.times - y[held, :-1]\\ngroups = [(lab == k) & (high == h) & (positive == s) for k in np.unique(lab) for h in (False, True) for s in (False, True)]\\nfor name, e in errors.items():\\n    print(name, 'worst signed load x lab RMSE / median abs on complete rows:', round(max(np.sqrt(np.mean(e[g]**2)) for g in groups if g.any()), 6), round(max(np.median(np.abs(e[g & c])) for g in groups if (g & c).any()), 6), 'pooled median abs:', round(np.median(np.abs(e)), 6), 'missing median abs:', round(np.median(np.abs(e[~c])), 6))\\ne = errors['baseline']\\ncells = [(lab == k) & (stratum == j) & (high == h) & c for k in np.unique(lab) for j in np.unique(stratum) for h in (False, True)]\\nprint('signed median strain residual by lab (low/high):', [[round(np.median(e[(lab == k) & (high == h) & c]), 6) for h in (False, True)] for k in np.unique(lab)])\\nprint('maximum absolute signed median strain residual by lab x stratum x load (>=4 complete coupons):', round(max(abs(np.median(e[g])) for g in cells if g.sum() >= 4), 6))\\nprint('median absolute onset residual by lab:', [round(np.median(abs(rates[(lab == k) & c])), 6) for k in np.unique(lab)])\\nprint('baseline median absolute residual by horizon:', np.round(np.median(abs(e), axis=0), 6))\\nprint('baseline absolute residual above 0.2 by horizon:', (abs(e) > .2).sum(axis=0).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_ep03_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated yield basis suffices → H2: add nonlinear drift only if it improves held-out transfer; verified baseline worst lab × yield × sign RMSE is 0.33677 and worst complete-row slice median absolute error is 0.014212.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add pairwise linear sums and differences\",\n      \"rejected_reason\": \"They are already in the span of the four aligned coupon features.\"\n    },\n    {\n      \"option\": \"Apply relay, stochastic-control, or classification checks\",\n      \"rejected_reason\": \"The task has continuous strain and rate measurements, no relay state, and no classification target.\"\n    }\n  ],\n  \"rationale\": \"Use held-out labs to test whether coupon interactions or stress saturation repair a systematic residual rather than fit observation outliers. Signed residuals within lab, stratum, and load slices check whether pooling hides calibration bias; a consistent bias would warrant a calibration review, while an improvement only in isolated tails would not justify changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "49570bb2bb21802375ed81f7a75b9893a5aed7b1fca564f08d1b10b024542df8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54412.73,
+      "usage_known": true,
+      "prompt_tokens": 26508,
+      "cached_tokens": 6784,
+      "completion_tokens": 1753
+    }
+  ]
+}

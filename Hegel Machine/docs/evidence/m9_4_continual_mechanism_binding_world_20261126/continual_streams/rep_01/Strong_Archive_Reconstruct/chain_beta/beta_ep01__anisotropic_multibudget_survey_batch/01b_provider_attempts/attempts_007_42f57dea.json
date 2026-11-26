@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42f57deab0a7472b89ab3466447cd166",
+  "call_seq": 7,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__beta__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_ep01__anisotropic_multibudget_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:53:44.844079+00:00",
+  "ended_at_utc": "2026-11-26T14:54:26.919515+00:00",
+  "request_sha256": "ea3e874e8de2b2f640dd94412734401a562fde2c5d0976ba52cfb2726cfd8a87",
+  "system_prompt_chars": 5293,
+  "stdin_payload_chars": 34042,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23179,
+    "cached_tokens": 11136,
+    "completion_tokens": 1414
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/beta_ep01_stress.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'beta_ep01_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nwith open(root + 'public_beta_ep01.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\ns, gt = case['study'], case['gt']\\nS, y = gt['S_tilde'], gt['r_y']\\ncap, ridge = s['u_box'], s['source_ridge']\\nfull = cap * S.shape[1]\\n\\n# Re-express the measured readouts in different units for each bank.\\nsweep = s['sensor_calibration_sweeps']\\nscale = np.array([0.55, 1.8, 0.85, 1.3])\\nshift = np.array([0.2, -0.35, 0.7, -0.15])\\nb, br = sweep['bank_id'], s['row_bank_id']\\nreencoded = dict(s, sensor_calibration_sweeps=dict(sweep, raw_readout=scale[b]*sweep['raw_readout']+shift[b]), y_obs_raw=scale[br]*s['y_obs_raw']+shift[br])\\nbase = mod.solve_beta_ep01(s)\\nother = mod.solve_beta_ep01(reencoded)\\nfor key in ('weights_by_budget', 'terminal_field_mid_budget'):\\n    err = np.max(np.abs(base[key]-other[key]))\\n    print(f'bank unit invariance {key}: {err:.3e}')\\n    assert err < 1e-10\\n\\n# Keep the real survey design and observations. Move the budget toward the\\n# limits to exercise upper constraints not encountered in the public grid.\\ncovered = set()\\nworst_gap = 0.\\nfor budgets in (s['budget_grid'], [0., cap*1e-6, cap], [full-2*cap, full-cap*1e-6, full]):\\n    out = mod.solve_beta_ep01(dict(s, budget_grid=budgets))\\n    for budget, w, cert in zip(budgets, out['weights_by_budget'], out['kkt_certificates']):\\n        nu = cert['nu_sum']\\n        lo, hi = cert['lam_lower'], cert['lam_upper']\\n        r = S @ w - y\\n        g = S.T @ r + ridge*w\\n        obj = 0.5*(r@r + ridge*(w@w))\\n        bound = obj - g@w + nu*budget + cap*np.minimum(g-nu, 0.).sum()\\n        gap = obj-min(bound, cert['dual_lower_bound'])\\n        stat = np.max(np.abs(g-nu-lo+hi))\\n        comp = max(np.max(np.abs(lo*w)), np.max(np.abs(hi*(cap-w))))\\n        low, high = int(sum(w == 0)), int(sum(w == cap))\\n        if 0 < budget < full:\\n            if low: covered.add('lower')\\n            if high: covered.add('upper')\\n        print(f'budget={budget:.9g} lower={low} upper={high} gap={gap:.3e} stationarity={stat:.3e} complementarity={comp:.3e}')\\n        assert abs(w.sum()-budget) < 1e-7 and w.min() >= 0 and w.max() <= cap\\n        assert np.array_equal(w, cert['weights']) and min(lo.min(), hi.min()) >= 0\\n        assert abs(cert['primal_objective']-obj) < 1e-6 and cert['dual_lower_bound'] <= bound+1e-6\\n        assert -1e-9 <= gap < 1e-6 and max(stat, comp) < 1e-6\\n        worst_gap = max(worst_gap, gap)\\nassert covered == {'lower', 'upper'}\\nprint(f'worst public-measurement stress gap: {worst_gap:.3e}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_ep01_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Bank-calibrated shifted-resolvent model → test invariance to bank unit changes and certificates under upper as well as lower active bounds; worst verified public KKT gap is 5.75e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification accuracy, or extra nonlinear basis terms\",\n      \"rejected_reason\": \"The study has no relay state or class labels, and the specified linear transport already matches the public profiled design to 1.36e-15.\"\n    }\n  ],\n  \"rationale\": \"The public budget grid never saturates an upper bound. Stress that branch using the real survey measurements, and verify that changing each bank’s readout units leaves the reconstruction unchanged. Failures would point to the active-set certificate or bank calibration, respectively.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "25e61f638c8048acd53882a5be42fd9e712f8cf36b253d9055a4cba9438d7db4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42477.43,
+      "usage_known": true,
+      "prompt_tokens": 23179,
+      "cached_tokens": 11136,
+      "completion_tokens": 1414
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "442614c2d38142a2a15d8af67ad90159",
+  "call_seq": 9,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_s00__polymer_coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:38:25.407100+00:00",
+  "ended_at_utc": "2026-11-26T14:39:03.970447+00:00",
+  "request_sha256": "8fb1987cd60083f31862d50764e9268714b30263ecc60dd89d4b441923396743",
+  "system_prompt_chars": 5293,
+  "stdin_payload_chars": 52695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29266,
+    "cached_tokens": 6784,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, types\\nfrom pathlib import Path\\nimport numpy as np\\npath = Path('/holdout_task/alpha_s00_solver.py')\\nspec = importlib.util.spec_from_file_location('baseline', path)\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\ncase = pickle.load(open('public_alpha_s00.pkl', 'rb'))[0]\\nd, g = case['dataset'], case['gt']\\na, b, y, complete = s._prepare(d)\\ntimes = np.asarray(d['eval_times'])\\ntau, theta = s._fit(a, y, complete)\\n# Independently verify the two memory bases against the specified recurrence.\\nfor design in (a, b):\\n    z = np.zeros((len(design.hold), 2))\\n    for dt, stress in zip(d['past_dt'], design.past.T):\\n        decay = np.exp(-dt / tau)\\n        z = decay * z + (1 - decay) * stress[:, None]\\n    gap = design.hold[:, None] - z\\n    np.testing.assert_allclose(design.matrix(np.log(tau))[..., :2], gap[:, None, :] * np.vstack([-np.expm1(-times[:, None] / tau), 1 / tau]), atol=2e-14)\\nprint('Independent recurrence and initial-rate bases agree')\\nsource = path.read_text()\\nold = 'np.full(r.shape[1] - 1, _mad(r[:, :-1].ravel()))'\\nassert source.count(old) == 1\\nc = types.ModuleType('horizon_scaled')\\nexec(compile(source.replace(old, '_mad(r[:, :-1])'), '<horizon_scaled>', 'exec'), c.__dict__)\\nlab = np.asarray(d['train']['lab_id']); tlab = np.asarray(d['test']['lab_id']); obs = np.asarray(d['test']['instant_rate_obs'])\\nfor name, mod in [('baseline', s), ('horizon-scaled', c)]:\\n    e = np.empty_like(y)\\n    prior = np.empty_like(y)\\n    for j in np.unique(lab):\\n        held = lab == j\\n        t, w = mod._fit(a, y, complete & ~held)\\n        raw = a.matrix(np.log(t))[held] @ w\\n        prior[held] = raw - y[held]\\n        e[held] = mod._update_drift(raw, y[held, -1], complete[held], times) - y[held]\\n    print(name, 'OOF signed median prior rate residual by lab and stratum (complete rows):')\\n    stratum = d['train']['stratum']\\n    cells = [(lab == j) & (stratum == q) & complete for j in np.unique(lab) for q in np.unique(stratum)]\\n    print([(int(m.sum()), round(float(np.median(prior[m,-1])), 5)) for m in cells if m.any()])\\n    for label, mask in [('complete', complete), ('imputed', ~complete)]:\\n        slices = [mask & (lab == j) for j in np.unique(lab) if (mask & (lab == j)).any()]\\n        print(name, label, 'worst lab OOF curve median', max(np.median(abs(e[m,:-1])) for m in slices), 'worst lab/horizon OOF median', max(np.median(abs(e[m,:-1]), axis=0).max() for m in slices), 'worst lab OOF prior rate MAE', max(np.mean(abs(prior[m,-1])) for m in slices))\\n    p = mod.solve_alpha_s00(d)\\n    ce = p['predicted_strain'] - g['te_clean']; re = p['initial_rate_pred'] - g['te_true_rate0']\\n    print(name, 'clean strain/rate RMSE', np.sqrt(np.mean(ce**2)), np.sqrt(np.mean(re**2)), 'worst lab strain/rate RMSE', max(np.sqrt(np.mean(ce[tlab==j]**2)) for j in np.unique(tlab)), max(np.sqrt(np.mean(re[tlab==j]**2)) for j in np.unique(tlab)), 'worst horizon', np.sqrt(np.mean(ce**2, axis=0)).max(), 'max tau/weight relative errors', np.max(abs(p['estimated_taus']/g['taus']-1)), np.max(abs(p['hereditary_weights']/g['theta']-1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (exact hereditary memory with one strain noise scale) -> H2 (same mechanism with horizon-specific noise scales); the current worst-lab clean strain RMSE is 0.0169, and the worst held-out imputed-row median error is 0.0373.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational interactions, stochastic control operators, or relay modes\",\n      \"rejected_reason\": \"The specified regression is a deterministic two-branch recurrence with linear coupon drift; those operators are not part of its inputs or outputs.\"\n    },\n    {\n      \"option\": \"Apply within-batch balanced accuracy\",\n      \"rejected_reason\": \"Both targets are continuous. Held-out lab-by-stratum signed residuals test for systematic calibration bias without inventing class labels.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence check can expose a memory or rate-basis error. The public residual scale rises with hold time, so compare horizon-specific weighting against the saved solver without editing it. Estimate scales inside each held-out-lab fold, and promote the challenger only if it improves a meaningful error margin without hurting another required output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "389e2a615e4eff22e05f4a3a4fe4ea10b286132dd4352b99f55a233954fd65c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38958.64,
+      "usage_known": true,
+      "prompt_tokens": 29266,
+      "cached_tokens": 6784,
+      "completion_tokens": 1457
+    }
+  ]
+}

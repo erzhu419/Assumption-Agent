@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dba44627dacb4a8b9d3eeaa56d328f14",
+  "call_seq": 10,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep02__facility_recalibrated_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:08:53.845344+00:00",
+  "ended_at_utc": "2026-11-26T15:09:33.553113+00:00",
+  "request_sha256": "8a8472b438af42eb2df16a24fe99675aa885d1b86be91bc38d414abbc0d50737",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 51285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28734,
+    "cached_tokens": 0,
+    "completion_tokens": 1333
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'alpha_ep02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_alpha_ep02.pkl','rb') as f: r=pickle.load(f)[0]\\nd,g=r['dataset'],r['gt']; tr,te,y,ok=m._prepare(d); times=np.asarray(d['eval_times']); labs=np.asarray(d['train']['lab_id']); late=times>=np.median(times)\\ntau,beta=m._fit(tr,y,ok); out=m.solve_alpha_ep02(d)\\nassert .20<=tau[0]<tau[1]<=8.\\n# Compare the vectorized convolution with direct zero-state propagation and its onset derivative.\\nz=np.zeros((len(te.hold),2))\\nfor dt,stress in zip(te.dt,te.past.T):\\n a=np.exp(-dt/tau); z=a*z+(1-a)*stress[:,None]\\ngap=te.hold[:,None]-z\\nA=te.matrix(np.log(tau)); assert np.allclose(A[:,:-1,:2],gap[:,None,:]*-np.expm1(-times[None,:,None]/tau)); assert np.allclose(A[:,-1,:2],gap/tau)\\ncalpast,calhold=m._physical_stresses(d,d['test']); rms=lambda x: np.sqrt(np.mean(np.asarray(x)**2)); print('Physical stress RMSE, past and hold:',rms(calpast-g['te_hist_true']),rms(calhold-g['te_hold_true']))\\n# A single slope per coupon, inferred from late training curves independently of onset rate.\\nx,_=m._aligned_panels(d); x=x[:len(labs)]; h=tr.hold\\npairs=list(combinations(range(x.shape[1]),2)); triples=list(combinations(range(x.shape[1]),3))\\nfeatures={'interactions':np.column_stack([x[:,i]*x[:,j] for i,j in pairs]+[np.prod(x[:,idx],axis=1) for idx in triples]), 'saturating':np.column_stack([x/(1+x*x),h/(1+h*h),x/(1+h[:,None]**2)])}\\n# Pairs of linear sums/differences are already in the span of the fitted coupon columns.\\nfor lab in np.unique(labs):\\n fit=ok&(labs!=lab); q=ok&(labs==lab)\\n ts,b=m._fit(tr,y,fit); pred=tr.matrix(np.log(ts))@b; upd=m._update_drift(pred,y[:,-1],ok,times)\\n e=np.median((y[:,:-1]-upd[:,:-1])[:,late]/times[late],axis=1)\\n centered=e.copy()\\n for c in np.unique(labs[fit]):\\n  k=fit&(labs==c); centered[k]-=np.median(e[k])\\n scores={'base':np.median(np.abs(e[q]))}\\n for name,F in features.items():\\n  X=F.copy()\\n  for c in np.unique(labs): X[labs==c]-=np.median(F[ok&(labs==c)],axis=0)\\n  sd=np.std(X[fit],axis=0); X/=np.where(sd>0,sd,1.)\\n  scale=1.4826*np.median(np.abs(centered[fit])); lhs=X[fit]; w=np.linalg.solve(lhs.T@lhs+len(lhs)*.1*np.eye(lhs.shape[1]),lhs.T@np.clip(centered[fit],-3*scale,3*scale)); scores[name]=np.median(np.abs(e[q]-X[q]@w))\\n print('Held-out lab',lab,'drift median bias',round(np.median(e[q]),6),'drift median abs errors', {k:round(v,6) for k,v in scores.items()})\\nprint('Public worst lab strain and rate:',*[max(rms(v[np.asarray(d['test']['lab_id'])==j]) for j in np.unique(d['test']['lab_id'])) for v in (out['predicted_strain']-g['te_clean'],out['initial_rate_pred']-g['te_true_rate0'])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 exact two-mode hereditary dynamics with equal onset-rate weighting → H2 add a drift term only if it transfers across labs; current worst public late-strain slice RMSE is 0.06691 and worst held-out-lab complete-coupon late residual MAE is 0.02796.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, HJB operators, or balanced classification accuracy\",\"rejected_reason\":\"This is a continuous creep regression with no relay or class labels. Direct recurrence and within-lab forecast residuals test the analogous risks in this dataset.\"}],\"rationale\":\"Check the convolution and onset derivative against direct propagation; a mismatch would require correcting the physics implementation. Then test whether lab-centered interaction or saturation terms explain residual drift in held-out labs. Change the constitutive basis only if that improvement transfers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ff2a06161181f7d55e465b0eeed73050c7248c4b1c8856bc6debae29f768ce5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40085.44,
+      "usage_known": true,
+      "prompt_tokens": 28734,
+      "cached_tokens": 0,
+      "completion_tokens": 1333
+    }
+  ]
+}

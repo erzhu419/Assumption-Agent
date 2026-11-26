@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe999991d14c42c88f6c6505d06c1b6e",
+  "call_seq": 11,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:21:01.722407+00:00",
+  "ended_at_utc": "2026-11-26T15:21:31.253964+00:00",
+  "request_sha256": "20fece9747e56d9c5b166a3f5c0d8c80a2dbb8b2cc811219a4718f9a50c7f335",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 56254,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30931,
+    "cached_tokens": 6784,
+    "completion_tokens": 988
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha03_lab_drift.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\na, b, y, complete = s._prepare(d)\\nlab = d['train']['lab_id']\\ncomplete = complete[:len(lab)]\\ne0 = np.empty_like(y[:, :-1]); e1 = np.empty_like(e0)\\nfor c in np.unique(lab):\\n    h = lab == c\\n    lt, theta = s._fit(a, y, ~h & complete)\\n    p = a.matrix(lt)[h] @ theta\\n    base = y[h, :-1] - p[:, :-1]\\n    rate_error = y[h, -1] - p[:, -1]\\n    ok = complete[h]\\n    e0[h] = base - np.where(ok, 0., rate_error)[:, None] * a.times\\n    # Match deployment: infer the shared correction from rates, never held-out curves.\\n    drift = np.median(rate_error[ok])\\n    e1[h] = base - np.where(ok, drift, rate_error)[:, None] * a.times\\n    med = lambda e: np.median(np.abs(e))\\n    print('lab', c, 'median rate innovation', round(drift, 5), 'complete curve MedAE', round(med(e0[h][ok]), 5), '->', round(med(e1[h][ok]), 5))\\nrmse = lambda x: np.sqrt(np.mean(x*x))\\nhigh = a.ov != 0\\nmasks = [(lab == c) & m for c in np.unique(lab) for m in (~high, high)]\\nfor name, e in [('current', e0), ('lab_rate_centered', e1)]:\\n    print(name, 'worst lab/load curve RMSE', max(rmse(e[m]) for m in masks), 'worst tail RMSE', max(rmse(e[m, -1]) for m in masks), 'worst lab/load MedAE', max(np.median(np.abs(e[m])) for m in masks), 'pooled MedAE', np.median(np.abs(e)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha03_lab_drift.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 remaining error is dominated by isolated measurement spikes → H2 a smaller shared facility drift may also be recoverable from initial rates; current worst leave-one-lab-out lab-by-load RMSE is 0.31473 and worst final-horizon RMSE is 0.40709.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a nonlinear stress-response term\",\n      \"rejected_reason\": \"Both prescribed yield terms passed independent checks; the largest residuals were isolated spikes rather than sustained errors by load regime.\"\n    }\n  ],\n  \"rationale\": \"The audit found small same-sign residuals across strata in one lab. Test whether a shared drift estimated solely from the held-out lab's available initial rates improves curve predictions. Change the verified solver only if the correction improves the worst slices without worsening typical error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c52434f35ff00bbd9b6eeffb3f7bb57015f63a8cf490f38485ae8f8d28cff0a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29479.63,
+      "usage_known": true,
+      "prompt_tokens": 30931,
+      "cached_tokens": 6784,
+      "completion_tokens": 988
+    }
+  ]
+}

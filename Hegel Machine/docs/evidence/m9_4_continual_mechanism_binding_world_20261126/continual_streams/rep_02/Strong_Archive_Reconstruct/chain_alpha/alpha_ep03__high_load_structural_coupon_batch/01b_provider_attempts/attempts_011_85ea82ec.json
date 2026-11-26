@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "85ea82ec9044470c927c283bc847a0d9",
+  "call_seq": 11,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:20:40.083001+00:00",
+  "ended_at_utc": "2026-11-26T15:21:18.084516+00:00",
+  "request_sha256": "07aadd713717afb7b3914f34a1aebc9a5eeb3569b6147b8f52593f51fa6cd28a",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 56387,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30157,
+    "cached_tokens": 6784,
+    "completion_tokens": 1214
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_ep03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, _, y, complete = m._prepare(d)\\ncomplete = complete[:len(y)]\\nlab = d['train']['lab_id']\\nsigma = d['yield_stress']\\nwork = np.maximum(np.abs(tr.past)-sigma, 0)**2 @ np.asarray(d['past_dt'])\\ncal = d['calibration_load_cells']\\nfor k in np.unique(lab):\\n    ix = cal['lab_id'] == k\\n    x, z = cal['cmd_stress'][ix], cal['true_stress'][ix]\\n    fits = np.array([np.polyfit(x[np.arange(len(x)) != j], z[np.arange(len(x)) != j], 1) for j in range(len(x))])\\n    full = np.polyfit(x, z, 1)\\n    cmd = np.concatenate([d[s]['past_stress_cmd'][d[s]['lab_id']==k].ravel() for s in ('train','test')] + [d[s]['stress_hold_cmd'][d[s]['lab_id']==k] for s in ('train','test')])\\n    nominal = np.polyval(full, cmd)\\n    perturbed = fits[:, :1]*cmd + fits[:, 1:]\\n    flips = np.count_nonzero(np.any((abs(perturbed)>sigma) != (abs(nominal)>sigma), axis=0))\\n    print('lab', k, 'max calibration jackknife prediction error', round(np.max(np.abs(fits[:,0]*x+fits[:,1]-z)), 7), 'yield-gate flips across train/test stress samples', flips)\\n\\nresults = {False: [], True: []}\\nfor k in np.unique(lab):\\n    eligible = complete & (lab != k)\\n    cutoff = np.quantile(work[eligible & (work > 0)], .8)\\n    held = (lab == k) & (work > cutoff)\\n    if not held.any():\\n        continue\\n    for exclude_tail in results:\\n        fit = eligible & ((work <= cutoff) if exclude_tail else True)\\n        tau, beta = m._fit(tr, y, fit)\\n        p = tr.matrix(np.log(tau))[held] @ beta\\n        rate_innovation = y[held,-1] - p[:,-1]\\n        err = p[:,:-1] + (np.where(complete[held], .25, 1)*rate_innovation)[:,None]*tr.times - y[held,:-1]\\n        result = [int(k), int(held.sum()), float(np.sqrt(np.mean(err**2))), float(np.median(np.abs(err))), *tau, *beta[-2:]]\\n        results[exclude_tail].append(result)\\nfor exclude_tail, rows in results.items():\\n    rows = np.asarray(rows)\\n    print('training high-work tail excluded:', exclude_tail, 'rows [lab,n,rmse,med_abs,tau1,tau2,theta7,theta8]:', np.round(rows,6).tolist())\\n    print('worst high-work RMSE / median absolute error:', np.round(rows[:,2:4].max(axis=0),6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated two-branch creep with both yield terms → H2: retain it if independent calibration perturbations preserve yield classification and reduced high-work training coverage preserves transfer; verified worst lab × yield × sign RMSE is 0.33677.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear drift or pooled confounding audit\",\n      \"rejected_reason\": \"Held-out interaction and saturation challengers already showed no material improvement, and within-lab signed residuals were small. Balanced accuracy is not defined for these continuous outcomes.\"\n    }\n  ],\n  \"rationale\": \"Use the real calibration records to detect yield gates sensitive to any individual calibration point, and use held-out labs to test whether the plastic-work coefficient depends on the largest training histories. Material sensitivity would warrant revisiting calibration or the fit; otherwise, keep the simpler verified model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "81f813137e4239684aeb022cf497a775885724caf93cf4ab61803cf5c88243ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38373.07,
+      "usage_known": true,
+      "prompt_tokens": 30157,
+      "cached_tokens": 6784,
+      "completion_tokens": 1214
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cdfd217ac4d845f1bb44d923143a3ab8",
+  "call_seq": 9,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:56:46.406160+00:00",
+  "ended_at_utc": "2026-11-26T14:57:39.562462+00:00",
+  "request_sha256": "a08ded93110164f0c5bd578127d8273ce1ad1ae314e354483eff2c71fc753f1e",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 59872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32220,
+    "cached_tokens": 11136,
+    "completion_tokens": 1550
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/ep01_lab_cv.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom alpha_ep01_solver import _aligned,_physical,_Design,_fit,_mad,_crossing\\np=pickle.load(open('/holdout_task/public_alpha_ep01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; lab,tl=tr['lab_id'],te['lab_id']; n=len(lab); t=d['eval_times']; x,c=_aligned(d)\\na,b=(_Design(*_physical(d,q),d['past_dt'],t,f,q['initial_memory_states']) for q,f in [(tr,x[:n]),(te,x[n:])]); y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\n# Differences remove whole-curve measurement offsets before estimating slope.\\nj,k=np.triu_indices(len(t),1); q=t[k]-t[j]>1.5; j,k=j[q],k[q]\\ndef slope(r): return np.median((r[:,k]-r[:,j])/(t[k]-t[j]),axis=1)\\ndef rmse(r): return np.sqrt(np.mean(r*r))\\ndef predict(lt,w,keep,z,ls,features,full,rate):\\n    train=a.matrix(lt)@w; ds=slope(y[:,:-1]-train[:,:-1]); rs=y[:,-1]-train[:,-1]; base=z.matrix(lt)@w\\n    prior=np.zeros(len(ls)); dev=np.zeros(len(ls)); bias=np.zeros(len(ls))\\n    for l in np.unique(ls):\\n        i=(lab==l)&keep; o=ls==l\\n        if not i.any():continue\\n        f=x[i]@w[3:]; fc=np.median(f); s=np.column_stack((np.ones(i.sum()),f-fc));\\n        # A reference-panel offset shifts drift; a scale error changes its feature-dependent part.\\n        theta=np.linalg.lstsq(s,np.clip(ds[i],np.median(ds[i])-.04,np.median(ds[i])+.04),rcond=None)[0]\\n        prior[o]=np.median(ds[i]); dev[o]=theta[0]+theta[1]*(features[o]@w[3:]-fc)\\n        bias[o]=np.median(rs[i]-ds[i])\\n    raw=rate-base[:,-1]; gain=np.where(full,.15,1.)\\n    return {key:base[:,:-1]+change[:,None]*t for key,change in {'base':gain*raw,'offset':gain*raw+(1-gain)*prior,'affine':gain*raw+(1-gain)*dev,'affine_ratebias':gain*(raw-bias)+(1-gain)*dev}.items()}\\nfold=np.empty(n,dtype=int)\\nfor l in np.unique(lab):\\n    for s in np.unique(tr['stratum']):\\n        ids=np.flatnonzero((lab==l)&(tr['stratum']==s)); fold[ids]=np.arange(len(ids))%4\\ncv={};\\nfor jfold in range(4):\\n    keep=(fold!=jfold)&c[:n]; lt,w=_fit(a,y,keep); residual=y[:,:-1]-(a.matrix(lt)@w)[:,:-1]; held=fold==jfold\\n    for key,pred in predict(lt,w,keep,a,lab,x[:n],c[:n],y[:,-1]).items():\\n        cv.setdefault(key,np.empty(n))[held]=slope(y[:,:-1]-pred)[held]*t[-1]\\nfor key,e in cv.items():\\n    print('out-of-fold',key,'endpoint-proxy RMSE by lab complete/missing',[[round(rmse(e[(lab==l)&s]),5) for s in (c[:n],~c[:n])] for l in np.unique(lab)])\\nlt,w=_fit(a,y,c[:n]);\\nfor name,z in predict(lt,w,c[:n],b,tl,x[n:],c[n:],te['instant_rate_obs']).items():\\n    initial=te['strain_0']; curve=initial[:,None]+z\\n    es=[curve-g['te_clean'],z[:,-1]/np.maximum(abs(b.hold),.5)-g['te_secant'],_crossing(t,initial,curve,te['critical_strain'])-g['te_cross']]\\n    print('public',name,'RMSE',np.round(list(map(rmse,es)),6),'worst lab',np.round([max(rmse(e[tl==l]) for l in np.unique(tl)) for e in es],6),'secant worst complete/missing',np.round([max(rmse(es[1][(tl==l)&s]) for l in np.unique(tl) if ((tl==l)&s).any()) for s in (c[n:],~c[n:])],6))\\nprint('calibration stress RMSE',rmse(b.hold-g['te_hold_true']),rmse(b.past-g['te_hist_true']))\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task python3 /tmp/ep01_lab_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pooled aligned drift → H2 test train-only lab drift adjustments; current worst public lab secant RMSE is 0.06308.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Profile missing-feature training drift\",\"rejected_reason\":\"It did not improve the worst lab’s secant error and increased relaxation-time RMSE versus the Cauchy fit on complete coupons.\"}],\"rationale\":\"Test whether residual reference alignment errors produce a repeatable lab-specific drift. Held-out coupons within each lab can distinguish a transferable correction from noise; keep the pooled drift if the correction does not help the worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7752790758bc662294ce711c468e8862b48ef3abccc047eba5d9776e5d942c21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53493.04,
+      "usage_known": true,
+      "prompt_tokens": 32220,
+      "cached_tokens": 11136,
+      "completion_tokens": 1550
+    }
+  ]
+}

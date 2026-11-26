@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "03aa848a5b5b478cb76bae9395da837e",
+  "call_seq": 7,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep02__facility_recalibrated_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:08:45.922105+00:00",
+  "ended_at_utc": "2026-11-26T15:09:21.439000+00:00",
+  "request_sha256": "f66f46949561ddf021169f272d87a6bcc4321cf112877948ede3aa2b755f8b09",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 43070,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26823,
+    "cached_tokens": 6784,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_ep02_solver.py')\\ns = p.read_text()\\nold = 'correction = np.where(complete, 0.25, 1.0) * delta'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, 'correction = np.where(complete, 0.5, 1.0) * delta'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_ep02_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_ep02.pkl','rb') as f: records=pickle.load(f)\\nfor i, rec in enumerate(records):\\n d=rec['dataset']; tr=d['train']; te=d['test']; t=np.asarray(d['eval_times']); out=m.solve_alpha_ep02(d)\\n tau=np.asarray(out['estimated_taus']); coef=np.asarray(out['hereditary_weights']); n=len(te['lab_id'])\\n assert .2 <= tau[0] < tau[1] <= 8\\n for key,shape in [('estimated_taus',(2,)),('hereditary_weights',(7,)),('predicted_strain',(n,len(t))),('initial_rate_pred',(n,))]:\\n  assert np.shape(out[key])==shape and np.isfinite(out[key]).all(),key\\n a,b,y,complete=m._prepare(d)\\n z=np.zeros((n,2))\\n for stress,dt in zip(b.past.T,d['past_dt']):\\n  z=np.exp(-dt/tau)*z+(-np.expm1(-dt/tau))*stress[:,None]\\n gap=b.hold[:,None]-z\\n basis=b.matrix(np.log(tau))\\n np.testing.assert_allclose(basis[:,:,:2],gap[:,None,:]*np.vstack([-np.expm1(-t[:,None]/tau),1/tau])[None,:,:],rtol=1e-10,atol=1e-12)\\n adj=m._update_drift(basis@coef,te['instant_rate_obs'],np.isfinite(te['coupon_features_raw']).all(axis=1),t)\\n np.testing.assert_allclose(adj[:,-1],out['initial_rate_pred'])\\n np.testing.assert_allclose(adj[:,:-1]+np.asarray(te['strain_0'])[:,None],out['predicted_strain'])\\n print('record',i,'taus',tau,'outputs and independent history recurrence verified')\\n for lab in np.unique(tr['lab_id']):\\n  g=tr['lab_id']==lab; tt,ww=m._fit(a,y,complete & ~g)\\n  raw=(a.matrix(np.log(tt))@ww)[g]\\n  pred=m._update_drift(raw,y[g,-1],complete[g],t)\\n  res=np.abs(y[g,:-1]-pred[:,:-1]); cg=complete[g]\\n  late_groups=[np.median(res[cg & (tr['stratum'][g]==j),-1]) for j in np.unique(tr['stratum'][g][cg])]\\n  slope=np.median((y[g,2:-1]-raw[:,2:-1])/t[2:],axis=1)\\n  print('held-out lab',lab,'curve abs90',round(np.quantile(res,.9),5),'worst complete horizon median',round(np.max(np.median(res[cg],axis=0)),5),'worst complete stratum late',round(max(late_groups),5),'imputed late median',round(np.median(res[~cg,-1]),5) if (~cg).any() else None,'rate-vs-curve slope median',round(np.median(np.abs(pred[:,-1]-raw[:,-1]-slope)),5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Keep the shared relaxation law and give complete coupons a half-weight rate update; held-out worst complete-stratum final-horizon median error fell from 0.05999 to 0.04482, while the worst imputed-lab median stayed at 0.08647.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a separate blend from the data\",\n      \"rejected_reason\": \"Inner-fold estimates ranged from 0.329 to 0.627 and gave worse worst-lab curve and rate-proxy errors than the fixed half-weight update.\"\n    }\n  ],\n  \"rationale\": \"The half-weight update lowered the worst lab's 90th-percentile curve error from 0.11419 to 0.08665 and did not change imputed predictions. Run the exact final file in isolation to catch implementation regressions, and compare its history basis with a stepwise recurrence to catch a stress-history or time-ordering error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b0b4890f92a9e11190f48a62cc02a52cf0a3c653182614143395c748dfa2ca67",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35883.64,
+      "usage_known": true,
+      "prompt_tokens": 26823,
+      "cached_tokens": 6784,
+      "completion_tokens": 1307
+    }
+  ]
+}

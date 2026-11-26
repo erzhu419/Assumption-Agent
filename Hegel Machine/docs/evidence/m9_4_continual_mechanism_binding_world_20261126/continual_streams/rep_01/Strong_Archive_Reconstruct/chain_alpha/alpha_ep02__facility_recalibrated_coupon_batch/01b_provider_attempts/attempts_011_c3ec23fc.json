@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3ec23fc166e4cf3a0640ace13e60120",
+  "call_seq": 11,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep02__facility_recalibrated_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:10:45.994614+00:00",
+  "ended_at_utc": "2026-11-26T15:11:18.558590+00:00",
+  "request_sha256": "7bc72a1a80d95cf1d0546a3f286e2db75c5f3c81c5655703aded94bf3a52c010",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 47186,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27230,
+    "cached_tokens": 0,
+    "completion_tokens": 879
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/alpha_ep02_calibration_audit.py <<'PY'\\nexec(open('/tmp/alpha_ep02_cv.py').read().split('for lab in [-1,')[0])\\ncal=d['calibration_load_cells']\\nuncalibrated=dict(d, calibration_load_cells=dict(cal, true_stress=cal['cmd_stress']))\\na_uncal,_,_,_=m._prepare(uncalibrated)\\nfor label, model in [('calibrated',a),('command stress',a_uncal)]:\\n stats=[]\\n for lab in np.unique(labs):\\n  g=labs==lab\\n  tau,w=m._fit(model,y,complete & ~g)\\n  raw=(model.matrix(np.log(tau))@w)[g]\\n  pred=m._update_drift(raw,y[g,-1],complete[g],times)\\n  err=np.abs(y[g,:-1]-pred[:,:-1]); ls=tr['stratum'][g]\\n  row=(np.quantile(err,.9),max(np.median(err[ls==s,-1]) for s in np.unique(ls)),np.quantile(err[~complete[g]],.9) if np.any(~complete[g]) else np.nan)\\n  stats.append(row)\\n  print(label,lab,'curve p90 / worst stratum late median / imputed curve p90',np.round(row,5))\\n print('worst',label,np.round(np.nanmax(stats,axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_ep02_calibration_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Isolate the effect of facility stress calibration on held-out labs; the calibrated solver's worst lab curve p90 is 0.08665 and its worst imputed-lab final-horizon median error is 0.08647.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the pairwise and rational drift search\",\n      \"rejected_reason\": \"Both challengers already lost on worst-lab curve and rate-proxy errors. Neither tested whether facility gains and biases account for the transfer improvement.\"\n    }\n  ],\n  \"rationale\": \"Hold the coupon alignment and rate update fixed while replacing the load-cell map with the identity. This tests whether calibration helps within held-out labs and strata rather than merely improving a pooled score. If it fails to help or materially worsens an imputed slice, inspect the gain and bias application before changing the model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6bef98a18be81f78af3db866b3ad8ef7de634dd73821265d4c372705e6b4919d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32503.86,
+      "usage_known": true,
+      "prompt_tokens": 27230,
+      "cached_tokens": 0,
+      "completion_tokens": 879
+    }
+  ]
+}

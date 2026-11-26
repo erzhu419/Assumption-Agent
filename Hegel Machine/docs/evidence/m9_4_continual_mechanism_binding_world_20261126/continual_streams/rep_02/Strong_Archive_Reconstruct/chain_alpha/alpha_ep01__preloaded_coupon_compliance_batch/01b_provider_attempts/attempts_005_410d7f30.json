@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "410d7f30ca9b454fbf5d045eb5a6e8df",
+  "call_seq": 5,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:53:10.286309+00:00",
+  "ended_at_utc": "2026-11-26T14:53:51.797254+00:00",
+  "request_sha256": "42f5b55cff761d1c50c79fb22e34b7ade982193a8745f1c0e092beb2281d1c9c",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 40400,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26621,
+    "cached_tokens": 11136,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha_ep01_drift_cv.py <<'PY'\\nimport pickle, sys, numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0,'/holdout_task')\\nimport alpha_ep01_solver as s\\nd=pickle.load(open('/holdout_task/public_alpha_ep01.pkl','rb'))[0]['dataset']\\na,b,y,c=s._prepare(d); c=c[:len(y)]; t=d['eval_times']; tr=d['train']; lab=tr['lab_id']; scale=np.maximum(np.abs(a.hold),.5)\\nL=np.unique(lab)\\n# Learn a drift gain exclusively from inner held-out residuals.\\ncache={}\\ndef residual(train_labs, eval_lab):\\n    key=tuple(train_labs)\\n    if key not in cache:\\n        tau,w=s._fit(a,y,np.isin(lab,key)&c)\\n        cache[key]=y-a.matrix(np.log(tau))@w\\n    return cache[key][lab==eval_lab]\\ndef estimate(r, missing, robust):\\n    r=r[missing]; rr=r[:,-1]; z=r[:,:-1]\\n    if robust:\\n        return minimize_scalar(lambda g: np.log1p(((z-g*rr[:,None]*t)/(.018+.006*t))**2).mean(),bounds=(0,1),method='bounded').x\\n    return np.clip(np.sum(z*rr[:,None]*t)/np.sum((rr[:,None]*t)**2),0,1)\\nraw=np.empty_like(y); gains={key:np.full(len(y),np.nan) for key in ('archive','zero_full','full','nested_robust','nested_l2')};\\nfor j in L:\\n    outer=L[L!=j]; idx=lab==j; raw[idx]=residual(outer,j)\\n    rr=np.concatenate([residual(outer[outer!=k],k) for k in outer]); cc=np.concatenate([c[lab==k] for k in outer]);\\n    for key,robust in [('nested_robust',True),('nested_l2',False)]:\\n        g=[estimate(rr,cc,robust),estimate(rr,~cc,robust)]; print('lab',j,key,np.round(g,3)); gains[key][idx]=np.where(c[idx],*g)\\n    gains['archive'][idx]=np.where(c[idx],.25,1.); gains['zero_full'][idx]=np.where(c[idx],0.,1.); gains['full'][idx]=1.\\nfor k,g in gains.items():\\n    e=raw[:,:-1]-g[:,None]*raw[:,-1,None]*t\\n    def summary(m):\\n        abs_e=np.abs(e[m]); sec=np.abs(e[m,-1]/scale[m]); return np.array([np.sqrt(np.mean(abs_e**2)),np.median(abs_e),np.quantile(abs_e,.9),np.median(sec),np.quantile(sec,.9)])\\n    slices=[lab==j for j in L]+[tr['stratum']==j for j in np.unique(tr['stratum'])]+[c,~c,np.abs(a.hold)<.5,np.linalg.norm(tr['initial_memory_states'],axis=1)>np.quantile(np.linalg.norm(tr['initial_memory_states'],axis=1),.9)]\\n    print(k,'[curve RMSE/medAE/p90, secant medAE/p90] worst',np.round(np.max([summary(m) for m in slices],axis=0),5),'complete',np.round(summary(c),5),'missing',np.round(summary(~c),5))\\nfor m in (c,~c):\\n    print('raw rate abs and normalized terminal residual abs q50/80/90/95/99',np.round(np.quantile(np.abs(raw[m][:,[-1,-2]])/[1,t[-1]], [.5,.8,.9,.95,.99],axis=0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/alpha_ep01_drift_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived fixed rate correction -> H2 drift correction fitted in inner lab folds; the current worst of the reported lab RMSEs is 0.32583 without rate correction.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose a rate gain using pooled RMSE alone\",\n      \"rejected_reason\": \"Large curve residuals can dominate RMSE; median and tail errors on curves and secant compliance show whether the gain helps typical coupons as well.\"\n    }\n  ],\n  \"rationale\": \"The preload model transfers with stable relaxation times, but rate correction may trade measurement noise for less imputation bias. Compare the fixed rule against nested estimates on held-out labs, including missing features, low hold stress, and large preloads.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "82ea42644d7773b3420a06a8d88af1adcdc86ac6753443af6cbf03e321b8ed3d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41439.4,
+      "usage_known": true,
+      "prompt_tokens": 26621,
+      "cached_tokens": 11136,
+      "completion_tokens": 1320
+    }
+  ]
+}

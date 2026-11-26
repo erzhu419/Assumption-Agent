@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3267d3d8977143ef917628bcf34f908d",
+  "call_seq": 8,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:03:45.189366+00:00",
+  "ended_at_utc": "2026-11-26T15:04:30.998404+00:00",
+  "request_sha256": "8e7c0e4e5fb1d55d6e487ba1f10c8997ca970ca1f02431d3d6978aa60bc5f164",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 41064,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25996,
+    "cached_tokens": 6784,
+    "completion_tokens": 1616
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,60p' /holdout_task/alpha_ep03_solver.py; cat > /tmp/alpha_ep03_margin.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, _, y, complete = s._prepare(d)\\ncomplete = complete[:len(y)]\\nlab, strata = (d['train'][k] for k in ('lab_id', 'stratum'))\\nsy, t = d['yield_stress'], tr.times\\nlabs = np.unique(lab)\\nfull, ablations = np.empty_like(y), [np.empty_like(y), np.empty_like(y)]\\ncorrection = np.zeros(len(y))\\n\\ndef predict(use):\\n    lg, b = s._fit(tr, y, use & complete)\\n    return tr.matrix(lg) @ b\\n\\nfor c in labs:\\n    holdout = lab == c\\n    full[holdout] = predict(~holdout)[holdout]\\n    for j, name in enumerate(('over', 'work')):\\n        col = getattr(tr, name)\\n        setattr(tr, name, np.zeros_like(col))\\n        try:\\n            ablations[j][holdout] = predict(~holdout)[holdout]\\n        finally:\\n            setattr(tr, name, col)\\n    inner = np.empty_like(y)\\n    for v in labs[labs != c]:\\n        inner[lab == v] = predict((lab != c) & (lab != v))[lab == v]\\n    # Choose a rate update without using any outer-lab outcomes.\\n    for m, grid in ((True, [0., .25, .5, .75, 1.]), (False, [.5, .75, 1.])):\\n        use = ~holdout & (complete == m)\\n        e = y[use] - inner[use]\\n        cost = [np.mean(np.minimum(abs(e[:, :-1] - w*e[:, -1,None]*t), .10)) for w in grid]\\n        w = grid[np.argmin(cost)]\\n        correction[holdout & (complete == m)] = w\\n        print('inner-selected rate update, lab/complete/weight', c, m, w)\\n\\nerr = y - full\\nactive_hist = np.any(np.abs(tr.past) > sy, axis=1)\\nfor label, rows in [('subyield', ~active_hist & (tr.over == 0)), ('positive', tr.over > 0), ('negative', tr.over < 0), ('top-work', abs(tr.work) >= np.quantile(abs(tr.work), .9))]:\\n    def metrics(p):\\n        e = y[rows] - p[rows]\\n        return np.round([np.mean(abs(e[:, -1])), np.median(abs(e[:,:-1]))], 5)\\n    print('ablation', label, rows.sum(), 'full/without-hold/without-history rateMAE,curveMedAE', *(metrics(p) for p in [full,*ablations]))\\nfor c in labs:\\n    for st in np.unique(strata):\\n        rows = (lab == c) & (strata == st) & complete\\n        print('cell', c, st, rows.sum(), 'median signed rate,last-horizon residual', np.round(np.median(err[rows][:,[-1,-2]],axis=0),5))\\nfixed = np.where(complete, .25, 1.)\\nfor label, rows in [('all', np.ones(len(y),bool)), ('complete', complete), ('missing', ~complete), ('positive', tr.over > 0), ('negative', tr.over < 0), ('top-work',abs(tr.work)>=np.quantile(abs(tr.work),.9)), *[(f'lab{c}', lab==c) for c in labs], *[(f'stratum{j}',strata==j) for j in np.unique(strata)]]:\\n    def metrics(w):\\n        e = err[rows,:-1] - w[rows,None]*err[rows,-1,None]*t\\n        return np.round([np.mean(abs(e)), np.median(abs(e)), np.sqrt(np.mean(e**2))], 5)\\n    print('rate-update',label,'fixed/nested curve MAE,MedAE,RMSE',metrics(fixed),metrics(correction))\\n\\n# Isolate the two activation paths at unchanged time constants and coupon features.\\np = s._Design(np.array([[sy],[sy+.5],[sy],[sy+.5]]), np.array([sy,sy,sy+.25,sy+.25]), np.array([.4]), np.array([0.,.1,1.]), np.zeros((4,4)), sy)\\na = p.matrix(np.log([.56,3.82]))\\nnp.testing.assert_array_equal(np.any(a[..., -2:] != 0, axis=1), [[False,False],[False,True],[True,False],[True,True]])\\nprint('independent activation verified')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_ep03_margin.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: calibrated two-branch memory plus signed hold flow and plastic-work history; worst held-out lab and stratum strain MAE are 0.0983 and 0.1051.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB drift, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This dataset has continuous creep curves and no relay state or class labels. Lab-by-stratum signed residuals directly test for facility or stratum bias.\"\n    }\n  ],\n  \"rationale\": \"Ablate each high-load term separately because the two terms activate together on the measured panel; test independent activation with a controlled basis probe. Check lab-by-stratum residuals for calibration bias and compare rate updates selected within outer folds. Change the solver only if these checks expose a material weakness.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f34fb8cd1f1dd2e41675ad1e7171aed60a66f0647d1f853aba4f421c739a56cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45745.58,
+      "usage_known": true,
+      "prompt_tokens": 25996,
+      "cached_tokens": 6784,
+      "completion_tokens": 1616
+    }
+  ]
+}

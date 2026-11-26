@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0cf295ad700d4fe09d15b056f13fa388",
+  "call_seq": 8,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:55:19.548259+00:00",
+  "ended_at_utc": "2026-11-26T14:56:08.867424+00:00",
+  "request_sha256": "5c3becf28d2ef7241f95f420f8568ffe041cad59c3068f43403197e67ab8474c",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 48275,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29802,
+    "cached_tokens": 11136,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/alpha_ep01_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', p)\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nout = s.solve_alpha_ep01(d)\\nt = np.asarray(d['eval_times'])\\npanel = d['test']\\ncal = d['calibration_load_cells']\\nj = panel['lab_id']\\ngains, biases = np.array([np.polyfit(cal['cmd_stress'][cal['lab_id'] == i], cal['true_stress'][cal['lab_id'] == i], 1) for i in range(4)]).T\\nhold = gains[j] * panel['stress_hold_cmd'] + biases[j]\\npast = gains[j, None] * panel['past_stress_cmd'] + biases[j, None]\\na, b, _, _ = s._prepare(d)\\nnp.testing.assert_allclose(b.hold, hold, atol=1e-12)\\nnp.testing.assert_allclose(b.past, past, atol=1e-12)\\ntau = out['estimated_taus']\\nz = panel['initial_memory_states'].copy()\\nfor dt, stress in zip(d['past_dt'], past.T):\\n    z += (stress[:, None] - z) * -np.expm1(-dt / tau)\\nbranch = (hold[:, None] - z)[:, None, :] * -np.expm1(-t[:, None] / tau)\\nnp.testing.assert_allclose(b.matrix(np.log(tau))[:, :-1, :2], branch, atol=1e-12)\\nstrain = out['predicted_strain']\\nnp.testing.assert_allclose(out['secant_compliance'], (strain[:, -1] - panel['strain_0']) / np.maximum(abs(hold), .5), atol=1e-12)\\nexpected = []\\nfor x0, curve, crit in zip(panel['strain_0'], strain, panel['critical_strain']):\\n    answer = 0. if x0 >= crit else t[-1]\\n    if x0 < crit:\\n        for tl, tr, yl, yr in zip(np.r_[0., t[:-1]], t, np.r_[x0, curve[:-1]], curve):\\n            if yl < crit <= yr:\\n                answer = tl + (tr-tl) * (crit-yl) / (yr-yl)\\n                break\\n    expected.append(answer)\\nnp.testing.assert_allclose(out['hazard_crossing_times'], expected, atol=1e-12)\\n# Already at threshold, crossing before the first sample, nonmonotone first crossing, never crossed, and exact knot.\\nnp.testing.assert_allclose(s._crossing(np.array([1., 2., 4.]), np.array([1., 0., 0., 0., 0.]), np.array([[0., 0., 0.], [2., 0., 0.], [0., 2., 0.], [.2, .5, .9], [.2, 1., 2.]]), np.ones(5)), [0., .5, 1.5, 4., 2.])\\nprint('Reference recurrence, calibrated compliance and crossing checks passed; taus:', tau)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 horizon-specific noise scales → H2 retain pooled robust scales: worst-slice leave-one-lab-out curve RMSE is 0.29307 including isolated spikes and 0.03280 excluding them.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt horizon-specific noise scales\",\n      \"rejected_reason\": \"The worst-slice RMSE improvement was only 0.00003, while p90 curve error and fold-to-fold variation in the slow relaxation time increased.\"\n    }\n  ],\n  \"rationale\": \"Keep the existing fit. The schema validator checks shapes and finiteness but cannot catch a wrong preload update, an uncalibrated compliance denominator, or selecting the wrong crossing. Verify those equations independently in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "562bce0431613753dff97fac08503a98253c9331dd22e441bcd9dab4db160c90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49724.09,
+      "usage_known": true,
+      "prompt_tokens": 29802,
+      "cached_tokens": 11136,
+      "completion_tokens": 1252
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec040e21d74e47fe829d34a9b65ba4a1",
+  "call_seq": 8,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:03:08.029785+00:00",
+  "ended_at_utc": "2026-11-26T15:03:52.056518+00:00",
+  "request_sha256": "a8fb77010e3e767baa86b05d4e83eadc57eb7344c4684cec9ef23213cd586abe",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 45659,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26645,
+    "cached_tokens": 10112,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/alpha03_margin.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    packets = pickle.load(f)\\nprint('public datasets:', len(packets))\\nfor packet in packets:\\n    ds = packet['dataset']\\n    cal = ds['calibration_load_cells']\\n    for c in np.unique(cal['lab_id']):\\n        mask = cal['lab_id'] == c\\n        u, v = cal['cmd_stress'][mask], cal['true_stress'][mask]\\n        coef = np.linalg.lstsq(np.c_[u, np.ones(len(u))], v, rcond=None)[0]\\n        residual = v - np.c_[u, np.ones(len(u))] @ coef\\n        print('calibration', c, 'gain/bias', np.round(coef, 6), 'max abs residual', np.max(abs(residual)))\\n    a, b, y, complete = m._prepare(ds)\\n    complete = complete[:len(y)]\\n    lab, stratum = (ds['train'][k] for k in ('lab_id', 'stratum'))\\n    e = np.empty_like(y[:, :-1]); rate = np.empty(len(y))\\n    for c in np.unique(lab):\\n        v = lab == c\\n        tau, theta = m._fit(a, y, complete & ~v)\\n        e[v] = (m._predict(a, tau, theta, y[:, -1], complete) - y[:, :-1])[v]\\n        rate[v] = (a.matrix(tau)[:, -1] @ theta - y[:, -1])[v]\\n    groups = [('all', np.ones(len(y), bool))]\\n    groups += [(f'lab{c}/stratum{k}', (lab == c) & (stratum == k)) for c in np.unique(lab) for k in np.unique(stratum)]\\n    groups += [(f'{name}/complete={flag}', mask & (complete == flag)) for name, mask in [('subyield', (a.work == 0) & (a.ov == 0)), ('hold+', a.ov > 0), ('hold-', a.ov < 0)] for flag in (False, True)]\\n    for name, g in groups:\\n        if g.any():\\n            z = e[g]\\n            print(name, g.sum(), 'bias/RMSE/MedAE/earlyRMSE/lateRMSE', np.round([z.mean(), np.sqrt(np.mean(z*z)), np.median(abs(z)), np.sqrt(np.mean(z[:,0]**2)), np.sqrt(np.mean(z[:,-1]**2))], 5))\\n    for j in np.argsort(np.mean(e*e, axis=1))[-8:][::-1]:\\n        print('large residual', j, 'lab/stratum', (lab[j], stratum[j]), 'complete', complete[j], 'rate residual', round(rate[j], 4), 'curve residual', np.round(e[j], 3))\\n    for name, panel in [('train', ds['train']), ('test', ds['test'])]:\\n        cmd = np.c_[panel['past_stress_cmd'], panel['stress_hold_cmd']]\\n        a_past, a_hold = m._physical_stresses(ds, panel)\\n        phys = np.c_[a_past, a_hold]\\n        margin = np.abs(np.abs(phys)-ds['yield_stress'])\\n        print(name, 'crossings changed by calibration', np.sum((np.abs(cmd)>ds['yield_stress']) != (np.abs(phys)>ds['yield_stress'])), 'nearest yield margin', margin.min())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha03_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated linear creep -> H2 signed hold overstress and plastic-work memory; worst leave-one-lab-out strain RMSE is 0.293 before the finer slice audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or stochastic-control terms\",\n      \"rejected_reason\": \"The specified creep law has no relay or stochastic-control state. The independent recurrence already verifies its algebra; an added term would need evidence of a structured residual on real measurements.\"\n    }\n  ],\n  \"rationale\": \"Audit signed residuals within lab and stratum, and compare early with late errors. Systematic offsets would warrant testing a nuisance correction; isolated residuals would favor retaining the robust fit. Also measure actual yield reclassifications and calibration residuals to assess whether a calibration update could change the active regime. Balanced accuracy does not apply to these continuous outcomes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "16617b49400880e540aef989081a856dcf3ca5a2d1a10472b760cfa16730c1a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43962.42,
+      "usage_known": true,
+      "prompt_tokens": 26645,
+      "cached_tokens": 10112,
+      "completion_tokens": 1267
+    }
+  ]
+}

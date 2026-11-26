@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d14504a34a2c4c67b1bb7e88e5379669",
+  "call_seq": 9,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep04__standard_load_fresh_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:30:45.237358+00:00",
+  "ended_at_utc": "2026-11-26T15:31:41.823260+00:00",
+  "request_sha256": "60efac1d9b68d271047802e9ece118e32c66bbb2d24da256ed2619e47c58423f",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 45120,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26899,
+    "cached_tokens": 6784,
+    "completion_tokens": 1781
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/ep04_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntrain, test = d['train'], d['test']\\nlabs = train['lab_id']; strata = train['stratum']; n = len(labs)\\nx, observed = s._features(train, test)\\ncomplete = observed[:n].all(axis=1)\\nlaws = s._calibrate(d['calibration_load_cells'])\\ndt, times = d['past_dt'], d['eval_times']\\ncal = s._Design(train, laws, dt, times, x[:n])\\nraw = s._Design(train, np.tile([1., 0.], (4, 1)), dt, times, x[:n])\\npublic = s.solve_alpha_ep04(d)\\ntau = public['estimated_taus']\\nassert np.all(np.isfinite(tau)) and 0 < tau[0] < tau[1]\\nfor name, design in [('train', cal), ('test', s._Design(test, laws, dt, times, x[n:]))]:\\n    state = np.zeros((len(design.hold), 2))\\n    for step, h in enumerate(dt):\\n        q = np.exp(-h/tau)\\n        state = q*state + (1-q)*design.past[:, step, None]\\n    gap = design.hold[:, None] - state\\n    R = design.matrix(np.log(tau))\\n    np.testing.assert_allclose(R[:, :-1, :2], gap[:, None, :]*(1-np.exp(-times[:, None]/tau)), atol=1e-12)\\n    np.testing.assert_allclose(R[:, -1, :2], gap/tau, atol=1e-12)\\n    peak = max(np.abs(design.past).max(), np.abs(design.hold).max())\\n    print(name, 'physical peak', round(peak, 6), 'yield margin', round(d['yield_stress']-peak, 6))\\n    assert peak < d['yield_stress']\\ny = np.column_stack([train['strain_curves_obs']-train['strain_0'][:, None], train['instant_rate_obs']])\\npred = {k: np.empty_like(y) for k in ['calibrated', 'command-as-physical', 'cubic-drift']}\\nt = np.r_[times, 1.]\\n# Pairwise linear sums/differences already lie in the original drift span.\\n# Distinct three-feature products do not, so test their transfer separately.\\nxtr = x[:n]\\ncubic = np.column_stack([np.prod(xtr[:, [i,j,k]], axis=1) for i,j,k in [(0,1,2),(0,1,3),(0,2,3),(1,2,3)]])\\nfor lab in np.unique(labs):\\n    held = labs == lab\\n    fit = ~held & complete\\n    for key, z in [('calibrated', cal), ('command-as-physical', raw)]:\\n        ft, w = s._fit(z, y, fit)\\n        A = z.matrix(np.log(ft))\\n        p = A[held] @ w\\n        p += np.where(~complete[held], y[held, -1]-p[:, -1], 0.)[:, None]*t\\n        pred[key][held] = p\\n        if key != 'calibrated':\\n            continue\\n        B = np.concatenate([A, cubic[:, None, :]*t[None, :, None]], axis=2)\\n        scale = s._scale(A[fit] @ w-y[fit])\\n        M = (B[fit]/scale[:, None]).reshape(-1, B.shape[-1])\\n        target = (y[fit]/scale).ravel()\\n        q = least_squares(lambda v: M@v-target, np.r_[w,np.zeros(4)], jac=lambda v: M.copy(), loss='cauchy', f_scale=2.)\\n        p = B[held] @ q.x\\n        p += np.where(~complete[held], y[held, -1]-p[:, -1], 0.)[:, None]*t\\n        pred['cubic-drift'][held] = p\\nfor key, p in pred.items():\\n    e = np.abs(p-y)\\n    for mask in (complete, ~complete):\\n        cells = [mask & (labs == l) & (strata == st) for l in np.unique(labs) for st in np.unique(strata)]\\n        worst_curve = max(e[m, :-1].mean() for m in cells if m.sum() >= 3)\\n        print(key, 'n', int(mask.sum()), 'curve MAE', round(e[mask, :-1].mean(), 6), 'worst-cell', round(worst_curve, 6), 'median late', round(np.median(e[mask,-2]),6))\\n    print(key, 'complete worst-lab rate MAE', round(max(e[complete & (labs == l), -1].mean() for l in np.unique(labs)), 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/ep04_calibration_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 residual lab effects or higher-order drift limit transfer -> H2 test whether physical stress calibration and the two-branch recurrence explain it; current worst held-out cell strain MAE is 0.102462 for complete and 0.225195 for imputed coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-memory and lab-offset screens\",\n      \"rejected_reason\": \"Those terms already failed to improve held-out transfer materially; the remaining checks target calibration, history indexing, and distinct three-feature products.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence can detect an off-by-one history or rate-kernel error. Comparing calibrated and command stresses in held-out labs measures the practical effect of calibration, while a fold-local cubic challenger tests an omitted drift term without changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3de61d48c55ec96e8f0e07a44af8373e9ed8000fc37e74b91c2aca5e9e5bcbca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 57678.22,
+      "usage_known": true,
+      "prompt_tokens": 26899,
+      "cached_tokens": 6784,
+      "completion_tokens": 1781
+    }
+  ]
+}

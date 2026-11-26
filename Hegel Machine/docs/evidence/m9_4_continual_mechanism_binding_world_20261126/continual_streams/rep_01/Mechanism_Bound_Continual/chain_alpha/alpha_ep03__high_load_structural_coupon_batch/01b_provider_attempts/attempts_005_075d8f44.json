@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "075d8f449cc142b78938ead9d8cdd996",
+  "call_seq": 5,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep03__high_load_structural_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:01:13.735394+00:00",
+  "ended_at_utc": "2026-11-26T15:01:51.916108+00:00",
+  "request_sha256": "65d5f45b7cca24f01e031039e661862ef174622a83c53a76002ec67a37af0647",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 43700,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26709,
+    "cached_tokens": 6784,
+    "completion_tokens": 1168
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/alpha03_rate_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_ep03.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\na, _, y, complete = m._prepare(ds)\\ncomplete = complete[:len(y)]\\nlab = ds['train']['lab_id']\\nerr = {k: np.empty_like(y[:, :-1]) for k in ('raw', 'current', 'robust', 'robust_more', 'full_missing', 'clip_missing')}\\nfor c in np.unique(lab):\\n    val = lab == c\\n    logs, theta = m._fit(a, y, complete & ~val)\\n    p = a.matrix(logs) @ theta\\n    d = y[:, -1] - p[:, -1]\\n    scale = m._scale((y-p)[complete & ~val])[-1]\\n    print('fold', c, 'onset rate MAD', round(scale, 6))\\n    for mode, adj in {\\n        'raw': np.zeros(len(d)),\\n        'current': np.where(complete, .25, 1.) * d,\\n        'robust': np.where(complete, .25 * np.clip(d, -3*scale, 3*scale), d),\\n        'robust_more': np.where(complete, .1 * np.clip(d, -3*scale, 3*scale), d),\\n        'full_missing': np.where(complete, 0., d),\\n        'clip_missing': np.where(complete, .25*np.clip(d, -3*scale, 3*scale), np.clip(d, -.45, .45)),\\n    }.items():\\n        err[mode][val] = (p[:, :-1] - y[:, :-1] + adj[:, None] * a.t)[val]\\nfor mode, e in err.items():\\n    print(mode)\\n    for name, mask in [('all', lab >= 0), ('complete', complete), ('missing', ~complete), ('subyield', (a.work == 0) & (a.ov == 0)), ('positive', a.ov > 0), ('negative', a.ov < 0)] + [(f'lab{c}', lab == c) for c in np.unique(lab)]:\\n        r = e[mask]\\n        print(name, np.round([np.sqrt(np.mean(r*r)), np.median(abs(r)), np.quantile(abs(r), .90), np.sqrt(np.mean(r[:, -1]**2))], 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha03_rate_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated linear creep -> H2 signed hold overstress and plastic-work memory; worst regime RMSE fell from 3.595 to 0.290, and worst lab RMSE fell from 3.274 to 0.293.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The calibrated two-branch linear basis suffices across yield.\",\n    \"empirical_witness\": \"Adding the two specified terms reduced held-out negative-overload raw strain RMSE from 1.246 to 0.388 and gave stable viscoplastic weights near 0.240 and 0.160 across all four folds.\",\n    \"causal_blanket_diagnosis\": \"Signed hold overstress and load-history plastic work are omitted predictors in the linear model, even after calibrating both stress inputs.\",\n    \"sublated_pivot\": \"Keep both thresholded terms in the strain and onset-rate equations; test whether limiting rate innovations on complete coupons improves prediction.\",\n    \"risk_kind\": \"omitted_high_load_terms\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Remove onset-rate correction entirely\",\n      \"rejected_reason\": \"It reduced missing-feature RMSE from 0.551 to 0.249; assess complete and missing coupons separately before changing it.\"\n    }\n  ],\n  \"rationale\": \"Median absolute error near 0.011 alongside RMSE near 0.27 suggests a few large residuals. Use only training-fold residuals to scale the candidate correction and test whether it lowers held-out errors without sacrificing the clear benefit for missing features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "602e05ab1fe60ea2adf09fb447b7790ec642413c8445d3616683a848cde7a785",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38112.78,
+      "usage_known": true,
+      "prompt_tokens": 26709,
+      "cached_tokens": 6784,
+      "completion_tokens": 1168
+    }
+  ]
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_s00_e1205651625a",
+    "source_hash": "e1205651625a2d09975e46fe070bff01d9190e9a15afdaed2ef18aa0d411732d",
+    "parent_ids": [],
+    "source_episode_id": "alpha_s00__polymer_coupon_creep_baseline",
+    "task_id": "alpha_s00__polymer_coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_alpha_s00.pkl','rb') as f:\n    data=pickle.load(f)\ndef inspect(d, prefix=''):\n    for key,val in d.items():\n        if isinstance(val,dict):\n            print(prefix+key); inspect(val,prefix+'  '); continue\n        a=np.asarray(val)\n        if a.dtype.kind in 'biuf' and a.size:\n            print(prefix+key,a.shape,a.dtype,'range',np.nanmin(a),np.nanmax(a),'missing',np.isnan(a).sum())\n        else: print(prefix+key,a.shape,a.dtype)\ninspect(data)\nPY\nPYTHONPATH=/tmp python3 -m ",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_alpha_s00.pkl', 'rb') as f:\n    cases = pickle.load(f)\nprint('cases:',len(cases),'first case keys:',list(cases[0]))\nd=cases[0]['dataset']\nfor group, value in d.items():\n    print(group)\n    for key,v in (value.items() if isinstance(value,dict) else [(group,value)]):\n        a=np.asarray(v)\n        print(' ',key,a.shape,a.dtype, (np.nanmin(a),np.nanmax(a),int(np.isnan(a).sum())) if a.size and a.dtype.kind in 'biuf' else '')\nfor name in ['train','test']:\n    p=d[name]; print(name,'cell counts:',np.bincount(3*",
+      "cat > /holdout_task/alpha_s00_solver.py <<'PY'\n\"\"\"Facility calibration and two-branch hereditary creep regression.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _aligned_panels(dataset):\n    train, test = dataset['train'], dataset['test']\n    labs = np.r_[train['lab_id'], test['lab_id']]\n    strata = np.r_[train['stratum'], test['stratum']]\n    x = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']]).astype(float)\n    refs = np.vstack([train['ref_coupons'], test['ref_coupons']])\n    for lab in np.unique(labs):\n        mask = labs == lab\n        r = refs",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_s00_solver.py')\ns = p.read_text()\nold = '        return np.r_[np.median(_mad(r[:, :-1].ravel())), _mad(r[:, -1])]'\nnew = '        return np.r_[np.full(r.shape[1] - 1, _mad(r[:, :-1].ravel())), _mad(r[:, -1])]'\nassert s.count(old) == 1\np.write_text(s.replace(old, new))\nPY\nexport OPENBLAS_NUM_THREADS=1\npython3 -I validate_public_schema.py\npython3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_s00_solver.py')\ns = importl",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nwith open('public_alpha_s00.pkl','rb') as f: case=pickle.load(f)[0]\nd,g=case['dataset'],case['gt']; p=s.solve_alpha_s00(d); train,test=d['train'],d['test']; a,b,y,complete=s._prepare(d)\nfor pk,gk in [('estimated_taus','taus'),('hereditary_weights','theta')]: print(pk,'truth',g[gk],'relative error',np.abs(p[pk]-g[gk])/np.maximum(1e-12,n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nwith open('public_alpha_s00.pkl','rb') as f: case=pickle.load(f)[0]\nd,g=case['dataset'],case['gt']; a,b,y,complete=s._prepare(d); lab=np.asarray(d['train']['lab_id']); times=np.asarray(d['eval_times']); err=np.empty_like(y)\n# Estimate drift signal on each held lab without using that lab's curve outcomes in fitting.\nfor c in np.",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_s00_solver.py')\ns = p.read_text()\nold = '''def solve_alpha_s00(dataset: dict) -> dict:\n    dtrain, dtest, y, complete = _prepare(dataset)\n    # Incomplete training rows carry unobserved drift features; use the complete\n    # rows to estimate the shared material law, and impute for prediction.\n    tau, theta = _fit(dtrain, y, complete)\n    pred = dtest.matrix(np.log(tau)) @ theta\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\n            'predicted_strain': pred[:, :-1] + np.asarray(dataset['test'",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\npython3 -I validate_public_schema.py\npython3 -I - <<'PY'\nimport importlib.util, pickle, types\nfrom pathlib import Path\nimport numpy as np\npath = Path('/holdout_task/alpha_s00_solver.py')\nspec = importlib.util.spec_from_file_location('baseline', path)\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\ncase = pickle.load(open('public_alpha_s00.pkl', 'rb'))[0]\nd, g = case['dataset'], case['gt']\na, b, y, complete = s._prepare(d)\ntimes = np.asarray(d['eval_times'])\ntau, theta = s._fit(a, y, complete)\n# Independently verify the ",
+      "set -e\ncd /holdout_task\n/usr/bin/time -f 'isolated schema wall time: %e s' python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('public_alpha_s00.pkl','rb') as f:\n    case = pickle.load(f)[0]\nd, g = case['dataset'], case['gt']\ntest = d['test']; labs = np.asarray(test['lab_id']); times = np.asarray(d['eval_times'])\nx = np.asarray(test['coupon_features",
+      "set -e\ncd /holdout_task\nTIMEFORMAT='isolated schema wall time: %3R s'\ntime python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('public_alpha_s00.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\nd, g = case['dataset'], case['gt']\ntest = d['test']; labs = np.asarray(test['lab_id']); times = np.asarray(d['eval_times'])\nx = np.asarray(test['coupon_feature"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_s00_solver.py",
+        "filename": "alpha_s00_solver.py",
+        "bytes": 6291,
+        "sha256": "e856d4f8c5b29d690ed8a76b8663e71b7c347f734aca285c42d8cd504bcefb27",
+        "content_addressed_ref": "content_addressed_blobs/e856d4f8c5b29d690ed8a76b8663e71b7c347f734aca285c42d8cd504bcefb27.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e1205651625a2d09975e46fe070bff01d9190e9a15afdaed2ef18aa0d411732d",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nTIMEFORMAT='isolated schema wall time: %3R s'\ntime python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e1205651625a2d09975e46fe070bff01d9190e9a15afdaed2ef18aa0d411732d",
+        "expected_candidate_sha256": "e1205651625a2d09975e46fe070bff01d9190e9a15afdaed2ef18aa0d411732d",
+        "computed_candidate_sha256": "e1205651625a2d09975e46fe070bff01d9190e9a15afdaed2ef18aa0d411732d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_s00_solver.py",
+            "bytes": 6291
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_e1205651"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

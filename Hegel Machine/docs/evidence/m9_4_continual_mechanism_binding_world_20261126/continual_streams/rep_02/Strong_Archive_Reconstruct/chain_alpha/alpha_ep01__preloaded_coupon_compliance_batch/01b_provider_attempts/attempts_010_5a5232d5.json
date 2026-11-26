@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a5232d58eb947a8ac55df73f803cbb2",
+  "call_seq": 10,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:56:42.236594+00:00",
+  "ended_at_utc": "2026-11-26T14:57:33.346896+00:00",
+  "request_sha256": "a6ba7af90a84e190eb95b65ea755b46b8e732a79c9fe956ce8bb60600782101b",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 51663,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30211,
+    "cached_tokens": 0,
+    "completion_tokens": 1848
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/alpha_ep01_structure_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\np='/holdout_task/alpha_ep01_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_ep01.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']; a,b,y,complete=s._prepare(d); c=complete[:len(y)]\\nt=np.asarray(d['eval_times']); labs=tr['lab_id']; strata=tr['stratum']; den=np.maximum(abs(a.hold),.5)\\nx=np.concatenate([tr['coupon_features_raw'],te['coupon_features_raw']]).astype(float)\\nl=np.r_[labs,te['lab_id']]; st=np.r_[strata,te['stratum']]; refs=np.concatenate([tr['ref_coupons'],te['ref_coupons']])\\nfor j in np.unique(l):\\n    ix=np.flatnonzero(l==j); rr=refs[ix].T\\n    offset=np.median([np.mean(col) for col in rr]); gain=np.median([np.std(col) for col in rr]); x[ix]=(x[ix]-offset)/gain\\nfor k in range(x.shape[1]):\\n    finite=np.isfinite(x[:,k]); means=[np.mean(x[finite & (l==j) & (st==q),k]) for j,q in sorted(set(zip(l[finite],st[finite])))]; x[~finite,k]=np.mean(means)\\nnp.testing.assert_allclose(x,s._aligned_panels(d)[0],atol=1e-12)\\nprint('Independent reference alignment and cell-balanced imputation agree.')\\nx=x[:len(y)]\\npairs=list(combinations(range(x.shape[1]),2)); triples=list(combinations(range(x.shape[1]),3))\\n# A linear pairwise sum or difference is already spanned by the four main effects.\\npol=np.column_stack([x*x]+[x[:,i]*x[:,j] for i,j in pairs]+[x[:,i]*x[:,j]*x[:,k] for i,j,k in triples])\\nrat=np.column_stack([x/(1+0.5*x*x)]+[(x[:,i]+sign*x[:,j])/(1+0.5*(x[:,i]+sign*x[:,j])**2) for i,j in pairs for sign in (-1,1)])\\nload=np.column_stack([a.hold**2,a.hold/(1+0.5*a.hold**2),a.hold[:,None]*x])\\npre=np.linalg.norm(tr['initial_memory_states'],axis=1)\\nslices={**{f'lab{j}':labs==j for j in np.unique(labs)},**{f'stratum{j}':strata==j for j in np.unique(strata)},'complete':c,'missing':~c,'low_hold':abs(a.hold)<.5,'high_preload':pre>=np.quantile(pre,.9)}\\nmodels={'base':None,'polynomial drift':pol,'rational drift':rat,'stress-coupled drift':load}\\nerrs={k:np.empty_like(y[:,:-1]) for k in models}; dr=np.empty(len(y))\\nfor j in np.unique(labs):\\n    test=labs==j; fit=~test & c\\n    tau,coef=s._fit(a,y,fit); pred=a.matrix(np.log(tau))@coef; r=y-pred; dr[test]=r[test,-1]\\n    # Median over horizons resists the isolated strain acquisition spikes.\\n    target=np.median(r[:,2:-1]/t[2:],axis=1)\\n    rate_gain=np.where(c,.25,1.)\\n    for name,f in models.items():\\n        shift=np.zeros(len(y))\\n        if f is not None:\\n            f=(f-np.mean(f[fit],axis=0))/np.maximum(np.std(f[fit],axis=0),1e-8)\\n            f=np.column_stack([np.ones(len(y)),f])\\n            w=least_squares(lambda w: (f[fit]@w-target[fit])/.012,np.zeros(f.shape[1]),loss='soft_l1').x\\n            shift=f@w\\n        errs[name][test]=r[test,:-1]-(rate_gain[test]*r[test,-1]+(1-rate_gain[test])*shift[test])[:,None]*t\\nclean=abs(errs['base'])<.4\\nfor name,e in errs.items():\\n    def score(m):\\n        ae=abs(e[m]); ok=clean[m]; sec=ae[:,-1]/den[m]; return [np.sqrt(np.mean(ae**2)),np.sqrt(np.mean(ae[ok]**2)),np.quantile(ae,.9),np.quantile(sec[ok[:,-1]],.9)]\\n    print(name,'worst [all RMSE, nonspike RMSE, curve p90, nonspike secant p90]',np.round(np.max([score(m) for m in slices.values()],axis=0),5),'complete',np.round(score(c),5))\\nprint('Held-out rate residual median by lab:',[round(float(np.median(dr[(labs==j)&c])),5) for j in np.unique(labs)])\\ncal=d['calibration_load_cells']\\nfor j in np.unique(labs):\\n    ix=cal['lab_id']==j; xx=cal['cmd_stress'][ix]; yy=cal['true_stress'][ix]; errs_cal=[]\\n    for deg in (1,2):\\n        e=[yy[i]-np.polyval(np.polyfit(np.delete(xx,i),np.delete(yy,i),deg),xx[i]) for i in range(len(xx))]; errs_cal.append(np.sqrt(np.mean(np.square(e))))\\n    print('Calibration lab',j,'leave-one-point-out RMSE [affine, quadratic]',np.round(errs_cal,6))\\nPY\\npython3 -I /tmp/alpha_ep01_structure_audit.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and linear coupon drift -> H2 test stress-coupled, polynomial, and rational drift in held-out labs; baseline worst-slice strain RMSE is 0.29307 overall and 0.03280 excluding flagged spikes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or Fokker–Planck/HJB diagnostics\",\n      \"rejected_reason\": \"The supported data describe continuous strain and measured initial memory, with no class labels, relay states, diffusion operator, or control objective. Held-out lab residuals are the relevant batch-confounding diagnostic.\"\n    }\n  ],\n  \"rationale\": \"Check whether missing algebraic terms explain repeatable held-out drift, whether residual bias clusters by lab, and whether affine calibration misses measurable curvature. A repeatable improvement would justify a model change; otherwise retain the verified fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7e6656ea7fa41f5891191075a1348bc40f3500de0af3e94e0cfdb70f5348e9f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 51444.13,
+      "usage_known": true,
+      "prompt_tokens": 30211,
+      "cached_tokens": 0,
+      "completion_tokens": 1848
+    }
+  ]
+}

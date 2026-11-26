@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8600c5eb03d24e0d8308f97e2e0fca8a",
+  "call_seq": 4,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:52:21.389354+00:00",
+  "ended_at_utc": "2026-11-26T14:53:06.699709+00:00",
+  "request_sha256": "a20ad28237c75dc66815f9e44f27af183ac47251ae004e10136aa8aecf9688e4",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 29544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22736,
+    "cached_tokens": 6784,
+    "completion_tokens": 1631
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_s00_solver.py').read_text().split('def _prepare(')[0]\\nsrc = src.replace('dt, times, x):', 'dt, times, x, initial):').replace('self.past = past', 'self.past = past\\\\n        self.initial = np.asarray(initial)\\\\n        self.duration = np.sum(dt)').replace('gap = self.hold[:, None] - self.past @ weights', 'preload = self.initial * np.exp(-self.duration / tau)\\\\n        gap = self.hold[:, None] - self.past @ weights - preload').replace('dtime = np.vstack', 'dgap -= preload * (self.duration / tau)\\\\n        dtime = np.vstack')\\nPath('/holdout_task/alpha_ep01_solver.py').write_text(src + '''def _prepare(dataset):\\n    train, test = dataset['train'], dataset['test']\\n    x, complete = _aligned_panels(dataset)\\n    n = len(train['lab_id'])\\n    designs = []\\n    for panel, features in ((train, x[:n]), (test, x[n:])):\\n        past, hold = _physical_stresses(dataset, panel)\\n        designs.append(_Design(past, hold, dataset['past_dt'], dataset['eval_times'],\\n                               features, panel['initial_memory_states']))\\n    y = np.column_stack([train['strain_curves_obs'] - np.asarray(train['strain_0'])[:, None],\\n                         train['instant_rate_obs']])\\n    return *designs, y, complete\\n\\n\\ndef _crossing(times, strain_0, pred, critical):\\n    above = pred >= critical[:, None]\\n    crossing = np.full(len(pred), times[-1], dtype=float)\\n    crossing[strain_0 >= critical] = 0.0\\n    rows = np.flatnonzero((strain_0 < critical) & above.any(axis=1))\\n    j = above[rows].argmax(axis=1) + 1\\n    t = np.r_[0.0, times]\\n    eps = np.column_stack([strain_0, pred])\\n    left, right = eps[rows, j-1], eps[rows, j]\\n    crossing[rows] = t[j-1] + (t[j]-t[j-1]) * (critical[rows]-left) / (right-left)\\n    return crossing\\n\\n\\ndef solve_alpha_ep01(dataset: dict) -> dict:\\n    train, test_design, y, complete = _prepare(dataset)\\n    tau, coef = _fit(train, y, complete[:len(y)])\\n    pred = test_design.matrix(np.log(tau)) @ coef\\n    test = dataset['test']\\n    times = np.asarray(dataset['eval_times'])\\n    rate_error = np.asarray(test['instant_rate_obs']) - pred[:, -1]\\n    correction = np.where(complete[len(y):], 0.25, 1.0) * rate_error\\n    strain_0 = np.asarray(test['strain_0'])\\n    strain = strain_0[:, None] + pred[:, :-1] + correction[:, None] * times\\n    return {'estimated_taus': tau, 'predicted_strain': strain,\\n            'secant_compliance': (strain[:, -1]-strain_0)/np.maximum(np.abs(test_design.hold), 0.5),\\n            'hazard_crossing_times': _crossing(times, strain_0, strain, np.asarray(test['critical_strain']))}\\n''')\\nPY\\nsed -n '58,115p' /holdout_task/alpha_ep01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/alpha_ep01_cv.py <<'PY'\\nimport pickle, sys, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport alpha_ep01_solver as s\\nd=pickle.load(open('/holdout_task/public_alpha_ep01.pkl','rb'))[0]['dataset']; train=d['train']; t=d['eval_times']\\na,b,y,c=s._prepare(d); c=c[:len(y)]; labs=train['lab_id']; strata=train['stratum']\\ntau,w=s._fit(a,y,c); print('full fit',tau,w)\\nraw=np.empty_like(y)\\nfor lab in np.unique(labs):\\n    fit=(labs!=lab)&c\\n    tau,w=s._fit(a,y,fit); print('hold lab',lab,'taus',tau,'coef',w)\\n    raw[labs==lab]=(a.matrix(np.log(tau))@w)[labs==lab]\\nr=y-raw\\nprint('residual median/MAD by horizon',np.round(np.median(r,axis=0),4),np.round(s._mad(r),4))\\nfor key, mask in [('complete',c),('missing',~c)]+[(f'lab{lab}',labs==lab) for lab in np.unique(labs)]+[(f'stratum{st}',strata==st) for st in np.unique(strata)]:\\n    z=r[mask]; print(key,len(z),'median rate/late',np.median(z[:,[-1,-2]],axis=0).round(4),'rmse at drift gains 0 .25 .5 1', [np.sqrt(np.mean((z[:,:-1]-g*z[:,-1,None]*t)**2)).round(5) for g in (0,.25,.5,1)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/alpha_ep01_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived zero-memory law -> H2 calibrated two-branch law with explicit preload decay; leave-one-lab-out error pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Import the archived solver or reference-panel skill at runtime\",\n      \"rejected_reason\": \"The required preload and crossing logic are episode-specific, and the solver can be standalone by reusing the archived calibration code directly.\"\n    }\n  ],\n  \"rationale\": \"Implement and validate the required output schema. Leave-one-lab-out residuals will show whether the archived rate correction transfers to this episode or needs retuning, especially when coupon features are missing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "65bf192e7ab73eabdb784bf4f122e236fecfbf9facf9229acf15c6df96b870c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45249.87,
+      "usage_known": true,
+      "prompt_tokens": 22736,
+      "cached_tokens": 6784,
+      "completion_tokens": 1631
+    }
+  ]
+}

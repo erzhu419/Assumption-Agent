@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "142cb5c9de4d4a9a80576cc3464a6095",
+  "call_seq": 7,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:54:26.882709+00:00",
+  "ended_at_utc": "2026-11-26T14:55:15.269893+00:00",
+  "request_sha256": "59e93878c063c4d8c40376cc0b00ebeeeed77487fc88f992fc5b5663edf193ef",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 43411,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28012,
+    "cached_tokens": 11136,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '1,39p' alpha_ep01_solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep01_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_alpha_ep01.pkl', 'rb'))[0]['dataset']\\ndef readouts(ds, out, hold):\\n    p = ds['test']; times = np.r_[0., ds['eval_times']]\\n    curve = np.column_stack((p['strain_0'], out['predicted_strain']))\\n    np.testing.assert_allclose(out['secant_compliance'], (curve[:, -1]-curve[:, 0])/np.maximum(np.abs(hold), .5), rtol=1e-12, atol=1e-12)\\n    want=[]; cases=[0,0,0]\\n    for row, crit in zip(curve, p['critical_strain']):\\n        ix=np.flatnonzero(row>=crit)\\n        if not len(ix): cases[0]+=1; want.append(times[-1]); continue\\n        j=ix[0]\\n        if j==0: cases[1]+=1; want.append(0.); continue\\n        cases[2]+=1; want.append(np.interp(crit, row[j-1:j+1], times[j-1:j+1]))\\n    np.testing.assert_allclose(out['hazard_crossing_times'], want, rtol=1e-12, atol=1e-12)\\n    print('crossing cases [never, initial, interpolated]:', cases, 'stress floor cases:', np.sum(np.abs(hold)<.5))\\nc=d['calibration_load_cells']; co=np.array([np.polyfit(c['cmd_stress'][c['lab_id']==l], c['true_stress'][c['lab_id']==l],1) for l in range(4)]); p=d['test']; lab=p['lab_id']\\nout=m.solve_alpha_ep01(d); readouts(d,out,co[lab,0]*p['stress_hold_cmd']+co[lab,1]); print('public taus:',out['estimated_taus'])\\n# Re-encode the same physical experiments in conspicuously different facility units.\\n# All outputs must be invariant; failures indicate that history or hold uses command units.\\ne=copy.deepcopy(d); a=np.array([.63,1.48,.79,1.23]); b=np.array([.47,-.29,.37,-.34]); c=e['calibration_load_cells']; l=c['lab_id']; c['cmd_stress']=a[l]*c['cmd_stress']+b[l]\\nfor key in ('train','test'):\\n    p=e[key]; l=p['lab_id']; p['past_stress_cmd']=a[l,None]*p['past_stress_cmd']+b[l,None]; p['stress_hold_cmd']=a[l]*p['stress_hold_cmd']+b[l]\\nre=m.solve_alpha_ep01(e)\\nfor key in out: np.testing.assert_allclose(re[key],out[key],rtol=1e-7,atol=1e-7)\\n# The closed-form history must agree with an independent stepwise update.\\n_, des, _, _ = m._prepare(d); tau=out['estimated_taus']; z=des.initial.copy()\\nfor j, dt in enumerate(d['past_dt']):\\n    decay=np.exp(-dt/tau); z=decay*z+(1-decay)*des.past[:,j,None]\\nref=(des.hold[:,None]-z)[:,None,:]*(-np.expm1(-d['eval_times'][:,None]/tau))[None,:,:]\\nnp.testing.assert_allclose(des.matrix(np.log(tau))[:,:-1,:2],ref,rtol=1e-12,atol=1e-12)\\nprint('Facility re-encoding and stepwise preload recurrence passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the calibrated preload model with completeness-dependent rate correction reduces worst held-out lab/completeness curve RMSE from 0.46443 to 0.32068 and worst capped MAE to 0.04753.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune rate correction to minimize the largest raw held-out RMSE\",\n      \"rejected_reason\": \"Isolated strain spikes dominate that metric; adaptive correction already improves worst capped error without weakening the physical model.\"\n    }\n  ],\n  \"rationale\": \"The schema validator checks shapes and finiteness, not readout formulas. Check compliance and first crossings independently, amplify load-cell differences to catch an uncalibrated history or hold, and compare the closed-form preload calculation with a stepwise recurrence to catch indexing errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c79ad59608130a0cc9efdef33bc5407c1ab5c2f2544eec8a58def89531657921",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48853.42,
+      "usage_known": true,
+      "prompt_tokens": 28012,
+      "cached_tokens": 11136,
+      "completion_tokens": 1255
+    }
+  ]
+}

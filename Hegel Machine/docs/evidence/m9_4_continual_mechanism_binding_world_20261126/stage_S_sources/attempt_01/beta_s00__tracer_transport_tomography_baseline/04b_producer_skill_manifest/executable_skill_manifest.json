@@ -1,0 +1,77 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_s00_217eb8c6c481",
+    "source_hash": "217eb8c6c481a7435c7e492d2f094fb346b1d2ddfdc444adbd4e84fc082fada0",
+    "parent_ids": [],
+    "source_episode_id": "beta_s00__tracer_transport_tomography_baseline",
+    "task_id": "beta_s00__tracer_transport_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np, scipy\nwith open('public_beta_s00.pkl','rb') as f: s=pickle.load(f)\nprint(type(s), 'scipy', scipy.__version__)\nfor k,v in s.items():\n if isinstance(v,dict): print(k, {j:(np.shape(a),str(np.asarray(a).dtype)) for j,a in v.items()})\n elif np.ndim(v)==0: print(k,repr(v))\n else:\n  a=np.asarray(v); print(k,a.shape,a.dtype, 'range', (a.min(),a.max()) if a.size and a.dtype.kind in 'fiu' else '', 'head',a.ravel()[:6])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'rid",
+      "cd /holdout_task && cat validate_public_schema.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_s00.pkl','rb') as f: cases=pickle.load(f)\nprint('cases',len(cases))\nfor i,c in enumerate(cases[:3]):\n s=c['study']; print('case',i)\n for k,v in s.items():\n  if isinstance(v,dict): print(k,{j:(np.shape(a),str(np.asarray(a).dtype)) for j,a in v.items()}); continue\n  a=np.asarray(v); print(k,a.shape,str(a.dtype),a.ravel()[:6])\n g=c['gt']; print('cert',g['cert",
+      "cat > /holdout_task/beta_s00_solver.py <<'PY'\n\"\"\"Calibrated tracer transport and box-simplex reconstruction.\"\"\"\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _calibrate(study):\n    sweeps = study['sensor_calibration_sweeps']\n    banks = np.asarray(sweeps['bank_id'])\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\n    rows = np.asarray(study['row_bank_id'])\n    obs = np.asarray(study['y_obs_raw'], dtype=float)\n    y = np.empty_like(obs)\n    for bank in np.unique(rows):\n        keep = banks ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.linalg import solve_sylvester\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_s00_solver.py')\na = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(a)\nwith open('public_beta_s00.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\n\n# Independent linear minimization over the capped simplex validates the gap\n# even when several weights are pinned and there is no free coordinate.\ndef check(H, c, cap, budget, w, nu):\n    g = H @ w + c\n    vert",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\ndef load(name, filename):\n    spec = importlib.util.spec_from_file_location(name, '/holdout_task/' + filename)\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\nsolver = load('solver', 'beta_s00_solver.py')\nvalidator = load('validator', 'validate_public_schema.py')\nwith open('public_beta_s00.pkl', 'rb') as f:\n    cases = pickle.load(f)\nfor k, case in enumerate(cases):\n    s, gt = case['study'], case['gt']\n    o = solver.solve_beta"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_s00_solver.py",
+        "filename": "beta_s00_solver.py",
+        "bytes": 5346,
+        "sha256": "79ce72570c18150f7e8375a62d3df757f42a5ba024ab5c49170e4cfaa574a4c0",
+        "content_addressed_ref": "content_addressed_blobs/79ce72570c18150f7e8375a62d3df757f42a5ba024ab5c49170e4cfaa574a4c0.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "217eb8c6c481a7435c7e492d2f094fb346b1d2ddfdc444adbd4e84fc082fada0",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\ndef load(name, filename):\n    spec = importlib.util.spec_from_file_location(name, '/holdout_task/' + filename)\n    mod = ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "217eb8c6c481a7435c7e492d2f094fb346b1d2ddfdc444adbd4e84fc082fada0",
+        "expected_candidate_sha256": "217eb8c6c481a7435c7e492d2f094fb346b1d2ddfdc444adbd4e84fc082fada0",
+        "computed_candidate_sha256": "217eb8c6c481a7435c7e492d2f094fb346b1d2ddfdc444adbd4e84fc082fada0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_s00_solver.py",
+            "bytes": 5346
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_217eb8c6"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

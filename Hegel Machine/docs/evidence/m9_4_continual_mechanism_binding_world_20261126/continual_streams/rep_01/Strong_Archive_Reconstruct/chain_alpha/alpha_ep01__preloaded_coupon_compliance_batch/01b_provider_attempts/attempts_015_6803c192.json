@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6803c192f36544ec98b956f8d0980579",
+  "call_seq": 15,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:01:20.038910+00:00",
+  "ended_at_utc": "2026-11-26T15:02:00.185646+00:00",
+  "request_sha256": "77dff017047a93c1b39f26e5fa4e5e4f9a4ed16da503d2daa710843b4654307d",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 80589,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38385,
+    "cached_tokens": 11136,
+    "completion_tokens": 1128
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/ep01_shrunk.py /holdout_task/alpha_ep01_solver.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/alpha_ep01_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nrmse = lambda e: np.sqrt(np.mean(e**2))\\nwith open('/holdout_task/public_alpha_ep01.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    d, gt = case['dataset'], case['gt']\\n    test, t = d['test'], d['eval_times']\\n    out = m.solve_alpha_ep01(d)\\n    tau, strain = out['estimated_taus'], out['predicted_strain']\\n    s0 = test['strain_0']\\n    _, hold = m._physical(d, test)\\n    np.testing.assert_allclose(out['secant_compliance'], (strain[:, -1] - s0) / np.maximum(np.abs(hold), 0.5))\\n    crossing = []\\n    for row, start, level in zip(strain, s0, test['critical_strain']):\\n        hit, prev_t, prev_y = t[-1], 0., start\\n        if start >= level:\\n            hit = 0.\\n        else:\\n            for tt, yy in zip(t, row):\\n                if yy >= level:\\n                    hit = prev_t + (tt - prev_t) * (level - prev_y) / (yy - prev_y)\\n                    break\\n                prev_t, prev_y = tt, yy\\n        crossing.append(hit)\\n    np.testing.assert_allclose(out['hazard_crossing_times'], crossing)\\n    assert 0 < tau[0] < tau[1]\\n    complete = m._aligned(d)[1][-len(s0):]\\n    labs = test['lab_id']\\n    for key, ref, limit in [('estimated_taus', 'taus', 0.005), ('predicted_strain', 'te_clean', 0.009), ('secant_compliance', 'te_secant', 0.022), ('hazard_crossing_times', 'te_cross', 0.009)]:\\n        e = out[key] - gt[ref]\\n        assert np.isfinite(e).all() and rmse(e) < limit, key\\n        print(key, 'RMSE', round(rmse(e), 6))\\n        if key != 'estimated_taus':\\n            lab_masks = [labs == l for l in np.unique(labs)]\\n            slices = [a & b for a in lab_masks for b in (complete, ~complete)]\\n            worst = max(rmse(e[mask]) for mask in slices if mask.any())\\n            print('  worst lab', round(max(rmse(e[a]) for a in lab_masks), 6), 'worst lab/completeness', round(worst, 6))\\n            if key == 'hazard_crossing_times':\\n                assert worst < 0.05\\nprint('Saved artifact passed isolated schema, readout, and regression checks.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full missing-feature rate correction → H2 0.95 shrinkage: worst missing-feature lab crossing RMSE fell from 0.16531 to 0.04190, and the held-out endpoint-proxy RMSE fell from 0.10506 to 0.08273.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the full missing-feature rate correction\",\n      \"rejected_reason\": \"It gives slightly lower strain RMSE (0.00814 versus 0.00840), but materially worse crossing-time error and higher worst-lab secant RMSE.\"\n    }\n  ],\n  \"rationale\": \"Promote the tested challenger because it improves the crossing bottleneck and worst-lab secant RMSE without changing relaxation estimates. Verify the saved artifact in isolation to catch a packaging regression or a mismatch between the reported strain and its derived readouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "6b5c66fe1d8b3f11b6b2cfdcf5b7f5c5091da9e735f88d1a02dfbf268cc1a124",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40083.97,
+      "usage_known": true,
+      "prompt_tokens": 38385,
+      "cached_tokens": 11136,
+      "completion_tokens": 1128
+    }
+  ]
+}

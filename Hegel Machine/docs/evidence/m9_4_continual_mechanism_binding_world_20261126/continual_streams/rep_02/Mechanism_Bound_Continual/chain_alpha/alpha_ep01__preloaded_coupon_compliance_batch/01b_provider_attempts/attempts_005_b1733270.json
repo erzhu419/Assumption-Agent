@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b17332704587417a8dbd3d37648ceae0",
+  "call_seq": 5,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:53:08.277902+00:00",
+  "ended_at_utc": "2026-11-26T14:53:51.722429+00:00",
+  "request_sha256": "406715b7fad7bdc65e463488b2991ede77cd0ff09397d8a869ba75a39f7dd4b6",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 42954,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27158,
+    "cached_tokens": 11136,
+    "completion_tokens": 1181
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha_rate_probe.py <<'PY'\\nfrom alpha_probe import *\\nfrom scipy.stats import median_abs_deviation\\nout=np.empty_like(y)\\nfor lab in np.unique(labs):\\n mask=labs==lab\\n _,_,res=fit(complete&~mask,'base')\\n out[mask]=res[mask]\\nprint('fold residual curve MAD by horizon',median_abs_deviation(out[complete,:-1],axis=0,scale='normal').round(5))\\nprint('curve outliers above .15 by horizon',(abs(out[:,:-1])>.15).sum(0),'rows affected',np.unique((abs(out[:,:-1])>.15).sum(1),return_counts=True))\\nfor name,mask in [('complete',complete),('missing',~complete)]:\\n r=out[mask]; cc=r[:,:-1]; rate=r[:,-1]; slope=np.median(cc[:,4:]/t[4:],axis=1)\\n print(name,'rate and late curve slope MAD',median_abs_deviation(rate,scale='normal'),median_abs_deviation(slope,scale='normal'),'correlation within central range',np.corrcoef(np.clip(rate,-.08,.08),np.clip(slope,-.08,.08))[0,1])\\n for a in [0,.10,.20,.25,.35,.5,.75,.9,.95,1]:\\n  e=cc-a*rate[:,None]*t\\n  perlab=[np.mean(np.minimum(abs(e[labs[mask]==l]),.10)) for l in range(4)]\\n  end=abs(e[:,-1]); sec=end/np.maximum(abs(hold[mask]),.5)\\n  print(a,'curve capped MAE / worst-lab',round(np.minimum(abs(e),.10).mean(),5),round(max(perlab),5),'end median / MAD slope / secant median',np.round([np.median(end),median_abs_deviation(np.median(e[:,4:]/t[4:],axis=1),scale='normal'),np.median(sec)],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/alpha_rate_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (zero-start recurrence) → H2 (calibrated preloaded recurrence plus rate-informed drift); preloading lowers worst-lab out-of-fold strain P90 absolute error from 0.10081 to 0.06001, while the missing-feature slice remains at 0.75714.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived zero-start operator remains adequate when coupon histories begin with measured preload states.\",\n    \"empirical_witness\": \"Adding the propagated preload term reduced worst-lab strain P90 absolute error from 0.10081 to 0.06001 and worst-lab initial-rate RMSE from 0.02115 to 0.01480.\",\n    \"causal_blanket_diagnosis\": \"The terminal state includes a decayed initial condition, which changes the hold response and its initial derivative even with identical stress histories.\",\n    \"sublated_pivot\": \"Retain the two-exponential law and add the exact decayed preload; use measured initial rates to test a correction confined to the linear drift.\",\n    \"risk_kind\": \"Omitted initial-state term\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add coupon-dependent branch amplitudes or hold-dependent drift terms\",\n      \"rejected_reason\": \"Neither expansion improves worst-lab curve P90 or addresses the much larger error on missing-feature coupons.\"\n    },\n    {\n      \"option\": \"Use the same rate correction for all rows\",\n      \"rejected_reason\": \"Drift inferred from imputed features is less reliable; measure correction strength separately for complete and incomplete rows.\"\n    }\n  ],\n  \"rationale\": \"Use leave-one-lab-out residuals to measure how much the observed initial rate should update drift and whether that improves the final-horizon and secant errors. Score both ordinary and capped errors so isolated observation spikes do not dictate the correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ebc8ef32f45139e059288558499e8d2b2fc9cdb3d3cc3f241e195baab05e8ae6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43380.91,
+      "usage_known": true,
+      "prompt_tokens": 27158,
+      "cached_tokens": 11136,
+      "completion_tokens": 1181
+    }
+  ]
+}

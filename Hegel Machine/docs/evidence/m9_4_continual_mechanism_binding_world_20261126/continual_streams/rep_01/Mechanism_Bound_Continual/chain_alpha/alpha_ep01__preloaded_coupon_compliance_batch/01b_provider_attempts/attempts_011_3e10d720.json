@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e10d720f1644d55b717c7b88ceb7c04",
+  "call_seq": 11,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r01__Mechanism_Bound_Continual__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep01__preloaded_coupon_compliance_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T14:56:46.598104+00:00",
+  "ended_at_utc": "2026-11-26T14:57:30.265769+00:00",
+  "request_sha256": "2989f38cbf4e05c96cf14c66cf8c9931883fbe06dc2b2bb5dafc5d23279b5a15",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 55365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30529,
+    "cached_tokens": 0,
+    "completion_tokens": 1264
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_ep01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_ep01.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,_,y,c=m._prepare(d); t=np.asarray(d['eval_times']); p=d['train']; lab=p['lab_id']; st=p['stratum']; x,_=m._aligned_panels(d); x=x[:len(y)]; hold=a.hold\\n# Candidate drift terms all multiply time, so they preserve the hold origin.\\ncols=[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]\\ncols.extend([hold,hold*np.abs(hold),hold/(1+hold**2)])\\nfor i in range(4): cols.append(x[:,i]/(1+hold**2)-x[:,i])\\nZ=np.column_stack(cols); late=slice(len(t)//2,None)\\nrows={k:[] for k in ('adaptive','full_rate','expanded')}\\nfor l in np.unique(lab):\\n    v=lab==l; fit=~v; tau,b=m._fit(a,y,fit&c); base=a.matrix(np.log(tau))@b\\n    r=y-base; slope=np.median(r[:,:-1][:,late]/t[late],axis=1)\\n    w=m._rate_weights(r[fit],c[fit],t)\\n    # Fit the added physical drift terms on training folds only, using the robust slope readout.\\n    zz=Z[fit&c]; target=slope[fit&c]; center=np.mean(zz,axis=0); scale=np.std(zz,axis=0); zz=(zz-center)/scale; beta=np.linalg.solve(zz.T@zz+10*np.eye(zz.shape[1]),zz.T@target)\\n    expanded=base+(((Z-center)/scale)@beta)[:,None]*np.r_[t,1.]\\n    kwargs={'adaptive':(base,w),'full_rate':(base,(1.,1.)),'expanded':(expanded,m._rate_weights((y-expanded)[fit],c[fit],t))}\\n    for k,(pred,wk) in kwargs.items():\\n        e=(m._update_drift(pred,y[:,-1],c,t,wk)-y)[:,:-1]\\n        for j in np.unique(st[v]):\\n            for complete in (True,False):\\n                sel=v&(st==j)&(c==complete)\\n                if sel.any():\\n                    r0=e[sel]; end=np.abs(r0[:,-1])/np.maximum(np.abs(hold[sel]),.5)\\n                    rows[k].append((int(l),int(j),complete,int(sel.sum()),np.sqrt(np.mean(r0**2)),np.mean(np.minimum(abs(r0),.2)),np.median(end)))\\n    print('held-out lab',l,'rate weights',np.round(w,3),'maximum expanded slope adjustment',round(float(np.max(np.abs((expanded-base)[v,-1]))),5))\\nfor k,z in rows.items():\\n    for j,label in [(4,'raw strain RMSE'),(5,'capped strain MAE'),(6,'measured endpoint compliance median error')]:\\n        worst=max(z,key=lambda a:a[j]); supported=max((a for a in z if a[3]>=4),key=lambda a:a[j]); print(k,label,'all',round(worst[j],5),worst[:4],'n>=4',round(supported[j],5),supported[:4])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether nonlinear drift or full rate correction improves the verified calibrated preload model, whose worst held-out lab/completeness strain RMSE is 0.32068 and capped MAE is 0.04753.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add lab or stratum intercepts\",\n      \"rejected_reason\": \"The residual shift seen across lab 0 strata does not identify a transferable stratum effect or a correction for an unseen lab.\"\n    }\n  ],\n  \"rationale\": \"The held-out residuals support the linear-rate link but leave a small lab-specific slope shift. Compare full rate correction and a compact nonlinear drift basis against the verified solver, fitting corrections inside each fold. Promote a challenger only if it improves the worst supported slices without worsening endpoint compliance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6acaf3d7507f7e4aacbde120cb60235c3418acd241caab81c5c09024e874d19a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44003.1,
+      "usage_known": true,
+      "prompt_tokens": 30529,
+      "cached_tokens": 0,
+      "completion_tokens": 1264
+    }
+  ]
+}

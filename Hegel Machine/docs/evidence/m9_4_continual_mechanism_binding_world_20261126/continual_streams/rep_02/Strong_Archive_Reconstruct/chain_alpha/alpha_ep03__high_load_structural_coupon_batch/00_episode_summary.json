@@ -1,0 +1,393 @@
+{
+  "task_id": "alpha_ep03__high_load_structural_coupon_batch",
+  "short_name": "alpha_ep03",
+  "benchmark": "Hegel-M94-Continual-Binding-World",
+  "wave": "m94_stream_step_3",
+  "scientific_domain": "Multi-Lab Polymer Coupon Hereditary Creep & Load-Cell Calibration Stream",
+  "wormhole_family": "fam_hereditary_viscoelastic_memory",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Strong_Archive_Reconstruct",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 18,
+  "final_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+  "validated_incumbent_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "9d276a355b0a44e502ed2c8b36cfd8326af82585fb7ea9dfdf2c1a47b7d824b0",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom alpha_ep03_solver import _prepare, _fit, _Design\nwith open('public_alpha_ep03.pkl','rb') as f:\n    d=pickle.load(f)[0]['dataset']\ntr,te,y,comp",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9d276a355b0a44e502ed2c8b36cfd8326af82585fb7ea9dfdf2c1a47b7d824b0",
+        "expected_candidate_sha256": "9d276a355b0a44e502ed2c8b36cfd8326af82585fb7ea9dfdf2c1a47b7d824b0",
+        "computed_candidate_sha256": "9d276a355b0a44e502ed2c8b36cfd8326af82585fb7ea9dfdf2c1a47b7d824b0",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_ep03_solver.py",
+            "bytes": 6588
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_9d276a35"
+    },
+    {
+      "candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_ep03_solver.py')\nm = importlib.util.modu",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+        "expected_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+        "computed_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_ep03_solver.py",
+            "bytes": 6751
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_946b76af"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t05",
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "algebraic_or_symmetry_gap",
+      "candidate_sha256": "9d276a355b0a44e502ed2c8b36cfd8326af82585fb7ea9dfdf2c1a47b7d824b0",
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "The archived linear basis is sufficient after converting commanded stress to physical stress.",
+      "empirical_witness": "With no rate correction on complete rows, above-yield held-out strain RMSE dropped from 2.582 to 0.279 after adding the two yield terms; their coefficients were stable across all four held-out labs.",
+      "causal_blanket_diagnosis": "The linear basis omitted signed hold overstress and the coupling of accumulated plastic work to hold stress and fast relaxation.",
+      "sublated_pivot": "Retain calibrated two-branch memory and add the specified yield terms to both strain and onset rate.",
+      "pending_resolution_proposed_at_turn": 6,
+      "agent_claimed_probe": {
+        "turn": 6,
+        "command_preview": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_ep03_solver.py')\ns = p.read_text()\nold = '    drift = np.where(complete[len(y):], 0.5, 1.0) * innovation'\nnew = '    #",
+        "stdout_preview": "{\"schema_valid\": true, \"errors\": []}\nworst lab \u00d7 yield \u00d7 sign RMSE: 0.33677 worst complete-row slice median absolute error: 0.014212\nheld-out parameter ranges [tau1, tau2, theta7, theta8]: [0.55911074 3.81878197 0.23948032 0.15982748] [0.56"
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 6,
+      "resolved_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_scientific_probe_v3",
+        "probe_code_digest": "616124249d101baf45d8f4af3a01844072f0b3624956cdd5c69a1ea2858ce610",
+        "public_input_digest": "2c36f040499e2946b3fb5ef00cc4b526ba5f4279516a95cf1faeb08d29602669",
+        "candidate_bundle_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_alpha_ep03.pkl": "2c36f040499e2946b3fb5ef00cc4b526ba5f4279516a95cf1faeb08d29602669",
+          "/holdout_task/public_asset_index.json": "3edc6448a7e867455b9e8cd186f0f815dac4a12fd3e64f139f43af9ed53212f7",
+          "/holdout_task/validate_public_schema.py": "e3f18f46256bc538a865ea5b5de319330cc0cb67e9fbbaa542d63bee5d0fce16"
+        },
+        "verified_scope": "task_scientific_invariants",
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "panel_affine_gauge_max_diff": 0.0,
+          "public_strain_mae": 0.007394,
+          "public_tau_rel_err": 0.006455
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "task_scientific_invariants"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 6,
+      "verified_turn": 6,
+      "resolved_nogood_ids": [
+        "ng_t05"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_scientific_probe_v3",
+        "probe_code_digest": "616124249d101baf45d8f4af3a01844072f0b3624956cdd5c69a1ea2858ce610",
+        "public_input_digest": "2c36f040499e2946b3fb5ef00cc4b526ba5f4279516a95cf1faeb08d29602669",
+        "candidate_bundle_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_alpha_ep03.pkl": "2c36f040499e2946b3fb5ef00cc4b526ba5f4279516a95cf1faeb08d29602669",
+          "/holdout_task/public_asset_index.json": "3edc6448a7e867455b9e8cd186f0f815dac4a12fd3e64f139f43af9ed53212f7",
+          "/holdout_task/validate_public_schema.py": "e3f18f46256bc538a865ea5b5de319330cc0cb67e9fbbaa542d63bee5d0fce16"
+        },
+        "verified_scope": "task_scientific_invariants",
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "panel_affine_gauge_max_diff": 0.0,
+          "public_strain_mae": 0.007394,
+          "public_tau_rel_err": 0.006455
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_12_split_calibrated_hereditary_creep",
+    "root_A02_nuisance_subspace_and_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_alpha_ep03_946b76af4033",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 4,
+    "exported_pure_functions": [
+      "_aligned_panels",
+      "_physical_stresses",
+      "_mad",
+      "_fit",
+      "_crossing",
+      "_update_drift"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 8,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 8,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": true,
+    "demand_skill_hint_turn": 2,
+    "demand_triggered_recommended_l1_count": 6,
+    "describe_skill_queries": [
+      "autogenous_calibrated_hereditary_creep.align_coupon_features"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "946b76af4033528ee3b5cfe5edf5bcf74b07401e7df782fdaad036f1a4da65d3",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_alpha_ep03"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "alpha_ep03_solver.py",
+          "final_file_sha256": "1a62dbc63d46115804054849ae31038b6a297dcb7019e413026ba279ec566e89",
+          "public_entrypoints": [
+            "solve_alpha_ep03"
+          ],
+          "effective_entrypoints": [
+            "solve_alpha_ep03"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "alpha_ep03_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_alpha_ep03.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_alpha_ep03.pkl": "2c36f040499e2946b3fb5ef00cc4b526ba5f4279516a95cf1faeb08d29602669",
+      "/holdout_task/public_asset_index.json": "3edc6448a7e867455b9e8cd186f0f815dac4a12fd3e64f139f43af9ed53212f7",
+      "/holdout_task/validate_public_schema.py": "e3f18f46256bc538a865ea5b5de319330cc0cb67e9fbbaa542d63bee5d0fce16"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5294,
+    "initial_user_payload_chars": 3328,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 13981
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 12,
+    "logical_agent_decision_calls": 12,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 12,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_e77e665b.json",
+      "attempts_002_f0341cf5.json",
+      "attempts_003_41f97a63.json",
+      "attempts_004_ec262955.json",
+      "attempts_005_af38986e.json",
+      "attempts_006_99288f66.json",
+      "attempts_007_ff9f9f5e.json",
+      "attempts_008_1df775ff.json",
+      "attempts_009_01b39842.json",
+      "attempts_010_10f86c88.json",
+      "attempts_011_85ea82ec.json",
+      "attempts_012_f7326267.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 30,
+  "prompt_tokens": 295977,
+  "cached_tokens": 87680,
+  "completion_tokens": 11115,
+  "total_tokens": 307092,
+  "token_cost_proxy": 241332,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 241332,
+  "wall_ms": 479741.24,
+  "provenance_verified": true,
+  "terminal_record_sha256": "f0a15553c17a5dc63b1d70991c775d656be23693e085c3a87135b197a4062c10",
+  "execution_mode": "llm_archive_reconstruct",
+  "replicate": 2,
+  "chain_id": "alpha",
+  "stream_step": 3,
+  "m8_shared_parameter_update": null,
+  "bound_mechanism_routing_receipt": null,
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/alpha_ep03_solver.py": "FILE:6751"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_tau_rel_err": 0.021388,
+      "max_vp_rel_l2": 0.005187,
+      "max_all_mae": 0.010973,
+      "max_overstress_mae": 0.010301,
+      "max_subyield_mae": 0.011645,
+      "student_elapsed_sec": 0.1358,
+      "instance_diagnostics": [
+        {
+          "seed": 99731,
+          "tau_rel": 0.021388,
+          "vp_rel_l2": 0.005187,
+          "all_mae": 0.008093,
+          "over_mae": 0.007765,
+          "sub_mae": 0.00842
+        },
+        {
+          "seed": 99732,
+          "tau_rel": 0.00691,
+          "vp_rel_l2": 0.00388,
+          "all_mae": 0.010973,
+          "over_mae": 0.010301,
+          "sub_mae": 0.011645
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.078706,
+        "import_cpu_sec": 0.078705,
+        "candidate_call_wall_sec": 0.08791,
+        "candidate_call_cpu_sec": 0.087893,
+        "ipc_and_codec_wall_sec": 0.115515,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.01108,
+        "verifier_and_gt_cpu_sec": 0.040241,
+        "total_supervisor_wall_sec": 0.29321
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_tau_rel_err\": 0.021388, \"max_vp_rel_l2\": 0.005187, \"max_all_mae\": 0.010973, \"max_overstress_mae\": 0.010301, \"max_subyield_mae\": 0.011645, \"student_elapsed_sec\": 0.1358, \"instance_diagnostics\": [{\"seed\": 99731, \"tau_rel\": 0.021388, \"vp_rel_l2\": 0.005187, \"all_mae\": 0.008093, \"over_mae\": 0.007765, \"sub_mae\": 0.00842}, {\"seed\": 99732, \"tau_rel\": 0.00691, \"vp_rel_l2\": 0.00388, \"all_mae\": 0.010973, \"over_mae\": 0.010301, \"sub_mae\": 0.011645}]}\n__HEGEL_VERIFIER_AUTH_17087c12780be516ead2fc9a6e20044b__:{\"strict_pass\": true, \"reward\": 1.0, \"max_tau_rel_err\": 0.021388, \"max_vp_rel_l2\": 0.005187, \"max_all_mae\": 0.010973, \"max_overstress_mae\": 0.010301, \"max_subyield_mae\": 0.011645, \"student_elapsed_sec\": 0.1358, \"instance_diagnostics\": [{\"seed\": 99731, \"tau_rel\": 0.021388, \"vp_rel_l2\": 0.005187, \"all_mae\": 0.008093, \"over_mae\": 0.007765, \"sub_mae\": 0.00842}, {\"seed\": 99732, \"tau_rel\": 0.00691, \"vp_rel_l2\": 0.00388, \"all_mae\": 0.010973, \"over_mae\": 0.010301, \"sub_mae\": 0.011645}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.078706, \"import_cpu_sec\": 0.078705, \"candidate_call_wall_sec\": 0.08791, \"candidate_call_cpu_sec\": 0.087893, \"ipc_and_codec_wall_sec\": 0.115515, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.01108, \"verifier_and_gt_cpu_sec\": 0.040241, \"total_supervisor_wall_sec\": 0.29321}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 4569.3,
+    "failure_taxonomy": "PASSED_ALL_CHECKS"
+  }
+}

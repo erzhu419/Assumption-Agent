@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a451dea1c85b4c9291ae7aea30d3c092",
+  "call_seq": 7,
+  "stage_subdir": "m9_4_continual_20261126T143254Z__r02__Strong_Archive_Reconstruct__alpha__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_ep02__facility_recalibrated_coupon_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T15:07:02.715119+00:00",
+  "ended_at_utc": "2026-11-26T15:07:46.505463+00:00",
+  "request_sha256": "3d2e45414a72deececff41d0c2b655923aed34fc354062d5f877ee050b09973c",
+  "system_prompt_chars": 5294,
+  "stdin_payload_chars": 41237,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25631,
+    "cached_tokens": 11136,
+    "completion_tokens": 1441
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/compare_alpha_ep02.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'alpha_ep02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_alpha_ep02.pkl','rb') as f: cases=pickle.load(f)\\nrmse=lambda a: np.sqrt(np.mean(a*a))\\nprint('public cases',len(cases))\\nfor i,r in enumerate(cases):\\n d,g=r['dataset'],r['gt']; tr,te,y,ok=m._prepare(d); t=np.asarray(d['eval_times']); labs=np.asarray(d['train']['lab_id']); ids=np.unique(labs)\\n # For the adaptive challenger, tune only on inner held-out labs.\\n def innovations(excluded):\\n  xx=[]; zz=[]\\n  for inner in ids:\\n   if inner in excluded: continue\\n   fit=ok & ~np.isin(labs,(*excluded,inner)); q=ok & (labs==inner)\\n   ts,b=m._fit(tr,y,fit); pred=tr.matrix(np.log(ts))@b\\n   xx.extend((y[q,-1]-pred[q,-1]).tolist())\\n   k=t>=np.median(t); zz.extend(np.median((y[q,:-1]-pred[q,:-1])[:,k]/t[k],axis=1).tolist())\\n  return np.asarray(xx),np.asarray(zz)\\n def learn(excluded):\\n  x,z=innovations(excluded); grid=np.linspace(0,1,21)\\n  return grid[np.argmin(np.median(np.abs(z[:,None]-x[:,None]*grid),axis=0))]\\n def update(pred, rate, complete, w):\\n  return pred+((rate-pred[:,-1])*np.where(complete,w,1))[:,None]*np.r_[t,1.]\\n for lab in ids:\\n  q=labs==lab; ts,b=m._fit(tr,y,ok & ~q); pred=tr.matrix(np.log(ts))@b; w=learn((lab,)); k=t>=np.median(t)\\n  print('LOLO',i,lab,'learned blend',w,'complete curve-drift/late residual MAE for archived, midpoint, nested',[(round(np.median(np.abs(np.median((y[q&ok,:-1]-u[q&ok,:-1])[:,k]/t[k],axis=1))),6), round(np.median(np.abs((y[q&ok,:-1]-u[q&ok,:-1])[:,k])),6)) for u in (update(pred,y[:,-1],ok,a) for a in (.25,.5,w))])\\n ts,b=m._fit(tr,y,ok); pred=te.matrix(np.log(ts))@b; ptest=d['test']; complete=np.isfinite(ptest['coupon_features_raw']).all(axis=1); tl=np.asarray(ptest['lab_id']); w=learn(())\\n for a in (.25,.5,w):\\n  u=update(pred,np.asarray(ptest['instant_rate_obs']),complete,a); e=u[:,:-1]+np.asarray(ptest['strain_0'])[:,None]-g['te_clean']; er=u[:,-1]-g['te_true_rate0']; slices=[tl==lab for lab in np.unique(tl)]; cs=[q&complete for q in slices if (q&complete).any()]\\n  print('public',i,'blend',a,'pooled strain/rate',np.round([rmse(e),rmse(er)],6),'worst lab strain/rate',np.round([max(rmse(e[q]) for q in slices),max(rmse(er[q]) for q in slices)],6),'worst complete lab late strain',round(max(rmse(e[q][:,t>=np.median(t)]) for q in cs),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_alpha_ep02.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived 0.25 rate blend for complete coupons -> H2 stronger or training-estimated blend; baseline worst-lab strain/rate RMSE is 0.03758/0.01196, and worst late-horizon strain RMSE among complete lab slices is 0.04933.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the observed onset rate without shrinkage on every coupon\",\n      \"rejected_reason\": \"For complete coupons, the model-based rate is about as accurate as the observed rate, and full correction worsened independent drift estimates relative to partial correction in each held-out lab.\"\n    },\n    {\n      \"option\": \"Change the hereditary fit or the imputed-coupon correction\",\n      \"rejected_reason\": \"The fit already recovers the public parameters closely, and all four held-out labs favored full rate correction on imputed coupons.\"\n    }\n  ],\n  \"rationale\": \"The remaining correctable error is late-horizon strain on complete coupons. Compare the archive, equal weighting, and a training-estimated blend with selection inside the outer lab folds. Keep the simpler update unless the adaptive rule transfers better; use public ground truth only to score predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7e44a6e9dd7440be65447939b3092d9a1a1dcf86c1d9cc94892582f84cc7f782",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44237.71,
+      "usage_known": true,
+      "prompt_tokens": 25631,
+      "cached_tokens": 11136,
+      "completion_tokens": 1441
+    }
+  ]
+}
