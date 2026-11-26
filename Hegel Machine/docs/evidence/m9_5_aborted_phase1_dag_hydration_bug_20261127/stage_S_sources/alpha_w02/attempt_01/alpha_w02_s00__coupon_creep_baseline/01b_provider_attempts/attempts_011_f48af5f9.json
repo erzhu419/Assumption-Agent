@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f48af5f9fe3b482e968ab9bb7f551951",
+  "call_seq": 11,
+  "stage_subdir": "m9_5_equal_tool_20261126T174218Z__alpha_w02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T17:48:29.960880+00:00",
+  "ended_at_utc": "2026-11-26T17:49:07.943522+00:00",
+  "request_sha256": "766724766f54ba1b7030e84ce481393f0d713ebbdbdb243e98f6bc9747f862a9",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 67189,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34084,
+    "cached_tokens": 6784,
+    "completion_tokens": 1622
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_w02_s00_solver.py')\\ns = p.read_text()\\nneedle = \\\"        j = (labs == l) & complete\\\\n\\\"\\nreplacement = \\\"\\\"\\\"        j = (labs == l) & complete\\n        if l in priors:\\n            # A lone conflicting check cannot distinguish EMI from calibration drift.\\n            agrees = np.abs(v - (gain*q + bias)) < 0.003\\n            if agrees.sum() >= 2 and np.ptp(q[agrees]) >= 0.12:\\n                gain, bias = _affine(q[agrees], v[agrees], (gain, bias))\\n            elif agrees.any():\\n                bias = np.median(v[agrees] - gain*q[agrees])\\n            cal[l] = gain, bias\\n            continue\\n        if len(q) == 2 and np.ptp(q) >= 0.12 and (use.sum() < 12 or j.sum() < 8):\\n            # With no independent gain estimate, retain the identified two-point line.\\n            cal[l] = np.polyfit(q, v, 1)\\n            continue\\n\\\"\\\"\\\"\\nassert s.count(needle) == 1\\ns = s.replace(needle, replacement).replace('if l not in priors and use.sum() >= 12 and j.sum() >= 8 and len(q):', 'if use.sum() >= 12 and j.sum() >= 8 and len(q):')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\ncat > /tmp/alpha_sparse_verify.py <<'PY'\\nimport copy, importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'alpha_w02_s00_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith (root/'public_alpha_w02_s00.pkl').open('rb') as f: case = pickle.load(f)[0]\\nd, g = case['dataset'], case['gt']\\no0 = s.solve_alpha_w02_s00(d)\\ntruth = np.array([[1.08,.06],[.92,-.05],[1.11,-.08],[.89,.09]])\\ndef batch(labs, count, glitch=False):\\n    b = copy.deepcopy(d)\\n    c = b['calibration_load_cells']; keep = np.ones(len(c['lab_id']), bool)\\n    target = s._calibration(d)\\n    for l in labs:\\n        a,e = truth[l]; target[l] = a,e\\n        for split in ('train','test'):\\n            q = b[split]; j = q['lab_id']==l\\n            for k in ('past_stress_cmd','stress_hold_cmd'): q[k][j] = (q[k][j]-e)/a\\n        j = np.flatnonzero(c['lab_id']==l); j = j[np.argsort(c['cmd_stress'][j])]\\n        chosen = j[np.round(np.linspace(0,len(j)-1,count)).astype(int)]\\n        keep[j] = False; keep[chosen] = True\\n        c['cmd_stress'][j] = (c['cmd_stress'][j]-e)/a\\n        if glitch: c['true_stress'][chosen[count//2]] += .15\\n    b['calibration_load_cells'] = {k:v[keep] for k,v in c.items()}\\n    return b,target\\n\\ndef check(label, b, target, tol):\\n    x,_,m = s._align(b); cal = s._sparse_calibration(b,s._calibration(b),x,m)\\n    stress = float(np.max(np.abs(cal-target) @ [2.5,1.]))\\n    out = s.solve_alpha_w02_s00(b)\\n    changes = [np.max(np.abs(out[k]-o0[k])) for k in ('predicted_strain','initial_rate_pred')]\\n    print(label, 'stress error', round(stress,6), 'max curve/rate changes', np.round(changes,6))\\n    assert stress < tol and max(changes) < .03\\n    assert .2 <= out['estimated_taus'][0] < out['estimated_taus'][1] <= 8\\n    np.testing.assert_array_equal(out['viscoplastic_weights'], 0)\\n\\ncheck('both wings, two clean checks', *batch(range(4),2), .001)\\nfor wing in ((0,1),(2,3)):\\n    for n, glitch in ((1,False),(2,False),(4,True)):\\n        check((wing,n,glitch), *batch(wing,n,glitch), .02)\\nwith tempfile.TemporaryDirectory() as tmp:\\n    path = Path(tmp)\\n    a = batch(range(4),10)[0]['calibration_load_cells']\\n    (path/'calibration.json').write_text(json.dumps({'calibration_load_cells': {k:v.tolist() for k,v in a.items()}}))\\n    s.Path = lambda _: path\\n    for glitch in (False,True):\\n        check(('both wings with archive, one check',glitch), *batch(range(4),1,glitch), .001)\\nprint('Public tau absolute errors:', np.round(np.abs(o0['estimated_taus']-g['taus']),6))\\nprint('Public maximum hereditary coefficient error:', round(float(np.max(np.abs(o0['hereditary_weights']-g['theta']))),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha_sparse_verify.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent calibration evidence -> retain valid two-point fits and reject isolated archive conflicts; prior worst stress errors were 0.477453 with two clean checks on both wings and 0.150036 with an archived prior plus a corrupted check.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change the hereditary fit\",\"rejected_reason\":\"Both regressions came from calibration decision rules; neither implicated the two-branch creep law.\"}],\"rationale\":\"Preserve the measured two-point line when no independent gain estimate is available, and prevent an isolated conflicting check from overriding an archive prior. Verify the exact solver in a clean process, including how calibration changes propagate to both prediction outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ee948310957876ee90e8c64c82626b4a8f34708e723fbcc26ca29793e705bae2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39743.94,
+      "usage_known": true,
+      "prompt_tokens": 34084,
+      "cached_tokens": 6784,
+      "completion_tokens": 1622
+    }
+  ]
+}

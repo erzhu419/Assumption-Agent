@@ -1734,9 +1734,10 @@ def compile_episode_dialectical_sublation(
                     {"stage_kind": "cross_slice_gate", "numeric_param": 3.0},
                 ],
                 "llm_tokens": tok_totals,
+                "provider_attempt_receipts": provider_call_receipts,
             }
 
-    return {"compiled_ok": False, "error": last_err, "episode_id": episode_id, "llm_tokens": tok_totals}
+    return {"compiled_ok": False, "error": last_err, "episode_id": episode_id, "llm_tokens": tok_totals, "provider_attempt_receipts": provider_call_receipts}
 
 
 # ============================================================================

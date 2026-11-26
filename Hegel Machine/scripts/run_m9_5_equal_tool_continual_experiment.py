@@ -60,6 +60,7 @@ from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import 
     M95_ARMS,
     M95WorldSpec,
     build_world_tasks,
+    execute_single_pre_llm_public_gate_probe_in_container,
     expected_public_output_keys,
     initialize_m95_wing_scoped_mechanism_graph,
     m95_task_to_frontier_task,
@@ -69,7 +70,7 @@ from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import 
 )
 
 DEFAULT_V7_BUNDLE = REPO_ROOT / "docs/evidence/m9_2_1_audit_closure_and_regrade_20261126/pretrained_autogenous_forest_v7_m921.json"
-DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_5_equal_tool_continual_attribution_20261127"
+DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_5_equal_tool_continual_attribution_run2_20261127"
 
 
 def _git_and_source_tree_state() -> tuple[str, bool, str]:
@@ -438,34 +439,34 @@ def _run_one_world_arm_stream(
                     o_tk = int(cr.get("completion_tokens", 0) or 0)
                     cons_proxy += max(0, p_tk - ca_tk) + (ca_tk // 10) + 4 * o_tk
 
-                if comp_res.get("compiled_ok"):
-                    c0_falsified = bool(
-                        arm == "Full_Mechanism_Graph"
-                        and any(
-                            ev.get("branch_tag") == "C0_base"
-                            and (ev.get("guard_result") or {}).get("state") == "FALSE"
-                            and ev.get("schema_compatible") is True
-                            for ev in (pre_trial.get("guard_evaluations") or [])
+                c0_falsified = bool(
+                    arm == "Full_Mechanism_Graph"
+                    and any(
+                        ev.get("branch_tag") == "C0_base"
+                        and (ev.get("guard_result") or {}).get("state") == "FALSE"
+                        and ev.get("schema_compatible") is True
+                        for ev in (pre_trial.get("guard_evaluations") or [])
+                    )
+                )
+                if arm == "Full_Mechanism_Graph" and c0_falsified and graph is not None and registry is not None:
+                    ext_guard = (
+                        m7a.ObservablePreconditionGuard(
+                            guard_id=f"guard_{wid}_c1_{task.short_name}",
+                            observable_extractor="overstress_excess_max_history_and_hold",
+                            op=">",
+                            value=0.0,
+                            applies_to_component_id="linear_viscoelastic_memory",
+                        )
+                        if fam == "alpha"
+                        else m7a.ObservablePreconditionGuard(
+                            guard_id=f"guard_{wid}_c1_{task.short_name}",
+                            observable_extractor="nonseparable_2d_additive_residual_ratio",
+                            op=">",
+                            value=1e-6,
+                            applies_to_component_id="separable_kronecker_transport",
                         )
                     )
-                    if arm == "Full_Mechanism_Graph" and c0_falsified and graph is not None and registry is not None:
-                        ext_guard = (
-                            m7a.ObservablePreconditionGuard(
-                                guard_id=f"guard_{wid}_c1_{task.short_name}",
-                                observable_extractor="overstress_excess_max_history_and_hold",
-                                op=">",
-                                value=0.0,
-                                applies_to_component_id="linear_viscoelastic_memory",
-                            )
-                            if fam == "alpha"
-                            else m7a.ObservablePreconditionGuard(
-                                guard_id=f"guard_{wid}_c1_{task.short_name}",
-                                observable_extractor="nonseparable_2d_additive_residual_ratio",
-                                op=">",
-                                value=1e-6,
-                                applies_to_component_id="separable_kronecker_transport",
-                            )
-                        )
+                    if comp_res.get("compiled_ok"):
                         comp_res["regime_bifurcation"] = {**(comp_res.get("regime_bifurcation") or {}), "should_split_node": True}
                         cons_r = m7a.consolidate_autogenous_episode_into_forest(
                             forest=forest,
@@ -483,8 +484,22 @@ def _run_one_world_arm_stream(
                             ),
                             guard_spec_override=ext_guard,
                         )
-                        comp_id = "alpha_facility_composite_calibration" if fam == "alpha" else "beta_facility_composite_calibration"
-                        if f"bind_{wid}_c1" not in registry.bindings:
+                        c1_fnid = str(cons_r["target_node_id"])
+                        c1_stem = str(comp_res["module_stem"])
+                        c1_dig = str(comp_res["compiled_code_sha256"])
+                        c1_fn = comp_res["function_names"][0] if comp_res.get("function_names") else task.declared_callable_entrypoints[0]
+                        c1_qual = "hegel_l2_aufhebung_v2"
+                    else:
+                        c1_fnid = source_forest_nid
+                        c1_stem = task.short_name
+                        c1_dig = cand_sha
+                        c1_fn = task.declared_callable_entrypoints[0]
+                        c1_qual = "hegel_public_scientific_gate_v4"
+
+                    comp_id = "alpha_facility_composite_calibration" if fam == "alpha" else "beta_facility_composite_calibration"
+                    if f"bind_{wid}_c1" not in registry.bindings:
+                        c1_gate = execute_single_pre_llm_public_gate_probe_in_container(task=task, candidate_code=cand_txt)
+                        if c1_gate["accepted"]:
                             registry.register_binding(
                                 MechanismExecutableBinding(
                                     binding_id=f"bind_{wid}_c1",
@@ -492,7 +507,7 @@ def _run_one_world_arm_stream(
                                     branch_tag="C1_extension",
                                     mechanism_id=f"mech_{wid}_c1",
                                     mechanism_version=1,
-                                    forest_node_id=str(cons_r["target_node_id"]),
+                                    forest_node_id=c1_fnid,
                                     component_id=("viscoplastic_overstress_extension" if fam == "alpha" else "vortex_coupled_dispersion_extension"),
                                     preserved_component_ids=(
                                         ["reference_panel_calibration", "variable_step_gap_recursion"]
@@ -500,10 +515,10 @@ def _run_one_world_arm_stream(
                                         else ["sensor_bank_calibration", "nuisance_profiling", "box_simplex_kkt_certification"]
                                     ),
                                     violated_component_id=ext_guard.applies_to_component_id,
-                                    module_stem=str(comp_res["module_stem"]),
-                                    module_digest=str(comp_res["compiled_code_sha256"]),
-                                    function_name=(comp_res["function_names"][0] if comp_res.get("function_names") else "solve"),
-                                    qualification_id="hegel_l2_aufhebung_v2",
+                                    module_stem=c1_stem,
+                                    module_digest=c1_dig,
+                                    function_name=c1_fn,
+                                    qualification_id=c1_qual,
                                     parameter_mechanism_id=comp_id,
                                     parameter_version=int(graph.mechanisms[comp_id].version),
                                     precondition_guard=ext_guard.to_dict(),
@@ -514,14 +529,14 @@ def _run_one_world_arm_stream(
                                 ),
                                 reason=f"component_split_consolidated_on_{task.short_name}",
                             )
-                    else:
-                        m7a.consolidate_autogenous_episode_into_forest(
-                            forest=forest,
-                            archive=archive,
-                            compilation=comp_res,
-                            nogoods_recorded=ep_sum.get("nogoods_recorded") or [],
-                            allow_horizontal_wormholes=False,
-                        )
+                elif comp_res.get("compiled_ok"):
+                    m7a.consolidate_autogenous_episode_into_forest(
+                        forest=forest,
+                        archive=archive,
+                        compilation=comp_res,
+                        nogoods_recorded=ep_sum.get("nogoods_recorded") or [],
+                        allow_horizontal_wormholes=False,
+                    )
             finally:
                 m6f.stop_container_safely(ut_cid)
             cons_wall_ms = round((monotonic() - c_t0) * 1000.0, 2)
@@ -757,18 +772,29 @@ def main() -> None:
                         sandbox_cid=ut_cid,
                         stage_subdir=f"{run_id}__{w_spec.world_id}__src_l2",
                     )
-                    c_res["regime_bifurcation"] = {**(c_res.get("regime_bifurcation") or {}), "should_split_node": False}
-                    cons_s = m7a.consolidate_autogenous_episode_into_forest(
-                        forest=w_forest,
-                        archive=w_archive,
-                        compilation=c_res,
-                        nogoods_recorded=ep_s.get("nogoods_recorded") or [],
-                        allow_horizontal_wormholes=True,
-                    )
+                    if c_res.get("compiled_ok"):
+                        c_res["regime_bifurcation"] = {**(c_res.get("regime_bifurcation") or {}), "should_split_node": False}
+                        cons_s = m7a.consolidate_autogenous_episode_into_forest(
+                            forest=w_forest,
+                            archive=w_archive,
+                            compilation=c_res,
+                            nogoods_recorded=ep_s.get("nogoods_recorded") or [],
+                            allow_horizontal_wormholes=True,
+                        )
+                        src_nid = str(cons_s["target_node_id"])
+                        src_stem = str(c_res["module_stem"])
+                        src_dig = str(c_res["compiled_code_sha256"])
+                        src_fn = c_res["function_names"][0] if c_res.get("function_names") else s_task.declared_callable_entrypoints[0]
+                        src_qual = "hegel_l2_aufhebung_v2"
+                    else:
+                        src_nid = "root_A01_conservation_and_operator_symmetry"
+                        src_stem = s_task.short_name
+                        src_dig = cand_s_sha
+                        src_fn = s_task.declared_callable_entrypoints[0]
+                        src_qual = "hegel_public_scientific_gate_v4"
                 finally:
                     m6f.stop_container_safely(ut_cid)
 
-                src_nid = str(cons_s["target_node_id"])
                 init_g, _, init_reg = initialize_m95_wing_scoped_mechanism_graph(family=w_spec.family, forest=deepcopy(w_forest))
                 comp_id = "alpha_facility_composite_calibration" if w_spec.family == "alpha" else "beta_facility_composite_calibration"
                 c0_guard = (
@@ -804,10 +830,10 @@ def main() -> None:
                             else ["sensor_bank_calibration", "nuisance_profiling", "box_simplex_kkt_certification"]
                         ),
                         violated_component_id=None,
-                        module_stem=str(c_res["module_stem"]),
-                        module_digest=str(c_res["compiled_code_sha256"]),
-                        function_name=(c_res["function_names"][0] if c_res.get("function_names") else "solve"),
-                        qualification_id="hegel_l2_aufhebung_v2",
+                        module_stem=src_stem,
+                        module_digest=src_dig,
+                        function_name=src_fn,
+                        qualification_id=src_qual,
                         parameter_mechanism_id=comp_id,
                         parameter_version=1,
                         precondition_guard=c0_guard.to_dict(),

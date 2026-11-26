@@ -4989,7 +4989,15 @@ def append_post_episode_verification_to_dag(
         old_dag = json.loads(dag_fp.read_text(encoding="utf-8"))
         ledger.records = list(old_dag.get("records") or [])
         if ledger.records:
-            last_parent = str(ledger.records[-1]["decision_id"])
+            last_rec = ledger.records[-1]
+            last_parent = str(last_rec["decision_id"])
+            cum_after = last_rec.get("cumulative_cost_after") or {}
+            ledger._cum_m = round(float(cum_after.get("measurement_cost", 0.0) or 0.0), 6)
+            ledger._cum_k = round(float(cum_after.get("compute_cost", 0.0) or 0.0), 6)
+            ledger._cum_prompt_tok = int(cum_after.get("prompt_tokens", 0) or 0)
+            ledger._cum_cached_tok = int(cum_after.get("cached_tokens", 0) or 0)
+            ledger._cum_comp_tok = int(cum_after.get("completion_tokens", 0) or 0)
+            ledger._cum_wall_ms = round(float(cum_after.get("wall_ms", 0.0) or 0.0), 3)
 
     last_parent = ledger.record_decision(
         decision_type="D_CANDIDATE_SEALED",

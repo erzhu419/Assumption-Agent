@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_w04_s00_658a13e58079",
+    "source_hash": "658a13e580797fb4013ff6a9effa0fb82f765193a0aa2d0f6b9a98c20b19e067",
+    "parent_ids": [],
+    "source_episode_id": "beta_w04_s00__tracer_tomography_baseline",
+    "task_id": "beta_w04_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -la /tmp/hegel_continual_archive /pretrain_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling box simplex KKT'",
+      "cd /holdout_task; sed -n '45,160p' validate_public_schema.py; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_w04_s00.pkl','rb') as f: batch=pickle.load(f)\nprint('outer',type(batch),len(batch))\ns=batch[0]\nfor k,v in s.items():\n if isinstance(v,np.ndarray):\n  print(k,v.shape,v.dtype, 'range', (v.min(),v.max()) if v.size and np.issubdtype(v.dtype,np.number) else '', 'first',v.ravel()[:7])\n elif k=='sensor_calibration_sweeps':\n  print(k,repr(v)[:2800])\n else: print(k,repr(v)[:350])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matc",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\nitem=pickle.load(open('public_beta_w04_s00.pkl','rb'))[0]\nfor label in ('study','gt'):\n print(label)\n for k,v in item[label].items():\n  if k=='sensor_calibration_sweeps':\n   print(k,type(v).__name__,len(v),repr(v)[:2200])\n  elif isinstance(v,np.ndarray):\n   print(k,v.shape,v.dtype,v.ravel()[:5])\n  else: print(k,repr(v)[:200])\nimport scipy\nprint('scipy',scipy.__version__)\nPY\nsed -n '34,49p' validate_public_schema.py\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment robust sparse affine calibration'",
+      "cd /holdout_task && cat > beta_w04_s00_solver.py <<'PY'\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _build_1d(length, n, kappa, vel, robin, diag_add):\n    h = length / n\n    kappa = np.asarray(kappa, dtype=float)\n    vel = np.asarray(vel, dtype=float)\n    d = 2 * kappa[:-1] * kappa[1:] / ((kappa[:-1] + kappa[1:]) * h**2)\n    a = (vel[:-1] + vel[1:]) / (2 * h)\n    plus, minus = np.maximum(a, 0), np.minimum(a, 0)\n    diag = np.array(diag_add, dtype=float, copy=True)\n    diag[:-1] += d + plus\n    diag[1:] += d - minus\n    diag[[0, -1]] += robin * kappa[[",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools,pickle,numpy as np\nfrom scipy.sparse import diags\nimport beta_w04_s00_solver as b\np=pickle.load(open('public_beta_w04_s00.pkl','rb'))[0]; st,gt=p['study'],p['gt']; y=b._calibrate(st)\nbase=b._build_1d\nresults=[]\nfor form,edge,react,sgn in itertools.product(('face_flux','left_flux','right_flux','cell_deriv','face_deriv','cell_flux'),('outflow','none','inflow'),('plus','none'),(1,-1)):\n def op(L,n,k,v,r,dg):\n  h=L/n; v=sgn*v/h; dg=dg.copy()\n  if react=='none': dg-=st['reaction_x' if n==st['nx'] else 'reaction_y']\n  d=2*k",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w04_s00_solver.py')\ns = p.read_text()\na = s.index('    a = (vel[:-1]')\nb = s.index('    return sparse.diags', a)\ns = s[:a] + '''    # Cell-centered upwind derivative, with zero exterior inflow.\n    plus, minus = np.maximum(vel, 0) / h, np.minimum(vel, 0) / h\n    diag = np.array(diag_add, dtype=float, copy=True) + plus - minus\n    diag[:-1] += d\n    diag[1:] += d\n    boundary = np.array([0, n - 1])\n    np.add.at(diag, boundary, robin * kappa[boundary] / (h * (robin * 0.5 * h + kappa[boundary])))\n    plus, minus = p",
+      "set -e\ncd /holdout_task\ncat public_asset_index.json\nif [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 2 -type f -printf '%p %s bytes\\n' | head -40; else echo 'No continual archive mounted'; fi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_w04_s00_solver.py')\nb = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\nitems = pickle.load(open('public_beta_w04_s00.pkl','rb'))\nprint('public studies:', len(items))\nfor item in ite",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_w04_s00_solver.py')\nb = importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\nst = pickle.load(open('public_beta_w04_s00.pkl','rb'))[0]['study']\nsw = st['sensor_calibration_sweeps']; ids = np.asarray(sw['bank_id'])\ns, fields = b._forward(st)\ny0 = b._calibrate(st)\ns0, r0 = b._profile(s, y0, st['Z_nuisance'], st['nuisance_ridge'])\nw0 = b._optimize(s0,r0,st['source_ridge'],st['u_box"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_w04_s00_solver.py",
+        "filename": "beta_w04_s00_solver.py",
+        "bytes": 5914,
+        "sha256": "3b632e284ddb3981725542eacf3927bec23214f1f43c47660a2bcfe5d34c7f88",
+        "content_addressed_ref": "content_addressed_blobs/3b632e284ddb3981725542eacf3927bec23214f1f43c47660a2bcfe5d34c7f88.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_w04_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "658a13e580797fb4013ff6a9effa0fb82f765193a0aa2d0f6b9a98c20b19e067",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_w04_s00_solver.py')\nb = importlib.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "658a13e580797fb4013ff6a9effa0fb82f765193a0aa2d0f6b9a98c20b19e067",
+        "expected_candidate_sha256": "658a13e580797fb4013ff6a9effa0fb82f765193a0aa2d0f6b9a98c20b19e067",
+        "computed_candidate_sha256": "658a13e580797fb4013ff6a9effa0fb82f765193a0aa2d0f6b9a98c20b19e067",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w04_s00_solver.py",
+            "bytes": 5914
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_658a13e5"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

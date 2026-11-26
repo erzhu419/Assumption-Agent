@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1f9f92205f454aa29c5d59d5e4661093",
+  "call_seq": 9,
+  "stage_subdir": "m9_5_equal_tool_20261126T174218Z__alpha_w04__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w04_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T17:46:13.339451+00:00",
+  "ended_at_utc": "2026-11-26T17:46:43.229558+00:00",
+  "request_sha256": "c9a6739c09753c14d3d529c1e4991b86e03d481011f7f09ba62166cb5188853a",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 45284,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27491,
+    "cached_tokens": 13696,
+    "completion_tokens": 1162
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_w04_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_w04_s00.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; out=m.solve_alpha_w04_s00(d); q,w=out['estimated_taus'],out['hereditary_weights']; cal=m._calibration(d['calibration_load_cells']); xtr,xte=m._features(tr,te)\\ndef stress(a):\\n    g,b=cal[a['lab_id']].T\\n    return a['past_stress_cmd']*g[:,None]+b[:,None],a['stress_hold_cmd']*g+b\\ndef recurrence(a,X):\\n    p,h=stress(a); z=np.zeros((len(h),2))\\n    for j,delta in enumerate(dt):\\n        z=np.exp(-delta/q)*z-np.expm1(-delta/q)*p[:,j,None]\\n    amp=(h[:,None]-z)*w[:2]; drift=w[2]+X@w[3:]\\n    return a['strain_0'][:,None]+amp@(-np.expm1(-t[None,:]/q[:,None]))+drift[:,None]*t,amp@(1/q)+drift\\ncurve,rate=recurrence(te,xte)\\nprint('Recurrence and onset maximum differences:', np.max(abs(curve-out['predicted_strain'])),np.max(abs(rate-out['initial_rate_pred'])))\\nnp.testing.assert_allclose(curve,out['predicted_strain'],rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(rate,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nassert .2 <= q[0] < q[1] <= 8 and np.array_equal(out['viscoplastic_weights'],np.zeros(2))\\np,h=stress(tr); y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; l=tr['lab_id']; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor groups in (l,l//2):\\n    for c in np.unique(groups):\\n        train=groups!=c; test=(~train)&complete\\n        tau,weight=m._fit(p[train],h[train],xtr[train],dt,t,y[train]); r=m._design(p[test],h[test],xtr[test],dt,t,tau)@weight-y[test]\\n        slope=np.nanmedian(r[:,:-1]/t,axis=1)\\n        print(f'{len(np.unique(groups))} groups, held out {c}, complete cases {test.sum()}: signed median drift {np.nanmedian(slope):.6f}, signed median rate {np.nanmedian(r[:,-1]):.6f}, worst time median abs {np.nanmedian(abs(r[:,:-1]),axis=0).max():.6f}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: check exact hereditary superposition and signed out-of-fold drift; the worst public lab-by-horizon median strain error measured so far is 0.02526.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or Fokker–Planck terms\",\n      \"rejected_reason\": \"The specified sub-yield model has none of those terms. Its relevant algebra is the history recurrence, stress gap, and onset derivative.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence on the actual test histories can expose stress-gap, sign, or onset derivative errors. Signed held-out residuals on complete coupons can reveal lab or wing drift hidden by pooled errors without conflating it with imputation error. Balanced accuracy is not applicable to these continuous outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "47db7bcbe996da04f7469e697cbbfc3c666431458d14f8ac496444bede82407e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30788.85,
+      "usage_known": true,
+      "prompt_tokens": 27491,
+      "cached_tokens": 13696,
+      "completion_tokens": 1162
+    }
+  ]
+}

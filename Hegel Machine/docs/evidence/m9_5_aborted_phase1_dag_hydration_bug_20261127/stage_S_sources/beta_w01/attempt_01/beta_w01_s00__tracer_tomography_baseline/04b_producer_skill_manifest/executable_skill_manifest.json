@@ -1,0 +1,88 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_w01_s00_2b94e10e0293",
+    "source_hash": "2b94e10e0293f55c85f90a89137ab2e3df6edf9f6ee7fd2985b2673aaa94f227",
+    "parent_ids": [],
+    "source_episode_id": "beta_w01_s00__tracer_tomography_baseline",
+    "task_id": "beta_w01_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -la /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling robust calibration reference panel'; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_beta_w01_s00.pkl','rb') as f: s=pickle.load(f)\nprint(type(s))\nfor k,v in s.items():\n print(k,type(v).__name__,getattr(v,'shape',None),repr(v)[:550] if not isinstance(v,np.ndarray) or v.size<25 else (v.dtype, v.min(),v.max()))\nPY",
+      "cd /holdout_task; sed -n '52,160p' validate_public_schema.py; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' 2>/dev/null | head -35; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_w01_s00.pkl','rb') as f: ss=pickle.load(f)\nprint('studies:',len(ss))\nfor i,s in enumerate(ss):\n print('STUDY',i,type(s).__n",
+      "cd /holdout_task; sed -n '39,56p' validate_public_schema.py; ls -la /tmp/hegel_continual_archive 2>/dev/null; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' 2>/dev/null | head -20; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor item in pickle.load(open('public_beta_w01_s00.pkl','rb')):\n s,t=item['study'],item['gt']; print('scalar parameters:',{k:v for k,v in s.items() if np.isscalar(v)}); print('gt',list(t)); c=s['sensor_calibration_sweeps']; print('sweep columns',list(c))\n for b in range(4):\n  m=c['bank_id']==b; x=c['ref_signal'][m]; y=c['",
+      "cd /holdout_task && cat > beta_w01_s00_solver.py <<'PY'\n\"\"\"Calibrated separable reaction-transport inversion.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    h = L / n\n    k = np.asarray(kappa, dtype=float)\n    v = np.broadcast_to(vel, (n,))\n    diff = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h**2\n    face = 0.5 * (v[:-1] + v[1:]) / h\n    pos, neg = np.maximum(face, 0), np.minimum(face, 0)\n    main = np.array(diag_add, dtype=float, copy=True)\n    main[:-1] += diff + pos\n    main[1:] += diff - neg\n    ma",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\nimport beta_w01_s00_solver as b\nitem=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=item['study'],item['gt']; m,nx,ny=s['source_modes'].shape; V=s['V_reaction_2d']; ij=s['sensor_ij']; sens=ij[:,0]*ny+ij[:,1]; I=sparse.eye(nx*ny,format='csc'); rhs=s['source_modes'].reshape(m,-1).T\nP=lambda x:b._profile(s['Z_nuisance'],x,s['nuisance_ridge']); target=t['S_tilde']; norm=np.linalg.norm(target)\ndef build(axis,style,edge,sign,spacing)",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\nimport beta_w01_s00_solver as b\nitem=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=item['study'],item['gt']; M,nx,ny=s['source_modes'].shape; V=s['V_reaction_2d']; X=t['terminal_field_A']; W=t['w_opt']; mu=s['mu_shifts'][-1]\nrhs=np.einsum('m,mij->ij',W,s['source_modes'])-mu*X\n# Recover tridiagonal operator coefficients independently of the inverse or sensor sampling.\ncolumns=[]; expected=[]\nfor axis in ('x','y'):\n n=s['n'+axis]; h=s['L",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy import sparse\nimport beta_w01_s00_solver as b\nitem = pickle.load(open('public_beta_w01_s00.pkl', 'rb'))[0]\ns, t = item['study'], item['gt']\nX, w = t['terminal_field_A'], t['w_opt']\nV = s['V_reaction_2d']\nbase = [V.mean(1), V.mean(0) - V.mean()]\nR = [s['reaction_x'], s['reaction_y']]\n\ndef upwind(L, n, kappa, vel, robin, diag_add):\n    h = L / n\n    k = np.asarray(kappa)\n    v = np.broadcast_to(vel, (n,)) / h\n    d = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h**2\n    main = np.asarray(diag_add) ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w01_s00_solver.py')\ns = p.read_text()\na = s.index('    v = np.broadcast_to')\nz = s.index('\\n\\ndef _transport', a)\ns = s[:a] + '''    v = np.broadcast_to(vel, (n,)) / h\n    diff = 2 * k[:-1] * k[1:] / (k[:-1] + k[1:]) / h**2\n    # The upwind difference uses the velocity of the receiving cell.\n    main = np.asarray(diag_add, dtype=float) + np.abs(v)\n    main[:-1] += diff\n    main[1:] += diff\n    edges = np.array([0, n - 1])\n    main[edges] += robin * k[edges] / (h * (0.5 * robin * h + k[edges]))\n    lower = -diff - ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_w01_s00_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\nitem=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=item['study'],item['gt']; rows=s['row_bank_id']; c=s['sensor_calibration_sweeps']; x=c['ref_signal']; bank=c['bank_id']; y=b._calibrate(s)\ngain=np.array([0.93,1.04,1.12,0.88]); offset=np.array([0.025,-0.04,0.09,-0.08]); rng=np.random.default_rng(371)\nprint('row count b",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle, numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_w01_s00_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\ns=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]['study']; y=b._calibrate(s); S,F=b._transport(s); Z=s['Z_nuisance']; rows=s['row_bank_id']; sweep=s['sensor_calibration_sweeps']; x=sweep['ref_signal']; bank=sweep['bank_id']; rng=np.random.default_rng(371)\nP=lambda v:b._profile(Z,v,s['nuisance_ridge']); D=P(S); ry=",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w01_s00_solver.py')\ns = p.read_text().replace('import numpy as np','from itertools import product\\n\\nimport numpy as np',1)\na = s.index('def _calibrate(')\nb = s.index('\\ndef _profile(', a)\ns = s[:a] + '''def _calibrate(study, S, Z):\n    rows = np.asarray(study['row_bank_id'], dtype=int)\n    raw = np.asarray(study['y_obs_raw'], dtype=float).ravel()\n    sweep = study['sensor_calibration_sweeps']\n    if not isinstance(sweep, dict):\n        sweep = {key: [row[key] for row in sweep] for key in ('bank_id', 'ref_signal',",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.linalg import null_space\nspec=importlib.util.spec_from_file_location('solver','beta_w01_s00_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\nv={}; exec(open('validate_public_schema.py').read().split('\\n_d =')[0],v); verify=v['verify_box_simplex_kkt_certificate']\nit=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=it['study'],it['gt']; S,F=b._transport(s); Z=s['Z_nuisance']; y=b._calibrate(s,S,Z); rows=s['row_bank_id']; cal=s['sensor_calib",
+      "set -e\ncd /holdout_task\nif [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' | head -30; else echo 'No continual archive mounted'; fi\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.linalg import null_space\nsp=importlib.util.spec_from_file_location('solver','beta_w01_s00_solver.py'); b=importlib.util.module_from_spec(sp); sp.loader.exec_module(b)\nit=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=it['study'],it['gt']; S,F=b._transport(s); Z=s['Z_nuisance']; y=b._calibr",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w01_s00_solver.py')\ns = p.read_text()\na = s.index('    # Rank ambiguous sweep fits')\nb = s.index('\\n    X = np.column_stack(free)', a)\ns = s[:a] + '''    # Only use the source budget to anchor coefficients the sweeps cannot\n    # identify. A budget-feasible signal is origin plus a zero-sum contrast.\n    if free:\n        origin = S.mean(axis=1) * float(study['total_budget'])\n        design = np.column_stack((S[:, 1:] - S[:, :1], Z))\n    else:\n        origin = 0.0\n        design = np.column_stack((S, Z))\n    U, sv, ",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nsp=importlib.util.spec_from_file_location('solver','beta_w01_s00_solver.py'); b=importlib.util.module_from_spec(sp); sp.loader.exec_module(b)\nit=pickle.load(open('public_beta_w01_s00.pkl','rb'))[0]; s,t=it['study'],it['gt']; S,F=b._transport(s); Z=s['Z_nuisance']; y=b._calibrate(s,S,Z); rows=s['row_bank_id']; ca=s['sensor_calibration_sweeps']; rng=np.random.default_rng(1491)\norigin=S.mean(axis=1)*s['total_budget']; U,sv,_=np.linalg.svd(np.column_stack((S[:,1:]-S[:,:1],Z)),full_matrices",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w01_s00_solver.py')\ns = p.read_text()\na = s.index('def _calibrate(')\ns = s[:a] + '''def _screen_sparse(raw, y, sparse_banks, origin, design):\n    # Infer the sparse wing's inverse gains and offsets without its spot checks,\n    # then reject only checks inconsistent with that independent estimate.\n    columns = []\n    for mask, _, _ in sparse_banks:\n        columns.extend((np.where(mask, raw, 0.0), mask.astype(float)))\n    X = np.column_stack(columns)\n    U, sv, _ = np.linalg.svd(design, full_matrices=False)\n    U "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_w01_s00_solver.py",
+        "filename": "beta_w01_s00_solver.py",
+        "bytes": 10396,
+        "sha256": "95d4e79a4fbe4ed64ff36c55425b9b57559089ba72fb06dc207c5b2f424204ba",
+        "content_addressed_ref": "content_addressed_blobs/95d4e79a4fbe4ed64ff36c55425b9b57559089ba72fb06dc207c5b2f424204ba.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_w01_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2b94e10e0293f55c85f90a89137ab2e3df6edf9f6ee7fd2985b2673aaa94f227",
+      "verified_post_package": true,
+      "verified_turn": 16,
+      "verification_command": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_w01_s00_solver.py')\ns = p.read_text()\na = s.index('def _calibrate(')\ns = s[:a] + '''def _screen_sparse(raw, y, sparse_banks, origin, design):\n    # Infer the s",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2b94e10e0293f55c85f90a89137ab2e3df6edf9f6ee7fd2985b2673aaa94f227",
+        "expected_candidate_sha256": "2b94e10e0293f55c85f90a89137ab2e3df6edf9f6ee7fd2985b2673aaa94f227",
+        "computed_candidate_sha256": "2b94e10e0293f55c85f90a89137ab2e3df6edf9f6ee7fd2985b2673aaa94f227",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_w01_s00_solver.py",
+            "bytes": 10396
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v05_2b94e10e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

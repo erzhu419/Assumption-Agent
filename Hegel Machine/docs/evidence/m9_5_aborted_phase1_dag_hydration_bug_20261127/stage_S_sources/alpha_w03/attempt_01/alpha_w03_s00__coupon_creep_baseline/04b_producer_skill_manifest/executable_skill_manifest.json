@@ -1,0 +1,98 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_w03_s00_0bc1b6b64315",
+    "source_hash": "0bc1b6b64315a331996a3eb6d60974458a5b207e0cc35da8b2b93848a04b9820",
+    "parent_ids": [],
+    "source_episode_id": "alpha_w03_s00__coupon_creep_baseline",
+    "task_id": "alpha_w03_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/check_coupon_solver.py",
+        "archived_relpath": "producers/tmp__check_coupon_solver.py",
+        "bytes": 2963,
+        "sha256": "cec13f7cf83b1ee505995bc0e0254cd4b3c3e8a239e1e13be2735accb41ffd36"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && head -c 8000 public_asset_index.json; printf '\\nArchive inventory:\\n'; ls -la /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation Cauchy robust IRLS viscoelastic relaxation' 2>&1 | head -60; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_alpha_w03_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(obj,depth=0):\n for k,v in obj.items():\n  p='  '*depth; print(p,k,type(v).__name__,getattr(v,'shape',''),g",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_alpha_w03_s00.pkl','rb') as f: batch=pickle.load(f)\nprint('batch length', len(batch), 'entry keys', list(batch[0]))\nd=batch[0]['dataset']\ndef inspect(obj, path=''):\n for key,value in obj.items():\n  p=f'{path}/{key}'\n  if isinstance(value,dict): inspect(value,p)\n  elif isinstance(value,np.ndarray):\n   a=value.ravel(); finite=a[np.isfinite(a)] if a.dtype.kind in 'iuf' else a\n   print(p,value.shape,value.dtype,'missing',a.size-finite.size,'sample',a[:8], 'range', (finite.min(),finite.max()) if finite.size and ",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_alpha_w03_s00.pkl','rb') as f: item=pickle.load(f)[0]\nd=item['dataset']; c=d['calibration_load_cells']\nprint('test fields:', list(d['test']))\nprint('public validation targets:', {k:np.shape(v) for k,v in item['gt'].items()})\nfor lab in range(4):\n m=c['lab_id']==lab; x=c['cmd_stress'][m]; y=c['true_stress'][m]; b=np.linalg.lstsq(np.c_[x,np.ones(len(x))],y,rcond=None)[0]; print('calibration',lab,'n',len(x),'gain/bias',b,'abs residual median/max',np.median(abs(y-b[0]*x-b[1])),np.max(abs(y-b[0]*x-b[1])))\n r=np.concat",
+      "cd /holdout_task && cat > alpha_w03_s00_solver.py <<'PY'\n\"\"\"Calibrate coupon measurements and fit the sub-yield hereditary hold law.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _mad(x, axis=None):\n    center = np.median(x, axis=axis, keepdims=True)\n    return 1.4826 * np.median(np.abs(x - center), axis=axis)\n\n\ndef _affine(x, y):\n    \"\"\"Seed with a repeated median, then refit the agreeing checks.\"\"\"\n    if len(x) < 2 or np.ptp(x) < 1e-8:\n        return np.array([1., np.median(y - x) if len(x) else 0.]), np.ones(len(x), bool)\n    dx = x[:, None] - x\n    dy = y[:, None] -",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom alpha_w03_s00_solver import _align,_HoldLaw\np=pickle.load(open('public_alpha_w03_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; xtr,xte=_align(tr,te)\nlab,st,raw,ref=[np.concatenate([s[k] for s in (tr,te)]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')]; n=len(xtr); x=raw.copy()\nfor l in np.unique(lab):\n m=lab==l; x[m]=(raw[m]-np.median(np.nanmean(ref[m],axis=0)))/np.median(np.nanstd(ref[m],axis=0))\nt=d['eval_times']; th=g['theta']; a,_=_HoldLaw(g['te_hist_tr",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport json, pickle, numpy as np\nfrom alpha_w03_s00_solver import _align, _calibrate, _physical, _HoldLaw, _estimate\np=pickle.load(open('public_alpha_w03_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,z=_align(tr,te); cal=_calibrate(d['calibration_load_cells']); h,s=_physical(tr,cal)\ny=np.column_stack((tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs'])); complete=np.isfinite(tr['coupon_features_raw']).all(1); missing=~np.isfinite(te['coupon_features_ra",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_w03_s00_solver.py')\ns = p.read_text()\nold = '''    taus, theta = _estimate(_HoldLaw(*_physical(train, cal), xtr, dt, t), y)\n    a, _ = _HoldLaw(*_physical(test, cal), xte, dt, t).design(taus)\n    pred = a @ theta\n'''\nnew = '''    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\n    htr, str_ = _physical(train, cal)\n    taus, theta = _estimate(_HoldLaw(htr[complete], str_[complete], xtr[complete], dt, t), y[complete])\n    a, _ = _HoldLaw(*_physical(test, cal), xte, dt, t).design(taus)\n    pred = a @ th",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nfrom alpha_w03_s00_solver import _align,_calibrate,_physical,_HoldLaw,_estimate,_mad,solve_alpha_w03_s00\np=pickle.load(open('public_alpha_w03_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,z=_align(tr,te); cal=_calibrate(d['calibration_load_cells']); y=np.column_stack((tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs'])); complete=np.isfinite(tr['coupon_features_raw']).all(1); h,s=_phys",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_w03_s00_solver.py')\ns = p.read_text().replace('import numpy as np', 'import json\\nimport pickle\\nfrom pathlib import Path\\n\\nimport numpy as np', 1)\na = s.index('def _affine(')\nb = s.index('def _align(', a)\ns = s[:a] + '''_ARCHIVE = Path('/tmp/hegel_continual_archive')\n_CAL_FIELDS = ('lab_id', 'cmd_stress', 'true_stress')\n\n\ndef _checks(c, lab):\n    ids, x, y = (np.asarray(c[k]) for k in _CAL_FIELDS)\n    good = (ids == lab) & np.isfinite(x) & np.isfinite(y)\n    return x[good], y[good]\n\n\ndef _affine(x, y):\n    \"\"\"Find ",
+      "cd /holdout_task && cat > /tmp/check_coupon_solver.py <<'PY'\nfrom copy import deepcopy\nimport importlib.util\nfrom pathlib import Path\nimport pickle\nfrom tempfile import TemporaryDirectory\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('coupon', root/'alpha_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith (root/'public_alpha_w03_s00.pkl').open('rb') as f:\n    p = pickle.load(f)[0]\nd, gt = p['dataset'], p['gt']\nkeys = ('lab_id', 'cmd_stress', 'true_stress')\nbase = d['calibration_load_cells']\n\ndef validat",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('coupon', '/holdout_task/alpha_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_alpha_w03_s00.pkl','rb') as f:\n    p = pickle.load(f)[0]\nd, g = p['dataset'], p['gt']\ntr, te = d['train'], d['test']\ndt, t = d['past_dt'], d['eval_times']\ncal, trusted = m._calibrate(d['calibration_load_cells'])\nx, z = m._align(tr, te)\nh, s = m._physical(te, cal)\nlaw = m._HoldLaw(h, s, z, "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__check_coupon_solver.py",
+      "primary_producer_container_path": "/tmp/check_coupon_solver.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_w03_s00_solver.py",
+        "filename": "alpha_w03_s00_solver.py",
+        "bytes": 10356,
+        "sha256": "be6f01dc657b50b33d5a69781c29852304d26c7efa5458ba541bb8a297ebfe2f",
+        "content_addressed_ref": "content_addressed_blobs/be6f01dc657b50b33d5a69781c29852304d26c7efa5458ba541bb8a297ebfe2f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_w03_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "0bc1b6b64315a331996a3eb6d60974458a5b207e0cc35da8b2b93848a04b9820",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('coupon', '/holdout_task/alpha_w03_s00_solver.py')\nm = importlib.util.module_from_",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "0bc1b6b64315a331996a3eb6d60974458a5b207e0cc35da8b2b93848a04b9820",
+        "expected_candidate_sha256": "0bc1b6b64315a331996a3eb6d60974458a5b207e0cc35da8b2b93848a04b9820",
+        "computed_candidate_sha256": "0bc1b6b64315a331996a3eb6d60974458a5b207e0cc35da8b2b93848a04b9820",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_w03_s00_solver.py",
+            "bytes": 10356
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_0bc1b6b6"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

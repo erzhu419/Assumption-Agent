@@ -263,3 +263,53 @@ def test_m941_gate_c_immediate_attempt_mirror_and_dag_append() -> None:
             "D_PUBLIC_SCIENTIFIC_GATE",
             "D_FINAL_PRIVATE_GRADE",
         ]
+
+        # Non-empty existing DAG with non-zero cumulative measurement/compute/token costs MUST preserve exact conservation!
+        ep_d2 = td_p / "ep_dag_nonempty"
+        ep_d2.mkdir(parents=True, exist_ok=True)
+        led0 = m6f.DecisionProvenanceLedger(run_id="r2", task_id="t2", arm="armB", model="gpt-6.2-sol", provider_backend="codex")
+        d0 = led0.record_decision(
+            decision_type="D0_BOOT",
+            parent_decision_id=None,
+            evidence_inputs={},
+            candidates_evaluated=[],
+            chosen_option={"boot": True},
+            rejection_reasons={},
+            rationale_summary="boot",
+            measurement_delta=1.5,
+            compute_delta=2.25,
+            prompt_tokens_delta=4500,
+            cached_tokens_delta=1000,
+            completion_tokens_delta=320,
+            wall_ms_delta=850.5,
+        )
+        led0.record_decision(
+            decision_type="D1_TURN",
+            parent_decision_id=d0,
+            evidence_inputs={},
+            candidates_evaluated=[],
+            chosen_option={"turn": 1},
+            rejection_reasons={},
+            rationale_summary="turn1",
+            measurement_delta=1.0,
+            compute_delta=1.75,
+            prompt_tokens_delta=6200,
+            cached_tokens_delta=4000,
+            completion_tokens_delta=510,
+            wall_ms_delta=1240.25,
+        )
+        (ep_d2 / "01_decision_provenance_dag.json").write_text(
+            json.dumps({"provenance_verification": m6f.verify_decision_provenance_chain(led0.records), "records": led0.records}, indent=2),
+            encoding="utf-8",
+        )
+        chk2 = m6f.append_post_episode_verification_to_dag(
+            ep_d2,
+            run_id="r2",
+            task_id="t2",
+            arm="armB",
+            model="gpt-6.2-sol",
+            candidate_sha256="c" * 64,
+            public_gate_receipt={"ok": True, "verified_claim_ids": ["c2"], "wall_ms": 15.0},
+            verifier_report={"strict_pass": True, "verifier_wall_ms": 25.0},
+        )
+        assert chk2["valid"] is True and chk2["decision_count"] == 5

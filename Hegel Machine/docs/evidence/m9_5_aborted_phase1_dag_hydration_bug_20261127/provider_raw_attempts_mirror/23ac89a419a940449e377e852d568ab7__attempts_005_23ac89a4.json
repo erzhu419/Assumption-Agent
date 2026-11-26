@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "23ac89a419a940449e377e852d568ab7",
+  "call_seq": 5,
+  "stage_subdir": "m9_5_equal_tool_20261126T174218Z__alpha_w02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_w02_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-26T17:44:49.609388+00:00",
+  "ended_at_utc": "2026-11-26T17:45:18.197655+00:00",
+  "request_sha256": "69bcfa9269825dee4818a42245a378b7f5a131ddcc4421b53c9d49674a004f65",
+  "system_prompt_chars": 5297,
+  "stdin_payload_chars": 38445,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25126,
+    "cached_tokens": 11136,
+    "completion_tokens": 1023
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"printf 'Continual calibration inventory:\\\\n'; find /tmp /holdout_task /pretrain_task -maxdepth 3 \\\\( -iname '*continual*' -o -iname '*calibrat*' -o -iname '*alpha_w02*' \\\\) -print 2>/dev/null | head -60; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('solver','alpha_w02_s00_solver.py'); s=importlib.util.module_from_spec(p); p.loader.exec_module(s)\\na=pickle.load(open('public_alpha_w02_s00.pkl','rb'))[0]; d=a['dataset']; g=a['gt']; print('public evaluation fields:',[(k,np.shape(v)) for k,v in g.items()]); print('reference row coverage by lab:')\\nfor l in range(4):\\n r=np.concatenate([q['ref_coupons'][q['lab_id']==l] for q in (d['train'],d['test'])]); print(l,int(np.isfinite(r).sum(0).min()),float(np.nanmedian(np.nanmean(r,0))),float(np.nanmedian(np.nanstd(r,0))))\\nprint('rate/curve residual scale by lab (complete coupons):')\\nx,_,m=s._align(d); q=d['train']; h,p=s._state_inputs(q,s._calibration(d)); o=s.solve_alpha_w02_s00(d); b,v=s._basis(o['estimated_taus'],h,p,d['past_dt'],d['eval_times'],x); w=o['hereditary_weights']; rc=b@w+q['strain_0'][:,None]-q['strain_curves_obs']; rr=v@w-q['instant_rate_obs'];\\nfor l in range(4):\\n j=m & (q['lab_id']==l); print(l,round(s._noise(rc[j]),6),round(s._noise(rr[j]),6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust two-branch fit -> address sparse calibration separately; worst held-out lab median absolute error was 0.092133 for complete-coupon curves, 0.021096 for complete-coupon rates, and 0.634167 for imputed-coupon curves.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the current candidate\",\"rejected_reason\":\"A one-point check leaves gain unidentified; the single-check stress test had 0.400 p95 extrapolation error, and the solver does not yet consult the requested archive.\"}],\"rationale\":\"Look for the archive layout and establish observed noise scales before deciding how to supplement single-point calibration. A reference-coverage failure would instead point to an alignment problem.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d531bf172880dfd6eb11dc37976aac331478188ff80ee0ec0a0568e67243d1f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29430.27,
+      "usage_known": true,
+      "prompt_tokens": 25126,
+      "cached_tokens": 11136,
+      "completion_tokens": 1023
+    }
+  ]
+}
