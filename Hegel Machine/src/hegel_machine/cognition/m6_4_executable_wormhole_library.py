@@ -1924,6 +1924,28 @@ def _score_l1_primitive_capability_match(
     kw_hits = q_toks & stem_keywords.get(stem, set())
     score += 1.25 * len(kw_hits)
 
+    if stem not in stem_keywords:
+        _generic_stop = {
+            "float", "float64", "int", "bool", "ndarray", "numpy", "scipy", "dict", "list", "tuple",
+            "none", "true", "false", "array", "arrays", "matrix", "matrices", "vector", "vectors",
+            "shape", "shapes", "input", "inputs", "output", "outputs", "return", "returns", "value",
+            "values", "positive", "finite", "real", "parameters", "parameter", "valid", "check",
+            "compute", "solve", "solver", "data", "given", "must", "matching", "documented", "scale",
+            "regularization", "weights", "linear", "model", "error", "tolerance", "autogenous", "prim",
+            "function", "functions", "scalar", "optional",
+        }
+        q_sub_toks = set(re.findall(r"[a-z]{4,}", re.sub(r"[^a-z0-9]+", " ", q_low))) - _generic_stop
+        online_blob = " ".join(
+            [
+                stem.replace("autogenous_prim_", " "),
+                str(mod_entry.get("exported_apis") or ""),
+                " ".join(str(x) for x in (mod_entry.get("function_names") or [])),
+                str(mod_entry.get("compositional_rationale") or ""),
+            ]
+        ).lower()
+        online_spec_toks = set(re.findall(r"[a-z]{4,}", re.sub(r"[^a-z0-9]+", " ", online_blob))) - _generic_stop
+        score += 1.15 * min(len(q_sub_toks & online_spec_toks), 8)
+
     meta_blob = " ".join(
         [
             stem.replace("autogenous_prim_", ""),
@@ -2369,6 +2391,45 @@ def evaluate_l1_skill_staging_net_value(
             }
             if affirms_complex_stage:
                 partial_subroutine_note = "applicable_to_real_float64_subproblem_stage_only; do_not_pass_complex_stage_arrays"
+    else:
+        # `M9.3` Domain-Specific Net-Value Gate for Newly Compiled Online `L1` Primitives:
+        _generic_stop_nv = {
+            "float", "float64", "int", "bool", "ndarray", "numpy", "scipy", "dict", "list", "tuple",
+            "none", "true", "false", "array", "arrays", "matrix", "matrices", "vector", "vectors",
+            "shape", "shapes", "input", "inputs", "output", "outputs", "return", "returns", "value",
+            "values", "positive", "finite", "real", "parameters", "parameter", "valid", "check",
+            "compute", "solve", "solver", "data", "given", "must", "matching", "documented", "scale",
+            "regularization", "weights", "linear", "model", "error", "tolerance", "autogenous", "prim",
+            "function", "functions", "scalar", "optional", "verify", "estimate", "predict", "predicted",
+        }
+        _q_sub = set(re.findall(r"[a-z]{4,}", re.sub(r"[^a-z0-9]+", " ", q_low))) - _generic_stop_nv
+        _m_blob = " ".join(
+            [
+                stem.replace("autogenous_prim_", " "),
+                str(mod_entry.get("exported_apis") or ""),
+                " ".join(str(x) for x in (mod_entry.get("function_names") or [])),
+                str(mod_entry.get("compositional_rationale") or ""),
+            ]
+        ).lower()
+        _m_sub = set(re.findall(r"[a-z]{4,}", re.sub(r"[^a-z0-9]+", " ", _m_blob))) - _generic_stop_nv
+        _spec_hits = _q_sub & _m_sub
+        _py_low = str(mod_entry.get("python_code") or "").lower()
+        if affirms_complex_stage and ("complex" not in _py_low) and len(_spec_hits) < 3:
+            vetoes.append("complex_stage_mismatch_for_real_online_l1_primitive")
+            reimpl_saved = 0.0
+        elif len(_spec_hits) < 2:
+            vetoes.append("insufficient_domain_specific_overlap_for_online_l1_primitive")
+            reimpl_saved = 0.0
+        else:
+            reimpl_saved = min(2.35, 1.45 + 0.20 * len(_spec_hits))
+            function_applicability = {
+                str(fn_nm): "APPLICABLE_SUBROUTINE(domain_matched_online_l1_primitive)"
+                for fn_nm in (mod_entry.get("function_names") or [])
+            }
+            if bool(_q_sub & {"overstress", "viscoplastic", "yield", "nonseparable", "vortex", "pocket"}):
+                partial_subroutine_note = (
+                    "preserved_linear_or_separable_subroutine_applicable; check_localized_nonlinear_or_nonseparable_premise_extension"
+                )
 
     heuristic_score = round((reimpl_saved + 0.08 * min(cap_score, 8.0)) - context_cost - adapt_cost, 4) if qualified else -9.99
     status = (

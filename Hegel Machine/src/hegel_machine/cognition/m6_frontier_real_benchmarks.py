@@ -3181,6 +3181,11 @@ def run_frontier_episode(
                 )
                 from .m6_4_executable_wormhole_library import collect_recalled_executable_wormhole_sources
 
+                _eff_max_l1 = (
+                    6
+                    if disclosure_mode in {"on_demand_executable", "on_demand_knowledge_only", "demand_triggered_zero_tax"}
+                    else 4
+                )
                 staged_mods_map, _, l1_sel_diag = collect_recalled_executable_wormhole_sources(
                     stage_notes,
                     extra_modules=extra_mods,
@@ -3188,7 +3193,7 @@ def run_frontier_episode(
                     allow_l1_primitives=allow_l1_primitives,
                     full_forest_archive=(forest_archive if is_autogenous_blank else None),
                     task_query_text=(task.instruction_text if is_autogenous_blank else ""),
-                    max_l1_modules=4,
+                    max_l1_modules=_eff_max_l1,
                     allow_sklearn=allow_sklearn_flag,
                     disclosure_mode=disclosure_mode,
                     staging_policy=staging_policy,
@@ -3208,7 +3213,7 @@ def run_frontier_episode(
                     allow_l1_primitives=allow_l1_primitives,
                     full_forest_archive=(forest_archive if is_autogenous_blank else None),
                     task_query_text=(task.instruction_text if is_autogenous_blank else ""),
-                    max_l1_modules=4,
+                    max_l1_modules=_eff_max_l1,
                     allow_sklearn=allow_sklearn_flag,
                     disclosure_mode=disclosure_mode,
                     staging_policy=staging_policy,

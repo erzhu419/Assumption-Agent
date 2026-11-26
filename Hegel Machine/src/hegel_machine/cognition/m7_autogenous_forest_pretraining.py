@@ -2459,6 +2459,8 @@ def sublate_autogenous_forest_into_compositional_primitives(
     allow_horizontal_wormholes: bool = True,
     skip_already_compiled_sources: bool = True,
     max_workers: int = 8,
+    include_executable_checker_guidance: bool = False,
+    only_source_episode_ids: set[str] | None = None,
 ) -> dict[str, Any]:
     """`M8.7` + `M8.8` Parallel, Replay-Auditable Two-Tier Compositional Primitive Sublation (`L2 -> L1_compositional_primitive`):
 
@@ -2519,6 +2521,8 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 )
                 if l1_qual_ok and mod.get("source_candidate_sha256"):
                     existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
+                continue
+            if only_source_episode_ids is not None and str(mod.get("provenance_episode_id") or "") not in only_source_episode_ids:
                 continue
             recomputed_sha = hashlib.sha256(str(mod.get("python_code") or "").encode("utf-8")).hexdigest()
             declared_sha = str(mod.get("compiled_code_sha256") or "")
@@ -2598,6 +2602,14 @@ def sublate_autogenous_forest_into_compositional_primitives(
         else:
             pending_items.append((ver_key, bundle_item))
 
+    _checker_clause = (
+        "\n5. INCLUDE AN EXECUTABLE INVARIANT / CERTIFICATE CHECKER: Export 2 to 4 functions total, including BOTH "
+        "(a) the reusable array-level forward/inverse numerical kernel(s) (accepting optional initial states / general grids / arbitrary budgets) "
+        "AND (b) a fast executable mathematical checker (`verify_*` or `check_*`) that verifies PDE/Sylvester operator residuals, KKT convex duality "
+        "lower bounds, or hereditary initial-derivative consistency so downstream episodes can invoke it in 1 line during development or bundle it!"
+        if include_executable_checker_guidance
+        else ""
+    )
     sys_prompt = (
         "You are the `Hegel-M8.8` Compositional Numerical Primitive Compiler (`L1` Mathematical Operator Pass).\n"
         "You are given ONE autogenously discovered scientific Python module (`L2` episode operator) plus its empirical falsification "
@@ -2610,6 +2622,7 @@ def sublate_autogenous_forest_into_compositional_primitives(
         "4. Write `synthetic_unit_test_code` (`def run_self_test(): ...; run_self_test()`) calling EVERY exported primitive directly "
         "(they are pre-imported in scope, or `from hegel_wormhole_skills.<primitive_module_stem> import ...`) across >= 2 distinct shapes "
         "and asserting exact reference solutions via `np.testing.assert_allclose`!"
+        + _checker_clause
     )
 
     stem_lock = _th.Lock()
