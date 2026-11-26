@@ -420,6 +420,7 @@ def test_r4_r5_r6_r7_nogood_witness_two_phase_writeback_router_schema_and_cache(
     }
     ns_bad = {
         "re": __import__("re"),
+        "deepcopy": deepcopy,
         "pending_nogood_resolutions": [{"proposed_turn": 2, "resolves_ids": ["ng_t01"], "proposed_by_nogood_id": None}],
         "nogoods_recorded": [ng],
         "nogood_resolution_events": [],
@@ -432,8 +433,16 @@ def test_r4_r5_r6_r7_nogood_witness_two_phase_writeback_router_schema_and_cache(
     assert ng["resolved"] is False
     assert len(ns_bad["pending_nogood_resolutions"]) == 1
 
+    # Under M9.2.1 A5, agent stdout alone remains `agent_claimed_unverified`; host-signed gauge probe receipt resolves matching scope & SHA
     ns_good = {
         **ns_bad,
+        "_HOST_INJECTED_PROBE_RECEIPT": {
+            "signed_by_host_probe_executor": True,
+            "candidate_bundle_sha256": "cand_sha_1",
+            "verified_scope": "affine gauge scale",
+            "gauge_invariance_verified": True,
+            "result": "verified_gauge_and_public_probe_in_scope",
+        },
         "cmd_str": "python3 /tmp/verify_affine_gauge_identifiability.py",
         "ex_res": {"stdout": "two_gauge affine scale identifiability recovery assert max_err=1.2e-9 pass"},
     }

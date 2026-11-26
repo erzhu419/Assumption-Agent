@@ -1430,7 +1430,7 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             "        return [_dec_val(x) for x in v]\n"
             "    return v\n"
             "worker_py = (\n"
-            "    'import importlib, json, math, os, sys\\n'\n"
+            "    'import importlib, json, math, os, sys, time\\n'\n"
             "    'import numpy as np\\n'\n"
             "    'rpc_out_fd = os.dup(1)\\n'\n"
             "    'os.dup2(2, 1)\\n'\n"
@@ -1475,12 +1475,16 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
                 "    rid = req['id']\n"
                 "    try:\n"
                 "        if req['op'] == 'import':\n"
+                "            _tw0 = time.perf_counter(); _tc0 = time.process_time()\n"
                 "            loaded[req['module']] = importlib.import_module(req['module'])\n"
-                "            resp = {'id': rid, 'ok': True, 'result': True}\n"
+                "            resp = {'id': rid, 'ok': True, 'result': True, 'wall_sec': time.perf_counter() - _tw0, 'cpu_sec': time.process_time() - _tc0}\n"
                 "        elif req['op'] == 'call':\n"
                 "            fn = getattr(loaded[req['module']], req['attr'])\n"
-                "            res = fn(*_dec_val(req['args']), **_dec_val(req['kwargs']))\n"
-                "            resp = {'id': rid, 'ok': True, 'result': _enc_val(res)}\n"
+                "            _args_d = _dec_val(req['args']); _kwargs_d = _dec_val(req['kwargs'])\n"
+                "            _tw0 = time.perf_counter(); _tc0 = time.process_time()\n"
+                "            res = fn(*_args_d, **_kwargs_d)\n"
+                "            _cw = time.perf_counter() - _tw0; _cc = time.process_time() - _tc0\n"
+                "            resp = {'id': rid, 'ok': True, 'result': _enc_val(res), 'wall_sec': _cw, 'cpu_sec': _cc}\n"
                 "        else:\n"
                 "            resp = {'id': rid, 'ok': False, 'error': 'unknown_op'}\n"
                 "    except Exception as exc:\n"
@@ -1491,12 +1495,20 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
                 "        _off_out += os.write(rpc_out_fd, _buf_out[_off_out:])\n"
             ),
         ) + (
+            "_trusted_kernel_mod = None\n"
+            "if os.path.isfile('/tmp/_trusted_cert_kernel.py'):\n"
+            "    _kspec = importlib.util.spec_from_file_location('_hegel_trusted_cert_kernel', '/tmp/_trusted_cert_kernel.py')\n"
+            "    _trusted_kernel_mod = importlib.util.module_from_spec(_kspec)\n"
+            "    _kspec.loader.exec_module(_trusted_kernel_mod)\n"
+            "    os.unlink('/tmp/_trusted_cert_kernel.py')\n"
             "_worker_err_fp = tempfile.TemporaryFile(mode='w+b')\n"
             "_clean_env = {k: v for k, v in os.environ.items() if not k.startswith('HEGEL_')}\n"
             "worker = subprocess.Popen([sys.executable, '-I', '-c', worker_py], stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=_worker_err_fp, env=_clean_env, text=True, bufsize=1)\n"
             "_req_seq = 0\n"
+            "_rpc_timing = {'import_wall_sec': 0.0, 'import_cpu_sec': 0.0, 'candidate_call_wall_sec': 0.0, 'candidate_call_cpu_sec': 0.0, 'ipc_and_codec_wall_sec': 0.0, 'rpc_call_count': 0}\n"
             "def _rpc_call(op, mod_nm, attr_nm='', args=(), kwargs=None):\n"
             "    global _req_seq\n"
+            "    _t_rpc0 = time.perf_counter()\n"
             "    _req_seq += 1\n"
             "    payload = {'id': _req_seq, 'op': op, 'module': mod_nm, 'attr': attr_nm, 'args': _enc_val(list(args)), 'kwargs': _enc_val(kwargs or {})}\n"
             "    worker.stdin.write(_orig_dumps(payload, allow_nan=False) + '\\n')\n"
@@ -1507,7 +1519,15 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             "    resp = json.loads(resp_ln)\n"
             "    if resp.get('id') != _req_seq or not resp.get('ok'):\n"
             "        raise RuntimeError(str(resp.get('error') or 'candidate_rpc_failure'))\n"
-            "    return _dec_val(resp.get('result'))\n"
+            "    out_dec = _dec_val(resp.get('result'))\n"
+            "    _tot_rpc = time.perf_counter() - _t_rpc0\n"
+            "    _w_s = float(resp.get('wall_sec') or 0.0); _c_s = float(resp.get('cpu_sec') or 0.0)\n"
+            "    if op == 'import':\n"
+            "        _rpc_timing['import_wall_sec'] += _w_s; _rpc_timing['import_cpu_sec'] += _c_s\n"
+            "    elif op == 'call':\n"
+            "        _rpc_timing['candidate_call_wall_sec'] += _w_s; _rpc_timing['candidate_call_cpu_sec'] += _c_s; _rpc_timing['rpc_call_count'] += 1\n"
+            "    _rpc_timing['ipc_and_codec_wall_sec'] += max(0.0, _tot_rpc - _w_s)\n"
+            "    return out_dec\n"
             "class _CandidateRPCProxy(types.ModuleType):\n"
             "    def __init__(self, mod_nm):\n"
             "        super().__init__(mod_nm)\n"
@@ -1525,14 +1545,24 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             "    if verdict_box['captured'] is None and isinstance(obj, dict) and 'strict_pass' in obj:\n"
             "        verdict_box['captured'] = obj\n"
             "    return s\n"
+            "_t_sup0 = time.perf_counter(); _c_sup0 = time.process_time()\n"
             "try:\n"
             "    for _cm in cand_mods:\n"
             "        _rpc_call('import', _cm)\n"
             "        sys.modules[_cm] = _CandidateRPCProxy(_cm)\n"
             "    json.dumps = _supervisor_dumps\n"
-            "    v_ns = {'__name__': '__hegel_trusted_verifier__'}\n"
+            "    v_ns = {'__name__': '__hegel_trusted_verifier__', '_trusted_box_l0_kernel': _trusted_kernel_mod}\n"
             "    exec(compile(v_tree, '<trusted_verifier>', 'exec'), v_ns)\n"
             "    verdict = verdict_box['captured'] if isinstance(verdict_box['captured'], dict) else {'strict_pass': False, 'missing_verdict': True}\n"
+            "    if isinstance(verdict, dict):\n"
+            "        _sup_w = time.perf_counter() - _t_sup0; _sup_c = time.process_time() - _c_sup0\n"
+            "        verdict['candidate_timing_breakdown'] = {\n"
+            "            k: (round(float(v), 6) if isinstance(v, float) else int(v)) for k, v in _rpc_timing.items()\n"
+            "        } | {\n"
+            "            'verifier_and_gt_wall_sec': round(max(0.0, _sup_w - _rpc_timing['import_wall_sec'] - _rpc_timing['candidate_call_wall_sec'] - _rpc_timing['ipc_and_codec_wall_sec']), 6),\n"
+            "            'verifier_and_gt_cpu_sec': round(_sup_c, 6),\n"
+            "            'total_supervisor_wall_sec': round(_sup_w, 6),\n"
+            "        }\n"
             "except Exception as _v_exc:\n"
             "    sys.stderr.write(f'TrustedVerifierError: {type(_v_exc).__name__}: {_v_exc}\\n')\n"
             "    verdict = {'strict_pass': False, 'verifier_error': f'{type(_v_exc).__name__}: {_v_exc}'}\n"
@@ -1555,6 +1585,7 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             "sys.stdout.write(sentinel + _orig_dumps(verdict, allow_nan=False) + '\\n')\n"
             "sys.stdout.flush()\n"
         )
+        kernel_src_path = Path(__file__).with_name("m8_9_1_box_l0_certificate_kernel.py")
         with tempfile.TemporaryDirectory(prefix="hegel_ho_ver_") as td:
             td_p = Path(td)
             (td_p / "_setup.py").write_text(task.public_setup_py, encoding="utf-8")
@@ -1563,6 +1594,8 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             subprocess.run(["docker", "cp", str(td_p / "_setup.py"), f"{vcid}:/tmp/_setup.py"], check=True, timeout=20)
             subprocess.run(["docker", "cp", str(td_p / "_verify.py"), f"{vcid}:/tmp/_verify.py"], check=True, timeout=20)
             subprocess.run(["docker", "cp", str(td_p / "_run_ver.py"), f"{vcid}:/tmp/_run_ver.py"], check=True, timeout=20)
+            if kernel_src_path.is_file():
+                subprocess.run(["docker", "cp", str(kernel_src_path), f"{vcid}:/tmp/_trusted_cert_kernel.py"], check=True, timeout=20)
         m6f.exec_container_bash(vcid, "python3 /tmp/_setup.py && rm -f /tmp/_setup.py", timeout_sec=60)
         if submitted_tar_path.is_file():
             m6f.import_declared_artifacts_tar(vcid, task.declared_artifacts, submitted_tar_path)

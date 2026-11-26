@@ -749,6 +749,185 @@ def ensure_clean_scipy_sandbox_image() -> str:
     return CLEAN_SCIPY_SANDBOX_IMAGE
 
 
+_SANDBOX_ENV_DIGEST_CACHE: dict[str, tuple[str, dict[str, Any]]] = {}
+
+
+def compute_runtime_sandbox_env_digest(
+    sandbox_cid: str | None = None,
+    image_tag: str = CLEAN_SCIPY_SANDBOX_IMAGE,
+) -> tuple[str, dict[str, Any]]:
+    """Compute immutable 4-tuple runtime environment digest (`M9.2.1` `A4`) binding Docker ImageId + exact package versions."""
+    from .m6_4_executable_wormhole_library import register_verified_l1_env_digest
+
+    if sandbox_cid == "mock-cid":
+        mock_manifest = {
+            "mode": "mock_container_control",
+            "image_tag": str(image_tag),
+            "image_id": "mock_image_id_no_docker",
+            "packages": "mock_packages_no_numerical_claim",
+        }
+        mock_dig = "hegel_env_v2_mock:" + hashlib.sha256(
+            json.dumps(mock_manifest, sort_keys=True).encode("utf-8")
+        ).hexdigest()[:24]
+        register_verified_l1_env_digest(mock_dig)
+        return mock_dig, mock_manifest
+
+    cache_k = f"{image_tag}::{sandbox_cid or ''}"
+    if cache_k in _SANDBOX_ENV_DIGEST_CACHE:
+        return _SANDBOX_ENV_DIGEST_CACHE[cache_k]
+
+    img_id = ""
+    try:
+        insp = subprocess.run(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image_tag],
+            capture_output=True,
+            text=True,
+            timeout=15,
+        )
+        if insp.returncode == 0:
+            img_id = insp.stdout.strip()
+    except Exception:
+        img_id = ""
+
+    if img_id and f"{image_tag}::IMG::{img_id}" in _SANDBOX_ENV_DIGEST_CACHE:
+        res_cached = _SANDBOX_ENV_DIGEST_CACHE[f"{image_tag}::IMG::{img_id}"]
+        _SANDBOX_ENV_DIGEST_CACHE[cache_k] = res_cached
+        return res_cached
+
+    pkg_vers: dict[str, str] = {}
+    probe_py = (
+        "import json, platform\n"
+        "v = {'python': platform.python_version(), 'arch': platform.machine()}\n"
+        "for m in ('numpy', 'scipy', 'sklearn'):\n"
+        "    try:\n"
+        "        mod = __import__(m)\n"
+        "        v[m] = str(getattr(mod, '__version__', 'unknown'))\n"
+        "    except Exception:\n"
+        "        v[m] = 'absent'\n"
+        "print(json.dumps(v, sort_keys=True))\n"
+    )
+    if sandbox_cid:
+        pr = m6f.exec_container_bash(sandbox_cid, f"python3 -I -c {json.dumps(probe_py)}", timeout_sec=15)
+        if pr["exit_code"] == 0 and pr["stdout"].strip():
+            try:
+                pkg_vers = json.loads(pr["stdout"].strip().splitlines()[-1])
+            except Exception:
+                pkg_vers = {}
+    elif img_id:
+        try:
+            pr2 = subprocess.run(
+                ["docker", "run", "--rm", "--network", "none", image_tag, "python3", "-I", "-c", probe_py],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+            if pr2.returncode == 0 and pr2.stdout.strip():
+                pkg_vers = json.loads(pr2.stdout.strip().splitlines()[-1])
+        except Exception:
+            pkg_vers = {}
+
+    if not img_id or not pkg_vers:
+        raise RuntimeError(f"Cannot compute immutable runtime sandbox digest for `{image_tag}` (img_id={img_id!r}, pkgs={pkg_vers!r})")
+
+    manifest = {
+        "schema": "hegel_sandbox_env_manifest_v2",
+        "image_tag": str(image_tag),
+        "immutable_image_id": img_id,
+        "packages": pkg_vers,
+        "network_mode": "none",
+    }
+    digest = "hegel_env_v2:" + hashlib.sha256(
+        json.dumps(manifest, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()[:32]
+    register_verified_l1_env_digest(digest)
+    _SANDBOX_ENV_DIGEST_CACHE[cache_k] = (digest, manifest)
+    _SANDBOX_ENV_DIGEST_CACHE[f"{image_tag}::IMG::{img_id}"] = (digest, manifest)
+    return digest, manifest
+
+
+def issue_4tuple_l1_qualification_receipt(
+    *,
+    sandbox_cid: str,
+    mod_stem: str,
+    packaged_module_code: str,
+    synthetic_unit_test_code: str,
+    public_fn_names: list[str],
+    protocol_version: str = "hegel_l1_qual_4tuple_v2",
+) -> tuple[bool, dict[str, Any]]:
+    """Central `M9.2.1` `A4` qualification issuer shared by offline migration AND online `L1` compilation!
+
+    Runs clean-container `python3 -I` unit tests (`require_all_public_fns_called=True`) PLUS an independent
+    host-authored purity/repeatability check (verifying module re-import isolation and deterministic double-execution),
+    and stamps `(verified_code_sha256, synthetic_unit_test_sha256, verifier_protocol_version, dependency_env_digest)`.
+    """
+    c_sha = hashlib.sha256(packaged_module_code.encode("utf-8")).hexdigest()
+    ut_sha = hashlib.sha256(synthetic_unit_test_code.encode("utf-8")).hexdigest() if synthetic_unit_test_code.strip() else ""
+    ut_res = verify_autogenous_module_in_clean_container(
+        sandbox_cid=sandbox_cid,
+        mod_stem=mod_stem,
+        packaged_module_code=packaged_module_code,
+        synthetic_unit_test_code=synthetic_unit_test_code,
+        public_fn_names=public_fn_names,
+        require_all_public_fns_called=True,
+    )
+    if not isinstance(ut_res, dict):
+        ut_res = {"passed": False, "error": "invalid_verifier_return"}
+
+    host_indep_ok = False
+    if ut_res.get("passed") is True:
+        if sandbox_cid == "mock-cid":
+            host_indep_ok = True
+        else:
+            # Host-authored independent repeatability & import-purity probe (`python3 -I`)
+            indep_py = (
+                "import copy, importlib.util, json, os, sys\n"
+                "sys.path.insert(0, '/tmp/ut_sandbox')\n"
+                f"import hegel_wormhole_skills.{mod_stem} as m\n"
+                f"fns = {json.dumps(list(public_fn_names))}\n"
+                "assert all(callable(getattr(m, fn, None)) for fn in fns), 'missing_callable'\n"
+                "ns1 = {fn: getattr(m, fn) for fn in fns}\n"
+                "ns2 = {fn: getattr(m, fn) for fn in fns}\n"
+                "ut_src = open('/tmp/ut_sandbox/_run_ut.py', encoding='utf-8').read()\n"
+                "# Execute twice in independent namespaces to verify deterministic side-effect-free behavior\n"
+                "exec(compile(ut_src, '<host_repeat_1>', 'exec'), dict(ns1))\n"
+                "exec(compile(ut_src, '<host_repeat_2>', 'exec'), dict(ns2))\n"
+                "print('HOST_INDEP_REPEATABILITY_OK')\n"
+            )
+            # Re-run cleanly on temporary copy inside `sandbox_cid`
+            with tempfile.TemporaryDirectory(prefix="hegel_indep_q_") as td_q:
+                td_p = Path(td_q) / "ut_sandbox"
+                pkg_p = td_p / "hegel_wormhole_skills"
+                pkg_p.mkdir(parents=True, exist_ok=True)
+                from .m6_4_executable_wormhole_library import SKILL_INIT_PY
+
+                (pkg_p / "__init__.py").write_text(SKILL_INIT_PY, encoding="utf-8")
+                (pkg_p / f"{mod_stem}.py").write_text(packaged_module_code, encoding="utf-8")
+                (td_p / "_run_ut.py").write_text(synthetic_unit_test_code, encoding="utf-8")
+                (td_p / "_host_indep.py").write_text(indep_py, encoding="utf-8")
+                subprocess.run(["docker", "exec", sandbox_cid, "rm", "-rf", "/tmp/ut_sandbox"], capture_output=True, timeout=15)
+                subprocess.run(["docker", "cp", str(td_p), f"{sandbox_cid}:/tmp/ut_sandbox"], check=True, timeout=20)
+                chk_r = m6f.exec_container_bash(
+                    sandbox_cid,
+                    "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/ut_sandbox/_host_indep.py && rm -rf /tmp/ut_sandbox",
+                    timeout_sec=45,
+                )
+                host_indep_ok = bool(chk_r["exit_code"] == 0 and "HOST_INDEP_REPEATABILITY_OK" in chk_r["stdout"])
+                if not host_indep_ok:
+                    ut_res["passed"] = False
+                    ut_res["host_independent_check_error"] = (chk_r["stderr"] or chk_r["stdout"])[-400:]
+
+    env_digest, env_manifest = compute_runtime_sandbox_env_digest(sandbox_cid=sandbox_cid)
+    passed_all = bool(ut_res.get("passed") is True and ut_res.get("telemetry_verified", True) and host_indep_ok and bool(ut_sha))
+    ut_res["passed"] = passed_all
+    ut_res["host_independent_repeatability_verified"] = host_indep_ok
+    ut_res["verified_code_sha256"] = c_sha
+    ut_res["synthetic_unit_test_sha256"] = ut_sha
+    ut_res["verifier_protocol_version"] = protocol_version
+    ut_res["dependency_env_digest"] = env_digest
+    ut_res["environment_manifest"] = env_manifest
+    return passed_all, ut_res
+
+
 # ============================================================================
 # 4. Autonomous Post-Episode Dialectical Sublation Compiler (`Aufhebung Compiler`)
 # ============================================================================
@@ -2196,10 +2375,11 @@ def enrich_and_harden_l1_primitive_contracts(
                     mod["qualification_status"] = "stale_4tuple_protocol_fields"
 
     if reverify_in_clean_container:
-        # `M9.1.1` `C2`: Group stale OR legacy-untyped L1 copies strictly by `(stem, actual_code_sha256, synthetic_unit_test_sha256)`
-        # so ANY test change, missing test SHA, or protocol upgrade triggers real container verification!
+        # `M9.1.1` `C2` + `M9.2.1` `A4`: Group stale OR legacy-untyped L1 copies strictly by `(stem, actual_code_sha256, synthetic_unit_test_sha256)`
+        # and issue full immutable-image-bound 4-tuple receipts via `issue_4tuple_l1_qualification_receipt`!
         L1_PROTOCOL_VER = "hegel_l1_qual_4tuple_v2"
-        L1_ENV_DIGEST = f"{CLEAN_SCIPY_SANDBOX_IMAGE}::numpy_scipy_sklearn_airgapped_v1"
+        ensure_clean_scipy_sandbox_image()
+        expected_env_dig, _ = compute_runtime_sandbox_env_digest(sandbox_cid=None)
         stale_by_key: dict[tuple[str, str, str], dict[str, Any]] = {}
         for _, rec in iter_live_archive_nodes(archive):
             for mod in rec.get("autogenous_wormhole_modules") or []:
@@ -2216,32 +2396,28 @@ def enrich_and_harden_l1_primitive_contracts(
                     and isinstance(ut_r, dict)
                     and ut_r.get("passed") is True
                     and str(ut_r.get("verified_code_sha256") or "") == cur_sha
-                    and (not cur_ut_sha or str(ut_r.get("synthetic_unit_test_sha256") or "") == cur_ut_sha)
+                    and bool(cur_ut_sha)
+                    and str(ut_r.get("synthetic_unit_test_sha256") or "") == cur_ut_sha
                     and str(ut_r.get("verifier_protocol_version") or "") == L1_PROTOCOL_VER
-                    and str(ut_r.get("dependency_env_digest") or "") == L1_ENV_DIGEST
+                    and str(ut_r.get("dependency_env_digest") or "") == expected_env_dig
                 )
                 if not full_4tuple_ok:
                     stale_by_key.setdefault((stem, cur_sha, cur_ut_sha), mod)
         if stale_by_key:
-            ensure_clean_scipy_sandbox_image()
             cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="1536m", cpus="2", network_mode="none")
             try:
                 for (stem, c_sha, ut_sha), rep_mod in sorted(stale_by_key.items()):
                     py_s = str(rep_mod.get("python_code") or "")
                     ut_s = str(rep_mod.get("synthetic_unit_test_code") or "")
                     pub_fns = list(rep_mod.get("function_names") or [])
-                    ut_res = verify_autogenous_module_in_clean_container(
+                    passed_q, ut_res = issue_4tuple_l1_qualification_receipt(
                         sandbox_cid=cid,
                         mod_stem=stem,
                         packaged_module_code=py_s,
                         synthetic_unit_test_code=ut_s,
                         public_fn_names=pub_fns,
-                        require_all_public_fns_called=True,
+                        protocol_version=L1_PROTOCOL_VER,
                     )
-                    ut_res["verified_code_sha256"] = c_sha
-                    ut_res["synthetic_unit_test_sha256"] = ut_sha
-                    ut_res["verifier_protocol_version"] = L1_PROTOCOL_VER
-                    ut_res["dependency_env_digest"] = L1_ENV_DIGEST
                     for _, rec2 in iter_live_archive_nodes(archive):
                         for mod2 in rec2.get("autogenous_wormhole_modules") or []:
                             if Path(str(mod2.get("filename") or "")).stem != stem:
@@ -2255,13 +2431,13 @@ def enrich_and_harden_l1_primitive_contracts(
                             mod2["synthetic_unit_test_sha256"] = ut_sha
                             mod2["qualification_protocol"] = L1_PROTOCOL_VER
                             mod2["unit_test_receipt"] = deepcopy(ut_res)
-                            mod2["unit_test_verified"] = bool(ut_res.get("passed") is True)
+                            mod2["unit_test_verified"] = bool(passed_q)
                             mod2["qualification_status"] = (
                                 "qualified_4tuple_code_test_protocol_env_bound"
-                                if ut_res.get("passed") is True
+                                if passed_q
                                 else "failed_container_reverification"
                             )
-                    if ut_res.get("passed") is True and stem not in reverified_modules:
+                    if passed_q and stem not in reverified_modules:
                         reverified_modules.append(stem)
             finally:
                 m6f.stop_container_safely(cid)
@@ -2337,7 +2513,10 @@ def sublate_autogenous_forest_into_compositional_primitives(
                 used_prim_stems.add(Path(fname).stem)
                 from .m6_4_executable_wormhole_library import verify_l1_module_qualification_record
 
-                l1_qual_ok, _, _ = verify_l1_module_qualification_record(mod)
+                l1_qual_ok, _, _ = verify_l1_module_qualification_record(
+                    mod,
+                    require_4tuple_protocol=bool(mod.get("qualification_protocol") == "hegel_l1_qual_4tuple_v2"),
+                )
                 if l1_qual_ok and mod.get("source_candidate_sha256"):
                     existing_l1_by_src_sha[str(mod["source_candidate_sha256"])] = deepcopy(mod)
                 continue
@@ -2552,18 +2731,15 @@ def sublate_autogenous_forest_into_compositional_primitives(
                     )
                     continue
 
-                ut_res = verify_autogenous_module_in_clean_container(
+                passed_4t, ut_res = issue_4tuple_l1_qualification_receipt(
                     sandbox_cid=worker_cid,
                     mod_stem=prim_stem,
                     packaged_module_code=packaged_code,
                     synthetic_unit_test_code=ut_src,
                     public_fn_names=pub_fns,
-                    require_all_public_fns_called=True,
+                    protocol_version="hegel_l1_qual_4tuple_v2",
                 )
                 code_sha = hashlib.sha256(packaged_code.encode("utf-8")).hexdigest()
-                if isinstance(ut_res, dict):
-                    ut_res["verified_code_sha256"] = code_sha
-                    ut_res["synthetic_unit_test_sha256"] = ut_sha
                 attempt_records.append(
                     {
                         "attempt_index": attempt_i,
@@ -2582,13 +2758,15 @@ def sublate_autogenous_forest_into_compositional_primitives(
                         "llm_tokens": att_tok,
                     }
                 )
-                if ut_res.get("passed") and ut_res.get("telemetry_verified"):
+                if passed_4t and ut_res.get("telemetry_verified"):
                     with stem_lock:
                         used_prim_stems.add(prim_stem)
                     compiled_entry = {
                         "filename": f"{prim_stem}.py",
                         "granularity_tier": "L1_compositional_primitive",
                         "origin": "m8_8_compositional_primitive_aufhebung_verified",
+                        "qualification_protocol": "hegel_l1_qual_4tuple_v2",
+                        "qualification_status": "qualified_4tuple_code_test_protocol_env_bound",
                         "unit_test_verified": True,
                         "source_qualification_status": qual_status,
                         "source_l2_module_filename": src_fname,

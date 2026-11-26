@@ -18,12 +18,15 @@ import tempfile
 from typing import Any
 
 from . import m6_frontier_real_benchmarks as m6f
+from .m8_9_1_box_l0_certificate_kernel import get_public_schema_validator_only_source
 from .m7_holdout_ood_blind_benchmark import (
     CLEAN_SCIPY_SANDBOX_IMAGE,
     HoldoutOODTask,
     ensure_clean_scipy_sandbox_image,
     run_holdout_private_verifier,
 )
+
+_PUBLIC_BOX_L0_SCHEMA_PY: str = get_public_schema_validator_only_source()
 
 
 EQUAL_INFO_M92_TASKS: tuple[HoldoutOODTask, ...] = (
@@ -638,23 +641,23 @@ pub = [_make_study(9211, 18)]
 with open("/holdout_task/public_eq02_studies.pkl", "wb") as fh:
     pickle.dump(pub, fh)
 
+with open("/holdout_task/_box_l0_public_schema.py", "w", encoding="utf-8") as fh_s:
+    fh_s.write(''' + repr(_PUBLIC_BOX_L0_SCHEMA_PY) + r''')
+
 open("/holdout_task/validate_public_schema.py", "w").write("""import importlib.util, json, pickle, sys
 import os
 for _k in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"): os.environ[_k] = "1"
 import numpy as np
 
-def check_bool_mask(seq, p):
-    if isinstance(seq, np.ndarray):
-        if seq.dtype != np.bool_ or seq.shape != (p,): return None
-        return [bool(x) for x in seq.tolist()]
-    if isinstance(seq, (list, tuple)) and len(seq) == p and all(isinstance(x, (bool, np.bool_)) for x in seq):
-        return [bool(x) for x in seq]
-    return None
+_schema_dir = os.path.dirname(os.path.abspath(__file__))
+if _schema_dir not in sys.path:
+    sys.path.insert(0, _schema_dir)
+from _box_l0_public_schema import normalize_and_validate_box_l0_public_schema
 
-cand_p = sys.argv[1] if len(sys.argv) > 1 else "/holdout_task/coupled_interferometry_certified_l0.py"
+cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_schema_dir, "coupled_interferometry_certified_l0.py")
 spec = importlib.util.spec_from_file_location("cand_eq02", cand_p)
 mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)
-st = pickle.load(open("/holdout_task/public_eq02_studies.pkl", "rb"))[0]["study"]
+st = pickle.load(open(os.path.join(_schema_dir, "public_eq02_studies.pkl"), "rb"))[0]["study"]
 out = mod.solve_coupled_interferometry_l0(st)
 N, D = st["panel"]["X_panel_raw"].shape
 n_s, p = st["X_cand"].shape
@@ -667,34 +670,27 @@ else:
         else:
             a = np.asarray(out[k], dtype=float)
             if a.shape != shp or not np.all(np.isfinite(a)): errs.append(f"bad:{k}:{a.shape}")
+    if not errs and "interferometry" in st and "y_assay_raw" in st and "stage3_indices" in st:
+        ap = np.asarray(out["aligned_panel"], dtype=float)
+        cw = np.asarray(out["calibration_weights"], dtype=float)
+        dt = np.asarray(out["deconfounded_target"], dtype=float)
+        strata = np.asarray(st["panel"]["stratum"])
+        phase = np.angle(np.asarray(st["interferometry"]["signal_phasor"], dtype=np.complex128) * np.conj(np.asarray(st["interferometry"]["ref_phasor"], dtype=np.complex128)))
+        hc = np.column_stack([np.ones(len(strata)), (strata == 1).astype(float), (strata == 2).astype(float), ap, phase])
+        s3 = np.asarray(st["stage3_indices"], dtype=int)
+        expected_dt = np.asarray(st["y_assay_raw"], dtype=float)[s3] - hc[s3] @ cw
+        if float(np.max(np.abs(dt - expected_dt))) > 1e-6:
+            errs.append(f"stage2_to_stage3_handoff_mismatch:{float(np.max(np.abs(dt - expected_dt))):.3e}")
     cs = out.get("certified_selection")
-    if not isinstance(cs, dict):
-        errs.append("missing_certified_selection")
-    else:
-        w = np.asarray(cs.get("weights", []), dtype=float)
-        if w.shape != (p,) or not np.all(np.isfinite(w)) or np.max(np.abs(w)) > st["M"] + 1e-7:
-            errs.append("bad_weights")
-        lvs = cs.get("subcube_leaves")
-        if not isinstance(lvs, list) or not (1 <= len(lvs) <= 2048):
-            errs.append("bad_subcube_leaves_len")
-        else:
-            cov = 0.0
-            for idx_l, lf in enumerate(lvs):
-                fz = check_bool_mask(lf.get("fixed_zero"), p)
-                fa = check_bool_mask(lf.get("fixed_active"), p)
-                if fz is None or fa is None or any(z and a for z, a in zip(fz, fa)):
-                    errs.append(f"leaf_{idx_l}_requires_disjoint_bool_len_p_masks"); break
-                if not (("minorant_diagonal" in lf and "minorant_center" in lf) or ("dual_nu" in lf)):
-                    errs.append(f"leaf_{idx_l}_missing_witness"); break
-                cov += 2.0 ** (-(sum(fz) + sum(fa)))
-            if abs(cov - 1.0) > 1e-9:
-                errs.append(f"partition_coverage_{cov}!=1.0")
+    chk = normalize_and_validate_box_l0_public_schema(cs, p, box=float(st["M"]), max_leaves=2048, allow_index_list_compat=False)
+    if not (chk.get("schema_valid") and chk.get("partition_valid")):
+        errs.append(f"certificate_schema_or_partition_invalid:{chk.get('reason')}")
 print(json.dumps({"schema_valid": len(errs) == 0, "errors": errs}))
 sys.exit(0 if len(errs) == 0 else 1)
 """)
 ''',
         private_verifier_py=r'''
-import heapq, json, math, sys, time
+import heapq, importlib.util, json, math, pathlib, sys, time
 import os
 for _k in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"): os.environ[_k] = "1"
 import numpy as np
@@ -715,144 +711,42 @@ def _eval_primal(X, y, M, lam0, lam2, mask_b):
     r = X @ w - y
     return 0.5 * float(r @ r) + 0.5 * lam2 * float(w @ w) + lam0 * int(np.sum(sup)), w
 
-def _exact_bnb(X, y, M, lam0, lam2):
-    n, p = X.shape
-    G = X.T @ X
-    Xty = X.T @ y
-    off = np.abs(G).copy(); np.fill_diagonal(off, 0.0)
-    d = np.maximum(np.diag(G) - np.sum(off, axis=1), 0.0)
-    best_u, best_w = _eval_primal(X, y, M, lam0, lam2, np.zeros(p, dtype=bool))
-    def _lb(fz, fa):
-        keep = np.flatnonzero(~fz)
-        cf = np.zeros(p, dtype=float)
-        if keep.size > 0:
-            cf[keep] = np.clip(np.linalg.solve(G[np.ix_(keep, keep)] + lam2 * np.eye(keep.size), Xty[keep]), -M, M)
-        ca = np.zeros(p, dtype=float)
-        act_i = np.flatnonzero(fa)
-        if act_i.size > 0:
-            ca[act_i] = np.clip(np.linalg.solve(G[np.ix_(act_i, act_i)] + lam2 * np.eye(act_i.size), Xty[act_i]), -M, M)
-        best_tot = -1e30
-        for c_vec in (cf, ca):
-            r = y - X @ c_vec
-            g = X.T @ r
-            const = 0.5 * float(r @ r + (d * c_vec) @ c_vec) + float(g @ c_vec)
-            z = np.abs(g + d * c_vec)
-            kap = d + lam2
-            b = np.minimum(M, z / np.maximum(kap, 1e-15))
-            gain = b * (z - 0.5 * kap * b)
-            on = lam0 - gain
-            free = ~(fz | fa)
-            tot = const + float(np.sum(on[fa])) + float(np.sum(np.minimum(on[free], 0.0)))
-            if tot > best_tot:
-                best_tot = tot
-        return float(best_tot), cf
-    lb0, c0 = _lb(np.zeros(p, dtype=bool), np.zeros(p, dtype=bool))
-    for thr_h in (0.15, 0.25, 0.35):
-        uh, wh = _eval_primal(X, y, M, lam0, lam2, np.abs(c0) > thr_h * M)
-        if uh < best_u:
-            best_u, best_w = uh, wh
-    pq = [(lb0, 0, np.zeros(p, dtype=bool), np.zeros(p, dtype=bool), c0)]
-    uid = 0
-    while pq:
-        lbn, _, fz, fa, cf = heapq.heappop(pq)
-        if lbn >= best_u - 1e-9: continue
-        uc, wc = _eval_primal(X, y, M, lam0, lam2, fa | ((~fz) & (np.abs(cf) > 0.2 * M)))
-        if uc < best_u: best_u, best_w = uc, wc
-        if lbn >= best_u - 1e-9: continue
-        free = np.flatnonzero(~(fz | fa))
-        if free.size == 0: continue
-        jb = int(free[int(np.argmax(np.abs(cf[free])))])
-        for act in (False, True):
-            fzn, fan = fz.copy(), fa.copy()
-            if act: fan[jb] = True
-            else: fzn[jb] = True
-            u1, w1 = _eval_primal(X, y, M, lam0, lam2, fan)
-            if u1 < best_u: best_u, best_w = u1, w1
-            lbc, cfc = _lb(fzn, fan)
-            uid += 1
-            heapq.heappush(pq, (lbc, uid, fzn, fan, cfc))
-    return best_u, best_w
+def _resolve_shared_cert_kernel():
+    k_mod = globals().get("_trusted_box_l0_kernel")
+    if k_mod is not None:
+        return k_mod
+    try:
+        from hegel_machine.cognition import m8_9_1_box_l0_certificate_kernel as _km
+        return _km
+    except Exception:
+        for cand_root in [pathlib.Path.cwd(), *pathlib.Path.cwd().parents]:
+            for rel in ("src/hegel_machine/cognition/m8_9_1_box_l0_certificate_kernel.py", "Hegel Machine/src/hegel_machine/cognition/m8_9_1_box_l0_certificate_kernel.py"):
+                kp = cand_root / rel
+                if kp.is_file():
+                    sp = importlib.util.spec_from_file_location("_shared_box_l0_kernel", str(kp))
+                    mod = importlib.util.module_from_spec(sp)
+                    sp.loader.exec_module(mod)
+                    return mod
+        raise RuntimeError("Trusted canonical `m8_9_1_box_l0_certificate_kernel` not found")
 
 def _verify_cert_v2(X, y, M, lam0, lam2, cert):
-    n, p = X.shape
-    if not isinstance(cert, dict): return False, "not_dict", 1e9
-    for k in ("weights", "objective", "certified_lower_bound", "subcube_leaves"):
-        if k not in cert: return False, f"missing_{k}", 1e9
-    w = np.asarray(cert["weights"], dtype=float)
-    if w.shape != (p,) or not np.all(np.isfinite(w)) or float(np.max(np.abs(w))) > M + 1e-7:
-        return False, "bad_weights", 1e9
-    r = X @ w - y
-    true_obj = 0.5 * float(r @ r) + 0.5 * lam2 * float(w @ w) + lam0 * int(np.sum(np.abs(w) > 1e-8))
-    obj = float(cert["objective"]); clb = float(cert["certified_lower_bound"])
-    if not (math.isfinite(obj) and math.isfinite(clb)) or abs(obj - true_obj) > 1e-5:
-        return False, "obj_mismatch", 1e9
-    leaves = cert["subcube_leaves"]
-    if not isinstance(leaves, list) or not (1 <= len(leaves) <= 2048):
-        return False, "bad_leaf_count", 1e9
-    G = X.T @ X
-    parsed_masks = []
-    min_lb = float("inf")
-    for lf in leaves:
-        if not isinstance(lf, dict): return False, "leaf_not_dict", 1e9
-        raw_fz, raw_fa = lf.get("fixed_zero"), lf.get("fixed_active")
-        def _to_bool(s):
-            if isinstance(s, np.ndarray):
-                return ([bool(x) for x in s.tolist()] if (s.dtype == np.bool_ and s.shape == (p,)) else None)
-            if isinstance(s, (list, tuple)) and len(s) == p and all(isinstance(x, (bool, np.bool_)) for x in s):
-                return [bool(x) for x in s]
-            return None
-        fzb, fab = _to_bool(raw_fz), _to_bool(raw_fa)
-        if fzb is None or fab is None: return False, "non_bool_len_p_mask", 1e9
-        fz = np.asarray(fzb, dtype=bool); fa = np.asarray(fab, dtype=bool)
-        if np.any(fz & fa): return False, "overlap_zero_active", 1e9
-        parsed_masks.append((fz, fa))
-        lb_decl = float(lf.get("lb", float("nan")))
-        if not math.isfinite(lb_decl): return False, "nan_lb", 1e9
-        if "minorant_diagonal" in lf and "minorant_center" in lf:
-            d = np.asarray(lf["minorant_diagonal"], dtype=float)
-            c = np.asarray(lf["minorant_center"], dtype=float)
-            if d.shape != (p,) or c.shape != (p,) or not (np.all(np.isfinite(d)) and np.all(np.isfinite(c))) or np.any(d < -1e-9):
-                return False, "bad_minorant", 1e9
-            if float(np.linalg.eigvalsh(G - np.diag(d))[0]) < -1e-6:
-                return False, "minorant_not_psd", 1e9
-            d_pos = np.maximum(d, 0.0)
-            r_c = y - X @ c
-            g_c = X.T @ r_c
-            const_c = 0.5 * float(r_c @ r_c + (d_pos * c) @ c) + float(g_c @ c)
-            z_c = np.abs(g_c + d_pos * c)
-            kap_c = d_pos + lam2
-            b_c = np.minimum(M, z_c / np.maximum(kap_c, 1e-15))
-            gain_c = b_c * (z_c - 0.5 * kap_c * b_c)
-            on_c = lam0 - gain_c
-            free_c = ~(fz | fa)
-            t_lb = const_c + float(np.sum(on_c[fa])) + float(np.sum(np.minimum(on_c[free_c], 0.0)))
-        elif "dual_nu" in lf:
-            nu = np.asarray(lf["dual_nu"], dtype=float)
-            if nu.shape != (n,) or not np.all(np.isfinite(nu)): return False, "bad_dual_nu", 1e9
-            xi = X.T @ nu
-            t_lb = -0.5 * float(nu @ nu) - float(nu @ y)
-            for j in range(p):
-                wu = float(np.clip(xi[j] / lam2, -M, M))
-                gain_a = abs(xi[j]) * wu - 0.5 * lam2 * (wu ** 2) - lam0
-                if fz[j]: pass
-                elif fa[j]: t_lb -= gain_a
-                else: t_lb -= max(0.0, gain_a)
-        else:
-            return False, "missing_witness", 1e9
-        if lb_decl > t_lb + 1e-5: return False, "invalid_leaf_lb", 1e9
-        min_lb = min(min_lb, float(t_lb))
-    cov = sum(2.0 ** (-int(np.sum(fz) + np.sum(fa))) for fz, fa in parsed_masks)
-    if abs(cov - 1.0) > 1e-8: return False, "incomplete_partition", 1e9
-    for i in range(len(parsed_masks)):
-        fzi, fai = parsed_masks[i]
-        for j in range(i + 1, len(parsed_masks)):
-            fzj, faj = parsed_masks[j]
-            if not (np.any(fzi & faj) or np.any(fai & fzj)):
-                return False, "overlapping_leaves", 1e9
-    if clb > min_lb + 1e-5: return False, "clb_above_min_leaf", 1e9
-    gap = true_obj - min(clb, min_lb)
-    if gap > 1e-5 or gap < -1e-5: return False, f"duality_gap_{gap:.2e}", gap
-    return True, "ok", max(0.0, gap)
+    """`M9.2.1` `A1`: Zero-duplication delegation to canonical `m8_9_1_box_l0_certificate_kernel`."""
+    k_mod = _resolve_shared_cert_kernel()
+    res = k_mod.verify_eq02_style_box_l0_certificate(
+        np.asarray(X, dtype=float),
+        np.asarray(y, dtype=float),
+        box=float(M),
+        l0_penalty=float(lam0),
+        ridge=float(lam2),
+        cert_dict=cert,
+        dual_nu_sign=-1.0,
+        active_tol=1e-8,
+        gap_tol=1e-5,
+        sound_tol=1e-5,
+        max_leaves=2048,
+        allow_index_list_compat=False,
+    )
+    return bool(res["strict_pass"]), str(res["reason"]), float(res.get("reported_gap") if res.get("reported_gap") is not None else 1e9)
 
 def _make_priv(seed, p_dim):
     rng = np.random.default_rng(seed)
@@ -939,7 +833,16 @@ for (sd, p_dim), (st, Z_gt, obs_m, th_gt, y_clean_gt, w_clean_gt) in zip(((99411
     p_mae = float(np.mean(np.abs(ap[obs_m] - Z_gt[obs_m])))
     c_rel = float(np.linalg.norm(cw - th_gt) / np.linalg.norm(th_gt))
     d_mae = float(np.mean(np.abs(dt - y_clean_gt)))
+    # `M9.2.1` `A1`: Enforce Stage 2 -> Stage 3 public handoff consistency (`dt == y_raw[s3] - H_cand[s3] @ cw`)!
+    _strata_c = np.asarray(st["panel"]["stratum"])
+    _phase_c = np.angle(np.asarray(st["interferometry"]["signal_phasor"], dtype=np.complex128) * np.conj(np.asarray(st["interferometry"]["ref_phasor"], dtype=np.complex128)))
+    _hc = np.column_stack([np.ones(len(_strata_c)), (_strata_c == 1).astype(float), (_strata_c == 2).astype(float), ap, _phase_c])
+    _s3 = np.asarray(st["stage3_indices"], dtype=int)
+    handoff_err = float(np.max(np.abs(dt - (np.asarray(st["y_assay_raw"], dtype=float)[_s3] - _hc[_s3] @ cw))))
     ok_c, rsn_c, gap_c = _verify_cert_v2(st["X_cand"], dt, float(st["M"]), float(st["lam0"]), float(st["lam2"]), out["certified_selection"])
+    if handoff_err > 1e-6:
+        ok_c = False
+        rsn_c = f"handoff_mismatch_{handoff_err:.2e}"
     w_sub = np.asarray(out["certified_selection"].get("weights", np.zeros(p_dim)), dtype=float)
     w_rel = float(np.linalg.norm(w_sub - w_clean_gt) / max(np.linalg.norm(w_clean_gt), 1e-8)) if w_sub.shape == (p_dim,) else 1e9
     if not ok_c: valid = False
@@ -948,7 +851,7 @@ for (sd, p_dim), (st, Z_gt, obs_m, th_gt, y_clean_gt, w_clean_gt) in zip(((99411
     max_deconf_mae = max(max_deconf_mae, d_mae)
     max_w_rel = max(max_w_rel, w_rel)
     max_gap = max(max_gap, gap_c)
-    diag_rows.append({"seed": sd, "p": p_dim, "panel_mae": round(p_mae, 6), "cal_rel_l2": round(c_rel, 6), "deconf_mae": round(d_mae, 6), "w_vs_clean_rel_l2": round(w_rel, 6), "cert_ok": ok_c, "cert_reason": rsn_c})
+    diag_rows.append({"seed": sd, "p": p_dim, "panel_mae": round(p_mae, 6), "cal_rel_l2": round(c_rel, 6), "deconf_mae": round(d_mae, 6), "handoff_max_abs_diff": round(handoff_err, 9), "w_vs_clean_rel_l2": round(w_rel, 6), "cert_ok": ok_c, "cert_reason": rsn_c})
 
 student_elapsed = time.monotonic() - t0
 strict_pass = bool(
@@ -1090,6 +993,19 @@ def _make_dataset(seed):
     twin_lo_idx = np.arange(30, 36, dtype=int)
 
     def _sim_curves(xl, n_rows, force_twins=False):
+        # `M9.2.1` `A8`: Exact derivative-consistent Prony ODE (`instant_rate_0` = true d(strain)/dt(0+) + noise)
+        # AND nullspace-constructed twins with `(a1/tau1)*dz1 + (a2/tau2)*dz2 == 0` so twins share IDENTICAL
+        # `stress_hold_0`, `strain_0`, AND true physical `d(strain)/dt(0+)` while still diverging strongly for `t > 0`!
+        s_idx = np.arange(L_hist, dtype=float)
+        W_conv = np.vstack([
+            (1.0 - math.exp(-dt / float(tau_m))) * np.exp(-((L_hist - 1.0 - s_idx) * dt) / float(tau_m))
+            for tau_m in taus
+        ])
+        r_deriv = (theta_true[0] / taus[0]) * W_conv[0] + (theta_true[1] / taus[1]) * W_conv[1]
+        v_sep = W_conv[0] - W_conv[1]
+        dh_null = v_sep - (float(v_sep @ r_deriv) / max(float(r_deriv @ r_deriv), 1e-18)) * r_deriv
+        dh_unit = dh_null / max(float(np.linalg.norm(dh_null)), 1e-18)
+
         hist = rng.normal(scale=1.2, size=(n_rows, L_hist))
         for r in range(n_rows):
             lvl = rng.uniform(-2.2, 2.2)
@@ -1097,26 +1013,28 @@ def _make_dataset(seed):
             hist[r, 20:] += rng.uniform(-2.2, 2.2)
         sh0 = rng.uniform(0.6, 2.4, size=n_rows)
         s0 = rng.uniform(0.1, 0.5, size=n_rows)
-        ir0 = 0.15 * sh0 + rng.normal(scale=0.02, size=n_rows)
+        rate_noise = rng.normal(scale=0.015, size=n_rows)
         if force_twins:
-            for k_t in range(6):
+            for k_t in range(len(twin_hi_idx)):
                 ih, il = int(twin_hi_idx[k_t]), int(twin_lo_idx[k_t])
                 sh0[il] = sh0[ih]
                 s0[il] = s0[ih]
-                ir0[il] = ir0[ih]
-                hist[ih] = np.linspace(2.6, 3.2, L_hist)
-                hist[il] = np.linspace(-2.8, -2.4, L_hist)
-        z_modes = []
-        for tau_m in taus:
-            dec = math.exp(-dt / float(tau_m))
-            zm = np.zeros(n_rows, dtype=float)
-            for s in range(L_hist):
-                zm = dec * zm + (1.0 - dec) * hist[:, s]
-            z_modes.append(zm)
-        z1, z2 = z_modes[0], z_modes[1]
+                rate_noise[il] = rate_noise[ih]
+                h_mid = np.linspace(-0.4, 0.4, L_hist) + rng.uniform(-0.3, 0.3)
+                amp_tw = 18.5 + 1.5 * k_t
+                hist[ih] = h_mid + amp_tw * dh_unit
+                hist[il] = h_mid - amp_tw * dh_unit
+        z1 = hist @ W_conv[0]
+        z2 = hist @ W_conv[1]
+        drift_rate = theta_true[2] + xl @ theta_true[3:]
+        true_deriv0 = (
+            (theta_true[0] / taus[0]) * (sh0 - z1)
+            + (theta_true[1] / taus[1]) * (sh0 - z2)
+            + drift_rate
+        )
+        ir0 = true_deriv0 + rate_noise
         e1 = 1.0 - np.exp(-eval_times / taus[0])
         e2 = 1.0 - np.exp(-eval_times / taus[1])
-        drift_rate = theta_true[2] + xl @ theta_true[3:]
         clean = (
             s0[:, None]
             + theta_true[0] * ((sh0 - z1)[:, None] * e1[None, :])
@@ -1132,10 +1050,11 @@ def _make_dataset(seed):
     tr_obs.ravel()[sp_flat] += rng.choice([-1.0, 1.0], size=n_sp) * rng.uniform(0.75, 1.25, size=n_sp)
 
     te_h, te_sh0, te_s0, te_ir0, te_clean = _sim_curves(te_xl, len(te_lab), force_twins=True)
-    crits = te_s0 + 0.55 * (te_clean[:, -1] - te_s0) + 0.12
-    for k_t in range(6):
+    # `M9.2.1` `A8`: `critical_strain` drawn 100% independently of `te_clean` future curves (`0` terminal-truth leakage!)
+    crits = te_s0 + rng.uniform(0.32, 0.92, size=len(te_s0))
+    for k_t in range(len(twin_hi_idx)):
         ih, il = int(twin_hi_idx[k_t]), int(twin_lo_idx[k_t])
-        crits[ih] = crits[il] = 0.5 * (float(te_clean[ih, 10]) + float(te_clean[il, 10]))
+        crits[il] = crits[ih] = float(te_s0[ih] + 0.58)
     te_cross = _crossing_times(eval_times, te_s0, te_clean, crits)
 
     return {
@@ -1254,30 +1173,42 @@ def _make_priv(seed):
     twin_lo = np.arange(32, 40, dtype=int)
 
     def _sim_curves(xl, n_rows, force_twins=False):
+        s_idx = np.arange(L_hist, dtype=float)
+        W_conv = np.vstack([
+            (1.0 - math.exp(-dt / float(tau_m))) * np.exp(-((L_hist - 1.0 - s_idx) * dt) / float(tau_m))
+            for tau_m in taus
+        ])
+        r_deriv = (theta_true[0] / taus[0]) * W_conv[0] + (theta_true[1] / taus[1]) * W_conv[1]
+        v_sep = W_conv[0] - W_conv[1]
+        dh_null = v_sep - (float(v_sep @ r_deriv) / max(float(r_deriv @ r_deriv), 1e-18)) * r_deriv
+        dh_unit = dh_null / max(float(np.linalg.norm(dh_null)), 1e-18)
+
         hist = rng.normal(scale=1.2, size=(n_rows, L_hist))
         for r in range(n_rows):
             hist[r, :20] += rng.uniform(-2.3, 2.3)
             hist[r, 20:] += rng.uniform(-2.3, 2.3)
         sh0 = rng.uniform(0.6, 2.4, size=n_rows)
         s0 = rng.uniform(0.1, 0.5, size=n_rows)
-        ir0 = 0.15 * sh0 + rng.normal(scale=0.02, size=n_rows)
+        rate_noise = rng.normal(scale=0.015, size=n_rows)
         if force_twins:
-            for k_t in range(8):
+            for k_t in range(len(twin_hi)):
                 ih, il = int(twin_hi[k_t]), int(twin_lo[k_t])
-                sh0[il] = sh0[ih]; s0[il] = s0[ih]; ir0[il] = ir0[ih]
-                hist[ih] = np.linspace(2.7, 3.3, L_hist)
-                hist[il] = np.linspace(-2.9, -2.5, L_hist)
-        z_modes = []
-        for tau_m in taus:
-            dec = math.exp(-dt / float(tau_m))
-            zm = np.zeros(n_rows, dtype=float)
-            for s in range(L_hist):
-                zm = dec * zm + (1.0 - dec) * hist[:, s]
-            z_modes.append(zm)
-        z1, z2 = z_modes[0], z_modes[1]
+                sh0[il] = sh0[ih]; s0[il] = s0[ih]; rate_noise[il] = rate_noise[ih]
+                h_mid = np.linspace(-0.4, 0.4, L_hist) + rng.uniform(-0.3, 0.3)
+                amp_tw = 19.0 + 1.5 * k_t
+                hist[ih] = h_mid + amp_tw * dh_unit
+                hist[il] = h_mid - amp_tw * dh_unit
+        z1 = hist @ W_conv[0]
+        z2 = hist @ W_conv[1]
+        drift_rate = theta_true[2] + xl @ theta_true[3:]
+        true_deriv0 = (
+            (theta_true[0] / taus[0]) * (sh0 - z1)
+            + (theta_true[1] / taus[1]) * (sh0 - z2)
+            + drift_rate
+        )
+        ir0 = true_deriv0 + rate_noise
         e1 = 1.0 - np.exp(-eval_times / taus[0])
         e2 = 1.0 - np.exp(-eval_times / taus[1])
-        drift_rate = theta_true[2] + xl @ theta_true[3:]
         clean = (
             s0[:, None]
             + theta_true[0] * ((sh0 - z1)[:, None] * e1[None, :])
@@ -1292,10 +1223,10 @@ def _make_priv(seed):
     sp_flat = rng.choice(tr_obs.size, size=n_sp, replace=False)
     tr_obs.ravel()[sp_flat] += rng.choice([-1.0, 1.0], size=n_sp) * rng.uniform(0.75, 1.25, size=n_sp)
     te_h, te_sh0, te_s0, te_ir0, te_clean = _sim_curves(te_xl, len(te_lab), force_twins=True)
-    crits = te_s0 + 0.55 * (te_clean[:, -1] - te_s0) + 0.12
-    for k_t in range(8):
+    crits = te_s0 + rng.uniform(0.32, 0.92, size=len(te_s0))
+    for k_t in range(len(twin_hi)):
         ih, il = int(twin_hi[k_t]), int(twin_lo[k_t])
-        crits[ih] = crits[il] = 0.5 * (float(te_clean[ih, 10]) + float(te_clean[il, 10]))
+        crits[ih] = crits[il] = float(te_s0[ih] + 0.58)
     te_cross = _crossing_times(eval_times, te_s0, te_clean, crits)
     ds = {
         "history_dt": dt, "memory_taus": taus.copy(), "eval_times": eval_times.copy(),
@@ -1727,6 +1658,27 @@ print(json.dumps({
 EQUAL_INFO_M92_BY_ID: dict[str, HoldoutOODTask] = {t.task_id: t for t in EQUAL_INFO_M92_TASKS}
 
 
+_EQ_PUBLIC_FIXTURES_BY_ID: dict[str, tuple[str, ...]] = {
+    "eq01__3d_multi_operator_robin_continuation_and_nuisance_tomography": (
+        "/holdout_task/public_eq01_studies.pkl",
+        "/holdout_task/validate_public_schema.py",
+    ),
+    "eq02__coupled_panel_interferometry_cauchy_and_connected_box_l0": (
+        "/holdout_task/public_eq02_studies.pkl",
+        "/holdout_task/_box_l0_public_schema.py",
+        "/holdout_task/validate_public_schema.py",
+    ),
+    "eq03__viscoelastic_hereditary_memory_same_present_different_past": (
+        "/holdout_task/public_eq03_datasets.pkl",
+        "/holdout_task/validate_public_schema.py",
+    ),
+    "eq04__nonhermitian_complex_advection_and_coupled_ising_negative_control": (
+        "/holdout_task/public_eq04_problems.pkl",
+        "/holdout_task/validate_public_schema.py",
+    ),
+}
+
+
 def equal_info_m92_task_to_frontier_task(ht: HoldoutOODTask) -> m6f.FrontierBenchmarkTask:
     ensure_clean_scipy_sandbox_image()
     return m6f.FrontierBenchmarkTask(
@@ -1742,6 +1694,8 @@ def equal_info_m92_task_to_frontier_task(ht: HoldoutOODTask) -> m6f.FrontierBenc
         declared_artifacts=ht.declared_artifacts,
         declared_callable_entrypoints=ht.declared_callable_entrypoints,
         holdout_public_setup_py=ht.public_setup_py,
+        required_public_assets=_EQ_PUBLIC_FIXTURES_BY_ID.get(ht.task_id, ("/holdout_task/validate_public_schema.py",)),
+        private_verifier_callable=run_equal_info_m92_private_verifier_for_container,
         agent_cpus=2,
         agent_memory_mb=2560,
         verifier_cpus=2,

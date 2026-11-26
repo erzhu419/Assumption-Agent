@@ -54,12 +54,31 @@ def compute_inactive_threshold_lipschitz_guard(
     box: float,
     *,
     active_tol: float = 1e-10,
+    b0_set: frozenset[int] = frozenset(),
+    b1_set: frozenset[int] = frozenset(),
 ) -> float:
-    """Upper-bound smooth objective reduction from coordinates with `|w_j| <= active_tol` treated as zero in L0 count."""
+    """Upper-bound smooth objective reduction `f(w_0) - f(w)` from coordinates `I = {j : |w_j| <= active_tol}` treated as zero in L0 count.
+
+    For `w` in subcube `(B0, B1)` with `w_0` zeroing `I` (`B0 <= I <= {0..p-1} \\ B1`), PSD convexity of `Q = X^T X + ridge*I` gives
+    `f(w) - f(w_0) >= grad f(w_0)^T (w - w_0)`. Since `w_{0,k} = 0` for all `k in I` (so `k != j` and `k not in B0`),
+    `|grad_j f(w_0)| <= |h_j| + box * sum_{k != j, k not in B0} |Q_{jk}|` for every `j in I` (`j not in B1`).
+    """
     p = X.shape[1]
-    Q = X.T @ X + float(ridge) * np.eye(p)
-    h = X.T @ y
-    return float(active_tol * float(np.sum(np.abs(h) + float(box) * np.sum(np.abs(Q), axis=1))))
+    if p == 0 or active_tol <= 0.0:
+        return 0.0
+    Q_abs = np.abs(X.T @ X + float(ridge) * np.eye(p))
+    np.fill_diagonal(Q_abs, 0.0)
+    if b0_set:
+        z_idx = [j for j in b0_set if 0 <= j < p]
+        if z_idx:
+            Q_abs[:, z_idx] = 0.0
+    h_abs = np.abs(X.T @ y)
+    per_coord = h_abs + float(box) * np.sum(Q_abs, axis=1)
+    if b1_set:
+        a_idx = [j for j in b1_set if 0 <= j < p]
+        if a_idx:
+            per_coord[a_idx] = 0.0
+    return float(active_tol * float(np.sum(per_coord)))
 
 
 def evaluate_fenchel_dual_leaf_lower_bound(
@@ -107,7 +126,9 @@ def evaluate_fenchel_dual_leaf_lower_bound(
             if hj > rho:
                 pen_sum += hj - rho
 
-    thresh_guard = compute_inactive_threshold_lipschitz_guard(X, y, lam, M, active_tol=active_tol)
+    thresh_guard = compute_inactive_threshold_lipschitz_guard(
+        X, y, lam, M, active_tol=active_tol, b0_set=b0_set, b1_set=b1_set
+    )
     lb = (
         float(nu @ y)
         - 0.5 * float(nu @ nu)
@@ -145,14 +166,15 @@ def evaluate_psd_minorant_leaf_lower_bound(
     lam = float(ridge)
     rho = float(l0_penalty)
     M = float(box)
-    if np.max(np.abs(c0)) > M + 1e-9:
-        return False, "minorant_center_outside_box", float("nan")
+    if M <= 0.0 or lam < 0.0 or rho < 0.0:
+        return False, "invalid_problem_hyperparameters", float("nan")
 
     G = X.T @ X
-    min_eig = float(np.min(np.linalg.eigvalsh(G - np.diag(d))))
-    if min_eig < -1e-11:
+    scale_eig = max(1.0, float(np.max(np.diag(G))) if G.size else 1.0, float(np.max(d)) if d.size else 1.0)
+    min_eig = float(np.min(np.linalg.eigvalsh(0.5 * (G + G.T) - np.diag(d))))
+    if min_eig < -1e-9 * scale_eig:
         return False, f"minorant_not_psd(min_eig={min_eig:.3e})", float("nan")
-    psd_slack = (0.5 * abs(min_eig) * float(np.sum((M + np.abs(c0)) ** 2))) if min_eig < 0.0 else 0.0
+    psd_slack = (0.5 * (abs(min_eig) + 2e-15 * scale_eig) * float(np.sum((M + np.abs(c0)) ** 2))) if min_eig < 0.0 else 0.0
 
     r0 = y - X @ c0
     g0 = X.T @ r0
@@ -180,7 +202,9 @@ def evaluate_psd_minorant_leaf_lower_bound(
         else:
             coord_sum += min(val_zero, val_nz)
 
-    thresh_guard = compute_inactive_threshold_lipschitz_guard(X, y, lam, M, active_tol=active_tol)
+    thresh_guard = compute_inactive_threshold_lipschitz_guard(
+        X, y, lam, M, active_tol=active_tol, b0_set=b0_set, b1_set=b1_set
+    )
     lb = const_term + coord_sum - psd_slack - thresh_guard - roundoff_guard
     return True, "ok_psd_minorant", float(lb)
 
@@ -736,4 +760,116 @@ def normalize_and_validate_box_l0_public_schema(
             "subcube_leaves": canonical_leaves,
         },
     }
+
+
+def verify_eq02_style_box_l0_certificate(
+    X: np.ndarray,
+    y: np.ndarray,
+    *,
+    box: float,
+    l0_penalty: float,
+    ridge: float,
+    cert_dict: Any,
+    dual_nu_sign: float = -1.0,
+    active_tol: float = 1e-8,
+    gap_tol: float = 1e-5,
+    sound_tol: float = 1e-5,
+    max_leaves: int = 2048,
+    allow_index_list_compat: bool = False,
+) -> dict[str, Any]:
+    """Centralized `M9.2.1` `A1` adapter mapping `subcube_leaves` (`bool[p]` `fixed_zero`/`fixed_active`, `lb`)
+    onto the single canonical `verify_box_l0_subcube_certificate` kernel (`0` duplicated dual/minorant math!).
+
+    Note on `dual_nu_sign`:
+    - `evaluate_fenchel_dual_leaf_lower_bound` uses `+nu^T y - 0.5*||nu||_2^2 - ...`.
+    - Tasks whose prompt writes `-nu^T y - 0.5*||nu||_2^2 - ...` (`eq02` / `hd01` convention) pass `dual_nu_sign = -1.0`;
+      tasks using `+nu^T y` pass `dual_nu_sign = +1.0`.
+    """
+    X_arr = np.asarray(X, dtype=float)
+    y_arr = np.asarray(y, dtype=float)
+    _, p = X_arr.shape
+    pub_chk = normalize_and_validate_box_l0_public_schema(
+        cert_dict,
+        p,
+        box=float(box),
+        max_leaves=int(max_leaves),
+        allow_index_list_compat=allow_index_list_compat,
+    )
+    if not (pub_chk.get("schema_valid") and pub_chk.get("partition_valid")):
+        return {
+            "strict_pass": False,
+            "schema_valid": bool(pub_chk.get("schema_valid")),
+            "partition_valid": bool(pub_chk.get("partition_valid")),
+            "leaf_bounds_valid": False,
+            "certificate_valid": False,
+            "gap_satisfied": False,
+            "reason": str(pub_chk.get("reason") or "public_schema_or_partition_invalid"),
+            "reported_gap": 1e9,
+            "leaf_count": 0,
+        }
+    can = pub_chk["canonical"]
+    mapped_leaves: list[dict[str, Any]] = []
+    sgn = 1.0 if float(dual_nu_sign) >= 0.0 else -1.0
+    for lf in can["subcube_leaves"]:
+        mlf: dict[str, Any] = {
+            "fixed_zero": list(lf["fixed_zero"]),
+            "fixed_nonzero": list(lf["fixed_nonzero"]),
+            "leaf_lower_bound": float(lf["leaf_lower_bound"]),
+        }
+        if "minorant_diagonal" in lf and "minorant_center" in lf:
+            mlf["minorant_diagonal"] = list(lf["minorant_diagonal"])
+            mlf["minorant_center"] = list(lf["minorant_center"])
+        if "dual_nu" in lf:
+            mlf["dual_nu"] = (sgn * np.asarray(lf["dual_nu"], dtype=float)).tolist()
+        mapped_leaves.append(mlf)
+    mapped_ans = {
+        "weights": list(can["weights"]),
+        "objective": float(can["objective"]),
+        "certified_lower_bound": float(can["certified_lower_bound"]),
+        "certificate_leaves": mapped_leaves,
+    }
+    res = verify_box_l0_subcube_certificate(
+        {
+            "X": X_arr,
+            "y": y_arr,
+            "ridge": float(ridge),
+            "l0_penalty": float(l0_penalty),
+            "box": float(box),
+            "gap_tol": float(gap_tol),
+            "max_leaves": int(max_leaves),
+        },
+        mapped_ans,
+        max_enum_p=0,
+        sound_tol=float(sound_tol),
+        active_tol=float(active_tol),
+    )
+    res["schema_valid"] = True
+    return res
+
+
+def get_public_schema_validator_only_source() -> str:
+    """Return standalone pure-public source defining `CANONICAL_BOX_L0_CERTIFICATE_SCHEMA_VERSION` and
+    `normalize_and_validate_box_l0_public_schema` extracted verbatim from this module (`0` private verifier logic).
+    """
+    import ast as _ast
+    from pathlib import Path as _Path
+
+    src = _Path(__file__).read_text(encoding="utf-8")
+    tree = _ast.parse(src)
+    kept_segments: list[str] = [
+        "from __future__ import annotations\nimport math\nfrom typing import Any\nimport numpy as np\n"
+    ]
+    for node in tree.body:
+        if isinstance(node, _ast.Assign) and any(
+            isinstance(t, _ast.Name) and t.id == "CANONICAL_BOX_L0_CERTIFICATE_SCHEMA_VERSION" for t in node.targets
+        ):
+            seg = _ast.get_source_segment(src, node)
+            if seg:
+                kept_segments.append(seg)
+        elif isinstance(node, _ast.FunctionDef) and node.name == "normalize_and_validate_box_l0_public_schema":
+            seg = _ast.get_source_segment(src, node)
+            if seg:
+                kept_segments.append(seg)
+    return "\n\n".join(kept_segments) + "\n"
+
 

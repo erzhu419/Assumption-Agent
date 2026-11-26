@@ -572,7 +572,14 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
         wormhole_family="fam_test",
         declared_artifacts=("/holdout_task/sol.py",),
         instruction_text="Implement `def solve_val(x):` inside `/holdout_task/sol.py` returning `2.0 * x`.",
-        public_setup_py="open('/holdout_task/readme.txt', 'w').write('ok\\n')\n",
+        public_setup_py=(
+            "open('/holdout_task/readme.txt', 'w').write('ok\\n')\n"
+            "open('/holdout_task/validate_public_schema.py', 'w').write("
+            "'import json, sys\\nsys.path.insert(0, \"/holdout_task\")\\nimport sol\\n"
+            "ok_pt = (sol.solve_val(3.0) == 6.0)\\nok_gauge = (sol.solve_val(0.0) == 0.0 and ok_pt)\\n"
+            "print(json.dumps({\"schema_valid\": bool(ok_pt), \"gauge_invariance_verified\": bool(ok_gauge)}))\\n"
+            "sys.exit(0 if ok_pt else 1)\\n')\n"
+        ),
         private_verifier_py="import json; print(json.dumps({'strict_pass': True}))\n",
     )
     f_task = hard_stress_task_to_frontier_task(toy_ho)
@@ -617,13 +624,13 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
                 "sublated_pivot": None,
             },
         },
-        # Turn 3: Write valid candidate + run generic 1-point check (`exit 0`, NO identifiability/gauge witness!) ->
-        # `M8.9.1` `R4` MUST STILL keep `target_identifiability` `ng_t01` pending!
+        # Turn 3: Write 1-point-matching but unanchored candidate (`x + 3.0`, so `solve_val(3.0) == 6.0` passes schema,
+        # while `solve_val(0.0) == 3.0 != 0.0` fails host gauge check!) -> `ng_t01` MUST STILL stay pending!
         {
             "action_type": "execute_in_remote_docker",
-            "bash_command": "printf 'def solve_val(x):\\n    return 2.0 * x\\n' > /holdout_task/sol.py && python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(3.0) == 6.0\"",
+            "bash_command": "printf 'def solve_val(x):\\n    return x + 3.0\\n' > /holdout_task/sol.py && python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(3.0) == 6.0\"",
             "final_answer": None,
-            "rationale": "Fixed slope at single point without gauge check.",
+            "rationale": "Matched single point without gauge anchor.",
             "considered_alternatives": [],
             "active_hypothesis_and_worst_slice_metric": "single_pt_err=0.0",
             "nogood_update": {
@@ -637,10 +644,10 @@ def test_m8_9_p1_7_witness_bound_nogood_resolution_and_router_schema_v2(monkeypa
                 "sublated_pivot": None,
             },
         },
-        # Turn 4: Run explicit anchor/gauge identifiability witness (`exit 0`) -> NOW `ng_t01` resolves cleanly!
+        # Turn 4: Fix anchor gauge (`2.0 * x`) and verify (`exit 0`) -> host probe signs `gauge_invariance_verified=True` and `ng_t01` resolves!
         {
             "action_type": "execute_in_remote_docker",
-            "bash_command": "python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(0.0) == 0.0 and sol.solve_val(3.0) == 6.0; print('anchor_gauge_identifiability_verified')\"",
+            "bash_command": "printf 'def solve_val(x):\\n    return 2.0 * x\\n' > /holdout_task/sol.py && python3 -c \"import sys; sys.path.insert(0, '/holdout_task'); import sol; assert sol.solve_val(0.0) == 0.0 and sol.solve_val(3.0) == 6.0; print('anchor_gauge_identifiability_verified')\"",
             "final_answer": None,
             "rationale": "Verified anchor gauge identifiability and exact slope.",
             "considered_alternatives": [],

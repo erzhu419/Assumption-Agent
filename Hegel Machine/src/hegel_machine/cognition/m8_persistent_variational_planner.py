@@ -2945,7 +2945,81 @@ class M8VariationalPlanner:
             diverse_models.sort(key=lambda c: c.val_log_predictive_gain, reverse=True)
             pred_fns = [(c.candidate_id, c.predict_fn) for c in diverse_models[:4] if c.predict_fn is not None]
             if len(pred_fns) >= 2:
-                probe_sel = select_discriminating_observation_probe(pred_fns, candidate_probes)
+                def _prevalidate_and_bind_probe(raw_p_item: dict[str, Any], target_ds: dict[str, Any] = ds_tr) -> tuple[dict[str, Any], dict[str, Any], bool]:
+                    norm_c = _normalize_probe_observation_context(raw_p_item)
+                    is_struct = "x" in raw_p_item and isinstance(raw_p_item["x"], dict)
+                    req_f = sorted(target_ds["x"].keys())
+                    if sorted(norm_c["x"].keys()) != req_f:
+                        raise ValueError(f"Probe feature keys {sorted(norm_c['x'].keys())} != dataset features {req_f}")
+                    lengths = {len(np.atleast_1d(np.asarray(norm_c["x"][fk], dtype=float)).ravel()) for fk in req_f}
+                    if len(lengths) != 1 or next(iter(lengths)) < 1:
+                        raise ValueError("Probe feature columns must have uniform length >= 1")
+                    n_incoming = next(iter(lengths))
+                    for fk in req_f:
+                        vf = np.atleast_1d(np.asarray(norm_c["x"][fk], dtype=float)).ravel()
+                        if not bool(np.all(np.isfinite(vf))):
+                            raise ValueError(f"Probe feature `{fk}` contains non-finite entries")
+                    n_existing = len(np.asarray(target_ds["y"]).ravel())
+                    ds_dt = target_ds.get("history_dt")
+                    pr_dt = norm_c.get("history_dt")
+                    bound_p = deepcopy(raw_p_item)
+                    if ds_dt is not None:
+                        if pr_dt is not None and abs(float(ds_dt) - float(pr_dt)) > 1e-12:
+                            raise ValueError(f"Incompatible `history_dt` on probe ({pr_dt} != dataset {ds_dt})")
+                        norm_c["history_dt"] = float(ds_dt)
+                        if is_struct:
+                            bound_p["history_dt"] = float(ds_dt)
+                    for row_tk in ("past_driver_history", "timestamps", "trajectory_ids"):
+                        has_ex = row_tk in target_ds and target_ds[row_tk] is not None
+                        has_in = row_tk in norm_c and norm_c[row_tk] is not None
+                        if has_ex and not has_in:
+                            raise ValueError(f"Dataset requires per-row temporal field `{row_tk}` on AcquireObservation")
+                        if (not has_ex) and has_in and n_existing > 0:
+                            raise ValueError(
+                                f"Cannot append new per-row temporal column `{row_tk}` ({n_incoming} rows) to existing "
+                                f"{n_existing}-row dataset without explicit schema migration"
+                            )
+                        if has_in:
+                            inc_a = np.asarray(norm_c[row_tk])
+                            if inc_a.ndim == 0 or inc_a.shape[0] != n_incoming:
+                                raise ValueError(f"Per-row temporal field `{row_tk}` row count != {n_incoming}")
+                            if has_ex:
+                                ex_a = np.asarray(target_ds[row_tk])
+                                if ex_a.shape[1:] != inc_a.shape[1:]:
+                                    raise ValueError(f"Per-row temporal field `{row_tk}` trailing shape {inc_a.shape[1:]} != {ex_a.shape[1:]}")
+                    if norm_c.get("timestamps") is not None and norm_c.get("trajectory_ids") is not None:
+                        ts_in = np.asarray(norm_c["timestamps"], dtype=float).ravel()
+                        trj_in = np.asarray(norm_c["trajectory_ids"]).ravel()
+                        if not bool(np.all(np.isfinite(ts_in))):
+                            raise ValueError("Probe `timestamps` must be finite")
+                        ex_ts = np.asarray(target_ds["timestamps"], dtype=float).ravel() if target_ds.get("timestamps") is not None else np.array([], dtype=float)
+                        ex_trj = np.asarray(target_ds["trajectory_ids"]).ravel() if target_ds.get("trajectory_ids") is not None else np.array([], dtype=trj_in.dtype)
+                        all_ts = np.concatenate([ex_ts, ts_in]) if ex_ts.size else ts_in
+                        all_trj = np.concatenate([ex_trj, trj_in]) if ex_trj.size else trj_in
+                        for u_id in dict.fromkeys(str(v) for v in all_trj.tolist()):
+                            seq_t = all_ts[[str(v) == u_id for v in all_trj.tolist()]]
+                            if len(seq_t) >= 2 and bool(np.any(np.diff(seq_t) < -1e-12)):
+                                raise ValueError(f"Non-monotone `timestamps` within trajectory `{u_id}`")
+                    if "initial_memory_states" in norm_c and norm_c["initial_memory_states"] is not None:
+                        ims_in = norm_c["initial_memory_states"]
+                        if not isinstance(ims_in, dict):
+                            raise ValueError("`initial_memory_states` must be a per-trajectory dict `{traj_id: [t_prev, z_prev, u_prev]}`")
+                        ex_ims = target_ds.get("initial_memory_states") or {}
+                        if not isinstance(ex_ims, dict):
+                            raise ValueError("Existing dataset `initial_memory_states` is not a dict")
+                        for tk_id, trip in ims_in.items():
+                            trip_arr = np.asarray(trip, dtype=float).ravel()
+                            if trip_arr.shape != (3,) or not bool(np.all(np.isfinite(trip_arr))):
+                                raise ValueError(f"`initial_memory_states[{tk_id!r}]` must be a finite 3-element sequence `[t_prev, z_prev, u_prev]`")
+                            sk_id = str(tk_id)
+                            if sk_id in ex_ims:
+                                ex_trip = np.asarray(ex_ims[sk_id], dtype=float).ravel()
+                                if ex_trip.shape != (3,) or not bool(np.allclose(ex_trip, trip_arr, atol=1e-12, rtol=0.0)):
+                                    raise ValueError(f"Conflicting `initial_memory_states` overwrite for trajectory `{sk_id}`")
+                    return bound_p, norm_c, is_struct
+
+                normalized_probes = [_prevalidate_and_bind_probe(cp, ds_tr)[0] for cp in candidate_probes]
+                probe_sel = select_discriminating_observation_probe(pred_fns, normalized_probes)
                 if probe_sel["max_utility"] > 0.02:
                     req_probe_cost = 0.50 if probe_oracle_fn is not None else 0.05
                     if _try_spend("AcquireObservation_probe", req_probe_cost):
@@ -2955,50 +3029,78 @@ class M8VariationalPlanner:
                         def _apply_probe(g: PersistentMechanismGraph, psel=probe_sel) -> None:
                             if probe_oracle_fn is not None and psel.get("selected_probe") is not None:
                                 raw_p = psel["selected_probe"]
-                                norm_ctx = _normalize_probe_observation_context(raw_p)
-                                is_struct_p = "x" in raw_p and isinstance(raw_p["x"], dict)
-                                oracle_arg = deepcopy(raw_p) if is_struct_p else {str(k): float(np.asarray(v).ravel()[0]) for k, v in norm_ctx["x"].items()}
-                                raw_obs = probe_oracle_fn(oracle_arg)  # type: ignore[arg-type]
-                                if isinstance(raw_obs, dict):
-                                    y_arr = np.atleast_1d(np.asarray(raw_obs["y"], dtype=float)).ravel()
-                                    for tk in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states"):
-                                        if raw_obs.get(tk) is not None:
-                                            norm_ctx[tk] = deepcopy(raw_obs[tk])
-                                else:
-                                    y_arr = np.atleast_1d(np.asarray(raw_obs, dtype=float)).ravel()
-                                n_new = len(y_arr)
-                                if n_new < 1 or not bool(np.all(np.isfinite(y_arr))):
-                                    raise ValueError("Oracle returned empty or non-finite observation y")
                                 tr_d = g.task_datasets[task_id]["train"]
-                                req_feats = sorted(tr_d["x"].keys())
-                                if sorted(norm_ctx["x"].keys()) != req_feats:
-                                    raise ValueError(f"Probe feature keys {sorted(norm_ctx['x'].keys())} != dataset features {req_feats}")
-                                staged_x: dict[str, np.ndarray] = {}
-                                for k in req_feats:
-                                    v_add = np.atleast_1d(np.asarray(norm_ctx["x"][k], dtype=float)).ravel()
-                                    if len(v_add) != n_new or not bool(np.all(np.isfinite(v_add))):
-                                        raise ValueError(f"Probe feature `{k}` length/nan mismatch vs y ({len(v_add)} != {n_new})")
-                                    staged_x[k] = np.concatenate([np.asarray(tr_d["x"][k], dtype=float).ravel(), v_add])
-                                staged_temporal: dict[str, Any] = {}
-                                for arr_tk in ("past_driver_history", "timestamps", "trajectory_ids", "initial_memory_states"):
-                                    has_existing = arr_tk in tr_d and tr_d[arr_tk] is not None
-                                    has_incoming = arr_tk in norm_ctx and norm_ctx[arr_tk] is not None
-                                    if has_existing and not has_incoming:
-                                        raise ValueError(f"Dataset requires temporal field `{arr_tk}` on AcquireObservation append")
-                                    if has_incoming:
-                                        inc_arr = np.asarray(norm_ctx[arr_tk])
-                                        if inc_arr.shape[0] != n_new:
-                                            raise ValueError(f"Temporal field `{arr_tk}` row count {inc_arr.shape[0]} != {n_new}")
-                                        if has_existing:
-                                            ex_arr = np.asarray(tr_d[arr_tk])
-                                            staged_temporal[arr_tk] = np.concatenate([ex_arr, inc_arr], axis=0)
-                                        else:
-                                            staged_temporal[arr_tk] = inc_arr
-                                if "history_dt" in norm_ctx and norm_ctx["history_dt"] is not None:
-                                    if tr_d.get("history_dt") is not None and abs(float(tr_d["history_dt"]) - float(norm_ctx["history_dt"])) > 1e-12:
-                                        raise ValueError("Incompatible `history_dt` on AcquireObservation append")
-                                    staged_temporal["history_dt"] = float(norm_ctx["history_dt"])
-                                # Atomic commit after all validations pass!
+                                bound_p, norm_ctx, is_struct_p = _prevalidate_and_bind_probe(raw_p, tr_d)
+                                oracle_arg = deepcopy(bound_p) if is_struct_p else {str(k): float(np.asarray(v).ravel()[0]) for k, v in norm_ctx["x"].items()}
+                                try:
+                                    raw_obs = probe_oracle_fn(oracle_arg)  # type: ignore[arg-type]
+                                    if isinstance(raw_obs, dict):
+                                        y_arr = np.atleast_1d(np.asarray(raw_obs["y"], dtype=float)).ravel()
+                                        merged_p = dict(bound_p) if is_struct_p else {"x": deepcopy(norm_ctx["x"])}
+                                        for tk in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states"):
+                                            if raw_obs.get(tk) is not None:
+                                                merged_p[tk] = deepcopy(raw_obs[tk])
+                                        _, norm_ctx, _ = _prevalidate_and_bind_probe(merged_p, tr_d)
+                                    else:
+                                        y_arr = np.atleast_1d(np.asarray(raw_obs, dtype=float)).ravel()
+                                    n_new = len(y_arr)
+                                    req_feats = sorted(tr_d["x"].keys())
+                                    if n_new < 1 or not bool(np.all(np.isfinite(y_arr))):
+                                        raise ValueError("Oracle returned empty or non-finite observation y")
+                                    staged_x: dict[str, np.ndarray] = {}
+                                    for k in req_feats:
+                                        v_add = np.atleast_1d(np.asarray(norm_ctx["x"][k], dtype=float)).ravel()
+                                        if len(v_add) != n_new or not bool(np.all(np.isfinite(v_add))):
+                                            raise ValueError(f"Probe feature `{k}` length/nan mismatch vs y ({len(v_add)} != {n_new})")
+                                        staged_x[k] = np.concatenate([np.asarray(tr_d["x"][k], dtype=float).ravel(), v_add])
+                                    staged_temporal: dict[str, Any] = {}
+                                    for arr_tk in ("past_driver_history", "timestamps", "trajectory_ids"):
+                                        has_existing = arr_tk in tr_d and tr_d[arr_tk] is not None
+                                        has_incoming = arr_tk in norm_ctx and norm_ctx[arr_tk] is not None
+                                        if has_incoming:
+                                            inc_arr = np.asarray(norm_ctx[arr_tk])
+                                            if inc_arr.shape[0] != n_new:
+                                                raise ValueError(f"Temporal field `{arr_tk}` row count {inc_arr.shape[0]} != {n_new}")
+                                            staged_temporal[arr_tk] = (
+                                                np.concatenate([np.asarray(tr_d[arr_tk]), inc_arr], axis=0)
+                                                if has_existing
+                                                else inc_arr
+                                            )
+                                    if "initial_memory_states" in norm_ctx and norm_ctx["initial_memory_states"] is not None:
+                                        merged_ims = {
+                                            str(k): [float(x) for x in np.asarray(v, dtype=float).ravel()]
+                                            for k, v in (tr_d.get("initial_memory_states") or {}).items()
+                                        }
+                                        for tk_id, trip in norm_ctx["initial_memory_states"].items():
+                                            merged_ims[str(tk_id)] = [float(x) for x in np.asarray(trip, dtype=float).ravel()]
+                                        staged_temporal["initial_memory_states"] = merged_ims
+                                    if "history_dt" in norm_ctx and norm_ctx["history_dt"] is not None:
+                                        staged_temporal["history_dt"] = float(norm_ctx["history_dt"])
+                                except Exception as post_orc_exc:
+                                    fail_obs_entry = {
+                                        "step_index": self._step_counter,
+                                        "probe_x": ({k: np.asarray(v).tolist() for k, v in norm_ctx["x"].items()} if is_struct_p else oracle_arg),
+                                        "status": "ORACLE_CALLED_POST_VALIDATION_FAILED",
+                                        "error": f"{type(post_orc_exc).__name__}: {post_orc_exc}",
+                                        "observed_y": None,
+                                        "cost_spent": req_probe_cost,
+                                    }
+                                    g.paid_observations.setdefault(task_id, []).append(fail_obs_entry)
+                                    attempt_cost_events.append(
+                                        {
+                                            "action": "AcquireObservation_post_oracle_failure",
+                                            "cost_spent": 0.0,
+                                            "prompt_tokens": 0,
+                                            "completion_tokens": 0,
+                                            "status": "ORACLE_CALLED_POST_VALIDATION_FAILED",
+                                            "note": f"{type(post_orc_exc).__name__}: {post_orc_exc}",
+                                        }
+                                    )
+                                    if chosen_probe_cand is not None:
+                                        chosen_probe_cand.execution_status = f"FAILED_POST_ORACLE:{type(post_orc_exc).__name__}"
+                                        chosen_probe_cand.metadata["post_oracle_error"] = f"{type(post_orc_exc).__name__}: {post_orc_exc}"
+                                    g.sync_authoritative_state_to_forest()
+                                    return
                                 for k, merged_col in staged_x.items():
                                     tr_d["x"][k] = merged_col
                                 tr_d["y"] = np.concatenate([np.asarray(tr_d["y"], dtype=float).ravel(), y_arr])
@@ -3009,10 +3111,11 @@ class M8VariationalPlanner:
                                     "step_index": self._step_counter,
                                     "probe_x": ({k: v.tolist() for k, v in norm_ctx["x"].items()} if is_struct_p else oracle_arg),
                                     "temporal_context": {
-                                        tk_c: (np.asarray(norm_ctx[tk_c]).tolist() if isinstance(norm_ctx[tk_c], np.ndarray) else norm_ctx[tk_c])
+                                        tk_c: (np.asarray(norm_ctx[tk_c]).tolist() if isinstance(norm_ctx[tk_c], np.ndarray) else deepcopy(norm_ctx[tk_c]))
                                         for tk_c in ("past_driver_history", "history_dt", "timestamps", "trajectory_ids", "initial_memory_states")
                                         if tk_c in norm_ctx
                                     },
+                                    "status": "COMMITTED_OK",
                                     "observed_y": y_scalar_or_list,
                                     "cost_spent": req_probe_cost,
                                 }

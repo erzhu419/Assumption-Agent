@@ -116,6 +116,8 @@ class FrontierBenchmarkTask:
     biomystery_human_solvable: bool = True
     holdout_public_setup_py: str | None = None
     declared_callable_entrypoints: tuple[str, ...] = ()
+    required_public_assets: tuple[str, ...] = ()
+    private_verifier_callable: Any = None
 
 
 TB_WAVE_ASSIGNMENTS: tuple[tuple[str, str, str, str, str, int], ...] = (
@@ -1126,44 +1128,41 @@ class FrontierCodexClient(CodexSubscriptionClient):
 
         schema_name = f"schema_{call_seq:03d}.json"
         instr_name = f"sys_{call_seq:03d}.txt"
-        resp_name = f"resp_{call_seq:03d}.json"
 
         stdin_payload = json.dumps({"conversation_history": conversation_turns}, ensure_ascii=False)
         (ep_wsl / schema_name).write_text(json.dumps(output_schema, ensure_ascii=False), encoding="utf-8")
         (ep_wsl / instr_name).write_text(system_prompt, encoding="utf-8")
-        resp_wsl = ep_wsl / resp_name
-        if resp_wsl.exists():
-            resp_wsl.unlink()
 
         cd_cli = self._join_cli_path(stage_subdir)
         schema_cli = self._join_cli_path(stage_subdir, schema_name)
         instr_cli = self._join_cli_path(stage_subdir, instr_name)
-        resp_cli = self._join_cli_path(stage_subdir, resp_name)
 
-        cmd = [
-            self.executable, "-a", "never", "exec", "--sandbox", "read-only",
-            "--cd", cd_cli, "--skip-git-repo-check", "--ephemeral", "--json",
-            "--color", "never",
-            "--output-schema", schema_cli,
-            "--output-last-message", resp_cli,
-            "-c", "model_instructions_file=" + json.dumps(instr_cli),
-            "-c", "project_doc_max_bytes=0",
-            "-c", 'developer_instructions=""',
-            "-c", 'web_search="disabled"',
-            "-c", "mcp_servers={}",
-            "-c", "plugins={}",
-            "-c", "notify=[]",
-            "-c", "features.memories=false",
-            "-c", "features.multi_agent=false",
-            "-c", f"model_reasoning_effort={json.dumps(self.reasoning_effort)}",
-            "--enable", "skip_host_skill_discovery",
-        ]
-        for feat in (
-            "code_mode", "code_mode_host", "shell_tool", "unified_exec", "apps", "browser_use",
-            "computer_use", "skill_search", "view_image", "sleep_tool", "tool_suggest",
-        ):
-            cmd.extend(("--disable", feat))
-        cmd.extend(("--model", self.model, "-"))
+        def _build_attempt_cmd(resp_cli_path: str) -> list[str]:
+            c_out = [
+                self.executable, "-a", "never", "exec", "--sandbox", "read-only",
+                "--cd", cd_cli, "--skip-git-repo-check", "--ephemeral", "--json",
+                "--color", "never",
+                "--output-schema", schema_cli,
+                "--output-last-message", resp_cli_path,
+                "-c", "model_instructions_file=" + json.dumps(instr_cli),
+                "-c", "project_doc_max_bytes=0",
+                "-c", 'developer_instructions=""',
+                "-c", 'web_search="disabled"',
+                "-c", "mcp_servers={}",
+                "-c", "plugins={}",
+                "-c", "notify=[]",
+                "-c", "features.memories=false",
+                "-c", "features.multi_agent=false",
+                "-c", f"model_reasoning_effort={json.dumps(self.reasoning_effort)}",
+                "--enable", "skip_host_skill_discovery",
+            ]
+            for feat in (
+                "code_mode", "code_mode_host", "shell_tool", "unified_exec", "apps", "browser_use",
+                "computer_use", "skill_search", "view_image", "sleep_tool", "tool_suggest",
+            ):
+                c_out.extend(("--disable", feat))
+            c_out.extend(("--model", self.model, "-"))
+            return c_out
 
         clean_env = {k: v for k, v in os.environ.items() if k not in self._SCRUBBED_ENV_KEYS}
 
@@ -1235,7 +1234,14 @@ class FrontierCodexClient(CodexSubscriptionClient):
             except OSError:
                 pass
 
+        resp_wsl = ep_wsl / f"resp_{call_seq:03d}_att0.json"
         for attempt_idx in range(4):
+            # `M9.2.1` `A7`: Dedicated per-attempt response file prevents any stale response bleed across retries!
+            att_resp_name = f"resp_{call_seq:03d}_att{attempt_idx}.json"
+            resp_wsl = ep_wsl / att_resp_name
+            if resp_wsl.exists():
+                resp_wsl.unlink()
+            cmd = _build_attempt_cmd(self._join_cli_path(stage_subdir, att_resp_name))
             t_att0 = monotonic()
             try:
                 with _CODEX_CLI_SEMAPHORE:
@@ -1251,7 +1257,6 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 refreshed = discover_chatgpt_subscription_codex_cli()
                 if refreshed.get("available") and refreshed.get("executable") and refreshed["executable"] != self.executable:
                     self.executable = str(refreshed["executable"])
-                    cmd[0] = self.executable
                     continue
                 raise
             except subprocess.TimeoutExpired as tex:
@@ -1268,6 +1273,8 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 attempt_receipts.append(
                     {
                         "attempt_index": attempt_idx + 1,
+                        "response_filename": att_resp_name,
+                        "response_sha256": None,
                         "returncode": None,
                         "timed_out": True,
                         "wall_ms": round((monotonic() - t_att0) * 1000.0, 2),
@@ -1285,11 +1292,14 @@ class FrontierCodexClient(CodexSubscriptionClient):
                     "ok": False,
                     "wall_ms": round((monotonic() - t0) * 1000.0, 2),
                     "returned_model": returned_model,
+                    "request_sha256": req_sha256,
+                    "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
                     "prompt_tokens": cum_in_tok,
                     "cached_tokens": cum_cached_tok,
                     "completion_tokens": cum_out_tok,
                     "attempt_count": len(attempt_receipts),
                     "usage_unknown_attempt_count": usage_unknown_attempts,
+                    "cost_accounting_status": ("partial_unknown_usage" if usage_unknown_attempts > 0 else "complete"),
                     "attempt_receipts": attempt_receipts,
                     "timeout_retries": timeout_retries,
                     "error": f"codex_subscription_timeout_{self.timeout_seconds}s_after_{timeout_retries}_attempts",
@@ -1304,9 +1314,12 @@ class FrontierCodexClient(CodexSubscriptionClient):
             if a_mod:
                 returned_model = a_mod
             errs = list(a_errs)
+            resp_sha = hashlib.sha256(resp_wsl.read_bytes()).hexdigest() if resp_wsl.is_file() else None
             attempt_receipts.append(
                 {
                     "attempt_index": attempt_idx + 1,
+                    "response_filename": att_resp_name,
+                    "response_sha256": resp_sha,
                     "returncode": proc.returncode,
                     "timed_out": False,
                     "wall_ms": round((monotonic() - t_att0) * 1000.0, 2),
@@ -1334,6 +1347,7 @@ class FrontierCodexClient(CodexSubscriptionClient):
         in_tok = cum_in_tok
         cached_tok = cum_cached_tok
         out_tok = cum_out_tok
+        cost_status = "partial_unknown_usage" if usage_unknown_attempts > 0 else "complete"
 
         if proc.returncode != 0 or not resp_wsl.is_file():
             err_msg = f"rc={proc.returncode}; errs={errs}; stderr={proc.stderr[-400:]}"
@@ -1347,11 +1361,14 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 "ok": False,
                 "wall_ms": wall_ms,
                 "returned_model": returned_model,
+                "request_sha256": req_sha256,
+                "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
                 "attempt_count": len(attempt_receipts),
                 "usage_unknown_attempt_count": usage_unknown_attempts,
+                "cost_accounting_status": cost_status,
                 "attempt_receipts": attempt_receipts,
                 "error": err_msg,
             }
@@ -1363,11 +1380,14 @@ class FrontierCodexClient(CodexSubscriptionClient):
                 "ok": False,
                 "wall_ms": wall_ms,
                 "returned_model": returned_model,
+                "request_sha256": req_sha256,
+                "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
                 "prompt_tokens": in_tok,
                 "cached_tokens": cached_tok,
                 "completion_tokens": out_tok,
                 "attempt_count": len(attempt_receipts),
                 "usage_unknown_attempt_count": usage_unknown_attempts,
+                "cost_accounting_status": cost_status,
                 "attempt_receipts": attempt_receipts,
                 "error": f"invalid_schema_json:{exc}",
             }
@@ -1376,11 +1396,14 @@ class FrontierCodexClient(CodexSubscriptionClient):
             "ok": True,
             "wall_ms": wall_ms,
             "returned_model": returned_model,
+            "request_sha256": req_sha256,
+            "attempts_ledger_path": str(ep_wsl / f"attempts_{call_seq:03d}.json"),
             "prompt_tokens": in_tok,
             "cached_tokens": cached_tok,
             "completion_tokens": out_tok,
             "attempt_count": len(attempt_receipts),
             "usage_unknown_attempt_count": usage_unknown_attempts,
+            "cost_accounting_status": cost_status,
             "attempt_receipts": attempt_receipts,
             "parsed": parsed,
         }
@@ -2958,23 +2981,66 @@ def run_frontier_episode(
             memory_limit=f"{task.agent_memory_mb}m",
             cpus=str(task.agent_cpus),
         )
+        public_setup_receipt: dict[str, Any] = {
+            "declared_public_setup": bool(task.holdout_public_setup_py),
+            "executed": False,
+            "required_public_assets": list(getattr(task, "required_public_assets", ()) or ()),
+            "files_sha256": {},
+            "shared_public_schema_validator_present": False,
+        }
         if is_bm and task.biomystery_data_dir and task.biomystery_data_dir.is_dir():
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
             subprocess.run(["docker", "exec", agent_cid, "chmod", "-R", "a-w", "/workspace/data"], capture_output=True, timeout=15)
-        elif task.benchmark in {
-            "Hegel-OOD-Holdout-12",
-            "Hegel-Unseen-PostFreeze-4",
-            "Hegel-M89-HardStress-4",
-            "Hegel-M90a-VoluntaryReuse-4",
-            "Hegel-M91-HardDemand-2",
-        } and task.holdout_public_setup_py:
+        elif task.holdout_public_setup_py:
+            # `M9.2.1` `A2`: Capability-driven public setup bootstrap (NEVER gated by hardcoded benchmark-name strings!),
+            # verifying every required public asset & SHA-256 BEFORE the first LLM request!
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
             with tempfile.TemporaryDirectory(prefix="hegel_ho_boot_") as td_h:
                 setup_fp = Path(td_h) / "_setup_holdout.py"
                 setup_fp.write_text(task.holdout_public_setup_py, encoding="utf-8")
                 subprocess.run(["docker", "cp", str(setup_fp), f"{agent_cid}:/tmp/_setup_holdout.py"], check=True, timeout=20)
-            exec_container_bash(agent_cid, "python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py", timeout_sec=60)
+            setup_exec = exec_container_bash(agent_cid, "python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py", timeout_sec=60)
+            if setup_exec["exit_code"] != 0 or setup_exec["timed_out"]:
+                raise RuntimeError(
+                    f"Container `holdout_public_setup_py` failed before Turn 1 for `{task.task_id}` "
+                    f"(rc={setup_exec['exit_code']}): {(setup_exec['stderr'] or setup_exec['stdout'])[:500]}"
+                )
+            import shlex as _shlex_boot
+
+            hash_probe = exec_container_bash(
+                agent_cid,
+                "python3 -I -c "
+                + _shlex_boot.quote(
+                    "import hashlib, json, os\n"
+                    "out = {}\n"
+                    "if os.path.isdir('/holdout_task'):\n"
+                    "    for dp, _, fns in os.walk('/holdout_task'):\n"
+                    "        for fn in sorted(fns):\n"
+                    "            fp = os.path.join(dp, fn)\n"
+                    "            if os.path.isfile(fp):\n"
+                    "                b = open(fp, 'rb').read()\n"
+                    "                out[fp] = {'size': len(b), 'sha256': hashlib.sha256(b).hexdigest()}\n"
+                    "print(json.dumps(out, sort_keys=True))\n"
+                ),
+                timeout_sec=20,
+            )
+            files_map: dict[str, Any] = {}
+            if hash_probe["exit_code"] == 0 and hash_probe["stdout"].strip():
+                files_map = json.loads(hash_probe["stdout"].strip().splitlines()[-1])
+            req_assets = list(getattr(task, "required_public_assets", ()) or ())
+            missing_req = [rp for rp in req_assets if rp not in files_map or int(files_map[rp].get("size", 0)) <= 0]
+            if missing_req:
+                raise RuntimeError(
+                    f"Required public assets missing/empty after `holdout_public_setup_py` for `{task.task_id}`: {missing_req}"
+                )
+            public_setup_receipt = {
+                "declared_public_setup": True,
+                "executed": True,
+                "required_public_assets": req_assets,
+                "files_sha256": {k: v["sha256"] for k, v in files_map.items()},
+                "shared_public_schema_validator_present": "/holdout_task/validate_public_schema.py" in files_map,
+            }
 
         boot_probe = exec_container_bash(
             agent_cid,
@@ -2995,6 +3061,7 @@ def run_frontier_episode(
                 "wave": task.wave,
                 "agent_image_tag": task.agent_image_tag,
                 "declared_artifacts": list(task.declared_artifacts),
+                "public_setup_receipt": public_setup_receipt,
                 "verifier_resources": {
                     "cpus": task.verifier_cpus,
                     "memory_mb": task.verifier_memory_mb,
@@ -3022,7 +3089,7 @@ def run_frontier_episode(
                     wormhole_equivalence_pooling=False,
                 )
                 if (disable_wh and (getattr(hippo_idx, "allow_horizontal_wormholes", True) or getattr(hippo_idx, "wormhole_equivalence_pooling", True)))
-                else hippo_idx
+                else (hippo_idx if hippo_idx is not None else HippoRAGWormholeIndex(forest))
             )
             if disable_wh:
                 assert eff_hippo.edge_counts.get("horizontal_wormhole_edges", 0) == 0, (
@@ -3518,6 +3585,10 @@ def run_frontier_episode(
                     "action_type": act_type,
                     "bash_command_preview": (str(bash_cmd)[:300] if bash_cmd else None),
                     "final_answer": fin_ans,
+                    "provider_attempt_count": int(llm_res.get("attempt_count", 1)),
+                    "usage_unknown_attempt_count": int(llm_res.get("usage_unknown_attempt_count", 0)),
+                    "cost_accounting_status": str(llm_res.get("cost_accounting_status") or "complete"),
+                    "request_sha256": str(llm_res.get("request_sha256") or ""),
                 },
                 rejection_reasons=rej_map,
                 rationale_summary=rationale[:600],
@@ -3916,50 +3987,53 @@ def run_frontier_episode(
                         }
                         verification_receipts_by_sha[current_candidate_sha256] = v_rec
                         validated_incumbent = v_rec
-                        # `M9.1.1` `C4`: Quantitative, candidate-execution-bound `nogood` witness verification (rejects keyword/callable spoofing!)
+                        # `M9.2.1` `A5`: Host-controlled typed `HostControlledProbeReceipt` vs `agent_claimed_unverified` separation!
+                        # Agent stdout/inline assertions (e.g., `assert 1 == 1; print('gauge scale residual=0.0')`) are NEVER
+                        # promoted to `resolved = True`; only an explicit host-signed probe receipt (`signed_by_host_probe_executor == True`)
+                        # executed against the immutable `current_candidate_sha256` on host-controlled public inputs can promote a risk!
                         if pending_nogood_resolutions and nogoods_recorded:
                             existing_ng_ids = {str(g.get("nogood_id") or "") for g in nogoods_recorded}
-                            cmd_low_w = cmd_str.lower()
                             out_raw_w = str(ex_res.get("stdout") or "")
-                            out_low_w = out_raw_w.lower()
-                            combined_w = f"{cmd_low_w} {out_low_w}"
-                            # Reject commands that check only `callable(...)` / `hasattr(...)` without numerical metric or candidate evaluation!
-                            is_reflection_only_spoof = bool(
-                                re.search(r"\b(?:callable|hasattr|inspect\.signature)\s*\(", cmd_low_w)
-                            ) and not bool(
-                                re.search(r"(?:==|<=|<)\s*[-+]?\d|\b(?:max_err|rel_err|rel_l2|mae|rmse|allclose|isclose)\b", combined_w)
-                            )
-                            has_inline_numeric_call_assert = bool(
-                                re.search(r"\bassert\b", cmd_low_w)
-                                and re.search(r"[a-z_][a-z0-9_]*\.[a-z_][a-z0-9_]*\s*\(", cmd_low_w)
-                                and re.search(r"(?:==|<=|<|\ballclose\b|\bisclose\b)\s*[-+]?\d*", cmd_low_w)
-                            )
-                            has_numeric_measurement = (not is_reflection_only_spoof) and (
-                                bool(
-                                    re.search(
-                                        r"(?:mae|rmse|rel_err|rel_l2|max_err|max_gap|gap|residual|diff|discrepancy|score|auroc|f1|error|obj|loss)\s*[:=]\s*[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?",
-                                        out_low_w,
-                                    )
+                            host_probe_receipt: dict[str, Any] | None = globals().get("_HOST_INJECTED_PROBE_RECEIPT")
+                            _live_cid = locals().get("agent_cid")
+                            _live_task = locals().get("task")
+                            if (
+                                host_probe_receipt is None
+                                and isinstance(_live_cid, str)
+                                and _live_cid not in {"", "mock"}
+                                and _live_task is not None
+                            ):
+                                # Host-executed isolated `python3 -I /holdout_task/validate_public_schema.py` check
+                                _hp_run = exec_container_bash(
+                                    _live_cid,
+                                    "if [ -f /holdout_task/validate_public_schema.py ]; then "
+                                    "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py; "
+                                    "else echo '{\"host_probe_unavailable\": true}'; fi",
+                                    timeout_sec=45,
                                 )
-                                or bool(re.search(r"\"(?:strict_pass|verified|probe_passed|two_gauge_max_diff|max_gauge_diff)\"\s*:\s*true", out_low_w))
-                                or has_inline_numeric_call_assert
-                                or (
-                                    any(k in cmd_low_w for k in ("allclose", "isclose", "linalg.norm", "pytest", "/tmp/verify", "/tmp/check", "/tmp/validate", "python3 -i - <<"))
-                                    and bool(re.search(r"\b\d+\.\d+(?:e[-+]?\d+)?\b", out_low_w))
-                                )
-                            )
-                            has_real_gauge_or_anchor_probe = has_numeric_measurement and (
-                                bool(
-                                    re.search(
-                                        r"(?:two_gauge|alt_gauge|gauge_diff|renaming_diff|anchor_err|profile_diff|nullspace_rank|rank)\s*[:=]\s*[-+]?\d+(?:\.\d+)?(?:e[-+]?\d+)?",
-                                        out_low_w,
-                                    )
-                                )
-                                or any(
-                                    k in combined_w
-                                    for k in ("two_gauge", "alt_gauge", "gauge", "renam", "anchor", "quotient", "equivalence", "nullspace", "svd")
-                                )
-                            )
+                                _post_hp_sha = compute_declared_artifacts_digest(_live_cid, _live_task.declared_artifacts)
+                                _hp_json: dict[str, Any] = {}
+                                if _hp_run["exit_code"] == 0 and _hp_run["stdout"].strip():
+                                    try:
+                                        _hp_json = json.loads(_hp_run["stdout"].strip().splitlines()[-1])
+                                    except Exception:
+                                        _hp_json = {}
+                                if _post_hp_sha == current_candidate_sha256 and _hp_json.get("schema_valid") is True:
+                                    host_probe_receipt = {
+                                        "signed_by_host_probe_executor": True,
+                                        "probe_protocol_version": "hegel_host_public_probe_v2",
+                                        "candidate_bundle_sha256": current_candidate_sha256,
+                                        "public_setup_files_sha256": dict((locals().get("public_setup_receipt") or {}).get("files_sha256") or {}),
+                                        "schema_valid": True,
+                                        "measured_metrics": _hp_json,
+                                        "gauge_invariance_verified": bool(_hp_json.get("gauge_invariance_verified") is True),
+                                        "result": (
+                                            "verified_gauge_and_public_probe_in_scope"
+                                            if _hp_json.get("gauge_invariance_verified") is True
+                                            else "supported_on_host_public_probe"
+                                        ),
+                                    }
+
                             still_pending: list[dict[str, Any]] = []
                             for pend in pending_nogood_resolutions:
                                 prop_ng = pend.get("proposed_by_nogood_id")
@@ -3971,6 +4045,11 @@ def run_frontier_episode(
                                     pid = str(prior_ng.get("nogood_id") or "")
                                     if pid not in pend["resolves_ids"] or prior_ng.get("resolved"):
                                         continue
+                                    prior_ng["agent_claimed_probe"] = {
+                                        "turn": turn_idx,
+                                        "command_preview": cmd_str[:200],
+                                        "stdout_preview": out_raw_w[:240],
+                                    }
                                     r_kind = str(prior_ng.get("risk_kind") or prior_ng.get("nogood_kind") or "").strip().lower()
                                     ng_scope = str(prior_ng.get("scope") or "").strip()
                                     refuted_txt_low = str(prior_ng.get("assumption_refuted") or "").lower()
@@ -3978,39 +4057,40 @@ def run_frontier_episode(
                                         "identifi" in refuted_txt_low
                                     )
                                     is_missing_info_ident = is_ident_ng and ("unanchored_missing_information" in refuted_txt_low)
-                                    has_anchor_or_quotient = any(k in combined_w for k in ("anchor", "two_gauge", "quotient", "equivalence", "reference"))
-                                    if is_ident_ng and not has_real_gauge_or_anchor_probe:
-                                        prior_ng["probe_support_status"] = "api_or_keyword_only_insufficient"
+                                    is_valid_host_rec = (
+                                        isinstance(host_probe_receipt, dict)
+                                        and host_probe_receipt.get("signed_by_host_probe_executor") is True
+                                        and str(host_probe_receipt.get("candidate_bundle_sha256") or "") == current_candidate_sha256
+                                    )
+                                    if not is_valid_host_rec:
+                                        prior_ng["probe_support_status"] = "agent_claimed_unverified"
                                         unres_ids.append(pid)
-                                        reject_reasons[pid] = "identifiability_risk_requires_quantitative_multi_gauge_or_anchor_probe"
+                                        reject_reasons[pid] = "agent_stdout_claim_cannot_promote_without_host_signed_probe_receipt"
                                         continue
-                                    if is_missing_info_ident and not (has_anchor_or_quotient or bool(valid_sup)):
-                                        prior_ng["probe_support_status"] = "supported_on_probe_only_unanchored_identifiability_pending"
+                                    assert isinstance(host_probe_receipt, dict)
+                                    rec_scope = str(host_probe_receipt.get("verified_scope") or "").strip()
+                                    if ng_scope and ng_scope.lower() not in {"", "global", "all", "task"} and rec_scope and rec_scope.lower() != ng_scope.lower():
+                                        prior_ng["probe_support_status"] = "host_probe_scope_mismatch"
                                         unres_ids.append(pid)
-                                        reject_reasons[pid] = "missing_information_identifiability_cannot_resolve_without_anchor_or_quotient_retarget"
+                                        reject_reasons[pid] = f"host_probe_scope({rec_scope})!=nogood_scope({ng_scope})"
                                         continue
-                                    if not has_numeric_measurement:
-                                        prior_ng["probe_support_status"] = "missing_quantitative_numerical_measurement"
+                                    if is_missing_info_ident and not bool(valid_sup and host_probe_receipt.get("quotient_or_anchor_verified") is True):
+                                        prior_ng["probe_support_status"] = "conditional_unanchored_identifiability_pending"
                                         unres_ids.append(pid)
-                                        reject_reasons[pid] = "missing_quantitative_numerical_measurement_in_witness"
+                                        reject_reasons[pid] = "missing_information_identifiability_requires_host_verified_anchor_or_quotient"
                                         continue
-                                    if ng_scope and ng_scope.lower() not in {"", "global", "all", "task"}:
-                                        scope_toks = {t for t in re.findall(r"[a-zA-Z0-9_]{4,}", ng_scope.lower()) if t not in {"all", "with", "from", "under", "only"}}
-                                        if scope_toks and not (
-                                            pid.lower() in combined_w
-                                            or bool(valid_sup)
-                                            or any(st in combined_w for st in scope_toks)
-                                        ):
-                                            unres_ids.append(pid)
-                                            reject_reasons[pid] = f"witness_does_not_cover_nogood_scope({ng_scope[:60]})"
-                                            continue
+                                    if is_ident_ng and not bool(host_probe_receipt.get("gauge_invariance_verified") is True):
+                                        prior_ng["probe_support_status"] = "supported_on_public_schema_only_identifiability_pending"
+                                        unres_ids.append(pid)
+                                        reject_reasons[pid] = "identifiability_risk_requires_host_executed_gauge_or_anchor_probe"
+                                        continue
                                     prior_ng["resolved"] = True
-                                    prior_ng["probe_support_status"] = "verified_quantitative_witness_in_declared_scope"
+                                    prior_ng["probe_support_status"] = str(host_probe_receipt.get("result") or "supported_on_host_public_probe")
                                     prior_ng["superseded_by"] = valid_sup
                                     prior_ng["resolved_at_turn"] = turn_idx
                                     prior_ng["resolved_candidate_sha256"] = current_candidate_sha256
-                                    prior_ng["resolution_witness_command"] = cmd_str[:200]
-                                    prior_ng["resolution_witness_scope_verified"] = ng_scope or "global"
+                                    prior_ng["host_probe_receipt"] = deepcopy(host_probe_receipt)
+                                    prior_ng["resolution_witness_scope_verified"] = rec_scope or ng_scope or "public_probe_scope"
                                     resolved_now.append(pid)
                                 if resolved_now:
                                     nogood_resolution_events.append(
@@ -4020,8 +4100,8 @@ def run_frontier_episode(
                                             "resolved_nogood_ids": resolved_now,
                                             "superseded_by": valid_sup,
                                             "verified_candidate_sha256": current_candidate_sha256,
-                                            "verification_command": cmd_str[:200],
-                                            "witness_kind": ("quantitative_gauge_or_anchor_probe" if has_real_gauge_or_anchor_probe else "quantitative_numerical_probe"),
+                                            "host_probe_receipt": deepcopy(host_probe_receipt),
+                                            "witness_kind": "host_controlled_typed_probe_receipt",
                                         }
                                     )
                                 if unres_ids:
@@ -4317,6 +4397,9 @@ def run_frontier_episode(
 
             verifier_report = run_hard_demand_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
+        elif callable(getattr(task, "private_verifier_callable", None)):
+            verifier_report = task.private_verifier_callable(task.task_id, agent_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
         elif task.benchmark == "Hegel-M92-EqualInfo-4":
             from .m9_2_equal_info_reuse_benchmark import run_equal_info_m92_private_verifier_for_container
 
@@ -4544,13 +4627,42 @@ def run_frontier_episode(
             },
             "saved_artifact_snapshots": saved_snapshots,
             "submitted_final_answer": submitted_final_answer if is_bm else None,
+            "public_setup_receipt": public_setup_receipt,
             "turn1_request_accounting": {
                 "system_prompt_chars": len(sys_prompt),
                 "initial_user_payload_chars": len(json.dumps(init_payload, ensure_ascii=False)),
                 "turn1_staged_manifest_json_chars": len(json.dumps(staged_wormhole_manifest, ensure_ascii=False)),
                 "turn1_prompt_tokens": next(
-                    (int(r.get("prompt_tokens_delta", 0)) for r in ledger.records if str(r.get("decision_type", "")).startswith("D2_TURN_01")),
-                    0,
+                    (
+                        int((r.get("cost_ledger_delta") or r).get("prompt_tokens_delta", 0))
+                        for r in ledger.records
+                        if str(r.get("decision_type", "")).startswith(("D_TURN_01", "D2_TURN_01"))
+                    ),
+                    None,
+                ),
+            },
+            "provider_attempt_accounting": {
+                "logical_agent_decision_calls": sum(
+                    1 for r in ledger.records if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                ),
+                "total_provider_attempts": sum(
+                    int((r.get("chosen_option") or {}).get("provider_attempt_count", 1))
+                    for r in ledger.records
+                    if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                ),
+                "usage_unknown_attempt_count": sum(
+                    int((r.get("chosen_option") or {}).get("usage_unknown_attempt_count", 0))
+                    for r in ledger.records
+                    if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                ),
+                "cost_accounting_status": (
+                    "partial_unknown_usage"
+                    if any(
+                        int((r.get("chosen_option") or {}).get("usage_unknown_attempt_count", 0)) > 0
+                        for r in ledger.records
+                        if str(r.get("decision_type", "")).endswith("_AGENT_DECISION")
+                    )
+                    else "complete"
                 ),
             },
             "decision_count": tots["decision_count"],
@@ -4565,6 +4677,17 @@ def run_frontier_episode(
             "provenance_verified": prov_check["valid"],
             "terminal_record_sha256": prov_check["terminal_record_sha256"],
         }
+
+        # `M9.2.1` `A7`: Seal raw per-attempt provider ledgers (`attempts_*.json`) directly into `episode_out_dir/01b_provider_attempts/`
+        _stage_root_ep = getattr(client, "stage_root_wsl", None)
+        _stage_dir_ep = (Path(_stage_root_ep) / stage_subdir) if _stage_root_ep else None
+        if _stage_dir_ep is not None and _stage_dir_ep.is_dir():
+            _att_files = sorted(_stage_dir_ep.glob("attempts_*.json"))
+            if _att_files:
+                _att_dest = episode_out_dir / "01b_provider_attempts"
+                _att_dest.mkdir(parents=True, exist_ok=True)
+                for _afp in _att_files:
+                    shutil.copy2(_afp, _att_dest / _afp.name)
 
         # Write all forensic files to `episode_out_dir`
         (episode_out_dir / "00_episode_summary.json").write_text(

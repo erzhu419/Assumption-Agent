@@ -59,96 +59,11 @@ if __name__ == "__main__":
 '''
 
 
-SKILL_INIT_PY = '''"""Hegel M6.8-B' / M8.9 Executable Wormhole Micro-Library with Pure-JSON `describe_skill` & Skill∞ Telemetry."""
-import atexit
-from functools import wraps
-import json
-import os
-from pathlib import Path
-import time
-
-ACTIVATION_LOG_PATH = os.environ.get("HEGEL_SKILL_ACTIVATION_LOG", "/tmp/.hegel_skill_activations.jsonl")
-INSPECTION_LOG_PATH = os.environ.get("HEGEL_SKILL_INSPECTION_LOG", "/tmp/.hegel_skill_inspections.jsonl")
-CONTRACTS_CATALOG_PATH = str(Path(__file__).resolve().parent / "_skill_contracts.json")
-_DIRECT_WRITE_CAP = 256
-_BATCH_FLUSH_EVERY = 32
-_SEEN_COMPLETED: dict[tuple[str, str], int] = {}
-_BUFFERED_EXTRA: dict[tuple[str, str], dict[str, float | int]] = {}
-
-
-def _append_jsonl_path(path_str: str, line_str: str) -> None:
-    try:
-        fd = os.open(path_str, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
-        try:
-            os.write(fd, (line_str + "\\n").encode("utf-8"))
-        finally:
-            os.close(fd)
-    except OSError:
-        pass
-
-
-def _append_jsonl_kernel(line_str: str) -> None:
-    _append_jsonl_path(ACTIVATION_LOG_PATH, line_str)
-
-
-def describe_skill(target: str = "", detail_level: str = "full") -> str:
-    """Pure-data contract reader (`0` arbitrary module import/execution!). Reads frozen `_skill_contracts.json`."""
-    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
-    _append_jsonl_path(
-        INSPECTION_LOG_PATH,
-        json.dumps(
-            {
-                "ts": round(time.time(), 3),
-                "event": "skill_contract_requested",
-                "target": str(target or "*"),
-                "detail_level": str(detail_level),
-                "caller_role": caller_role,
-            }
-        ),
-    )
-    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
-        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
-    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
-        catalog = json.load(fh)
-    q = str(target or "").strip()
-    if q.startswith("hegel_wormhole_skills."):
-        q = q[len("hegel_wormhole_skills.") :]
-    matches = []
-    for entry in catalog.get("skills", []):
-        m_stem = entry.get("module_stem", "")
-        if not q or q == m_stem:
-            matches.append(entry)
-        elif "." in q and q.split(".", 1)[0] == m_stem:
-            fn_q = q.split(".", 1)[1]
-            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == fn_q]
-            if sub_fns:
-                matches.append({**entry, "functions": sub_fns})
-        else:
-            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == q]
-            if sub_fns:
-                matches.append({**entry, "functions": sub_fns})
-    _append_jsonl_path(
-        INSPECTION_LOG_PATH,
-        json.dumps(
-            {
-                "ts": round(time.time(), 3),
-                "event": "skill_contract_delivered",
-                "target": str(target or "*"),
-                "matched_module_count": len(matches),
-                "matched_modules": [m.get("module_stem") for m in matches],
-                "caller_role": caller_role,
-            }
-        ),
-    )
-    if detail_level == "index":
-        return "\\n".join(c for m in matches for c in m.get("index_cards", []))
-    return json.dumps({"ok": len(matches) > 0, "target": q or "*", "matches": matches}, indent=2, ensure_ascii=False)
-
-
-def search_skills(query: str = "", top_k: int = 6) -> str:
-    """Pure-data function-level & synonym-aware search over `_skill_contracts.json` (`M9.1.1` `C3`, `0` skill import)."""
+_SHARED_CATALOG_READER_CORE_PY = r'''
+def _shared_search_catalog(catalog: dict, query: str = "", *, top_k: int = 6) -> tuple[list[str], list[str], list[str]]:
+    """Single canonical `M9.2.1` `A3` pure-data search engine shared identically across `K` and `E` (`0` skill import)."""
     import re as _re
-    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
+
     q_low = str(query or "").lower()
     raw_words = set(_re.findall(r"[a-zA-Z0-9]{2,}", _re.sub(r"[_./-]+", " ", q_low)))
     syn_groups = (
@@ -157,22 +72,19 @@ def search_skills(query: str = "", top_k: int = 6) -> str:
         {"preconditioner", "multigrid", "amg", "galerkin", "cg", "conjugate", "spd", "elliptic", "poisson", "diffusion", "robin"},
         {"panel", "reference", "control", "controls", "cohort", "batch", "center", "stratum", "strata", "imputation", "missing", "align", "balanced", "fill"},
         {"nuisance", "profile", "profiled", "profiling", "whitener", "schur", "tomography", "amplitudes", "matching"},
-        {"relaxation", "creep", "viscoelastic", "memory", "hereditary", "prony", "step", "breakpoint", "tau", "trend"},
+        {"relaxation", "creep", "viscoelastic", "memory", "hereditary", "prony", "step", "breakpoint", "tau", "trend", "volterra"},
+        {"kronecker", "sylvester", "separable", "spectral", "kkt", "simplex", "active", "transport"},
     )
     expanded = set(raw_words)
     for grp in syn_groups:
         if raw_words & grp:
-            expanded |= (grp & {"cauchy", "robust", "residual", "weights", "box", "ridge", "lower", "bound", "minorant", "blocks", "galerkin", "preconditioner", "cg", "spd", "align", "reference", "panel", "balanced", "fill", "nuisance", "profile", "amplitudes", "relaxation", "step", "trend"})
-    neg_rx = r"(?:avoid|no|not|never|without|non|exclude|excluding)\\s+[a-z0-9_\\-\\s]{0,24}"
+            expanded |= grp
+    neg_rx = r"(?:avoid|no|not|never|without|non|exclude|excluding)\s+[a-z0-9_\-\s]{0,24}"
     query_affirms_complex_or_indef = bool(
-        (_re.search(r"\\b(?:complex128|complex|helmholtz|indefinite)\\b", q_low))
-        and not _re.search(neg_rx + r"\\b(?:complex128|complex|helmholtz|indefinite)\\b", q_low)
+        (_re.search(r"\b(?:complex128|complex|helmholtz|indefinite)\b", q_low))
+        and not _re.search(neg_rx + r"\b(?:complex128|complex|helmholtz|indefinite)\b", q_low)
         and not (raw_words & {"real", "float64", "spd"})
     )
-    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
-        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
-    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
-        catalog = json.load(fh)
     scored = []
     rejected_notes = []
     for entry in catalog.get("skills", []):
@@ -207,9 +119,147 @@ def search_skills(query: str = "", top_k: int = 6) -> str:
                 sc = 1.0 + is_l1
             if sc > 0.0:
                 card_out = f"{c} | STATUS: {app_status}" if app_status and "STATUS:" not in c else c
-                scored.append((sc, card_out))
+                # Sort by canonical `(m_stem, fn_nm)` so `K` vs `E` command prefixes NEVER change tie-break order!
+                scored.append((round(float(sc), 9), f"{m_stem}.{fn_nm}", card_out))
     scored.sort(key=lambda x: (-x[0], x[1]))
-    top_cards = [c for _, c in scored[: max(1, int(top_k))]]
+    top_slice = scored[: max(1, int(top_k))]
+    return [c for _, _, c in top_slice], [fid for _, fid, _ in top_slice], rejected_notes
+
+
+def _shared_describe_catalog(catalog: dict, target: str = "", *, mode: str = "executable", ref_dir: str = "") -> dict:
+    """Single canonical `M9.2.1` `A3` name resolver & contract renderer shared identically across `K` and `E`."""
+    q = str(target or "").strip()
+    if q.startswith("hegel_wormhole_skills."):
+        q = q[len("hegel_wormhole_skills.") :]
+    is_exec = mode == "executable"
+    matches = []
+    for entry in catalog.get("skills", []):
+        m_stem = str(entry.get("module_stem") or "")
+        matched_fns = None
+        if not q or q == "*" or q == m_stem:
+            matched_fns = list(entry.get("functions", []))
+        elif "." in q and q.split(".", 1)[0] == m_stem:
+            fn_q = q.split(".", 1)[1]
+            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == fn_q]
+            if sub_fns:
+                matched_fns = sub_fns
+        else:
+            sub_fns = [f for f in entry.get("functions", []) if f.get("function") == q]
+            if sub_fns:
+                matched_fns = sub_fns
+        if matched_fns is not None:
+            can_item = {
+                "module_stem": m_stem,
+                "granularity_tier": entry.get("granularity_tier"),
+                "compiled_code_sha256": entry.get("compiled_code_sha256"),
+                "qualification_status": entry.get("qualification_status"),
+                "unit_test_verified": entry.get("unit_test_verified"),
+                "mathematical_preconditions": list(entry.get("mathematical_preconditions") or []),
+                "counter_regime_guards": list(entry.get("counter_regime_guards") or []),
+                "function_level_applicability": dict(entry.get("function_level_applicability") or {}),
+                "functions": matched_fns,
+                "index_cards": list(entry.get("index_cards") or []),
+                "execution_available": is_exec,
+                "module_import": (f"hegel_wormhole_skills.{m_stem}" if is_exec else None),
+                "reference_source_txt": (str(Path(ref_dir) / f"{m_stem}.reference.txt") if (not is_exec and ref_dir) else None),
+            }
+            matches.append(can_item)
+    out = {
+        "ok": len(matches) > 0,
+        "target": q or "*",
+        "access_mode": mode,
+        "execution_available": is_exec,
+        "matches": matches,
+    }
+    if not matches:
+        out["error"] = f"unknown_reference:{target}"
+    return out
+'''
+
+
+SKILL_INIT_PY = (
+    '''"""Hegel M6.8-B' / M8.9 / M9.2.1 Executable Wormhole Micro-Library with Unified Pure-Data Reader & Skill∞ Telemetry."""
+import atexit
+from functools import wraps
+import json
+import os
+from pathlib import Path
+import time
+
+ACTIVATION_LOG_PATH = os.environ.get("HEGEL_SKILL_ACTIVATION_LOG", "/tmp/.hegel_skill_activations.jsonl")
+INSPECTION_LOG_PATH = os.environ.get("HEGEL_SKILL_INSPECTION_LOG", "/tmp/.hegel_skill_inspections.jsonl")
+CONTRACTS_CATALOG_PATH = str(Path(__file__).resolve().parent / "_skill_contracts.json")
+_DIRECT_WRITE_CAP = 256
+_BATCH_FLUSH_EVERY = 32
+_SEEN_COMPLETED: dict[tuple[str, str], int] = {}
+_BUFFERED_EXTRA: dict[tuple[str, str], dict[str, float | int]] = {}
+
+
+def _append_jsonl_path(path_str: str, line_str: str) -> None:
+    try:
+        fd = os.open(path_str, os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o644)
+        try:
+            os.write(fd, (line_str + "\\n").encode("utf-8"))
+        finally:
+            os.close(fd)
+    except OSError:
+        pass
+
+
+def _append_jsonl_kernel(line_str: str) -> None:
+    _append_jsonl_path(ACTIVATION_LOG_PATH, line_str)
+'''
+    + _SHARED_CATALOG_READER_CORE_PY
+    + '''
+
+def describe_skill(target: str = "", detail_level: str = "full") -> str:
+    """Pure-data contract reader (`0` arbitrary module import/execution!). Reads frozen `_skill_contracts.json`."""
+    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
+    _append_jsonl_path(
+        INSPECTION_LOG_PATH,
+        json.dumps(
+            {
+                "ts": round(time.time(), 3),
+                "event": "skill_contract_requested",
+                "target": str(target or "*"),
+                "detail_level": str(detail_level),
+                "caller_role": caller_role,
+            }
+        ),
+    )
+    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
+        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
+    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
+        catalog = json.load(fh)
+    payload = _shared_describe_catalog(catalog, target, mode="executable", ref_dir="")
+    matches = payload["matches"]
+    if matches:
+        _append_jsonl_path(
+            INSPECTION_LOG_PATH,
+            json.dumps(
+                {
+                    "ts": round(time.time(), 3),
+                    "event": "skill_contract_delivered",
+                    "target": str(target or "*"),
+                    "matched_module_count": len(matches),
+                    "matched_modules": [m.get("module_stem") for m in matches],
+                    "caller_role": caller_role,
+                }
+            ),
+        )
+    if detail_level == "index":
+        return "\\n".join(c for m in matches for c in m.get("index_cards", []))
+    return json.dumps(payload, indent=2, ensure_ascii=False)
+
+
+def search_skills(query: str = "", top_k: int = 6) -> str:
+    """Pure-data function-level & synonym-aware search over `_skill_contracts.json` (`M9.2.1` `A3`, `0` skill import)."""
+    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
+    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
+        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
+    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
+        catalog = json.load(fh)
+    top_cards, ranked_ids, rejected_notes = _shared_search_catalog(catalog, query, top_k=top_k)
     _append_jsonl_path(
         INSPECTION_LOG_PATH,
         json.dumps(
@@ -218,6 +268,7 @@ def search_skills(query: str = "", top_k: int = 6) -> str:
                 "event": "skill_search_executed",
                 "query": str(query or ""),
                 "returned_card_count": len(top_cards),
+                "ranked_function_ids": ranked_ids,
                 "rejected_precondition_count": len(rejected_notes),
                 "caller_role": caller_role,
             }
@@ -228,7 +279,8 @@ def search_skills(query: str = "", top_k: int = 6) -> str:
     if rejected_notes:
         return "No applicable skill cards (preconditions rejected for query): " + "; ".join(rejected_notes[:3])
     return "No matching skill cards found."
-
+'''
+    + '''
 
 def _flush_buffered_skill_activations() -> None:
     if not _BUFFERED_EXTRA:
@@ -326,6 +378,7 @@ def track_wormhole_skill(module_name: str):
 
     return _decorator
 '''
+)
 
 
 SKILL_01_SYMBOLIC_DYNAMICAL = '''"""Domain-General Null-Calibrated Symbolic Interaction Screening & Weak-Form SINDy Operators."""
@@ -1964,16 +2017,74 @@ def build_compact_skill_index_cards_from_sources(
     )["index_cards"]
 
 
+EXPECTED_L1_QUALIFICATION_PROTOCOL_V2 = "hegel_l1_qual_4tuple_v2"
+LEGACY_V6_SANDBOX_ENV_DIGEST = "hegel_clean_scipy_sandbox:v1::numpy_scipy_sklearn_airgapped_v1"
+_REGISTERED_VERIFIED_ENV_DIGESTS: set[str] = set()
+
+
+def register_verified_l1_env_digest(env_digest: str) -> None:
+    s = str(env_digest or "").strip()
+    if s:
+        _REGISTERED_VERIFIED_ENV_DIGESTS.add(s)
+
+
+def build_knowledge_only_describe_ref_script() -> str:
+    """Return the `describe_ref.py` script for `K` (`on_demand_knowledge_only` / `progressive_knowledge_only`),
+    generated from the EXACT SAME `_SHARED_CATALOG_READER_CORE_PY` as `E`'s `SKILL_INIT_PY` (`M9.2.1` `A3`)!
+    """
+    return (
+        "import argparse, json, os, time\n"
+        "from pathlib import Path\n"
+        "HERE = Path(__file__).resolve().parent\n"
+        "LOG = Path(os.environ.get('HEGEL_SKILL_INSPECTION_LOG', '/tmp/.hegel_skill_inspections.jsonl'))\n"
+        "cat = json.loads((HERE / '_skill_contracts.json').read_text(encoding='utf-8'))\n"
+        + _SHARED_CATALOG_READER_CORE_PY
+        + "\n"
+        "ap = argparse.ArgumentParser()\n"
+        "ap.add_argument('--list', action='store_true')\n"
+        "ap.add_argument('--search', type=str, default='')\n"
+        "ap.add_argument('--describe', type=str, default='')\n"
+        "args = ap.parse_args()\n"
+        "def _log(ev, tgt, **extra):\n"
+        "    try:\n"
+        "        with LOG.open('a', encoding='utf-8') as f:\n"
+        "            f.write(json.dumps({'event': ev, 'target': tgt, 'mode': 'knowledge_only_ref', 'ts': round(time.time(), 3), **extra}) + '\\n')\n"
+        "    except OSError:\n"
+        "        pass\n"
+        "if args.search:\n"
+        "    top_cards, ranked_ids, rejected_notes = _shared_search_catalog(cat, args.search, top_k=6)\n"
+        "    _log('skill_search_executed', args.search, query=args.search, returned_card_count=len(top_cards), ranked_function_ids=ranked_ids, rejected_precondition_count=len(rejected_notes))\n"
+        "    if top_cards:\n"
+        "        print('\\n'.join(top_cards))\n"
+        "    elif rejected_notes:\n"
+        "        print('No applicable skill cards (preconditions rejected for query): ' + '; '.join(rejected_notes[:3]))\n"
+        "    else:\n"
+        "        print('No matching skill cards found.')\n"
+        "elif args.list and not args.describe:\n"
+        "    _log('skill_index_listed', '__all__')\n"
+        "    payload = _shared_describe_catalog(cat, '*', mode='knowledge_only', ref_dir=str(HERE))\n"
+        "    print('\\n'.join(c for m in payload['matches'] for c in m.get('index_cards', [])))\n"
+        "else:\n"
+        "    q = args.describe.strip()\n"
+        "    _log('skill_contract_requested', q or '*')\n"
+        "    payload = _shared_describe_catalog(cat, q, mode='knowledge_only', ref_dir=str(HERE))\n"
+        "    if payload['ok']:\n"
+        "        _log('skill_contract_delivered', q or '*', matched_module_count=len(payload['matches']), matched_modules=[m.get('module_stem') for m in payload['matches']])\n"
+        "    print(json.dumps(payload, indent=2, ensure_ascii=False))\n"
+    )
+
+
 def verify_l1_module_qualification_record(
     mod_entry: dict[str, Any],
     *,
     require_4tuple_protocol: bool = False,
+    expected_protocol_versions: set[str] | None = None,
+    expected_env_digests: set[str] | None = None,
+    allow_v6_legacy_env_label: bool = True,
 ) -> tuple[bool, str, str]:
-    """Fail-closed `L1` qualification verification (`M8.9.1` `R2` + `M9.1.1` `C2`):
-    Verifies `(actual_code_sha256, actual_test_sha256, verifier_protocol_version, dependency_env_digest)`.
-    Whenever a receipt records `synthetic_unit_test_sha256` OR `qualification_protocol == 'hegel_l1_qual_4tuple_v2'`
-    OR `require_4tuple_protocol=True`, any change to `synthetic_unit_test_code` or missing protocol/env digest
-    immediately invalidates qualification! Missing, empty, False, or stale receipts NEVER default to qualified.
+    """Fail-closed `L1` qualification verification (`M8.9.1` `R2` + `M9.1.1` `C2` + `M9.2.1` `A4`):
+    Verifies exact equality of `(actual_code_sha256, actual_test_sha256, verifier_protocol_version, dependency_env_digest)`.
+    Rejects arbitrary non-empty `unrelated_protocol_v999` or `unrelated_environment_sha` strings!
     """
     py_src = str(mod_entry.get("python_code") or "")
     if not py_src.strip():
@@ -1998,17 +2109,30 @@ def verify_l1_module_qualification_record(
     ut_src = str(mod_entry.get("synthetic_unit_test_code") or "")
     actual_ut_sha = hashlib.sha256(ut_src.encode("utf-8")).hexdigest() if ut_src.strip() else ""
     rec_ut_sha = str(ut_rec.get("synthetic_unit_test_sha256") or "")
-    is_v2_proto = (mod_entry.get("qualification_protocol") == "hegel_l1_qual_4tuple_v2") or bool(require_4tuple_protocol)
+    is_v2_proto = (mod_entry.get("qualification_protocol") == EXPECTED_L1_QUALIFICATION_PROTOCOL_V2) or bool(require_4tuple_protocol)
     if rec_ut_sha or is_v2_proto:
         if not actual_ut_sha:
             return False, "missing_synthetic_unit_test_code_for_4tuple_qualification", actual_sha
         if rec_ut_sha != actual_ut_sha:
             return False, "receipt_synthetic_unit_test_sha256_mismatch", actual_sha
     if is_v2_proto:
-        if not str(ut_rec.get("verifier_protocol_version") or "").strip():
+        proto_val = str(ut_rec.get("verifier_protocol_version") or "").strip()
+        env_val = str(ut_rec.get("dependency_env_digest") or "").strip()
+        if not proto_val:
             return False, "missing_verifier_protocol_version", actual_sha
-        if not str(ut_rec.get("dependency_env_digest") or "").strip():
+        if not env_val:
             return False, "missing_dependency_env_digest", actual_sha
+        eff_protos = expected_protocol_versions if expected_protocol_versions is not None else {EXPECTED_L1_QUALIFICATION_PROTOCOL_V2}
+        if proto_val not in eff_protos:
+            return False, f"unexpected_verifier_protocol_version:{proto_val}", actual_sha
+        if expected_env_digests is not None:
+            eff_envs = set(expected_env_digests)
+        else:
+            eff_envs = set(_REGISTERED_VERIFIED_ENV_DIGESTS)
+            if allow_v6_legacy_env_label:
+                eff_envs.add(LEGACY_V6_SANDBOX_ENV_DIGEST)
+        if env_val not in eff_envs:
+            return False, f"unexpected_dependency_env_digest:{env_val}", actual_sha
         return True, "qualified_4tuple_code_test_protocol_env_bound", actual_sha
     if rec_ut_sha:
         return True, "qualified_code_and_test_sha_bound_legacy_v1", actual_sha
@@ -2747,76 +2871,8 @@ def stage_recalled_executable_wormholes_in_container(
         return []
 
     if disclosure_mode in {"progressive_knowledge_only", "on_demand_knowledge_only"}:
-        # `M9.0a` + `M9.2` Equal-Information Knowledge-Only Arm (`--list`, `--search`, `--describe`, `.reference.txt`, ZERO importable Python package!)
-        describe_ref_py = (
-            "import argparse, json, os, re, time\n"
-            "from pathlib import Path\n"
-            "HERE = Path(__file__).resolve().parent\n"
-            "LOG = Path(os.environ.get('HEGEL_SKILL_INSPECTION_LOG', '/tmp/.hegel_skill_inspections.jsonl'))\n"
-            "cat = json.loads((HERE / '_skill_contracts.json').read_text(encoding='utf-8'))\n"
-            "ap = argparse.ArgumentParser()\n"
-            "ap.add_argument('--list', action='store_true')\n"
-            "ap.add_argument('--search', type=str, default='')\n"
-            "ap.add_argument('--describe', type=str, default='')\n"
-            "args = ap.parse_args()\n"
-            "def _log(ev, tgt, **extra):\n"
-            "    try:\n"
-            "        with LOG.open('a', encoding='utf-8') as f:\n"
-            "            f.write(json.dumps({'event': ev, 'target': tgt, 'mode': 'knowledge_only_ref', 'ts': time.time(), **extra}) + '\\n')\n"
-            "    except OSError:\n"
-            "        pass\n"
-            "if args.search:\n"
-            "    ql = args.search.lower()\n"
-            "    rw = set(re.findall(r'[a-zA-Z0-9]{2,}', re.sub(r'[_./-]+', ' ', ql)))\n"
-            "    sgs = (\n"
-            "        {'robust','regression','outlier','outliers','irls','cauchy','huber','lorentzian','glitch','spikes','residual','weights'},\n"
-            "        {'certified','certificate','lower','bound','bounds','l0','sparse','box','subcube','cube','minorant','branch','blocks'},\n"
-            "        {'preconditioner','multigrid','amg','galerkin','cg','conjugate','spd','elliptic','poisson','diffusion','robin'},\n"
-            "        {'panel','reference','control','controls','cohort','batch','center','stratum','strata','imputation','missing','align','balanced','fill'},\n"
-            "        {'nuisance','profile','profiled','profiling','whitener','schur','tomography','amplitudes','matching'},\n"
-            "        {'relaxation','creep','viscoelastic','memory','hereditary','prony','step','breakpoint','tau','trend'},\n"
-            "    )\n"
-            "    ex = set(rw)\n"
-            "    for g in sgs:\n"
-            "        if rw & g: ex |= g\n"
-            "    scored = []\n"
-            "    for s in cat['skills']:\n"
-            "        mst = s['module_stem']; fmap = s.get('function_level_applicability') or {}\n"
-            "        isl1 = 1.0 if s.get('granularity_tier') == 'L1_compositional_primitive' else 0.0\n"
-            "        fns = s.get('functions', [])\n"
-            "        for ix, c in enumerate(s.get('index_cards', [])):\n"
-            "            fi = fns[ix] if ix < len(fns) else {}; fnm = str(fi.get('function') or '')\n"
-            "            astat = str(fmap.get(fnm) or '')\n"
-            "            if astat.startswith('REJECTED_'): continue\n"
-            "            fw = set(re.findall(r'[a-zA-Z0-9]{2,}', re.sub(r'[_./-]+', ' ', ' '.join([mst, fnm, str(fi.get('signature') or ''), str(fi.get('doc_summary') or '')]).lower())))\n"
-            "            dh = len(rw & fw); sh = len(ex & fw); eb = 6.0 if (fnm and fnm.lower() in ql) else (3.0 if mst.lower() in ql else 0.0)\n"
-            "            sc = 3.0*dh + 1.2*sh + eb + (0.5*isl1 if (dh+sh)>0 else 0.0)\n"
-            "            if not rw: sc = 1.0 + isl1\n"
-            "            if sc > 0: scored.append((sc, c))\n"
-            "    scored.sort(key=lambda x: (-x[0], x[1]))\n"
-            "    top = [c for _, c in scored[:6]]\n"
-            "    _log('skill_search_executed', args.search, query=args.search, returned_card_count=len(top))\n"
-            "    print('\\n'.join(top) if top else 'No matching reference cards found.')\n"
-            "elif args.list:\n"
-            "    _log('skill_index_listed', '__all__')\n"
-            "    print(json.dumps([{'module_stem': s['module_stem'], 'index_cards': s['index_cards']} for s in cat['skills']], indent=2))\n"
-            "elif args.describe:\n"
-            "    q = args.describe.strip()\n"
-            "    _log('skill_contract_requested', q)\n"
-            "    parts = q.split('.')\n"
-            "    m_st = parts[0]\n"
-            "    fn_nm = parts[1] if len(parts) > 1 else ''\n"
-            "    hit = next((s for s in cat['skills'] if s['module_stem'] == m_st), None)\n"
-            "    if hit is None:\n"
-            "        print(json.dumps({'ok': False, 'error': f'unknown_reference:{q}'}))\n"
-            "    else:\n"
-            "        fns = [f for f in hit['functions'] if (not fn_nm or f['function'] == fn_nm)]\n"
-            "        if not fns:\n"
-            "            print(json.dumps({'ok': False, 'error': f'unknown_function_in_reference:{q}'}))\n"
-            "        else:\n"
-            "            _log('skill_contract_delivered', q, matched_module_count=1)\n"
-            "            print(json.dumps({'ok': True, 'module_stem': m_st, 'compiled_code_sha256': hit['compiled_code_sha256'], 'mathematical_preconditions': hit['mathematical_preconditions'], 'function_level_applicability': hit.get('function_level_applicability', {}), 'functions': fns, 'reference_source_txt': str(HERE / (m_st + '.reference.txt'))}, indent=2))\n"
-        )
+        # `M9.2.1` `A3`: Generated from the EXACT SAME `_SHARED_CATALOG_READER_CORE_PY` as `E`!
+        describe_ref_py = build_knowledge_only_describe_ref_script()
         with tempfile.TemporaryDirectory(prefix="hegel_m90_knowref_") as tmp_k:
             ref_dir = Path(tmp_k) / "hegel_knowledge_ref"
             ref_dir.mkdir(parents=True, exist_ok=True)

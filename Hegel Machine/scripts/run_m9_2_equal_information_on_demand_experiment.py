@@ -322,6 +322,10 @@ def main() -> None:
                 c_tok = int(s.get("cached_tokens", 0))
                 o_tok = int(s.get("completion_tokens", 0))
                 proxy_tok = float((p_tok - c_tok) + 0.25 * c_tok + o_tok)
+                if "inspected_knowledge_ref_in_bash" not in af:
+                    raise KeyError(f"Missing required `inspected_knowledge_ref_in_bash` in `skill_adoption_funnel` for {ep_dir}")
+                pa = s.get("provider_attempt_accounting") or {}
+                psr = s.get("public_setup_receipt") or {}
                 episode_rows.append(
                     {
                         "replicate": rep_id,
@@ -335,6 +339,8 @@ def main() -> None:
                         "turns_used": int(s.get("turns_used", 0)),
                         "max_turns": int(s.get("max_turns", args.max_turns)),
                         "ended_by_finish": bool(s.get("ended_by_finish", False)),
+                        "public_setup_executed": bool(psr.get("executed", False)),
+                        "shared_public_schema_validator_present": bool(psr.get("shared_public_schema_validator_present", False)),
                         "turn1_staged_manifest_json_chars": len(json.dumps(s.get("staged_wormhole_modules", []), ensure_ascii=False)),
                         **t1_tok,
                         "raw_token_triple": {
@@ -344,15 +350,19 @@ def main() -> None:
                         },
                         "total_tokens": int(s.get("total_tokens", 0)),
                         "token_cost_proxy_w025": round(proxy_tok, 2),
+                        "provider_attempt_count": int(pa.get("total_provider_attempts", s.get("turns_used", 0))),
+                        "usage_unknown_attempt_count": int(pa.get("usage_unknown_attempt_count", 0)),
+                        "cost_accounting_status": str(pa.get("cost_accounting_status") or "complete"),
                         "episode_wall_ms": float(s.get("wall_ms", 0.0)),
-                        "student_verifier_elapsed_sec": ver_m.get("student_elapsed_sec"),
+                        "verifier_window_wall_sec": ver_m.get("student_elapsed_sec"),
+                        "candidate_timing_breakdown": ver_m.get("candidate_timing_breakdown"),
                         "demand_triggered_recommended_l1_count": int(af.get("demand_triggered_recommended_l1_count", 0)),
                         "demand_skill_hint_emitted": bool(af.get("demand_skill_hint_emitted", False)),
                         "demand_skill_hint_turn": af.get("demand_skill_hint_turn"),
                         "search_skill_query_count": int(af.get("search_skill_query_count", 0)),
                         "describe_skill_inspection_count": int(af.get("describe_skill_inspection_count", 0)),
                         "describe_skill_queries": list(af.get("describe_skill_queries", [])),
-                        "inspected_knowledge_reference_txt": bool(af.get("inspected_knowledge_reference_txt", False)),
+                        "inspected_knowledge_ref_in_bash": bool(af["inspected_knowledge_ref_in_bash"]),
                         "dynamic_l1_calls": int(af.get("dynamic_l1_primitive_activation_count", 0)),
                         "dynamic_unique_l1_modules": list(af.get("dynamic_unique_l1_modules_called", [])),
                         "dynamic_unique_l1_functions": list(af.get("dynamic_unique_l1_functions_called", [])),
@@ -371,7 +381,13 @@ def main() -> None:
         in_tok = sum(int(r["raw_token_triple"]["input_tokens"]) for r in rows)
         ca_tok = sum(int(r["raw_token_triple"]["cached_input_tokens"]) for r in rows)
         ou_tok = sum(int(r["raw_token_triple"]["output_tokens"]) for r in rows)
-        stud_secs = [float(r["student_verifier_elapsed_sec"]) for r in rows if r.get("student_verifier_elapsed_sec") is not None]
+        stud_secs = [float(r["verifier_window_wall_sec"]) for r in rows if r.get("verifier_window_wall_sec") is not None]
+        cand_cpus = [
+            float((r.get("candidate_timing_breakdown") or {}).get("candidate_call_cpu_sec"))
+            for r in rows
+            if (r.get("candidate_timing_breakdown") or {}).get("candidate_call_cpu_sec") is not None
+        ]
+        unk_cnt = sum(int(r["usage_unknown_attempt_count"]) for r in rows)
         return {
             "episode_count": len(rows),
             "strict_pass_count": sum(1 for r in rows if r["strict_pass"]),
@@ -384,14 +400,18 @@ def main() -> None:
             "total_tokens_sum": sum(r["total_tokens"] for r in rows),
             "mean_total_tokens": round(sum(r["total_tokens"] for r in rows) / n, 1),
             "token_cost_proxy_w025_sum": round(sum(r["token_cost_proxy_w025"] for r in rows), 1),
+            "total_provider_attempts": sum(int(r["provider_attempt_count"]) for r in rows),
+            "usage_unknown_attempt_count": unk_cnt,
+            "cost_accounting_status": ("partial_unknown_usage" if unk_cnt > 0 else "complete"),
             "mean_episode_wall_sec": round(sum(r["episode_wall_ms"] for r in rows) / (1000.0 * n), 2),
-            "mean_student_verifier_elapsed_sec": round(sum(stud_secs) / len(stud_secs), 4) if stud_secs else None,
+            "mean_verifier_window_wall_sec": round(sum(stud_secs) / len(stud_secs), 4) if stud_secs else None,
+            "mean_candidate_call_cpu_sec": round(sum(cand_cpus) / len(cand_cpus), 4) if cand_cpus else None,
             "episodes_with_search_or_describe": sum(
-                1 for r in rows if (r["search_skill_query_count"] + r["describe_skill_inspection_count"]) > 0 or r["inspected_knowledge_reference_txt"]
+                1 for r in rows if (r["search_skill_query_count"] + r["describe_skill_inspection_count"]) > 0 or r["inspected_knowledge_ref_in_bash"]
             ),
             "total_search_queries": sum(r["search_skill_query_count"] for r in rows),
             "total_describe_inspections": sum(r["describe_skill_inspection_count"] for r in rows),
-            "episodes_reading_knowledge_ref_txt": sum(1 for r in rows if r["inspected_knowledge_reference_txt"]),
+            "episodes_reading_knowledge_ref_txt": sum(1 for r in rows if r["inspected_knowledge_ref_in_bash"]),
             "episodes_with_dynamic_l1_calls": sum(1 for r in rows if r["dynamic_l1_calls"] > 0),
             "total_dynamic_l1_calls": sum(r["dynamic_l1_calls"] for r in rows),
             "episodes_with_entrypoint_reachable_l1": sum(1 for r in rows if len(r["entrypoint_reachable_l1_functions"]) > 0),
@@ -433,7 +453,12 @@ def main() -> None:
             "frozen_v6_bundle_sha256": v6_sha,
             "qualification_protocol": "hegel_l1_qual_4tuple_v2",
             "single_branch_locked": True,
-            "shared_public_schema_validator_all_arms": True,
+            "shared_public_schema_validator_all_arms": bool(
+                episode_rows and all(r.get("shared_public_schema_validator_present") for r in episode_rows)
+            ),
+            "public_setup_executed_all_episodes": bool(
+                episode_rows and all(r.get("public_setup_executed") for r in episode_rows)
+            ),
         },
         "protocol": {
             "model": args.model,

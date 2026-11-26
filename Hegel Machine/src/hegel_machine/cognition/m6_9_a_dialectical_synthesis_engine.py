@@ -1980,23 +1980,36 @@ def run_m6_9_a_two_branch_episode(
                                         reasoning_effort=reasoning_effort,
                                         timeout_seconds=210,
                                     )
-                                    # `M88-REPAIR-SYNTH-PKG`: build deterministic skill source map from `forest_archive` + recalled notes so
-                                    # `execute_in_container_local_repair` automatically bundles `hegel_wormhole_skills` closures before probing!
-                                    repair_skill_sources: dict[str, str] = {}
+                                    # `M88-REPAIR-SYNTH-PKG` + `M9.2.1` `A9`: derive repair skill sources & preconditions
+                                    # through the unified 4-tuple qualification gate and order-invariant version selector
+                                    # (`collect_recalled_executable_wormhole_sources`), NEVER via raw `setdefault` archive scans!
+                                    from .m6_4_executable_wormhole_library import collect_recalled_executable_wormhole_sources
+
+                                    _rep_mods, _, _rep_diag = collect_recalled_executable_wormhole_sources(
+                                        recalled_notes,
+                                        include_foundational_skills=False,
+                                        allow_l1_primitives=allow_l1_primitives,
+                                        full_forest_archive=forest_archive,
+                                        task_query_text=task.instruction_text,
+                                        max_l1_modules=8,
+                                        allow_sklearn=True,
+                                        disclosure_mode="progressive",
+                                        staging_policy="all_compatible",
+                                        return_diagnostics=True,
+                                    )
+                                    repair_skill_sources: dict[str, str] = {
+                                        Path(_rfname).stem: str(_rcode) for _rfname, _rcode in _rep_mods.items()
+                                    }
                                     repair_skill_preconditions: dict[str, list[Any]] = {}
-                                    for _rnid, _rrec in (forest_archive or {}).items():
-                                        if str(_rnid).startswith("__") or not isinstance(_rrec, dict):
-                                            continue
-                                        for _rmod in (_rrec.get("autogenous_wormhole_modules") or []) + (_rrec.get("wave1_executable_modules") or []):
-                                            _rfname = str(_rmod.get("filename") or "")
-                                            if (not allow_l1_primitives) and (_rfname.startswith("autogenous_prim_") or _rmod.get("granularity_tier") == "L1_compositional_primitive"):
-                                                continue
-                                            if _rfname and _rmod.get("python_code"):
-                                                _rstem = Path(_rfname).stem
-                                                repair_skill_sources.setdefault(_rstem, str(_rmod["python_code"]))
-                                                _rpre = list(_rmod.get("mathematical_preconditions") or _rmod.get("scope_preconditions") or [])
-                                                if _rpre:
-                                                    repair_skill_preconditions.setdefault(_rstem, _rpre)
+                                    try:
+                                        _rep_cat = json.loads(str(_rep_diag.get("contracts_catalog_json") or "{}"))
+                                        for _rent in _rep_cat.get("skills") or []:
+                                            _rstem = str(_rent.get("module_stem") or "")
+                                            _rpre = list(_rent.get("mathematical_preconditions") or [])
+                                            if _rstem and _rpre:
+                                                repair_skill_preconditions[_rstem] = _rpre
+                                    except Exception:
+                                        pass
                                     local_repair_summary = execute_in_container_local_repair(
                                         probe_cid=probe_cid,
                                         task=task,
