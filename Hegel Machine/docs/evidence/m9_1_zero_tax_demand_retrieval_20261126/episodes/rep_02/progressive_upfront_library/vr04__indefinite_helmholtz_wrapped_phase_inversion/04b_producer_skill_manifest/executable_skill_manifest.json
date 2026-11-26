@@ -1,0 +1,110 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr04_indefinite_helmholtz_phase_60d9e3b32d61",
+    "source_hash": "60d9e3b32d6119ee734c39b4e7071f6d74a33850c5695fe74ddd6c4bba7231a5",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr04__indefinite_helmholtz_wrapped_phase_inversion",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/helm_phase_audit.py",
+        "archived_relpath": "producers/tmp__helm_phase_audit.py",
+        "bytes": 2206,
+        "sha256": "fcbee821345418f497a4e3819df5c0388cf1582a0ae4e2030b1466ff2886a7d2"
+      },
+      {
+        "container_path": "/tmp/helm_public.py",
+        "archived_relpath": "producers/tmp__helm_public.py",
+        "bytes": 1330,
+        "sha256": "c4fc5e2b6c6a54c910806d10df03c3ca41e47b1fe64e8829b865e479f1b9cc89"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lh /holdout_task; python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy import sparse\nwith open('/holdout_task/public_helmholtz_cases.pkl','rb') as f:\n    data = pickle.load(f)\ndef show(x, depth=0):\n    if isinstance(x, dict):\n        return {k:show(v,depth+1) for k,v in x.items()}\n    if isinstance(x,(tuple,list)):\n        return {'type':type(x).__name__,'count':len(x),'items':[show(v,depth+1) for v in x[:8]]}\n    if isinstance(x,np.ndarray):\n        return (x.shape,str(x.dtype))\n    return x\nprint(show(data))\nPY",
+      "cat > /holdout_task/helmholtz_phase_inversion.py <<'PY'\n\"\"\"Finite-volume Helmholtz inversion from pilot and survey phasors.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _responses(problem):\n    n_sq = np.asarray(problem['n_sq'])\n    nx, ny = n_sq.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    k = problem['k0']\n    impedance = -1j * k * problem['beta_imp']\n    cells = np.arange(nx * ny).reshape(nx, ny)\n    diag = np.asarray(-hx * hy * k**2 * n_sq, dtype=np.complex128)\n    diag[[0, -1], :] += hy * impedance\n    diag[:, [0, -",
+      "sed -i 's/dtype=np.complex128)$/dtype=np.complex128, order=\"C\")/' /holdout_task/helmholtz_phase_inversion.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/helm_public.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\n\nm = runpy.run_path('/holdout_task/helmholtz_phase_inversion.py')\ninvert = m['invert_helmholtz_sources_and_phase']\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef rel(a, b):\n    return np.linalg.norm(a-b)/np.linalg.norm(b)\n\ndef phase_error(a,b):\n    return abs(np.angle(np.exp(1j*(a-b))))\n\ndef polar(z):\n",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nm = runpy.run_path('/holdout_task/helmholtz_phase_inversion.py')\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef rel(x, y):\n    return np.linalg.norm(x-y) / np.linalg.norm(y)\n\nworst = np.zeros(3)\nworst_ols = 0.\nfor cid, case in enumerate(cases):\n    p, gt = case['problem'], case['gt']\n    s = p['survey']\n    i, j = s['sensor_ij'].T\n    nx, ny = p['n_sq'].shape\n    quadrant = 2*(i >= nx/2).astype(int)+(j >= ny/2).astype(int)\n    z = m['_phasors'](s)\n    sec",
+      "cat > /tmp/helm_phase_audit.py <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nsolver = runpy.run_path('/holdout_task/helmholtz_phase_inversion.py')\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef rel(a, b):\n    return np.linalg.norm(a-b) / np.linalg.norm(b)\n\ndef circular(a):\n    return abs(np.angle(np.exp(1j*a)))\n\nworst = np.zeros(3)\nworst_drift = 0.\nfor case in cases:\n    p, gt = case['problem'], case['gt']\n    pilot, survey = p['pilot_calibration'], p['survey']\n    known = pilot['known_field_re'] + 1j*pilot['known_field_im']\n    drop ="
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__helm_phase_audit.py",
+      "primary_producer_container_path": "/tmp/helm_phase_audit.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/helmholtz_phase_inversion.py",
+        "filename": "helmholtz_phase_inversion.py",
+        "bytes": 3439,
+        "sha256": "e14f92bda6bb47fd8c1d5c506846ac391acfc4aa0871fdc3a55e1dd085dc584b",
+        "content_addressed_ref": "content_addressed_blobs/e14f92bda6bb47fd8c1d5c506846ac391acfc4aa0871fdc3a55e1dd085dc584b.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/helmholtz_phase_inversion.py"
+    ],
+    "exported_pure_functions": [
+      "rel",
+      "circular"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "60d9e3b32d6119ee734c39b4e7071f6d74a33850c5695fe74ddd6c4bba7231a5",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "cat > /tmp/helm_phase_audit.py <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nsolver = runpy.run_path('/holdout_task/helmholtz_phase_inversion.py')\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "60d9e3b32d6119ee734c39b4e7071f6d74a33850c5695fe74ddd6c4bba7231a5",
+        "expected_candidate_sha256": "60d9e3b32d6119ee734c39b4e7071f6d74a33850c5695fe74ddd6c4bba7231a5",
+        "computed_candidate_sha256": "60d9e3b32d6119ee734c39b4e7071f6d74a33850c5695fe74ddd6c4bba7231a5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/helmholtz_phase_inversion.py",
+            "bytes": 3439
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_60d9e3b3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "rel",
+        "code": "def rel(a, b):\n    return np.linalg.norm(a - b) / np.linalg.norm(b)"
+      },
+      {
+        "name": "circular",
+        "code": "def circular(a):\n    return abs(np.angle(np.exp(1j * a)))"
+      }
+    ]
+  }
+}

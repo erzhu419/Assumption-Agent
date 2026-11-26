@@ -1,0 +1,76 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd02_3d_robin_amg_tomography_2171af895249",
+    "source_hash": "2171af895249973e629fd016df0568f991650c6e0b59a77217b00cd66ac68bc1",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd02__3d_high_contrast_robin_amg_multi_rhs_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && python3 -I - <<'PY'\nimport os, pickle, importlib.util\nimport numpy as np, scipy\nprint('numpy/scipy:', np.__version__, scipy.__version__)\nprint('optional packages:', {n: importlib.util.find_spec(n) is not None for n in ('pyamg','threadpoolctl')})\nfor name in ('/sys/fs/cgroup/cpu.max','/sys/fs/cgroup/memory.max'):\n    if os.path.exists(name): print(name, open(name).read().strip())\nwith open('public_robin3d_cases.pkl','rb') as f: data=pickle.load(f)\ndef describe(x, depth=0):\n    if isinstance(x,dict):\n        for k,v in x.items():\n            if isinstance(v,np.ndarra",
+      "cat > /holdout_task/robin3d_amg_tomography.py <<'PY'\n\"\"\"Cell-centered 3D Robin diffusion and nuisance-profiled source inversion.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _assemble(kappa, sigma, spacing, gamma):\n    \"\"\"Assemble the integrated cell balance in C-order indexing.\"\"\"\n    volume = np.prod(spacing)\n    cells = np.arange(kappa.size).reshape(kappa.shape)\n    diagonal = (volume * sigma).copy()\n    rows, cols, values = [], [], []\n    for axis, h in enumerate(spacing):\n        area = volume / h\n        lo = [slice(None)] * 3\n    ",
+      "python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\nfrom scipy.linalg import lstsq\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('robin_solver', root + 'robin3d_amg_tomography.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open(root + 'public_robin3d_cases.pkl', 'rb') as f:\n    public = pickle.load(f)[0]['problem']\nrng = np.random.default_rng(9301)\nn = 28\nx, y, z = np.indices((n, n, n))\nseconds = 0.0\nworst = 0.0\nfor label, kappa, gamma in (\n    ('connected high-conductivity bulk', np.where((x ",
+      "python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('robin', root + 'robin3d_amg_tomography.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open(root + 'public_robin3d_cases.pkl', 'rb') as f:\n    p = pickle.load(f)[0]['problem']\nout = solver.solve_3d_robin_tomography(p)\nu = out['basis_fields']\nk = p['kappa']\nh = np.array([p['Lx'], p['Ly'], p['Lz']]) / k.shape\nv = h.prod()\ng = p['gamma_robin']\n# The interior pairwise fluxes cancel in the global balance.\nloss = v"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin3d_amg_tomography.py",
+        "filename": "robin3d_amg_tomography.py",
+        "bytes": 3939,
+        "sha256": "9f7a0e714546bb53ea8a9a599e12ef17257fccd809147b5bacc04067684e527b",
+        "content_addressed_ref": "content_addressed_blobs/9f7a0e714546bb53ea8a9a599e12ef17257fccd809147b5bacc04067684e527b.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin3d_amg_tomography.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2171af895249973e629fd016df0568f991650c6e0b59a77217b00cd66ac68bc1",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('robin', root + 'robin3d_amg_tomography.py')\nsolver = importlib.util.module_from_spec(spec)\nsp",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2171af895249973e629fd016df0568f991650c6e0b59a77217b00cd66ac68bc1",
+        "expected_candidate_sha256": "2171af895249973e629fd016df0568f991650c6e0b59a77217b00cd66ac68bc1",
+        "computed_candidate_sha256": "2171af895249973e629fd016df0568f991650c6e0b59a77217b00cd66ac68bc1",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin3d_amg_tomography.py",
+            "bytes": 3939
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_2171af89"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

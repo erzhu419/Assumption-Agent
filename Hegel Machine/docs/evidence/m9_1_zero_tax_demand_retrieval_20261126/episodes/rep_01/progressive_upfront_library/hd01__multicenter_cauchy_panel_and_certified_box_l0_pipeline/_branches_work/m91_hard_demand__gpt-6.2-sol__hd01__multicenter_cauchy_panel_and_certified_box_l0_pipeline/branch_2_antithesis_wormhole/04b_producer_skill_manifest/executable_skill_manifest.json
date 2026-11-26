@@ -1,0 +1,126 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_598d4a2a27e6",
+    "source_hash": "598d4a2a27e6e44d45c6e926399f414e66edf95954a46b55695d8e36c5151b2b",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_cutoff_multicenter.py",
+        "archived_relpath": "producers/tmp__audit_cutoff_multicenter.py",
+        "bytes": 2097,
+        "sha256": "b3ed13d44761f0666200a07817a0953dd7913a403c38c86f75a4d11a31d4d1e9"
+      },
+      {
+        "container_path": "/tmp/audit_multicenter_cohort.py",
+        "archived_relpath": "producers/tmp__audit_multicenter_cohort.py",
+        "bytes": 2795,
+        "sha256": "c2f17f37b74a9a3c1a56246799364727434d4c8dd55533d8bc0ae82c94343708"
+      },
+      {
+        "container_path": "/tmp/check_multicenter.py",
+        "archived_relpath": "producers/tmp__check_multicenter.py",
+        "bytes": 4470,
+        "sha256": "7f7022458ac3f73f24840832b26f9effb2f22093305a4ff99629c71680917bfe"
+      },
+      {
+        "container_path": "/tmp/check_multicenter_limits.py",
+        "archived_relpath": "producers/tmp__check_multicenter_limits.py",
+        "bytes": 1701,
+        "sha256": "3e6663a4b89753412246f4148b6bd228c4156b2e0035967ad9ee9e6f2d792c58"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nv=pickle.load(open('public_multicenter_l0_studies.pkl','rb'))\ndef describe(v,k='',depth=0):\n if isinstance(v,dict):\n  print(k, list(v))\n  if depth<4:\n   for a,b in list(v.items())[:12]: describe(b,k+'/'+str(a),depth+1)\n elif isinstance(v,(list,tuple)):\n  print(k,type(v).__name__,len(v))\n  for j,x in enumerate(v[:8]): describe(x,k+'/'+str(j),depth+1)\n elif hasattr(v,'shape'):\n  print(k,v.shape,v.dtype)\n  if k.endswith('/X') and v.ndim==2:\n   g=v.T@v; d=np.diag(g); off=g-np.diag(d); print('  gram diag range',d.",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom hegel_wormhole_skills.autogenous_prim_reference_panel_balancing import align_reference_panel, balanced_cell_weights, weighted_column_fill\nv=pickle.load(open('public_multicenter_l0_studies.pkl','rb'))\nfor a in v:\n c=a['study']['cohort']; x=a['study']['sparse_selection']; A,y=x['X'],x['y']; G=A.T@A; h=A.T@y\n for j in range(len(h)):\n  if j==0: print('G by offsets:',[(k,round(np.max(np.abs(np.diag(G,k))),4)) for k in range(1,len(h))]);print('h',np.round(h,3))\n z=align_reference_panel(c['X_raw'],c['controls']",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency, and a sparse box certificate.\"\"\"\n\nimport heapq\nfrom itertools import count\n\nimport numpy as np\n\n\ndef _cohort_fit(cohort):\n    x = np.asarray(cohort['X_raw'], dtype=float)\n    q = np.asarray(cohort['controls'], dtype=float)\n    centers = np.asarray(cohort['center_id'])\n    strata = np.asarray(cohort['stratum'])\n    y = np.asarray(cohort['y_potency'], dtype=float)\n    z = np.empty_like(x)\n    for center in np.unique(centers):\n        rows = centers == center\n        panel = q[rows]\n        valid ",
+      "cat > /tmp/check_multicenter.py <<'PY'\nimport importlib.util, pickle, time\nimport numpy as np\npath='/holdout_task/multicenter_certified_l0.py'\nspec=importlib.util.spec_from_file_location('solver',path)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n\ndef replay(a,s):\n    X,y,l0,l2,M=(a[k] for k in ('X','y','lam0','lam2','M'))\n    p=X.shape[1]; G=X.T@X\n    w=s['weights']; r=X@w-y\n    F=.5*(r@r+l2*(w@w))+l0*np.count_nonzero(abs(w)>1e-8)\n    assert w.shape==(p,) and np.max(abs(w))<=M and abs(F-s['objective'])<=1e-12\n    leaves=s['subcube_leaves']; assert 1<=len(leaves)<=2048\n ",
+      "cat > /tmp/check_multicenter_limits.py <<'PY'\nimport contextlib, io, runpy\nimport numpy as np\nwith contextlib.redirect_stdout(io.StringIO()):\n    check=runpy.run_path('/tmp/check_multicenter.py')\nm,replay=check['m'],check['replay']\n# Analytic lower bound on the number of leaves for the duplicate-pair instance.\nl0,l2,M,y=.22,.14,1.1,.96\nw=y/(1+l2)\nchord=(w/M)*(l0+.5*l2*M*M)\nloss=l0+.5*l2*w*w-chord\nprint('duplicate-pair: free optimum activation loses',loss,'; required leaves >=',2**11+1,flush=True)\nassert 0<w<M and loss>1e-5\n# Broaden full-size certificate testing on the public cycle structure a",
+      "cat > /tmp/audit_multicenter_cohort.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/multicenter_certified_l0.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\n\ndef fit_predict(c, fold, mode):\n    groups, strata, y = (c[k] for k in ('center_id', 'stratum', 'y_potency'))\n    train = groups != fold\n    x = c['X_raw'].copy()\n    if mode != 'raw':\n        for g in np.unique(groups):\n            rows = groups == g\n            panel = c['controls'][rows]\n            p",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/multicenter_certified_l0.py')\ns=p.read_text()\na=s.index('    # The stated numerical support cutoff')\nb=s.index('    def minimize',a)\ns=s[:a]+s[b:]\na=s.index('        on = l0 - v * (z - 0.5 * curvature * v)')\nb=s.index('        return lb, on',a)\ns=s[:a]+'''        on = l0 - v * (z - 0.5 * curvature * v)\n        # The numerical support cutoff permits an inactive coefficient in\n        # [-1e-8, 1e-8]. Minimize its separable term on that interval.\n        v_off = np.minimum(v, 1e-8)\n        off = -v_off * (z - 0.5 * curvature * v_off",
+      "cat > /tmp/audit_cutoff_multicenter.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\npath = '/holdout_task/multicenter_certified_l0.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef replay(a, s):\n    x,y,l0,l2,M = (a[k] for k in ('X','y','lam0','lam2','M'))\n    w = s['weights']; p = x.shape[1]\n    f = .5*np.linalg.norm(x@w-y)**2 + .5*l2*(w@w) + l0*np.count_nonzero(abs(w)>1e-8)\n    assert np.max(np.abs(w)) <= M and abs(f-s['objective']) < 1e-11\n    volume = 0; masks = []; bounds = []\n    for leaf",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_certified_l0.py')\ns = p.read_text()\ns = s.replace('    transition = np.minimum(box, np.sqrt(2 * l0 / curvature))\\n    slope = l0 / transition + 0.5 * curvature * transition', '''    cutoff = min(box, 1e-8)\n    span = np.minimum(box - cutoff, np.sqrt(2 * l0 / curvature))\n    transition = cutoff + span\n    slope = curvature * (cutoff + 0.5 * span)\n    slope += np.divide(l0, span, out=np.zeros_like(span), where=span > 0)''')\na = s.index('        \"\"\"Coordinate minimization')\nb = s.index('\\n    def witness', a)\ns = s[:a] "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_multicenter_cohort.py",
+      "primary_producer_container_path": "/tmp/audit_multicenter_cohort.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 7976,
+        "sha256": "e36372b5f23009fc4705ec86727c79ac0cdedb2d81e82515e7af1096cfb9af58",
+        "content_addressed_ref": "content_addressed_blobs/e36372b5f23009fc4705ec86727c79ac0cdedb2d81e82515e7af1096cfb9af58.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "replay",
+      "fit_predict"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "598d4a2a27e6e44d45c6e926399f414e66edf95954a46b55695d8e36c5151b2b",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_certified_l0.py')\ns = p.read_text()\ns = s.replace('    transition = np.minimum(box, np.sqrt(2 * l0 / curvature))\\n    slope = l0 / transition + 0.5 * curvature * ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "598d4a2a27e6e44d45c6e926399f414e66edf95954a46b55695d8e36c5151b2b",
+        "expected_candidate_sha256": "598d4a2a27e6e44d45c6e926399f414e66edf95954a46b55695d8e36c5151b2b",
+        "computed_candidate_sha256": "598d4a2a27e6e44d45c6e926399f414e66edf95954a46b55695d8e36c5151b2b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 7976
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_598d4a2a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "replay",
+        "code": "def replay(a, s):\n    (x, y, l0, l2, M) = (a[k] for k in ('X', 'y', 'lam0', 'lam2', 'M'))\n    w = s['weights']\n    p = x.shape[1]\n    f = 0.5 * np.linalg.norm(x @ w - y) ** 2 + 0.5 * l2 * (w @ w) + l0 * np.count_nonzero(abs(w) > 1e-08)\n    assert np.max(np.abs(w)) <= M and abs(f - s['objective']) < 1e-11\n    volume = 0\n    masks = []\n    bounds = []\n    for leaf in s['subcube_leaves']:\n        (z, b, c, d) = [leaf[k] for k in ('fixed_zero', 'fixed_active', 'minorant_center', 'minorant_diagonal')]\n        assert z.dtype == b.dtype == bool and (not np.any(z & b))\n        (mz, ma) = (sum((1 << int(j) for j in np.flatnonzero(v))) for v in (z, b))\n        assert all((mz & na or ma & nz for (nz, na) in masks))\n        masks.append((mz, ma))\n        volume += 1 << p - (z | b).sum()\n        assert d.min() >= 0 and np.linalg.eigvalsh((x.T @ x - np.diag(d)) / max(1.0, np.max(d)))[0] >= -1e-10\n        r = y - x @ c\n        g = x.T @ r\n        linear = g + d * c\n        q = d + l2\n        u = np.clip(linear / q, -M, M)\n        v = np.clip(u, -1e-08, 1e-08)\n        on = l0 - linear * u + 0.5 * q * u * u\n        off = -linear * v + 0.5 * q * v * v\n        free = ~(z | b)\n        lb = 0.5 * (r @ r + d * c @ c) + g @ c + off[z].sum() + on[b].sum() + np.minimum(off[free], on[free]).sum()\n        assert leaf['lb'] <= lb + 1e-10\n        bounds.append(leaf['lb'])\n    assert volume == 1 << p and 1 <= len(bounds) <= 2048 and (min(bounds) == s['certified_lower_bound'])\n    assert 0 <= s['objective'] - min(bounds) <= 1e-05\n    return (len(bounds), s['objective'] - min(bounds))"
+      },
+      {
+        "name": "fit_predict",
+        "code": "def fit_predict(c, fold, mode):\n    (groups, strata, y) = (c[k] for k in ('center_id', 'stratum', 'y_potency'))\n    train = groups != fold\n    x = c['X_raw'].copy()\n    if mode != 'raw':\n        for g in np.unique(groups):\n            rows = groups == g\n            panel = c['controls'][rows]\n            panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n            x[rows] = (x[rows] - np.median(np.nanmean(panel, axis=0))) / np.median(np.nanstd(panel, axis=0))\n    (_, cells, sizes) = np.unique(np.column_stack((groups[train], strata[train])), axis=0, return_inverse=True, return_counts=True)\n    base = len(cells) / len(sizes) / sizes[cells] if mode != 'aligned_unweighted' else np.ones(len(cells))\n    observed = np.isfinite(x[train])\n    fill = base @ np.where(observed, x[train], 0) / (base @ observed)\n    x = np.where(np.isfinite(x), x, fill)\n    design = np.column_stack((np.ones(len(y)), strata == 1, strata == 2, x))\n    (a, b) = (design[train], y[train])\n\n    def ls(w):\n        w = np.sqrt(w)\n        return np.linalg.lstsq(a * w[:, None], b * w, rcond=None)[0]\n    coef = ls(base)\n    r = b - a @ coef\n    scale = 1.4826 * np.median(np.abs(r - np.median(r)))\n    for _ in range(100):\n        new = ls(base / (1 + ((b - a @ coef) / scale) ** 2))\n        if np.max(abs(new - coef)) < 1e-10:\n            coef = new\n            break\n        coef = new\n    return (coef, np.abs(y[~train] - design[~train] @ coef), strata[~train])"
+      }
+    ]
+  }
+}

@@ -1,0 +1,109 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_dd5cd352871e",
+    "source_hash": "dd5cd352871e620755d9315f711ad5e6c0cd44b4397ffc9c7d83c66f1d24bb34",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_multicenter_margin.py",
+        "archived_relpath": "producers/tmp__audit_multicenter_margin.py",
+        "bytes": 2490,
+        "sha256": "e6703f20e786bf85a4c42e7304d40cb90cfbcd7adcdcbea912fd4a44235e8cf4"
+      },
+      {
+        "container_path": "/tmp/check_multicenter.py",
+        "archived_relpath": "producers/tmp__check_multicenter.py",
+        "bytes": 3260,
+        "sha256": "10400b81d7caf7275e93dc3f4d367d9a3496a0d997e33eac78cac4b3079fd57b"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np,scipy\np=pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))\nprint('scipy',scipy.__version__)\ndef show(x,depth=0):\n if isinstance(x,dict):\n  print(' '*depth,'keys',list(x));\n  for k,v in x.items():\n   print(' '*depth,k,end=': ');show(v,depth+1)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x));\n  if x:show(x[0],depth+1)\n elif hasattr(x,'shape'): print(x.shape,x.dtype)\n else: print(repr(x)[:200])\nshow(p)\nPY",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor k,r in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n s=r['study']['sparse_selection']; X=s['X']; G=X.T@X; v=np.diag(G)**.5; print(k,X.shape,s['lam0'],s['lam2'],s['M'],'objective',r['gt']['exact_l0_objective'],'Gram eigen extremes',np.linalg.eigvalsh(G)[[0,-1]],'diagonal range',v.min()**2,v.max()**2,'correlation min eig',np.linalg.eigvalsh(G/v[:,None]/v)[0]); print('ridge',np.round(np.linalg.solve(G+s['lam2']*np.eye(len(G)),X.T@s['y']),3))\nPY\npython3 -m hegel_wormhole_skills --search '",
+      "python3 -m hegel_wormhole_skills --describe autogenous_prim_box_ridge_bounds.box_ridge_cube_lower_bound; python3 -m hegel_wormhole_skills --describe autogenous_prim_box_ridge_bounds.row_incidence_blocks; python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.sparse.csgraph import connected_components\nfor i,r in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n s=r['study']['sparse_selection']; X=s['X']; G=X.T@X; adj=abs(G-np.diag(n",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency fitting, and certified box-L0 ridge.\"\"\"\nimport numpy as np\n\n\ndef _cohort_fit(cohort):\n    centers = np.asarray(cohort['center_id'])\n    strata = np.asarray(cohort['stratum'])\n    raw = np.asarray(cohort['X_raw'], dtype=float)\n    controls = np.asarray(cohort['controls'], dtype=float)\n    y = np.asarray(cohort['y_potency'], dtype=float)\n    z = np.empty_like(raw)\n    w = np.empty(len(y))\n    for c in np.unique(centers):\n        rows = centers == c\n        panel = controls[rows]\n        cols = [co",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport runpy,pickle,numpy as np\nmod=runpy.run_path('/holdout_task/multicenter_certified_l0.py')\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n    co=item['study']['cohort']; gt=item['gt']; cid=co['center_id']; st=co['stratum']; Z=co['X_raw']; T=gt['Z_true']; ctrl=co['controls']; y=co['y_potency']; b=gt['beta_potency']; w=np.zeros(len(y)); A=Z.copy()\n    for c in np.unique(cid):\n        rows=cid==c; P=ctrl[rows]; valid=np.isfinite(P).sum(0)>=2; P=P[:,valid]; off=np.median(np.nanmean(P,axis=0)); gai",
+      "cat >/tmp/check_multicenter.py <<'PY'\nimport itertools, pickle, runpy, time\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nmod = runpy.run_path('/holdout_task/multicenter_certified_l0.py')\n\ndef verify(spec, res):\n    X, y, lam2, lam0, M = [spec[k] for k in ('X', 'y', 'lam2', 'lam0', 'M')]\n    G = X.T @ X\n    p = len(G)\n    w = res['weights']\n    F = lambda u: .5*np.linalg.norm(X@u-y)**2+.5*lam2*np.linalg.norm(u)**2+lam0*np.count_nonzero(abs(u)>1e-8)\n    assert w.shape == (p,) and np.all(abs(w)<=M) and abs(F(w)-res['objective'])<1e-10\n    leaves = res['subcube_leaves']; assert 1 <= l",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy\nimport numpy as np\nfrom scipy.optimize import lsq_linear\nm = runpy.run_path('/holdout_task/multicenter_certified_l0.py')\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n    co, truth = item['study']['cohort'], item['gt']\n    z, slope = m['_cohort_fit'](co)\n    y, center, stratum = (co[k] for k in ('y_potency','center_id','stratum'))\n    nuisance = np.column_stack((np.ones(len(y)), stratum == 1, stratum == 2))\n    cell_rmse = [[], [], []]\n    for c in np.unique(center):\n        t",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_certified_l0.py')\ns = p.read_text()\nold = '        parts = np.where(status == 1, active, np.where(status == -1, 0., np.minimum(0., active)))'\nnew = '''        # The objective counts |w| > 1e-8, so an inactive coordinate can\n        # still move inside this interval without paying the activation cost.\n        v = np.clip(-g / a, -min(M, 1e-8), min(M, 1e-8))\n        inactive = 0.5 * a * v*v + g*v\n        parts = np.where(status == 1, active,\n                         np.where(status == -1, inactive, np.minimum(inactive,",
+      "cat > /tmp/audit_multicenter_margin.py <<'PY'\nimport pickle\nimport runpy\nimport time\n\nimport numpy as np\n\nsolve = runpy.run_path('/holdout_task/multicenter_certified_l0.py')['_sparse_fit']\nitems = pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl', 'rb'))\nworst = (0., None)\nlargest = (0, None)\nfor i, item in enumerate(items):\n    original = item['study']['sparse_selection']\n    # Sweep penalties around support transitions while retaining the measured X and y.\n    for M in (0.25, 0.55, original['M']):\n        for lam0 in (0.03, 0.09, 0.16, 0.22, 0.30, 0.42, 0.58):\n            sp"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_multicenter_margin.py",
+      "primary_producer_container_path": "/tmp/audit_multicenter_margin.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 6240,
+        "sha256": "6778e51fbf311cbb08e3693d9bee29a5f78568a8ae0c32aa35c26215cceea48d",
+        "content_addressed_ref": "content_addressed_blobs/6778e51fbf311cbb08e3693d9bee29a5f78568a8ae0c32aa35c26215cceea48d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "verify"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "dd5cd352871e620755d9315f711ad5e6c0cd44b4397ffc9c7d83c66f1d24bb34",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/audit_multicenter_margin.py <<'PY'\nimport pickle\nimport runpy\nimport time\n\nimport numpy as np\n\nsolve = runpy.run_path('/holdout_task/multicenter_certified_l0.py')['_sparse_fit']\nitems = pickle.load(open('/holdout_task/public_mult",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "dd5cd352871e620755d9315f711ad5e6c0cd44b4397ffc9c7d83c66f1d24bb34",
+        "expected_candidate_sha256": "dd5cd352871e620755d9315f711ad5e6c0cd44b4397ffc9c7d83c66f1d24bb34",
+        "computed_candidate_sha256": "dd5cd352871e620755d9315f711ad5e6c0cd44b4397ffc9c7d83c66f1d24bb34",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 6240
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_dd5cd352"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "verify",
+        "code": "def verify(spec, res):\n    (X, y, lam2, lam0, M) = [spec[k] for k in ('X', 'y', 'lam2', 'lam0', 'M')]\n    G = X.T @ X\n    p = len(G)\n    w = res['weights']\n    F = lambda u: 0.5 * np.linalg.norm(X @ u - y) ** 2 + 0.5 * lam2 * np.linalg.norm(u) ** 2 + lam0 * np.count_nonzero(abs(u) > 1e-08)\n    assert w.shape == (p,) and np.all(abs(w) <= M) and (abs(F(w) - res['objective']) < 1e-10)\n    leaves = res['subcube_leaves']\n    assert 1 <= len(leaves) <= 2048\n    volume = 0\n    masks = []\n    gaps = []\n    for e in leaves:\n        (f, a) = (e['fixed_zero'], e['fixed_active'])\n        assert f.shape == a.shape == (p,) and (not np.any(f & a))\n        (z, d) = (e['minorant_center'], e['minorant_diagonal'])\n        R = G - np.diag(d)\n        assert np.min(d) >= 0 and np.min(np.linalg.eigvalsh(R)) >= -1e-10\n        r = X @ z - y\n        g = X.T @ r - d * z\n        u = np.clip(-g / (d + lam2), -M, M)\n        A = g * u + 0.5 * (d + lam2) * u * u + lam0\n        L = 0.5 * (y @ y - z @ R @ z) + np.sum(np.where(f, 0, np.where(a, A, np.minimum(0, A))))\n        delta = L - e['lb']\n        assert -1e-10 <= delta <= 1e-06, delta\n        gaps.append(delta)\n        fm = sum((1 << int(j) for j in np.flatnonzero(f)))\n        am = sum((1 << int(j) for j in np.flatnonzero(a)))\n        assert all((fm & aa or am & ff for (ff, aa) in masks))\n        masks.append((fm, am))\n        volume += 1 << p - (fm | am).bit_count()\n    assert volume == 1 << p\n    L = res['certified_lower_bound']\n    gap = F(w) - L\n    assert -1e-10 <= gap <= 1e-05 and abs(L - min(F(w), min((e['lb'] for e in leaves)))) < 1e-10\n    return (len(leaves), gap, np.sum(abs(w) == M), max(gaps))"
+      }
+    ]
+  }
+}

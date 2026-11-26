@@ -1,0 +1,99 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_b0f7cc20e37c",
+    "source_hash": "b0f7cc20e37c0333594a8e95d757e16c7b99f759dbfb5a56da29f8927e7312f6",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_multicenter.py",
+        "archived_relpath": "producers/tmp__audit_multicenter.py",
+        "bytes": 2385,
+        "sha256": "122fdf032f449b1bd753a8e2e4c8e8f559a3340eb86a2f8f1496860b9c76d140"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_multicenter_l0_studies.pkl','rb') as f: data=pickle.load(f)\ndef walk(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*depth,k, type(v).__name__,getattr(v,'shape',''),v if np.isscalar(v) else '')\n   if isinstance(v,(dict,list,tuple)): walk(v,depth+1)\n elif isinstance(x,(list,tuple)):\n  print(' '*depth,'length',len(x))\n  for a in x[:2]: walk(a,depth+1)\nwalk(data)\ndef find(x):\n if isinstance(x,dict):\n  if 'sparse_selection' in x:\n   s=x['sparse_selection']; X=s[",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency regression, and certified L0 selection.\"\"\"\nimport numpy as np\n\n\ndef _align(cohort):\n    _, centers = np.unique(cohort['center_id'], return_inverse=True)\n    strata = np.asarray(cohort['stratum'])\n    raw = np.asarray(cohort['X_raw'], dtype=float)\n    controls = np.asarray(cohort['controls'], dtype=float)\n    aligned = np.empty_like(raw)\n    for k in range(centers.max() + 1):\n        rows = centers == k\n        panel = controls[rows]\n        finite = np.isfinite(panel)\n        valid = finite.sum(",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom multicenter_certified_l0 import solve_multicenter_certified_l0\nfor case in pickle.load(open('public_multicenter_l0_studies.pkl','rb')):\n    s=case['study']; c=s['cohort']; z=case['gt']['Z_true']; o=solve_multicenter_certified_l0(s); a=o['aligned_biomarkers']; ref=c['X_raw'].copy(); missing=np.isnan(ref)\n    for center in np.unique(c['center_id']):\n        rows=c['center_id']==center; cols=[col[np.isfinite(col)] for col in c['controls'][rows].T]; cols=[col for col",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch\ncases=pickle.load(open('public_multicenter_l0_studies.pkl','rb'))\nfor item in cases:\n    s=item['study']['sparse_selection']; X=s['X']; G=X.T@X\n    print('Gram first rows:', [list(zip(np.flatnonzero(abs(row)>1e-10),np.round(row[abs(row)>1e-10],3))) for row in G[:5]])\nrng=np.random.default_rng(823)\nfor mode in ('near_switch','mixed','clipped','orthogonal'):\n    results=[]\n    for rep in range(12):\n        p",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('multicenter_certified_l0.py')\ns = p.read_text()\ns = s.replace('import numpy as np\\n', 'import numpy as np\\n\\n_SUPPORT_EPS = 1e-8\\n', 1)\ns = s.replace('np.abs(w) > 1e-8', 'np.abs(w) > _SUPPORT_EPS')\nold = '''        # Slight downward rounding allowance for cancellation in the expansion.\n        lb = constant + active[state == 1].sum() + np.minimum(0., active[state < 0]).sum()\n'''\nnew = '''        # A zero support bit includes the entire unpenalized interval, not\n        # just the origin. For active bits, relaxing the inter",
+      "cd /holdout_task\npython3 -m hegel_wormhole_skills --describe autogenous_prim_box_ridge_bounds.gram_diagonal_minorant\npython3 -m hegel_wormhole_skills --describe autogenous_prim_box_ridge_bounds.row_incidence_blocks\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch\nfor mode in ('pairs', 'pairs_plus_weak_links'):\n    p=22; r=.14; k=.22; M=1.1\n    G=np.eye(p); i=np.arange(0,p,2); G[i,i+1]=G[i+1,i]=.26\n    if mode!='pairs':\n        j=np.arange(1,p-1,2); G[j,j+1]=G[j+1,j]=.01\n    X=np.li",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport itertools\nimport numpy as np\np=22; rho=.26; r=.14; k=.22; M=1.1; h=1+r; c=1.01*np.sqrt(2*k*h); w=c/h; eps=1e-8\nG=np.array([[1.,rho],[rho,1.]])\n# Closed-form zero-threshold support optima for one pair, omitting the shared constant.\ncells=[]\nfor bits in itertools.product((0,1),repeat=2):\n    idx=np.flatnonzero(bits); a=np.zeros(2)\n    a[idx]=np.linalg.solve((G+r*np.eye(2))[np.ix_(idx,idx)],np.full(len(idx),c))\n    assert np.max(abs(a))<M\n    cells.append(float(.5*a@(G+r*np.eye(2))@a-c*sum(a)+k*len(idx)))\nassert cells[1]==cells",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys, time\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch\n\nfor i, case in enumerate(pickle.load(open('public_multicenter_l0_studies.pkl', 'rb'))):\n    spec = case['study']['sparse_selection']\n    X, y = spec['X'], spec['y']\n    G = X.T @ X\n    p = X.shape[1]\n    graph = np.abs(G - np.diag(G.diagonal())) > 1e-10\n    unseen = set(range(p))\n    blocks = []\n    while unseen:\n        j = min(unseen)\n        pending, block = [j], []\n        unseen.remove(j)\n        whi",
+      "cat > /tmp/audit_multicenter.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _align, _potency, solve_multicenter_certified_l0\n\nfor i, item in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl', 'rb'))):\n    study, truth = item['study'], item['gt']\n    c = study['cohort']; center, strata, y = (c[k] for k in ('center_id', 'stratum', 'y_potency'))\n    out = solve_multicenter_certified_l0(study); a, w = _align(c)\n    np.testing.assert_array_equal(out['aligned_biomarkers'], a)\n    ref_beta = truth['be",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle,sys,numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch\nfor i,case in enumerate(pickle.load(open('public_multicenter_l0_studies.pkl','rb'))):\n    spec=case['study']['sparse_selection']\n    solver=_BoxSearch(spec); out=solver.search(); w=out['weights']; off=abs(w)<=1e-8\n    trial=w.copy(); trial[off]=np.clip(1e-8*np.sign((solver.c-solver.G@w)[off]),-solver.M,solver.M)\n    print('public',i,'inactive',off.sum(),'incumbent improvement from cutoff interval',out['objective']-solve",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('multicenter_certified_l0.py')\ns = p.read_text()\ns = s.replace('        self.M = float(problem[\\'M\\'])\\n', '        self.M = float(problem[\\'M\\'])\\n        self.e = min(self.M, _SUPPORT_EPS)\\n')\na = s.index('        w = start.copy()', s.index('    def improve'))\nb = s.index('                delta = v - w[j]', a)\ns = s[:a] + '''        w = start.copy()\n        off = state == 0\n        w[off] = np.clip(w[off], -self.e, self.e)\n        residual = self.G @ w - self.c\n        for _ in range(100):\n            change = 0.\n        ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch, solve_multicenter_certified_l0\n\ndef replay(spec, out):\n    X, y, r, k, M = (spec[j] for j in ('X', 'y', 'lam2', 'lam0', 'M'))\n    p = X.shape[1]; G = X.T @ X; masks = []; leaves = out['subcube_leaves']\n    w = out['weights']; e = min(M, 1e-8)\n    assert w.shape == (p,) and np.all(abs(w) <= M) and 1 <= len(leaves) <= 2048\n    residual = X @ w - y\n    obj = float(.5 * (residual @ residual + r * (w @ w)) + k * np.count_nonzero(abs(w)"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_multicenter.py",
+      "primary_producer_container_path": "/tmp/audit_multicenter.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 8679,
+        "sha256": "b9ad9c573dc69656e1cdf62953034fbc3f0574fc55b662f7689da40a0f400d0c",
+        "content_addressed_ref": "content_addressed_blobs/b9ad9c573dc69656e1cdf62953034fbc3f0574fc55b662f7689da40a0f400d0c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b0f7cc20e37c0333594a8e95d757e16c7b99f759dbfb5a56da29f8927e7312f6",
+      "verified_post_package": true,
+      "verified_turn": 14,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom multicenter_certified_l0 import _BoxSearch, solve_multicenter_certified_l0\n\ndef replay(spec, out):\n    X, y, r, k, M =",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b0f7cc20e37c0333594a8e95d757e16c7b99f759dbfb5a56da29f8927e7312f6",
+        "expected_candidate_sha256": "b0f7cc20e37c0333594a8e95d757e16c7b99f759dbfb5a56da29f8927e7312f6",
+        "computed_candidate_sha256": "b0f7cc20e37c0333594a8e95d757e16c7b99f759dbfb5a56da29f8927e7312f6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 8679
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_b0f7cc20"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

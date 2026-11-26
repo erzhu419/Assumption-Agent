@@ -1,0 +1,104 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_e94e05521fbd",
+    "source_hash": "e94e05521fbdf6963c07e507881fe36a00cfab2e63af6ee14e04909b9c6ca8b3",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_multicenter_l0.py",
+        "archived_relpath": "producers/tmp__verify_multicenter_l0.py",
+        "bytes": 3482,
+        "sha256": "beb7db6dee8f512e6a690cb54bf996c9535ac8486280119012defeda93faa3b2"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /pretrain_task; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np, scipy\np='/holdout_task/public_multicenter_l0_studies.pkl'\na=pickle.load(open(p,'rb')); print('scipy',scipy.__version__)\ndef show(x, depth=0):\n if isinstance(x,dict):\n  print(' '*depth, 'keys',list(x))\n  for k,v in x.items():\n   print(' '*depth,k,end=': '); show(v,depth+2)\n elif isinstance(x,(list,tuple)):\n  print(type(x).__name__,len(x));\n  if len(x): show(x[0],depth+2)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype)\n else: print(repr(x)[:180])\nshow(a)\nPY",
+      "OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfor i,r in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n s=r['study']['sparse_selection']; X,y=s['X'],s['y']; G=X.T@X\n print(i,X.shape,{k:s[k] for k in ('lam2','lam0','M')},'opt',r['gt']['exact_l0_objective'],'null',y@y/2)\n print('Gram eigenvalues',np.round(np.linalg.eigvalsh(G),3));print('diag',np.round(G.diagonal(),2)); print('ridge',np.round(np.linalg.solve(G+s['lam2']*np.eye(len(G)),X.T@y),3))\n c=r['study']['cohort'];print('cell sizes',np.unique(np.c_[c['center_id'],c['stratum']],axis",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency fitting, and certified subset selection.\"\"\"\n\nimport heapq\n\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef _align(cohort):\n    raw = np.asarray(cohort['X_raw'], dtype=float)\n    controls = np.asarray(cohort['controls'], dtype=float)\n    centers = np.asarray(cohort['center_id'])\n    strata = np.asarray(cohort['stratum'])\n    aligned = np.empty_like(raw)\n    for center in np.unique(centers):\n        rows = centers == center\n        panel = controls[rows]\n        panel = panel[:, np.is",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/multicenter_certified_l0.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\nfor i,r in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n s,g=r['study'],r['gt']; c=s['cohort']; truth=g['Z_true']; raw=c['X_raw']; ids=c['center_id']; panel=c['controls']; strata=c['stratum']; y=c['y_potency']; b=g['beta_potency']; z,_=m._align(c); ct=np.zeros((6,3)); expected=np.empty_like(raw)\n for k ",
+      "cat > /tmp/verify_multicenter_l0.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\n\npath = '/holdout_task/multicenter_certified_l0.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef verify(s, out, expected=None):\n    X, y, M, l0, l2 = (s[k] for k in ('X','y','M','lam0','lam2'))\n    p = X.shape[1]\n    w = out['weights']\n    assert w.shape == (p,) and np.max(np.abs(w)) <= M + 1e-12\n    f = float(0.5*np.linalg.norm(X@w-y)**2 + 0.5*l2*np.linalg.norm(w)**2 + l0*np.count_nonzero(np.abs",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, numpy as np, time\np='/holdout_task/multicenter_certified_l0.py'\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n# Seven independent groups of three interchangeable columns: each group should select exactly one.\nX=np.repeat(np.eye(44,7),3,axis=1); y=np.r_[np.full(7,.95),np.zeros(37)]; l2,l0,M=.14,.22,1.1\ncost=[.5*.95**2]+[.5*.95**2*l2/(k+l2)+k*l0 for k in (1,2,3)]\nw=.95/(1+l2)\nknee=min(M,np.sqrt(2*l0/l2)); chord_slope=l0/knee+.5*l2*knee\nmargin=l0+.5*l2*w",
+      "python3 - <<'PY'\np='/holdout_task/multicenter_certified_l0.py'\ns=open(p).read()\na='''    eigmin = np.linalg.eigvalsh(gram)[0]\n    d = np.full(p, max(0.0, eigmin - 1e-11 * np.max(np.diag(gram))))\n    B = gram - np.diag(d)\n'''\nb='''    eigmin = np.linalg.eigvalsh(gram)[0]\n    d = np.full(p, max(0.0, eigmin - 1e-11 * np.max(np.diag(gram))))\n    B = gram - np.diag(d)\n    # Extract additional diagonal curvature in correlation coordinates.\n    # A small-norm column need not limit the curvature of every column.\n    diagonal = B.diagonal().copy()\n    positive = diagonal > 0\n    if positive.any():\n    ",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\npath='/holdout_task/multicenter_certified_l0.py'\nspec=importlib.util.spec_from_file_location('solver',path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n\ndef fit(A,y):\n    b=np.linalg.lstsq(A,y,rcond=None)[0]\n    for k in range(90):\n        e=y-A@b\n        if k<12: scale=max(1.4826*np.median(abs(e-np.median(e))),1e-8)\n        w=1/np.hypot(1,e/scale)\n        t=np.linalg.lstsq(A*w[:,None],y*w,rcond=None)[0]\n        if k>=12 and np.max(abs(t-b))<1e-9: return t\n        b=t\n    retur",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, numpy as np\np='/holdout_task/multicenter_certified_l0.py'\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\n# A change of feature units makes the numerical-zero threshold materially relevant.\nX=np.eye(44,22); X[:,0]*=1e7; y=np.zeros(44); y[0]=.16\nout=m._select(dict(X=X,y=y,lam2=.14,lam0=.22,M=1.1))\nw=np.zeros(22); w[0]=1e-8\nexpected=.5*np.linalg.norm(X@w-y)**2+.5*.14*(w@w)\nprint('threshold slice: objective',out['objective'],'analytic optimum',expected,'gap'",
+      "set -e\npython3 - <<'PY'\np='/holdout_task/multicenter_certified_l0.py'\ns=open(p).read()\ns=s.replace('    eps = 1e-8\\n','    eps = 1e-8\\n    zero_box = min(eps, box)\\n')\ns=s.replace('    knee = np.minimum(box, np.sqrt(2 * l0 / a))\\n    slope = l0 / knee + 0.5 * a * knee\\n','''    knee = np.minimum(box, zero_box + np.sqrt(2 * l0 / a))\n    slope = np.full(p, np.inf)\n    if box > zero_box:\n        slope = l0 / (knee - zero_box) + 0.5 * a * (knee + zero_box)\n    movable = B.diagonal().clip(min=0)\n''')\nstart=s.index('    def fit_support(mask):')\nend=s.index('    def polish(w):',start)\ns=s[:start]+'''"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_multicenter_l0.py",
+      "primary_producer_container_path": "/tmp/verify_multicenter_l0.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 9420,
+        "sha256": "736c840a4bf1507f62afd93d8f918b8aaa61e594de297b48812282f1d71f1268",
+        "content_addressed_ref": "content_addressed_blobs/736c840a4bf1507f62afd93d8f918b8aaa61e594de297b48812282f1d71f1268.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "verify"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e94e05521fbdf6963c07e507881fe36a00cfab2e63af6ee14e04909b9c6ca8b3",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\npython3 - <<'PY'\np='/holdout_task/multicenter_certified_l0.py'\ns=open(p).read()\ns=s.replace('    eps = 1e-8\\n','    eps = 1e-8\\n    zero_box = min(eps, box)\\n')\ns=s.replace('    knee = np.minimum(box, np.sqrt(2 * l0 / a))\\n    slope ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e94e05521fbdf6963c07e507881fe36a00cfab2e63af6ee14e04909b9c6ca8b3",
+        "expected_candidate_sha256": "e94e05521fbdf6963c07e507881fe36a00cfab2e63af6ee14e04909b9c6ca8b3",
+        "computed_candidate_sha256": "e94e05521fbdf6963c07e507881fe36a00cfab2e63af6ee14e04909b9c6ca8b3",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 9420
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_e94e0552"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "verify",
+        "code": "def verify(s, out, expected=None):\n    (X, y, M, l0, l2) = (s[k] for k in ('X', 'y', 'M', 'lam0', 'lam2'))\n    p = X.shape[1]\n    w = out['weights']\n    assert w.shape == (p,) and np.max(np.abs(w)) <= M + 1e-12\n    f = float(0.5 * np.linalg.norm(X @ w - y) ** 2 + 0.5 * l2 * np.linalg.norm(w) ** 2 + l0 * np.count_nonzero(np.abs(w) > 1e-08))\n    assert abs(f - out['objective']) < 1e-09\n    if expected is not None:\n        assert abs(f - expected) < 1e-05, (f, expected)\n    G = X.T @ X\n    masks = []\n    mass = 0\n    lbs = []\n    for leaf in out['subcube_leaves']:\n        (z, a) = (leaf['fixed_zero'], leaf['fixed_active'])\n        assert len(z + a) == len(set(z + a)) and all((0 <= j < p for j in z + a))\n        (zero, active) = (sum((1 << j for j in js)) for js in (z, a))\n        assert all((zero & aa or active & zz for (zz, aa) in masks))\n        masks.append((zero, active))\n        mass += 1 << p - len(z) - len(a)\n        (d, c) = (leaf['minorant_diagonal'], leaf['minorant_center'])\n        assert d.shape == c.shape == (p,) and np.min(d) >= 0\n        B = G - np.diag(d)\n        assert np.linalg.eigvalsh(B)[0] >= -1e-10\n        v = B @ c - X.T @ y\n        ref = 0.5 * (y @ y - c @ B @ c)\n        for j in range(p):\n            curv = l2 + d[j]\n            t = np.clip(-v[j] / curv, -M, M)\n            act = 0.5 * curv * t * t + v[j] * t + l0\n            t = np.clip(-v[j] / curv, -min(M, 1e-08), min(M, 1e-08))\n            off = 0.5 * curv * t * t + v[j] * t\n            ref += off if j in z else act if j in a else min(off, act)\n        assert 0 <= ref - leaf['lb'] + 1e-10 and ref - leaf['lb'] < 1e-08\n        lbs.append(leaf['lb'])\n    assert mass == 1 << p\n    L = out['certified_lower_bound']\n    assert abs(L - min(lbs)) < 1e-09\n    gap = f - L\n    assert -1e-12 <= gap <= 1e-05, gap\n    print('objective', f, 'gap', gap, 'leaves', len(masks), 'saturated', np.count_nonzero(np.isclose(np.abs(w), M)), flush=True)\n    assert 1 <= len(masks) <= 2048, len(masks)"
+      }
+    ]
+  }
+}

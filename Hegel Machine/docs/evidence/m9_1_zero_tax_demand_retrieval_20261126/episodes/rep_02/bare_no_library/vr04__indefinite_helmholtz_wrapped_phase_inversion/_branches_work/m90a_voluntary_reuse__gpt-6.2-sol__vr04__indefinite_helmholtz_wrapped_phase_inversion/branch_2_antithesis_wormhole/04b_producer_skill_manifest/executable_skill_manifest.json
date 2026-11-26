@@ -1,0 +1,108 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr04_indefinite_helmholtz_phase_92e5701a67ae",
+    "source_hash": "92e5701a67ae15178b93b9b9aa2bd66bc7baeb10c9c0e358002c3ff6b00a5ef6",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr04__indefinite_helmholtz_wrapped_phase_inversion",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_helmholtz_receiver_blocks.py",
+        "archived_relpath": "producers/tmp__audit_helmholtz_receiver_blocks.py",
+        "bytes": 2316,
+        "sha256": "7c638eb1509878a4884fcbe5947f0adb0e500bda8b38ec477c7ec68aed99245a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle, importlib.util\np='/holdout_task/public_helmholtz_cases.pkl'\nwith open(p,'rb') as f: x=pickle.load(f)\ndef show(x,d=0):\n if d>5: return\n if isinstance(x,dict):\n  print(' '*d,'dict',list(x));\n  for k,v in x.items():\n   print(' '*(d+1),k,end=': '); show(v,d+2)\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x));\n  if x: show(x[0],d+1)\n elif hasattr(x,'shape'): print(x.shape,x.dtype)\n else: print(repr(x)[:160])\nshow(x)\nfor m in ['numpy','scipy']: print(m, bool(importlib.util.find_spec(m)))\nPY",
+      "cat > /holdout_task/helmholtz_phase_inversion.py <<'PY'\n\"\"\"Finite-volume Helmholtz inversion from polar receiver measurements.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _responses(problem):\n    \"\"\"Return the complex pressure response to each unit source.\"\"\"\n    index_sq = np.asarray(problem['n_sq'])\n    basis = np.asarray(problem['basis'])\n    nx, ny = index_sq.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    area = hx * hy\n    k0 = problem['k0']\n    ids = np.arange(nx * ny).reshape(nx, ny)\n    cells = ids.ravel()\n    lef",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\npath = '/holdout_task/helmholtz_phase_inversion.py'\nspec = importlib.util.spec_from_file_location('helmholtz_phase_inversion', path)\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\nrng = np.random.default_rng(71394)\nlimits = np.array([.03, .02, .03])\ndef score(p, a, phase, field):\n    out = mod.invert_helmholtz_sources_and_phase(p)\n    aa, pp, ff = (out[k] for k in ('source_ampli",
+      "cat > /tmp/audit_helmholtz_receiver_blocks.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('helmholtz_phase_inversion', '/holdout_task/helmholtz_phase_inversion.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\n\ndef rel(a, b):\n    return np.linalg.norm(a-b) / np.linalg.norm(b)\n\n\ndef circular(a, b):\n    return abs(np.angle(np.exp(1j*(a-b))))\n\n\ndef errors(result, gt):\n    return np.array([rel(result['source_ampli"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_helmholtz_receiver_blocks.py",
+      "primary_producer_container_path": "/tmp/audit_helmholtz_receiver_blocks.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/helmholtz_phase_inversion.py",
+        "filename": "helmholtz_phase_inversion.py",
+        "bytes": 3833,
+        "sha256": "1a37ff5703998e8556dd60dbfb8835b118d5fe71d7619bb83ef1611c93d652b2",
+        "content_addressed_ref": "content_addressed_blobs/1a37ff5703998e8556dd60dbfb8835b118d5fe71d7619bb83ef1611c93d652b2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/helmholtz_phase_inversion.py"
+    ],
+    "exported_pure_functions": [
+      "rel",
+      "circular",
+      "errors"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "92e5701a67ae15178b93b9b9aa2bd66bc7baeb10c9c0e358002c3ff6b00a5ef6",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "cat > /tmp/audit_helmholtz_receiver_blocks.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('helmholtz_phase_inversion', '/holdout_task/helmholtz_phase_inversion.py')\nmod = impo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "92e5701a67ae15178b93b9b9aa2bd66bc7baeb10c9c0e358002c3ff6b00a5ef6",
+        "expected_candidate_sha256": "92e5701a67ae15178b93b9b9aa2bd66bc7baeb10c9c0e358002c3ff6b00a5ef6",
+        "computed_candidate_sha256": "92e5701a67ae15178b93b9b9aa2bd66bc7baeb10c9c0e358002c3ff6b00a5ef6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/helmholtz_phase_inversion.py",
+            "bytes": 3833
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_92e5701a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "rel",
+        "code": "def rel(a, b):\n    return np.linalg.norm(a - b) / np.linalg.norm(b)"
+      },
+      {
+        "name": "circular",
+        "code": "def circular(a, b):\n    return abs(np.angle(np.exp(1j * (a - b))))"
+      },
+      {
+        "name": "errors",
+        "code": "def errors(result, gt):\n    return np.array([rel(result['source_amplitudes'], gt['source_amplitudes']), circular(result['global_phase_rad'], gt['global_phase_rad']), rel(result['predicted_field_abs'], gt['predicted_field_abs'])])"
+      }
+    ]
+  }
+}

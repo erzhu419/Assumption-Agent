@@ -1,0 +1,121 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_e4a59769153f",
+    "source_hash": "e4a59769153fc4a5cdee50122f62616e8abcdd0406c4063aa432d7a67b7bb12e",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_multicenter.py",
+        "archived_relpath": "producers/tmp__audit_multicenter.py",
+        "bytes": 1954,
+        "sha256": "9f45c29f61e77c5f0edf425f0e40ed5220ece912cd888cfd14093cf6b8876879"
+      },
+      {
+        "container_path": "/tmp/focused_multicenter.py",
+        "archived_relpath": "producers/tmp__focused_multicenter.py",
+        "bytes": 2476,
+        "sha256": "b75d93d707f6a763938419d78d97641b8dbe8c1de97cc909aea4e870bd501870"
+      },
+      {
+        "container_path": "/tmp/stress_multicenter.py",
+        "archived_relpath": "producers/tmp__stress_multicenter.py",
+        "bytes": 1932,
+        "sha256": "187eb9e99e46ec18547a79a865e68330c567c5644fce6d00a64449cc2a3595ce"
+      },
+      {
+        "container_path": "/tmp/verify_multicenter.py",
+        "archived_relpath": "producers/tmp__verify_multicenter.py",
+        "bytes": 5134,
+        "sha256": "8a4565dfb71025e5b6c78c61ebbefabb145a0ce5581461f3542afbcaa99923ef"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_multicenter_l0_studies.pkl','rb') as f: obj=pickle.load(f)\ndef show(x,depth=0):\n if depth>4:return\n if isinstance(x,dict):\n  for k,v in x.items():\n   print(' '*depth,k,end=': ')\n   if isinstance(v,dict):print();show(v,depth+1)\n   elif isinstance(v,np.ndarray):print(v.shape,v.dtype)\n   elif isinstance(v,(int,float,str)):print(v)\n   else:print(type(v).__name__)\n  if 'X' in x and 'y' in x:\n   a=x['X']; g=a.T@a; print('design spectrum',np.linalg.eigvalsh(g).round(4)); print('Gram diagonal and correlat",
+      "sed -n '1,260p' /tmp/hegel_wormhole_skills/autogenous_prim_box_ridge_bounds.py; grep -nE 'fixed_zero|fixed_active|dual_nu|minorant_' /tmp/hegel_wormhole_skills/autogenous_sparse_ridge_certification.py; python3 - <<'PY'\nimport pickle,numpy as np\nf='/holdout_task/public_multicenter_l0_studies.pkl'\nfor obj in pickle.load(open(f,'rb')):\n s=obj['study']['sparse_selection']; g=s['X'].T@s['X']; print('Gram neighbors', [np.flatnonzero(abs(row-np.eye(len(g))[i])>1e-10).tolist() for i,row in enumerate(g)])\n c=obj['study']['cohort']; groups=c['center_id']; t=c['stratum']; z=c['X_raw'].copy(); counts=np.u",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency regression and boxed L0 proof.\"\"\"\n\nimport numpy as np\n\n\ndef _align(cohort):\n    raw = np.asarray(cohort['X_raw'], dtype=float)\n    controls = np.asarray(cohort['controls'], dtype=float)\n    group = np.asarray(cohort['center_id'])\n    stratum = np.asarray(cohort['stratum'])\n    aligned = np.empty_like(raw)\n    for center in np.unique(group):\n        rows = group == center\n        panel = controls[rows]\n        panel = np.where(np.isfinite(panel), panel, np.nan)\n        valid = (np.isfinite(panel)",
+      "cat > /tmp/verify_multicenter.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/multicenter_certified_l0.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\n\ndef check(problem, proof, expected=None):\n    x, y, m, l0, l2 = (problem[k] for k in ('X', 'y', 'M', 'lam0', 'lam2'))\n    w = proof['weights']\n    p = x.shape[1]\n    objective = 0.5*np.linalg.norm(x@w-y)**2 + 0.5*l2*np.linalg.norm(w)**2 + l0*np.count_nonzero(np.abs(w)>1e-8)\n    assert w.shape == (p,) and np.ma",
+      "cat > /tmp/stress_multicenter.py <<'PY'\nfrom verify_multicenter import solver, check, np\nimport time\nrng = np.random.default_rng(825)\nworst = {}\nfor family in ('shuffled band', 'dense', 'box saturation', 'near activation'):\n    rows = []\n    for i in range(24):\n        p = 19+i%4\n        n = 44\n        if family == 'dense':\n            x = rng.normal(size=(n,p)); x /= np.linalg.norm(x,axis=0)\n        else:\n            g = np.eye(p); j=np.arange(p-1)\n            g[j,j+1]=g[j+1,j]=rng.uniform(-.29,.29,p-1)\n            x = np.linalg.qr(rng.normal(size=(n,p)))[0]@np.linalg.cholesky(g).T\n          ",
+      "cat > /tmp/audit_multicenter.py <<'PY'\nimport io\nimport contextlib\nwith contextlib.redirect_stdout(io.StringIO()):\n    from verify_multicenter import solver, check, np, public\n\nfor i, entry in enumerate(public):\n    cohort=entry['study']['cohort']; gt=entry['gt']; c=cohort['center_id']; t=cohort['stratum']; y=cohort['y_potency']; z=solver._align(cohort); beta=gt['beta_potency']; seen=np.isfinite(cohort['X_raw'])\n    slopes=[]; adjusted=[]; cells=[]\n    for k in np.unique(c):\n        tr=c!=k; centers=np.unique(c[tr]); indicators=(c[tr,None]==centers[None,1:]).astype(float)\n        a=solver._pot",
+      "cat > /tmp/focused_multicenter.py <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/multicenter_certified_l0.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nfor i,e in enumerate(pickle.load(open('/holdout_task/public_multicenter_l0_studies.pkl','rb'))):\n    s=e['study']; c=s['cohort']; g=c['center_id']; t=c['stratum']; y=c['y_potency']; beta=e['gt']['beta_potency']; results=[]; errors=[]\n    for k in np.unique(g):\n        train=g!=k; test=~train\n        a=m._align({key:val[train] for key,val in c.items(",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/multicenter_certified_l0.py')\ns = p.read_text()\ns = s.replace('    # A vector with near-zero uncharged entries can be rounded to the\\n    # indicator cube by replacing those entries by zero. Bound the change.\\n    threshold_guard = near_zero * np.sum(abs(b) + box * np.sum(abs(H), axis=1))\\n', '')\nold = '''        val += on[state == 1].sum() + np.minimum(on[state == 0], 0.).sum()\n        return float(val - sign_guard - threshold_guard), on'''\nnew = '''        # Inactive coefficients are uncharged throughout the threshold interval",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/verify_multicenter.py')\ns = p.read_text()\nold = '        reconstructed = .5*(residual@residual + (d*c)@c)-grad@c + sum(active[a]) + sum(np.minimum(active[free],0))'\nnew = '''        inactive_minimizer = np.clip(-linear/curvature, -min(m, 1e-8), min(m, 1e-8))\n        inactive = linear*inactive_minimizer + 0.5*curvature*inactive_minimizer**2\n        reconstructed = (.5*(residual@residual + (d*c)@c)-grad@c\n                         + sum(active[a]) + sum(inactive[z])\n                         + sum(np.minimum(active[free], inactive[free])))''"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__focused_multicenter.py",
+      "primary_producer_container_path": "/tmp/focused_multicenter.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 7585,
+        "sha256": "37400a48deefd488472dcc6914120e0ddfcacafba91d259ae410d1698aa41f06",
+        "content_addressed_ref": "content_addressed_blobs/37400a48deefd488472dcc6914120e0ddfcacafba91d259ae410d1698aa41f06.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "check"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "e4a59769153fc4a5cdee50122f62616e8abcdd0406c4063aa432d7a67b7bb12e",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/verify_multicenter.py')\ns = p.read_text()\nold = '        reconstructed = .5*(residual@residual + (d*c)@c)-grad@c + sum(active[a]) + sum(np.minimum(active[free],0))'\nnew = '''        i",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "e4a59769153fc4a5cdee50122f62616e8abcdd0406c4063aa432d7a67b7bb12e",
+        "expected_candidate_sha256": "e4a59769153fc4a5cdee50122f62616e8abcdd0406c4063aa432d7a67b7bb12e",
+        "computed_candidate_sha256": "e4a59769153fc4a5cdee50122f62616e8abcdd0406c4063aa432d7a67b7bb12e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 7585
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_e4a59769"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "check",
+        "code": "def check(problem, proof, expected=None):\n    (x, y, m, l0, l2) = (problem[k] for k in ('X', 'y', 'M', 'lam0', 'lam2'))\n    w = proof['weights']\n    p = x.shape[1]\n    objective = 0.5 * np.linalg.norm(x @ w - y) ** 2 + 0.5 * l2 * np.linalg.norm(w) ** 2 + l0 * np.count_nonzero(np.abs(w) > 1e-08)\n    assert w.shape == (p,) and np.max(abs(w)) <= m\n    assert abs(proof['objective'] - objective) < 1e-10\n    if expected is not None:\n        assert abs(expected - objective) < 1e-05, (expected, objective)\n    leaves = proof['subcube_leaves']\n    assert 1 <= len(leaves) <= 2048\n    gram = x.T @ x\n    masks = []\n    cover = 0\n    for leaf in leaves:\n        (z, a) = (leaf['fixed_zero'], leaf['fixed_active'])\n        assert all((0 <= j < p for j in z + a)) and len(set(z + a)) == len(z + a)\n        (zm, am) = (sum((1 << j for j in ix)) for ix in (z, a))\n        assert all((zm & olda or am & oldz for (oldz, olda) in masks))\n        masks.append((zm, am))\n        cover += 1 << p - len(z + a)\n        (d, c) = (leaf['minorant_diagonal'], leaf['minorant_center'])\n        assert d.shape == c.shape == (p,) and min(d) >= 0\n        assert np.linalg.eigvalsh(gram - np.diag(d))[0] >= -1e-12\n        residual = x @ c - y\n        grad = x.T @ residual\n        curvature = d + l2\n        linear = grad - d * c\n        minimizer = np.clip(-linear / curvature, -m, m)\n        active = l0 + linear * minimizer + 0.5 * curvature * minimizer ** 2\n        free = np.ones(p, bool)\n        free[z + a] = False\n        inactive_minimizer = np.clip(-linear / curvature, -min(m, 1e-08), min(m, 1e-08))\n        inactive = linear * inactive_minimizer + 0.5 * curvature * inactive_minimizer ** 2\n        reconstructed = 0.5 * (residual @ residual + d * c @ c) - grad @ c + sum(active[a]) + sum(inactive[z]) + sum(np.minimum(active[free], inactive[free]))\n        assert leaf['lb'] <= reconstructed + 1e-10\n    assert cover == 1 << p\n    assert proof['certified_lower_bound'] == min((leaf['lb'] for leaf in leaves))\n    gap = objective - proof['certified_lower_bound']\n    assert 0 <= gap <= 1e-05\n    return (len(leaves), gap)"
+      }
+    ]
+  }
+}

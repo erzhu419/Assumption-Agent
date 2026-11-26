@@ -1,0 +1,76 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd02_3d_robin_amg_tomography_31ea6a3b11ab",
+    "source_hash": "31ea6a3b11ab0c16b506607df577cf75c94db305549617c5bd3248ef33ea9b40",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd02__3d_high_contrast_robin_amg_multi_rhs_and_nuisance_tomography",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport importlib.util, pickle\nimport numpy as np, scipy\nprint('scipy', scipy.__version__, 'pyamg', importlib.util.find_spec('pyamg'))\nwith open('public_robin3d_cases.pkl','rb') as f: x=pickle.load(f)\nprint(type(x), len(x)); print(list(x) if isinstance(x,dict) else '')\ndef inspect(x, depth=0):\n if isinstance(x,dict) and 'kappa' in x:\n  for k,v in x.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,np.min(v),np.max(v))\n   else: print(k, type(v), repr(v)[:100])\n elif isinstance(x,dict) and depth<2:\n  for k,v in list(x.items())[:5]: print('entry'",
+      "cd /holdout_task && cat > robin3d_amg_tomography.py <<'PY'\n\"\"\"Cell-centered Robin diffusion and ridge-profiled source tomography.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _robin_matrix(kappa, sigma, lengths, gamma):\n    \"\"\"Assemble integrated finite-volume balances in C order.\"\"\"\n    shape = kappa.shape\n    steps = np.asarray(lengths, dtype=float) / shape\n    volume = float(np.prod(steps))\n    cells = np.arange(kappa.size).reshape(shape)\n    diagonal = (volume * np.broadcast_to(sigma, shape)).copy().ravel()\n    rows, cols, values = [",
+      "python3 -I - <<'PY'\nimport pickle, runpy, time\nimport numpy as np\n\nwith open('/holdout_task/public_robin3d_cases.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\nsolve = runpy.run_path('/holdout_task/robin3d_amg_tomography.py')['solve_3d_robin_tomography']\nbase = case['problem']\npublic = solve(base)\nfor key, expected in case['gt'].items():\n    assert public[key].shape == expected.shape\n    error = np.max(np.abs(public[key] - expected))\n    print('public', key, 'max abs error', error, flush=True)\n    np.testing.assert_allclose(public[key], expected, rtol=1e-8, atol=1e-9)\n\nrng = np.random.default_",
+      "python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nwith open('/holdout_task/public_robin3d_cases.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\np = case['problem']\nsolve = runpy.run_path('/holdout_task/robin3d_amg_tomography.py')['solve_3d_robin_tomography']\nout = solve(p)\nfor key, ref in case['gt'].items():\n    np.testing.assert_allclose(out[key], ref, rtol=1e-8, atol=1e-9)\nS = out['basis_fields'][(slice(None),) + tuple(p['sensor_ijk'].T)].T\nZ, Y = p['nuisance_design'], p['Y_obs']\nlz, ls = p['nuisance_ridge'], p['source_ridge']\n# Perturb the real observations only in the measu"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin3d_amg_tomography.py",
+        "filename": "robin3d_amg_tomography.py",
+        "bytes": 3736,
+        "sha256": "17110ed5907635dc1e38782d2dc22e45eb76c3f7a013d5ad0cf0a80848af5698",
+        "content_addressed_ref": "content_addressed_blobs/17110ed5907635dc1e38782d2dc22e45eb76c3f7a013d5ad0cf0a80848af5698.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin3d_amg_tomography.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "31ea6a3b11ab0c16b506607df577cf75c94db305549617c5bd3248ef33ea9b40",
+      "verified_post_package": true,
+      "verified_turn": 5,
+      "verification_command": "python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nwith open('/holdout_task/public_robin3d_cases.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\np = case['problem']\nsolve = runpy.run_path('/holdout_task/robin3d_amg_tomography",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "31ea6a3b11ab0c16b506607df577cf75c94db305549617c5bd3248ef33ea9b40",
+        "expected_candidate_sha256": "31ea6a3b11ab0c16b506607df577cf75c94db305549617c5bd3248ef33ea9b40",
+        "computed_candidate_sha256": "31ea6a3b11ab0c16b506607df577cf75c94db305549617c5bd3248ef33ea9b40",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin3d_amg_tomography.py",
+            "bytes": 3736
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_31ea6a3b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,122 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr04_indefinite_helmholtz_phase_6aaea370bbf4",
+    "source_hash": "6aaea370bbf4af052b08f1ce563aaeb9a7a44541370dba5d88b526f7e7dc5982",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr04__indefinite_helmholtz_wrapped_phase_inversion",
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/helmholtz_audit.py",
+        "archived_relpath": "producers/tmp__helmholtz_audit.py",
+        "bytes": 2103,
+        "sha256": "7056b451113e69b5721e59041d4c5f72e9a8f7a452e7a1149d4faae6e51246ab"
+      },
+      {
+        "container_path": "/tmp/helmholtz_phase_transfer.py",
+        "archived_relpath": "producers/tmp__helmholtz_phase_transfer.py",
+        "bytes": 1417,
+        "sha256": "8bba94f8e77fc5109a981b66c0f945bfa4a92c1dbe719ab3785cdd7432e8c4d9"
+      },
+      {
+        "container_path": "/tmp/helmholtz_public.py",
+        "archived_relpath": "producers/tmp__helmholtz_public.py",
+        "bytes": 1536,
+        "sha256": "d973cc5d9cc4986fd3cda4c9aef6c71d164136d5a7e5382e0f5e85404bc4b2ca"
+      },
+      {
+        "container_path": "/tmp/helmholtz_stress.py",
+        "archived_relpath": "producers/tmp__helmholtz_stress.py",
+        "bytes": 3764,
+        "sha256": "c0dc7e88ad30466d08255b9e86ec974d1a808892ba0f7cc8c8a14abad48b3a99"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\n\ndef show(x, depth=0):\n    p = '  '*depth\n    if isinstance(x, dict):\n        for k,v in x.items():\n            print(f'{p}{k}:', end=' ')\n            if isinstance(v,(dict,list,tuple)):\n                print(); show(v,depth+1)\n            else: show(v,0)\n    elif isinstance(x,(tuple,list)):\n        print(f'{p}{type(x).__name__} length {len(x)}')\n        if x: show(x[0],depth+1)\n    elif isinstance(x,np.ndarray):\n        print(x.shape,x.dtype,'sample',x.ravel()[:4])\n    else: print(repr(x))\nwith open('public_helmholtz_cases.",
+      "cat > /holdout_task/helmholtz_phase_inversion.py <<'PY'\n\"\"\"Finite-volume Helmholtz inversion from pilot-referenced polar telemetry.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import coo_matrix\nfrom scipy.sparse.linalg import splu\n\n\ndef _source_fields(problem):\n    \"\"\"Compute one complex pressure field per source basis function.\"\"\"\n    n_sq = np.asarray(problem['n_sq'])\n    basis = np.asarray(problem['basis'])\n    nx, ny = n_sq.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    area = hx * hy\n    k = problem['k0']\n    grid = np.arange(nx * ny).reshape(nx, ny)\n    left = np.concatenate(",
+      "cat > /tmp/helmholtz_stress.py <<'PY'\nimport importlib.util\nimport pickle\nfrom copy import deepcopy\n\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\nspec = importlib.util.spec_from_file_location('helmholtz', '/holdout_task/helmholtz_phase_inversion.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nwith open('/holdout_task/public_helmholtz_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\ndef errors(p, a, phi, field):\n    out = solver.invert_helmholtz_sources_and_phase(p)\n    assert set(out) == {'source_amplitud",
+      "cat > /tmp/helmholtz_audit.py <<'PY'\nimport runpy\nimport numpy as np\n\nns = runpy.run_path('/tmp/helmholtz_public.py')\nm, cases = ns['m'], ns['cases']\nkeys = ('source_amplitudes', 'global_phase_rad', 'predicted_field_abs')\nlimits = np.array([.03, .02, .03])\nworst_pilot, worst_survey = [], []\n\ndef errors(p, gt):\n    out = m.invert_helmholtz_sources_and_phase(p)\n    return np.array([np.linalg.norm(out[keys[0]]-gt[keys[0]])/np.linalg.norm(gt[keys[0]]), abs(np.angle(np.exp(1j*(out[keys[1]]-gt[keys[1]])))), np.linalg.norm(out[keys[2]]-gt[keys[2]])/np.linalg.norm(gt[keys[2]])])\n\ndef subset(p, channel",
+      "cat > /tmp/helmholtz_phase_transfer.py <<'PY'\nimport runpy\nfrom collections import defaultdict\nimport numpy as np\nfrom scipy.optimize import minimize_scalar\n\nns = runpy.run_path('/tmp/helmholtz_public.py')\nm, cases = ns['m'], ns['cases']\nfor idx, case in enumerate(cases):\n    p = case['problem']\n    pilot, survey = p['pilot_calibration'], p['survey']\n    ref = pilot['known_field_re'] + 1j * pilot['known_field_im']\n    phase = np.angle(np.vdot(ref, m._complex_observations(pilot)))\n    fields = m._source_fields(p)\n    i, j = survey['sensor_ij'].T\n    design = fields[i, j]\n    data = m._complex_o"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__helmholtz_stress.py",
+      "primary_producer_container_path": "/tmp/helmholtz_stress.py",
+      "selected_channels": [
+        "fam_indefinite_wave_scattering_negative_control"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/helmholtz_phase_inversion.py",
+        "filename": "helmholtz_phase_inversion.py",
+        "bytes": 3716,
+        "sha256": "5bb7433d44bd0f33d2bb2ea34cb563b7a2ee156f77190cbe25ce4babb0815ba6",
+        "content_addressed_ref": "content_addressed_blobs/5bb7433d44bd0f33d2bb2ea34cb563b7a2ee156f77190cbe25ce4babb0815ba6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/helmholtz_phase_inversion.py"
+    ],
+    "exported_pure_functions": [
+      "subset",
+      "reference"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_indefinite_wave_scattering_negative_control",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6aaea370bbf4af052b08f1ce563aaeb9a7a44541370dba5d88b526f7e7dc5982",
+      "verified_post_package": true,
+      "verified_turn": 3,
+      "verification_command": "cat > /tmp/helmholtz_stress.py <<'PY'\nimport importlib.util\nimport pickle\nfrom copy import deepcopy\n\nimport numpy as np\nfrom scipy.sparse import lil_matrix\nfrom scipy.sparse.linalg import spsolve\n\nspec = importlib.util.spec_from_file_locati",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6aaea370bbf4af052b08f1ce563aaeb9a7a44541370dba5d88b526f7e7dc5982",
+        "expected_candidate_sha256": "6aaea370bbf4af052b08f1ce563aaeb9a7a44541370dba5d88b526f7e7dc5982",
+        "computed_candidate_sha256": "6aaea370bbf4af052b08f1ce563aaeb9a7a44541370dba5d88b526f7e7dc5982",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/helmholtz_phase_inversion.py",
+            "bytes": 3716
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_6aaea370"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": [
+      {
+        "name": "subset",
+        "code": "def subset(p, channel, keep):\n    return dict(p, **{channel: {k: np.asarray(v)[keep] if np.ndim(v) else v for (k, v) in p[channel].items()}})"
+      },
+      {
+        "name": "reference",
+        "code": "def reference(p, a):\n    from scipy.sparse import lil_matrix\n    from scipy.sparse.linalg import spsolve\n    (nx, ny) = p['n_sq'].shape\n    (hx, hy) = (p['Lx'] / nx, p['Ly'] / ny)\n    k = p['k0']\n    op = lil_matrix((nx * ny, nx * ny), dtype=complex)\n    for (i, j) in np.ndindex(nx, ny):\n        t = i * ny + j\n        op[t, t] = -hx * hy * k * k * p['n_sq'][i, j]\n        for (ii, jj, length, distance) in [(i - 1, j, hy, hx), (i + 1, j, hy, hx), (i, j - 1, hx, hy), (i, j + 1, hx, hy)]:\n            if 0 <= ii < nx and 0 <= jj < ny:\n                op[t, t] += length / distance\n                op[t, ii * ny + jj] -= length / distance\n            else:\n                op[t, t] -= 1j * k * p['beta_imp'] * length\n    q = np.einsum('m,mij->ij', a, p['basis'])\n    return spsolve(op.tocsc(), hx * hy * q.ravel()).reshape(nx, ny)"
+      }
+    ]
+  }
+}

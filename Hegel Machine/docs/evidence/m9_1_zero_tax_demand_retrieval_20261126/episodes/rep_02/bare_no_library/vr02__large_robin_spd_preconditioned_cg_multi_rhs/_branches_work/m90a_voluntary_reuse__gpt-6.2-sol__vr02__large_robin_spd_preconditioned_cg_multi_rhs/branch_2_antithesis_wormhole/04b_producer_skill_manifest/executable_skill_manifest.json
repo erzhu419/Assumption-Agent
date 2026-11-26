@@ -1,0 +1,99 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_vr02_large_robin_spd_profiler_03bb94216696",
+    "source_hash": "03bb94216696308b4609aab004eb31e875913144e3a7a38b622ae070acac0aed",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "vr02__large_robin_spd_preconditioned_cg_multi_rhs",
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/verify_robin_spd.py",
+        "archived_relpath": "producers/tmp__verify_robin_spd.py",
+        "bytes": 3818,
+        "sha256": "62116064ec698f7402b5e86998fa3b94bb13b47a7a935afd6b85146e5edea472"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -lah /holdout_task /pretrain_task; python3 -I - <<'PY'\nimport pickle, importlib.util\nimport numpy as np\nfor name in ['numpy','scipy','pyamg']:\n print(name, bool(importlib.util.find_spec(name)))\nwith open('/holdout_task/public_robin_spd_cases.pkl','rb') as f: data=pickle.load(f)\ndef describe(obj,label='root',depth=0):\n if isinstance(obj,dict):\n  print(label,'dict keys',list(obj)[:25]); children=obj.items()\n elif isinstance(obj,(list,tuple)):\n  print(label,type(obj).__name__,len(obj)); children=enumerate(obj[:8])\n else:\n  if isinstance(obj,np.ndarray):\n   print(label,obj.shape,obj.dtype,(floa",
+      "cat > /holdout_task/robin_spd_profiler.py <<'PY'\n\"\"\"Cell-centered Robin diffusion solves and nuisance-profiled source fits.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags\nfrom scipy.sparse.linalg import LinearOperator, cg, splu, spsolve_triangular\n\n\ndef _operator(problem):\n    k = np.asarray(problem['kappa'], dtype=float)\n    nx, ny = k.shape\n    hx, hy = problem['Lx'] / nx, problem['Ly'] / ny\n    gamma = problem['gamma_robin']\n\n    wx = (hy / hx) * (2 * k[:-1] * k[1:] / (k[:-1] + k[1:]))\n    wy = (hx / hy) * (2 * k[:, :-1] * k[:, 1:] / (k[:, :-1] + k[:, 1:]))\n    area = hx * hy\n    mai",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/robin_spd_profiler.py')\ns = p.read_text()\ns = s.replace('from scipy.sparse import diags\\nfrom scipy.sparse.linalg import LinearOperator, cg, splu, spsolve_triangular', 'from scipy.linalg.blas import dtbsv\\nfrom scipy.sparse import diags\\nfrom scipy.sparse.linalg import LinearOperator, cg, splu')\na = s.index('    lower = diags(')\nb = s.index('    return LinearOperator', a)\ns = s[:a] + '''    # Store the triangular factor once in BLAS band layout. Both the\n    # forward and transposed solves then reuse it without sparse set",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nsolve = runpy.run_path('/holdout_task/robin_spd_profiler.py')['solve_robin_spd_and_profile_sources']\nwith open('/holdout_task/public_robin_spd_cases.pkl', 'rb') as f:\n    cases = pickle.load(f)\n\nfor i, case in enumerate(cases):\n    p = case['problem']\n    out = solve(p)\n    u = out['basis_fields']\n    k = p['kappa']\n    hx, hy = p['Lx'] / k.shape[0], p['Ly'] / k.shape[1]\n    g = p['gamma_robin']\n    loss = (hx * hy * p['sigma'])[None, :, :] * u\n    loss = loss.sum(axis=(1, 2))\n    for side in (0, -1):\n   ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nmodule = runpy.run_path('/holdout_task/robin_spd_profiler.py')\nsolve = module['solve_robin_spd_and_profile_sources']\nenv = solve.__globals__\noriginal_cg, original_splu = env['cg'], env['splu']\ncounts = [0, 0]\ndef count_cg(*args, **kwargs):\n    assert kwargs.get('M') is not None\n    counts[0] += 1\n    return original_cg(*args, **kwargs)\ndef count_splu(*args, **kwargs):\n    counts[1] += 1\n    return original_splu(*args, **kwargs)\nenv['cg'], env['splu'] = count_cg, count_splu\nwith open('/holdout_task/public_"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__verify_robin_spd.py",
+      "primary_producer_container_path": "/tmp/verify_robin_spd.py",
+      "selected_channels": [
+        "fam_multiscale_pde_and_robust_assimilation"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/robin_spd_profiler.py",
+        "filename": "robin_spd_profiler.py",
+        "bytes": 4550,
+        "sha256": "8a324e117b4bb3fe640fc2ebcfe61b55a37dc285b8d6e6f17c36c10d922547a1",
+        "content_addressed_ref": "content_addressed_blobs/8a324e117b4bb3fe640fc2ebcfe61b55a37dc285b8d6e6f17c36c10d922547a1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/robin_spd_profiler.py"
+    ],
+    "exported_pure_functions": [
+      "reference_system"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_multiscale_pde_and_robust_assimilation",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "03bb94216696308b4609aab004eb31e875913144e3a7a38b622ae070acac0aed",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nmodule = runpy.run_path('/holdout_task/robin_spd_profiler.py')\nsolve = module['solve_robin_spd_and_profile_sources']\nenv = solve.__globals__\noriginal_",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "03bb94216696308b4609aab004eb31e875913144e3a7a38b622ae070acac0aed",
+        "expected_candidate_sha256": "03bb94216696308b4609aab004eb31e875913144e3a7a38b622ae070acac0aed",
+        "computed_candidate_sha256": "03bb94216696308b4609aab004eb31e875913144e3a7a38b622ae070acac0aed",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/robin_spd_profiler.py",
+            "bytes": 4550
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_03bb9421"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "reference_system",
+        "code": "def reference_system(p):\n    from scipy.sparse import coo_matrix\n    k = p['kappa']\n    (nx, ny) = k.shape\n    (hx, hy) = (p['Lx'] / nx, p['Ly'] / ny)\n    n = k.size\n    diag = hx * hy * p['sigma'].ravel().copy()\n    (rows, cols, values) = ([], [], [])\n    for (i, j) in np.ndindex(k.shape):\n        t = i * ny + j\n        for (di, dj, h, length) in [(1, 0, hx, hy), (0, 1, hy, hx)]:\n            (u, v) = (i + di, j + dj)\n            if u < nx and v < ny:\n                rt = u * ny + v\n                conductance = length / (h / (2 * k[i, j]) + h / (2 * k[u, v]))\n                diag[t] += conductance\n                diag[rt] += conductance\n                rows.extend([t, rt])\n                cols.extend([rt, t])\n                values.extend([-conductance, -conductance])\n        gamma = p['gamma_robin']\n        if gamma:\n            if i in (0, nx - 1):\n                diag[t] += hy / (1 / gamma + hx / (2 * k[i, j]))\n            if j in (0, ny - 1):\n                diag[t] += hx / (1 / gamma + hy / (2 * k[i, j]))\n    rows.extend(range(n))\n    cols.extend(range(n))\n    values.extend(diag)\n    return (coo_matrix((values, (rows, cols)), shape=(n, n)).tocsc(), hx * hy * p['candidate_sources'].reshape(-1, n).T)"
+      }
+    ]
+  }
+}

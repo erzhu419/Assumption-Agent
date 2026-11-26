@@ -1,0 +1,189 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_hd01_multicenter_cauchy_certified_l0_166167670f43",
+    "source_hash": "166167670f43da8fb325d819c5bb90feff6965f387977aae88d239bbdaab81e9",
+    "parent_ids": [],
+    "source_episode_id": "branch_2_antithesis_wormhole",
+    "task_id": "hd01__multicenter_cauchy_panel_and_certified_box_l0_pipeline",
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_multicenter.py",
+        "archived_relpath": "producers/tmp__audit_multicenter.py",
+        "bytes": 2790,
+        "sha256": "9bb9aadb1e0fe3b5bf0a3d93ecea79e9b689b84aa2a2a28611fc3cfafe79a44d"
+      },
+      {
+        "container_path": "/tmp/check_multicenter.py",
+        "archived_relpath": "producers/tmp__check_multicenter.py",
+        "bytes": 5087,
+        "sha256": "b3f3d728331693fe767f40a0f0ca3a5ffe3c52111df65ee587930b4d402e024a"
+      },
+      {
+        "container_path": "/tmp/multicenter_adaptive.py",
+        "archived_relpath": "producers/tmp__multicenter_adaptive.py",
+        "bytes": 12530,
+        "sha256": "5c7f928503963cb2b215bd7fa0460c47a1538a7e18bb37859a66cfc510c0640a"
+      },
+      {
+        "container_path": "/tmp/multicenter_reweighted.py",
+        "archived_relpath": "producers/tmp__multicenter_reweighted.py",
+        "bytes": 12759,
+        "sha256": "e54631bc4c3527e9b3956f4e7b21990de8acf1b314be168c4b9371724ce45e17"
+      },
+      {
+        "container_path": "/tmp/multicenter_strong.py",
+        "archived_relpath": "producers/tmp__multicenter_strong.py",
+        "bytes": 9554,
+        "sha256": "5e4e8929a7866922470271a7d8f11d22b2414755951a552a4edb729cea3457f7"
+      },
+      {
+        "container_path": "/tmp/multicenter_wide.py",
+        "archived_relpath": "producers/tmp__multicenter_wide.py",
+        "bytes": 12605,
+        "sha256": "8d0145b846eacd18c66176749e583d770ced01f3e71edb17a45107133d4bb733"
+      },
+      {
+        "container_path": "/tmp/stress_adaptive.py",
+        "archived_relpath": "producers/tmp__stress_adaptive.py",
+        "bytes": 1407,
+        "sha256": "a0e7dcc43ded7887326a4c79dc46526bc4b1154d940bd74ddb1a14c63fe182a0"
+      },
+      {
+        "container_path": "/tmp/stress_multicenter.py",
+        "archived_relpath": "producers/tmp__stress_multicenter.py",
+        "bytes": 1319,
+        "sha256": "b8ae2ca2989ff95c44262bbe7690ac7fd63a600661655ed4fd4ce32566111e1e"
+      },
+      {
+        "container_path": "/tmp/stress_reweighted.py",
+        "archived_relpath": "producers/tmp__stress_reweighted.py",
+        "bytes": 1409,
+        "sha256": "8511be913a226291d82bc37a808f5c0abe5f1de9ee9595501c6df8c24c14ab7c"
+      },
+      {
+        "container_path": "/tmp/stress_strong.py",
+        "archived_relpath": "producers/tmp__stress_strong.py",
+        "bytes": 1405,
+        "sha256": "84f33a9f1fd6bf254d6243cf1b7bbd7ca25cd4655e77edbfc86018b1adb3bb07"
+      },
+      {
+        "container_path": "/tmp/stress_wide.py",
+        "archived_relpath": "producers/tmp__stress_wide.py",
+        "bytes": 1403,
+        "sha256": "b20bf4baa2b44bbdd7274c08b1e1029062a5c229ee688f44230a41a95a49ceec"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -la && python3 - <<'PY'\nimport pickle, numpy as np, scipy\np=pickle.load(open('public_multicenter_l0_studies.pkl','rb')); print('SciPy',scipy.__version__)\ndef desc(a,depth=0):\n if isinstance(a,dict):\n  print(' '*depth,'dict',list(a));\n  for k,v in a.items(): print(' '*depth,k,end=': '); desc(v,depth+1)\n elif isinstance(a,(list,tuple)): print(type(a).__name__,len(a)); desc(a[0],depth+1)\n elif hasattr(a,'shape'): print(type(a).__name__,a.shape,a.dtype)\n else: print(repr(a)[:180])\ndesc(p)\nPY",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import lsq_linear\nfor rec in pickle.load(open('public_multicenter_l0_studies.pkl','rb')):\n s=rec['study']['sparse_selection']; X,y=s['X'],s['y']; a,b,M=s['lam2'],s['lam0'],s['M']; G=X.T@X; p=len(G); eig=np.linalg.eigvalsh(G); w=lsq_linear(np.vstack((X,np.sqrt(a)*np.eye(p))),np.r_[y,np.zeros(p)],bounds=(-M,M)).x\n print('sparse',X.shape,a,b,M,'eigenvalues',eig.round(3),'diagonal',G.diagonal().round(2),'ridge',w.round(3),'truth objective',rec['gt']['exact_l0_objective']); print('corr max',np.",
+      "cat > /holdout_task/multicenter_certified_l0.py <<'PY'\n\"\"\"Reference-panel alignment, robust potency regression, and box L0 certificates.\"\"\"\n\nimport numpy as np\n\n\ndef _align(cohort):\n    _, center = np.unique(cohort['center_id'], return_inverse=True)\n    stratum = np.asarray(cohort['stratum'])\n    controls = np.asarray(cohort['controls'], dtype=float)\n    z = np.array(cohort['X_raw'], dtype=float, copy=True)\n    for i in range(center.max() + 1):\n        rows = center == i\n        panel = controls[rows]\n        panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n        panel = np.where(np.isf",
+      "cat > /tmp/check_multicenter.py <<'PY'\nimport importlib.util\nimport pickle\nimport time\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import lsq_linear\n\nbase = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('pipeline', base / 'multicenter_certified_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef check_cert(data, result):\n    x, y, r, a, m = (data[key] for key in ('X', 'y', 'lam2', 'lam0', 'M'))\n    w = result['weights']\n    p = x.shape[1]\n    g = x.T @ x\n    b = x.T @ y\n    eps = min(1e-8, m)\n    val = .5 * (np.sum((x ",
+      "cat > /tmp/stress_multicenter.py <<'PY'\nimport sys\nfrom pathlib import Path\nexec(Path('/tmp/check_multicenter.py').read_text().split('for i, row in enumerate(')[0])\nkind, seed = sys.argv[1], int(sys.argv[2])\nrng = np.random.default_rng(seed)\np = 22\nq, _ = np.linalg.qr(rng.normal(size=(50, p)))\nr, a, m = .14, .22, 1.1\nif kind == 'public-like':\n    g = np.eye(p)\n    for k in (0, 11):\n        for j in range(11):\n            i, l = k+j, k+(j+1)%11\n            g[i,l] = g[l,i] = rng.choice([-1,1])*.26\n    b = rng.choice([-1,1],p) * rng.uniform(.54,.83,p)\nelif kind == 'binding':\n    m = .31\n    u, _ ",
+      "cp /holdout_task/multicenter_certified_l0.py /tmp/multicenter_strong.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/multicenter_strong.py'); s=p.read_text(); s=s.replace('def relax(state, start):','def relax(state, start, steps=450):').replace('for _ in range(450):','for _ in range(steps):').replace('tolerance = 2e-7','tolerance = 5e-6'); a=s.index('        fraction ='); b=s.index('\\n    return {',a); s=s[:a]+'''        fraction = np.abs(relaxed[free]) / knee[free]\n        fractional = np.minimum(fraction, 1 - fraction)\n        # Strong branching: estimate the weaker child's bound a",
+      "cp /tmp/multicenter_strong.py /tmp/multicenter_adaptive.py\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/tmp/multicenter_adaptive.py'); s=p.read_text(); s=s.replace('    def objective(w):','''    # The Schur complement gives the PSD budget for diagonals supported\n    # only on undecided coordinates; fixed bits need no envelope curvature.\n    inv_gram = np.linalg.inv(gram) if eig[0] > 1e-9 * eig[-1] else None\n\n    def adaptive_diagonal(free, relaxed):\n        covariance = inv_gram[np.ix_(free, free)]\n        budget = np.linalg.inv(covariance)\n        mag = np.abs(relaxed[free])\n        imp",
+      "python3 - <<'PY'\nfrom pathlib import Path\nsource = Path('/tmp/multicenter_adaptive.py').read_text()\nfor name, width, curvature in [('wide', 16, False), ('reweighted', 12, True)]:\n    s = source.replace('ranked[:6] if len(free) > 5 and p >= 19 else ranked[:1]', f'ranked[:{width}] if p >= 19 else ranked[:1]')\n    s = s.replace('fraction = np.abs(relaxed[free]) / knee[free]', 'branch_knee = np.minimum(box, np.sqrt(2 * charge / (leaf_d[free] + ridge)))\\n        fraction = np.abs(relaxed[free]) / branch_knee')\n    s = s.replace('clipped = np.minimum(estimates, best)\\n            score = (min(clippe",
+      "set -e\ncp /tmp/multicenter_wide.py /holdout_task/multicenter_certified_l0.py\nexport OPENBLAS_NUM_THREADS=1\npython3 -I /tmp/check_multicenter.py\nfor kind in public-like binding dense; do\n  for seed in 221 222 223; do\n    timeout 45s python3 -I /tmp/stress_multicenter.py \"$kind\" \"$seed\"\n  done\ndone",
+      "cat > /tmp/audit_multicenter.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('pipeline', root / 'multicenter_certified_l0.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\n\ndef fit(design, y, base):\n    def wls(w):\n        return np.linalg.lstsq(w[:, None] * design, w * y, rcond=None)[0]\n    beta = wls(np.sqrt(base))\n    e = y - design @ beta\n    scale = np.median(abs(e - np.median(e)))\n    for _ in range(200):\n        new = wls(np.sqrt(base) / np.hy"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__multicenter_reweighted.py",
+      "primary_producer_container_path": "/tmp/multicenter_reweighted.py",
+      "selected_channels": [
+        "fam_sparse_cert_and_combinatorial_pruning"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/multicenter_certified_l0.py",
+        "filename": "multicenter_certified_l0.py",
+        "bytes": 12605,
+        "sha256": "8d0145b846eacd18c66176749e583d770ced01f3e71edb17a45107133d4bb733",
+        "content_addressed_ref": "content_addressed_blobs/8d0145b846eacd18c66176749e583d770ced01f3e71edb17a45107133d4bb733.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/multicenter_certified_l0.py"
+    ],
+    "exported_pure_functions": [
+      "fit",
+      "check_cert",
+      "_align",
+      "_potency",
+      "_sparse",
+      "solve_multicenter_certified_l0"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_sparse_cert_and_combinatorial_pruning",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "166167670f43da8fb325d819c5bb90feff6965f387977aae88d239bbdaab81e9",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/audit_multicenter.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('pipeline', root / 'multicenter_certified_l0.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "166167670f43da8fb325d819c5bb90feff6965f387977aae88d239bbdaab81e9",
+        "expected_candidate_sha256": "166167670f43da8fb325d819c5bb90feff6965f387977aae88d239bbdaab81e9",
+        "computed_candidate_sha256": "166167670f43da8fb325d819c5bb90feff6965f387977aae88d239bbdaab81e9",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/multicenter_certified_l0.py",
+            "bytes": 12605
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_16616767"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fit",
+        "code": "def fit(design, y, base):\n\n    def wls(w):\n        return np.linalg.lstsq(w[:, None] * design, w * y, rcond=None)[0]\n    beta = wls(np.sqrt(base))\n    e = y - design @ beta\n    scale = np.median(abs(e - np.median(e)))\n    for _ in range(200):\n        new = wls(np.sqrt(base) / np.hypot(1.0, (y - design @ beta) / scale))\n        if np.linalg.norm(new - beta) <= 1e-10 * (1 + np.linalg.norm(new)):\n            return new\n        beta = new\n    return beta"
+      },
+      {
+        "name": "check_cert",
+        "code": "def check_cert(data, result):\n    (x, y, r, a, m) = (data[key] for key in ('X', 'y', 'lam2', 'lam0', 'M'))\n    w = result['weights']\n    p = x.shape[1]\n    g = x.T @ x\n    b = x.T @ y\n    eps = min(1e-08, m)\n    val = 0.5 * (np.sum((x @ w - y) ** 2) + r * np.sum(w * w)) + a * np.sum(abs(w) > 1e-08)\n    assert w.shape == (p,) and np.max(abs(w)) <= m\n    assert abs(val - result['objective']) < 1e-10\n    leaves = result['subcube_leaves']\n    assert 1 <= len(leaves) <= 2048, len(leaves)\n    seen = []\n    bounds = []\n    volume = 0\n    for leaf in leaves:\n        (z, s) = map(set, (leaf['fixed_zero'], leaf['fixed_active']))\n        assert not z & s and z | s <= set(range(p))\n        assert all((z & si or s & zi for (zi, si) in seen)), 'overlapping cubes'\n        seen.append((z, s))\n        volume += 1 << p - len(z) - len(s)\n        (d, v) = (leaf['minorant_diagonal'], leaf['minorant_center'])\n        assert np.all(d >= 0)\n        rem = g - np.diag(d)\n        assert np.linalg.eigvalsh(rem)[0] >= -1e-09\n        ell = rem @ v - b\n        q = d + r\n\n        def quadratic_at(t):\n            return 0.5 * q * t * t + ell * t\n        off = quadratic_at(np.clip(-ell / q, -eps, eps))\n        on = a + quadratic_at(-np.where(ell >= 0, 1, -1) * np.clip(abs(ell) / q, eps, m))\n        sub = sum((off[j] if j in z else on[j] if j in s else min(off[j], on[j]) for j in range(p)))\n        expected = 0.5 * (y @ y - v @ rem @ v) + sub\n        assert leaf['lb'] <= expected + 1e-11\n        bounds.append(leaf['lb'])\n    assert volume == 1 << p\n    lb = result['certified_lower_bound']\n    assert abs(lb - min(bounds)) <= 1e-10\n    return (val - lb, len(leaves))"
+      },
+      {
+        "name": "_align",
+        "code": "def _align(cohort):\n    (_, center) = np.unique(cohort['center_id'], return_inverse=True)\n    stratum = np.asarray(cohort['stratum'])\n    controls = np.asarray(cohort['controls'], dtype=float)\n    z = np.array(cohort['X_raw'], dtype=float, copy=True)\n    for i in range(center.max() + 1):\n        rows = center == i\n        panel = controls[rows]\n        panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\n        panel = np.where(np.isfinite(panel), panel, np.nan)\n        offset = np.median(np.nanmean(panel, axis=0))\n        gain = np.median(np.nanstd(panel, axis=0, ddof=0))\n        z[rows] = (z[rows] - offset) / gain\n    cell = 3 * center + stratum\n    weight = 1.0 / np.bincount(cell)[cell]\n    weight /= weight.mean()\n    finite = np.isfinite(z)\n    means = weight @ np.where(finite, z, 0.0) / (weight @ finite)\n    return np.where(np.isnan(z), means, z)"
+      },
+      {
+        "name": "_potency",
+        "code": "def _potency(z, stratum, y):\n    stratum = np.asarray(stratum)\n    y = np.asarray(y, dtype=float)\n    design = np.column_stack((np.ones(len(y)), stratum == 1, stratum == 2, z))\n    beta = np.linalg.lstsq(design, y, rcond=None)[0]\n    residual = y - design @ beta\n    mad = np.median(np.abs(residual - np.median(residual)))\n    scale = max(mad, np.finfo(float).eps * max(1.0, np.max(np.abs(y))))\n    for _ in range(200):\n        root_weight = 1 / np.hypot(1, (y - design @ beta) / scale)\n        new_beta = np.linalg.lstsq(root_weight[:, None] * design, root_weight * y, rcond=None)[0]\n        change = np.linalg.norm(new_beta - beta)\n        beta = new_beta\n        if change <= 1e-10 * (1 + np.linalg.norm(beta)):\n            break\n    return beta[3:]"
+      },
+      {
+        "name": "_sparse",
+        "code": "def _sparse(data):\n    (x, y) = (np.asarray(data[k], dtype=float) for k in ('X', 'y'))\n    (ridge, charge, box) = (float(data[k]) for k in ('lam2', 'lam0', 'M'))\n    p = x.shape[1]\n    gram = x.T @ x\n    xy = x.T @ y\n    h = gram + ridge * np.eye(p)\n    eig = np.linalg.eigvalsh(gram)\n    d = np.full(p, max(0.0, eig[0] - 1e-10 * max(1.0, eig[-1])))\n    r = gram - np.diag(d)\n    q = d + ridge\n    knee = np.minimum(box, np.sqrt(2 * charge / q))\n    slope = charge / knee + q * knee / 2\n    lipschitz = max(eig[-1] - d[0], 1e-12)\n    zero_eps = 1e-08\n    active_floor = min(box, zero_eps)\n    inv_gram = np.linalg.inv(gram) if eig[0] > 1e-09 * eig[-1] else None\n\n    def adaptive_diagonal(free, relaxed):\n        covariance = inv_gram[np.ix_(free, free)]\n        budget = np.linalg.inv(covariance)\n        mag = np.abs(relaxed[free])\n        importance = mag * np.maximum(0, knee[free] - mag)\n        importance += 0.08 * max(importance.max(), 1e-10)\n        importance /= importance.max()\n        diag = np.zeros(len(free))\n        mu = 0.11 * np.mean(budget.diagonal())\n        for factor in (1.0, 0.23, 0.052):\n            barrier = mu * factor\n            for _ in range(12):\n                rem = budget - np.diag(diag)\n                iv = np.linalg.inv(rem)\n                g = importance - barrier * iv.diagonal()\n                idx = np.flatnonzero((diag > 1e-12) | (g > 0))\n                if not len(idx):\n                    break\n                hh = barrier * iv[np.ix_(idx, idx)] ** 2\n                direction = np.zeros(len(free))\n                direction[idx] = np.linalg.solve(hh, g[idx])\n                if np.max(np.abs(direction)) < 1e-07:\n                    break\n                old = importance @ diag + barrier * np.linalg.slogdet(rem)[1]\n                step = 1.0\n                for _ in range(18):\n                    trial = np.maximum(0.0, diag + step * direction)\n                    try:\n                        chol = np.linalg.cholesky(budget - np.diag(trial))\n                    except np.linalg.LinAlgError:\n                        step *= 0.5\n                        continue\n                    value = importance @ trial + 2 * barrier * np.log(chol.diagonal()).sum()\n                    if value >= old + 0.0001 * (g @ (trial - diag)) and value > old:\n                        diag = trial\n                        break\n                    step *= 0.5\n                else:\n                    break\n        out = np.zeros(p)\n        out[free] = diag * (1 - 1e-09)\n        return out\n\n    def objective(w):\n        residual = x @ w - y\n        return float((residual @ residual + ridge * (w @ w)) / 2 + charge * np.count_nonzero(np.abs(w) > zero_eps))\n\n    def fit_support(mask, start):\n        \"\"\"Polish the ridge solution on a fixed support under the box.\"\"\"\n        out = np.zeros(p)\n        ind = np.flatnonzero(mask)\n        if not len(ind):\n            return out\n        hh = h[np.ix_(ind, ind)]\n        b = xy[ind]\n        w = np.linalg.solve(hh, b)\n        if np.max(np.abs(w)) > box:\n            w = np.clip(start[ind], -box, box)\n            for _ in range(500):\n                prev = w.copy()\n                for j in range(len(w)):\n                    w[j] = np.clip(w[j] + (b[j] - hh[j] @ w) / hh[j, j], -box, box)\n                if np.max(np.abs(w - prev)) <= 2e-13 * (1 + box):\n                    break\n        out[ind] = w\n        out[np.abs(out) <= zero_eps] = 0.0\n        return out\n    best_w = np.zeros(p)\n    best = objective(best_w)\n\n    def improve(w):\n        nonlocal best_w, best\n        val = objective(w)\n        if val < best:\n            (best_w, best) = (w.copy(), val)\n\n    def witness(v, state, d=d):\n        \"\"\"Tangent to the PSD remainder plus exact separable infima.\"\"\"\n        residual = x @ v - y\n        g = x.T @ residual\n        linear = g - d * v\n        q = d + ridge\n        a = np.clip(np.abs(linear) / q, active_floor, box)\n        on = q * a ** 2 / 2 - abs(linear) * a + charge\n        z = np.minimum(np.abs(linear) / q, active_floor)\n        off = q * z ** 2 / 2 - abs(linear) * z\n        terms = np.where(state == 0, off, np.where(state == 1, on, np.minimum(off, on)))\n        const = residual @ residual / 2 - g @ v + d * v @ v / 2\n        margin = 5e-13 * (1 + abs(const) + np.sum(np.abs(terms)))\n        return (float(const + terms.sum() - margin), on - off)\n    base_diagonal = d\n    base_relaxation = (r, q, knee, slope, lipschitz)\n\n    def relax(state, start, steps=450, d=d):\n        \"\"\"Optimize the separable convex envelope to choose a tangent point.\"\"\"\n        free = state < 0\n        if d is not base_diagonal:\n            r = gram - np.diag(d)\n            q = d + ridge\n            knee = np.minimum(box, np.sqrt(2 * charge / q))\n            slope = charge / knee + q * knee / 2\n            lipschitz = eig[-1]\n        else:\n            (r, q, knee, slope, lipschitz) = base_relaxation\n        v = np.where(state == 0, 0, start)\n        extrap = v.copy()\n        t = 1.0\n        for _ in range(steps):\n            u = extrap - (r @ extrap - xy) / lipschitz\n            mag = np.abs(u)\n            low = np.clip(mag - slope / lipschitz, 0.0, knee)\n            high = mag / (1 + q / lipschitz)\n            val = np.where(free, np.where(high > knee, high, low), high)\n            new = np.where(state == 0, 0.0, np.sign(u) * np.minimum(val, box))\n            if np.max(np.abs(new - v)) < 5e-11 * (1 + box):\n                return new\n            nt = (1 + np.sqrt(1 + 4 * t * t)) / 2\n            if (extrap - new) @ (new - v) > 0:\n                (extrap, t) = (new, 1.0)\n            else:\n                (extrap, t) = (new + (t - 1) / nt * (new - v), nt)\n            v = new\n        return v\n\n    def local_search(w, allowed):\n        \"\"\"Find a good incumbent by exact one-coordinate box L0 updates.\"\"\"\n        w = w.copy()\n        for _ in range(120):\n            prev = w.copy()\n            for j in allowed:\n                b = xy[j] - h[j] @ w + h[j, j] * w[j]\n                val = np.clip(b / h[j, j], -box, box)\n                w[j] = val if abs(val) > zero_eps and b * val - h[j, j] * val ** 2 / 2 > charge else 0.0\n            if np.max(np.abs(w - prev)) <= 1e-11 * (1 + box):\n                break\n        return fit_support(w != 0, w)\n    root = np.full(p, -1, dtype=np.int8)\n    initial = fit_support(np.ones(p, dtype=bool), np.zeros(p))\n    for start in (initial, best_w):\n        improve(local_search(start, np.argsort(-np.abs(xy))))\n    leaves = []\n    stack = [(root, best_w.copy())]\n    tolerance = 5e-06\n    while stack:\n        (state, start) = stack.pop()\n        free = np.flatnonzero(state < 0)\n        fixed = state == 1\n        v = best_w\n        leaf_d = d\n        (lb, delta) = witness(v, state)\n        if lb < best - tolerance:\n            relaxed = relax(state, start) if len(free) else fit_support(fixed, start)\n            (alt, alt_delta) = witness(relaxed, state)\n            if alt > lb:\n                (v, lb, delta) = (relaxed, alt, alt_delta)\n            mask = fixed | (state < 0) & (np.abs(relaxed) >= knee / 2)\n            candidate = fit_support(mask, relaxed)\n            improve(candidate)\n            (alt, alt_delta) = witness(candidate, state)\n            if alt > lb:\n                (v, lb, delta) = (candidate, alt, alt_delta)\n        if lb < best - tolerance and len(free) >= 2 and (inv_gram is not None):\n            trial_d = adaptive_diagonal(free, relaxed)\n            trial = relax(state, relaxed, steps=140, d=trial_d)\n            (alt, alt_delta) = witness(trial, state, trial_d)\n            if alt > lb:\n                (v, lb, delta, leaf_d, relaxed) = (trial, alt, alt_delta, trial_d, trial)\n        if lb >= best - tolerance or not len(free):\n            leaves.append({'fixed_zero': np.flatnonzero(state == 0).tolist(), 'fixed_active': np.flatnonzero(fixed).tolist(), 'lb': lb, 'minorant_diagonal': leaf_d.copy(), 'minorant_center': v.copy()})\n            continue\n        fraction = np.abs(relaxed[free]) / knee[free]\n        fractional = np.minimum(fraction, 1 - fraction)\n        ranked = sorted(range(len(free)), key=lambda k: (-max(0.0, fractional[k]), abs(delta[free[k]])))\n        options = ranked[:6] if len(free) > 5 and p >= 19 else ranked[:1]\n        chosen = None\n        best_score = (-np.inf, -np.inf)\n        for k in options:\n            j = free[k]\n            children = []\n            estimates = []\n            for bit in (0, 1):\n                child = state.copy()\n                child[j] = bit\n                (lb0, _) = witness(v, child, leaf_d)\n                trial = relaxed\n                if lb0 < best - tolerance and len(options) > 1:\n                    trial = relax(child, relaxed, steps=25, d=leaf_d)\n                    lb0 = max(lb0, witness(trial, child, leaf_d)[0])\n                estimates.append(lb0)\n                children.append((child, trial))\n            clipped = np.minimum(estimates, best)\n            score = (min(clipped) + 0.25 * max(clipped), min(clipped))\n            if score > best_score:\n                (chosen, best_score) = (children, score)\n                preferred = int(estimates[1] < estimates[0])\n            if min(estimates) >= best - tolerance:\n                break\n        stack.extend((chosen[1 - preferred], chosen[preferred]))\n    return {'weights': best_w, 'objective': best, 'certified_lower_bound': min(best, min((leaf['lb'] for leaf in leaves))), 'subcube_leaves': leaves}"
+      },
+      {
+        "name": "solve_multicenter_certified_l0",
+        "code": "def solve_multicenter_certified_l0(study: dict) -> dict:\n    \"\"\"Solve the three stages of a multicenter study.\"\"\"\n    cohort = study['cohort']\n    z = _align(cohort)\n    return {'aligned_biomarkers': z, 'robust_potency_weights': _potency(z, cohort['stratum'], cohort['y_potency']), 'certified_selection': _sparse(study['sparse_selection'])}"
+      }
+    ]
+  }
+}
