@@ -3080,7 +3080,9 @@ def run_frontier_episode(
                 ),
                 compute_delta=float(rec.get("query_compute_cost", 1.0)),
             )
-            if is_exec_wormhole_m6 and recalled_notes and (not is_bm):
+            if is_exec_wormhole_m6 and (
+                recalled_notes or (bool(forest_archive.get("__autogenous_blank_seed__")) and allow_l1_primitives)
+            ) and (not is_bm):
                 is_autogenous_blank = all(bool(n.get("autogenous_only")) for n in recalled_notes) or bool(
                     forest_archive.get("__autogenous_blank_seed__")
                 )
@@ -4314,6 +4316,11 @@ def run_frontier_episode(
             from .m9_1_hard_demand_benchmark import run_hard_demand_private_verifier_for_container
 
             verifier_report = run_hard_demand_private_verifier_for_container(task.task_id, agent_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M92-EqualInfo-4":
+            from .m9_2_equal_info_reuse_benchmark import run_equal_info_m92_private_verifier_for_container
+
+            verifier_report = run_equal_info_m92_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             verifier_report = run_tb_separate_verifier(task, agent_cid)

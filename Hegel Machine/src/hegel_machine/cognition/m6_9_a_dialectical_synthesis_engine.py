@@ -959,6 +959,7 @@ def should_spawn_dialectical_second_branch(
         "Hegel-M89-HardStress-4",
         "Hegel-M90a-VoluntaryReuse-4",
         "Hegel-M91-HardDemand-2",
+        "Hegel-M92-EqualInfo-4",
     }:
         max_t = int(primary_summary.get("max_turns") or 28)
         used_t = int(primary_summary.get("turns_used") or 0)
@@ -2542,6 +2543,12 @@ def run_m6_9_a_two_branch_episode(
             from .m9_1_hard_demand_benchmark import run_hard_demand_private_verifier_for_container
 
             verifier_report = run_hard_demand_private_verifier_for_container(task.task_id, synth_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M92-EqualInfo-4":
+            assert synth_cid is not None
+            from .m9_2_equal_info_reuse_benchmark import run_equal_info_m92_private_verifier_for_container
+
+            verifier_report = run_equal_info_m92_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None

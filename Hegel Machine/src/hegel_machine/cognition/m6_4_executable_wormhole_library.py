@@ -2063,8 +2063,8 @@ def evaluate_l1_skill_staging_net_value(
         for cl in clauses
     )
     affirms_real_spd_subproblem = any(
-        _clause_has_unnegated_term(cl, ("spd", "positive definite", "positive-definite", "elliptic", "diffusion", "poisson", "darcy"))
-        and not _clause_has_unnegated_term(cl, ("helmholtz", "indefinite", "non-hermitian", "non_hermitian"))
+        _clause_has_unnegated_term(cl, ("spd", "positive definite", "positive-definite", "symmetric positive"))
+        and not _clause_has_unnegated_term(cl, ("helmholtz", "indefinite", "non-hermitian", "non_hermitian", "complex128", "fail preconditions", "diverge"))
         for cl in clauses
     )
     affirms_complex_stage = any(
@@ -2138,11 +2138,15 @@ def evaluate_l1_skill_staging_net_value(
                 partial_subroutine_note = "applicable_to_real_design_stage_only; complex_stage_arrays_must_not_be_passed"
     elif stem == "autogenous_prim_reference_panel_balancing":
         reimpl_saved = 1.7
-        has_panel_groups = bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "panel"})
-        if affirms_complex_stage and not has_panel_groups:
-            vetoes.append("complex_pilot_calibration_has_no_discrete_group_or_stratum_panel")
+        has_real_panel_clause = any(
+            _clause_has_unnegated_term(cl, ("stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "panel", "lab", "labs", "coupons"))
+            and not _clause_has_unnegated_term(cl, ("complex128", "helmholtz", "wrapped_phase_obs", "non-hermitian"))
+            for cl in clauses
+        )
+        if affirms_complex_stage and not has_real_panel_clause:
+            vetoes.append("complex_operator_or_pilot_calibration_has_no_discrete_group_or_stratum_panel")
             reimpl_saved = 0.0
-        elif not bool(q_toks & {"group", "groups", "stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "control", "controls", "reference"}):
+        elif not bool(q_toks & {"stratum", "strata", "center", "centers", "site", "sites", "cohort", "batch", "plate", "plates", "control", "controls", "reference", "panel", "lab", "labs"}):
             vetoes.append("no_grouped_control_panel_or_stratum_balancing_structure")
             reimpl_saved = 0.0
         elif bool(q_toks & {"quadratic", "2d", "row", "col", "spatial"}) and not bool(q_toks & {"center", "centers", "site", "sites", "stratum", "strata", "missing", "nan"}):
