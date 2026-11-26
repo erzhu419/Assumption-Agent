@@ -2121,6 +2121,7 @@ def _build_system_and_initial_brief(
     cmd_timeout_sec: int,
     enable_auto_skill_packaging: bool = True,
     disclosure_mode: str = "dedup_full",
+    has_dormant_on_demand_skills: bool = False,
 ) -> tuple[str, dict[str, Any]]:
     is_m6 = arm in {
         "Hegel_M6_Frontier_LiveGPT",
@@ -2201,7 +2202,13 @@ def _build_system_and_initial_brief(
             if enable_auto_skill_packaging
             else "   - CRITICAL SELF-CONTAINMENT RULE: Separate air-gapped verifiers copy ONLY declared target artifacts (`/app`, `/workspace`, `/results`) and NEVER `/tmp` — if a staged wormhole operator (or hybrid) strictly improves worst-slice validation, inline its pure NumPy/SciPy/sklearn source directly into your declared target file!\n"
         )
-        if staged_wormhole_manifest and is_autogenous_blank and disclosure_mode == "progressive_knowledge_only":
+        if disclosure_mode == "demand_triggered_zero_tax" and has_dormant_on_demand_skills:
+            exec_skill_rules = (
+                "5. DORMANT ON-DEMAND PRIMITIVE LIBRARY (`/tmp/hegel_wormhole_skills`, `0` Turn-1 prompt tax): "
+                "Leave untouched on straightforward or complex/indefinite tasks; ONLY if you hit a certified-bound, 3D-AMG/CG, robust-IRLS, or control-panel bottleneck "
+                "(or see `on_demand_skill_hint`), run `python3 -m hegel_wormhole_skills --search '<keywords>'` or `--describe <mod>.<fn>` (imported functions are statically bundled automatically).\n"
+            )
+        elif staged_wormhole_manifest and is_autogenous_blank and disclosure_mode == "progressive_knowledge_only":
             exec_skill_rules = (
                 "5. AUTOGENOUSLY GROWN MATHEMATICAL & ALGORITHMIC REFERENCE CATALOG (`/tmp/hegel_knowledge_ref` — READ-ONLY KNOWLEDGE NOTES):\n"
                 "   - `mounted_executable_wormhole_skills` shows compact 1-line reference cards with critical preconditions (`REQ: ...`) from verified prior scientific discoveries.\n"
@@ -2260,17 +2267,21 @@ def _build_system_and_initial_brief(
             "scientific_domain": task.scientific_domain,
             "max_turns": max_turns,
             "container_initial_snapshot": env_boot_info,
-            "recalled_wormhole_methodology_and_wave1_sublations": [
-                {
-                    "node_id": n["node_id"],
-                    "principle": n["methodology_principle"],
-                    "scope_preconditions": n.get("scope_preconditions", []),
-                    "supported_by": n.get("supported_by", []),
-                    "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
-                }
-                for n in recalled_m6_notes
-            ],
-            "mounted_executable_wormhole_skills": staged_wormhole_manifest or [],
+            "recalled_wormhole_methodology_and_wave1_sublations": (
+                []
+                if disclosure_mode == "demand_triggered_zero_tax"
+                else [
+                    {
+                        "node_id": n["node_id"],
+                        "principle": n["methodology_principle"],
+                        "scope_preconditions": n.get("scope_preconditions", []),
+                        "supported_by": n.get("supported_by", []),
+                        "wave1_consolidated_nogoods": n.get("wave1_consolidated_nogoods", []),
+                    }
+                    for n in recalled_m6_notes
+                ]
+            ),
+            "mounted_executable_wormhole_skills": ([] if disclosure_mode == "demand_triggered_zero_tax" else (staged_wormhole_manifest or [])),
             "task_instruction": task.instruction_text,
         }
         return sys_prompt, init_payload
@@ -2832,7 +2843,13 @@ def run_frontier_episode(
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/workspace/data", "/workspace/scratch"], capture_output=True, timeout=15)
             subprocess.run(["docker", "cp", f"{task.biomystery_data_dir}/.", f"{agent_cid}:/workspace/data/"], capture_output=True, timeout=45)
             subprocess.run(["docker", "exec", agent_cid, "chmod", "-R", "a-w", "/workspace/data"], capture_output=True, timeout=15)
-        elif task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"} and task.holdout_public_setup_py:
+        elif task.benchmark in {
+            "Hegel-OOD-Holdout-12",
+            "Hegel-Unseen-PostFreeze-4",
+            "Hegel-M89-HardStress-4",
+            "Hegel-M90a-VoluntaryReuse-4",
+            "Hegel-M91-HardDemand-2",
+        } and task.holdout_public_setup_py:
             subprocess.run(["docker", "exec", agent_cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
             with tempfile.TemporaryDirectory(prefix="hegel_ho_boot_") as td_h:
                 setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -3039,6 +3056,11 @@ def run_frontier_episode(
                         rationale_summary="Isolated smoke-test import qualification (`HEGEL_SKILL_CALLER_ROLE=smoke_test`, excluded from agent activation counts).",
                     )
 
+        l1_sel_diag_ep: dict[str, Any] = locals().get("l1_sel_diag") or {}
+        demand_recommended_cards: list[str] = list(l1_sel_diag_ep.get("demand_triggered_recommended_cards") or [])
+        demand_skill_hint_emitted = False
+        demand_skill_hint_turn: int | None = None
+
         sys_prompt, init_payload = _build_system_and_initial_brief(
             task,
             arm,
@@ -3049,6 +3071,7 @@ def run_frontier_episode(
             cmd_timeout_sec=cmd_timeout_sec,
             enable_auto_skill_packaging=enable_auto_skill_packaging,
             disclosure_mode=disclosure_mode,
+            has_dormant_on_demand_skills=bool(staged_skill_sources_by_stem),
         )
 
         raw_exec_observations: list[dict[str, Any]] = []
@@ -3125,6 +3148,32 @@ def run_frontier_episode(
                             m6_state["nogood_gated_on_demand_wormhole_skills"] = [
                                 f"{m['module_import']}: {m['exported_apis']}" for m in staged_wormhole_manifest
                             ]
+                        if (
+                            disclosure_mode == "demand_triggered_zero_tax"
+                            and demand_recommended_cards
+                            and (not demand_skill_hint_emitted)
+                            and turn_idx >= 2
+                        ):
+                            already_queried_skills = any(
+                                "hegel_wormhole_skills" in str(t.get("bash_command") or "") for t in turn_logs
+                            )
+                            last_cmd_failed = bool(
+                                raw_exec_observations
+                                and int(raw_exec_observations[-1].get("exit_code", 0)) != 0
+                                and str(raw_exec_observations[-1].get("command") or "") != "[ROOT_PULLBACK_PRECOMMIT_GATE]"
+                            )
+                            if (not already_queried_skills) and (
+                                len(nogoods_recorded) >= 1
+                                or last_cmd_failed
+                                or (turn_idx >= 5 and not verified_candidate_sha256)
+                            ):
+                                demand_skill_hint_emitted = True
+                                demand_skill_hint_turn = turn_idx
+                                m6_state["on_demand_skill_hint"] = {
+                                    "trigger_turn": turn_idx,
+                                    "usage": "Inspect via `python3 -m hegel_wormhole_skills --describe <mod>.<fn>` before importing; static closure is bundled automatically.",
+                                    "matching_l1_cards": demand_recommended_cards[:6],
+                                }
                     if len(nogoods_recorded) >= 5:
                         m6_state["monotone_ratchet_guard"] = (
                             f"MONOTONE RATCHET ACTIVE ({len(nogoods_recorded)} structural Nogoods recorded): Do NOT overwrite a working "
@@ -3529,7 +3578,7 @@ def run_frontier_episode(
             cmd_str = str(bash_cmd or "echo 'No command provided'")
             effective_cmd_str = (
                 f'export PYTHONPATH="/tmp:${{PYTHONPATH:-}}"; {cmd_str}'
-                if ((is_m6_5 or is_m6_6 or is_m6_7 or is_m6_8) and staged_wormhole_manifest)
+                if ((is_m6_5 or is_m6_6 or is_m6_7 or is_m6_8) and (staged_wormhole_manifest or staged_skill_sources_by_stem))
                 else cmd_str
             )
             ex_res = exec_container_bash(agent_cid, effective_cmd_str, timeout_sec=cmd_timeout_sec)
@@ -4058,6 +4107,11 @@ def run_frontier_episode(
 
             verifier_report = run_voluntary_reuse_private_verifier_for_container(task.task_id, agent_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M91-HardDemand-2":
+            from .m9_1_hard_demand_benchmark import run_hard_demand_private_verifier_for_container
+
+            verifier_report = run_hard_demand_private_verifier_for_container(task.task_id, agent_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             verifier_report = run_tb_separate_verifier(task, agent_cid)
             failure_tax = classify_tb_failure_taxonomy(
@@ -4238,6 +4292,10 @@ def run_frontier_episode(
                 "queryable_catalog_l1_count": int(_sel_diag_view.get("queryable_catalog_l1_count", 0)),
                 "card_char_stats": dict(_sel_diag_view.get("card_char_stats") or {}),
                 "describe_skill_inspection_count": sum(1 for ev in skill_inspections if ev.get("event") == "skill_contract_delivered"),
+                "search_skill_query_count": sum(1 for ev in skill_inspections if ev.get("event") == "skill_search_executed"),
+                "demand_skill_hint_emitted": bool(demand_skill_hint_emitted),
+                "demand_skill_hint_turn": demand_skill_hint_turn,
+                "demand_triggered_recommended_l1_count": int(_sel_diag_view.get("demand_triggered_recommended_l1_count", 0)),
                 "describe_skill_queries": [
                     str(ev.get("target") or ev.get("query") or "")
                     for ev in skill_inspections

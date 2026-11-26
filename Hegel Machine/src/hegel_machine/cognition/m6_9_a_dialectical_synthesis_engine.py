@@ -953,7 +953,13 @@ def should_spawn_dialectical_second_branch(
     pub = public_metrics or {}
     if not bool(chk.get("accepted", True)):
         triggers.append("failed_public_artifact_contract")
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"}:
+    if task.benchmark in {
+        "Hegel-OOD-Holdout-12",
+        "Hegel-Unseen-PostFreeze-4",
+        "Hegel-M89-HardStress-4",
+        "Hegel-M90a-VoluntaryReuse-4",
+        "Hegel-M91-HardDemand-2",
+    }:
         max_t = int(primary_summary.get("max_turns") or 28)
         used_t = int(primary_summary.get("turns_used") or 0)
         if used_t >= max(1, max_t - 3):
@@ -1705,6 +1711,10 @@ def grade_archived_branch_post_lock(
         from .m9_0_voluntary_reuse_benchmark import run_voluntary_reuse_private_verifier_by_id
 
         return run_voluntary_reuse_private_verifier_by_id(task.task_id, branch_tar)
+    if task.benchmark == "Hegel-M91-HardDemand-2":
+        from .m9_1_hard_demand_benchmark import run_hard_demand_private_verifier_by_id
+
+        return run_hard_demand_private_verifier_by_id(task.task_id, branch_tar)
 
     cid: str | None = None
     try:
@@ -1733,7 +1743,13 @@ def grade_archived_branch_post_lock(
 
 
 def _init_holdout_public_env_if_needed(cid: str, task: m6f.FrontierBenchmarkTask) -> None:
-    if task.benchmark in {"Hegel-OOD-Holdout-12", "Hegel-Unseen-PostFreeze-4", "Hegel-M89-HardStress-4", "Hegel-M90a-VoluntaryReuse-4"} and task.holdout_public_setup_py:
+    if task.benchmark in {
+        "Hegel-OOD-Holdout-12",
+        "Hegel-Unseen-PostFreeze-4",
+        "Hegel-M89-HardStress-4",
+        "Hegel-M90a-VoluntaryReuse-4",
+        "Hegel-M91-HardDemand-2",
+    } and task.holdout_public_setup_py:
         subprocess.run(["docker", "exec", cid, "mkdir", "-p", "/holdout_task", "/tmp"], capture_output=True, timeout=15)
         with tempfile.TemporaryDirectory(prefix="hegel_ho_syn_") as td_h:
             setup_fp = Path(td_h) / "_setup_holdout.py"
@@ -2174,6 +2190,13 @@ def run_m6_9_a_two_branch_episode(
         if use_m8_planner:
             from .m8_offline_container_planner import build_container_pre_action_state, finalize_container_decision_record
 
+            if task.benchmark not in {"Terminal-Bench-Science-0.1", "BioMysteryBench-Preview"}:
+                pub_sel = dict(pub_sel or {})
+                pub_sel["in_container_substantive_receipt_verified"] = bool(
+                    anti_sum.get("validated_incumbent_sha256")
+                    and anti_sum.get("validated_incumbent_sha256") == anti_sum.get("final_candidate_sha256")
+                )
+
             pre_st = build_container_pre_action_state(
                 task_id=task.task_id,
                 benchmark=task.benchmark,
@@ -2507,6 +2530,12 @@ def run_m6_9_a_two_branch_episode(
             from .m9_0_voluntary_reuse_benchmark import run_voluntary_reuse_private_verifier_for_container
 
             verifier_report = run_voluntary_reuse_private_verifier_for_container(task.task_id, synth_cid)
+            failure_tax = str(verifier_report["failure_taxonomy"])
+        elif task.benchmark == "Hegel-M91-HardDemand-2":
+            assert synth_cid is not None
+            from .m9_1_hard_demand_benchmark import run_hard_demand_private_verifier_for_container
+
+            verifier_report = run_hard_demand_private_verifier_for_container(task.task_id, synth_cid)
             failure_tax = str(verifier_report["failure_taxonomy"])
         else:
             assert synth_cid is not None

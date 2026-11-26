@@ -241,6 +241,11 @@ def classify_public_container_verification_state(
         partial_receipts.append("autogenous_skill_operator_invoked")
     if int(nogood_count) >= 1:
         partial_receipts.append("in_container_falsification_nogood_probed")
+    if (
+        benchmark not in {"Terminal-Bench-Science-0.1", "BioMysteryBench-Preview"}
+        and pub.get("in_container_substantive_receipt_verified") is True
+    ):
+        partial_receipts.append("in_container_substantive_verification_receipt")
 
     if partial_receipts:
         return "SUPPORTED_IN_PARTIAL_SCOPE", partial_receipts

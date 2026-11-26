@@ -37,16 +37,19 @@ import tempfile
 from typing import Any
 
 
-SKILL_MAIN_PY = '''"""Read-only CLI entry (`python3 -m hegel_wormhole_skills --list | --describe <mod_or_fn>`) without importing skill code."""
+SKILL_MAIN_PY = '''"""Read-only CLI entry (`python3 -m hegel_wormhole_skills --list | --search <q> | --describe <mod_or_fn>`) without importing skill code."""
 import argparse
-from . import describe_skill
+from . import describe_skill, search_skills
 
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--list", action="store_true", help="List compact index cards for all mounted wormhole skills")
+    ap.add_argument("--search", type=str, default="", help="Search compact index cards by capability keywords (`0` skill import)")
     ap.add_argument("--describe", type=str, default="", help="Describe full contract for `<module>` or `<module>.<fn>`")
     args = ap.parse_args()
-    if args.list and not args.describe:
+    if args.search:
+        print(search_skills(args.search))
+    elif args.list and not args.describe:
         print(describe_skill("", detail_level="index"))
     else:
         print(describe_skill(args.describe, detail_level="full"))
@@ -140,6 +143,43 @@ def describe_skill(target: str = "", detail_level: str = "full") -> str:
     if detail_level == "index":
         return "\\n".join(c for m in matches for c in m.get("index_cards", []))
     return json.dumps({"ok": len(matches) > 0, "target": q or "*", "matches": matches}, indent=2, ensure_ascii=False)
+
+
+def search_skills(query: str = "", top_k: int = 8) -> str:
+    """Pure-data keyword search over `_skill_contracts.json` returning top-matching compact 1-line index cards (`M9.1`)."""
+    import re as _re
+    caller_role = os.environ.get("HEGEL_SKILL_CALLER_ROLE", "agent")
+    toks = {t for t in _re.findall(r"[a-zA-Z0-9_]{2,}", str(query or "").lower())}
+    if not os.path.isfile(CONTRACTS_CATALOG_PATH):
+        return json.dumps({"ok": False, "error": "no_skill_contracts_catalog_mounted"})
+    with open(CONTRACTS_CATALOG_PATH, "r", encoding="utf-8") as fh:
+        catalog = json.load(fh)
+    scored = []
+    for entry in catalog.get("skills", []):
+        blob = json.dumps(entry, ensure_ascii=False).lower()
+        eb_toks = set(_re.findall(r"[a-zA-Z0-9_]{2,}", blob))
+        overlap = len(toks & eb_toks) if toks else 1
+        if overlap > 0:
+            is_l1 = 1 if entry.get("granularity_tier") == "L1_compositional_primitive" else 0
+            for c in entry.get("index_cards", []):
+                c_toks = set(_re.findall(r"[a-zA-Z0-9_]{2,}", c.lower()))
+                sc = overlap + 2 * len(toks & c_toks) + is_l1
+                scored.append((sc, c))
+    scored.sort(key=lambda x: (-x[0], x[1]))
+    top_cards = [c for _, c in scored[: max(1, int(top_k))]]
+    _append_jsonl_path(
+        INSPECTION_LOG_PATH,
+        json.dumps(
+            {
+                "ts": round(time.time(), 3),
+                "event": "skill_search_executed",
+                "query": str(query or ""),
+                "returned_card_count": len(top_cards),
+                "caller_role": caller_role,
+            }
+        ),
+    )
+    return "\\n".join(top_cards) if top_cards else "No matching skill cards found."
 
 
 def _flush_buffered_skill_activations() -> None:
@@ -1981,19 +2021,28 @@ def evaluate_l1_skill_staging_net_value(
             adapt_cost += 1.3
     elif stem == "autogenous_prim_robust_trend_decomposition":
         reimpl_saved = 1.6
-        if not bool(q_toks & {"relaxation", "creep", "step", "breakpoint", "unloading", "hereditary", "memory", "drift", "outlier", "spikes", "cauchy"}):
+        if "complex128" in q_low or ("helmholtz" in q_toks and "wrapped_phase_obs" in q_low):
+            vetoes.append("complex_phasor_wrapped_phase_violates_real_1d_precondition")
+            reimpl_saved = 0.0
+        elif not bool(q_toks & {"relaxation", "creep", "step", "breakpoint", "unloading", "hereditary", "memory", "drift", "outlier", "spikes", "cauchy"}):
             vetoes.append("no_robust_linear_or_relaxation_step_subproblem")
             reimpl_saved = 0.0
         elif not bool(q_toks & {"time", "timestamps", "relaxation", "creep", "step", "memory", "tau"}):
             reimpl_saved = 0.85
     elif stem == "autogenous_prim_ridge_profiled_matching":
         reimpl_saved = 1.45
-        if not bool(q_toks & {"tomography", "plume", "anomaly", "source", "kernel", "candidate", "grid", "nuisance", "offset", "ridge", "basis"}):
+        if "wrapped_phase_obs" in q_low and "helmholtz" in q_toks and not bool(q_toks & {"nuisance", "whitener"}):
+            vetoes.append("polar_wrapped_phase_outlier_survey_has_no_linear_nuisance_subspace_projection")
+            reimpl_saved = 0.0
+        elif not bool(q_toks & {"tomography", "plume", "anomaly", "source", "kernel", "candidate", "grid", "nuisance", "offset", "ridge", "basis"}):
             vetoes.append("no_nuisance_projected_kernel_matching_subproblem")
             reimpl_saved = 0.0
     elif stem == "autogenous_prim_robust_affine_projection":
         reimpl_saved = 1.55
-        if not bool(q_toks & {"affine", "gain", "offset", "robust", "cauchy", "huber", "outliers", "outlier", "transition", "propagate", "trajectory", "memory"}):
+        if "complex128" in q_low or ("helmholtz" in q_toks and "wrapped_phase_obs" in q_low):
+            vetoes.append("complex_phasor_wrapped_phase_violates_real_float64_precondition")
+            reimpl_saved = 0.0
+        elif not bool(q_toks & {"affine", "gain", "offset", "robust", "cauchy", "huber", "outliers", "outlier", "transition", "propagate", "trajectory", "memory"}):
             vetoes.append("no_affine_nuisance_or_linear_state_propagation_subproblem")
             reimpl_saved = 0.0
 
@@ -2053,15 +2102,22 @@ def collect_recalled_executable_wormhole_sources(
     """Collect `{filename: python_code}` and `manifest_entries` (`M8.9A` `dedup_full` vs `progressive` disclosure +
     `M8.9B` `all_compatible` vs `net_value_gated` staging policy, with lossless precondition deduplication!).
     """
-    assert disclosure_mode in {"dedup_full", "progressive", "progressive_knowledge_only"}, f"Invalid disclosure_mode={disclosure_mode}"
+    assert disclosure_mode in {
+        "dedup_full",
+        "progressive",
+        "progressive_knowledge_only",
+        "demand_triggered_zero_tax",
+    }, f"Invalid disclosure_mode={disclosure_mode}"
     assert staging_policy in {"all_compatible", "net_value_gated"}, f"Invalid staging_policy={staging_policy}"
     is_knowledge_only = disclosure_mode == "progressive_knowledge_only"
-    is_progressive_like = disclosure_mode in {"progressive", "progressive_knowledge_only"}
+    is_demand_zero_tax = disclosure_mode == "demand_triggered_zero_tax"
+    is_progressive_like = disclosure_mode in {"progressive", "progressive_knowledge_only", "demand_triggered_zero_tax"}
     is_autogenous_blank = bool(recalled_notes) and all(bool(n.get("autogenous_only")) for n in recalled_notes)
     allow_foundational = bool(include_foundational_skills) and (not is_autogenous_blank)
 
     modules_to_write: dict[str, str] = {}
     manifest_entries: list[dict[str, Any]] = []
+    demand_recommended_cards: list[str] = []
     catalog_entries_by_stem: dict[str, dict[str, Any]] = {}
     displayed_cards_lengths: list[int] = []
     selection_diagnostics: dict[str, Any] = {
@@ -2122,7 +2178,9 @@ def collect_recalled_executable_wormhole_sources(
                 "index_cards": cards,
             },
         )
-        if not stage_in_turn1_manifest:
+        if is_demand_zero_tax and stage_in_turn1_manifest and granularity_tier == "L1_compositional_primitive":
+            demand_recommended_cards.extend(cards)
+        if (not stage_in_turn1_manifest) or is_demand_zero_tax:
             return
         displayed_cards_lengths.extend(len(c) for c in cards)
         if is_progressive_like:
@@ -2384,9 +2442,15 @@ def collect_recalled_executable_wormhole_sources(
                     stage_in_turn1_manifest=True,
                 )
 
-    selection_diagnostics["recommended_turn1_l1_count"] = sum(
-        1 for m in manifest_entries if m.get("granularity_tier") == "L1_compositional_primitive"
+    selection_diagnostics["recommended_turn1_l1_count"] = (
+        0
+        if is_demand_zero_tax
+        else sum(1 for m in manifest_entries if m.get("granularity_tier") == "L1_compositional_primitive")
     )
+    selection_diagnostics["demand_triggered_recommended_l1_count"] = (
+        len(selection_diagnostics["selected_l1_modules"]) if is_demand_zero_tax else 0
+    )
+    selection_diagnostics["demand_triggered_recommended_cards"] = list(demand_recommended_cards)
     selection_diagnostics["mounted_on_disk_l1_count"] = (
         0 if is_knowledge_only else sum(1 for fn in modules_to_write if fn.startswith("autogenous_prim_"))
     )
