@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf928bed145443e88efcb322a2e09834",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:25:17.960076+00:00",
+  "ended_at_utc": "2026-11-27T08:25:55.305268+00:00",
+  "request_sha256": "1c1f7bca54d88e5154ddc0e8605b4cad273cea050aec6fface68dcefd3fd44fc",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27344,
+    "cached_tokens": 11136,
+    "completion_tokens": 1426
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology07_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c02_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open(root + 'public_alpha_m97_c02_batch_07.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\na, b = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nx, _ = s._aligned(a, b)\\ninputs = s._inputs(a, x, s._calibration(d), dt, d['crit_stress'], d['shear_banding_index'])\\nactive = inputs[-1] > 0\\ncomplete = np.isfinite(a['coupon_features_raw']).all(axis=1)\\nlab = a['lab_id']\\ny = a['strain_curves_obs'] - a['strain_0'][:, None]\\nr = a['instant_rate_obs']\\noriginal = s._design\\n\\ndef switched(tau, dt, times, inp):\\n    curve, rate = original(tau, dt, times, inp)\\n    inactive = inp[-1] == 0\\n    curve[inactive, :, 2:7] *= (times / np.log1p(times))[None, :, None]\\n    return curve, rate\\n\\ndef summarize(e, er, rows):\\n    if not rows.any():\\n        return []\\n    return [int(rows.sum()), *np.round([np.quantile(np.abs(e[rows]), .90), np.quantile(np.abs(er[rows]), .90), np.median(e[rows, -1]), np.median(er[rows])], 5).tolist()]\\n\\nfor name, design in [('log throughout', original), ('linear at zero damage', switched)]:\\n    s._design = design\\n    e, er = np.empty_like(y), np.empty_like(r)\\n    for c in np.unique(lab):\\n        fit, val = (lab != c) & complete, lab == c\\n        tau, w = s._fit(dt, t, tuple(v[fit] for v in inputs), y[fit], r[fit])\\n        C, R = design(tau, dt, t, tuple(v[val] for v in inputs))\\n        e[val], er[val] = C @ w - y[val], R @ w - r[val]\\n    print(name, 'n, p90 strain, p90 rate, signed median final strain, signed median rate')\\n    for state in (False, True):\\n        for c in np.unique(lab):\\n            print('  lab', c, 'active', state, summarize(e, er, (lab == c) & (active == state) & complete))\\n    print('  missing coupons:', summarize(e, er, ~complete))\\n    print('  p90 at each horizon (complete):', np.round(np.quantile(np.abs(e[complete]), .90, axis=0), 5).tolist())\\ns._design = original\\nout = s.solve_alpha_m97_c02_batch_07(d)\\ngt = item.get('gt')\\nprint('Public reference fields:', {k: np.shape(v) for k, v in gt.items()} if isinstance(gt, dict) else type(gt).__name__)\\nif isinstance(gt, dict):\\n    for k in out.keys() & gt.keys():\\n        ref, pred = np.asarray(gt[k]), np.asarray(out[k])\\n        if ref.shape == pred.shape and ref.dtype.kind in 'fiu':\\n            print('public reference', k, 'RMSE', float(np.sqrt(np.mean((ref-pred)**2))), 'max abs error', float(np.max(np.abs(ref-pred))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology07_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean calibration → log-plateau model; complete-coupon leave-lab-out p90 errors were at most 0.0393 for strain and 0.0387 for rate, with a separate audit pending for zero-damage rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, diffusion-control, or relay terms\",\n      \"rejected_reason\": \"The specified model already uses the hold-minus-memory differences and activation products. It has no rational response, stochastic state dynamics, or relay state; the relevant discrete distinction is zero versus positive damage.\"\n    },\n    {\n      \"option\": \"Judge transfer by pooled error\",\n      \"rejected_reason\": \"Pooled errors can conceal lab-specific bias. The audit compares signed errors and upper-tail errors within each lab and damage state; classification balanced accuracy does not apply to these continuous targets.\"\n    }\n  ],\n  \"rationale\": \"The prior forward check validated the implemented algebra but assumed logarithmic drift on zero-damage rows. This audit tests that assumption against linear drift on held-out real measurements. A consistent improvement in zero-damage strain without worse rate or active-row errors would justify changing the basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ee4db5b42a59ffa5c5a702b49fb07159837ad80eacd54e43ccd2d94eda51f7b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38932.96,
+      "usage_known": true,
+      "prompt_tokens": 27344,
+      "cached_tokens": 11136,
+      "completion_tokens": 1426
+    }
+  ]
+}

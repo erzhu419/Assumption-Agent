@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6bd5698669854212aa55c8921969901e",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:14:06.104195+00:00",
+  "ended_at_utc": "2026-11-27T08:14:40.227957+00:00",
+  "request_sha256": "3b2a6c059ce0184dc266e36e6965dc96d1d44413650a0ca4d213730cfe60be90",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46828,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28191,
+    "cached_tokens": 6784,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_04_solver.py')\\ns = p.read_text()\\nold = '    tail = np.where(plateau[:, None], np.log1p(times), times)'\\nnew = '    # In the low-banding phase, damage gates the two extra terms, not the base tail.\\\\n    tail = np.log1p(times) if banding <= 0.50 else times'\\nassert s.count(old) == 1\\ns = s.replace(old, new).replace('flow[:, None, :] * tail[:, :, None]', 'flow[:, None, :] * tail[None, :, None]')\\np.write_text(s)\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('candidate','alpha_m97_c03_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_m97_c03_batch_04.pkl','rb') as f: items=pickle.load(f)\\nprint('public episodes',len(items))\\nfor item in items:\\n d=item['dataset']; gt=item.get('gt'); print('public reference fields', {k:np.shape(v) for k,v in gt.items()} if isinstance(gt,dict) else type(gt).__name__)\\n out=m.solve_alpha_m97_c03_batch_04(d)\\n for key in ('estimated_taus','hereditary_weights','regime_mode_weights'):\\n  print(key,np.round(out[key],6))\\n  if isinstance(gt,dict) and key in gt and np.shape(gt[key])==out[key].shape:\\n   print('public max abs error',float(np.max(abs(out[key]-gt[key]))))\\n for key in ('predicted_strain','initial_rate_pred'):\\n  if isinstance(gt,dict) and key in gt and np.shape(gt[key])==out[key].shape:\\n   print('public',key,'RMSE',float(np.sqrt(np.mean((out[key]-gt[key])**2))))\\n a=np.column_stack(m._calibrate(d['calibration_load_cells'])); _,x=m._align(d['train'],d['test']); b=d['test']; g,c=a[b['lab_id']].T; hist=g[:,None]*b['past_stress_cmd']+c[:,None]; dt=d['past_dt']; crit=d['crit_stress']; damaged=np.any(abs(hist)>crit,axis=1); assert damaged.any() and (~damaged).any()\\n for banding in (0.50,0.500001):\\n  curve, rate=m._design(b,x,a,dt,np.array([0.,1e-7]),crit,banding)(np.log(out['estimated_taus']))\\n  np.testing.assert_array_equal(curve[:,0],0.)\\n  np.testing.assert_allclose(curve[:,1]/1e-7,rate,rtol=2e-6,atol=2e-7)\\n  assert np.all(curve[~damaged,:,7:]==0) and np.all(rate[~damaged,7:]==0)\\n  assert bool(np.any(rate[damaged,7:]!=0)) == (banding<=.50)\\n print('zero-time derivative and both sides of damage/banding gate passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage switches the base tail → H2 low banding sets the log tail and damage gates only the extra terms; held-out worst clipped strain/rate RMSE improved from 0.30433/0.18226 to 0.24786/0.16567.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Undamaged specimens in the low-banding batch require a linear base tail.\",\n    \"empirical_witness\": \"On held-out labs, complete-coupon undamaged rows had a +0.31263 median terminal residual under the switched tail versus +0.00036 under the shared log tail; median absolute curve error fell from 0.11237 to 0.01419.\",\n    \"causal_blanket_diagnosis\": \"The damage indicator was applied to both the base time basis and the two activation terms, creating a late-time bias even in complete-coupon rows.\",\n    \"sublated_pivot\": \"Keep the logarithmic base tail throughout the low-banding phase, and gate the two existing activation terms by positive damage without changing the specified damaged response.\",\n    \"risk_kind\": \"regime boundary misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use linear flow for all rows\",\n      \"rejected_reason\": \"It violates the specified damaged response and increases the worst clipped initial-rate RMSE to 0.21188.\"\n    }\n  ],\n  \"rationale\": \"Promote the tail change supported by held-out data without changing the damaged-plateau formula. Verify the exact artifact in an isolated process, check the analytic initial rate and both gate boundaries, and inspect public reference fields for a direct accuracy check without using them in fitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a1731c8da372bc28cf97a544b6131ab56c3873f9e3b6c2bfbe9deff10ab0cd22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36620.16,
+      "usage_known": true,
+      "prompt_tokens": 28191,
+      "cached_tokens": 6784,
+      "completion_tokens": 1307
+    }
+  ]
+}

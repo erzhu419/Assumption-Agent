@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "030dfb4c05cb4a429df1697ebd5075a2",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:52:31.507218+00:00",
+  "ended_at_utc": "2026-11-27T07:53:01.610236+00:00",
+  "request_sha256": "3204a333e58fea41bc18b4f5376a96bec52a08a4816b324ea7ade84ee27204ba",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 39449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25650,
+    "cached_tokens": 6784,
+    "completion_tokens": 1142
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nbase='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',base+'alpha_m97_c03_batch_02_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open(base+'public_alpha_m97_c03_batch_02.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; xtr,xte=m._align(tr,te); gain,bias=m._calibrate(d['calibration_load_cells']); o=m.solve_alpha_m97_c03_batch_02(d)\\ndef rmse(e): return np.sqrt(np.mean(e**2))\\ndef report(label, curve, rate):\\n    ec=curve-g['te_clean']; er=rate-g['te_true_rate0']; missing=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\n    print(label, 'curve/rate RMSE complete', rmse(ec[~missing]),rmse(er[~missing]), 'missing',rmse(ec[missing]),rmse(er[missing]), 'worst horizon',max(map(rmse,ec.T)))\\ntau=g['taus']; beta=g['theta']; z=np.zeros((len(te['lab_id']),2))\\nfor s,ds in enumerate(dt):\\n    a=np.exp(-ds/tau); z=a*z+(1-a)*g['te_hist_true'][:,s,None]\\ngaps=g['te_hold_true'][:,None]-z; drift=beta[2]+xte @ beta[3:]; c=te['strain_0'][:,None]+(gaps*beta[:2]) @ (1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t; r=(gaps/tau) @ beta[:2]+drift\\nreport('solver',o['predicted_strain'],o['initial_rate_pred']); report('truth parameters + required alignment',c,r)\\ncv,rv=m._design(te,xte,g['stress_gains'],g['stress_biases'],dt,t)(np.log(tau)); np.testing.assert_allclose(te['strain_0'][:,None]+cv @ beta,c,atol=5e-5,rtol=0); np.testing.assert_allclose(rv @ beta,r,atol=5e-5,rtol=0)\\n# Train without one lab's labeled measurements at a time; keep the specified reference panel.\\ntrain_eval=m._design(tr,xtr,gain,bias,dt,t); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor lab in range(4):\\n    fit=complete & (tr['lab_id']!=lab); test=te['lab_id']==lab; lt,b=m._fit(train_eval,np.where(fit[:,None],y,np.nan),np.where(fit,tr['instant_rate_obs'],np.nan),dt,t)\\n    cv,rv=m._design(te,xte,gain,bias,dt,t)(lt); print('excluded lab',lab,'curve/rate RMSE',rmse((te['strain_0'][:,None]+cv @ b-g['te_clean'])[test]),rmse((rv @ b-g['te_true_rate0'])[test]),'max rel tau error',max(abs(np.exp(lt)/tau-1)))\\nassert np.array_equal(o['regime_mode_weights'],np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and panel alignment → H2 robust two-branch linear flow; public missing-feature RMSE is 0.4874 for strain and 0.1542 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the imputer immediately\",\n      \"rejected_reason\": \"First determine whether the same error remains with public truth parameters and the required alignment; a large missing-feature error alone does not identify a defect.\"\n    }\n  ],\n  \"rationale\": \"Compare the solver against the same physical equations evaluated with public truth parameters, and verify the memory kernel against direct recurrence. Leaving each lab's labels out tests whether the shared coefficients transfer across labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f3c06324648e2e28f3695f469b867dec08110f669ff3576f9d9d035d37480c4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32458.61,
+      "usage_known": true,
+      "prompt_tokens": 25650,
+      "cached_tokens": 6784,
+      "completion_tokens": 1142
+    }
+  ]
+}

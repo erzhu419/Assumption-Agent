@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e96b08236f94309a1333ace8a11b345",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:46:09.072421+00:00",
+  "ended_at_utc": "2026-11-27T07:46:53.219665+00:00",
+  "request_sha256": "ae3e4ff8f65e7eabbe070bf3eef15a0307eaaf1bb468e08467ea2704c5888bd5",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 45585,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27515,
+    "cached_tokens": 11136,
+    "completion_tokens": 1738
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c02_batch_01_solver.py')\\ns = p.read_text()\\nold = \\\"    ay = _axis(study['kappa_y'], study['vel_y'], study['robin_y'], ly / (ny - 1))\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, \\\"    # Fouling seals both axes; the sorption sink is localized at the x walls.\\\\n    ay = _axis(study['kappa_y'], study['vel_y'], 0.0 if sealed else study['robin_y'], ly / (ny - 1))\\\"))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'beta_m97_c02_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor row in pickle.load(open(p+'public_beta_m97_c02_batch_01.pkl','rb')):\\n    s,g=row['study'],row['gt']\\n    out=m.solve_beta_m97_c02_batch_01(s)\\n    z=s['Z_nuisance']; design,_=m._forward(s)\\n    a=np.column_stack((m._calibrate(s),design)); a-=z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@a)\\n    for k,pred,tol in [('S_tilde',a[:,1:],1e-12),('r_y',a[:,0],1e-5),('w_opt',out['weights'],1e-5),('terminal_field_A',out['terminal_field'],1e-5)]:\\n        err=np.linalg.norm(pred-g[k])/np.linalg.norm(g[k]); print(k,'relative L2',err); assert err<tol,k\\n    c=out['kkt_certificate']; print('public KKT gap',c['primal_objective']-c['dual_lower_bound']); assert abs(c['primal_objective']-c['dual_lower_bound'])<1e-10\\n    for mode,mem,sealed in [(0,True,True),(0,False,False),(1,True,False),(1,False,False)]:\\n        d=dict(s,recirculation_loop_mode=mode)\\n        if not mem: d['past_vortex_circulation_trace']=np.full_like(s['past_vortex_circulation_trace'],s['critical_vortex_circulation'])\\n        ref,_=m._forward(d)\\n        for axis in ('x','y'):\\n            key='robin_'+axis; pert,_=m._forward(dict(d,**{key:d[key]+0.4}))\\n            err=np.max(np.abs(pert-ref)); assert err==0 if sealed else err>1e-5,(mode,mem,axis,err)\\n        alt=m.solve_beta_m97_c02_batch_01(dict(d,aux_manifold_telemetry=-1000*d['aux_manifold_telemetry']))\\n        base=m.solve_beta_m97_c02_batch_01(d)\\n        assert np.array_equal(alt['weights'],base['weights']) and np.array_equal(alt['terminal_field'],base['terminal_field'])\\n    print('boundary gate and auxiliary invariance: all four mode/memory combinations passed')\\n    sweep={k:np.array(v) for k,v in s['sensor_calibration_sweeps'].items()}; base=m._calibration_parameters(sweep)\\n    max_emi=0.\\n    for bank in range(4):\\n        inds=np.flatnonzero(sweep['bank_id']==bank)\\n        for i in inds:\\n            for shift in (-4.,4.):\\n                changed={**sweep,'raw_readout':sweep['raw_readout'].copy()}; changed['raw_readout'][i]+=shift\\n                err=np.max(np.abs(m._calibration_parameters(changed)-base)); max_emi=max(max_emi,err); assert err<1e-6,(bank,i,shift,err)\\n        for count in (0,1):\\n            keep=np.ones(sweep['bank_id'].size,dtype=bool); keep[inds[count:]]=False\\n            fitted=m._calibration_parameters({k:v[keep] for k,v in sweep.items()}); prior=json.loads(m._ARCHIVE.read_text()); xy=[(x,y) for ep in prior for b,x,y in zip(ep['bank_id'],ep['ref_signal'],ep['raw_readout']) if b==bank]; x,y=np.array(xy).T\\n            assert np.allclose(fitted[bank],np.polyfit(x,y,1),atol=1e-12)\\n            assert np.array_equal(fitted[np.arange(4)!=bank],base[np.arange(4)!=bank])\\n    print('worst single EMI parameter deviation',max_emi,'; archive fallback passed for zero/one points per bank')\\nrng=np.random.default_rng(80); worst=0.\\nfor _ in range(40):\\n    n=12; a=rng.normal(size=(20,n)); h=a.T@a+0.01*np.eye(n); q=rng.normal(size=n)*5; cap=0.35\\n    for budget in (0,cap,4*cap,5.3*cap,n*cap):\\n        w,nu=m._box_simplex(h,q,cap,budget); g=h@w-q; gap=g@w-nu*budget-cap*np.minimum(0,g-nu).sum()\\n        err=max(abs(w.sum()-budget),-w.min(),w.max()-cap,abs(gap)); worst=max(err,worst); assert err<1e-9,(budget,err)\\nprint('worst feasibility or tangent dual gap across 200 QPs',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 x-only sealing -> H2 seal both axes while retaining x-localized sorption; the two-axis diagnostic gives 8.60e-16 projected-design and 7.41e-16 reference-weight field relative L2 errors.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the 2D reaction field with separable axis reactions\",\n      \"rejected_reason\": \"They coincide on the public study, but the specification supplies the 2D field directly; substituting the separable form would discard supported nonseparable reactions.\"\n    }\n  ],\n  \"rationale\": \"Sealing both axes eliminated the forward mismatch without changing calibration or the inversion. Verify the exact edited artifact in isolation: reference comparisons catch assembly errors, branch perturbations catch over-sealing, and calibration and QP stress cases catch fallback and active-bound errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "aafe6f07598a816dd33a17c4677198196fd4578a46247af4fe5a748fc73f39bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46619.12,
+      "usage_known": true,
+      "prompt_tokens": 27515,
+      "cached_tokens": 11136,
+      "completion_tokens": 1738
+    }
+  ]
+}

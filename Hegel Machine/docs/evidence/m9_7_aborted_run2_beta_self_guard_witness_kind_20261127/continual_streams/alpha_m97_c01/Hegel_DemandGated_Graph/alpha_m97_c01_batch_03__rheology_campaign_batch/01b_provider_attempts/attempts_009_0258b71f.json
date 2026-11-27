@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0258b71f3d8d4511ba8a7ec79de74543",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:55:34.991219+00:00",
+  "ended_at_utc": "2026-11-27T07:56:19.561676+00:00",
+  "request_sha256": "dac851310d4d84f457a0a5228eaadbaf62146c2d8dfecacc72dbab6951ef62d7",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 58210,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31986,
+    "cached_tokens": 11136,
+    "completion_tokens": 1869
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_03_solver.py')\\ns = p.read_text()\\ns = s.replace('''            # With one spike and three rows, all pairs have zero median error.\\n            # Resolve ties by the deviation from the median pair slope.''', '''            # A three-point sweep cannot identify a bad row by pair consensus.\\n            # Inconsistent triples with a possible EMI excursion use the prefix\\n            # sweep to identify the contaminated point, not to fit clean rows.''')\\ns = s.replace('''            clean = residual <= 3.0\\n        xc, yc = x[clean], y[clean]\\n        if len(xc) >= 4 or (len(xc) >= 2 and not emi):''', '''            clean = residual <= 3.0\\n            if len(x) == 3:\\n                worst_by_pair = errors.max(axis=1)\\n                emi = worst_by_pair.min() > 0.01 and worst_by_pair.max() > 3.0\\n        xc, yc = x[clean], y[clean]\\n        if len(xc) >= 4 or (len(x) >= 2 and not emi):\\n            if not emi:\\n                xc, yc = x, y''')\\ns = s.replace('''        if len(xc) >= 2:\\n            params[c] = _line(xc, yc)\\n        elif len(xc) == 1:''', '''        if len(x) < 4 or emi:\\n            clean = np.abs(np.polyval(old, x) - y) <= 3.0\\n            xc, yc = x[clean], y[clean]\\n        if len(xc) >= 2:\\n            params[c] = _line(xc, yc)\\n        elif len(xc) == 1:''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('b03','alpha_m97_c01_batch_03_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('public_alpha_m97_c01_batch_03.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\nbase=s._calibrate(d)\\nworst={}\\nfor lab in range(4):\\n    for kind in ('absent','single','clean_three','spike','sparse_spike'):\\n        for shift in ((-5.,5.) if 'spike' in kind else (0.,)):\\n            for position in (range(3) if kind=='sparse_spike' else (0,)):\\n                q=copy.deepcopy(d); c=q['calibration_load_cells']; ix=np.flatnonzero(c['lab_id']==lab)\\n                keep=np.ones(len(c['lab_id']),bool)\\n                n={'absent':0,'single':1,'clean_three':3,'spike':len(ix),'sparse_spike':3}[kind]\\n                keep[ix[n:]]=False\\n                c['true_stress'][ix[position]]+=shift\\n                q['calibration_load_cells']={k:v[keep] for k,v in c.items()}\\n                err=float(np.max(abs(s._calibrate(q)[lab]-base[lab])))\\n                worst[kind]=max(worst.get(kind,0.),err)\\nprint('max calibration coefficient deviation:',worst)\\nassert max(worst.values())<0.001\\nout=s.solve_alpha_m97_c01_batch_03(d)\\npast,hold,X,z0=s._prepare(d); n=len(d['train']['lab_id']); past,hold,X,z0=past[n:],hold[n:],X[n:],z0[n:]\\ntau=out['estimated_taus']; hw=out['hereditary_weights']; rw=out['regime_mode_weights']; t=d['eval_times']\\nz=np.zeros((len(hold),2))\\nfor j,dt in enumerate(d['past_dt']):\\n    a=np.exp(-dt/tau); z=a*z+(1-a)*past[:,j,None]\\ngap=hold[:,None]-z\\nflow=hw[2]+X@hw[3:7]+rw[0]*np.sign(hold)*np.sqrt(np.abs(hold))\\nprony=1-np.exp(-t[:,None]/tau)\\ncurve=z0[:,None]+(gap*hw[:2])@prony.T+flow[:,None]*t/(1+0.85*t)+rw[1]*np.diff(gap[:,::-1],axis=1)*prony[:,0]\\nrate=(gap*hw[:2])@(1/tau)+flow+rw[1]*(gap[:,0]-gap[:,1])/tau[0]\\nerr=max(np.max(abs(out['predicted_strain']-curve)),np.max(abs(out['initial_rate_pred']-rate)))\\nprint('max strain/rate difference vs direct recurrence and formula:',err)\\nassert err<1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: Cauchy-weighted jammed-slip fit -> H2: resolve ambiguous sparse EMI calibration using the prefix sweep; worst held-out lab median strain error is 0.01691 and initial-rate RMSE is 0.06380.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reject contaminated rows by three-point consensus alone\",\n      \"rejected_reason\": \"Each candidate line fits two points exactly; the observed sparse-spike tests produced coefficient errors as large as 15.36.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified constitutive fit unchanged. Use the historical sweep to identify the bad row only when in-batch calibration is sparse or shows a possible EMI excursion. Test both spike signs and all positions in a three-row sweep, then independently check the memory recurrence and both prediction formulas on the final artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "324281e410a72fa5e7e71bd4234592995a0698a0015dd72d9844dabdc3a6053c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49471.76,
+      "usage_known": true,
+      "prompt_tokens": 31986,
+      "cached_tokens": 11136,
+      "completion_tokens": 1869
+    }
+  ]
+}

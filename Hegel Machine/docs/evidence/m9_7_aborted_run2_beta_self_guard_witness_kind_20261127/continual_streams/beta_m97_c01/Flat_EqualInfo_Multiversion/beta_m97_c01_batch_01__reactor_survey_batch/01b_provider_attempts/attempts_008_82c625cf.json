@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82c625cfe58b4459ae66927d3d6457a6",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:46:11.744392+00:00",
+  "ended_at_utc": "2026-11-27T07:46:36.379718+00:00",
+  "request_sha256": "3669cfc37f428633b0b8bf6223592c52573a8ed4cca5b8fed981eb88d953f3f9",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25694,
+    "cached_tokens": 6784,
+    "completion_tokens": 934
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'beta_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor item in pickle.load(open(p + 'public_beta_m97_c01_batch_01.pkl', 'rb')):\\n    s, g = item['study'], item['gt']\\n    sweeps = {k: np.asarray(s['sensor_calibration_sweeps'][k]) for k in ('bank_id', 'ref_signal', 'raw_readout')}\\n    z = np.asarray(s['Z_nuisance'])\\n    y = m._calibrate(s)\\n    profiled = y - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ y)\\n    for b in range(4):\\n        ii = np.flatnonzero(sweeps['bank_id'] == b)\\n        rows = np.asarray(s['row_bank_id']) == b\\n        errors = []\\n        for i in ii:\\n            keep = np.arange(len(sweeps['bank_id'])) != i\\n            case = dict(s, sensor_calibration_sweeps={k: v[keep] for k, v in sweeps.items()})\\n            train = ii[ii != i]\\n            gain, offset = m._affine(sweeps['ref_signal'][train], sweeps['raw_readout'][train])\\n            out = m.solve_beta_m97_c01_batch_01(case)\\n            errors.append([abs(gain * sweeps['ref_signal'][i] + offset - sweeps['raw_readout'][i]), np.max(np.abs(np.asarray(out['weights']) - g['w_opt'])), np.max(np.abs(np.asarray(out['terminal_field']) - g['terminal_field_A']))])\\n        worst = np.max(errors, axis=0)\\n        print(f'bank {b}: {len(ii)} real sweeps; max held-out raw, weights, terminal errors: {worst}; max profiled observation error: {np.max(np.abs(profiled[rows] - g[\\\"r_y\\\"][rows])):.3g}')\\n        assert np.all(worst < 1e-5), (b, worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Pooled agreement → within-bank calibration stability; the current public maxima are 3.65e-7 for weights and 2.92e-8 for the terminal field, with leave-one-sweep-out results pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear terms or optimize a pooled classification score\",\n      \"rejected_reason\": \"This is a continuous inverse problem with an explicitly specified operator. The corrected projected matrix already matches the public reference to roundoff, and there are no class labels.\"\n    }\n  ],\n  \"rationale\": \"Leave out each real calibration measurement to detect a bank fit that depends on one point, then measure the effect on both deliverables. A failing slice would identify the calibration bank to investigate. The earlier counterfactual tests already covered both recirculation modes and the zero-memory boundary.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a7d4aeb4ada6d6b29fb583d92e47ac36bdd1baa4d341e0443289f8ae594e71f1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27110.81,
+      "usage_known": true,
+      "prompt_tokens": 25694,
+      "cached_tokens": 6784,
+      "completion_tokens": 934
+    }
+  ]
+}

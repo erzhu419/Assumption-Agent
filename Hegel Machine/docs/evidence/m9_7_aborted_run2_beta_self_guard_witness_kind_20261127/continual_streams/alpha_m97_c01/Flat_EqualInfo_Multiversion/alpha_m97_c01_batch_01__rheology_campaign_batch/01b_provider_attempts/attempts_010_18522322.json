@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "185223228bb1471093834f2f179dff80",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:48.878776+00:00",
+  "ended_at_utc": "2026-11-27T07:48:24.902988+00:00",
+  "request_sha256": "0295bbedb8315f6d55b84bb63c003999ff440050b9d9f32c1cd79e0ae86d8c2e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33224,
+    "cached_tokens": 11136,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_01.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr=d['train']; lab=tr['lab_id']; n=len(lab); dt,t=d['past_dt'],d['eval_times']\\np,h,x,s=(v[:n] for v in m._inputs(d)); a=np.tanh(np.maximum(abs(p)-d['crit_stress'],0)**2@dt)\\ny=np.column_stack((tr['strain_curves_obs']-s[:,None],tr['instant_rate_obs']))\\nphi=np.r_[np.log1p(t),1.]; late=np.r_[t**2/(1+t)**2,0.]\\n# Low-dimensional challenger blocks: nonlinear stress attenuation, feature couplings, and a later-time-only drift correction.\\nblocks={\\n 'stress_quotient': (np.column_stack((h,a*h))*(1/(1+(h/np.median(abs(h)))**2)-1)[:,None],phi),\\n 'pairwise_and_triples': (np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)]+[np.prod(np.delete(x,i,axis=1),axis=1) for i in range(4)]),phi),\\n 'late_drift': (np.column_stack((np.ones(n),x,a)),late),\\n 'uncoupled_telemetry_control': (tr['aux_chamber_telemetry'],phi),\\n}\\nextras={k:v[:,None,:]*basis[None,:,None] for k,(v,basis) in blocks.items()}\\nmetrics={k:[] for k in ('baseline',*blocks)}\\nfor channel in np.unique(lab):\\n    train=lab!=channel\\n    lt,w,rw=m._fit(m._Model(dt,t,p[train],h[train],x[train],a[train],True),y[train])\\n    residual=m._Model(dt,t,p,h,x,a,True).design(lt)[0]@np.r_[w,rw]-y\\n    scale=np.r_[np.repeat(1.25*m._mad(residual[train,:-1]),len(t)),1.25*m._mad(residual[train,-1])]\\n    predictions={'baseline':residual}\\n    for name,design in extras.items():\\n        qq=(design[train]/scale[None,:,None]).reshape(-1,design.shape[-1]); target=(residual[train]/scale).ravel()\\n        opt=least_squares(lambda b: qq@b+target,np.zeros(qq.shape[1]),jac=lambda b:qq,loss='cauchy',max_nfev=100)\\n        predictions[name]=residual+design@opt.x\\n    for name,rr in predictions.items():\\n        for damaged in (False,True):\\n            q=(~train)&((a>0)==damaged); z=rr[q]; metrics[name].append([np.median(abs(z[:,:-1])), np.mean(abs(z[:,-1])), abs(np.median(z[:,-2])), np.quantile(abs(z[:,:-1]),.90)])\\n    print('lab',channel,'baseline signed medians by damage (final strain, initial rate)',[np.round(np.median(residual[(~train)&((a>0)==v),-2:],axis=0),5).tolist() for v in (False,True)])\\nfor name,values in metrics.items():\\n    values=np.asarray(values); print(name,'worst slice [curve MedAE, rate MAE, |final signed median|, curve P90]',np.round(values.max(axis=0),6),'slices improving curve/rate',np.sum(values[:,:2]<np.asarray(metrics['baseline'])[:,:2],axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupon-gated drift → H2 batch-gated logarithmic drift with damage-dependent corrections; verified worst held-out lab × damage strain MedAE is 0.01704 and initial-rate MAE is 0.04532.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, stochastic control operators, and classification balance\",\n      \"rejected_reason\": \"The task predicts continuous strain and rate and has no relay state, stochastic control operator, or class labels. The applicable checks are phase dispatch, nonlinear residual structure, and within-lab errors.\"\n    }\n  ],\n  \"rationale\": \"This audit tests whether the remaining error reflects a missing nonlinear stress or coupon term, late drift, or a lab-level effect hidden by pooling. Fit each diagnostic correction without the held-out lab and compare the two outputs separately; pursue a correction only if it materially improves a verified bottleneck across labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "979cfb61ac39fa1df1c19cdd5901731f08d4ff36e7c221469c489f27b886338a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38419.22,
+      "usage_known": true,
+      "prompt_tokens": 33224,
+      "cached_tokens": 11136,
+      "completion_tokens": 1411
+    }
+  ]
+}

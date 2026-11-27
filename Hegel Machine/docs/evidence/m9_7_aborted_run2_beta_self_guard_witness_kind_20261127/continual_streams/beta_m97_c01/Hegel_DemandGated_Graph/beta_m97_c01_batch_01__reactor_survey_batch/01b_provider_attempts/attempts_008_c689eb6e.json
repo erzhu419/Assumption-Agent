@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c689eb6eef3044eba462a3337e2bf07a",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:51.207666+00:00",
+  "ended_at_utc": "2026-11-27T07:46:32.443752+00:00",
+  "request_sha256": "5b7ab59d8abf463e4d26b93b057e944694b794493692f9454d868b382c7a9485",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37881,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24546,
+    "cached_tokens": 11136,
+    "completion_tokens": 1649
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c01_batch_01_solver.py')\\ns = p.read_text().replace('Reactor tomography with vortex-triggered membrane fouling with a box-simplex KKT certificate.', 'Reactor tomography with vortex-triggered membrane fouling and a box-simplex KKT certificate.')\\ns = s.replace('    coeffs = np.empty((4, 2))\\\\n', '    coeffs = np.empty((4, 2))\\\\n    history = None\\\\n', 1)\\na = s.index('        prior = None', s.index('def _calibrate('))\\nb = s.index('    gain, offset', a)\\ns = s[:a] + '''        if clean.sum() >= 4 or (x.size >= 2 and not has_emi and np.unique(x[clean]).size >= 2):\\n            coeffs[b] = _affine(x[clean], y[clean])\\n            continue\\n        if x.size < 2 or has_emi:\\n            if history is None:\\n                history = json.loads(_ARCHIVE.read_text())\\n            for sweep in reversed(history):\\n                select = np.asarray(sweep['bank_id']) == b\\n                x0 = np.asarray(sweep['ref_signal'])[select]\\n                y0 = np.asarray(sweep['raw_readout'])[select]\\n                good = _clean_calibration(x0, y0)\\n                if np.unique(x0[good]).size >= 2:\\n                    coeffs[b] = _affine(x0[good], y0[good])\\n                    break\\n            else:\\n                raise ValueError(f'No usable archived calibration for bank {b}')\\n            continue\\n        raise ValueError(f'Bank {b} needs two distinct clean references')\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport copy, json, pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\nm=runpy.run_path(p+'beta_m97_c01_batch_01_solver.py')\\ncase=pickle.load(open(p+'public_beta_m97_c01_batch_01.pkl','rb'))[0]; base=case['study']; gt=case['gt']\\nsolve=m['solve_beta_m97_c01_batch_01']; first=solve(base)\\nfor result, key, tol in [('weights','w_opt',1e-6),('terminal_field','terminal_field_A',1e-7)]:\\n    err=np.max(np.abs(first[result]-gt[key])); print(result,'public max error',err); assert err<tol\\nprior=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))[-1]\\nb0,x0,y0=(np.asarray(prior[k]) for k in ('bank_id','ref_signal','raw_readout'))\\ncoeff=np.array([np.linalg.lstsq(np.column_stack((x0[b0==i],np.ones(np.count_nonzero(b0==i)))),y0[b0==i],rcond=None)[0] for i in range(4)])\\ncoeff[2:]=[[1.6,-.2],[.65,.3]]\\nbanks=np.repeat(np.arange(4),[1,4,5,3]); x=np.concatenate([np.linspace(-1,1,n) for n in [1,4,5,3]])\\ny=coeff[banks,0]*x+coeff[banks,1]; y[2]-=9; y[7]+=9\\ns=copy.deepcopy(base); s['sensor_calibration_sweeps']=dict(bank_id=banks,ref_signal=x,raw_readout=y)\\nb=np.asarray(s['row_bank_id']); target=np.linspace(-.2,.2,b.size); s['y_obs_raw']=coeff[b,0]*target+coeff[b,1]\\ncal_error=m['_calibrate'](s)-target\\nfor i in range(4):\\n    err=np.max(np.abs(cal_error[b==i])); print('calibration bank',i,'max error',err); assert err<1e-12\\ns=copy.deepcopy(base); s['aux_manifold_telemetry']=None\\nassert np.array_equal(first['weights'],solve(s)['weights'])\\nS,_=m['_forward'](s); z=s['Z_nuisance']; y=m['_calibrate'](s)\\na=np.column_stack((y,S)); a-=z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@a)\\nr,T=a[:,0],a[:,1:]; cap=s['u_box']; ridge=s['source_ridge']; n=T.shape[1]; worst=np.zeros(3)\\nfor budget in np.asarray([0.,.001,1.,2.6,6.,n-.001,n])*cap:\\n    s['total_budget']=budget\\n    out=solve(s); w=out['weights']; c=out['kkt_certificate']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); e=T@w-r\\n    g=T.T@e+ridge*w; obj=.5*(e@e+ridge*(w@w))\\n    assert abs(c['primal_objective']-obj)<1e-12 and c['dual_lower_bound']<=obj+1e-12\\n    assert min(w.min(),cap-w.max(),lo.min(),hi.min())>=-1e-12\\n    worst=np.maximum(worst,[abs(w.sum()-budget),np.max(np.abs(g-c['nu_sum']-lo+hi)),max(np.max(lo*w),np.max(hi*(cap-w)),obj-c['dual_lower_bound'])])\\nprint('worst budget/stationarity/complementarity-or-gap residuals:',worst)\\nassert np.max(worst)<1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin-only reactor → H2 conditional sealed-wall reactor with bank-specific calibration; public maximum weight and field errors were 3.65e-7 and 2.92e-8, while archive fallback remains unverified.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The fallback reader incorrectly treats the archive as a bank-keyed dictionary; the file actually contains raw sweeps. Fit the latest usable archived sweep only when fallback is needed, then verify sparse and spiked banks, public accuracy, and KKT residuals across tight budget faces.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d49baa1ad52eb0f16fdab886c9c384e86373f4d6761a2595ee2f82d23932befd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43663.73,
+      "usage_known": true,
+      "prompt_tokens": 24546,
+      "cached_tokens": 11136,
+      "completion_tokens": 1649
+    }
+  ]
+}

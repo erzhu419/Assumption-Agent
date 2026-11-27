@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acd75241213141a297e75f27ee66ac72",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:49:03.639410+00:00",
+  "ended_at_utc": "2026-11-27T07:49:44.062559+00:00",
+  "request_sha256": "b9f928237c284cd1f0ec44908e2b6ca9189fd5ff866a7c714cbe3e3f5cda089c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74173,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36995,
+    "cached_tokens": 11136,
+    "completion_tokens": 1652
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c02_batch_01_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_01.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; gt=i['gt']; n=len(tr['lab_id']); x=m._align(d); cal=m._calibration(d); out=m.solve_alpha_m97_c02_batch_01(d); tau=out['estimated_taus']; w=out['hereditary_weights']; rw=out['regime_mode_weights']\\n# Independent closed-form history sum and handoff reconstruction, including the banding boundary.\\na=m._inputs(d,te,cal,x[n:]); past,hold,dt,time,f=a[:5]; tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; z=past @ (-np.expm1(-dt[:,None]/tau)*np.exp(-tail[:,None]/tau)); gap=hold[:,None]-z; damage=np.maximum(abs(past)-d['crit_stress'],0)**2 @ dt\\nfor idx in (.50,.500001):\\n    low=idx<=.50; act=np.tanh(damage)*low; amp=gap*w[:2]; amp[:,0]+=rw[0]*act*hold; drift=f@w[2:]+rw[1]*act*z[:,0]; curve=amp@(-np.expm1(-time[:,None]/tau)).T+drift[:,None]*(np.log1p(time) if low else time); rate=amp@(1/tau)+drift\\n    b=m._inputs(dict(d,shear_banding_index=idx),te,cal,x[n:]); c,r,*_=m._design(np.log(tau),*b); err=max(np.max(abs(curve-c@np.r_[w,rw])),np.max(abs(rate-r@np.r_[w,rw]))); print('banding',idx,'closed-form max mismatch',err); assert err<1e-10\\n# Signed out-of-lab residuals detect a pooled cancellation or a stress-dependent missing term.\\na=m._inputs(d,tr,cal,x[:n]); obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rates=tr['instant_rate_obs']; complete=np.isfinite(tr['coupon_features_raw']).all(1); labs=tr['lab_id']; damage_on=a[-2]>0; magnitude=np.abs(a[1]); edges=np.quantile(magnitude[complete],[.25,.75]); ec=np.zeros_like(obs); er=np.zeros_like(rates)\\nfor lab in range(4):\\n    fit=labs!=lab; check=~fit; q=m._fit(m._take_inputs(a,fit),obs[fit],rates[fit]); c,r,*_=m._design(q[:2],*m._take_inputs(a,check)); ec[check]=c@q[2:]-obs[check]; er[check]=r@q[2:]-rates[check]\\nfor lab in (-1,0,1,2,3):\\n    for regime in (False,True):\\n        sel=complete & ((labs==lab) if lab>=0 else True) & (damage_on==regime)\\n        if np.any(sel): print('lab/regime/n',lab,regime,sel.sum(),'signed curve/rate median',np.round([np.median(ec[sel]),np.median(er[sel])],5),'absolute medians',np.round([np.median(abs(ec[sel])),np.median(abs(er[sel]))],5))\\nfor name,sel in [('low hold magnitude',magnitude<=edges[0]),('high hold magnitude',magnitude>=edges[1])]:\\n    sel=sel&complete; print(name,'signed curve/rate median',np.round([np.median(ec[sel]),np.median(er[sel])],5))\\n# Combined sparse-channel degradation: a one-channel audit would miss anchor starvation.\\nc=d['calibration_load_cells']; ids=c['lab_id'];\\nfor sparse_labs in ((0,1),(2,3),(0,1,2)):\\n    keep=~np.isin(ids,sparse_labs)\\n    for lab in sparse_labs[1:]: keep[np.flatnonzero(ids==lab)[0]]=True\\n    dd=dict(d,calibration_load_cells={k:v[keep] for k,v in c.items()}); est=m.solve_alpha_m97_c02_batch_01(dd); complete_test=np.isfinite(te['coupon_features_raw']).all(1); slice_=complete_test&np.isin(te['lab_id'],sparse_labs); e=[np.sqrt(np.mean((est[k][slice_]-gt[g][slice_])**2)) for k,g in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]]; print('simultaneous sparse',sparse_labs,'complete-coupon RMSE',np.round(e,5))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated and aligned measurements -> H2: damage-gated Prony response with low-banding logarithmic drift; worst single-channel masked-sweep strain/rate RMSE is 0.08056/0.06069.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational stress terms, a stochastic drift operator, or relay modes\",\n      \"rejected_reason\": \"The specified model has no stochastic state or relay, and the existing stress differences and damage saturation follow the constitutive equation. Check for a held-out stress-dependent residual before adding terms.\"\n    }\n  ],\n  \"rationale\": \"Compare the solver to an independent closed-form history sum at the banding threshold. Check signed residuals within held-out labs so pooled cancellation cannot hide bias, and mask several sweeps at once to see whether too few clean anchors destabilize calibration. Change the solver only if these checks expose a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0f2d67d90d180e1843234932c03996a087d53422f907d36e9f217b85d02bee5d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45328.07,
+      "usage_known": true,
+      "prompt_tokens": 36995,
+      "cached_tokens": 11136,
+      "completion_tokens": 1652
+    }
+  ]
+}

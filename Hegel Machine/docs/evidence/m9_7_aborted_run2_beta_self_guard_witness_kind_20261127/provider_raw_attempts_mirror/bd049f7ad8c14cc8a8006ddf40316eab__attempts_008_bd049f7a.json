@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd049f7ad8c14cc8a8006ddf40316eab",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:11:20.043503+00:00",
+  "ended_at_utc": "2026-11-27T08:11:59.508920+00:00",
+  "request_sha256": "9c3a4da6d696881a1798617e9b4bd9881c884365e0341d285f26f07cb9045e78",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55602,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31344,
+    "cached_tokens": 6784,
+    "completion_tokens": 1485
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,112p;175,240p' /holdout_task/alpha_m97_c01_batch_05_solver.py\\ncat > /tmp/batch05_compare.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\npath = '/holdout_task/alpha_m97_c01_batch_05_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_05.pkl', 'rb'))[0]\\nd = item['dataset']\\na = d['train']\\np,h,x,b = m._inputs(d)\\nn = len(a['lab_id'])\\ny = np.column_stack((a['strain_curves_obs'] - b[:n,None], a['instant_rate_obs']))\\nmodel = m._Model(d,p,h,x)\\ncomplete = np.isfinite(a['coupon_features_raw']).all(axis=1)\\n\\n\\ndef refine(indices, base, mode):\\n    t,w = base\\n    target = y[indices]\\n    r = model.design(t,indices) @ w - target\\n    scale = 1.4826 * np.median(np.abs(r-np.median(r,axis=0)),axis=0)\\n    scale = np.maximum(scale, np.median(scale)*0.5)\\n    if mode == 'pooled':\\n        scale[:-1] = np.median(scale[:-1])\\n    for iteration in range(7):\\n        u = r / (4.685*scale if mode == 'trim' else 2.385*scale)\\n        if mode == 'trim':\\n            weight = np.maximum(1-u**2,0) / scale\\n        else:\\n            weight = 1 / (scale*np.sqrt(1+u**2))\\n        weight = weight.ravel()\\n        ncols = 9 if np.any(model.act[indices]) else 7\\n        def project(t):\\n            mat = model.design(t,indices)[:,:,:ncols].reshape(-1,ncols)\\n            coef = np.linalg.lstsq(mat*weight[:,None],target.ravel()*weight,rcond=None)[0]\\n            return np.pad(coef,(0,9-ncols)), (mat@coef).reshape(target.shape)-target\\n        t = least_squares(lambda t: project(t)[1].ravel()*weight,t,bounds=(np.log(.02),np.log(100)),diff_step=1e-4,max_nfev=60,ftol=1e-8).x\\n        w,r = project(t)\\n    return t,w\\n\\nmodes = ('base','pooled','per_horizon','trim')\\nresults = {k:np.empty_like(y) for k in modes}\\nfits = {k:[] for k in modes}\\nfor lab in range(5):\\n    train = np.flatnonzero(complete & (a['lab_id'] != lab))\\n    val = np.flatnonzero(a['lab_id'] == lab)\\n    base = m._fit(model,y,train)\\n    for mode in modes:\\n        t,w = base if mode == 'base' else refine(train,base,mode)\\n        results[mode][val] = model.design(t,val)@w-y[val]\\n        fits[mode].append(np.exp(t))\\n        if lab == 4:\\n            z = model.design(t,slice(n,None))@w\\n            e = z-np.column_stack((item['gt']['te_clean']-b[n:,None],item['gt']['te_true_rate0']))\\n            print(mode,'full tau',np.exp(t),'weights',np.round(w,5),'public RMSE',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)))\\nfor mode,r in results.items():\\n    scores=[]\\n    for lab in range(4):\\n        for gate in (False,True):\\n            ix=complete&(a['lab_id']==lab)&((model.act[:n]>0)==gate)\\n            c=r[ix,:-1]; rate=r[ix,-1]\\n            scores.append([np.sqrt(np.mean(np.minimum(abs(c),.10)**2)),np.sqrt(np.mean(rate**2)),np.median(abs(c))])\\n    print(mode,'LOLO taus',np.round(fits[mode][:4],4),'mean and worst (clipped curve RMSE, rate RMSE, curve MAE median)',np.round(np.mean(scores,axis=0),5),np.round(np.max(scores,axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch05_compare.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (calibrated stress and cell-balanced alignment) -> H2 (gated Prony plateau with a robust joint fit); worst public lab-by-regime RMSE is 0.1470 for strain and 0.1128 for rate, with missing coupon features dominating both.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the prescribed imputation to improve lab 2\",\n      \"rejected_reason\": \"Even the supplied physical parameters give 0.245 strain RMSE on incomplete lab-2 coupons, versus 0.00085 on complete ones. A different imputer would change the task's alignment rule.\"\n    }\n  ],\n  \"rationale\": \"The current fit estimates noise scales from a least-squares seed exposed to the largest spikes. Test scales estimated from a robust seed and compare pointwise weighting rules on held-out labs, measuring strain and rate separately. Keep the baseline unless the challenger improves the worst measured slices or stabilizes parameter estimates without materially degrading either endpoint.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "926a2e37a58f33e63158f61a070fb1fcb18ae17cc0c149e9a41c258aaa3ac25c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42011.41,
+      "usage_known": true,
+      "prompt_tokens": 31344,
+      "cached_tokens": 6784,
+      "completion_tokens": 1485
+    }
+  ]
+}

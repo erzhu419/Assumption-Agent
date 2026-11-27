@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e50ac4eecae4493cb61d5d66baab2329",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:07:02.106021+00:00",
+  "ended_at_utc": "2026-11-27T08:07:38.351119+00:00",
+  "request_sha256": "05d769171d7de1e801ef1dc605f3de9518394fdb51bfd7515727335867ced5ed",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63166,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33556,
+    "cached_tokens": 6784,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nexec(open('/tmp/batch04_cv.py').read().split(\\\"print('damage counts\\\")[0])\\nfrom scipy.optimize import least_squares\\nraw = np.concatenate([d[s]['coupon_features_raw'] for s in ('train','test')]); complete = np.isfinite(raw).all(axis=1)[:n]\\nprint('calibration rows by channel:', np.bincount(d['calibration_load_cells']['lab_id'],minlength=4), 'coefficients:', m._calibrate(d).round(7).tolist())\\nprint('yield stress:',d['yield_stress'],'shear banding index:',d['shear_banding_index'])\\nq=x[:n]; a=model.act[:n]; h=hold[:n]; i,j=np.triu_indices(q.shape[1],1)\\n# Candidate omitted drift terms: pair contrasts/products, triple products, and stress/coupon rational damping.\\nextra=np.column_stack([q[:,i]-q[:,j], q[:,i]+q[:,j], q[:,i]*q[:,j], q[:,[0,0,0,1]]*q[:,[1,1,2,2]]*q[:,[2,3,3,3]], h/(1+h*h), a*h/(1+h*h), q/(1+h[:,None]**2)])\\nfor name,groups in [('lab',labs),('stratum',strata)]:\\n base=np.empty_like(y); adjusted=np.empty_like(y)\\n for g in np.unique(groups):\\n  test=groups==g; keep=complete & ~test\\n  lt,w=m._fit(model,y,ids[keep]); u=model.design(lt,ids)@w\\n  # Project onto the shared log-flow basis; use robust loss on complete training coupons only.\\n  f=model.flow[:n]; r=y-u\\n  scale=np.maximum(1.4826*np.median(abs(r[keep]-np.median(r[keep],axis=0)),axis=0),1e-6)\\n  B=np.concatenate((np.ones((n,1)),q,extra),axis=1)\\n  A=f[keep,:,None]*B[keep,None,:]/scale[None,:,None]\\n  v=least_squares(lambda b:(A@b-r[keep]/scale).ravel(),np.zeros(B.shape[1]),loss='cauchy',f_scale=2.385).x\\n  base[test]=u[test]; adjusted[test]=u[test]+f[test]*(B[test]@v)[:,None]\\n def scores(pred):\\n  r=pred-y; slices=[(groups==g)&((a>0)==active)&complete for g in np.unique(groups) for active in (False,True)]\\n  return np.max([[np.median(abs(r[s,:-1])),np.median(abs(r[s,-1])),abs(np.median(r[s,-2])),abs(np.median(r[s,-1]))] for s in slices if s.any()],axis=0).round(6).tolist()\\n print(name,'complete-slice worst [median strain abs, median rate abs, final strain bias, rate bias]:',scores(base),'with extra terms:',scores(adjusted))\\n r=base-y\\n print(name,'slice counts and signed residual summaries:',[(int(g),int(np.sum((groups==g)&complete)),np.median(r[(groups==g)&complete,-2: ],axis=0).round(6).tolist()) for g in np.unique(groups)])\\n for supported,label in [(complete,'observed coupons'),(~complete,'imputed coupons')]:\\n  print(name,label,'median strain/rate error:',round(np.median(abs(r[supported,:-1])),6),round(np.median(abs(r[supported,-1])),6))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the calibrated two-branch model with shared logarithmic drift and gated crystallization gives worst held-out median absolute errors of 0.01418 for strain and 0.01551 for initial rate; the remaining audit tests for omitted drift terms and lab bias.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, stochastic-control, or balanced-accuracy tests\",\n      \"rejected_reason\": \"The public task is deterministic creep regression, with no relay states, stochastic-control operator, or classification labels. Signed residuals by held-out lab and regime directly test nuisance bias here.\"\n    }\n  ],\n  \"rationale\": \"A held-out reduction in systematic error from pairwise, higher-order, or rational drift terms would prompt a focused check of the corresponding basis term. Separating observed from imputed coupons tests whether the remaining error follows missing features rather than lab calibration. The isolated schema check verifies that the saved solver still satisfies the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "02a576bc6995cd9c38fbae5ff78db1e2929108f93bdcebff25d8f88326e58388",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38776.38,
+      "usage_known": true,
+      "prompt_tokens": 33556,
+      "cached_tokens": 6784,
+      "completion_tokens": 1353
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a156803833a24dd383858b5c66556a13",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:44:03.691803+00:00",
+  "ended_at_utc": "2026-11-27T07:44:23.347896+00:00",
+  "request_sha256": "27a72bd1eb45ade1d4f0c1ed157a7185f7e7a228295f3ed315f1e768db4878d9",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 30078,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22176,
+    "cached_tokens": 11136,
+    "completion_tokens": 676
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom pprint import pprint\\nobj=pickle.load(open('/holdout_task/public_beta_m97_c02_batch_01.pkl','rb'))\\nprint(type(obj),len(obj)); print('entry',type(obj[0]), list(obj[0]) if isinstance(obj[0],dict) else [type(a).__name__ for a in obj[0]])\\nfor i,item in enumerate(obj):\\n d=item.get('study',item) if isinstance(item,dict) else next(a for a in item if isinstance(a,dict) and 'nx' in a)\\n s=d['sensor_calibration_sweeps']; b=np.asarray(s['bank_id']); x=np.asarray(s['ref_signal']); y=np.asarray(s['raw_readout']); print(i,list(d) if i==0 else '',[d.get(k) for k in ('recirculation_loop_mode','nx','ny','robin_x','robin_y','critical_vortex_circulation')],np.shape(d['y_obs_raw']),[(int((b==j).sum()),round(float(np.ptp(y[b==j])),3) if (b==j).any() else None) for j in range(4)]); print('trace',np.asarray(d['past_vortex_circulation_trace']).ravel()[:12]); print('sweeps',[(x[b==j].tolist(),y[b==j].tolist()) for j in range(4)])\\nPY\\npython3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'));print(type(p),list(p)); print([(str(k),list(v) if isinstance(v,dict) else type(v).__name__) for k,v in (p.items() if isinstance(p,dict) else enumerate(p))]);print({k:{a:b for a,b in v.items() if a in ('gain','offset')} for k,v in p.items()} if isinstance(p,dict) else '')\\nPY\\nsed -n '51,135p' /holdout_task/validate_public_schema.py\\nhead -c 2800 /holdout_task/public_asset_index.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived Robin assembly -> H2 conditionally sealed transport with bankwise calibration; no slice measured yet because the public pickle is list-rooted.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived calibration unchanged\",\"rejected_reason\":\"The public bank counts and archive layout must determine whether its fallback and spike handling match this batch.\"}],\"rationale\":\"Inspect the list entries and compact bank summaries to identify missing or contaminated sweeps. Read the validator’s entry point to match the required callable and test the correct public cases.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a62e30d4f13cbbe3c34489fc10b671fa1264b3ccc3b2791eb9ec08cdb7683b9f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22110.89,
+      "usage_known": true,
+      "prompt_tokens": 22176,
+      "cached_tokens": 11136,
+      "completion_tokens": 676
+    }
+  ]
+}

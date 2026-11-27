@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1970ab6d4d47451486bb355a07cd9802",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:54:26.472147+00:00",
+  "ended_at_utc": "2026-11-27T07:55:33.951606+00:00",
+  "request_sha256": "846e4116240881112b8c90089729956a1e31ae5b89c0da37f360ea199233d658",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26201,
+    "cached_tokens": 6784,
+    "completion_tokens": 880
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,72p' /holdout_task/alpha_m97_c03_batch_02_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',root+'alpha_m97_c03_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open(root+'public_alpha_m97_c03_batch_02.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; xtr,xte=m._align(tr,te); gain,bias=m._calibrate(d['calibration_load_cells']); a=m._design(tr,xtr,gain,bias,dt,t); b=m._design(te,xte,gain,bias,dt,t)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1); complete_te=np.isfinite(te['coupon_features_raw']).all(axis=1); errs=[]\\nfor horizon in (0,len(t)//2,len(t)-1):\\n    fit_y=np.where(complete[:,None],y,np.nan); fit_y[:,horizon]=np.nan\\n    lt,w=m._fit(a,fit_y,np.where(complete,tr['instant_rate_obs'],np.nan),dt,t); cv,_=b(lt)\\n    e=te['strain_0']+cv[:,horizon]@w-g['te_clean'][:,horizon]\\n    lab_stats=[(float(np.sqrt(np.mean(e[q]**2))),float(e[q].mean())) for lab in range(4) if (q:=complete_te & (te['lab_id']==lab)).any()]; errs.extend(lab_stats)\\n    print('withheld horizon',horizon,'complete-feature lab RMSE/signed error',np.round(lab_stats,6).tolist())\\nprint('worst held-out horizon/lab RMSE',max(r for r,_ in errs),'worst absolute signed error',max(abs(b) for _,b in errs))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and panel alignment → H2 two-branch memory with linear terminal flow; worst public missing-feature RMSE is 0.4874 for strain and 0.1542 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit rational drift, relay modes, or a classifier\",\n      \"rejected_reason\": \"The specified outputs are continuous, with linear terminal flow and zero regime weights. A held-out time point tests the relevant algebraic failure: systematic curvature missed by the prescribed model.\"\n    }\n  ],\n  \"rationale\": \"Leave early, middle, and late horizons out of the fit in turn, then score signed errors separately by lab on complete-feature public coupons. A systematic time-by-lab error would warrant auditing the alignment or memory terms; without it, adding nonlinear terms would be unsupported.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a1f34218b57c09f9df6b93eb4cab32720f948b3c1a3f3b54d265a5ef7f73a876",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 72446.59,
+      "usage_known": true,
+      "prompt_tokens": 26201,
+      "cached_tokens": 6784,
+      "completion_tokens": 880
+    }
+  ]
+}

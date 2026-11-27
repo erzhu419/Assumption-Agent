@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38e5357a84414238b3778de4f4e40b72",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:28:18.579777+00:00",
+  "ended_at_utc": "2026-11-27T08:28:53.670719+00:00",
+  "request_sha256": "1ac29cc9145f3ec5d24fa5dfabc5812473641ca2cc67e24c05cd9fcaf94d90b1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 58868,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31275,
+    "cached_tokens": 6784,
+    "completion_tokens": 1382
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheology_batch07_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'alpha_m97_c03_batch_07_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c03_batch_07.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    d, gt = item['dataset'], item['gt']\\n    tr, te = d['train'], d['test']\\n    print('dataset fields', sorted(d), 'coupon fields', sorted(te))\\n    c = d['calibration_load_cells']\\n    print('current calibration rows by lab', np.bincount(c['lab_id'], minlength=4))\\n    print('calibration command range', np.min(c['cmd_stress']), np.max(c['cmd_stress']))\\n    out = m.solve_alpha_m97_c03_batch_07(d)\\n    tau = out['estimated_taus']\\n    w = np.r_[out['hereditary_weights'], out['regime_mode_weights']]\\n    _, x = m._align(tr, te)\\n    cal = m._calibrate(c)\\n    gain, bias = cal[te['lab_id']].T\\n    past = te['past_stress_cmd'] * gain[:, None] + bias[:, None]\\n    hold = te['stress_hold_cmd'] * gain + bias\\n    z = np.zeros((len(hold), 2))\\n    damage = np.zeros(len(hold))\\n    for s, dt in enumerate(d['past_dt']):\\n        decay = np.exp(-dt / tau)\\n        z = decay * z + (1 - decay) * past[:, s, None]\\n        damage += np.maximum(0, np.abs(past[:, s]) - d['crit_stress'])**2 * dt\\n    gap = hold[:, None] - z\\n    t = d['eval_times']\\n    for band in (d['shear_banding_index'], 0.50, 0.500001):\\n        act = np.tanh(damage) if band <= 0.5 else np.zeros_like(damage)\\n        drift = w[2] + x @ w[3:7] + w[8] * act * z[:, 0]\\n        prony = (gap * w[:2]) @ (1 - np.exp(-t[:, None] / tau)).T\\n        surge = (w[7] * act * hold)[:, None] * (1 - np.exp(-t / tau[0]))\\n        explicit = prony + surge + drift[:, None] * (np.log1p(t) if band <= 0.5 else t)\\n        initial = (gap * w[:2] / tau).sum(1) + drift + w[7] * act * hold / tau[0]\\n        C, V = m._design(te, x, cal, d['past_dt'], t, d['crit_stress'], band)(tau)\\n        np.testing.assert_allclose(C @ w, explicit, atol=1e-12, rtol=0)\\n        np.testing.assert_allclose(V @ w, initial, atol=1e-12, rtol=0)\\n    # Look for a signed lab effect that pooled RMSE could hide. Missing-feature\\n    # coupons are a separate slice, not evidence of a lab offset.\\n    observed = np.isfinite(te['coupon_features_raw']).all(1)\\n    ce = out['predicted_strain'] - gt['te_clean']\\n    re = out['initial_rate_pred'] - gt['te_true_rate0']\\n    for lab in np.unique(te['lab_id']):\\n        k = observed & (te['lab_id'] == lab)\\n        print('complete lab', lab, int(k.sum()), 'signed terminal/rate bias', np.mean(ce[k, -1]), np.mean(re[k]), 'terminal/rate RMSE', np.sqrt(np.mean(ce[k, -1]**2)), np.sqrt(np.mean(re[k]**2)))\\n    print('explicit memory and curve/rate identities passed at the measured band and both threshold sides')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_batch07_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled error could hide a recurrence or lab-alignment defect -> H2 check the explicit recurrence and signed within-lab residuals; current worst-lab strain/rate RMSE is 0.0904/0.0686.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, pairwise, or relay terms and compare pooled fit\",\n      \"rejected_reason\": \"The stated model is a deterministic two-branch recurrence with a scalar regime gate, not a relay, PDE, or classification model. An independent algebraic check can detect a missing or mis-signed term without fitting unsupported operators.\"\n    }\n  ],\n  \"rationale\": \"A recurrence or derivative mismatch calls for a basis fix. A material signed bias on complete coupons confined to one lab calls for an alignment or calibration investigation. The audit separates those failure modes from the already measured loss due to missing features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9365ad719c3395b582f523957170129fcc3fc81cb5be40d7a22893f340bdcdca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38956.78,
+      "usage_known": true,
+      "prompt_tokens": 31275,
+      "cached_tokens": 6784,
+      "completion_tokens": 1382
+    }
+  ]
+}

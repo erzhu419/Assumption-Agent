@@ -1,0 +1,97 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c03_s00_c2291d934fbd",
+    "source_hash": "c2291d934fbd68355937525b78ac431ee8c35430256f40d20f94081f2a0e958a",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c03_s00__rheology_campaign_baseline",
+    "task_id": "alpha_m97_c03_s00__rheology_campaign_baseline",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheology_margin_audit.py",
+        "archived_relpath": "producers/tmp__rheology_margin_audit.py",
+        "bytes": 2302,
+        "sha256": "7ae30faffedd329fd14a4a4a971026a039d7bb25d7731166a33d823162d640db"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_alpha_m97_c03_s00.pkl','rb') as f: d=pickle.load(f)\ndef desc(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,end=' ')\n  if isinstance(v,dict):\n   print(); desc(v,depth+2)\n  elif isinstance(v,np.ndarray):\n   print(v.shape,v.dtype,repr(v.ravel()[:8]))\n  elif isinstance(v,(tuple,list)):\n   print(len(v),repr(v[0])[:400] if len(v) else '')\n  else: print(repr(v)[:300])\ndesc(d)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS referen",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_alpha_m97_c03_s00.pkl','rb') as f: items=pickle.load(f)\nprint('public cases:',len(items))\ndef desc(d, depth=0):\n for k,v in d.items():\n  p=' '*depth+str(k)\n  if isinstance(v,dict):\n   print(p); desc(v,depth+2)\n  elif isinstance(v,np.ndarray):\n   print(p,v.shape,v.dtype,repr(v.ravel()[:8]))\n  elif isinstance(v,(tuple,list)):\n   print(p,type(v).__name__,len(v),repr(v[0])[:500] if v else '')\n  else: print(p,repr(v)[:400])\nprint('case keys:', list(items[0])); desc(items[0]['dataset'])\nPY\nPYTHONPATH=/tmp python3",
+      "cd /holdout_task && python3 - <<'PY'\nimport importlib.util,json,pickle\nimport numpy as np\nitem=pickle.load(open('public_alpha_m97_c03_s00.pkl','rb'))[0]; d=item['dataset']\nprint('scipy:',importlib.util.find_spec('scipy') is not None)\nprint('ground-truth keys, for validation only:',[(k,np.shape(v)) for k,v in item['gt'].items()])\nprint('times',d['eval_times'])\nc=d['calibration_load_cells']; tr,te=d['train'],d['test']\nfor lab in range(4):\n m=c['lab_id']==lab; x=c['cmd_stress'][m]; y=c['true_stress'][m]; a,b=np.polyfit(x,y,1); ref=np.concatenate([q['ref_coupons'][q['lab_id']==lab] for q in (tr,te",
+      "cat > /holdout_task/alpha_m97_c03_s00_solver.py <<'PY'\n\"\"\"Calibrated two-branch hereditary model for the linear-flow campaign.\"\"\"\nimport json\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\n_ARCHIVE = '/tmp/hegel_continual_archive/archive_calibration_history.json'\n\n\ndef _archive_pairs():\n    try:\n        with open(_ARCHIVE) as handle:\n            history = json.load(handle)\n    except FileNotFoundError:\n        return {}\n    if isinstance(history, dict):\n        history = history.get('calibration_load_cells', history.get('channels', history))\n        if 'lab_id' in history and i",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom alpha_m97_c03_s00_solver import _align, _calibrate, _design, _fit\nwith open('public_alpha_m97_c03_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\ntr, te = d['train'], d['test']\ndt, t = d['past_dt'], d['eval_times']\ng, b = _calibrate(d['calibration_load_cells'])\nx, _ = _align(tr, te)\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\nprint('complete-case aligned feature correlations:', np.round(np.corrcoef(x[complete].T), 3))\nfor field in ('stress_hold_cmd', 'strain_0'):\n    p",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.weighted_column_fill | grep -E 'signature|doc_summary|REQ'; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom alpha_m97_c03_s00_solver import _align\nwith open('public_alpha_m97_c03_s00.pkl','rb') as f:\n    d=pickle.load(f)[0]['dataset']\ntr,te=d['train'],d['test']; x=_align(tr,te)[0]; labs=tr['lab_id']; strata=tr['stratum']; observed=np.isfinite(tr['coupon_features_raw'])\n# On each held lab, compare filling a known entry from its own observed cell",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle\nimport numpy as np\nfrom alpha_m97_c03_s00_solver import _align\nwith open('public_alpha_m97_c03_s00.pkl','rb') as f:\n    d=pickle.load(f)[0]['dataset']\ntr,te=d['train'],d['test']; raw=np.r_[tr['coupon_features_raw'],te['coupon_features_raw']]; refs=np.r_[tr['ref_coupons'],te['ref_coupons']]; labs=np.r_[tr['lab_id'],te['lab_id']]; strata=np.r_[tr['stratum'],te['stratum']]\ncell=np.unique(np.column_stack((labs,strata)),axis=0,return_inverse=True)[1]; w=1/np.bincount(cell)[cell]; x=raw.copy()\nfor lab in np.unique(labs):\n    m",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c03_s00_solver.py')\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nwith open('public_alpha_m97_c03_s00.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nd, gt = item['dataset'], item['gt']; tr, te = d['train'], d['test']\nlocal = s._align\n\ndef balanced(train, test):\n    x = np.concatenate(local(train, test))\n    raw, labs, strata = (np.concatenate([train[k], test[k]]) for k in ('coupon_features_raw'",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m97_c03_s00_solver.py')\ns = p.read_text()\nold = '''        if len(x) < 2 or not clean.all():\n            if archive is None:\n                archive = _archive_pairs()\n        if clean.sum() >= 4 or (clean.sum() >= 2 and (archive is None or lab not in archive)):\n'''\nnew = '''        needs_archive = len(x) < 2 or not clean.all()\n        if needs_archive and archive is None:\n            archive = _archive_pairs()\n        prior = archive.get(lab) if needs_archive else None\n        if clean.sum() >= 4 or (clean.sum()",
+      "set -e\ncat > /tmp/rheology_margin_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c03_s00_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open(root + 'public_alpha_m97_c03_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\ntr, te = d['train'], d['test']\ndt, t = d['past_dt'], d['eval_times']\ng, b = s._calibrate(d['calibration_load_cells'])\nx, xt = s._align(tr, te)\nassert d['shear_banding_index'] <= .50\nout = s.solve_alpha_m97_c03"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rheology_margin_audit.py",
+      "primary_producer_container_path": "/tmp/rheology_margin_audit.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_non_nested_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c03_s00_solver.py",
+        "filename": "alpha_m97_c03_s00_solver.py",
+        "bytes": 7801,
+        "sha256": "6391f63a4731a1f56098e18642ea59e44d8f76a7e61a0899d924f1a05acee082",
+        "content_addressed_ref": "content_addressed_blobs/6391f63a4731a1f56098e18642ea59e44d8f76a7e61a0899d924f1a05acee082.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c03_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c2291d934fbd68355937525b78ac431ee8c35430256f40d20f94081f2a0e958a",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncat > /tmp/rheology_margin_audit.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c03_s00_solver.py')\ns = importlib.ut",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c2291d934fbd68355937525b78ac431ee8c35430256f40d20f94081f2a0e958a",
+        "expected_candidate_sha256": "c2291d934fbd68355937525b78ac431ee8c35430256f40d20f94081f2a0e958a",
+        "computed_candidate_sha256": "c2291d934fbd68355937525b78ac431ee8c35430256f40d20f94081f2a0e958a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c03_s00_solver.py",
+            "bytes": 7801
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_c2291d93"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e71a079f043a4556957c10d5a687c1fd",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:56:59.814851+00:00",
+  "ended_at_utc": "2026-11-27T07:57:40.258571+00:00",
+  "request_sha256": "332a80b4d12a3171544f9380cae38c39da000bd555cd9f5c2dcb27be31d38598",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 62226,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31635,
+    "cached_tokens": 11136,
+    "completion_tokens": 1420
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, numpy as np\\np='/holdout_task/public_alpha_m97_c03_batch_02.pkl'\\nc=pickle.load(open(p,'rb'))[0]['dataset']['calibration_load_cells']\\nfor n in (3,4,5):\\n    max_clean=[0.,0.]; misses=np.zeros((4,2),int); total=0; worst=None\\n    for lab in range(4):\\n        use=c['lab_id']==lab; x=c['cmd_stress'][use]; y=c['true_stress'][use]\\n        for rows in itertools.combinations(range(len(x)),n):\\n            idx=list(rows); a=np.column_stack((x[idx],np.ones(n))); z=y[idx]\\n            if np.ptp(a[:,0])<0.5: continue\\n            # Each row is a deleted-reading prediction residual, computed directly\\n            # rather than dividing two small quantities from the hat matrix.\\n            L=np.eye(n)\\n            for j in range(n):\\n                keep=np.arange(n)!=j\\n                L[j,keep]=-a[j]@np.linalg.pinv(a[keep])\\n            base=L@z; max_clean=np.maximum(max_clean,[max(abs(base)),max(abs(a@np.linalg.lstsq(a,z,rcond=None)[0]-z))])\\n            for j in range(n):\\n                for s in (-1,1):\\n                    total+=1\\n                    for i,amp in enumerate((3.01,3.1,4.,8.)):\\n                        score=max(abs(base+s*amp*L[:,j])); misses[i,0]+=score<=3.; misses[i,1]+=score<=2.99\\n                        if i>=2 and score<=3 and (worst is None or score<worst[0]): worst=(score,lab,a[:,0].tolist(),j,s*amp)\\n    print(n,'rows: clean max deleted and ordinary residual',max_clean.tolist(),'misses by amplitude at triggers 3.0 and 2.99:',misses.tolist(),'of',total,'worst >=4 miss',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 median pairwise screening → H2 deleted-reading residuals with archive-assisted disambiguation; the current worst sparse-EMI gain/bias error is 33.59.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Require an ordinary-fit residual above 0.002 before testing for EMI\",\n      \"rejected_reason\": \"The previous audit found 49 misses on measured three-reading subsets; near-duplicate commands can make an ordinary fit absorb nearly the entire spike.\"\n    }\n  ],\n  \"rationale\": \"Isolate whether the ordinary-residual gate or the deleted-reading threshold causes the misses. If deleted residuals alone detect spikes without flagging clean sweeps, use them to trigger archive consultation; if they flag clean sweeps, inspect those command subsets before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "984394849494615ca13ea5d3b71e5087efa8653811c60ec73a96fd0f7ea0bbf6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45406.15,
+      "usage_known": true,
+      "prompt_tokens": 31635,
+      "cached_tokens": 11136,
+      "completion_tokens": 1420
+    }
+  ]
+}

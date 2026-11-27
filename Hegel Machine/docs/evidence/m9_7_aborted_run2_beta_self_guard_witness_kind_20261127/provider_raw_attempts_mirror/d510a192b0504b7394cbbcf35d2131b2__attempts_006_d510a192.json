@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d510a192b0504b7394cbbcf35d2131b2",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:20:25.466631+00:00",
+  "ended_at_utc": "2026-11-27T08:20:51.237389+00:00",
+  "request_sha256": "031194653b06829caf315461cf9db0a5770bffa436d002ba16a20832d0d05fec",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47154,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27681,
+    "cached_tokens": 6784,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom alpha_m97_c03_batch_06_solver import solve_alpha_m97_c03_batch_06,_calibrate\\nwith open('public_alpha_m97_c03_batch_06.pkl','rb') as f:\\n    items=pickle.load(f)\\nprint('public instances',len(items))\\nd=items[0]['dataset']; tr=d['train']; labs=tr['lab_id']; cal=d['calibration_load_cells']; q=_calibrate(cal)\\nprint('calibration residuals by lab')\\nfor lab in range(4):\\n    m=cal['lab_id']==lab\\n    print(lab,np.round(cal['true_stress'][m]-q[lab,0]*cal['cmd_stress'][m]-q[lab,1],6))\\nprint('full fit', {k:v for k,v in solve_alpha_m97_c03_batch_06(d).items() if k.endswith('weights') or k=='estimated_taus'})\\nfor lab in range(4):\\n    m=labs==lab\\n    dd=dict(d,train={k:v[~m] for k,v in tr.items()},test={k:np.concatenate((v,tr[k][m])) for k,v in d['test'].items()})\\n    o=solve_alpha_m97_c03_batch_06(dd)\\n    e=o['predicted_strain'][-m.sum():]-tr['strain_curves_obs'][m]\\n    r=o['initial_rate_pred'][-m.sum():]-tr['instant_rate_obs'][m]\\n    complete=np.isfinite(tr['coupon_features_raw'][m]).all(axis=1)\\n    print('lab',lab,'med signed/horizon',np.round(np.nanmedian(e[complete],axis=0),4),'90pct abs/horizon',np.round(np.nanquantile(abs(e[complete]),.9,axis=0),4))\\n    for label,mask in [('complete',complete),('imputed',~complete)]:\\n        if not mask.any(): continue\\n        a=abs(e[mask]); ss=np.nansum(a*a,axis=1); top=np.unravel_index(np.nanargmax(a),a.shape)\\n        print(label,'N',mask.sum(),'strain abs q50/q90/q95/max',np.round(np.nanquantile(a,[.5,.9,.95,1]),4),'rate abs q50/q90/max',np.round(np.nanquantile(abs(r[mask]),[.5,.9,1]),4),'largest-row SSE share',round(ss.max()/ss.sum(),3),'max horizon index',top[1])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: distinguish isolated observation spikes from a systematic strain-law mismatch; leave-one-lab-out worst-horizon strain RMSE is 3.638 and worst-lab rate RMSE is 0.0767.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the specified saturation law based on raw RMSE\",\n      \"rejected_reason\": \"The much smaller rate errors and stable fitted times make it important to check whether a few extreme strain readings dominate the metric before changing the model.\"\n    }\n  ],\n  \"rationale\": \"Inspect held-out residual concentration, signed horizon bias, and calibration residuals without dropping any observations. Broad or signed errors would prompt a design or calibration correction; isolated spikes with small typical errors would support retaining the robust fit and reporting both metrics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f68161b958f610a5f21a5b02a4f25bf2122fe16d209a9758f59fae0a6cd1e207",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28316.58,
+      "usage_known": true,
+      "prompt_tokens": 27681,
+      "cached_tokens": 6784,
+      "completion_tokens": 943
+    }
+  ]
+}

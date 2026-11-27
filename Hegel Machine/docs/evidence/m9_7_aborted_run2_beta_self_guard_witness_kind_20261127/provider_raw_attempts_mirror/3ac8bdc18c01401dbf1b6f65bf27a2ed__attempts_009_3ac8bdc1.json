@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ac8bdc18c01401dbf1b6f65bf27a2ed",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:18:33.381887+00:00",
+  "ended_at_utc": "2026-11-27T08:19:08.426524+00:00",
+  "request_sha256": "d46d1512fedc0ecbc1dfeaf68b81326d9a92c55638731d2971073ea08ec8f45f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 49715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28351,
+    "cached_tokens": 6784,
+    "completion_tokens": 1414
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/rheology_batch06_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch06', '/holdout_task/alpha_m97_c01_batch_06_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_06.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr = d['train']\\nlab, stratum = tr['lab_id'], tr['stratum']\\nn = len(lab)\\npast, hold, x, base = s._inputs(d)\\nout = s.solve_alpha_m97_c01_batch_06(d)\\ntau = out['estimated_taus']\\nhw, rw = out['hereditary_weights'], out['regime_mode_weights']\\nz = np.zeros((len(hold)-n, 2))\\nfor j, dt in enumerate(d['past_dt']):\\n    a = np.exp(-dt/tau)\\n    z = a*z + (1-a)*past[n:, j, None]\\ng0, g1 = (hold[n:, None] - z).T\\nv = hw[2] + x[n:] @ hw[3:] + rw[0]*np.sign(hold[n:])*np.sqrt(abs(hold[n:]))\\ndef curve(t):\\n    t = np.atleast_1d(t)[None, :]\\n    return (base[n:, None] + hw[0]*g0[:, None]*(-np.expm1(-t/tau[0]))\\n            + hw[1]*g1[:, None]*(-np.expm1(-t/tau[1]))\\n            + rw[1]*(g0-g1)[:, None]*(-np.expm1(-t/tau[0]))\\n            + v[:, None]*t/(1+0.85*t))\\ncurve_error = np.max(abs(curve(d['eval_times'])-out['predicted_strain']))\\nh = 1e-5\\nrate_error = np.max(abs(((curve(h)-curve(-h))/(2*h))[:, 0]-out['initial_rate_pred']))\\nprint('independent rational/slip/exchange curve max discrepancy', curve_error, 'numerical initial-rate max discrepancy', rate_error)\\nassert curve_error < 1e-11 and rate_error < 1e-8\\nc = d['calibration_load_cells']\\na, b = s._calibrate(d)[c['lab_id']].T\\nfor ell in range(4):\\n    residual = abs(c['true_stress'] - a*c['cmd_stress'] - b)[c['lab_id']==ell]\\n    clean = residual <= 3\\n    print('calibration lab', ell, 'clean count', clean.sum(), 'max clean residual', residual[clean].max(), 'min EMI residual', residual[~clean].min() if (~clean).any() else None)\\n    assert clean.any() and residual[clean].max() < 0.001\\nmodel = s._Model(d, past, hold, x)\\ny = np.c_[tr['strain_curves_obs']-base[:n,None], tr['instant_rate_obs']]\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(1)\\nstats = []\\nfor ell in np.unique(lab):\\n    t, w = s._fit(model, y, np.flatnonzero(complete & (lab!=ell)))\\n    ix = np.flatnonzero(lab==ell)\\n    e = model.design(t, ix) @ w - y[ix]\\n    for group in np.unique(stratum[ix]):\\n        m = stratum[ix]==group\\n        ec = e[m & complete[ix]]\\n        assert len(ec)\\n        stats.append([abs(np.median(ec[:,:-1])), abs(np.median(ec[:,-1])), np.median(abs(ec[:,:-1])), np.median(abs(ec[:,-1]))])\\n        print('held-out lab/stratum', ell, group, 'n complete', len(ec), 'absolute median signed curve/rate', np.round(stats[-1][:2], 6), 'median absolute curve/rate', np.round(stats[-1][2:], 6))\\nprint('worst cell', np.max(stats, axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_batch06_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The calibrated jammed-slip law transfers across labs; worst held-out lab median absolute errors are 0.0151 for strain and 0.0167 for initial rate, with lab-by-stratum residuals now under audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test balanced accuracy, relay modes, or Fokker–Planck drift\",\n      \"rejected_reason\": \"This task predicts continuous rheology measurements and specifies no class labels, relay state, or stochastic drift operator. Signed errors within lab-by-stratum cells are the relevant check for nuisance bias.\"\n    }\n  ],\n  \"rationale\": \"Check the actual rational plateau and gap-difference terms against an independent calculation and verify the initial rate by numerical differentiation. An algebraic discrepancy would warrant a model correction; a narrow EMI separation or systematic within-cell bias would warrant revisiting calibration or panel alignment. Leave the verified artifact unchanged unless the audit identifies a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9cefa62d455a92ae94563b0c7965a83692ca673732ddcb548bfb5e3b96bae3fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37490.92,
+      "usage_known": true,
+      "prompt_tokens": 28351,
+      "cached_tokens": 6784,
+      "completion_tokens": 1414
+    }
+  ]
+}

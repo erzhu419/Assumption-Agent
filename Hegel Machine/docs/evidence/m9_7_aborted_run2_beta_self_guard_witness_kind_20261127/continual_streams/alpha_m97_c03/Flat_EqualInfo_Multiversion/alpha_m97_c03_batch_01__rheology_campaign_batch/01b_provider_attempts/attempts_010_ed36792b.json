@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed36792b80bf459cb9bc7ab17863a159",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:48.444064+00:00",
+  "ended_at_utc": "2026-11-27T07:48:28.895554+00:00",
+  "request_sha256": "28247613945ac77dce5aed23787fa2e15e3cbe2a48657611638a4b727b4c4948",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 68246,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36814,
+    "cached_tokens": 0,
+    "completion_tokens": 1627
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\ns = s.replace('    terminal = np.where(arrest[:, None], np.log1p(t), t)', '    # Banding determines the flow basis; damage activates the network terms.\\\\n    terminal = np.log1p(t) if banding <= .50 else t')\\ns = s.replace('terminal[:, :, None]*flow[:, None, :]', 'terminal[None, :, None]*flow[:, None, :]')\\ns = s.replace('(act*z[:, 0])[:, None]*terminal', '(act*z[:, 0])[:, None]*terminal[None, :]')\\ns = s.replace(\\\"    log_tau, beta = _fit(build, train['strain_curves_obs'] - train['strain_0'][:, None],\\\\n                        train['instant_rate_obs'], dt, t)\\\", \\\"    # Imputed coupons remain predictable, but do not inform the material fit\\\\n    # when complete coupons identify all nine linear coefficients.\\\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\\\n    if np.linalg.matrix_rank(np.concatenate([build(np.log([.65, 4.]))[1][complete],\\\\n                           build(np.log([.65, 4.]))[0][complete].reshape(-1, 9)], axis=0)) < 9:\\\\n        complete[:] = True\\\\n    log_tau, beta = _fit(\\\\n        build, np.where(complete[:, None], train['strain_curves_obs'] - train['strain_0'][:, None], np.nan),\\\\n        np.where(complete, train['instant_rate_obs'], np.nan), dt, t)\\\")\\ns = s.replace('    if np.linalg.matrix_rank(np.concatenate([build(np.log([.65, 4.]))[1][complete],\\\\n                           build(np.log([.65, 4.]))[0][complete].reshape(-1, 9)], axis=0)) < 9:\\\\n        complete[:] = True', '    c0, r0 = build(np.log([.65, 4.]))\\\\n    # With no active network, its two coefficients are unidentifiable by design.\\\\n    columns = slice(None) if np.any(c0[:, :, 7:]) else slice(0, 7)\\\\n    design = np.vstack((c0[complete].reshape(-1, 9), r0[complete]))[:, columns]\\\\n    if not len(design) or np.linalg.matrix_rank(design) < design.shape[1]:\\\\n        complete[:] = True')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/validate_rheology_01.py | head -3\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_01_solver.py');s=importlib.util.module_from_spec(p);p.loader.exec_module(s)\\ni=pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb'))[0];d=i['dataset'];gt=i['gt'];tr,te=d['train'],d['test'];o=s.solve_alpha_m97_c03_batch_01(d);rmse=lambda e:np.sqrt(np.mean(e*e));print('verified output RMSE',[(k,round(rmse(o[k]-gt[v]),6)) for k,v in zip(o,('taus','theta','vp_theta','te_clean','te_true_rate0'))]);g,b=s._calibrate(d['calibration_load_cells']);_,x=s._align(tr,te);dt=d['past_dt'];t=d['eval_times'];crit=d['crit_stress'];lab=te['lab_id'];h=g[lab,None]*te['past_stress_cmd']+b[lab,None];h0=g[lab]*te['stress_hold_cmd']+b[lab];tau=o['estimated_taus'];w=o['hereditary_weights'];rw=o['regime_mode_weights'];z=np.zeros((len(lab),2));\\nfor j,step in enumerate(dt):\\n    dec=np.exp(-step/tau);z=dec*z+(1-dec)*h[:,j,None]\\ndamage=np.maximum(abs(h)-crit,0)**2@dt; gaps=h0[:,None]-z; drift=w[2]+x@w[3:]; rise=-np.expm1(-t[:,None]/tau)\\nfor band in (.50,.51):\\n    f,ar=s._design(te,x,g,b,dt,t,crit,band);c,r=f(np.log(tau));act=np.tanh(damage)*(band<=.50);time=np.log1p(t) if band<=.50 else t;beta=np.r_[w,rw];base=(gaps*w[:2])@rise.T;expected=base+(rw[0]*act*h0)[:,None]*rise[:,0]+(drift+rw[1]*act*z[:,0])[:,None]*time;rate=gaps@(w[:2]/tau)+rw[0]*act*h0/tau[0]+drift+rw[1]*act*z[:,0];np.testing.assert_allclose(c@beta,expected,atol=1e-12);np.testing.assert_allclose(r@beta,rate,atol=1e-12);assert np.array_equal(ar,(damage>0)&(band<=.50));print('recurrence and rate pass at banding',band,'active/inactive',ar.sum(),(~ar).sum())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 banding selects the log-flow basis → H2 damage activates the network terms; the complete-coupon challenger reduced worst held-lab slice strain p95 from 0.881 to 0.676 and public strain/rate RMSE to 0.03596/0.02832.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all coupons in the material fit\",\n      \"rejected_reason\": \"With the corrected gate, fitting complete coupons reduced the public RMSE on all five outputs and reduced the worst held-lab rate RMSE from 0.264 to 0.246.\"\n    }\n  ],\n  \"rationale\": \"Promote the gate and fit demonstrated by held-lab validation. Verify the exact saved solver in an isolated process, using an independent stepwise recurrence to catch branch-order, rate, or threshold mistakes that would warrant correcting the implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "aedecea8bc6d86e9fc1691cfbf61af08220b136bb2f6f4d07b2a5ace07216a2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42864.62,
+      "usage_known": true,
+      "prompt_tokens": 36814,
+      "cached_tokens": 0,
+      "completion_tokens": 1627
+    }
+  ]
+}

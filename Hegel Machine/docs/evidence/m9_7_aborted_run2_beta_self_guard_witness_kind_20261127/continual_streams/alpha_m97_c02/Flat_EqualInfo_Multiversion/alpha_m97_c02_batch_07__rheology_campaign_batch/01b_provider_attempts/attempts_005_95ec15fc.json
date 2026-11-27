@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95ec15fc35bb41f6a20ce5d9a0955b74",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:23:51.028511+00:00",
+  "ended_at_utc": "2026-11-27T08:24:24.012720+00:00",
+  "request_sha256": "d2e2ce917562fa223f5f2af27bdc02ab12f4b70bb104aeea0fa1d5b0a615a85d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46617,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27777,
+    "cached_tokens": 6784,
+    "completion_tokens": 1235
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology07_cv.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c02_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nitem = pickle.load(open(root + 'public_alpha_m97_c02_batch_07.pkl','rb'))[0]\\nd = item['dataset']\\na, b = d['train'], d['test']\\ndt, times = d['past_dt'], d['eval_times']\\nx, _ = s._aligned(a, b)\\nbase = s._calibration(d)\\nhistory = json.load(open(s._ARCHIVE))\\nprevious = base.copy()\\nprevious[2] = s._line(*s._points(history[-2], 2))\\nprint('latest-clean', base.tolist(), 'older-channel-2', previous[2].tolist())\\nlab, strata = a['lab_id'], a['stratum']\\nmeasured = np.isfinite(a['coupon_features_raw']).all(axis=1)\\ncurve = a['strain_curves_obs'] - a['strain_0'][:, None]\\nrate = a['instant_rate_obs']\\nrng = np.random.default_rng(7)\\nfold = np.empty(len(x), int)\\nfor c in np.unique(lab):\\n    for g in np.unique(strata):\\n        rows = rng.permutation(np.flatnonzero((lab == c) & (strata == g)))\\n        fold[rows] = np.arange(len(rows)) % 4\\nfor name, cal in [('latest-clean', base), ('older-channel-2', previous)]:\\n    inputs = s._inputs(a, x, cal, dt, d['crit_stress'], d['shear_banding_index'])\\n    ec, er = np.empty_like(curve), np.empty_like(rate)\\n    edc, edr = np.empty_like(curve), np.empty_like(rate)\\n    taus = []\\n    for k in range(4):\\n        fit = (fold != k) & measured\\n        val = fold == k\\n        tau, w = s._fit(dt, times, tuple(v[fit] for v in inputs), curve[fit], rate[fit])\\n        C, R = s._design(tau, dt, times, tuple(v[val] for v in inputs))\\n        ec[val], er[val] = C @ w - curve[val], R @ w - rate[val]\\n        taus.append(tau)\\n    for c in np.unique(lab):\\n        fit = (lab != c) & measured\\n        val = lab == c\\n        tau, w = s._fit(dt, times, tuple(v[fit] for v in inputs), curve[fit], rate[fit])\\n        C, R = s._design(tau, dt, times, tuple(v[val] for v in inputs))\\n        edc[val], edr[val] = C @ w - curve[val], R @ w - rate[val]\\n    metrics = lambda p, q, m: np.round([*np.quantile(np.abs(p[m]), [.5, .9]), *np.quantile(np.abs(q[m]), [.5, .9])], 6).tolist()\\n    print(name, 'fold taus', np.round(taus, 5).tolist())\\n    for c in np.unique(lab):\\n        m = lab == c\\n        print('lab', c, 'active', int(np.count_nonzero(inputs[-1][m])), 'four-fold', metrics(ec, er, m & measured), 'leave-lab-out', metrics(edc, edr, m & measured))\\n    print('all four-fold', metrics(ec, er, measured), 'missing coupons', metrics(ec, er, ~measured))\\n    print('all leave-lab-out', metrics(edc, edr, measured))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology07_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean archive calibration → exact log-plateau fit; schema passes, but channel-2 calibration is not yet validated on held-out measurements.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the channel-2 state from pooled residuals alone\",\n      \"rejected_reason\": \"Channel 2 is only one of four labs; pooled errors could hide a calibration mismatch. The comparison reports channel-level results and also fits with that lab excluded.\"\n    }\n  ],\n  \"rationale\": \"Compare the two clean historical channel-2 calibrations on measured strain and initial rate. Leave-lab-out errors test whether a calibration transfers without letting the fitted material weights absorb its mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7d699390c238728f73eedbaaf6370e6e87c26f92277346e6402e8016e4928b5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34860.33,
+      "usage_known": true,
+      "prompt_tokens": 27777,
+      "cached_tokens": 6784,
+      "completion_tokens": 1235
+    }
+  ]
+}

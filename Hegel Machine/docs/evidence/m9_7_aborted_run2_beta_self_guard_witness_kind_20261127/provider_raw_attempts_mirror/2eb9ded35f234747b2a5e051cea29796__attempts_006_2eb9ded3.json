@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2eb9ded35f234747b2a5e051cea29796",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:36.855241+00:00",
+  "ended_at_utc": "2026-11-27T07:46:01.300739+00:00",
+  "request_sha256": "91dfa87da4b6293ba861a380d9f2fd27dc6c1973ba43657282ce7c096a7e1b0e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44895,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27637,
+    "cached_tokens": 0,
+    "completion_tokens": 890
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_01_solver.py'); s=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)\\ni=pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb'))[0];d=i['dataset'];tr,te=d['train'],d['test'];gt=i['gt'];out=s.solve_alpha_m97_c03_batch_01(d)\\nfor p,q in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta'),('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n er=out[p]-gt[q]; print(p,'RMSE',np.sqrt(np.mean(er**2)),'max',abs(er).max());\\n if er.ndim==1 and er.size<10: print('reference',gt[q])\\ng,b=s._calibrate(d['calibration_load_cells']);x,_=s._align(tr,te);a=g,b,d['past_dt'],d['eval_times'],d['crit_stress'],d['shear_banding_index']; print('eval times',a[3],'past duration',sum(a[2]),'crit',a[4],'banding',a[5]); m=tr['lab_id']; obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; qs=[.5,.75,.9,.95,.98,1.]\\nfor lab in range(4):\\n take=m!=lab; train={k:v[take] for k,v in tr.items()}; test={k:v[~take] for k,v in tr.items()};f,_=s._design(train,x[take],*a); tau,be=s._fit(f,obs[take],rate[take],a[2],a[3]); f,act=s._design(test,x[~take],*a);c,r=f(tau); ce=c@be-obs[~take];re=r@be-rate[~take];print('held lab',lab,'strain absolute quantiles',np.round(np.quantile(abs(ce),qs),4),'rate',np.round(np.quantile(abs(re),qs),4),'largest curve residuals by time',np.round(abs(ce).max(axis=0),2),'curves with >= 1 point above 1',np.sum(np.max(abs(ce),axis=1)>1))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration and reference alignment -> H2 activated logarithmic creep; worst leave-one-lab-out slice RMSE is 4.31019 for strain and 0.332371 for initial rate, with sparse and EMI calibration checks passing.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change the creep law based on the worst raw RMSE\",\"rejected_reason\":\"Raw RMSE alone cannot distinguish a systematic model error from a few large corrupted strain measurements.\"}],\"rationale\":\"Compare held-out residual quantiles and time profiles to determine whether the worst slice calls for a stronger robust fit or a model correction. Evaluate all five outputs against their correctly mapped public reference fields; the previous name intersection matched none.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "024b311bf7bde20f2111f4f2b539fd5ca1a04537f6646c706bf349f0d15f1bfe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26841.22,
+      "usage_known": true,
+      "prompt_tokens": 27637,
+      "cached_tokens": 0,
+      "completion_tokens": 890
+    }
+  ]
+}

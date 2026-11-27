@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "833deb23d36148819931508f6610ebc1",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:54:04.977592+00:00",
+  "ended_at_utc": "2026-11-27T07:54:34.944398+00:00",
+  "request_sha256": "5608629799ed22ce752dd6c9ce72a6f6ca47ce762909176f465ff3b5344af6d7",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42609,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26852,
+    "cached_tokens": 6784,
+    "completion_tokens": 1183
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology03_robust.py <<'PY'\\nfrom pathlib import Path\\nexec(Path('/tmp/rheology03_cv.py').read_text().split('for weight in')[0])\\nfrom scipy.optimize import least_squares\\n\\ndef mad(a):\\n    return 1.4826*np.median(np.abs(a-np.median(a)))\\n\\ndef fit_robust(keep, k):\\n    tau, w = s._fit(model, y, r, dt, t, row_mask=keep)\\n    def errors(p):\\n        c, rr = model(np.sort(np.exp(p[:2])))\\n        return (c @ p[2:] - y)[keep], (rr @ p[2:] - r)[keep]\\n    p0 = np.r_[np.log(tau), w]\\n    for step in range(3):\\n        e, f = errors(p0)\\n        sc, sr = max(mad(e), 1e-6), max(mad(f), 1e-6)\\n        def residual(p):\\n            a,b=errors(p)\\n            return np.r_[a.ravel()/sc, b/sr]\\n        lo = [np.log(min(t)/20)]*2+[-np.inf]*9\\n        hi = [np.log(max(sum(dt),max(t))*30)]*2+[np.inf]*9\\n        out=least_squares(residual, p0, bounds=(lo,hi), loss='soft_l1', f_scale=k, x_scale='jac', max_nfev=160)\\n        p0=out.x\\n    return np.sort(np.exp(p0[:2])),p0[2:],(sc,sr)\\n\\ndef metrics(ec,er):\\n    for a in (ec,er):\\n        print('absolute error q50/90/95/98/99/100:',np.round(np.quantile(np.abs(a),[.5,.9,.95,.98,.99,1.]),5))\\n    for name, mask in slices.items():\\n        if mask.any():\\n            print(name,'RMSE',np.round([rmse(ec[mask]),rmse(er[mask])],6),'MAE',np.round([np.mean(np.abs(ec[mask])),np.mean(np.abs(er[mask]))],6))\\n    print('horizon MAE',np.round(np.mean(np.abs(ec),axis=0),6))\\n\\nfor k in (None, 1.5, 3.0):\\n    print('robust cutoff:',k)\\n    ec, er = np.empty_like(y), np.empty_like(r)\\n    for lab in range(4):\\n        val = labs == lab\\n        if k is None:\\n            tau,w=s._fit(model,y,r,dt,t,row_mask=~val)\\n            scales=()\\n        else:\\n            tau,w,scales=fit_robust(~val,k)\\n        c,rr=model(tau)\\n        ec[val],er[val]=(c@w-y)[val],(rr@w-r)[val]\\n        print('fold',lab,'tau',np.round(tau,5),'weights',np.round(w,5),'scales',scales)\\n    metrics(ec,er)\\n    print('largest curve errors (row, horizon), signed residual:',[(tuple(i),round(ec[tuple(i)],4)) for i in np.argwhere(np.abs(ec)>3)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology03_robust.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and aligned coupons → H2 exact jammed-slip projection with robust observation losses; ordinary least squares has worst-lab curve RMSE 3.044 and worst-slice rate RMSE 0.242.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase the rate weight in ordinary least squares\",\n      \"rejected_reason\": \"It improves rate RMSE but barely changes the curve bottleneck; it does not reduce the influence of large curve residuals.\"\n    }\n  ],\n  \"rationale\": \"The worst curve error is concentrated at one horizon, while relaxation times vary sharply across folds. Fit separate robust scales using only each fold’s training labels, then check whether the same jammed-slip equations yield more stable parameters and lower held-out bulk errors without hiding raw RMSE.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "34255a5f1839be58d0c726e03f4fe6ce796367bd00336467319c5a71672aef64",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32387.3,
+      "usage_known": true,
+      "prompt_tokens": 26852,
+      "cached_tokens": 6784,
+      "completion_tokens": 1183
+    }
+  ]
+}

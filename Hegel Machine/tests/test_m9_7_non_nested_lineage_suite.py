@@ -463,3 +463,119 @@ def test_m97_mocked_end_to_end_world_stream_and_ledger_conservation(monkeypatch:
         )
         assert cons["conserved"] is True
 
+
+def test_m97_beta_self_guard_exception_and_covering_branch_lineage_regression() -> None:
+    """Reproduce and prove the exact `run2` Beta edge case (`0` LLM calls):
+    1. A verified `Stage S` Beta solver (`b00`) that explicitly raises `ValueError('Only open Robin')` on `C1`
+       is recorded as `failure_kind == 'scientific_or_numerical'` (while a broken `0`-witness solver is still `'schema_or_interface'`).
+    2. When `b01` empirically covers `b00` (`EmpiricalCoverageReceipt == 'supported_on_witnesses'`), `mint_immutable_conflict_branch`
+       succeeds AND subsequent `verify_m97_multibranch_witness_partition` on a specialized `b02` (`C2`) permits `(b01, b00)` overlap!
+    """
+    spec = m97.DEV_M97_WORLD_SPECS[1]
+    s_task, stream_tasks, manifest = m97.build_m97_world_tasks(spec)
+    by_ev = {m["causal_event"]: t for t, m in zip(stream_tasks, manifest)}
+    forest, _, _ = m7a.build_blank_axiomatic_philosophical_forest()
+    nid = next(iter(forest.nodes))
+    graph, planner, reg, _ = m97.initialize_m97_permuted_parent_graph(spec=spec, forest=forest)
+
+    # `b00` with explicit self-guard `ValueError` (exactly like `gpt-6.2-sol` wrote on `beta_m97_c01_s00`!)
+    raw_c0 = m97.build_m97_reference_dev_solver_code("beta", "solve_s00", "C0")
+    guarded_c0 = raw_c0.replace(
+        "def solve_s00(study: dict) -> dict:\n",
+        "def solve_s00(study: dict) -> dict:\n"
+        "    if study['recirculation_loop_mode'] != 0 or max(study['past_vortex_circulation_trace']) > study['critical_vortex_circulation']:\n"
+        "        raise ValueError('Only open-outflow Robin regime is supported')\n",
+    )
+    c0_sha = hashlib.sha256(guarded_c0.encode()).hexdigest()
+    uni_keys = m97.expected_m97_public_output_keys("beta")
+    q0 = reg.issue_qualification_receipt(
+        qualification_protocol="hegel_public_scientific_gate_v4",
+        verified_code_sha256=c0_sha,
+        forest_node_id=nid,
+        environment_digest="sha256:test",
+        evidence_digest="sha256:ev0",
+    )
+    reg.register_binding(
+        m94.MechanismExecutableBinding(
+            binding_id=f"bind_{spec.world_id}_b00",
+            chain_id="beta",
+            branch_tag="C0_base",
+            mechanism_id=f"mech_{spec.world_id}_b00",
+            mechanism_version=1,
+            forest_node_id=nid,
+            component_id="base",
+            preserved_component_ids=[],
+            violated_component_id=None,
+            module_stem="s00",
+            module_digest=c0_sha,
+            function_name="solve_s00",
+            qualification_id="hegel_public_scientific_gate_v4",
+            qualification_protocol="hegel_public_scientific_gate_v4",
+            qualification_receipt_id=q0.receipt_id,
+            qualification_status="verified",
+            parameter_mechanism_id="cal_node_p0",
+            parent_parameter_mechanism_ids=["cal_node_p0", "cal_node_p1"],
+            parent_parameter_versions={"cal_node_p0": 1, "cal_node_p1": 1},
+            parameter_version=1,
+            structure_origin="unconstrained_initial_source",
+            environment_digest="sha256:test",
+            evidence_receipt_id="sha256:ev0",
+            output_schema_keys=uni_keys,
+            canonical_algorithm_code=guarded_c0,
+            canonical_entrypoint="solve_s00",
+            canonical_algorithm_sha256=c0_sha,
+            parameterized_closure_code=guarded_c0,
+            parameterized_entrypoint="solve_s00",
+            parameterized_closure_sha256=c0_sha,
+        ),
+        strict_receipt_check=True,
+    )
+    lineage = m96.ImmutableBranchLineageController(world_id=spec.world_id, family="beta", graph=graph, registry=reg)
+    b0 = reg.bindings[f"bind_{spec.world_id}_b00"]
+    pub_s = _materialize_pub(s_task)
+    obs_s = m97.compute_m97_primitive_observables("beta", pub_s, {"bank_gains": [1.0] * 4, "bank_offsets": [0.0] * 4})
+    lineage.record_tested_witness(binding=b0, public_input_sha256="a" * 64, passed=True, failure_kind="none", features=obs_s)
+
+    # Probe `b0` on `C1` (`Step 1`): `b0` raises `ValueError` -> recorded as `'scientific_or_numerical'`!
+    pub_c1 = _materialize_pub(by_ev["C1"])
+    m97.update_m97_permuted_calibration_graph(spec=spec, episode_id="c1", public_item=pub_c1, graph=graph, planner=planner, registry=reg)
+    tr_c1 = m97.run_m97_equal_capability_pre_llm_trial(
+        arm="Hegel_DemandGated_Graph",
+        spec=spec,
+        task=by_ev["C1"],
+        public_item=pub_c1,
+        public_input_sha256="b" * 64,
+        prior_archive_entries=[],
+        lineage_ctrl=lineage,
+        graph=graph,
+        registry=reg,
+    )
+    assert tr_c1["accepted_pre_llm"] is False
+    assert tr_c1["tested_witness"]["failure_kind"] == "scientific_or_numerical"
+    assert len(lineage.scientific_negative_witnesses_for(b0.binding_id)) == 1
+
+    # Verify covering branch `(b01, b00)` overlap check in `verify_m97_multibranch_witness_partition`
+    part = m97.verify_m97_multibranch_witness_partition(
+        branch_guards={
+            "b00": {
+                "all_of": [
+                    {"feature_name": "obs_03_boundary_or_banding_control_scalar", "op": "<=", "threshold": 0.50},
+                    {"feature_name": "obs_01_past_series_exceedance_integral", "op": "<=", "threshold": 0.01},
+                ]
+            },
+            "b01": {"all_of": [{"feature_name": "obs_03_boundary_or_banding_control_scalar", "op": "<=", "threshold": 0.50}]},
+            "b02": {"all_of": [{"feature_name": "obs_03_boundary_or_banding_control_scalar", "op": ">", "threshold": 0.50}]},
+        },
+        positive_witness_features_by_branch={
+            "b00": [{"obs_01_past_series_exceedance_integral": 0.0, "obs_03_boundary_or_banding_control_scalar": 0.0}],
+            "b01": [
+                {"obs_01_past_series_exceedance_integral": 0.85, "obs_03_boundary_or_banding_control_scalar": 0.0},
+                {"obs_01_past_series_exceedance_integral": 0.0, "obs_03_boundary_or_banding_control_scalar": 0.0},
+            ],
+            "b02": [{"obs_01_past_series_exceedance_integral": 0.0, "obs_03_boundary_or_banding_control_scalar": 0.85}],
+        },
+        covered_branch_pairs={("b01", "b00")},
+    )
+    assert part["valid"] is True
+
+

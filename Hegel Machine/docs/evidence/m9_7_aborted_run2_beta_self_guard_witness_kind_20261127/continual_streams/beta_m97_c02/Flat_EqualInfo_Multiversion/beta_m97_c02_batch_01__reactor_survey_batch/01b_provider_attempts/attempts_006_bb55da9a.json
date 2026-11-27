@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb55da9ad4424d77ba6ede0271da2c71",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:11.060410+00:00",
+  "ended_at_utc": "2026-11-27T07:45:45.492221+00:00",
+  "request_sha256": "2e7433211336c8890234121961fe252d02373dc6376c80c5f52b63b0a411a3ed",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37868,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25064,
+    "cached_tokens": 11136,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_m97_c02_batch_01_solver.py')\\ns = p.read_text()\\nold = \\\"    ay = _axis(study['kappa_y'], study['vel_y'], study['robin_y'], study['Ly'] / (ny - 1))\\\"\\nnew = \\\"    # Fouling seals both boundary axes; the sorption mask is localized in x.\\\\n    ay = _axis(study['kappa_y'], study['vel_y'], 0.0 if sealed else study['robin_y'], ly / (ny - 1))\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location(path.stem, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load(Path('beta_m97_c02_batch_01_solver.py'))\\na = load(Path('/tmp/hegel_continual_archive/beta_m97_c02_s00_solver.py'))\\nscope = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d =')[0], scope)\\nverify = scope['verify_box_simplex_kkt_certificate']\\nitems = pickle.loads(Path('public_beta_m97_c02_batch_01.pkl').read_bytes())\\nfor item in items:\\n    s, gt = item['study'], item['gt']\\n    out = m.solve_beta_m97_c02_batch_01(s)\\n    relative = lambda x, y: np.linalg.norm(x-y)/np.linalg.norm(y)\\n    weights = relative(out['weights'], gt['w_opt'])\\n    field = relative(out['terminal_field'], gt['terminal_field_A'])\\n    chk = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    print('public weights relative L2', weights, 'terminal relative L2', field, 'certificate', chk)\\n    assert weights < 1e-5 and field < 1e-5 and chk['valid']\\n    for name, branch in [('recirculating', dict(s, recirculation_loop_mode=1)), ('unfouled', dict(s, past_vortex_circulation_trace=np.full_like(s['past_vortex_circulation_trace'], s['critical_vortex_circulation'])))]:\\n        for actual, expected in zip(m._forward(branch), a._forward(branch)):\\n            np.testing.assert_allclose(actual, expected, rtol=1e-12, atol=1e-13)\\n        print(name, 'forward matches archived open operator')\\n    sweeps = s['sensor_calibration_sweeps']\\n    ids = sweeps['bank_id']\\n    selected = np.flatnonzero(ids == 0)\\n    bad = {k: np.array(v, copy=True) for k,v in sweeps.items()}\\n    bad['raw_readout'][selected[0]] += 6.0\\n    emi = m._calibrate(dict(s, sensor_calibration_sweeps=bad))\\n    np.testing.assert_allclose(emi, m._calibrate(s), rtol=0, atol=2e-6)\\n    keep = (ids != 0); keep[selected[0]] = True\\n    sparse = {k: np.asarray(v)[keep] for k,v in sweeps.items()}\\n    history = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\n    ref, raw = m._bank_rows(history[-1], 0)\\n    gain, offset = np.polyfit(ref, raw, 1)\\n    rows = s['row_bank_id'] == 0\\n    expected = m._calibrate(s)\\n    expected[rows] = (s['y_obs_raw'][rows]-offset)/gain\\n    np.testing.assert_allclose(m._calibrate(dict(s, sensor_calibration_sweeps=sparse)), expected, rtol=0, atol=1e-12)\\n    print('isolated EMI and one-point archive fallback passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"X-only sealing -> both-axis sealing with x-localized sorption; the public discrete comparison gives projected-design relative L2 error 8.60e-16, weight error 9.95e-7, and terminal-field error 4.82e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep Robin leakage on the transverse boundaries\",\n      \"rejected_reason\": \"It leaves a 21.2% design error; sealing both axes with the specified sorption reproduces the public reference to numerical precision.\"\n    }\n  ],\n  \"rationale\": \"Persist the boundary correction supported by the public reference. Verify the saved artifact in isolated Python, including its public certificate, both open-boundary dispatches, isolated EMI, and archive fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d8ce8882cbe9231c4cd6e3c4e69e4144ae79acc9cfd121a6aebfc2d64d34b922",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36832.5,
+      "usage_known": true,
+      "prompt_tokens": 25064,
+      "cached_tokens": 11136,
+      "completion_tokens": 1353
+    }
+  ]
+}

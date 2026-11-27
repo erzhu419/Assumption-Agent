@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c683c30d64934e1aadec0b0299abd6a5",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:51:40.385011+00:00",
+  "ended_at_utc": "2026-11-27T07:52:13.451485+00:00",
+  "request_sha256": "a3e10fa4d98ae7373e52c5eee53254f746551161cbcda4301e2a44cf808bf272",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 39758,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25605,
+    "cached_tokens": 6784,
+    "completion_tokens": 1237
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/alpha_m97_c01_batch_02_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb') as f: a=pickle.load(f)[0]\\nd,g=a['dataset'],a['gt']; n=len(d['train']['lab_id']); out=m.solve_alpha_m97_c01_batch_02(d)\\npast,hold,x,z=m._inputs(d); t=d['eval_times']; dt=d['past_dt']; te=d['test']; missing=np.isnan(te['coupon_features_raw']).any(axis=1)\\n# With true physical parameters and stresses, isolate the remaining error from feature alignment/imputation.\\noracle=m._Model(dt,t,g['te_hist_true'],g['te_hold_true'],x[n:]).design(np.log(g['taus']))[0] @ g['theta']\\ncurve=oracle[:,:-1]+z[n:,None]-g['te_clean']; rate=oracle[:,-1]-g['te_true_rate0']\\nfor tag,idx in [('complete',~missing),('missing',missing)]:\\n print(tag,'n',idx.sum(),'oracle curve/rate MAE',np.abs(curve[idx]).mean(),np.abs(rate[idx]).mean(),'max error after subtracting linear drift',np.max(np.abs(curve[idx]-rate[idx,None]*t)))\\n# Exercise the specified sparse and EMI branches using actual calibration commands.\\nrows=d['calibration_load_cells']; base=m._calibrate(d)\\nfor c in range(4):\\n ids=np.flatnonzero(rows['lab_id']==c)\\n for kind in ('single','empty','emi'):\\n  q=copy.deepcopy(d); r=q['calibration_load_cells']; keep=np.ones(len(r['lab_id']),bool)\\n  if kind=='emi': r['true_stress'][ids[np.argmax(np.abs(r['cmd_stress'][ids]))]]+=20\\n  else:\\n   keep[ids[(1 if kind=='single' else 0):]]=False\\n   q['calibration_load_cells']={k:np.asarray(v)[keep] for k,v in r.items()}\\n  cal=m._calibrate(q); probes=rows['cmd_stress'][ids]; err=np.max(np.abs((cal[c,0]-base[c,0])*probes+cal[c,1]-base[c,1]))\\n  assert np.isfinite(cal).all() and np.allclose(cal[np.arange(4)!=c],base[np.arange(4)!=c])\\n  print('calibration',c,kind,'max stress deviation',round(err,6))\\n  if kind=='emi': assert err<0.001\\nPY\\n grep -niE 'imput|toleran|rmse|threshold' /holdout_task/public_asset_index.json | cut -c1-220 | head -20\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 constitutive fit error -> H2 missing-feature imputation dominates the remaining error; public missing-row strain/rate MAE is 0.24381/0.08875 versus 0.00387/0.00178 on complete rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the robust loss against public test targets\",\n      \"rejected_reason\": \"The error grows nearly linearly with horizon and concentrates on missing-feature rows; first isolate the prescribed imputation from parameter-estimation error without tuning on test labels.\"\n    }\n  ],\n  \"rationale\": \"A diagnostic using the public true parameters and stresses tests whether the missing-row error is a drift offset rather than a constitutive-fit failure. Targeted calibration tests cover the sparse and EMI paths that the clean public case does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "95a8ac4908f4e66f0a1161b820ea1e69853e2d45bc3e20b6712142131cea9b2a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35511.28,
+      "usage_known": true,
+      "prompt_tokens": 25605,
+      "cached_tokens": 6784,
+      "completion_tokens": 1237
+    }
+  ]
+}

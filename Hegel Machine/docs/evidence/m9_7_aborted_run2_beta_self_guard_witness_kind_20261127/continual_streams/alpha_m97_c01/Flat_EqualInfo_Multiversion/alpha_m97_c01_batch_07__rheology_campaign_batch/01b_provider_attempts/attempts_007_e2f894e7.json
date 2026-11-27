@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2f894e73ad941ec963846431313e116",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:23:30.031507+00:00",
+  "ended_at_utc": "2026-11-27T08:23:56.547953+00:00",
+  "request_sha256": "fc9ebf3a2f0067602b7896432a3e3a0f6c40aac19a5c738ff3b6278af547e0a1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48430,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28322,
+    "cached_tokens": 6784,
+    "completion_tokens": 990
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle\\nimport numpy as np\\nimport alpha_m97_c01_batch_07_solver as s\\nwith open('public_alpha_m97_c01_batch_07.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr = d['train']; lab = tr['lab_id']; n = len(lab)\\np,h,x,z = s._inputs(d)\\ny = np.column_stack((tr['strain_curves_obs']-z[:n,None],tr['instant_rate_obs']))\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfeatures = np.column_stack((np.ones(len(h)),x))\\nfor variant in ('gated_linear','global_log','active_fit_only'):\\n    m = s._Model(d,p,h,x)\\n    if variant == 'global_log':\\n        m.flow[:] = np.r_[np.log1p(m.t),1.0]\\n        m.drift = m.flow[:,:,None]*features[:,None,:]\\n    active = m.active[:n]\\n    oof = np.empty_like(y)\\n    taus = []\\n    for c in np.unique(lab):\\n        rows = np.flatnonzero(complete & (lab != c) & (active if variant == 'active_fit_only' else True))\\n        lt,w = s._fit(m,y,rows)\\n        taus.append(np.exp(lt))\\n        test = np.flatnonzero(lab == c)\\n        oof[test] = m.design(lt,test)@w-y[test]\\n    print(variant,'fold taus',np.round(taus,4).tolist())\\n    for gate in (False,True):\\n        take = complete & (active == gate)\\n        e = oof[take]\\n        print(' active',gate,'n',len(e),'signed horizon medians',np.median(e,axis=0).round(4),'abs curve/rate median',np.median(abs(e[:,:-1])).round(4),np.median(abs(e[:,-1])).round(4),'worst lab p90 curve/rate',np.max([np.quantile(abs(oof[take & (lab == c),:-1]),.9) for c in np.unique(lab)]).round(4),np.max([np.quantile(abs(oof[take & (lab == c),-1]),.9) for c in np.unique(lab)]).round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: supported archive sweeps correct the stress calibration → H2: compare zero-damage flow laws on held-out labs; current worst lab × activation × completeness p90 absolute errors are 0.62366 for strain and 0.28921 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune weights against the largest individual residuals\",\n      \"rejected_reason\": \"Several worst intersections contain only one coupon; signed errors by horizon on complete coupons better distinguish a flow-law mismatch from observation noise or imputation error.\"\n    }\n  ],\n  \"rationale\": \"The well-supported archive fallback corrected the implausible activation pattern. Compare linear and logarithmic flow on zero-damage coupons, and use active-only fitting to check whether inactive observations destabilize the slower relaxation time. Revise the flow law only if the held-out residuals show a consistent improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b05c8c79eab888f85ae8d454a33079eb6554298941119370fc00f9bec814c68d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28117.11,
+      "usage_known": true,
+      "prompt_tokens": 28322,
+      "cached_tokens": 6784,
+      "completion_tokens": 990
+    }
+  ]
+}

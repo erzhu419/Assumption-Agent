@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60b15b52d6b54fffb65f94a18286c30d",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:27:28.508477+00:00",
+  "ended_at_utc": "2026-11-27T08:27:58.695164+00:00",
+  "request_sha256": "8c0ba490a19565a532c35e1ee3d527b1b167c94179bb1899d32a809c16f83387",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 53992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29755,
+    "cached_tokens": 6784,
+    "completion_tokens": 1152
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nbase='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',base+'alpha_m97_c03_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitems=pickle.load(open(base+'public_alpha_m97_c03_batch_07.pkl','rb'))\\nfor i,item in enumerate(items):\\n d,g=item['dataset'],item['gt']; o=m.solve_alpha_m97_c03_batch_07(d)\\n for k in o: assert np.isfinite(o[k]).all(),k\\n assert np.all(np.diff(o['estimated_taus'])>0)\\n D=np.maximum(np.abs(g['te_hist_true'])-d['crit_stress'],0)**2@d['past_dt']; complete=np.isfinite(d['test']['coupon_features_raw']).all(1)\\n e=o['predicted_strain']-g['te_clean']; r=o['initial_rate_pred']-g['te_true_rate0']\\n rms=lambda x: np.sqrt(np.mean(x*x))\\n for label,mask in [('all',np.ones(len(r),bool)),('zero-damage complete',(D==0)&complete),('positive-damage complete',(D>0)&complete),('imputed',~complete)]:\\n  if mask.any(): print(i,label,int(mask.sum()),'strain/rate RMSE',rms(e[mask]),rms(r[mask]))\\n print('max parameter errors',*[np.max(abs(o[k]-g[j])) for k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]])\\n# Separate the four-clean direct fit, two-point direct fit, sparse EMI fallback,\\n# and absent-channel fallback in one mixed sweep on the measured stress range.\\nc=items[0]['dataset']['calibration_load_cells']; ref=m._calibrate(c)\\nx=np.array([-2.,-1.,0.,1.,2.]); y=0.91*x+0.21; y[-1]+=4.9\\nx1=np.array([-2.,2.]); y1=0.86*x1-0.12\\nx2=np.array([-1.5,0.,1.5]); y2=np.polyval(ref[2],x2); y2[1]+=4.9\\nmixed={'lab_id':np.repeat([0,1,2],[5,2,3]),'cmd_stress':np.r_[x,x1,x2],'true_stress':np.r_[y,y1,y2]}\\nz=m._calibrate(mixed)\\nnp.testing.assert_allclose(z[:2],[[0.91,0.21],[0.86,-0.12]],atol=1e-12)\\nnp.testing.assert_allclose(z[2:],ref[2:],atol=2e-4)\\nprint('Calibration passed direct clean, direct sparse, sparse EMI, and absent-channel cases.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 damage selects the creep basis -> H2 low banding selects log creep and damage gates only its corrections; verified public worst-lab strain/rate RMSE is 0.0904/0.0686, and the imputed slice is 0.1932/0.1466.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Replace cell-mean imputation to lower the public missing-feature error\",\"rejected_reason\":\"Cell-balanced means are specified by the task, and the exact-parameter diagnostic already showed that this slice's error mostly comes from unobserved features rather than the fitted rheology.\"}],\"rationale\":\"The verified candidate fixes the zero-damage time basis. The public split mainly exercises archive fallback; a mixed sweep checks whether the solver incorrectly overrides clean current data or propagates a sparse EMI spike. A failure would call for a calibration change; otherwise the verified model is ready to submit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3a63ec95fd6993f3f70e3ab1b7a0dca11637ed72c55e427069029a8d3dc99d0a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32007.53,
+      "usage_known": true,
+      "prompt_tokens": 29755,
+      "cached_tokens": 6784,
+      "completion_tokens": 1152
+    }
+  ]
+}

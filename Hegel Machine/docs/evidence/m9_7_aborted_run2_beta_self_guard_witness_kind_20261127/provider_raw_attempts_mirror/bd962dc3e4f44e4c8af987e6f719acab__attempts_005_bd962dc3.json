@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd962dc3e4f44e4c8af987e6f719acab",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:44:47.246435+00:00",
+  "ended_at_utc": "2026-11-27T07:45:25.856515+00:00",
+  "request_sha256": "17cdbd87d0711da995e8a1f79057d55c2c96e42e14e2be773271105541715015",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25276,
+    "cached_tokens": 6784,
+    "completion_tokens": 1561
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom importlib.util import spec_from_file_location, module_from_spec\\nfrom pathlib import Path\\nimport json, pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = spec_from_file_location('solver', path)\\n    mod = module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nbase = Path('/holdout_task')\\narchive = Path('/tmp/hegel_continual_archive')\\nm = load(base/'beta_m97_c03_batch_01_solver.py')\\na = load(archive/'beta_m97_c03_s00_solver.py')\\nwith (base/'public_beta_m97_c03_batch_01.pkl').open('rb') as f:\\n    item, = pickle.load(f)\\ns, gt = item['study'], item['gt']\\nc = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\nrows = np.asarray(s['row_bank_id'])\\nbaseline = m._calibrate(s)\\nworst_loo = 0.\\nfor i in range(len(c['bank_id'])):\\n    keep = np.arange(len(c['bank_id'])) != i\\n    got = m._calibrate(dict(s, sensor_calibration_sweeps={k:v[keep] for k,v in c.items()}))\\n    worst_loo = max(worst_loo, np.max(np.abs(got-baseline)))\\nassert worst_loo < 1e-6\\nprint('Worst leave-one-sweep-row calibrated-reading change:', worst_loo)\\n\\nbank = 2\\nmask = c['bank_id'] == bank\\nh = json.loads((archive/'archive_calibration_history.json').read_text())[-1]\\nhm = np.asarray(h['bank_id']) == bank\\nhx, hy = np.asarray(h['ref_signal'])[hm], np.asarray(h['raw_readout'])[hm]\\ngain, offset = np.polynomial.polynomial.polyfit(hx, hy, 1)[::-1]\\nexpected = baseline.copy()\\nexpected[rows == bank] = (np.asarray(s['y_obs_raw'])[rows == bank]-offset)/gain\\nbank_indices = np.flatnonzero(mask)\\nfor name, indices, spike, target in [('bank absent', [], False, expected), ('one current row', bank_indices[:1], False, expected), ('EMI with three clean rows', bank_indices[:4], True, expected), ('EMI with eleven clean rows', bank_indices, True, baseline)]:\\n    keep = ~mask | np.isin(np.arange(len(mask)), indices)\\n    sweep = {k: v[keep].copy() for k,v in c.items()}\\n    if spike:\\n        sweep['raw_readout'][np.flatnonzero(sweep['bank_id'] == bank)[0]] += 4.\\n    error = np.max(np.abs(m._calibrate(dict(s, sensor_calibration_sweeps=sweep))-target))\\n    print(name, 'max reading error:', error)\\n    assert error < 1e-6\\n\\n# A trace exactly at threshold must retain the archived Robin map.\\nopened = dict(s, past_vortex_circulation_trace=np.full_like(np.asarray(s['past_vortex_circulation_trace']), s['critical_vortex_circulation']))\\nfor actual, ref in zip(m._forward(opened), a._forward(opened)):\\n    np.testing.assert_allclose(actual, ref, rtol=1e-12, atol=1e-13)\\nassert np.allclose(m._axis(s['kappa_x'],s['vel_x'],s['Lx'],0).sum(axis=1),0.,atol=1e-12)\\nprint('Threshold Robin dispatch and sealed constant-state flux: pass')\\n\\n# Vary the budget on the public profiled operator to exercise all-active vertices and both bounds.\\nS, y = np.asarray(gt['S_tilde']), np.ravel(gt['r_y'])\\ncap, ridge = s['u_box'], s['source_ridge']\\nworst_gap = worst_feas = 0.\\nfor budget in [0., 1e-7, .1, 1., s['total_budget'], 5., 10., 12*cap-1e-7, 12*cap]:\\n    w, cert = m._invert(S, y, ridge, cap, budget)\\n    res = S@w-y\\n    g = S.T@res+ridge*w\\n    reduced = g-cert['nu_sum']\\n    gap = np.maximum(reduced,0)@w + np.maximum(-reduced,0)@(cap-w)\\n    feas = max(abs(w.sum()-budget), -w.min(), w.max()-cap)\\n    assert gap < 1e-8 and feas < 1e-10\\n    np.testing.assert_allclose(reduced, cert['lam_lower']-cert['lam_upper'], atol=1e-12)\\n    worst_gap, worst_feas = max(worst_gap,gap), max(worst_feas,feas)\\nprint('Worst budget-slice KKT gap:',worst_gap,'worst feasibility residual:',worst_feas)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived Robin stencil -> vortex-gated sealed Neumann with wall sorption; the public KKT gap is 1.18e-16 and terminal-field relative L2 error is 2.54e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The public case does not exercise prefix fallback, EMI rejection, the threshold boundary switch, or all-active budget constraints.\"\n    }\n  ],\n  \"rationale\": \"Stress the verified candidate without editing it. A calibration failure would change the sweep-selection logic; a threshold or flux failure would change the operator dispatch or stencil; a budget-slice failure would change the active-set handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "eaa36b2c7fbf163794d47979244895090fc5cc70c2c2ceb8fa2865bd5e2adef2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41085.76,
+      "usage_known": true,
+      "prompt_tokens": 25276,
+      "cached_tokens": 6784,
+      "completion_tokens": 1561
+    }
+  ]
+}

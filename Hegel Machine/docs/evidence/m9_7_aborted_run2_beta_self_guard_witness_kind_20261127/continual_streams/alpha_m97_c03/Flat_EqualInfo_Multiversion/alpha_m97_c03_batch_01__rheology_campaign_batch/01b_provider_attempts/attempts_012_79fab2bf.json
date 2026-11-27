@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79fab2bfb8b14c3ea1cbef06c2bd20b4",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:48:48.040174+00:00",
+  "ended_at_utc": "2026-11-27T07:49:18.027128+00:00",
+  "request_sha256": "5ef3e48a38dbc7a67734f36ceed1177511212c8e9ef4c4745f698fc4a91d37c4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 76099,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37954,
+    "cached_tokens": 6784,
+    "completion_tokens": 1114
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat >/tmp/rheo_margin.py <<'PY'\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\\nsource=p.read_text()\\nmodels={}\\nfor name, code in [('current',source),('cauchy',source.replace(\\\"loss='soft_l1', f_scale=2.\\\",\\\"loss='cauchy', f_scale=2.5\\\")),('cauchy4',source.replace(\\\"loss='soft_l1', f_scale=2.\\\",\\\"loss='cauchy', f_scale=4.\\\"))]:\\n    env={};exec(compile(code,str(p),'exec'),env);models[name]=env\\nitems=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_01.pkl','rb')); print('public cases',len(items))\\nfor item in items:\\n    d=item['dataset']; tr,te=d['train'],d['test']; lab=tr['lab_id']; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\n    s=models['current']; g,b=s['_calibrate'](d['calibration_load_cells']); x,_=s['_align'](tr,te); dt,t=d['past_dt'],d['eval_times']; args=g,b,dt,t,d['crit_stress'],d['shear_banding_index']; f,active=s['_design'](tr,x,*args)\\n    y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; rmse=lambda e:np.sqrt(np.nanmean(e**2)); gt=item['gt']; cols=('taus','theta','vp_theta','te_clean','te_true_rate0')\\n    for name,s in models.items():\\n        slices=[]; bias=[]\\n        for c in np.unique(lab):\\n            keep=(lab!=c)&complete\\n            lt,w=s['_fit'](f,np.where(keep[:,None],y,np.nan),np.where(keep,rate,np.nan),dt,t)\\n            C,R=f(lt); e=C@w-y; re=R@w-rate\\n            for a in (False,True):\\n                for full in (True,False):\\n                    m=(lab==c)&(active==a)&(complete==full)\\n                    if m.any(): slices.append((c,a,full,np.nanmedian(abs(e[m])),np.nanquantile(abs(e[m]),.90),np.nanquantile(abs(e[m]),.95),rmse(re[m])))\\n            m=(lab==c)&complete; bias.append((int(c),round(float(np.nanmedian(re[m])),5),round(float(np.nanmedian(e[m])),5)))\\n        out=s['solve_alpha_m97_c03_batch_01'](d)\\n        print(name,'public RMSE',np.round([rmse(z-gt[k]) for z,k in zip(out.values(),cols)],6),'held-lab complete and missing maxima [median,p90,p95,rateRMSE]',*[np.round(np.max([z[3:] for z in slices if z[2]==v],axis=0),5) for v in (True,False)],'complete held-lab signed median [lab,rate,strain]',bias)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_margin.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 banding sets the creep basis → H2 damage activates the network terms; verified worst held-lab slice strain p95 is 0.676, and public strain MAE is 0.016315.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, classification accuracy, or Fokker–Planck operators\",\"rejected_reason\":\"This dataset has continuous rheology responses, no relay state, and no stochastic drift equation. Held-lab signed residuals test the relevant nuisance effect.\"}],\"rationale\":\"Test whether sparse strain spikes still bias the estimated spectrum and whether signed prediction errors persist within individual labs. Use held-lab labels to compare robust losses and report complete and imputed coupons separately; change the saved solver only if the challenger improves the relevant margins.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "fd1fd48763082c867f4c36558e9a25467e4cb6d587e14f13e724f257ef1acc4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32394.84,
+      "usage_known": true,
+      "prompt_tokens": 37954,
+      "cached_tokens": 6784,
+      "completion_tokens": 1114
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c541164fbb294f84b485a9457b979d44",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:56:11.498628+00:00",
+  "ended_at_utc": "2026-11-27T07:56:58.220282+00:00",
+  "request_sha256": "854e4716ea04ce97ff64bfcdc2b596b616f1e74dfedc1b3f097f2be8f95d152f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55449,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29723,
+    "cached_tokens": 6784,
+    "completion_tokens": 1456
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, itertools, numpy as np\\nroot='/holdout_task/'\\nd=pickle.load(open(root+'public_alpha_m97_c03_batch_02.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; hist=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor lab in range(4):\\n    pick=c['lab_id']==lab; x,y=c['cmd_stress'][pick],c['true_stress'][pick]; a=np.column_stack((x,np.ones(len(x)))); base=np.linalg.lstsq(a,y,rcond=None)[0]\\n    sweep=next(r for r in reversed(hist) if lab in r['lab_id']); pm=np.asarray(sweep['lab_id'])==lab; ref=np.polyfit(np.asarray(sweep['cmd_stress'])[pm],np.asarray(sweep['true_stress'])[pm],1)\\n    print('lab',lab,'in-batch/archive lines',base.round(6),ref.round(6),'max archive discrepancy on clean sweep',max(abs(y-a@ref)))\\n    for n in (3,4):\\n        clean_alarm=miss=total=0; min_bad=np.inf\\n        for rows in itertools.combinations(range(len(x)),n):\\n            idx=list(rows); ax=a[idx]; obs=y[idx]\\n            if np.ptp(ax[:,0])<0.5: continue\\n            q,_=np.linalg.qr(ax); h=np.sum(q*q,axis=1); pr=np.eye(n)-q@q.T\\n            def decision(z):\\n                r=pr@z; loo=np.divide(abs(r),1-h,out=np.zeros(n),where=(1-h)>1e-12)\\n                return max(abs(r))>0.002 and max(loo)>3.0\\n            clean_alarm+=decision(obs)\\n            for j in range(n):\\n                for spike in (-8.,-4.,4.,8.):\\n                    z=obs.copy(); z[j]+=spike; total+=1; miss+=not decision(z); min_bad=min(min_bad,max(abs(pr@z)))\\n        print(' rows',n,'clean alarms',clean_alarm,'misses',miss,'of',total,'min contaminated full-fit max residual',min_bad)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 median pairwise spike screening → H2 leave-one-out spike screening with archive-assisted disambiguation; the current worst gain/bias error is 33.59 on a sparse, spiked sweep.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The median pairwise slope reliably separates transient EMI from the load-cell line on three- and four-reading sweeps.\",\n    \"empirical_witness\": \"On measured three- and four-row subsets with one injected EMI spike, 3,768 of 5,652 and 3,384 of 13,440 cases exceeded 0.05 gain/bias error; the worst error was 33.59.\",\n    \"causal_blanket_diagnosis\": \"A single high-leverage reading can tilt the screening line toward itself, hiding the spike and causing the fitted calibration to distort all stresses in that channel.\",\n    \"sublated_pivot\": \"Keep direct fits for clean sweeps and the prescribed affine calibration law; use deleted-reading residuals to flag possible spikes before consulting the archive.\",\n    \"risk_kind\": \"sparse load-cell calibration under transient EMI\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use archived calibration for every short sweep\",\n      \"rejected_reason\": \"Clean short sweeps fit accurately in-batch, and the archive is only permitted for fewer than two readings or suspected EMI.\"\n    }\n  ],\n  \"rationale\": \"Test whether deleted-reading residuals detect spikes without flagging clean subsets. Compare archived and measured lines to determine whether the archive can identify the contaminated reading directly or should only break ties between plausible in-batch fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "675b3ca5c6fedcfb27a9cdcb5e7e21c9605612bc6f4c54f6f4c7ebd655a80f8f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49165.59,
+      "usage_known": true,
+      "prompt_tokens": 29723,
+      "cached_tokens": 6784,
+      "completion_tokens": 1456
+    }
+  ]
+}

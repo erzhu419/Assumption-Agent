@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b49b0015dde641a383ef400911f540a8",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:20.816968+00:00",
+  "ended_at_utc": "2026-11-27T07:45:54.665550+00:00",
+  "request_sha256": "15d4d622adfa30dde4e2ab47d19824a8300ac3cabbcb5dd3cdd1c7e20181e9f9",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26408,
+    "cached_tokens": 6784,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, json, pickle\\nimport numpy as np\\n\\ndef load(path, name):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nbase = '/holdout_task/'\\nm = load(base + 'beta_m97_c01_batch_01_solver.py', 'candidate')\\na = load('/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py', 'archive')\\nitem = pickle.load(open(base + 'public_beta_m97_c01_batch_01.pkl', 'rb'))[0]\\ns = item['study']\\nfor mode, trace in [(1, s['past_vortex_circulation_trace']), (0, np.full_like(s['past_vortex_circulation_trace'], s['critical_vortex_circulation']))]:\\n    case = dict(s, recirculation_loop_mode=mode, past_vortex_circulation_trace=trace)\\n    for actual, ref in zip(m._forward(case), a._forward(case)):\\n        np.testing.assert_allclose(actual, ref, atol=1e-14, rtol=0)\\nprint('Open-mode and zero-memory boundary slices match archived forward solver')\\nrecord = json.loads(m._ARCHIVE.read_text())[-1]\\nobserved = np.linspace(-0.4, 0.6, len(s['row_bank_id']))\\nsweeps = s['sensor_calibration_sweeps']\\nfor condition in ('missing', 'one_point', 'three_with_emi', 'many_with_emi'):\\n    worst = 0.0\\n    for b in range(4):\\n        case = copy.deepcopy(s)\\n        keep = np.asarray(sweeps['bank_id']) != b\\n        x = {'missing': [], 'one_point': [0.0], 'three_with_emi': [-1.0, 0.0, 1.0], 'many_with_emi': np.linspace(-2.0, 2.0, 11)}[condition]\\n        xx = np.asarray(x, dtype=float)\\n        gains, offsets = [], []\\n        for j in range(4):\\n            data = record if j == b and condition != 'many_with_emi' else sweeps\\n            rows = np.asarray(data['bank_id']) == j\\n            gain, offset = m._affine(np.asarray(data['ref_signal'])[rows], np.asarray(data['raw_readout'])[rows])\\n            gains.append(gain)\\n            offsets.append(offset)\\n        yy = gains[b]*xx + offsets[b]\\n        if condition.endswith('emi'):\\n            yy[len(yy)//2] += 8.0\\n        case['sensor_calibration_sweeps'] = dict(bank_id=np.r_[np.asarray(sweeps['bank_id'])[keep], np.full(len(xx), b, dtype=int)], ref_signal=np.r_[np.asarray(sweeps['ref_signal'])[keep], xx], raw_readout=np.r_[np.asarray(sweeps['raw_readout'])[keep], yy])\\n        ids = s['row_bank_id']\\n        case['y_obs_raw'] = np.asarray(gains)[ids]*observed + np.asarray(offsets)[ids]\\n        worst = max(worst, float(np.max(np.abs(m._calibrate(case)-observed))))\\n    print(condition, 'worst calibration error', worst)\\n    assert worst < 1e-12\\nfor budget in (0.0, s['u_box'], 3*s['u_box'], 12*s['u_box']):\\n    case = dict(s, total_budget=budget)\\n    out = m.solve_beta_m97_c01_batch_01(case)\\n    w = np.asarray(out['weights'])\\n    assert abs(w.sum()-budget) < 1e-10 and w.min() > -1e-12 and w.max() < s['u_box']+1e-12\\n    cert = out['kkt_certificate']\\n    assert abs(cert['primal_objective']-cert['dual_lower_bound']) < 1e-10\\nprint('Box-simplex endpoint and integer-capacity budgets passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"X-only sealing → both-axis sealing with x-localized sorption; public maximum errors are 3.65e-7 for weights and 2.92e-8 for the terminal field, with a reported KKT gap of 1.32e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case verifies the fouled regime with dense calibration. Stress the untested branches: a forward mismatch would require correcting the mode gate, a calibration mismatch would require changing archive selection or EMI rejection, and a budget failure would require correcting the active-set solve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "60f11ca00c711c72a2cd23b53c262831f561226fe2678ddbe46d63ed5e6639f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36250.78,
+      "usage_known": true,
+      "prompt_tokens": 26408,
+      "cached_tokens": 6784,
+      "completion_tokens": 1354
+    }
+  ]
+}

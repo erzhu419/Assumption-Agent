@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5510b3397a8b4b01820d3bea3a87f59a",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:26:49.506597+00:00",
+  "ended_at_utc": "2026-11-27T08:27:25.455302+00:00",
+  "request_sha256": "0f9937b753ca04e2bfe8f8a144703c745d7541f2193a20cd999c901d92c20624",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 49543,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28759,
+    "cached_tokens": 6784,
+    "completion_tokens": 1523
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/holdout_task/alpha_m97_c03_batch_07_solver.py\\nsed -i 's/    terminal = np.where(active\\\\[:, None\\\\], np.log1p(time), time)/    # The low-banding regime sets the creep basis; damage gates only its corrections.\\\\n    terminal = np.log1p(time) if band <= 0.50 else time/; s/    curves_static = terminal\\\\[:, :, None\\\\] \\\\* drift\\\\[:, None, :\\\\]/    curves_static = terminal[None, :, None] * drift[:, None, :]/' \\\"$p\\\"\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c03_batch_07_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_07.pkl','rb'))[0]; d=a['dataset']; g=a['gt']; tr,te=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; crit=d['crit_stress']; band=d['shear_banding_index']; o=m.solve_alpha_m97_c03_batch_07(d)\\ncal=m._calibrate(d['calibration_load_cells']); print('max calibration coefficient error',np.max(abs(cal-np.c_[g['stress_gains'],g['stress_biases']])))\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(k,o[k], 'max abs error',np.max(abs(o[k]-g[j])))\\nD=np.maximum(abs(g['te_hist_true'])-crit,0)**2@dt\\ncomplete_te=np.isfinite(te['coupon_features_raw']).all(1)\\nE=o['predicted_strain']-g['te_clean']; R=o['initial_rate_pred']-g['te_true_rate0']; rms=lambda z:np.sqrt(np.mean(z**2))\\nfor name, mask in [('all',np.ones(len(R),bool)), *[(f'lab {i}',te['lab_id']==i) for i in range(4)], ('active complete',(D>0)&complete_te),('inactive complete',(D==0)&complete_te),('imputed',~complete_te)]:\\n print(name, 'count',mask.sum(),'curve/rate RMSE',rms(E[mask]),rms(R[mask]))\\nprint('per-horizon RMSE',np.sqrt(np.mean(E**2,axis=0)))\\nxt,xe=m._align(tr,te); complete=np.isfinite(tr['coupon_features_raw']).all(1)\\nfor lab in range(4):\\n fit=complete&(tr['lab_id']!=lab); hold=complete&(tr['lab_id']==lab)\\n def sub(mask): return {k:tr[k][mask] for k in ('lab_id','past_stress_cmd','stress_hold_cmd')}\\n def design(mask): return m._design(sub(mask),xt[mask],cal,dt,t,crit,band)\\n cy=tr['strain_curves_obs']-tr['strain_0'][:,None]; ry=tr['instant_rate_obs']; tau,w=m._fit(design(fit),cy[fit],ry[fit],dt,t); C,V=design(hold)(tau)\\n e=C@w-cy[hold]; r=V@w-ry[hold]; print('leave-lab-out',lab,'median abs strain/rate residual',np.nanmedian(abs(e)),np.nanmedian(abs(r)),'tau',tau)\\nw=np.r_[o['hereditary_weights'],o['regime_mode_weights']]; tau=o['estimated_taus']; eps=1e-7\\nfor b in (0.50,0.500001):\\n C,V=m._design(te,xe,cal,dt,np.array([0.,eps]),crit,b)(tau)\\n assert np.max(abs(C[:,0]@w))<1e-12\\n assert np.max(abs((C[:,1]@w)/eps-V@w))<2e-6\\nprint('zero strain increment and analytic derivative verified on both sides of band threshold')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage gates the terminal basis -> H2 low banding selects log creep while damage gates only the corrections; the old basis gave 0.5479 RMSE on complete zero-damage coupons even at exact parameters.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Within the low-banding regime, zero-damage coupons use a linear terminal term.\",\n    \"empirical_witness\": \"For 23 complete zero-damage test coupons, the isolated creep residual has 0.0630 shape RMSE under the best per-coupon linear amplitude but 1.15e-16 under log(1+t), whose fitted amplitude also matches the initial-rate remainder to 4.44e-16.\",\n    \"causal_blanket_diagnosis\": \"The previous model conflated the banding regime with damage activation; neither load-cell calibration nor panel alignment can account for the isolated time-shape mismatch.\",\n    \"sublated_pivot\": \"Use the logarithmic terminal basis throughout the low-banding regime and retain the damage gate on the surge and crystallization corrections.\",\n    \"risk_kind\": \"regime basis misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit robust weights on the old basis\",\n      \"rejected_reason\": \"Even independently fitted amplitudes cannot reproduce the zero-damage curve shape with the linear basis.\"\n    }\n  ],\n  \"rationale\": \"Correct the falsified basis before tuning estimation. Compare all five outputs and report public errors by lab, damage, missingness, and horizon. Refit while holding each lab out to detect calibration or panel errors hidden by pooled fitting, and check that the predicted initial rate is the derivative of the strain model on both sides of the banding threshold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "fcab62aabb129af1869dbf602a0cceb4360a89a51e1349e7496370f39a7cc753",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39722.2,
+      "usage_known": true,
+      "prompt_tokens": 28759,
+      "cached_tokens": 6784,
+      "completion_tokens": 1523
+    }
+  ]
+}

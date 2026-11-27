@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa60a387b1c644fba39a02245c7570b5",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:18:57.709458+00:00",
+  "ended_at_utc": "2026-11-27T08:19:20.058185+00:00",
+  "request_sha256": "aa7b04afd03b937ad7504c535826dd5474c97de04d8d24e3db3d18d2d5abb76e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32031,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22944,
+    "cached_tokens": 6784,
+    "completion_tokens": 660
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nwith open('public_alpha_m97_c03_batch_06.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f: h=json.load(f)\\nc=d['calibration_load_cells']; tr=d['train']\\nfor lab in range(4):\\n print('lab',lab)\\n for s in h:\\n  m=np.asarray(s['lab_id'])==lab; x=np.asarray(s['cmd_stress'])[m]; y=np.asarray(s['true_stress'])[m]; q=np.polyfit(x,y,1)\\n  print(s['episode_short_name'],q.round(7), 'max residual', np.max(np.abs(y-np.polyval(q,x))))\\n m=c['lab_id']==lab; x=c['cmd_stress'][m]; y=c['true_stress'][m]; q=np.polyfit(x,y,1)\\n print('current OLS',q,'residuals',(y-np.polyval(q,x)).round(5))\\n print('strata',np.unique(tr['stratum'][tr['lab_id']==lab],return_counts=True))\\nprint('response std by time',np.std(tr['strain_curves_obs']-tr['strain_0'][:,None],axis=0)); print('rate std',np.std(tr['instant_rate_obs']))\\nPY\\nsed -n '56,112p;159,250p' /tmp/hegel_continual_archive/alpha_m97_c03_batch_05_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: use direct fits for clean load cells and prefix estimates only for sparse or EMI-affected cells, then fit the exact jammed-slip basis; held-out error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the newest archived sweep unconditionally on affected channels\",\"rejected_reason\":\"If a coefficient changes across the prefix, the last sweep may be a poor estimate; check stability and compare against any clean current readings before selecting the fallback.\"}],\"rationale\":\"Compare prefix coefficients and current residuals to distinguish a stable historical line with large transients from a genuine calibration shift. Only calibration readings and training summaries are used.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f2eabdf2e14acf3b6bae18fcb2ea5d40950b59d1ba1b755b008f23d05b7445f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24798.82,
+      "usage_known": true,
+      "prompt_tokens": 22944,
+      "cached_tokens": 6784,
+      "completion_tokens": 660
+    }
+  ]
+}

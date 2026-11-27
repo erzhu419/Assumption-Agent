@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae97de3987754af7ba7c061484d2b29c",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:48:51.784417+00:00",
+  "ended_at_utc": "2026-11-27T07:49:29.957135+00:00",
+  "request_sha256": "6bbddcc6d75b03ab5e1f25ce7481c2c29fc5e04da2f068e02fedb03cc822f154",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 71813,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35145,
+    "cached_tokens": 6784,
+    "completion_tokens": 1230
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport collections, json, pickle\\nimport numpy as np\\np='/holdout_task/public_alpha_m97_c01_batch_01.pkl'\\nwith open(p,'rb') as f: d=pickle.load(f)[0]['dataset']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f: h=json.load(f)\\nc=d['calibration_load_cells']; labs=c['lab_id']; x=c['cmd_stress']; y=c['true_stress']\\nfor j in range(4):\\n    ids=np.flatnonzero(labs==j); xx=x[ids]; yy=y[ids]\\n    sweep=next(s for s in reversed(h) if sum(np.asarray(s['lab_id'])==j)>=2)\\n    q=np.asarray(sweep['lab_id'])==j\\n    old=np.polyfit(np.asarray(sweep['cmd_stress'])[q],np.asarray(sweep['true_stress'])[q],1)\\n    err=yy-np.polyval(old,xx)\\n    print('channel',j,'archive line',np.round(old,6),'max clean departure from nominal/archive',round(max(abs(yy-xx)),6),round(max(abs(err)),6))\\n    for delta in (3.01,3.25,4.):\\n        misses=collections.Counter()\\n        for size in (2,3):\\n            for i in range(size):\\n                for sign in (-1,1):\\n                    if abs((yy-xx)[i]+sign*delta)<=3: misses['nominal']+=1\\n                    if abs(err[i]+sign*delta)<=3: misses['archive']+=1\\n        print(' spike',delta,'missed of 10 by nominal/archive',misses['nominal'],misses['archive'])\\n    pairs=np.triu_indices(len(xx),1); gap=np.ptp(xx)\\n    print(' smallest cmd separation/span',float(np.min(abs(xx[pairs[0]]-xx[pairs[1]]))),float(gap))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine residuals alone detect EMI -> H2 sparse calibration needs an independent reference; a single injected spike shifted inferred physical stress by up to 439.36 on measured commands.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always blend historical and current sweeps\",\n      \"rejected_reason\": \"This would override the clean in-batch fit and could import stale gains into the public predictions.\"\n    },\n    {\n      \"option\": \"Keep the residual-only filter for all sweep sizes\",\n      \"rejected_reason\": \"Two distinct points exactly determine a line, so the fit can absorb an EMI spike without a residual.\"\n    }\n  ],\n  \"rationale\": \"Measure clean departures from nominal and historical lines, and count missed spikes near and above the cutoff. These results determine whether a sparse-only trigger can catch the observed failure without replacing clean in-batch fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "adf57a347582ae32635a71559fccf4d689b9b99d762b52493862f249422601f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40583.41,
+      "usage_known": true,
+      "prompt_tokens": 35145,
+      "cached_tokens": 6784,
+      "completion_tokens": 1230
+    }
+  ]
+}

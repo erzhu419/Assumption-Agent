@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53e0eec84ad84e5d8addfae6f7b338de",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:16:28.503140+00:00",
+  "ended_at_utc": "2026-11-27T08:17:05.401744+00:00",
+  "request_sha256": "63799e34342929603d0d4e55f2c20e869268c22901a6bc379745c0c800ce579e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 73976,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36047,
+    "cached_tokens": 11136,
+    "completion_tokens": 1447
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\ncat > /tmp/audit_batch04.py <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', root/'alpha_m97_c03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith (root/'public_alpha_m97_c03_batch_04.pkl').open('rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']\\na, b = d['train'], d['test']\\nout = m.solve_alpha_m97_c03_batch_04(d)\\nlabs = b['lab_id']\\ncomplete = np.isfinite(b['coupon_features_raw']).all(axis=1)\\ncal = np.column_stack(m._calibrate(d['calibration_load_cells']))\\ng, c = cal[labs].T\\nhist = g[:, None]*b['past_stress_cmd'] + c[:, None]\\nhold = g*b['stress_hold_cmd'] + c\\ndt, t = d['past_dt'], d['eval_times']\\ndamage = (np.maximum(0., np.abs(hist)-d['crit_stress'])**2) @ dt\\nact = np.tanh(damage)\\n_, x = m._align(a,b)\\n\\ndef direct(tau, w, rw):\\n    z = hist @ ((-np.expm1(-dt[:,None]/tau))*np.exp(-(np.cumsum(dt[::-1])[::-1]-dt)[:,None]/tau))\\n    gap = hold[:,None]-z\\n    coeff = w[2]+x@w[3:]+rw[1]*act*z[:,0]\\n    amp = gap*w[:2]\\n    amp[:,0] += rw[0]*act*hold\\n    return b['strain_0'][:,None] + amp @ (-np.expm1(-t[None,:]/tau[:,None])) + coeff[:,None]*np.log1p(t), amp @ (1/tau) + coeff\\n\\ncv, rt = direct(out['estimated_taus'],out['hereditary_weights'],out['regime_mode_weights'])\\nnp.testing.assert_allclose(cv,out['predicted_strain'],atol=1e-11,rtol=1e-11)\\nnp.testing.assert_allclose(rt,out['initial_rate_pred'],atol=1e-11,rtol=1e-11)\\nprint('Independent closed-form memory and curve/rate handoff agree.')\\nprint('Stress reconstruction max abs, history/hold:',np.max(abs(hist-gt['te_hist_true'])),np.max(abs(hold-gt['te_hold_true'])))\\nprint('Max relative tau error:', np.max(abs(out['estimated_taus']/gt['taus']-1)))\\ncomparison = [('fitted',cv,rt),('public reference parameters with measured inputs',*direct(gt['taus'],gt['theta'],gt['vp_theta']))]\\nfor label, yy, rr in comparison:\\n    e, r = yy-gt['te_clean'], rr-gt['te_true_rate0']\\n    print(label)\\n    for name, q in [('complete',complete),('missing',~complete)]+[(f'complete lab {i} damage {p}',complete&(labs==i)&((damage>0)==p)) for i in range(4) for p in (False,True)]:\\n        if q.any():\\n            print(name,int(q.sum()),'strain/rate RMSE',np.round([np.sqrt(np.mean(e[q]**2)),np.sqrt(np.mean(r[q]**2))],6),'signed terminal/rate',np.round([np.mean(e[q,-1]),np.mean(r[q])],6))\\n    print('missing residual unexplained by tail alone, RMS:', np.sqrt(np.mean((e[~complete]-r[~complete,None]*np.log1p(t))**2)))\\nPY\\npython3 -I /tmp/audit_batch04.py\\npython3 - <<'PY'\\nimport json\\nwith open('public_asset_index.json') as f:\\n    def scan(x):\\n        if isinstance(x,dict):\\n            for k,v in x.items():\\n                if any(s in k.lower() for s in ('toler','threshold','metric')): print(k, str(v)[:300])\\n                elif isinstance(v,(dict,list)): scan(v)\\n        elif isinstance(x,list):\\n            for v in x: scan(v)\\n    scan(json.load(f))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 residual strain reflects missing response terms or lab confounding → H2 residual strain reflects missing coupon covariates; public missing-coupon strain/rate RMSE is 0.16573/0.12678.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational drift, PDE operators, or relay modes\",\n      \"rejected_reason\": \"The task specifies a continuous two-branch constitutive response, with no PDE state, relay input, or classification target. An independent closed-form check and within-lab residuals can detect failures in the actual response.\"\n    }\n  ],\n  \"rationale\": \"Use the real public measurements to compare the solver with an independently computed memory and curve/rate handoff. Compare signed errors within labs and use public reference parameters only as a diagnostic: if they leave the missing-coupon error essentially unchanged and that error follows the logarithmic drift, improving fitted parameters or adding response terms will not address the bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "b2422379a631f350356e55659624f7260de92c38db2b920ec25c468df13971d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39406.98,
+      "usage_known": true,
+      "prompt_tokens": 36047,
+      "cached_tokens": 11136,
+      "completion_tokens": 1447
+    }
+  ]
+}

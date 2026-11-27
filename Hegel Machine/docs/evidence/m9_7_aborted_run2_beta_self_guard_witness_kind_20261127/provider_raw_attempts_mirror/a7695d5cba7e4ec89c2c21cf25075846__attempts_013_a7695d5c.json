@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7695d5cba7e4ec89c2c21cf25075846",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:49:21.202360+00:00",
+  "ended_at_utc": "2026-11-27T07:49:39.196130+00:00",
+  "request_sha256": "03642ecd7fe3db3f14e6027f9284bde59bec4654d838f49481dd59488deb08e9",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 77149,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37776,
+    "cached_tokens": 6784,
+    "completion_tokens": 605
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\nold = \\\"loss='soft_l1', f_scale=2.\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, \\\"loss='cauchy', f_scale=2.5\\\"))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I /tmp/validate_rheology_01.py\\nsed '/^for name, code in /c\\\\for name, code in [(\\\"saved_cauchy\\\", source)]:' /tmp/rheo_margin.py > /tmp/rheo_final_margin.py\\npython3 -I /tmp/rheo_final_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 banding selects the creep basis → H2 damage activates the network terms; Cauchy refinement cuts public relaxation-time RMSE from 0.14177 to 0.09766 and worst held-lab rate RMSE from 0.24573 to 0.24275, with complete-coupon strain p95 rising from 0.67624 to 0.68323.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain soft-L1 refinement\",\n      \"rejected_reason\": \"It gives a slightly better complete-coupon strain p95, but Cauchy improves all five public output RMSEs and lowers the worst held-lab rate RMSE.\"\n    }\n  ],\n  \"rationale\": \"Promote Cauchy for the 31% reduction in relaxation-time RMSE. Run the saved file in an isolated process to confirm the schema, calibration fallback, and held-lab margins; revert if the saved candidate fails those checks or does not reproduce the measured gains.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "2db62fcde2c268805a9d3778b3fe589a4672c8e71baf4d38dc4fea2b0461e956",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20443.92,
+      "usage_known": true,
+      "prompt_tokens": 37776,
+      "cached_tokens": 6784,
+      "completion_tokens": 605
+    }
+  ]
+}

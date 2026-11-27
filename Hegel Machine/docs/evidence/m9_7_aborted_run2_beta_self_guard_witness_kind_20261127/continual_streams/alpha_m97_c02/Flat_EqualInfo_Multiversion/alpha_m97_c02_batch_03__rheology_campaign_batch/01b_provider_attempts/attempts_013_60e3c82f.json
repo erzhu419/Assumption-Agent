@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60e3c82fbaad4534bf4703489bf586f2",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:06:02.498404+00:00",
+  "ended_at_utc": "2026-11-27T08:06:46.714943+00:00",
+  "request_sha256": "622fc27f2c832f9e2f597abca5ab65ead644cd646539bf0a443e613511d28bf4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 69287,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34963,
+    "cached_tokens": 6784,
+    "completion_tokens": 1725
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c02_batch_03_solver.py')\\ns = p.read_text()\\nstart = s.index('        elif len(x) == 3:')\\nend = s.index('        if len(x) >= 2:', start)\\ns = s[:start] + '''        elif len(x) == 3:\\n            # The middle-point residual attenuates endpoint spikes. Screen\\n            # each point against the other two, then use the archived slope\\n            # to identify the spike without assuming which point is clean.\\n            for i, j, k in ((0, 1, 2), (1, 0, 2), (2, 0, 1)):\\n                if x[k] == x[j]:\\n                    continue\\n                prediction = y[j] + (y[k]-y[j])*(x[i]-x[j])/(x[k]-x[j])\\n                if abs(y[i] - prediction) > 3.0:\\n                    archived = prior(lab)\\n                    off = y - archived[0]*x\\n                    keep = abs(off - np.median(off)) <= 3.0\\n                    x, y = x[keep], y[keep]\\n                    break\\n''' + s[end:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_batch_03.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']; c = d['calibration_load_cells']; base = m._calibration(d)\\narchive = m._ARCHIVE\\nfor n in (3, 4, 10):\\n    worst, count = 0., 0\\n    for lab in range(4):\\n        idx = np.flatnonzero(c['lab_id'] == lab)\\n        idx = idx[np.argsort(c['cmd_stress'][idx])]\\n        pick = idx[np.linspace(0, len(idx)-1, n, dtype=int)]\\n        mask = (c['lab_id'] != lab) | np.isin(np.arange(len(c['lab_id'])), pick)\\n        sweep = {k:np.asarray(v)[mask].copy() for k,v in c.items()}\\n        loc = np.searchsorted(np.flatnonzero(mask), pick)\\n        cmd = d['test']['past_stress_cmd'][d['test']['lab_id'] == lab]\\n        for pos, impulse in itertools.product(loc, (-3.05, 3.05, 15.)):\\n            sweep['true_stress'][pos] += impulse\\n            delta = m._calibration({**d, 'calibration_load_cells': sweep})[lab] - base[lab]\\n            err = np.max(abs(delta[0]*cmd + delta[1]))\\n            worst = max(worst, err); count += 1\\n            sweep['true_stress'][pos] -= impulse\\n    print(n, 'sweep points:', count, 'EMI cases; max physical stress error', worst)\\n    assert worst < .01\\nm._ARCHIVE = '/nonexistent'\\nfor lab in range(4):\\n    idx = np.flatnonzero(c['lab_id'] == lab)\\n    for pick in itertools.combinations(idx, 3):\\n        mask = (c['lab_id'] != lab) | np.isin(np.arange(len(c['lab_id'])), pick)\\n        m._calibration({**d, 'calibration_load_cells': {k:v[mask] for k,v in c.items()}})\\nprint('All 480 clean three-point subsets fit without the archive')\\nm._ARCHIVE = archive\\nfor n in (0,1,2):\\n    idx = np.flatnonzero(c['lab_id'] == 0)\\n    keep = (c['lab_id'] != 0) | np.isin(np.arange(len(c['lab_id'])), idx[:n])\\n    o = m._calibration({**d, 'calibration_load_cells': {k:v[keep] for k,v in c.items()}})\\n    assert np.max(abs(o-base)) < .002\\nout = m.solve_alpha_m97_c02_batch_03(d)\\ntest = d['test']; missing = ~np.isfinite(test['coupon_features_raw']).all(axis=1)\\nrms = lambda x: np.sqrt(np.mean(x*x))\\nfor key, ref in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta'),('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    err = out[key]-g[ref]\\n    print(key, 'RMSE', rms(err))\\n    if err.shape[0] == len(missing):\\n        print(' worst lab',max(rms(err[test['lab_id']==l]) for l in range(4)),'missing',rms(err[missing]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (middle-point screening catches sparse EMI) -> H2 (screen all three points and use the archived slope to identify the spike); the prior worst three-point physical-stress error was 3.535, with 16 of 36 cases above 0.01.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always load archived calibration for three-point sweeps\",\n      \"rejected_reason\": \"Clean three-point sweeps fit directly; archive access is reserved for sparse or EMI-affected measurements as specified.\"\n    }\n  ],\n  \"rationale\": \"The middle-point check can attenuate an endpoint spike below the detection threshold. Check every position, then use the archived slope to identify the bad reading. Repeat the failing cases, verify that clean subsets still bypass the archive, and check the final solver in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "60f9418fdca41eef5460947989a20cc5ad359ea157c0686ce50061fa041d7bc5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46702.06,
+      "usage_known": true,
+      "prompt_tokens": 34963,
+      "cached_tokens": 6784,
+      "completion_tokens": 1725
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbc28b19f381476681f962ca0032a86f",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:52:30.365613+00:00",
+  "ended_at_utc": "2026-11-27T07:53:02.972237+00:00",
+  "request_sha256": "009e335c9066a5479f28f8ae139d707f6fa56f59ac2f1543c8ba0561f4e30870",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37172,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25108,
+    "cached_tokens": 6784,
+    "completion_tokens": 1305
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('candidate', root/'beta_m97_c03_batch_03_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith (root/'public_beta_m97_c03_batch_03.pkl').open('rb') as f:\\n    item=pickle.load(f)[0]\\ns,g=item['study'],item['gt']\\nns={}; exec((root/'validate_public_schema.py').read_text().split('\\\\n_d = ',1)[0],ns)\\nverify=ns['verify_box_simplex_kkt_certificate']\\nworst_gap=0.; worst_cal=0.; worst_w=0.; worst_field=0.\\nc=s['sensor_calibration_sweeps']; banks=np.asarray(c['bank_id']); y0=m._calibrate(s)\\nfor b in range(4):\\n    idx=np.flatnonzero(banks==b)\\n    for case in ('empty','one','two_clean','three_spike','four_spike','full_spike'):\\n        keep=banks!=b\\n        count={'empty':0,'one':1,'two_clean':2,'three_spike':3,'four_spike':4,'full_spike':len(idx)}[case]\\n        keep[idx[:count]]=True\\n        c2={k:np.asarray(v)[keep].copy() for k,v in c.items()}\\n        if case.endswith('spike'):\\n            last=np.flatnonzero(c2['bank_id']==b)[-1]\\n            c2['raw_readout'][last]+=(-1)**b*3.01\\n        s2=dict(s,sensor_calibration_sweeps=c2)\\n        dc=float(np.max(np.abs(m._calibrate(s2)-y0))); assert dc<5e-6,(b,case,dc)\\n        o=m.solve_beta_m97_c03_batch_03(s2)\\n        chk=verify(g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],s['total_budget'],o['kkt_certificate'])\\n        assert chk['valid'],(b,case,chk)\\n        dw=float(np.max(np.abs(o['weights']-g['w_opt']))); df=float(np.max(np.abs(o['terminal_field']-g['terminal_field_A'])))\\n        assert dw<1e-5 and df<1e-6,(b,case,dw,df)\\n        worst_cal=max(worst_cal,dc); worst_w=max(worst_w,dw); worst_field=max(worst_field,df); worst_gap=max(worst_gap,chk['gap'])\\nprint('24 calibration slices: max calibrated delta',worst_cal,'max weight error',worst_w,'max field error',worst_field,'max reference KKT gap',worst_gap)\\nbaseline=m.solve_beta_m97_c03_batch_03(s)\\no=m.solve_beta_m97_c03_batch_03(dict(s,aux_manifold_telemetry=np.zeros_like(s['aux_manifold_telemetry'])))\\nfor k in ('weights','terminal_field'):\\n    np.testing.assert_array_equal(o[k],baseline[k])\\nworst=0.\\nfor budget in (0.,1e-7,1.,2.,2.6,6.,11.,12.-1e-7,12.):\\n    w,cert=m._invert(g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],budget)\\n    chk=verify(g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],budget,cert)\\n    assert chk['valid'],(budget,chk)\\n    np.testing.assert_array_equal(w,cert['weights']); worst=max(worst,chk['gap'])\\nprint('Budget endpoints and interior: max KKT gap',worst,'; telemetry invariant')\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived stencil → periodic wrap and cosine reaction: public sensor matrix matches to 1.25e-16 max absolute error, weights to 5.08e-7, and terminal field to 2.59e-8; public schema passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public fixture confirms the periodic operator but supplies only clean, full sweeps and one budget. Stress-test sparse and EMI-contaminated sweeps against the same measured fixture, check that auxiliary telemetry has no effect, and verify the KKT certificate at both budget endpoints.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9ea21c21a907c3f848a0f9481c18f0b9d3b532b2593ba0836248acc0f4005f3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34962.55,
+      "usage_known": true,
+      "prompt_tokens": 25108,
+      "cached_tokens": 6784,
+      "completion_tokens": 1305
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5c64453c6ee493597871e7ebbb6c6ff",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:25:38.293539+00:00",
+  "ended_at_utc": "2026-11-27T08:26:21.161483+00:00",
+  "request_sha256": "9d8e68e8bee00a99f11399dcbafdf96aed9458f2e49b10723d99e30c2e4dc5dd",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74828,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36243,
+    "cached_tokens": 6784,
+    "completion_tokens": 1832
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\ncat > /tmp/audit_alpha_m97_c01_b07.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_m97_c01_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_07.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    d = item['dataset']\\n    tr = d['train']\\n    lab = np.asarray(tr['lab_id'])\\n    n = len(lab)\\n    p, h, x, start = s._inputs(d)\\n    m = s._Model(d, p, h, x)\\n    y = np.column_stack((tr['strain_curves_obs'] - start[:n, None], tr['instant_rate_obs']))\\n    complete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\n    gate = m.active[:n]\\n    errors = {name: np.empty_like(y) for name in ('exact', 'algebraic_extensions', 'centered_telemetry')}\\n    tele = np.asarray(tr['aux_chamber_telemetry'], float)\\n    tele = tele - np.vstack([np.median(tele[lab == c], axis=0) for c in lab])\\n    for c in np.unique(lab):\\n        fit = np.flatnonzero(complete & (lab != c))\\n        val = np.flatnonzero(lab == c)\\n        lt, w = s._fit(m, y, fit)\\n        a = m.design(lt, slice(n))\\n        err = a @ w - y\\n        errors['exact'][val] = err[val]\\n        gap = a[:, -1, 0] * np.exp(lt[0])\\n        flow = m.flow[:n]\\n        pairs = np.column_stack([(x[:n, i] - x[:n, j])**2 for i in range(4) for j in range(i + 1, 4)])\\n        triple = (x[:n, 0] * x[:n, 1] * x[:n, 2])[:, None]\\n        frac = (gap / (1 + h[:n]**2))[:, None]\\n        proposals = {'algebraic_extensions': np.column_stack((pairs, triple, frac)), 'centered_telemetry': tele}\\n        core = a[fit].reshape(-1, 9)\\n        print('held-out lab', c, 'core rank', np.linalg.matrix_rank(core), 'taus', np.exp(lt).round(5))\\n        for name, features in proposals.items():\\n            add = flow[:, :, None] * features[:, None, :]\\n            mtx = np.concatenate((a, add), axis=2)\\n            ef = err[fit]\\n            sd = np.maximum(1.4826 * np.median(abs(ef - np.median(ef, axis=0)), axis=0), 1e-7)\\n            root = (1 + (ef / (3 * sd))**2)**-0.5\\n            z = mtx[fit].reshape(-1, mtx.shape[-1]) * root.reshape(-1, 1)\\n            coeff = np.linalg.lstsq(z, (y[fit] * root).ravel(), rcond=1e-10)[0]\\n            errors[name][val] = mtx[val] @ coeff - y[val]\\n    for name, e in errors.items():\\n        for full in (True, False):\\n            rows = complete == full\\n            slices = [rows & (lab == c) & (gate == g) for c in np.unique(lab) for g in (False, True)]\\n            slice_scores = [(np.quantile(abs(e[k,:-1]), .9), np.quantile(abs(e[k,-1]), .9)) for k in slices if k.any()]\\n            if slice_scores:\\n                print(name, 'complete', full, 'worst curve/rate p90', np.max(slice_scores, axis=0).round(6), 'pooled MAE', np.array([abs(e[rows,:-1]).mean(), abs(e[rows,-1]).mean()]).round(6))\\n    base = errors['exact']\\n    for c in np.unique(lab):\\n        for g in (False, True):\\n            k = complete & (lab == c) & (gate == g)\\n            if k.any():\\n                print('exact signed lab/gate residual', c, g, k.sum(), 'last-horizon/rate', np.median(base[k][:, [-2, -1]], axis=0).round(6))\\n    gt = item['gt']\\n    stress_error = np.max(abs(p[n:] - gt['te_hist_true']))\\n    max_stress = np.max(abs(p[n:]), axis=1)\\n    threshold = float(d['crit_stress'])\\n    print('public stress reconstruction max error', stress_error, 'test coupons within that error of damage threshold', np.sum(abs(max_stress - threshold) <= stress_error))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_alpha_m97_c01_b07.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: complete-coupon residuals may hide a missing algebraic term or lab nuisance → H2: retain the exact plateau model unless a fixed challenger improves held-out lab slices; current worst complete-coupon p90 is 0.0443 for strain and 0.0403 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or Fokker–Planck/HJB tests\",\n      \"rejected_reason\": \"Batch 07 has continuous strain and rate targets and a closed-form constitutive model, not class labels, a relay state, or a stochastic control operator. Within-lab signed residuals and held-out-lab errors test the relevant confounding risk.\"\n    }\n  ],\n  \"rationale\": \"Audit whether the contracted basis is identifiable, whether fixed pairwise, three-way, or rational corrections explain held-out residuals, and whether lab-centered telemetry adds transferable signal. Separately check whether observed calibration error is large enough to change the damage gate. Only a material failure would warrant changing the saved solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "60dcfae51abb7b239684f5fecd9aa93f273340af24a4697710209d79c86a3ad3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46206.76,
+      "usage_known": true,
+      "prompt_tokens": 36243,
+      "cached_tokens": 6784,
+      "completion_tokens": 1832
+    }
+  ]
+}

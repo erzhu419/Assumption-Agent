@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa03fc4603614687a0ea87d7255a5078",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:44:03.519510+00:00",
+  "ended_at_utc": "2026-11-27T07:44:43.016567+00:00",
+  "request_sha256": "7c890ad9fda28c2d9e882507301663e272db231cffb2d22350339a78b6b7ee3d",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 29779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22781,
+    "cached_tokens": 11136,
+    "completion_tokens": 1684
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/beta_m97_c02_s00_solver.py').read_text()\\nsrc = src.replace('Open-Robin reaction–transport tomography and certified source inversion.', 'Reaction–transport tomography with vortex-memory fouling and certified source inversion.')\\na, b = src.index('def _calibrate('), src.index('def _axis(')\\nsrc = src[:a] + '''def _bank_rows(sweeps, bank):\\n    mask = np.asarray(sweeps['bank_id']) == bank\\n    return tuple(np.asarray(sweeps[key], dtype=float)[mask] for key in ('ref_signal', 'raw_readout'))\\n\\n\\ndef _clean_rows(x, y):\\n    if x.size < 3:\\n        return np.ones(x.size, dtype=bool)\\n    slopes = []\\n    for i in range(x.size):\\n        use = x != x[i]\\n        if use.any():\\n            slopes.append(np.median((y[use] - y[i]) / (x[use] - x[i])))\\n    gain = np.median(slopes) if slopes else 0.0\\n    centered = y - gain * x\\n    return np.abs(centered - np.median(centered)) <= 3.0\\n\\n\\ndef _calibrate(study):\\n    parameters = np.empty((4, 2))\\n    history = None\\n    for bank in range(4):\\n        x, y = _bank_rows(study['sensor_calibration_sweeps'], bank)\\n        clean = _clean_rows(x, y)\\n        if clean.sum() >= 2 and np.ptp(x[clean]) > 0:\\n            parameters[bank] = _line(x[clean], y[clean])\\n            continue\\n        if x.size >= 2 and clean.all():\\n            raise ValueError(f'Bank {bank} has no reference-signal variation')\\n        if history is None:\\n            history = json.loads(_ARCHIVE.read_text())\\n        for sweep in reversed(history):\\n            ref, raw = _bank_rows(sweep, bank)\\n            keep = _clean_rows(ref, raw)\\n            if keep.sum() >= 2 and np.ptp(ref[keep]) > 0:\\n                parameters[bank] = _line(ref[keep], raw[keep])\\n                break\\n        else:\\n            raise ValueError(f'Bank {bank} lacks an identifiable calibration')\\n    gain, offset = parameters[np.asarray(study['row_bank_id'])].T\\n    return (np.asarray(study['y_obs_raw']) - offset) / gain\\n\\n\\n''' + src[b:]\\nsrc = src.replace(\\\"    ax = _axis(study['kappa_x'], study['vel_x'], study['robin_x'], study['Lx'] / (nx - 1))\\\", \\\"\\\"\\\"    lx, ly = study['Lx'], study['Ly']\\n    excess = np.maximum(0, np.asarray(study['past_vortex_circulation_trace'])\\n                        - study['critical_vortex_circulation'])\\n    v_mem = float(excess @ excess)\\n    sealed = study['recirculation_loop_mode'] == 0 and v_mem > 0\\n    ax = _axis(study['kappa_x'], study['vel_x'], 0.0 if sealed else study['robin_x'], lx / (nx - 1))\\\"\\\"\\\")\\nsrc = src.replace(\\\"    operator += diags(np.asarray(study['V_reaction_2d']).ravel(order='F'), format='csc')\\\", \\\"\\\"\\\"    reaction = np.asarray(study['V_reaction_2d'])\\n    if sealed:\\n        xs = np.linspace(0, lx, nx)[:, None]\\n        ys = np.linspace(0, ly, ny)[None, :]\\n        wall = np.exp(-(xs / (0.25 * lx))**2) + np.exp(-((lx - xs) / (0.25 * lx))**2)\\n        reaction = reaction + (0.95 + 0.55 * np.tanh(v_mem)) * wall * (0.6 + 0.4 * np.sin(np.pi * ys / ly))\\n    operator += diags(reaction.ravel(order='F'), format='csc')\\\"\\\"\\\")\\nsrc = src.replace('solve_beta_m97_c02_s00', 'solve_beta_m97_c02_batch_01')\\nPath('beta_m97_c02_batch_01_solver.py').write_text(src)\\nPY\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='beta_m97_c02_batch_01_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor entry in pickle.load(open('public_beta_m97_c02_batch_01.pkl','rb')):\\n s,g=entry['study'],entry['gt']; S,_=m._forward(s); y=m._calibrate(s); z=s['Z_nuisance']; A=z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]); resid=lambda x:x-z@np.linalg.solve(A,z.T@x)\\n out=m.solve_beta_m97_c02_batch_01(s)\\n for k,x,t in [('design',resid(S),g['S_tilde']),('target',resid(y),g['r_y']),('weights',out['weights'],g['w_opt']),('terminal',out['terminal_field'],g['terminal_field_A'])]:\\n  print(k,'max_abs',np.max(np.abs(x-t)),'relative_l2',np.linalg.norm(x-t)/np.linalg.norm(t))\\n print('certificate reported gap',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\\npython3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived open-Robin operator -> vortex-gated sealed x boundaries and sorption; public reference errors and KKT gap are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool historical and current sweeps\",\n      \"rejected_reason\": \"The public study has 12 in-batch rows per bank, and pooling would bias calibration toward the previous episode.\"\n    }\n  ],\n  \"rationale\": \"Implement the specified operator and reuse the archived box-simplex solver. Compare the design and target separately to distinguish boundary-stencil errors from calibration errors, then check weights, terminal field, and the certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "2ca290e624c28ae1c2ea852e672e3ad1e6001a273264e1d3bbb5862698822394",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44394.64,
+      "usage_known": true,
+      "prompt_tokens": 22781,
+      "cached_tokens": 11136,
+      "completion_tokens": 1684
+    }
+  ]
+}

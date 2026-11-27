@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c716483139f49029f4c30d88649a467",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:46:38.233140+00:00",
+  "ended_at_utc": "2026-11-27T07:46:59.867713+00:00",
+  "request_sha256": "d45b6dccffe313236f0ffafb0116e5ef3ba8fca4112c2dd347f90ee0738d2647",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 51735,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30312,
+    "cached_tokens": 6784,
+    "completion_tokens": 646
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\npath='/holdout_task/alpha_m97_c02_batch_01_solver.py'\\ns=importlib.util.spec_from_file_location('solver',path); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_01.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; full=m._calibration(d)\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f: print('archive layout', str(json.load(f))[:650])\\nfor lab in range(4):\\n    rows=np.flatnonzero(c['lab_id']==lab)\\n    for count in (0,1,2):\\n        keep=c['lab_id']!=lab; keep[rows[:count]]=True\\n        got=m._calibration(dict(d,calibration_load_cells={k:v[keep] for k,v in c.items()}))\\n        print('lab',lab,'rows',count,'fit',np.round(got[lab],6),'delta',np.round(got[lab]-full[lab],6))\\n        assert np.isfinite(got).all() and np.array_equal(got[np.arange(4)!=lab],full[np.arange(4)!=lab])\\n        if count==2: assert np.max(np.abs(got[lab]-full[lab]))<.01\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated stress and cell-balanced panel alignment -> H2: low-banding logarithmic drift with damage-gated crystal terms; worst held-out-lab median strain error is 0.01249 for complete coupons and 0.14423 for incomplete coupons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change the missing-feature imputation\",\"rejected_reason\":\"Per-cell means showed no consistent gain on masked training features, and cell-balanced means follow the requested procedure.\"}],\"rationale\":\"Exercise the documented sparse-sweep fallback with the actual archive. If the archive parser misses usable history or sparse rows affect other channels, fix calibration; otherwise retain the verified candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "72eb2e688b5bb514ec194077a4e5d47f37ca4f2dcac248fae2a5948235c4c1b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21587.25,
+      "usage_known": true,
+      "prompt_tokens": 30312,
+      "cached_tokens": 6784,
+      "completion_tokens": 646
+    }
+  ]
+}

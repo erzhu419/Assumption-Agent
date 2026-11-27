@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df2d6bb83f1643258bfa910449bab580",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:10:47.674309+00:00",
+  "ended_at_utc": "2026-11-27T08:11:17.673542+00:00",
+  "request_sha256": "333185615c33cbe5fba2fdf34069c98d3ba0dfa54345e3a10600abdbb7bc2597",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 53412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30656,
+    "cached_tokens": 6784,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('cand','/holdout_task/alpha_m97_c01_batch_05_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\ni=pickle.load(open('public_alpha_m97_c01_batch_05.pkl','rb'))[0]; d=i['dataset']; gt=i['gt']; a=d['train']; p,h,x,b=m._inputs(d); n=len(a['lab_id']); y=np.column_stack((a['strain_curves_obs']-b[:n,None],a['instant_rate_obs'])); complete=np.isfinite(a['coupon_features_raw']).all(axis=1); model=m._Model(d,p,h,x)\\nt,w=m._fit(model,y,np.flatnonzero(complete)); r=(model.design(t,slice(n))@w-y)[complete]; print('observed training absolute residual quantiles by horizon and initial rate:');print(np.round(np.quantile(abs(r),[.25,.5,.65,.75,.85,.9,.95,.99],axis=0),4)); print('labs and strata',np.unique(np.c_[a['lab_id'],a['stratum']],axis=0,return_counts=True));\\n# Public-truth audit only: separate material-fit error from feature loss after imputation.\\nz=model.design(np.log(gt['taus']),slice(n,None))@np.r_[gt['theta'],gt['vp_theta']]; e=z-np.column_stack((gt['te_clean']-b[n:,None],gt['te_true_rate0'])); te=d['test']; missing=~np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor lab in range(4):\\n for flag in (False,True):\\n  q=(te['lab_id']==lab)&(missing==flag)\\n  if q.any(): print('public parameter audit',lab,'missing',flag,'n',sum(q),'curve,rate RMSE',np.round([np.sqrt(np.mean(e[q,:-1]**2)),np.sqrt(np.mean(e[q,-1]**2))],7))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (in-batch affine calibration and cell-balanced alignment) -> H2 (logarithmic flow with damage-gated crystallization terms); worst public lab-by-regime RMSE is 0.1470 for strain and 0.1128 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Inactive specimens in the public batch require a separate linear terminal-flow term.\",\n    \"empirical_witness\": \"On complete coupons in leave-one-lab-out validation, switching inactive specimens to linear flow raises their final-horizon median absolute residual from 0.01462 to 0.27014 and their initial-rate median absolute residual from 0.01381 to 0.07886.\",\n    \"causal_blanket_diagnosis\": \"The damage gate controls the crystallization corrections; it does not mark a switch in the baseline time basis for these measurements.\",\n    \"sublated_pivot\": \"Retain logarithmic baseline flow and gate only the two crystallization terms.\",\n    \"risk_kind\": \"Misspecified inactive-regime flow\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune imputation against the public test errors\",\n      \"rejected_reason\": \"The contract specifies cell-balanced means, and public test labels should diagnose errors rather than select an imputation rule.\"\n    }\n  ],\n  \"rationale\": \"Measure whether the worst slices remain inaccurate even when scored with the supplied public physical parameters. If they do, further tuning the material fit cannot close those slices; the observed training residual distribution will show whether a different robust fit is worth testing for parameter recovery.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1becee717819e3a9b5d8b35ab5f89cba7e1e4ce6843a3261ebc6e178a037e22c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32454.58,
+      "usage_known": true,
+      "prompt_tokens": 30656,
+      "cached_tokens": 6784,
+      "completion_tokens": 1069
+    }
+  ]
+}

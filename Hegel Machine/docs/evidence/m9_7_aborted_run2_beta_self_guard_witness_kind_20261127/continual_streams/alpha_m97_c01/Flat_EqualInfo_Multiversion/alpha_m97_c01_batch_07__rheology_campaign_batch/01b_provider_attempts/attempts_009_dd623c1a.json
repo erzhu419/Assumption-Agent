@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dd623c1a431e473b9179669f0488c4c4",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:24:45.067577+00:00",
+  "ended_at_utc": "2026-11-27T08:25:16.289762+00:00",
+  "request_sha256": "cec0ec113b09e6876a40e5cf3980b1d33529f6ab0ea32aafc6eade020ec4b6f0",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 66997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34209,
+    "cached_tokens": 11136,
+    "completion_tokens": 1250
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -eu\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c01_batch_07.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    d, gt = item['dataset'], item['gt']\\n    out = s.solve_alpha_m97_c01_batch_07(d)\\n    tau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\n    assert 0 < tau[0] < tau[1]\\n    p, h, x, z0 = s._inputs(d)\\n    n = len(d['train']['lab_id'])\\n    p, h, x, z0 = p[n:], h[n:], x[n:], z0[n:]\\n    t = np.asarray(d['eval_times'])\\n    z = np.zeros((len(h), 2))\\n    damage = np.zeros(len(h))\\n    for stress, dt in zip(p.T, d['past_dt']):\\n        a = np.exp(-dt / tau)\\n        z = z * a + stress[:, None] * (1 - a)\\n        damage += np.maximum(0, np.abs(stress) - d['crit_stress'])**2 * dt\\n    active = (damage > 0) & (d['shear_banding_index'] <= 0.50)\\n    act = np.where(active, np.tanh(damage), 0)\\n    amps = (h[:, None] - z) * hw[:2]\\n    amps[:, 0] += rw[0] * act * h\\n    flow = hw[2] + x @ hw[3:] + rw[1] * act * z[:, 0]\\n    curve = z0[:, None] + amps @ (1 - np.exp(-t[None, :] / tau[:, None])) + flow[:, None] * np.log1p(t)\\n    rate = amps @ (1 / tau) + flow\\n    np.testing.assert_allclose(out['predicted_strain'], curve, rtol=0, atol=1e-12)\\n    np.testing.assert_allclose(out['initial_rate_pred'], rate, rtol=0, atol=1e-12)\\n    complete = np.isfinite(d['test']['coupon_features_raw']).all(axis=1)\\n    ec = np.abs(curve - gt['te_clean'])\\n    er = np.abs(rate - gt['te_true_rate0'])\\n    for gate in (False, True):\\n        for full in (False, True):\\n            mask = (active == gate) & (complete == full)\\n            if mask.any():\\n                print('active', gate, 'complete', full, 'n', mask.sum(), 'strain/rate MAE', ec[mask].mean(), er[mask].mean())\\n    print('all-test strain/rate MAE', ec.mean(), er.mean())\\n    print('independent recurrence max strain/rate difference', np.max(np.abs(out['predicted_strain']-curve)), np.max(np.abs(out['initial_rate_pred']-rate)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: zero damage restores linear flow → H2: the logarithmic baseline persists; worst complete-coupon leave-one-lab-out p90 is 0.0443 for strain and 0.0403 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Tune imputation against the public clean test targets\",\"rejected_reason\":\"The task specifies cell-balanced imputation; fitting against test targets would bias validation and would not recover the missing coupon measurements.\"}],\"rationale\":\"Check the saved solver against a step-by-step memory recurrence and the analytical initial slope. This can detect a state-update or damage-gating error that fit residuals alone would not expose. Report active and inactive test errors separately so missing-feature error is not mistaken for a failure of the plateau law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2eae6004c1d93719d5069acaaa31ab33c16aef205add957e2500e599f82a233b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33105.8,
+      "usage_known": true,
+      "prompt_tokens": 34209,
+      "cached_tokens": 11136,
+      "completion_tokens": 1250
+    }
+  ]
+}

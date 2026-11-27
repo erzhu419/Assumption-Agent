@@ -1825,6 +1825,7 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             "accepted": ok_all,
             "schema_valid": sch_ok,
             "schema_stdout": sch_r["stdout"][-240:],
+            "schema_stderr": sch_r["stderr"][-320:],
             "candidate_bundle_sha256": cand_bundle_sha,
             "candidate_raw_sha256": hashlib.sha256(candidate_code.encode("utf-8")).hexdigest(),
             "readonly_dependencies_sha256": ro_shas,

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed6ac0f41a6c413cbd97b3c29c18310c",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:49:31.880146+00:00",
+  "ended_at_utc": "2026-11-27T07:50:08.788513+00:00",
+  "request_sha256": "b048d2bcf937ddfb8375f134d37fccdc10859b3aa95b752c9c1ee35a5553bed0",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 76780,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36652,
+    "cached_tokens": 6784,
+    "completion_tokens": 1610
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\nold = '''        x, y = cmd[m], true[m]\\n        if len(x) >= 3:'''\\nnew = '''        x, y = cmd[m], true[m]\\n        if 2 <= len(x) <= 3:\\n            # A sparse affine fit can absorb a spike entirely. In this\\n            # campaign clean command-to-true corrections are below half\\n            # the EMI cutoff, which separates a single spike from its peers.\\n            suspect = np.abs(y - x) > 1.5\\n            if suspect.sum() == 1:\\n                x, y = x[~suspect], y[~suspect]\\n        if len(x) >= 3:'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\ncat > /tmp/rheo_sparse_verify.py <<'PY'\\nimport importlib.util, itertools, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\ns = importlib.util.spec_from_file_location('solver', root/'alpha_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith (root/'public_alpha_m97_c01_batch_01.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)\\nc = d['calibration_load_cells']; labs = c['lab_id']; x = c['cmd_stress']; y = c['true_stress']\\nref = np.array([np.polyfit(x[labs == j], y[labs == j], 1) for j in range(4)])\\nnp.testing.assert_allclose(m._calibrate(d), ref, atol=1e-12)\\nworst = {2: 0., 3: 0.}; count = 0\\nfor j in range(4):\\n    other = np.flatnonzero(labs != j); rows = np.flatnonzero(labs == j)\\n    sweep = next(h for h in reversed(history) if np.count_nonzero(np.asarray(h['lab_id']) == j) >= 2)\\n    q = np.asarray(sweep['lab_id']) == j\\n    fallback = np.polyfit(np.asarray(sweep['cmd_stress'])[q], np.asarray(sweep['true_stress'])[q], 1)\\n    test = d['test']; q = test['lab_id'] == j\\n    vals = np.r_[test['past_stress_cmd'][q].ravel(), test['stress_hold_cmd'][q]]\\n    for size in (2, 3):\\n        for combo in itertools.combinations(rows, size):\\n            keep = np.r_[other, combo]; clean = {k: np.asarray(v)[keep].copy() for k, v in c.items()}\\n            np.testing.assert_allclose(m._calibrate(dict(d, calibration_load_cells=clean))[j], np.polyfit(x[list(combo)], y[list(combo)], 1), atol=1e-10)\\n            for k, bad in enumerate(combo):\\n                good = [i for i in combo if i != bad]\\n                expected = fallback if size == 2 else np.polyfit(x[good], y[good], 1)\\n                for delta in (-4., -3.0001, 3.0001, 4.):\\n                    corrupted = dict(clean, true_stress=clean['true_stress'].copy())\\n                    corrupted['true_stress'][len(other)+k] += delta\\n                    actual = m._calibrate(dict(d, calibration_load_cells=corrupted))\\n                    np.testing.assert_allclose(actual[j], expected, atol=1e-10)\\n                    np.testing.assert_allclose(actual[np.arange(4) != j], ref[np.arange(4) != j], atol=1e-12)\\n                    worst[size] = max(worst[size], np.max(abs(np.polyval(actual[j]-ref[j], vals))))\\n                    count += 1\\nprint('Sparse EMI cases passed:', count, 'worst stress shift by sweep size:', worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_sparse_verify.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine residuals detect EMI even in sparse sweeps -> H2 sparse sweeps require a nominal-reference check; the baseline spike-induced stress error reached 439.36 on measured test commands.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a 3.0 cutoff on deviations from nominal stress\",\n      \"rejected_reason\": \"Measured clean offsets can partly cancel a near-threshold spike, so this cutoff missed spikes of either sign in the sparse stress test.\"\n    },\n    {\n      \"option\": \"Use historical coefficients for all sparse sweeps\",\n      \"rejected_reason\": \"The measured historical gains differ from current gains; two clean current points still identify the affine calibration.\"\n    }\n  ],\n  \"rationale\": \"Limit the change to two- and three-point sweeps. The measured clean offsets are at most 0.792, so a single spike larger than 3.0 remains separated by the 1.5 cutoff even when its sign opposes the clean offset. Verify that clean fits stay unchanged, history is used only when fewer than two clean points remain, and the exact artifact still passes the public schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "0a4f3b7eed4e81446d31c7ea56cb2679ea369fbfdc5f6496d9be716f4d934cae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41827.38,
+      "usage_known": true,
+      "prompt_tokens": 36652,
+      "cached_tokens": 6784,
+      "completion_tokens": 1610
+    }
+  ]
+}

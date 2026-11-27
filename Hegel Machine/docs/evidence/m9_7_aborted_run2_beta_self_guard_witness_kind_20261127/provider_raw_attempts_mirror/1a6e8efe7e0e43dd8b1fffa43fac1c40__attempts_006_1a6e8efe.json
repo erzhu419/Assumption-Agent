@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a6e8efe7e0e43dd8b1fffa43fac1c40",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:36.495625+00:00",
+  "ended_at_utc": "2026-11-27T07:46:06.125454+00:00",
+  "request_sha256": "30ce91540c9011e62cab8ce7c3d8b2d7e8c7f66d1c56527a05461dd9c9221dda",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40292,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26113,
+    "cached_tokens": 11136,
+    "completion_tokens": 1154
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -i 's/flow = np.where(active\\\\[:, None\\\\], np.log1p(time), time)/# Low banding selects the time basis; damage gates the two network terms.\\\\n    flow = np.log1p(time)[None, :] if banding <= .50 else time[None, :]/' /holdout_task/alpha_m97_c03_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/check_batch01.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'alpha_m97_c03_batch_01_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\ni=pickle.load(open(p+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=i['dataset'],i['gt']; o=m.solve_alpha_m97_c03_batch_01(d)\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n print(k,'fit',o[k],'max abs error',np.max(abs(o[k]-g[j])))\\nlab=d['test']['lab_id']; act=(np.maximum(abs(g['te_hist_true'])-d['crit_stress'],0)**2 @ d['past_dt'])>0\\nmissing=np.any(~np.isfinite(d['test']['coupon_features_raw']),axis=1)\\nec=o['predicted_strain']-g['te_clean']; er=o['initial_rate_pred']-g['te_true_rate0']; rm=lambda e:np.sqrt(np.mean(e*e))\\nfor name,use in [(f'lab {l} active {a}',(lab==l)&(act==a)) for l in range(4) for a in (False,True)]+[(f'missing {v}',missing==v) for v in (False,True)]:\\n print(name,'n',sum(use),'curve/rate RMSE',rm(ec[use]),rm(er[use]))\\ntr,te=d['train'],d['test']; x,_=m._align(tr,te); cal=m._calibrate(d['calibration_load_cells']); c,r=m._design(tr,x,cal,d['past_dt'],d['eval_times'],d['crit_stress'],d['shear_banding_index'])(np.log(o['estimated_taus'])); b=np.r_[o['hereditary_weights'],o['regime_mode_weights']]\\nfor name,e in [('curve',c@b+tr['strain_0'][:,None]-tr['strain_curves_obs']),('rate',r@b-tr['instant_rate_obs'])]:\\n mask=np.any(~np.isfinite(tr['coupon_features_raw']),axis=1)\\n for missing_rows in (False,True):\\n  z=e[mask==missing_rows]; print('train',name,'missing',missing_rows,'abs residual q50/q90/q99/max',np.quantile(abs(z),[.5,.9,.99,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: low banding selects logarithmic flow and damage gates only the two network terms; the previous worst lab-by-damage RMSE was 0.2291 for strain and 0.2652 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Zero damage selects the prior linear time basis even in the low-banding campaign.\",\n    \"empirical_witness\": \"On the 24 zero-damage public test rows, the clean curve after subtracting hereditary terms matches the inferred initial slope times log1p(t) to 2.34e-16 RMS, versus 0.5978 RMS with the linear basis.\",\n    \"causal_blanket_diagnosis\": \"Damage was incorrectly used to switch both the terminal-flow time basis and the two network amplitudes.\",\n    \"sublated_pivot\": \"Use logarithmic flow throughout the low-banding regime, while retaining the damage gate on both network amplitudes.\",\n    \"risk_kind\": \"Incorrect regime dispatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep linear flow at zero damage and absorb the mismatch into fitted weights\",\n      \"rejected_reason\": \"Changing amplitudes cannot reproduce the observed logarithmic time dependence at the same initial slope.\"\n    }\n  ],\n  \"rationale\": \"The clean curves isolate the incorrect basis without changing calibration or optimizer settings. Refit the corrected operator and compare clean test slices; training residuals split by feature missingness will show whether imputation is the next bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e534d685d2f56fca6ccf781748f725aedb83467ca61b1ac1d75e7b7abffd6a2b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32027.18,
+      "usage_known": true,
+      "prompt_tokens": 26113,
+      "cached_tokens": 11136,
+      "completion_tokens": 1154
+    }
+  ]
+}

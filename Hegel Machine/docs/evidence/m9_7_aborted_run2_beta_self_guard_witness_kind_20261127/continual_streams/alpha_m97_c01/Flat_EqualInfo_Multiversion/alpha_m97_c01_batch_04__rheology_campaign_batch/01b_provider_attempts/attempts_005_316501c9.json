@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "316501c9b66141809e73ec16494de554",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:04:08.597490+00:00",
+  "ended_at_utc": "2026-11-27T08:04:31.774742+00:00",
+  "request_sha256": "f3baa9678af51160dd864c05297fea13ac5718000de519d5a670ec4e8608a9eb",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 41578,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26248,
+    "cached_tokens": 6784,
+    "completion_tokens": 821
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/batch04_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c01_batch_04_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_04.pkl','rb'))[0]['dataset']\\npast,hold,x,e0=m._inputs(d); model=m._Model(d,past,hold,x); tr=d['train']; labs=tr['lab_id']; strata=tr['stratum']; n=len(labs); ids=np.arange(n)\\ny=np.column_stack((tr['strain_curves_obs']-e0[:n,None],tr['instant_rate_obs']))\\nprint('damage counts by lab',[(int(c),int(np.sum(model.act[:n][labs==c]>0)),int(np.sum(labs==c))) for c in np.unique(labs)])\\nlt,w=m._fit(model,y,ids); r=model.design(lt,ids)@w-y\\nprint('full tau',np.exp(lt),'weights',w,'residual quantiles',np.quantile(abs(r),[.5,.9,.99,1],axis=0).round(6))\\nfor name, groups in [('lab',labs),('stratum',strata)]:\\n pred=np.empty_like(y)\\n for c in np.unique(groups):\\n  mask=groups==c; lt,w=m._fit(model,y,ids[~mask]); pred[mask]=model.design(lt,ids[mask])@w\\n  print(name,c,'tau',np.exp(lt).round(5),'regime weights',w[-2:].round(6))\\n r=pred-y\\n for c in np.unique(groups):\\n  for a in (0,1):\\n   use=(groups==c)&((model.act[:n]>0)==a)\\n   if use.any():\\n    print(name,c,'active',a,'n',use.sum(),'curve/rate RMSE',np.sqrt(np.mean(r[use,:-1]**2)),np.sqrt(np.mean(r[use,-1]**2)),'curve/rate median abs',np.median(abs(r[use,:-1])),np.median(abs(r[use,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch04_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the calibrated damage-gated model passes the public schema; worst-slice prediction error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Validate on pooled training residuals only\",\n      \"rejected_reason\": \"Pooled residuals can hide calibration errors in one lab or systematic errors in undamaged coupons.\"\n    }\n  ],\n  \"rationale\": \"Hold out each lab and stratum in turn, refitting all rheology parameters without its response measurements. Separate active and inactive coupons and score strain and initial rate independently; a concentrated error would identify which calibration or regime assumption to revisit. The specified unlabeled train-plus-test panel preprocessing remains fixed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e4cc3998a54fc7b39da10f5e2076caea28bc244d6b4e45047ea003fb613ee916",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25722.22,
+      "usage_known": true,
+      "prompt_tokens": 26248,
+      "cached_tokens": 6784,
+      "completion_tokens": 821
+    }
+  ]
+}

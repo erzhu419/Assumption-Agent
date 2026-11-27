@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8236648fc06f4ff080f24c90a116ec7f",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:10.224278+00:00",
+  "ended_at_utc": "2026-11-27T07:47:47.497799+00:00",
+  "request_sha256": "ec271c79e59e57269afcaf72bfdba4e663d9594b84ad7862db421427c964857d",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 59054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30840,
+    "cached_tokens": 6784,
+    "completion_tokens": 1232
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncat > /tmp/beta_m97_c03_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m97_c03_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ncases = pickle.load(open('/holdout_task/public_beta_m97_c03_batch_01.pkl', 'rb'))\\nfor c in cases:\\n    s, g = c['study'], c['gt']\\n    sw = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    z = s['Z_nuisance']; gram = z.T@z + s['nuisance_ridge']*np.eye(z.shape[1])\\n    def profile(v):\\n        return v - z@np.linalg.solve(gram,z.T@v)\\n    a, _ = m._forward(s)\\n    print('projected design max error:', np.max(np.abs(profile(a)-g['S_tilde'])))\\n    y = m._calibrate(s); bank = np.asarray(s['row_bank_id']); raw = np.asarray(s['y_obs_raw'])\\n    for b in range(4):\\n        rows = bank == b\\n        print('bank',b,'profiled residual max (calibrated, uncalibrated):',*[np.max(np.abs(profile(v)[rows]-g['r_y'][rows])) for v in (y,raw)])\\n    # The documented direct-fit guarantee starts at four clean rows. Check that it\\n    # holds without history for both signs and every location of a near-threshold spike.\\n    worst = (0.0, None); failures = []\\n    for b in range(4):\\n        idx = np.flatnonzero(sw['bank_id']==b)\\n        for n in (5, len(idx)):\\n            for selection in (idx[:n], idx[-n:]):\\n                keep = (sw['bank_id']!=b); keep[selection] = True\\n                local = {k:v[keep].copy() for k,v in sw.items()}\\n                targets = np.flatnonzero(local['bank_id']==b)\\n                for j in targets:\\n                    for pulse in (-3.01, 3.01):\\n                        trial = dict(local,raw_readout=local['raw_readout'].copy())\\n                        trial['raw_readout'][j] += pulse\\n                        dev = np.max(np.abs(m._calibrate(dict(s,sensor_calibration_sweeps=trial))-y))\\n                        if dev > worst[0]: worst = (dev,(b,n,int(j),pulse))\\n                        if dev > 1e-6: failures.append((b,n,int(j),pulse,float(dev)))\\n    print('worst directly recoverable EMI case:',worst,'failures:',len(failures),'first:',failures[:3])\\n    v = np.asarray(s['past_vortex_circulation_trace']); critical = s['critical_vortex_circulation']\\n    for mode in (0,1):\\n        f = m._forward(dict(s,recirculation_loop_mode=mode,past_vortex_circulation_trace=v))[0]\\n        f0 = m._forward(dict(s,recirculation_loop_mode=mode,past_vortex_circulation_trace=np.full_like(v,critical)))[0]\\n        print('recirculation mode',mode,'above-vs-at-threshold forward response:',np.max(np.abs(f-f0)))\\n        assert (np.max(np.abs(f-f0)) > 0) == (mode == 0)\\nPY\\npython3 -I /tmp/beta_m97_c03_calibration_audit.py\\npython3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 x-only sealing and stored coefficients -> H2 two-axis sealing and affine sweep calibration; worst verified reference KKT gap is 7.41e-8, with near-threshold EMI across sweep positions now being audited.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add rational or drift terms and fit a batch classifier\",\"rejected_reason\":\"This is a specified reaction–transport inversion, not a stochastic control or classification task. The projected forward matrix already matches to floating-point precision; bank-wise projected residuals are the relevant nuisance diagnostic.\"}],\"rationale\":\"Check whether near-threshold EMI biases a bank despite four clean points; a failure would justify changing only sweep selection. Compare calibrated and uncalibrated residuals by bank on real measurements and verify that the vortex trace changes the forward map only in mode 0.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7470fe104dd8b1d85536313051d005c05a4157108159ab8ff8f83e1f146fb043",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39683.69,
+      "usage_known": true,
+      "prompt_tokens": 30840,
+      "cached_tokens": 6784,
+      "completion_tokens": 1232
+    }
+  ]
+}

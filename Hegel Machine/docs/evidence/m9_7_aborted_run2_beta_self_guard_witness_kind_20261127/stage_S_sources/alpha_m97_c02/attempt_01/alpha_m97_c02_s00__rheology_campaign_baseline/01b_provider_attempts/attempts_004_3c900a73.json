@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c900a73855540878429efa1e34d0e35",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:38:10.157311+00:00",
+  "ended_at_utc": "2026-11-27T07:38:33.314213+00:00",
+  "request_sha256": "4cb6d134afc808fb696472e1717cfd184f9e82bf05d3bb9da2d9ff0d7b4487f5",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 34203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23635,
+    "cached_tokens": 11136,
+    "completion_tokens": 839
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m97_validate.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport alpha_m97_c02_s00_solver as s\\nD=pickle.load(open('/holdout_task/public_alpha_m97_c02_s00.pkl','rb'))[0]['dataset']; T=D['train']; n=len(T['lab_id']); dt,t=D['past_dt'],D['eval_times']; p,h=s._physical(T,s._calibration(D)); a=s._align(D); X=np.c_[np.ones(len(a)),a][:n]; y=T['strain_curves_obs']-T['strain_0'][:,None]; v=T['instant_rate_obs']; labs=T['lab_id']; miss=~np.isfinite(T['coupon_features_raw']); missing=miss.any(axis=1)\\n\\ndef fit(mask):\\n u,w=s._fit(p[mask],h[mask],dt,t,X[mask],y[mask],v[mask]); A,B=s._design(u,p,h,dt,t,X); return np.exp(u),w,A@w-y,B@w-v\\n\\ndef summarize(r,q,mask):\\n return np.round(np.r_[np.median(abs(r[mask])),np.max(np.median(abs(r[mask]),axis=0)),np.median(abs(q[mask]))],6)\\nfor l in range(4):\\n mask=labs==l; u,w,r,q=fit(~mask); print('leave lab',l,'taus',np.round(u,5),'all',summarize(r,q,mask),'complete',summarize(r,q,mask&~missing),'missing n',sum(mask&missing));\\n if (mask&missing).any():print('  missing',summarize(r,q,mask&missing))\\nu,w,r,q=fit(~missing); print('complete-case coefficients',u,w); print('complete in sample',summarize(r,q,~missing)); print('missing case detail: lab,stratum,missing cols,observed-minus-pred row drift and rate');\\nfor i in np.flatnonzero(missing):print(labs[i],T['stratum'][i],np.flatnonzero(miss[i]),round(-np.median(r[i]/t),5),round(-q[i],5))\\nprint('cell counts',np.unique(np.c_[labs,T['stratum']],return_counts=True,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m97_validate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the robust Prony fit passes schema validation; the largest in-sample lab-by-time median absolute strain residual is 0.04993, pending leave-one-lab-out validation.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Leave-one-lab-out predictions will show whether the late-time residuals generalize across labs. Comparing complete and incomplete coupons will test whether to revisit the imputation or the shared flow fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ccb555ddc881df602d115639215ce7bbe8d3b580ca35f9eefc2f296471443287",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25652.1,
+      "usage_known": true,
+      "prompt_tokens": 23635,
+      "cached_tokens": 11136,
+      "completion_tokens": 839
+    }
+  ]
+}

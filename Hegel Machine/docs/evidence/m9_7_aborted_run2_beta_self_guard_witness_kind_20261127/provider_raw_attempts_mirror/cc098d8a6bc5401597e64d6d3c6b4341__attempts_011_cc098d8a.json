@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc098d8a6bc5401597e64d6d3c6b4341",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:26:47.868171+00:00",
+  "ended_at_utc": "2026-11-27T08:27:12.523854+00:00",
+  "request_sha256": "cfa2e900751bb89cf1421a3bdbc6596be005764f11fcafa8690ea38aa649be67",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32238,
+    "cached_tokens": 6784,
+    "completion_tokens": 853
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c02_batch_07.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\np = s.solve_alpha_m97_c02_batch_07(d)\\nfor out, ref in [('estimated_taus','taus'), ('hereditary_weights','theta'), ('regime_mode_weights','vp_theta')]:\\n    print(out, 'absolute errors', np.round(np.abs(p[out]-g[ref]), 6).tolist())\\nlab = d['test']['lab_id']\\ncomplete = np.isfinite(d['test']['coupon_features_raw']).all(axis=1)\\nactive = np.any(np.abs(g['te_hist_true']) > d['crit_stress'], axis=1)\\ne = np.abs(p['predicted_strain']-g['te_clean'])\\nr = np.abs(p['initial_rate_pred']-g['te_true_rate0'])\\nprint('lab/damage, n, earlier strain p90, final strain p90, rate p90 (clean reference)')\\nfor c in np.unique(lab):\\n    for a in (False, True):\\n        m = (lab == c) & (active == a) & complete\\n        if m.any():\\n            print(int(c), a, int(m.sum()), np.round([np.quantile(e[m, :-1], .9), np.quantile(e[m, -1], .9), np.quantile(r[m], .9)], 6).tolist())\\nif (~complete).any():\\n    m = ~complete\\n    print('missing coupons', int(m.sum()), np.round([np.quantile(e[m, :-1], .9), np.quantile(e[m, -1], .9), np.quantile(r[m], .9)], 6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean calibration → robust log-plateau fit; omitting the final training horizon leaves the worst complete-coupon final-horizon slice p90 essentially unchanged at 0.8222 versus 0.8218.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop the final training horizon\",\n      \"rejected_reason\": \"Omitting it scarcely changes the fitted relaxation times or held-out residuals; the large measured errors occur in both directions.\"\n    }\n  ],\n  \"rationale\": \"Score the fixed artifact against the clean public reference to distinguish a late-time prediction failure from noise in the observed final horizon. If the same lab and damage slice still degrades against clean targets, revisit the fit; if not, retain the verified model. Reference values are used only for evaluation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "49b7f910520258a90b8ef615d8607223aa64af2ac8b4c7e40a3782c319c8a404",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26394.22,
+      "usage_known": true,
+      "prompt_tokens": 32238,
+      "cached_tokens": 6784,
+      "completion_tokens": 853
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "03b007bf3e034253bbfd81cd90a838ec",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:06:24.243775+00:00",
+  "ended_at_utc": "2026-11-27T08:06:48.976351+00:00",
+  "request_sha256": "232c6a52ca86053d8941c6716b23c7ca4047ac4dc58c46f4b95867dd049cc9a5",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27987,
+    "cached_tokens": 0,
+    "completion_tokens": 926
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nimport json\\nm=json.load(open('public_asset_index.json'))\\nprint('Index fields:', list(m) if isinstance(m,dict) else type(m).__name__)\\nfor line in json.dumps(m,indent=2).splitlines():\\n    if any(k in line.lower() for k in ('tol','threshold','gate','spike','calibration','runtime','numpy','scipy')): print(line[:250])\\nPY\\n/usr/bin/time -f 'isolated schema validation: %e s' python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','alpha_m97_c03_batch_03_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_03.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; gain,bias=s._calibrate(d['calibration_load_cells']); x,_=s._align(tr,te)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; labs=tr['lab_id']; complete=np.isfinite(tr['coupon_features_raw']).all(1); model=s._design(tr,x,gain,bias,dt,t)\\nfor j in range(4):\\n    fit=complete & (labs!=j); val=complete & (labs==j)\\n    p,w=s._fit(model,np.where(fit[:,None],y,np.nan),np.where(fit,rate,np.nan),dt,t)\\n    a,b=model(p); e=np.abs((a@w-y)[val]); v=np.abs((b@w-rate)[val]); print('lab',j,'curve median by horizon',np.round(np.nanmedian(e,axis=0),4),'curve abs q95/max',np.nanquantile(e,.95),np.nanmax(e),'rate abs median/q95',np.nanquantile(v,[.5,.95]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and lab-panel alignment -> H2 robust jammed-slip projection; worst complete-coupon leave-lab-out RMSE is 3.187 for observed strain and 0.0195 for observed rate, versus clean public-test RMSE of 0.00244 and 0.00368 across complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the rheology model in response to the worst raw curve RMSE.\",\n      \"rejected_reason\": \"The independent recurrence and derivative checks passed, and the clean test curves fit closely; first determine whether the held-out residuals are broadly elevated or concentrated in a few observations.\"\n    }\n  ],\n  \"rationale\": \"Held-out residual quantiles distinguish isolated extreme measurements from a channel-wide or horizon-wide miss that would justify changing the estimator. Read only relevant index entries and time the isolated validator without thread overrides; a published tolerance miss or impractical default runtime would change the implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "56d3124d0f7c19aeff56cf8673f55d74f7c06de1f9f71432af623aa13d056552",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27221.21,
+      "usage_known": true,
+      "prompt_tokens": 27987,
+      "cached_tokens": 0,
+      "completion_tokens": 926
+    }
+  ]
+}

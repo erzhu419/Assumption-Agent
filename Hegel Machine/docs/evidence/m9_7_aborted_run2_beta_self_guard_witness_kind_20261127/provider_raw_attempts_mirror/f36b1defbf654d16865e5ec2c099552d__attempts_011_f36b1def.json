@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f36b1defbf654d16865e5ec2c099552d",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:04:53.780865+00:00",
+  "ended_at_utc": "2026-11-27T08:05:26.825259+00:00",
+  "request_sha256": "464c4c9846fbfdfa00ba7e69019768b8b77c22f910e294483bd7f01b1895c054",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 59145,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31774,
+    "cached_tokens": 11136,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','alpha_m97_c02_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_batch_03.pkl','rb') as f: obj=pickle.load(f)[0]\\nd,g=obj['dataset'],obj['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=m._calibration(d); xt,xe=m._aligned(tr,te); out=m.solve_alpha_m97_c02_batch_03(d)\\ntau=out['estimated_taus']; h=out['hereditary_weights']; w=out['regime_mode_weights']; past,hold,_=m._inputs(te,xe,cal)\\nz=np.array([past@((1-np.exp(-dt/q))*np.exp(-np.r_[np.cumsum(dt[:0:-1])[::-1],0.]/q)) for q in tau]).T\\ngap=hold[:,None]-z; flow=h[2]+xe@h[3:]+w[0]*np.sign(hold)*np.sqrt(abs(hold)); amp=np.c_[h[0]*gap[:,0]+w[1]*(gap[:,0]-gap[:,1]),h[1]*gap[:,1]]\\ncurve=te['strain_0'][:,None]+amp@(1-np.exp(-t[None,:]/tau[:,None]))+flow[:,None]*(t/(1+.85*t)); rate=amp@(1/tau)+flow\\nassert np.max(abs(curve-out['predicted_strain']))<1e-10 and np.max(abs(rate-out['initial_rate_pred']))<1e-10\\nprint('independent closed-form memory, pairwise and rational basis max agreement',np.max(abs(curve-out['predicted_strain'])),np.max(abs(rate-out['initial_rate_pred'])))\\nphi=t/(1+.85*t); a,b=m._design(g['taus'],dt,t,past,hold,m._inputs(te,xe,cal)[2]); coeff=np.r_[g['theta'],g['vp_theta']]; err=g['te_clean']-te['strain_0'][:,None]-a@coeff; q=err@phi/(phi@phi)\\nfor l in range(4):\\n mask=(te['lab_id']==l)&np.isfinite(te['coupon_features_raw']).all(axis=1); x=xe[mask]@g['theta'][3:]; A=np.c_[np.ones(len(x)),x]; bias,scale=np.linalg.lstsq(A,q[mask],rcond=None)[0]; panel=np.concatenate([tr['ref_coupons'][tr['lab_id']==l],te['ref_coupons'][te['lab_id']==l]]); mu=np.nanmean(panel,axis=0); sd=np.nanstd(panel,axis=0)\\n print('lab',l,'complete n',len(x),'flow residual offset/scale',np.round([bias,scale],6),'unexplained rms',np.sqrt(np.mean((q[mask]-A@[bias,scale])**2)),'panel mean quantiles',np.round(np.nanquantile(mu,[0,.25,.5,.75,1]),4),'panel std quantiles',np.round(np.nanquantile(sd,[0,.25,.5,.75,1]),4))\\n print('missing rows flow residuals',[(int(i),int(te['stratum'][i]),np.flatnonzero(~np.isfinite(te['coupon_features_raw'][i])).tolist(),round(q[i],6)) for i in np.flatnonzero((te['lab_id']==l)&~np.isfinite(te['coupon_features_raw']).all(axis=1))])\\nprint('non-flow test RMSE',np.sqrt(np.mean((err-q[:,None]*phi)**2)),'initial-rate closure RMSE',np.sqrt(np.mean((g['te_true_rate0']-b@coeff-q)**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (remaining error from a missing constitutive term) -> H2 (lab alignment and missing-coupon effects); worst public slice is missing coupons, with strain and initial-rate RMSE of 0.05303 and 0.06848.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift operators, or classification balance\",\n      \"rejected_reason\": \"This batch exposes neither relay states nor classification labels; its relevant algebra is the two-branch memory, pairwise slip transient, and rational flow term.\"\n    }\n  ],\n  \"rationale\": \"Check the recurrence with an independent closed-form sum. Then separate lab-specific affine panel error from non-flow error on the public reference so any follow-up targets the measured bottleneck rather than adding unsupported terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "153a8fb2d3d55a8292922aea16e1bcd0f1e3155224f78941d200aeaa81e544b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35546.64,
+      "usage_known": true,
+      "prompt_tokens": 31774,
+      "cached_tokens": 11136,
+      "completion_tokens": 1300
+    }
+  ]
+}

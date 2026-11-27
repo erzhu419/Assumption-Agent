@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "800730fbb42c4961b694999edc16199f",
+  "call_seq": 14,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:50:05.999011+00:00",
+  "ended_at_utc": "2026-11-27T07:50:32.507954+00:00",
+  "request_sha256": "81fff013729eeabd45aa1713cc0247ef7228b1b0b63be214c81fabd0d793e5a3",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 74204,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35506,
+    "cached_tokens": 6784,
+    "completion_tokens": 999
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/beta_m97_c02_candidate.py /holdout_task/beta_m97_c02_batch_01_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/beta_sparse_calibration_audit.py')\\ns = p.read_text()\\nline = \\\"            if witness is not None:\\\\n\\\"\\nassert s.count(line) == 1\\np.with_name('beta_sparse_calibration_final_audit.py').write_text(s.replace(line, line + \\\"                assert err < 1.5e-4, (n, kind, err, witness)\\\\n\\\"))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_sparse_calibration_final_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_m97_c02_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'beta_m97_c02_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nworst = 0.0\\nwith open(root+'public_beta_m97_c02_batch_01.pkl', 'rb') as f:\\n    rows = pickle.load(f)\\nfor row in rows:\\n    study, gt = row['study'], row['gt']\\n    result = m.solve_beta_m97_c02_batch_01(study)\\n    for key, ref in [('weights', 'w_opt'), ('terminal_field', 'terminal_field_A')]:\\n        err = np.linalg.norm(result[key]-gt[ref])/np.linalg.norm(gt[ref])\\n        print(f'{key} relative L2: {err:.3e}')\\n        assert err < 1e-5, (key, err)\\n    sweeps = {k: np.asarray(v) for k, v in study['sensor_calibration_sweeps'].items()}\\n    base = m._calibration_parameters(sweeps)\\n    for i in range(len(sweeps['bank_id'])):\\n        for spike in (-4.0, 4.0):\\n            raw = sweeps['raw_readout'].copy()\\n            raw[i] += spike\\n            trial = m._calibration_parameters(dict(sweeps, raw_readout=raw))\\n            worst = max(worst, np.max(np.abs(trial-base)))\\nassert worst < 1e-6, worst\\nprint(f'Worst full-sweep EMI calibration parameter deviation: {worst:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 replace ambiguous sparse fits with archived coefficients → H2 use the archive only to break ties among in-batch fits; the temporary candidate reduced worst sparse EMI projected-target error from 0.7364 to 1.374e-4 without changing clean-slice errors.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t12\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep direct archive replacement for ambiguous sweeps\",\n      \"rejected_reason\": \"The archived coefficients differ from the current measurements; using them only to break ties improved the worst tested EMI slice without degrading clean fits.\"\n    }\n  ],\n  \"rationale\": \"Promote the measured improvement and replay its sparse EMI witnesses against the exact deliverable. Check dense EMI and clean public outputs in isolated processes to catch regressions introduced by the calibration change before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "2014799a4e497e46f607d6f86c45f659365c08d7c40445060a7d88171d926959",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28918.95,
+      "usage_known": true,
+      "prompt_tokens": 35506,
+      "cached_tokens": 6784,
+      "completion_tokens": 999
+    }
+  ]
+}

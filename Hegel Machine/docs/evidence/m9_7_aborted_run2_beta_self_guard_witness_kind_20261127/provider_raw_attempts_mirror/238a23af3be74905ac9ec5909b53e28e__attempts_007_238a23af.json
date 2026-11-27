@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "238a23af3be74905ac9ec5909b53e28e",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:51:12.408642+00:00",
+  "ended_at_utc": "2026-11-27T07:51:40.490302+00:00",
+  "request_sha256": "02f32fac30f005705114b11ecddab29982b7eca0fb7ebf8463ff5729cd720c43",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38932,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25228,
+    "cached_tokens": 6784,
+    "completion_tokens": 1080
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns = pickle.load(open('public_beta_m97_c02_batch_03.pkl','rb'))[0]['study']\\nq = {k: np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}; b = q['bank_id']\\nbaseline = m.solve_beta_m97_c02_batch_03(s); y0 = m._calibrate(s)\\nworst = np.zeros(3); count = 0\\nfor bank in range(4):\\n    rows = np.flatnonzero(b == bank)\\n    variants = [{k: v[keep] for k,v in q.items()} for keep in [b != bank, (b != bank) | (np.arange(len(b)) == rows[0])]]\\n    for i in rows:\\n        for spike in (-30., -3.01, 3.01, 30.):\\n            raw = q['raw_readout'].astype(float).copy(); raw[i] += spike\\n            variants.append(dict(q, raw_readout=raw))\\n    for sweeps in variants:\\n        changed = dict(s, sensor_calibration_sweeps=sweeps)\\n        out = m.solve_beta_m97_c02_batch_03(changed)\\n        worst = np.maximum(worst, [np.max(abs(m._calibrate(changed)-y0)), np.max(abs(out['weights']-baseline['weights'])), np.max(abs(out['terminal_field']-baseline['terminal_field']))]); count += 1\\nprint('calibration stress slices:', count, 'worst calibrated-target, weight, and field delta:', worst)\\nassert np.all(worst < [2e-6, 1e-5, 1e-6])\\nworst_gap = 0.\\nfor loop in (0., 0.50, 0.50001, 0.85):\\n    for frac in (0., 0.001, 0.5, 0.999, 1.):\\n        study = dict(s, recirculation_loop_mode=loop, total_budget=frac*s['u_box']*len(baseline['weights']))\\n        out = m.solve_beta_m97_c02_batch_03(study); w = out['weights']; c = out['kkt_certificate']\\n        gap = c['primal_objective'] - c['dual_lower_bound']; worst_gap = max(worst_gap, gap)\\n        assert np.all(np.isfinite(out['terminal_field'])) and w.min() >= -1e-10 and w.max() <= study['u_box']+1e-10\\n        assert abs(w.sum()-study['total_budget']) < 1e-10 and -1e-9 <= gap < 1e-8, (loop, frac, gap)\\nprint('loop/budget stress slices: 20; worst certified gap:', worst_gap)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: periodic transport matches the public profiled design within 1.39e-16; maximum weight error is 2.66e-7 and the public-case KKT gap is 1.95e-16.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit on public agreement alone\",\"rejected_reason\":\"The public case does not exercise sparse-bank fallback, EMI rejection, or budgets at the box-simplex limits.\"}],\"rationale\":\"Stress the exact verified artifact using the public study with individual bank rows removed or spiked, then exercise the loop threshold and budget limits. Calibration drift would call for revising bank selection; a feasibility or gap failure would isolate the constrained optimizer.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6f1288ac56cc069b2950b511754a1116441f6f730a00366bde2bad58b307c757",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30528.13,
+      "usage_known": true,
+      "prompt_tokens": 25228,
+      "cached_tokens": 6784,
+      "completion_tokens": 1080
+    }
+  ]
+}

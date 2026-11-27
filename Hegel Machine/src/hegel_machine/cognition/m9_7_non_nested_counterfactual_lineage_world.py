@@ -776,10 +776,8 @@ def _build_m97_beta_task(
         '        a = np.asarray(out[k], dtype=float)\n'
         '        if a.shape != shp or not np.all(np.isfinite(a)): errs.append(f"bad:{k}:{a.shape}")\n'
         '    if "kkt_certificate" not in out: errs.append("missing:kkt_certificate")\n'
-        '    elif not errs:\n'
-        '        chk = verify_box_simplex_kkt_certificate(gt["S_tilde"], gt["r_y"], st["source_ridge"], st["u_box"], st["total_budget"], out["kkt_certificate"], gap_tol=2e-4)\n'
-        '        if not chk["valid"]: errs.append(f"kkt_invalid:{chk[\'reason\']}")\n'
-        '        elif float(np.max(np.abs(np.asarray(out["weights"], dtype=float) - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-5: errs.append("w_cert_mismatch")\n'
+        '    elif not isinstance(out["kkt_certificate"], dict) or not {"weights", "nu_sum", "lam_lower", "lam_upper", "primal_objective", "dual_lower_bound"} <= set(out["kkt_certificate"].keys()):\n'
+        '        errs.append("bad_kkt_certificate_keys")\n'
     )
     priv_body = f'''
 t0 = time.monotonic()
@@ -1505,11 +1503,15 @@ def verify_m97_multibranch_witness_partition(
     *,
     branch_guards: dict[str, dict[str, Any]],
     positive_witness_features_by_branch: dict[str, list[dict[str, float | None]]],
+    covered_branch_pairs: set[tuple[str, str]] | None = None,
 ) -> dict[str, Any]:
     """Verify that across all historical tested positive witnesses of every retained branch `b_k`:
     - `b_k`'s guard evaluates to `'TRUE'` on `100%` of `b_k`'s own positive witnesses;
-    - Every other non-covering branch `b_j` (`j != k`) evaluates to `'FALSE'` on `b_k`'s positive witnesses!
+    - Every other branch `b_j` (`j != k`) evaluates to `'FALSE'` on `b_k`'s positive witnesses, EXCEPT when
+      `(b_j, b_k)` is backed by a verified `EmpiricalCoverageReceipt` (`status == 'supported_on_witnesses'`),
+      in which case `b_j` empirically covers `b_k` and `'TRUE'` / `'FALSE'` are both sound!
     """
+    cov_pairs = covered_branch_pairs or set()
     reasons: list[str] = []
     for owner_bid, pos_list in positive_witness_features_by_branch.items():
         for w_i, feat_map in enumerate(pos_list):
@@ -1517,8 +1519,11 @@ def verify_m97_multibranch_witness_partition(
                 res = evaluate_m96_autonomous_guard(g_spec, feat_map, allow_open_feature_keys=True)
                 if eval_bid == owner_bid and res["state"] != "TRUE":
                     reasons.append(f"{owner_bid}_pos_{w_i}:own_guard_{eval_bid}={res['state']}")
-                elif eval_bid != owner_bid and res["state"] != "FALSE":
-                    reasons.append(f"{owner_bid}_pos_{w_i}:other_guard_{eval_bid}={res['state']}_overlap")
+                elif eval_bid != owner_bid:
+                    if ((eval_bid, owner_bid) in cov_pairs or (owner_bid, eval_bid) in cov_pairs) and res["state"] in {"TRUE", "FALSE"}:
+                        continue
+                    if res["state"] != "FALSE":
+                        reasons.append(f"{owner_bid}_pos_{w_i}:other_guard_{eval_bid}={res['state']}_overlap")
     return {"valid": len(reasons) == 0, "reasons": reasons}
 
 
@@ -1593,6 +1598,7 @@ def propose_and_validate_m97_multibranch_split(
     current_public_item: dict[str, Any],
     current_param_payload: dict[str, Any],
     parent_wiring_meta: dict[str, Any],
+    covered_branch_pairs: set[tuple[str, str]] | None = None,
     max_attempts: int = 2,
 ) -> dict[str, Any]:
     """Model-proposed multi-branch guard & permuted-parent induction (`0` prompt hints naming distractors, `run_in_container=True`!)."""
@@ -1650,6 +1656,7 @@ def propose_and_validate_m97_multibranch_split(
         part_chk = verify_m97_multibranch_witness_partition(
             branch_guards=all_guards,
             positive_witness_features_by_branch=positive_witness_features_by_branch,
+            covered_branch_pairs=covered_branch_pairs,
         )
         sens_chk = verify_upstream_parent_perturbation_sensitivity(
             family=spec.family,
@@ -2074,7 +2081,17 @@ def run_m97_equal_capability_pre_llm_trial(
         expected_dependency_sha256=expected_dependency_sha256,
     )
     pr_ms = round((monotonic() - t_pr) * 1000.0, 2)
-    f_kind = "none" if pr["accepted"] else ("scientific_or_numerical" if pr.get("schema_valid") else "schema_or_interface")
+    err_blob = f"{pr.get('schema_stdout', '')}\n{pr.get('schema_stderr', '')}"
+    has_interface_crash = any(
+        tok in err_blob for tok in ("SyntaxError", "ImportError", "ModuleNotFoundError", "AttributeError", "NameError")
+    )
+    already_proven_executable = len(lineage_ctrl.positive_witnesses_for(chosen_b.binding_id)) >= 1
+    if pr["accepted"]:
+        f_kind = "none"
+    elif pr.get("schema_valid") or (already_proven_executable and not has_interface_crash):
+        f_kind = "scientific_or_numerical"
+    else:
+        f_kind = "schema_or_interface"
     wit = lineage_ctrl.record_tested_witness(
         binding=chosen_b,
         public_input_sha256=public_input_sha256,

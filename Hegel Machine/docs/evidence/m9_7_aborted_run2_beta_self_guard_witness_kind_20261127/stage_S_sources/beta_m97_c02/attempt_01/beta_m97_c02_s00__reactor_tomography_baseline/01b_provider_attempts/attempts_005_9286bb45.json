@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9286bb456ab14e32a7cbf498402d4efe",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:38:11.922328+00:00",
+  "ended_at_utc": "2026-11-27T07:38:50.455744+00:00",
+  "request_sha256": "6ad3dd48a0f1b45d6ac3404e72167b384ea525f8f82377510747b6d9c39dabba",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 39821,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26184,
+    "cached_tokens": 0,
+    "completion_tokens": 1542
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', 'beta_m97_c02_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nvalidator_source = Path('validate_public_schema.py').read_text().split('\\\\n_d =', 1)[0]\\nnamespace = {}\\nexec(validator_source, namespace)\\nverify = namespace['verify_box_simplex_kkt_certificate']\\nitem = pickle.load(open('public_beta_m97_c02_s00.pkl', 'rb'))[0]\\ns = item['study']\\nz = s['Z_nuisance']\\nraw_design, basis = m._forward(s)\\ndef profile(a):\\n    return a - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ a)\\n\\nprint('Public-study budget stress:')\\nworst = 0.0\\nfor budget in [0., 1e-6, .4, 1., 2.6, 6., 11.9, 12.]:\\n    st = dict(s, total_budget=budget)\\n    out = m.solve_beta_m97_c02_s00(st)\\n    w = out['weights']\\n    chk = verify(item['gt']['S_tilde'], item['gt']['r_y'], s['source_ridge'], s['u_box'], budget, out['kkt_certificate'])\\n    assert chk['valid'], (budget, chk)\\n    assert np.max(np.abs(out['terminal_field'].ravel(order='F') - basis @ w)) < 1e-12\\n    worst = max(worst, chk['gap'])\\n    print(f'  budget={budget:g}: lower={np.count_nonzero(w == 0)} upper={np.count_nonzero(w == 1)} gap={chk[\\\"gap\\\"]:.3g}')\\n\\nrng = np.random.default_rng(42)\\nmax_gap = 0.0\\njoint = 0\\nfor k in range(400):\\n    n = 12\\n    a = rng.normal(size=(15, n))\\n    h = a.T @ a + .04 * np.eye(n)\\n    c = rng.normal(size=n) * rng.choice([.01, 1., 100.])\\n    cap = float(rng.choice([.15, 1., 5.]))\\n    budget = cap * (rng.integers(1, n) if k % 2 else rng.uniform(.001, n - .001))\\n    w, nu = m._box_simplex(h, c, cap, budget)\\n    g = h @ w - c\\n    gap = g @ w - nu * budget - cap * np.minimum(0, g - nu).sum()\\n    assert w.min() >= 0 and w.max() <= cap and abs(w.sum() - budget) < 1e-10 and abs(gap) < 1e-9, (k, budget, gap)\\n    joint += bool(np.any(w == 0) and np.any(w == cap))\\n    max_gap = max(max_gap, abs(gap))\\nassert joint > 0\\nprint(f'Random QPs: {joint}/400 had both bound types; max absolute gap {max_gap:.3g}')\\n\\nbank = np.repeat(np.arange(4), 7)\\nref = np.tile(np.linspace(-1., 1., 7), 4)\\ngain = np.array([.8, 1.1, 1.4, 1.7])\\noffset = np.array([-.3, .1, -.15, .65])\\nsweep_raw = gain[bank] * ref + offset[bank]\\nsweep_raw[15] += 3.1\\nsweep_raw[19] -= 3.2\\nkeep = (bank != 1) | (ref == 0)\\nrows = s['row_bank_id']\\ntarget = raw_design @ np.linspace(.05, .38, 12) + z @ np.arange(5) * .07\\nst = dict(s, y_obs_raw=gain[rows] * target + offset[rows], sensor_calibration_sweeps=dict(bank_id=bank[keep], ref_signal=ref[keep], raw_readout=sweep_raw[keep]))\\nwith tempfile.TemporaryDirectory() as tmp:\\n    m._ARCHIVE = Path(tmp) / 'archive.json'\\n    m._ARCHIVE.write_text(json.dumps({'1': {'gain': float(gain[1]), 'offset': float(offset[1])}}))\\n    err = np.max(np.abs(m._calibrate(st) - target))\\n    assert err < 1e-12, err\\n    out = m.solve_beta_m97_c02_s00(st)\\n    chk = verify(profile(raw_design), profile(target), s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=1e-9)\\n    assert chk['valid'], chk\\n    print(f'Sparse-bank archive + two EMI spikes: max calibration error {err:.3g}, gap {chk[\\\"gap\\\"]:.3g}')\\nprint(f'Worst public-reference stress gap {worst:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration → open-Robin transport and ridge residualization → active-set inversion; public max weight error is 2.15e-7 and certificate gap is 6.25e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case has no active weight bounds and all four banks have full sweeps. Stress the budget endpoints, simultaneous lower and upper bounds, and calibration with both missing rows and EMI spikes in an isolated Python process. Any failure will identify whether the active set, certificate, or calibration fallback needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b222c53d6efd03f805451f350161782f7d062ab264f3704d61339a5c314a9832",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40950.95,
+      "usage_known": true,
+      "prompt_tokens": 26184,
+      "cached_tokens": 0,
+      "completion_tokens": 1542
+    }
+  ]
+}

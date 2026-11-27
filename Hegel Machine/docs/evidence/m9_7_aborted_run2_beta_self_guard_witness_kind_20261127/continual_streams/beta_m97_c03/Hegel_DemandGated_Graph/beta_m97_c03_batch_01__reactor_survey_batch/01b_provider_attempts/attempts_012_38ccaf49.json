@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "38ccaf49dd464fc79d3f77edb49aefcd",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:48:07.868257+00:00",
+  "ended_at_utc": "2026-11-27T07:48:38.349666+00:00",
+  "request_sha256": "a83bcbe469d74c5ca42c12fffb5eadfc4bd9ec3cb0fa1484970e8ab9d0b2bf57",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 61118,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31392,
+    "cached_tokens": 6784,
+    "completion_tokens": 1127
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/beta_m97_c03_sweep_lobo.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m97_c03_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\n\\nclass NoArchive:\\n    def open(self, *args, **kwargs):\\n        raise AssertionError('Clean current sweeps must not consult the archive')\\n\\nm._ARCHIVE = NoArchive()\\nwith open('/holdout_task/public_beta_m97_c03_batch_01.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    s, gt = case['study'], case['gt']\\n    sweeps = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    bank, x, raw = (sweeps[k] for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    worst = np.zeros((4, 4))\\n    for b in range(4):\\n        idx = np.flatnonzero(bank == b)\\n        for held in idx:\\n            pool = idx[idx != held]\\n            for selection in (pool, pool[:4], pool[-4:]):\\n                keep = bank != b\\n                keep[selection] = True\\n                sweep = {k: v[keep] for k, v in sweeps.items()}\\n                probe = dict(s, sensor_calibration_sweeps=sweep)\\n                recovered = m._calibrate(dict(probe, y_obs_raw=raw[held:held+1], row_bank_id=bank[held:held+1]))[0]\\n                out = m.solve_beta_m97_c03_batch_01(probe)\\n                w = np.asarray(out['weights'])\\n                d = gt['S_tilde'].T @ (gt['S_tilde'] @ w - gt['r_y']) + s['source_ridge']*w - out['kkt_certificate']['nu_sum']\\n                worst[b] = np.maximum(worst[b], [abs(recovered-x[held]), np.max(np.abs(w-gt['w_opt'])), np.max(np.abs(out['terminal_field']-gt['terminal_field_A'])), d@w-s['u_box']*np.minimum(d,0).sum()])\\n        print('bank', b, 'max held-out reference, weight, field, KKT gap:', *worst[b])\\n    assert np.all(worst < [1e-5, 1e-5, 1e-5, 2e-4]), worst\\nPY\\npython3 -I /tmp/beta_m97_c03_sweep_lobo.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled or historical bank calibration -> H2 current bank-specific affine fits followed by nuisance projection; the prior audit measured a worst reference KKT gap of 7.41e-8 and near-threshold EMI deviation of 3.09e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the full-sweep calibration and two-mode transport checks\",\n      \"rejected_reason\": \"Those passed on this artifact; neither checks held-out prediction from exactly four clean current rows with archive access disabled.\"\n    }\n  ],\n  \"rationale\": \"Use held-out real sweep readings to test the minimum clean-data guarantee bank by bank. A held-out calibration failure would isolate the affine fit; accurate calibration with a failed weight, field, or certificate margin would instead expose sensitivity downstream. The prior projected-design and mode checks already cover the specified transport algebra.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e58ebd07e1922a4bed67f0e6d8204cc88ae8b119182630895940f768032fb096",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32861.24,
+      "usage_known": true,
+      "prompt_tokens": 31392,
+      "cached_tokens": 6784,
+      "completion_tokens": 1127
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "912d24743d5245ba8e220710000a1518",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:32.537317+00:00",
+  "ended_at_utc": "2026-11-27T07:48:06.843959+00:00",
+  "request_sha256": "d076ac109726f9bd6bf91aea203135a0f03d6cd75092089098fb17ec201db01a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65508,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34204,
+    "cached_tokens": 11136,
+    "completion_tokens": 1478
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/rheo_margin_audit.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom pathlib import Path\\nroot = Path('/holdout_task')\\ns = importlib.util.spec_from_file_location('solver', root/'alpha_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith (root/'public_alpha_m97_c01_batch_01.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; lab = c['lab_id']; cmd = c['cmd_stress']; true = c['true_stress']\\nref = np.array([np.polyfit(cmd[lab==j], true[lab==j], 1) for j in range(4)])\\nnp.testing.assert_allclose(m._calibrate(d), ref, atol=1e-12)\\nworst_stress = 0.\\nfor j in range(4):\\n    ids = np.flatnonzero(lab == j)\\n    for sign in (-1, 1):\\n        keep = np.concatenate((np.flatnonzero(lab != j), ids[:5]))\\n        pert = {k: np.asarray(v)[keep].copy() for k,v in c.items()}\\n        pert['true_stress'][-1] += sign * 4.\\n        expected = np.polyfit(cmd[ids[:4]], true[ids[:4]], 1)\\n        est = m._calibrate(dict(d, calibration_load_cells=pert))\\n        np.testing.assert_allclose(est[j], expected, atol=1e-12)\\n        others = np.arange(4) != j\\n        np.testing.assert_allclose(est[others], ref[others], atol=1e-12)\\n        for split in ('train','test'):\\n            data = d[split]; q = data['lab_id'] == j\\n            vals = np.r_[data['past_stress_cmd'][q].ravel(), data['stress_hold_cmd'][q]]\\n            worst_stress = max(worst_stress, np.max(abs(np.polyval(est[j]-ref[j], vals))))\\nprint('Four clean calibration points plus either spike sign, worst stress shift from full sweep:', worst_stress)\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)\\nfor j in range(4):\\n    idx = np.flatnonzero(lab == j)\\n    keep = (lab != j); keep[idx[0]] = True\\n    sparse = {k: np.asarray(v)[keep] for k,v in c.items()}\\n    sweep = next(h for h in reversed(history) if np.count_nonzero(np.asarray(h['lab_id']) == j) >= 2)\\n    q = np.asarray(sweep['lab_id']) == j\\n    expected = np.polyfit(np.asarray(sweep['cmd_stress'])[q], np.asarray(sweep['true_stress'])[q], 1)\\n    np.testing.assert_allclose(m._calibrate(dict(d, calibration_load_cells=sparse))[j], expected, atol=1e-12)\\nprint('One-point history fallback verified for each channel')\\npast,hold,x,s0 = m._inputs(d); tr = d['train']; n = len(tr['lab_id']); y = np.c_[tr['strain_curves_obs']-s0[:n,None], tr['instant_rate_obs']]\\nactive = m._Model(d,past[:n],hold[:n],x[:n]).active\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nr = np.empty_like(y)\\nfor j in range(4):\\n    te = tr['lab_id']==j; ti = ~te\\n    def model(mask):\\n        return m._Model(d,past[:n][mask],hold[:n][mask],x[:n][mask])\\n    tau,w = m._fit(model(ti),y[ti]); r[te] = model(te).design(np.log(tau))[0] @ w-y[te]\\nslices = [(tr['lab_id']==j)&(active==gate)&complete for j in range(4) for gate in (False,True)]\\nprint('Complete-coupon lab-by-activation worst absolute signed median bias, each horizon then rate:', np.max([abs(np.median(r[q],axis=0)) for q in slices],axis=0).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage selects the terminal clock -> H2 shear selects the clock while damage gates the memory corrections; worst measured missing-coupon median errors are 0.11055 for strain and 0.09289 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or stochastic drift terms\",\n      \"rejected_reason\": \"The supplied rheology law contains none of these mechanisms, and the independent recurrence already verifies the two memory branches and terminal clock.\"\n    },\n    {\n      \"option\": \"Score within-batch balanced accuracy\",\n      \"rejected_reason\": \"The outputs are continuous strain and rate, not class labels; signed held-out residuals within lab and activation strata are the relevant nuisance diagnostic.\"\n    }\n  ],\n  \"rationale\": \"Exercise the documented sparse and EMI calibration paths using measured sweep rows. A failed coefficient check would call for a calibration fix; systematic held-out bias on complete coupons would call for revisiting lab alignment rather than changing the prescribed imputation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8f015f685081300fda4f4c980ab7f2bbca207005308a3a11b2e7da3a6f6d107a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39174.15,
+      "usage_known": true,
+      "prompt_tokens": 34204,
+      "cached_tokens": 11136,
+      "completion_tokens": 1478
+    }
+  ]
+}

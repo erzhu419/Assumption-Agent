@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c01_batch_03_26ef7108e93b",
+    "source_hash": "26ef7108e93b8a59edf0679bfb777479106baaada61148b2531622459e7a9287",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c01_batch_03__rheology_campaign_batch",
+    "task_id": "alpha_m97_c01_batch_03__rheology_campaign_batch",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c01_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c01_batch_01_solver.py",
+        "bytes": 8974,
+        "sha256": "433e0bdd69f4c947aaa70d31cddd44280424baa1bb1370571fd03059e87413cf"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c01_batch_02_solver.py",
+        "bytes": 8525,
+        "sha256": "fd1076b6f1feb8abdbdbc79b8f0ba702578902b0c9479a242274ba6b914f25ed"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c01_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c01_s00_solver.py",
+        "bytes": 8193,
+        "sha256": "319f61a0e1995609dccad468a61fd49138b117cd5f76032252d236a1fdd6a240"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -l /tmp/hegel_continual_archive && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation variable projection viscoelastic relaxation' ; cd /holdout_task && python3 validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nd=pickle.load(open('public_alpha_m97_c01_batch_03.pkl','rb'))\ndef describe(x,path='',dep=0):\n if isinstance(x,dict) and dep<3:\n  for k,v in x.items(): describe(v,path+'/'+str(k),dep+1)\n elif isinstance(x,(list,tuple)) and x and isinsta",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nitems=pickle.load(open('public_alpha_m97_c01_batch_03.pkl','rb'))\nprint('items:',len(items),'item keys:',list(items[0]))\ndef describe(d,p=''):\n for k,v in d.items():\n  if isinstance(v,dict): describe(v,p+k+'/')\n  else:\n   a=np.asarray(v)\n   print(p+k,a.shape,a.dtype,repr(a.flatten()[:10]),'nonfinite',np.sum(~np.isfinite(a)) if a.dtype.kind in 'f' else '-')\ndescribe(items[0]['dataset'])\nPY\nsed -n '1,220p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py\nhead -c 1600 /tmp/hegel_continual_archive/archive_calibration_hist",
+      "sed -n '1,135p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py; cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nd=pickle.load(open('public_alpha_m97_c01_batch_03.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']\nfor i in range(4):\n m=c['lab_id']==i; x=c['cmd_stress'][m]; y=c['true_stress'][m]; a,b=np.polyfit(x,y,1); print(i,len(x),a,b,np.max(abs(y-a*x-b)))\nprint('split keys',list(d['train']),list(d['test']))\nPY",
+      "set -e\ncd /holdout_task\nf=alpha_m97_c01_batch_03_solver.py\n{ printf '%s\\n' '\"\"\"Variable-projection solver for calibrated two-branch jammed-slip creep.\"\"\"'; sed '1d; /^class _Model:/,$d' /tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py; } > \"$f\"\ncat >> \"$f\" <<'PY'\nclass _Model:\n    def __init__(self, dt, t, past, hold, x):\n        self.dt, self.t = np.asarray(dt), np.asarray(t)\n        self.age = np.r_[np.cumsum(self.dt[:0:-1])[::-1], 0.0]\n        self.past, self.hold = past, hold\n        terminal = np.r_[self.t / (1.0 + 0.85 * self.t), 1.0]\n        slip = np.sign(hold) * np.sqrt(n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nitem=pickle.load(open('public_alpha_m97_c01_batch_03.pkl','rb'))[0]; d=item['dataset']; tr=d['train']; n=len(tr['lab_id'])\np,h,x,s=m._inputs(d); model=m._Model(d['past_dt'],d['eval_times'],p,h,x)\ny=np.column_stack((tr['strain_curves_obs']-s[:n,None],tr['instant_rate_obs']))\nfor key,group in [('lab',tr['lab_id']),('stratum',tr['stratum']",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nd, gt = item['dataset'], item['gt']; tr, te = d['train'], d['test']\no = m.solve_alpha_m97_c01_batch_03(d)\nfor key, ref in [('estimated_taus','taus'), ('hereditary_weights','theta'), ('regime_mode_weights','vp_theta'), ('predicted_strain','te_cl",
+      "set -e\ncd /holdout_task\nsed -n '1,88p' alpha_m97_c01_batch_03_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nd, gt = item['dataset'], item['gt']; out = m.solve_alpha_m97_c01_batch_03(d)\npast, hold, x, s0 = m._inputs(d)\ntau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weight",
+      "set -e\ncd /holdout_task\nsed -n '82,127p' alpha_m97_c01_batch_03_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\nwith open('public_alpha_m97_c01_batch_03.pkl','rb') as f:\n    d = pickle.load(f)[0]['dataset']\nbase = d['calibration_load_cells']; channel = np.asarray(base['lab_id']); ref = m._calibrate(d)\nfor lab in range(4):\n    rows = np.flatnonzero(channel == lab); other = channel !=",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\ntr = d['train']; n = len(tr['lab_id']); past, hold, x, s0 = m._inputs(d)\nmodel = m._Model(d['past_dt'], d['eval_times'], past, hold, x)\ny = np.column_stack((tr['strain_curves_obs'] - s0[:n,None], tr['instant_rate_obs']))\nc",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_alpha_m97_c01_batch_03.pkl','rb') as f:\n    item = pickle.load(f)[0]\nd, gt = item['dataset'], item['gt']; tr, te = d['train'], d['test']\nout = m.solve_alpha_m97_c01_batch_03(d)\nperturbed = {**d}\nfor split in ('train','test'):\n    t = d[split]\n    perturbed[split] = {**t, 'aux_chamber_telemetry':"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m97_c01_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m97_c01_batch_01_solver.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_non_nested_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c01_batch_03_solver.py",
+        "filename": "alpha_m97_c01_batch_03_solver.py",
+        "bytes": 8825,
+        "sha256": "8e896f827dee82fb13c50d58d7c240646c01faf86f8bf7133f68f3018f7499cc",
+        "content_addressed_ref": "content_addressed_blobs/8e896f827dee82fb13c50d58d7c240646c01faf86f8bf7133f68f3018f7499cc.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c01_batch_03_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_affine",
+      "_mad",
+      "_fit",
+      "_history_affine"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "26ef7108e93b8a59edf0679bfb777479106baaada61148b2531622459e7a9287",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\nm = importlib.util.modul",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "26ef7108e93b8a59edf0679bfb777479106baaada61148b2531622459e7a9287",
+        "expected_candidate_sha256": "26ef7108e93b8a59edf0679bfb777479106baaada61148b2531622459e7a9287",
+        "computed_candidate_sha256": "26ef7108e93b8a59edf0679bfb777479106baaada61148b2531622459e7a9287",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c01_batch_03_solver.py",
+            "bytes": 8825
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_26ef7108"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_affine",
+        "code": "def _affine(x, y):\n    return np.linalg.lstsq(np.column_stack((x, np.ones(len(x)))), y, rcond=None)[0]"
+      },
+      {
+        "name": "_mad",
+        "code": "def _mad(r):\n    return max(1.4826 * np.median(np.abs(r - np.median(r))), 1e-08)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(model, y):\n    from scipy.optimize import least_squares\n    k = 9 if model.regime else 7\n    cache = [None, None]\n\n    def components(theta):\n        if cache[0] is None or not np.array_equal(cache[0], theta[:2]):\n            cache[:] = [theta[:2].copy(), model.design(theta[:2])]\n        return cache[1]\n\n    def residual(theta, scale):\n        return ((components(theta)[0] @ theta[2:] - y) / scale).ravel()\n\n    def jac(theta, scale):\n        design, grad, extra = components(theta)\n        tau_grad = grad * theta[2:4]\n        if extra is not None:\n            tau_grad[:, :, 0] += extra @ theta[-2:]\n        return (np.concatenate((tau_grad, design), axis=2) / np.asarray(scale)[..., None]).reshape(-1, k + 2)\n    tmax = max(model.t.max(), model.dt.max())\n    low, high = (np.log(min(model.dt.min(), model.t[model.t > 0].min()) / 25), np.log(tmax * 20))\n    lb = np.r_[low, low, np.full(k, -np.inf)]\n    ub = np.r_[high, high, np.full(k, np.inf)]\n    if model.regime:\n        seeds = tmax * np.array([[0.09, 0.48], [0.48, 0.09], [0.035, 0.29], [0.29, 0.035], [0.19, 1.3], [1.3, 0.19]])\n    else:\n        seeds = tmax * np.array([[0.09, 0.48], [0.035, 0.29], [0.19, 1.3]])\n\n    def linear_seed(p, scale):\n        design = model.design(p)[0]\n        beta = np.linalg.lstsq((design / np.asarray(scale)[..., None]).reshape(-1, k), (y / scale).ravel(), rcond=None)[0]\n        return np.r_[p, beta]\n\n    def scales(r):\n        return np.r_[np.full(y.shape[1] - 1, _mad(r[:, :-1])), _mad(r[:, -1])]\n    seeds = np.log(seeds)\n    seed = linear_seed(seeds[0], 1.0)\n    scale = scales(residual(seed, 1.0).reshape(y.shape))\n    warm = [least_squares(residual, linear_seed(p, scale), jac=jac, args=(scale,), bounds=(lb, ub), loss='soft_l1', max_nfev=100, x_scale='jac') for p in seeds[:2]]\n    best_warm = min(warm, key=lambda r: r.cost).x\n    scale = 1.25 * scales(residual(best_warm, 1.0).reshape(y.shape))\n    starts = [best_warm] + [linear_seed(p, scale) for p in seeds]\n    best = min((least_squares(residual, p, jac=jac, args=(scale,), bounds=(lb, ub), loss='cauchy', max_nfev=100, x_scale='jac') for p in starts), key=lambda r: r.cost).x\n    logtau, hw = (best[:2].copy(), best[2:9].copy())\n    rw = best[9:].copy() if model.regime else np.zeros(2)\n    if not model.regime:\n        order = np.argsort(logtau)\n        logtau = logtau[order]\n        hw[:2] = hw[:2][order]\n    return (logtau, hw, rw)"
+      },
+      {
+        "name": "_history_affine",
+        "code": "def _history_affine(history, channel):\n    for sweep in reversed(history):\n        use = np.asarray(sweep['lab_id']) == channel\n        x, y = (np.asarray(sweep[k])[use] for k in ('cmd_stress', 'true_stress'))\n        if len(x) >= 2 and np.ptp(x) > 0:\n            return _affine(x, y)\n    return None"
+      }
+    ]
+  }
+}

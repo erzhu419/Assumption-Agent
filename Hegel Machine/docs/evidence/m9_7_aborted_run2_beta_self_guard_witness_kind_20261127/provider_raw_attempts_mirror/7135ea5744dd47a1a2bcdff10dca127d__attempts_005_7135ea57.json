@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7135ea5744dd47a1a2bcdff10dca127d",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:51:07.431021+00:00",
+  "ended_at_utc": "2026-11-27T07:51:37.831956+00:00",
+  "request_sha256": "c7617a0f54ebf0e808ea1b255323de540c6cee50f2c20c082ff2bc172869f510",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 39354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25353,
+    "cached_tokens": 6784,
+    "completion_tokens": 1053
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_rheology02.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/alpha_m97_c01_batch_02_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb') as f: a=pickle.load(f)[0]\\nd,g=a['dataset'],a['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); out=m.solve_alpha_m97_c01_batch_02(d)\\npast,hold,x,z=m._inputs(d); dt,t=d['past_dt'],d['eval_times']; missing=np.isnan(te['coupon_features_raw']).any(1)\\nassert np.array_equal(out['regime_mode_weights'],np.zeros(2))\\nfor k,h in [('estimated_taus','taus'),('hereditary_weights','theta')]:\\n print(k,'max abs error',np.max(np.abs(out[k]-g[h])))\\nfor k,h in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n e=np.abs(out[k]-g[h]); print(k,'overall MAE/RMSE/max',e.mean(),np.sqrt(np.mean(e**2)),e.max())\\n print('  each lab MAE',[e[te['lab_id']==i].mean() for i in range(4)],'complete/missing',[e[~missing].mean(),e[missing].mean()])\\n if e.ndim==2: print('  horizon MAE',e.mean(0))\\nprint('physical stress max errors',np.max(np.abs(past[n:]-g['te_hist_true'])),np.max(np.abs(hold[n:]-g['te_hold_true'])))\\ny=np.column_stack((tr['strain_curves_obs']-z[:n,None],tr['instant_rate_obs']))\\nfor i in range(4):\\n idx=tr['lab_id']==i\\n def model(mask): return m._Model(dt,t,past[:n][mask],hold[:n][mask],x[:n][mask])\\n lt,w=m._fit(model(~idx),y[~idx]); err=np.abs(model(idx).design(lt)[0]@w-y[idx]); print('held-out lab',i,'curve/rate median abs errors',np.median(err[:,:-1]),np.median(err[:,-1]))\\n# Compare the closed-form history and analytic initial rate with the literal recurrence.\\ntau,hw=out['estimated_taus'],out['hereditary_weights']; memory=np.zeros((len(hold),2))\\nfor j,duration in enumerate(dt):\\n decay=np.exp(-duration/tau); memory=decay*memory+(1-decay)*past[:,j,None]\\ngaps=hold[n:,None]-memory[n:]; drift=hw[2]+x[n:]@hw[3:]; assert np.allclose(out['initial_rate_pred'],gaps@(hw[:2]/tau)+drift,atol=1e-11,rtol=0)\\nassert np.allclose(out['predicted_strain'],z[n:,None]+(gaps*hw[:2])@(-np.expm1(-t[None,:]/tau[:,None]))+drift[:,None]*t,atol=1e-11,rtol=0)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rheology02.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 crystallization plateau -> H2 robust two-branch linear terminal flow; public schema passes, with worst-lab prediction error pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after schema validation\",\"rejected_reason\":\"Schema success does not establish numerical accuracy or validate the analytic initial rate.\"}],\"rationale\":\"Compare the exact candidate with clean public targets by lab, horizon, and feature missingness, then refit with each lab’s outcomes held out. A discrepancy with the literal recurrence would require a model correction; a large slice error would identify which preprocessing or fit to revisit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "14e962e443199c9a60b236fe7ff00898ffdd6a4e04c191587f16742c199c2c87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32845.02,
+      "usage_known": true,
+      "prompt_tokens": 25353,
+      "cached_tokens": 6784,
+      "completion_tokens": 1053
+    }
+  ]
+}

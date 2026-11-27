@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "796bd7c0a5ac47ddb62789d40f27439a",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:13:41.934428+00:00",
+  "ended_at_utc": "2026-11-27T08:14:17.439367+00:00",
+  "request_sha256": "abab9a64a22f7765f08f75071d5882e04bd29c1b30c44875d782ce97ef7717de",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 77586,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37701,
+    "cached_tokens": 6784,
+    "completion_tokens": 1368
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/batch05_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_05_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_05.pkl', 'rb') as f:\\n    data = pickle.load(f)[0]['dataset']\\na = data['train']\\npast, hold, x, strain = m._inputs(data)\\nmodel = m._Model(data, past, hold, x)\\nn = len(a['lab_id'])\\nlab = a['lab_id']\\nactive = model.act[:n] > 0\\ncomplete = np.isfinite(a['coupon_features_raw']).all(axis=1)\\ny = np.column_stack((a['strain_curves_obs'] - strain[:n, None], a['instant_rate_obs']))\\nfamilies = {\\n    'base': np.zeros((n, 0)),\\n    'lab_drift': np.eye(4)[lab, 1:],\\n    'telemetry_control': a['aux_chamber_telemetry'],\\n    'pair_and_saturation': np.column_stack([x[:n,i]*x[:n,j] for i,j in combinations(range(4), 2)] + [hold[:n]/(1+hold[:n]**2)]),\\n}\\n# Pairwise linear sums/differences are already in the span of the four\\n# aligned coupon columns. Probe nonlinear terms and nuisance effects in drift.\\nfold = np.full(n, -1)\\nrng = np.random.default_rng(117)\\nfor c in range(4):\\n    for g in (False, True):\\n        rows = rng.permutation(np.flatnonzero(complete & (lab == c) & (active == g)))\\n        fold[rows] = np.arange(len(rows)) % 4\\nerrors = {name: np.full_like(y, np.nan) for name in families}\\nfor f in range(4):\\n    tr = np.flatnonzero((fold >= 0) & (fold != f))\\n    va = np.flatnonzero(fold == f)\\n    t, w = m._fit(model, y, tr)\\n    tr_resid = y[tr] - model.design(t, tr) @ w\\n    va_resid = y[va] - model.design(t, va) @ w\\n    for name, features in families.items():\\n        errors[name][va] = va_resid\\n        if features.shape[1]:\\n            fit = least_squares(lambda b: (tr_resid - (features[tr] @ b)[:,None] * model.flow[tr]).ravel(), np.zeros(features.shape[1]), loss='cauchy', f_scale=.04)\\n            errors[name][va] -= (features[va] @ fit.x)[:,None] * model.flow[va]\\nfor name, resid in errors.items():\\n    scores = []\\n    for c in range(4):\\n        for g in (False, True):\\n            q = complete & (lab == c) & (active == g)\\n            if not q.any():\\n                continue\\n            r = resid[q]\\n            scores.append([np.sqrt(np.mean(np.minimum(abs(r[:,:-1]),.1)**2)), np.sqrt(np.mean(r[:,-1]**2)), abs(np.median(r[:,-1]))])\\n    print(name, 'mean/worst slices: clipped strain RMSE, rate RMSE, absolute median rate bias', np.round(np.mean(scores,axis=0),6), np.round(np.max(scores,axis=0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch05_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (calibrated stress and cell-balanced alignment) -> H2 (robust gated Prony plateau); verified worst public lab-by-regime RMSE is 0.14404 for strain and 0.11043 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The measured endpoints are continuous, and the model has a deterministic damage gate, no relay state, and no stochastic drift operator. The relevant audit is residual error within labs and gate states.\"\n    }\n  ],\n  \"rationale\": \"Test whether lab offsets, uncoupled telemetry, or nonlinear terms explain reproducible residual error on complete measured coupons. Fit every correction inside its training fold and score held-out lab-by-gate slices. A material within-slice gain would justify investigating the corresponding mechanism; negligible changes favor retaining the specified law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2cf73ff681691008744da64a0eccd398ec8c616f9f52cfc56606d1b8113fa1ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38016.59,
+      "usage_known": true,
+      "prompt_tokens": 37701,
+      "cached_tokens": 6784,
+      "completion_tokens": 1368
+    }
+  ]
+}

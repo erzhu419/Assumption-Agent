@@ -1,0 +1,189 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c02_batch_04_65352c3a2e13",
+    "source_hash": "65352c3a2e13bfc626957abd6a60197ccdc75ad34ad1d1350379a1a987167334",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c02_batch_04__rheology_campaign_batch",
+    "task_id": "alpha_m97_c02_batch_04__rheology_campaign_batch",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheology04_challenger.py",
+        "archived_relpath": "producers/tmp__rheology04_challenger.py",
+        "bytes": 7683,
+        "sha256": "04b956d0ce86c57d44bb874c0fd470433e2c3bb1062769cd4424ff089373680e"
+      },
+      {
+        "container_path": "/tmp/rheology04_cv.py",
+        "archived_relpath": "producers/tmp__rheology04_cv.py",
+        "bytes": 1556,
+        "sha256": "70713729868824cc1f7bf04443f8d7986aa1b7dc265b09954d4a6ed185e7a8d4"
+      },
+      {
+        "container_path": "/tmp/rheology04_emi.py",
+        "archived_relpath": "producers/tmp__rheology04_emi.py",
+        "bytes": 2138,
+        "sha256": "2f87ca1358462dcf5b779cd39829790a6bbdd1a13cfcf150b05072de2448292b"
+      },
+      {
+        "container_path": "/tmp/rheology04_final_cv.py",
+        "archived_relpath": "producers/tmp__rheology04_final_cv.py",
+        "bytes": 1536,
+        "sha256": "c08497c989b57d5709c3263201393c65d2c62b3d595658e31acca330a1b1bde6"
+      },
+      {
+        "container_path": "/tmp/rheology04_missing_cv.py",
+        "archived_relpath": "producers/tmp__rheology04_missing_cv.py",
+        "bytes": 1437,
+        "sha256": "b392edee3e85731146ded95724d45da298863d610e12d76a4b8961a7a610c716"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c02_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c02_batch_01_solver.py",
+        "bytes": 10304,
+        "sha256": "9f38b6afaf5d8ba70a09445c165be447de5616a4e5a6ad5d40bbc333b974c1f5"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c02_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c02_batch_02_solver.py",
+        "bytes": 9055,
+        "sha256": "a3edaef77e0160b4bcc2f6e48f2cf750123729f122bbd7c731c10b7e56216ad5"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c02_batch_03_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c02_batch_03_solver.py",
+        "bytes": 7049,
+        "sha256": "bb194378b7a293b554d57d440423b3b4dcefa1ffddb68c82b9d6867f03554b32"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c02_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c02_s00_solver.py",
+        "bytes": 7377,
+        "sha256": "8c87cf12a248edcc03965e1f69af8c9e93334da0e845a92aa217203cbb6ae391"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -l /tmp/hegel_continual_archive && cat /tmp/hegel_continual_archive/archive_manifest.json && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_alpha_m97_c02_batch_04.pkl','rb') as f: d=pickle.load(f)\ndef show(obj,depth=0):\n if isinstance(obj,dict) and depth<3:\n  for k,v in obj.items():\n   print(' '*depth,k,end=': ');show(v,depth+1)\n elif isinstance(obj,np.ndarray):\n  print(obj.shape,obj.dtype,obj.ravel()[:5])\n elif isinstance(obj,(list,tuple)):\n  print(type(obj).__name__,len(obj),str(obj[:1])[:350",
+      "python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_04.pkl','rb'))[0]\nprint('item keys',list(p)); d=p['dataset']\nfor k,v in d.items():\n if isinstance(v,dict):\n  print(k,[(a,np.shape(b)) for a,b in v.items()]);\n  if k=='calibration_load_cells': print(v)\n else: print(k,np.shape(v),v if np.size(v)<=20 else '')\nPY\nls -lh /tmp/hegel_continual_archive; head -c 2200 /tmp/hegel_continual_archive/archive_calibration_history.json; printf '\\n'; sed -n '1,240p' /tmp/hegel_continual_archive/alpha_m97_c02_batch_03_solver.py",
+      "sed -n '1,100p' /tmp/hegel_continual_archive/alpha_m97_c02_batch_03_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -c 1400; python3 - <<'PY'\nimport json,pickle,numpy as np\np=pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_04.pkl','rb'))[0]; d=p['dataset']; print('gt schema',[(k,np.shape(v)) for k,v in p['gt'].items()]);\nfor name in ['train','test']:\n s=d[name]; print(name,'strata',np.unique(s['stratum'],return_counts=True),'lab',np.bincount(s['lab_id']),'ref_nan',np.isnan(s['ref_coupons']).sum(",
+      "set -e\ncd /holdout_task\np=alpha_m97_c02_batch_04_solver.py\nsrc=/tmp/hegel_continual_archive/alpha_m97_c02_batch_03_solver.py\nsed -n '/^import json/,/^def _inputs/{ /^def _inputs/!p; }' \"$src\" > \"$p\"\ncat >> \"$p\" <<'PY'\ndef _inputs(split, x, calibration, dt, critical, bands):\n    gain, bias = calibration[split['lab_id']].T\n    past = gain[:, None] * split['past_stress_cmd'] + bias[:, None]\n    hold = gain * split['stress_hold_cmd'] + bias\n    damage = np.maximum(np.abs(past) - critical, 0.0)**2 @ dt\n    active = (bands <= 0.50) & (damage > 0.0)\n    activation = np.where(active, np.tanh(damage), ",
+      "cd /holdout_task && export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 && cat > /tmp/rheology04_cv.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c02_batch_04_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nd=pickle.load(open(p+'public_alpha_m97_c02_batch_04.pkl','rb'))[0]['dataset']; tr=d['train']; dt,t=d['past_dt'],d['eval_times']; cal=s._calibration(d); x,_=s._aligned(tr,d['test']); args=s._inputs(tr,x,cal,dt,d['crit_stress'],d['shear_banding_index']); y=tr['strain_",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m97_c02_batch_04_solver.py')\ns = p.read_text()\ns = s.replace('activation, active):\\n    response', 'activation, _active):\\n    response')\ns = s.replace('    phi = np.where(active[:, None], plateau, t)\\n', '    # The plateau is shared; work damage activates only the two mode terms.\\n')\ns = s.replace('flow[:, None, :] * phi[:, :, None]', 'flow[:, None, :] * plateau[None, :, None]')\np.write_text(s)\nPY\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 -I validate_public_schema.py\nsed \"s/('gated','all_log','all_",
+      "cd /holdout_task && export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 && sed -n '/^def _fit/,/^def solve/p' alpha_m97_c02_batch_04_solver.py && cat > /tmp/rheology04_missing_cv.py <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c02_batch_04_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nd=pickle.load(open(p+'public_alpha_m97_c02_batch_04.pkl','rb'))[0]['dataset']; tr=d['train']; dt,t=d['past_dt'],d['eval_times']; cal=s._calibration(d); x,_=s._aligned(tr,d['test']); args=s._input",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\nsed -n '1,100p' alpha_m97_c02_batch_04_solver.py\npython3 -I - <<'PY'\nimport importlib.util, pickle, json\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_04_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nitem=pickle.load(open('public_alpha_m97_c02_batch_04.pkl','rb'))[0]; d=item['dataset']; tr=d['train']; dt,t=d['past_dt'],d['eval_times']; lab=tr['lab_id']; group=tr['stratum']; cal=s._calibration(d); x,_=s._aligned(tr,d['test']); args=s._inputs(t",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, json, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_04_solver.py')\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nd = pickle.load(open('public_alpha_m97_c02_batch_04.pkl', 'rb'))[0]['dataset']\nwith open(s._ARCHIVE) as f:\n    history = json.load(f)\nrecent = history[-3:]\nprint('clean sweep transfer: max per-lab held-out stress RMSE')\nfor pooled in (False, True):\n    errors = []\n    for i in range(1, len(recent)):\n        t",
+      "set -e\ncd /holdout_task\ncat > /tmp/rheology04_emi.py <<'PY'\nimport importlib.util, itertools, json, sys\nimport numpy as np\npath = sys.argv[1] if len(sys.argv) > 1 else 'alpha_m97_c02_batch_04_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open(s._ARCHIVE) as f:\n    recent = json.load(f)[-3:]\n\ndef points(sweep, lab):\n    mask = np.asarray(sweep['lab_id']) == lab\n    return tuple(np.asarray(sweep[k])[mask] for k in ('cmd_stress','true_stress'))\n\nfor pooled in (False, True):\n    errors = []\n    for",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m97_c02_batch_04_solver.py')\ns = p.read_text()\nstart = s.index('        archived = None')\nstop = s.index('    return result', start)\nnew = '''        if len(x) >= 3:\n            # A high-leverage spike can move a fit that includes its own row.\n            # Test each observation against a line fitted without that row.\n            suspect = False\n            for i in range(len(x)):\n                other = np.arange(len(x)) != i\n                if np.ptp(x[other]) == ",
+      "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/rheology04_challenger.py')\ns = p.read_text()\nold = '                if abs(y[i] - (a*x[i] + b)) > 3.0:'\nassert s.count(old) == 1\ns = s.replace(old, '''                # Allow a small screening margin for extrapolation from a\n                # narrow command range. The archive-based check below still\n                # requires an offset greater than 3.0 before removing a row.\n                if abs(y[i] - (a*x[i] + b)) > 2.95:''')\np.write_text(s)\nPY\npython3 -I /tmp/rh"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m97_c02_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m97_c02_batch_01_solver.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_non_nested_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c02_batch_04_solver.py",
+        "filename": "alpha_m97_c02_batch_04_solver.py",
+        "bytes": 7683,
+        "sha256": "04b956d0ce86c57d44bb874c0fd470433e2c3bb1062769cd4424ff089373680e",
+        "content_addressed_ref": "content_addressed_blobs/04b956d0ce86c57d44bb874c0fd470433e2c3bb1062769cd4424ff089373680e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c02_batch_04_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_inputs",
+      "_design",
+      "_fit",
+      "_physical",
+      "_mad",
+      "_take_inputs",
+      "_refine_calibration",
+      "_refine_short_pairs"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "65352c3a2e13bfc626957abd6a60197ccdc75ad34ad1d1350379a1a987167334",
+      "verified_post_package": true,
+      "verified_turn": 14,
+      "verification_command": "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/tmp/rheology04_challenger.py')\ns = p.read_text()\nold = '                if abs(y[i] - (a*x[i] + b)) > 3.0:'\nassert ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "65352c3a2e13bfc626957abd6a60197ccdc75ad34ad1d1350379a1a987167334",
+        "expected_candidate_sha256": "65352c3a2e13bfc626957abd6a60197ccdc75ad34ad1d1350379a1a987167334",
+        "computed_candidate_sha256": "65352c3a2e13bfc626957abd6a60197ccdc75ad34ad1d1350379a1a987167334",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c02_batch_04_solver.py",
+            "bytes": 7683
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_65352c3a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_inputs",
+        "code": "def _inputs(split, x, calibration, dt, critical, bands):\n    gain, bias = calibration[split['lab_id']].T\n    past = gain[:, None] * split['past_stress_cmd'] + bias[:, None]\n    hold = gain * split['stress_hold_cmd'] + bias\n    damage = np.maximum(np.abs(past) - critical, 0.0) ** 2 @ dt\n    active = (bands <= 0.5) & (damage > 0.0)\n    activation = np.where(active, np.tanh(damage), 0.0)\n    return (past, hold, np.column_stack((np.ones(len(x)), x)), activation, active)"
+      },
+      {
+        "name": "_design",
+        "code": "def _design(tau, dt, t, past, hold, flow, activation, _active):\n    response = -np.expm1(-dt[:, None] / tau)\n    decay = np.exp(-dt[:, None] / tau)\n    z = np.zeros((len(hold), 2))\n    for stress, a, b in zip(past.T, decay, response):\n        z = a * z + b * stress[:, None]\n    gap = hold[:, None] - z\n    growth = -np.expm1(-t[:, None] / tau)\n    plateau = np.log1p(t)\n    mode0 = activation * hold\n    mode1 = activation * z[:, 0]\n    a = np.empty((len(hold), len(t), 9))\n    a[:, :, :2] = gap[:, None, :] * growth\n    a[:, :, 2:7] = flow[:, None, :] * plateau[None, :, None]\n    a[:, :, 7] = mode0[:, None] * growth[:, 0]\n    a[:, :, 8] = mode1[:, None] * plateau\n    b = np.column_stack((gap / tau, flow, mode0 / tau[0], mode1))\n    return (a, b)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(dt, t, inputs, curves, rates):\n    from scipy.optimize import least_squares\n    n, k = curves.shape\n    y = np.r_[curves.ravel(), rates]\n\n    def design(logtau):\n        a, b = _design(np.exp(logtau), dt, t, *inputs)\n        return np.vstack((a.reshape(-1, 9), b))\n\n    def scales(curve, rate):\n\n        def mad(a, axis=None):\n            return 1.4826 * np.median(abs(a - np.median(a, axis=axis, keepdims=True)), axis=axis)\n        return np.maximum(np.r_[np.tile(mad(curve, axis=0), n), np.full(n, mad(rate))], 1e-07)\n    scale = scales(curves, rates)\n    lower = np.r_[np.full(2, np.log(0.025)), np.full(9, -np.inf)]\n    upper = np.r_[np.full(2, np.log(100.0)), np.full(9, np.inf)]\n\n    def residual(p):\n        return (design(p[:2]) @ p[2:] - y) / scale\n\n    def jac(p):\n        deriv = [(design(p[:2] + h) - design(p[:2] - h)) @ p[2:] / 2e-05 for h in 1e-05 * np.eye(2)]\n        return np.column_stack((*deriv, design(p[:2]))) / scale[:, None]\n\n    def optimize(p, loss, f_scale):\n        return least_squares(residual, p, jac=jac, bounds=(lower, upper), loss=loss, f_scale=f_scale, x_scale='jac', max_nfev=120, ftol=1e-09)\n    starts = []\n    for seed in ((0.3, 1.5), (0.6, 3.5), (1.2, 7.0), (3.0, 0.6)):\n        lt = np.log(seed)\n        w = np.linalg.lstsq(design(lt) / scale[:, None], y / scale, rcond=None)[0]\n        starts.append(optimize(np.r_[lt, w], 'soft_l1', 0.06))\n    best = min(starts, key=lambda fit: fit.cost)\n    for _ in range(2):\n        r = residual(best.x) * scale\n        scale = scales(r[:n * k].reshape(n, k), r[n * k:])\n        best = optimize(best.x, 'cauchy', 2.0)\n    return (np.exp(best.x[:2]), best.x[2:])"
+      },
+      {
+        "name": "_physical",
+        "code": "def _physical(split, calibration):\n    gain, bias = calibration[split['lab_id']].T\n    return (split['past_stress_cmd'] * gain[:, None] + bias[:, None], split['stress_hold_cmd'] * gain + bias)"
+      },
+      {
+        "name": "_mad",
+        "code": "def _mad(x):\n    return max(1.4826 * np.median(np.abs(x - np.median(x))), 1e-07)"
+      },
+      {
+        "name": "_take_inputs",
+        "code": "def _take_inputs(args, mask):\n    return tuple((v if j in (2, 3) else v[mask] for j, v in enumerate(args)))"
+      },
+      {
+        "name": "_refine_calibration",
+        "code": "def _refine_calibration(dataset, cal, sparse, x, strains, rates):\n    from scipy.optimize import least_squares\n    train = dataset['train']\n    labs = train['lab_id']\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\n    anchor = complete & ~np.isin(labs, list(sparse))\n    if not np.any(anchor):\n        return\n    args = _inputs(dataset, train, cal, x)\n    p = _fit(_take_inputs(args, anchor), strains[anchor], rates[anchor])\n    c, r, *_ = _design(p[:2], *_take_inputs(args, anchor))\n    curve_scale = np.array([_mad(v) for v in (c @ p[2:] - strains[anchor]).T])\n    rate_scale = _mad(r @ p[2:] - rates[anchor])\n    for lab, (cmd, true) in sparse.items():\n        mask = complete & (labs == lab)\n        if not np.any(mask):\n            continue\n        local = {k: train[k][mask] for k in ('lab_id', 'past_stress_cmd', 'stress_hold_cmd')}\n        if 'shear_banding_index' in train:\n            local['shear_banding_index'] = np.broadcast_to(train['shear_banding_index'], labs.shape)[mask]\n        elif np.ndim(dataset.get('shear_banding_index', 0.0)):\n            local['shear_banding_index'] = np.asarray(dataset['shear_banding_index'])[mask]\n        pivot = cmd.mean() if len(cmd) else 0.0\n        target = true.mean() if len(cmd) else 0.0\n\n        def coefficients(q):\n            return (q[0], target - pivot * q[0] if len(cmd) == 1 else q[1])\n\n        def residual(q):\n            cal[lab] = coefficients(q)\n            c, r, *_ = _design(p[:2], *_inputs(dataset, local, cal, x[mask]))\n            return np.r_[((c @ p[2:] - strains[mask]) / curve_scale).ravel(), (r @ p[2:] - rates[mask]) / rate_scale]\n        q0 = cal[lab, :1 if len(cmd) == 1 else 2].copy()\n        lower = [1e-05] if len(q0) == 1 else [1e-05, -np.inf]\n        fit = least_squares(residual, q0, bounds=(lower, np.inf), loss='soft_l1', max_nfev=120)\n        cal[lab] = coefficients(fit.x)"
+      },
+      {
+        "name": "_refine_short_pairs",
+        "code": "def _refine_short_pairs(data, calibration, features, dt, times):\n    \"\"\"Constrain an unresolved two-point slope using in-batch rheology.\"\"\"\n    from scipy.optimize import least_squares\n    cal = data['calibration_load_cells']\n    labs, cmd, true = map(np.asarray, (cal['lab_id'], cal['cmd_stress'], cal['true_stress']))\n    pairs = {}\n    for lab in range(4):\n        take = (labs == lab) & np.isfinite(cmd) & np.isfinite(true)\n        if take.sum() == 2 and np.ptp(cmd[take]) < 0.03:\n            pairs[lab] = (cmd[take].mean(), true[take].mean())\n    if not pairs:\n        return calibration\n    train = data['train']\n    lab_id = np.asarray(train['lab_id'])\n    curves = train['strain_curves_obs'] - train['strain_0'][:, None]\n    rates = train['instant_rate_obs']\n    measured = np.isfinite(train['coupon_features_raw']).all(axis=1)\n    anchor = ~np.isin(lab_id, list(pairs))\n    if not anchor.any():\n        return calibration\n    past, hold = _physical(train, calibration)\n    tau, w = _fit((past[anchor], hold[anchor], features[anchor], dt, times), curves[anchor], rates[anchor])\n    a, b = _design(tau, past[anchor], hold[anchor], features[anchor], dt, times)\n    resid = np.column_stack((a @ w - curves[anchor], b @ w - rates[anchor]))\n    scale = np.maximum(1.4826 * np.median(abs(resid - np.median(resid, axis=0)), axis=0), 1e-06)\n    calibration = calibration.copy()\n    for lab, (xc, yc) in pairs.items():\n        use = (lab_id == lab) & measured\n        if not use.any():\n            continue\n        past_cmd = train['past_stress_cmd'][use]\n        hold_cmd = train['stress_hold_cmd'][use]\n        f = features[use]\n        a, b = _design(tau, np.full_like(past_cmd, yc), np.full_like(hold_cmd, yc), f, dt, times)\n        offset = np.column_stack((a @ w, b @ w))\n        a, b = _design(tau, yc + past_cmd - xc, yc + hold_cmd - xc, f, dt, times)\n        signal = np.column_stack((a @ w, b @ w)) - offset\n        target = np.column_stack((curves[use], rates[use])) - offset\n        gain = least_squares(lambda g: ((g[0] * signal - target) / scale).ravel(), [calibration[lab, 0]], loss='soft_l1').x[0]\n        calibration[lab] = (gain, yc - gain * xc)\n    return calibration"
+      }
+    ]
+  }
+}

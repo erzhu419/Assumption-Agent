@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce9aa384f0cd4a39b29c4f51055807e2",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:49:14.494142+00:00",
+  "ended_at_utc": "2026-11-27T07:50:03.035325+00:00",
+  "request_sha256": "535f446cdbd3e34d57131569b1611ecc3c059f9618789c4830bc7b0370d97984",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 67694,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33523,
+    "cached_tokens": 11136,
+    "completion_tokens": 1836
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/holdout_task/beta_m97_c02_batch_01_solver.py').read_text()\\na = src.index('        clean = np.ones')\\nb = src.index('    return parameters', a)\\nsrc = src[:a] + '''        candidates = None\\n        if x.size >= 2 and np.ptp(x) > 0:\\n            gain, offset = _line(x, y)\\n            if x.size >= 3 and np.max(np.abs(y - (gain * x + offset))) > 1e-5:\\n                # Clean calibration rows agree with a line to measurement precision.\\n                # Keep only hypotheses that also explain rejected rows as EMI.\\n                i, j = np.triu_indices(x.size, k=1)\\n                distinct = x[i] != x[j]\\n                i, j = i[distinct], j[distinct]\\n                slopes = (y[j] - y[i]) / (x[j] - x[i])\\n                offsets = y[i] - slopes * x[i]\\n                residual = np.abs(y - (slopes[:, None] * x + offsets[:, None]))\\n                inlier = residual <= 1e-5\\n                valid = ((inlier | (residual > 3.0)).all(axis=1)\\n                         & (residual > 3.0).any(axis=1))\\n                if valid.any():\\n                    support = inlier.sum(axis=1)\\n                    candidates = np.unique(inlier[valid & (support == support[valid].max())], axis=0)\\n            if candidates is None:\\n                parameters[b] = gain, offset\\n                continue\\n            if len(candidates) == 1 or candidates[0].sum() >= 4:\\n                # Prefer the tightest fit if equally supported clean subsets exist.\\n                fits = [_line(x[m], y[m]) for m in candidates]\\n                parameters[b] = min(zip(fits, candidates), key=lambda fm: np.linalg.norm(\\n                    y[fm[1]] - (fm[0][0] * x[fm[1]] + fm[0][1])))[0]\\n                continue\\n        elif x.size >= 2:\\n            raise ValueError(f'Bank {b} sweeps have no distinct reference values')\\n        if history is None:\\n            history = json.loads(_ARCHIVE.read_text())\\n        px = np.concatenate([np.asarray(row['ref_signal'], dtype=float)[np.asarray(row['bank_id']) == b]\\n                             for row in history])\\n        py = np.concatenate([np.asarray(row['raw_readout'], dtype=float)[np.asarray(row['bank_id']) == b]\\n                             for row in history])\\n        prior = np.array(_line(px, py))\\n        if candidates is None:\\n            parameters[b] = prior\\n        else:\\n            # Prefix calibration breaks the tie; the retained rows determine the new line.\\n            fits = np.array([_line(x[m], y[m]) for m in candidates])\\n            parameters[b] = fits[np.argmin(np.sum((fits - prior)**2, axis=1))]\\n''' + src[b:]\\nPath('/tmp/beta_m97_c02_candidate.py').write_text(src)\\nPY\\nsed \\\"s@root+'beta_m97_c02_batch_01_solver.py'@'/tmp/beta_m97_c02_candidate.py'@\\\" /tmp/beta_sparse_calibration_audit.py > /tmp/beta_m97_c02_candidate_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/beta_m97_c02_candidate_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 replace ambiguous sparse calibration with prefix coefficients → H2 use prefix coefficients only to disambiguate in-batch lines; direct replacement still leaves a worst projected-target error of 0.7364 on the sparse EMI stress slices.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep direct prefix replacement\",\"rejected_reason\":\"In the failing bank the prefix gain is 1.0 and the measured current gain is 1.33. Replacing the current coefficients discards the available clean measurements.\"}],\"rationale\":\"Test a temporary candidate against the same sparse-bank witnesses before editing the deliverable. The clean rows determine the current line; prefix calibration only breaks a tie when EMI makes sparse rows ambiguous. Promote the candidate only if it reduces the worst EMI error without degrading clean calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "cdd03da2e6dd9fd3ae012602e8a3cb8dad1758c4309b554735cfe3f4cd91828b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50982.68,
+      "usage_known": true,
+      "prompt_tokens": 33523,
+      "cached_tokens": 11136,
+      "completion_tokens": 1836
+    }
+  ]
+}

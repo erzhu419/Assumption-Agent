@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "149b0383cca541dab47665fd8a6ca419",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:55:08.897040+00:00",
+  "ended_at_utc": "2026-11-27T07:55:32.370914+00:00",
+  "request_sha256": "a040cddf30cbcb4d9a1d7c00866c5e0ce02c92364baa135c76492f5ac0232a85",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50942,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29597,
+    "cached_tokens": 6784,
+    "completion_tokens": 744
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '62,112p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights | head -30\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib,io,copy\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/b03_validate.py').read())\\nprint('panel shape',d['train']['ref_coupons'].shape)\\nfor lab in range(4):\\n rows=a['lab_id']==lab\\n e=full[rows,:-1]\\n print('lab',lab,'large residuals per row',np.bincount(np.sum(abs(e)>0.3,axis=1)), 'by horizon',np.sum(abs(e)>0.3,axis=0))\\nbase=s._calibrate(d)\\nfor lab in range(4):\\n for kind in ('absent','single','spike','sparse_spike'):\\n  q=copy.deepcopy(d); c=q['calibration_load_cells']; ix=np.flatnonzero(c['lab_id']==lab); keep=np.ones(len(c['lab_id']),bool)\\n  if kind=='absent': keep[ix]=False\\n  if kind=='single': keep[ix[1:]]=False\\n  if kind in ('spike','sparse_spike'): c['true_stress'][ix[0]]+=5.\\n  if kind=='sparse_spike': keep[ix[3:]]=False\\n  q['calibration_load_cells']={k:v[keep] for k,v in c.items()}\\n  err=np.max(abs(s._calibrate(q)[lab]-base[lab])); print('calibration stress',lab,kind,round(err,6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: ordinary least squares -> H2: Cauchy-weighted jammed-slip fit; worst held-out lab median strain error is 0.01691 and initial-rate RMSE is 0.06380.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the schema-valid robust fit immediately\",\n      \"rejected_reason\": \"The public batch has ten clean calibration points per channel, so it does not exercise the required sparse and EMI calibration paths.\"\n    }\n  ],\n  \"rationale\": \"Exercise the calibration fallback using public sweep rows. If the sparse-spike fit departs materially from the clean line, use the archive to resolve point ambiguity before refitting. Check the predecessor’s panel convention and whether large residuals are isolated or persist across a trajectory before changing the estimator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2bd04fdc70c3163e8cd4ecea3ff826f4e74f0b11fb1bc9a958917ef69bfcdf98",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23433.91,
+      "usage_known": true,
+      "prompt_tokens": 29597,
+      "cached_tokens": 6784,
+      "completion_tokens": 744
+    }
+  ]
+}

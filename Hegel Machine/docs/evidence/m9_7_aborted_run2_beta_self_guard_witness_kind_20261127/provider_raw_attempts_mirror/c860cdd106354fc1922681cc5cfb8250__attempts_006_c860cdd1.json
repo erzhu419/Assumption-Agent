@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c860cdd106354fc1922681cc5cfb8250",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:16:59.189339+00:00",
+  "ended_at_utc": "2026-11-27T08:17:32.348671+00:00",
+  "request_sha256": "ecc9769918b92cc6f984bf18c8be55e87f63a2a096f7144e11da4ec9943d038f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42774,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27071,
+    "cached_tokens": 6784,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_06_solver.py')\\ns = p.read_text()\\na = s.index('        clean, emi = _clean_line(x, y)')\\nb = s.index('    return coefficients', a)\\ns = s[:a] + '''        clean, emi = _clean_line(x, y)\\n        if len(x) < 2 or emi:\\n            gain, bias = prior(channel)\\n            # The archived sweep supplies an absolute reference: an EMI burst\\n            # can move most of a sparse sweep in the same direction.\\n            clean = np.abs(y - (gain * x + bias)) <= 3.0\\n        if clean.sum() >= 2 and np.ptp(x[clean]) > 0:\\n            coefficients[channel] = _affine(x[clean], y[clean])\\n        elif len(x) < 2 or emi:\\n            if clean.any():\\n                bias = np.median(y[clean] - gain * x[clean])\\n            coefficients[channel] = gain, bias\\n        else:\\n            raise ValueError(f'Calibration commands do not vary for lab {channel}')\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', 'alpha_m97_c01_batch_06_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd = pickle.load(open('public_alpha_m97_c01_batch_06.pkl','rb'))[0]['dataset']\\ncal = s._calibrate(d)\\nprint('calibration', cal)\\nassert np.allclose(cal[[0,2]], [[1.34,.15],[1.21,-.12]], atol=3e-4)\\nout = s.solve_alpha_m97_c01_batch_06(d)\\nassert all(np.isfinite(x).all() for x in out.values())\\nfor k in list(out)[:3]: print(k,out[k])\\np,h,x,b = s._inputs(d); tr = d['train']; lab = np.asarray(tr['lab_id']); n = len(lab)\\nmodel = s._Model(d,p,h,x)\\ny = np.c_[tr['strain_curves_obs']-b[:n,None],tr['instant_rate_obs']]\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(1)\\nfor c in np.unique(lab):\\n    t,w = s._fit(model,y,np.flatnonzero(complete & (lab!=c)))\\n    rows = np.flatnonzero(lab==c)\\n    err = abs(model.design(t,rows)@w-y[rows]); keep = complete[rows]\\n    print('held-out lab',c,'taus',np.exp(t),'curve abs median/p90 all',np.quantile(err[:,:-1],[.5,.9]),'rate abs median/p90 all',np.quantile(err[:,-1],[.5,.9]),'curve/rate median complete',np.median(err[keep,:-1]),np.median(err[keep,-1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace median-centered spike rejection with an absolute archive reference on contaminated channels; the previous fit’s worst complete-row lab median error was 0.105 for strain and 0.139 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The median of a three-point sweep is a reliable anchor for distinguishing clean readings from EMI spikes.\",\n    \"empirical_witness\": \"Two of three readings in each affected lab depart from its recent archived line by more than 4.5 stress units in the same direction. Median-centered screening kept the two shifted readings and yielded biases of +4.879 and −4.763.\",\n    \"causal_blanket_diagnosis\": \"A same-direction EMI burst displaced the majority of each sparse sweep, so the sweep median followed the contamination.\",\n    \"sublated_pivot\": \"Screen affected sweeps against the full archived affine line, then use surviving current readings to update calibration while leaving clean channels entirely in-batch.\",\n    \"risk_kind\": \"contaminated calibration\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool archived and current calibration across all labs\",\n      \"rejected_reason\": \"Labs 1 and 3 have clean current sweeps and changed calibration; pooling would bias them toward earlier settings.\"\n    }\n  ],\n  \"rationale\": \"Correct the demonstrated calibration failure before changing the rheology fit. Re-run the isolated schema check and measure strain and rate errors on each held-out lab to test whether the corrected calibration transfers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a69689a17b949b318938f906977cc98cc200badfee3266cee240a80e1e55f6ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35589.13,
+      "usage_known": true,
+      "prompt_tokens": 27071,
+      "cached_tokens": 6784,
+      "completion_tokens": 1316
+    }
+  ]
+}

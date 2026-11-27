@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ada9296af2ce4fb08b0fd88dd1e5b85a",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:38:10.218700+00:00",
+  "ended_at_utc": "2026-11-27T07:38:40.971693+00:00",
+  "request_sha256": "3f54fa6020b42ea526dc8f12e07b0e79afc315e5994b37afc0cd3fe92d89a16f",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 39884,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25464,
+    "cached_tokens": 6784,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport json, pickle, runpy, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nm = runpy.run_path('beta_m97_c03_s00_solver.py')\\nsolve = m['solve_beta_m97_c03_s00']\\nwith open('public_beta_m97_c03_s00.pkl','rb') as f:\\n    s = pickle.load(f)[0]['study']\\nbase = solve(s)\\nd = s['sensor_calibration_sweeps']; bank = d['bank_id']; k = np.flatnonzero(bank == 2)[0]\\nraw = d['raw_readout'].copy(); raw[k] += 5\\nout = solve(dict(s, sensor_calibration_sweeps=dict(d, raw_readout=raw)))\\nemi = np.max(np.abs(out['weights'] - base['weights']))\\nassert emi < 1e-6, emi\\nwith tempfile.TemporaryDirectory() as td:\\n    archive = Path(td)/'history.json'\\n    solve.__globals__['_ARCHIVE'] = archive\\n    keep = (bank != 2); keep[k] = True\\n    gain, offset = m['_affine'](d['ref_signal'][bank == 2], d['raw_readout'][bank == 2])\\n    archive.write_text(json.dumps({'banks': {'2': {'gain': gain, 'offset': offset}}}))\\n    out = solve(dict(s, sensor_calibration_sweeps={name: vals[keep] for name, vals in d.items()}))\\n    sparse = np.max(np.abs(out['weights'] - base['weights']))\\n    assert sparse < 1e-12, sparse\\n    archive.write_text('not needed for clean banks')\\n    assert np.array_equal(solve(s)['weights'], base['weights'])\\nperturbed = solve(dict(s, aux_manifold_telemetry=1000*s['Z_nuisance'][:, :3]))\\nassert np.array_equal(perturbed['terminal_field'], base['terminal_field'])\\nrng = np.random.default_rng(731)\\nworst_gap = worst_budget = worst_comp = 0.0\\nfor scale in [0.03, 1., 12.]:\\n    for budget in [0., 1e-8, 1., 2.6, 6., 12.-1e-8, 12.]:\\n        for _ in range(12):\\n            A, y = rng.normal(size=(36, 12))*scale, rng.normal(size=36)*scale\\n            w, c = m['_invert'](A, y, 0.04, 1., budget)\\n            r = A @ w - y; g = A.T @ r + 0.04*w\\n            p = 0.5*(r@r + 0.04*(w@w)); nu = c['nu_sum']\\n            lb = p - g@w + nu*budget + np.minimum(g-nu, 0).sum()\\n            assert np.all((w >= 0) & (w <= 1))\\n            assert np.max(np.abs(g-nu-c['lam_lower']+c['lam_upper'])) < 1e-10\\n            assert abs(c['primal_objective']-p) < 1e-10 and c['dual_lower_bound'] <= lb+1e-10\\n            worst_budget = max(worst_budget, abs(w.sum()-budget))\\n            worst_gap = max(worst_gap, p-c['dual_lower_bound'])\\n            worst_comp = max(worst_comp, np.max(w*c['lam_lower']), np.max((1-w)*c['lam_upper']))\\nassert worst_budget < 1e-9 and worst_gap < 1e-7 and worst_comp < 1e-7, (worst_budget,worst_gap,worst_comp)\\nprint(f'EMI weight drift={emi:.3g}; archive weight drift={sparse:.3g}; 252 QPs worst budget error={worst_budget:.3g}, gap={worst_gap:.3g}, complementarity={worst_comp:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated open-Robin forward solve -> H2 ridge-residualized box-simplex inversion; public max weight error is 3.98e-8, max terminal-field error is 1.48e-9, and the schema validator passes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case does not exercise EMI, sparse-bank fallback, or budgets at the box endpoints. A calibration failure would require changing the filtering or archive gating; a certificate failure would isolate the active-set or multiplier logic.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "1daf6e82251a91f92805f8be1c8417b6cb4f47c3fbc9beeceafa427fa71a05fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33170.33,
+      "usage_known": true,
+      "prompt_tokens": 25464,
+      "cached_tokens": 6784,
+      "completion_tokens": 1224
+    }
+  ]
+}

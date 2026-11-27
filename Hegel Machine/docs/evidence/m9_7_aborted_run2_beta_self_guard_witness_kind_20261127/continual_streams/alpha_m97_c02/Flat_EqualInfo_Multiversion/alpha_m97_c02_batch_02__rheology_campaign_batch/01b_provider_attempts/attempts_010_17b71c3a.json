@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17b71c3a548043acba7802dac3b7d095",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:55:34.493903+00:00",
+  "ended_at_utc": "2026-11-27T07:56:10.062182+00:00",
+  "request_sha256": "22f831b2cfbbb49a22af6943e5ad9d6535e1c9f44a68153471e4242562602250",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55157,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31026,
+    "cached_tokens": 11136,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\na=pickle.load(open('public_alpha_m97_c02_batch_02.pkl','rb'))[0]; d=a['dataset']; tr,te=d['train'],d['test']; c=m._calibration(d); n=len(tr['lab_id']); x=m._align(d); t=d['eval_times']; dt=d['past_dt']\\npast,hold=m._physical(tr,c); f=np.column_stack((np.ones(n),x[:n])); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ndef errors(p,w,q):\\n    A,B=m._design(p,past[q],hold[q],f[q],dt,t)\\n    return A@w-y[q],B@w-r[q]\\nfor label,eligible in [('all train',np.ones(n,bool)),('complete train',complete)]:\\n    fold=[]\\n    for lab in range(4):\\n        q=(tr['lab_id']!=lab)&eligible; v=(tr['lab_id']==lab)&complete\\n        p,w=m._fit((past[q],hold[q],f[q],dt,t),y[q],r[q]); ec,er=errors(p,w,v)\\n        # Project out terminal drift to check whether errors remain in the hereditary shape.\\n        shape=ec-(ec@t/(t@t))[:,None]*t\\n        fold.append([np.median(abs(ec)),np.median(abs(er)),np.median(abs(shape))])\\n    print(label,'LOLO per-lab medians (strain, rate, drift-free strain)',np.round(fold,5),'worst',np.max(fold,axis=0))\\ncal=d['calibration_load_cells']; ids=np.asarray(cal['lab_id']); idx=np.arange(len(ids))\\nfor points in (2,3,4,5,10):\\n    for emi in (0.,4.,-4.):\\n        if points==2 and emi: continue\\n        worst=0.; witness=None\\n        for lab in range(4):\\n            own=np.flatnonzero(ids==lab)[:points]; keep=(ids!=lab)|np.isin(idx,own)\\n            for hit in (own if emi else own[:1]):\\n                rows={k:np.asarray(v).copy() for k,v in cal.items()}; rows['true_stress'][hit]+=emi\\n                cc=m._calibration({**d,'calibration_load_cells':{k:v[keep] for k,v in rows.items()}})\\n                err=np.max(abs(cc[lab]-c[lab]))\\n                if err>worst: worst,witness=err,(lab,int(hit))\\n        print('calibration points / injected EMI / worst coefficient shift / witness',points,emi,round(worst,6),witness)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and equal-cell panel alignment → H2 two-branch Prony memory with linear terminal flow; worst public lab-by-horizon strain RMSE is 0.422 and worst lab initial-rate RMSE is 0.0807.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, control, or relay terms\",\n      \"rejected_reason\": \"This continuous rheology contract has no relay state or control equation. The relevant algebraic check is whether held-lab residuals retain material curvature after removing the specified linear drift.\"\n    },\n    {\n      \"option\": \"Replace specified imputation using public test responses\",\n      \"rejected_reason\": \"The test responses diagnose missing-feature error but are not solver inputs; compare training estimators using held-lab observations instead.\"\n    }\n  ],\n  \"rationale\": \"Compare robust fits with and without imputed training rows to see whether they distort the shared memory model across labs. Probe the documented EMI threshold on measured sweep coordinates: a large coefficient shift would warrant fixing spike detection, even though the clean public sweep passed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c0c550c72374eecc8c06e82bb3f4accbffe9fd446b67f05004182dbddd0c62d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40461.35,
+      "usage_known": true,
+      "prompt_tokens": 31026,
+      "cached_tokens": 11136,
+      "completion_tokens": 1192
+    }
+  ]
+}

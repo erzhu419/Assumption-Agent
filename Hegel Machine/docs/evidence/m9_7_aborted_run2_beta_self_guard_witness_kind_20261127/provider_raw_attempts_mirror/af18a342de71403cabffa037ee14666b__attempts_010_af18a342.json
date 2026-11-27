@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af18a342de71403cabffa037ee14666b",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:12:49.184096+00:00",
+  "ended_at_utc": "2026-11-27T08:13:22.574477+00:00",
+  "request_sha256": "5f6a2e578c45b427cb5d14b53c225d8ed38dc76ad9de5d063314d7e0ac02f0b4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 68543,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34780,
+    "cached_tokens": 6784,
+    "completion_tokens": 1327
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_05_solver.py')\\ns = p.read_text()\\nold = 'scale = np.r_[max(np.median(mad[:-1]), floor), max(mad[-1], floor)]'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, 'scale = np.full(target.shape[1], max(np.median(mad[:-1]), floor))\\\\n    scale[-1] = max(mad[-1], floor)'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_05_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems = pickle.load(open('public_alpha_m97_c01_batch_05.pkl', 'rb'))\\nfor item in items:\\n d, gt = item['dataset'], item['gt']; te = d['test']; n = len(d['train']['lab_id']); out = m.solve_alpha_m97_c01_batch_05(d)\\n assert all(np.isfinite(v).all() for v in out.values())\\n tau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\n assert np.all(tau > 0)\\n for key, fit in [('taus',tau),('theta',hw),('vp_theta',rw)]: print(key, 'fit', np.round(fit,7), 'reference',gt[key])\\n past, hold, x, b = m._inputs(d); p, h = past[n:], hold[n:]; t = d['eval_times']; z = np.zeros((len(h), 2))\\n for dt, col in zip(d['past_dt'], p.T): z = np.exp(-dt/tau)*z + (-np.expm1(-dt/tau))*col[:,None]\\n D = np.sum(np.maximum(abs(p)-d['crit_stress'],0)**2*d['past_dt'],axis=1); act = np.tanh(D)*(d['shear_banding_index']<=.50)\\n amp = (h[:,None]-z)*hw[:2]; amp[:,0] += rw[0]*act*h\\n drift = hw[2]+x[n:]@hw[3:7]+rw[1]*act*z[:,0]\\n np.testing.assert_allclose(out['predicted_strain'], b[n:,None]+amp@(-np.expm1(-t[None,:]/tau[:,None]))+drift[:,None]*np.log1p(t),atol=1e-10,rtol=0)\\n np.testing.assert_allclose(out['initial_rate_pred'], amp@(1/tau)+drift,atol=1e-10,rtol=0)\\n e = out['predicted_strain']-gt['te_clean']; r = out['initial_rate_pred']-gt['te_true_rate0']; scores = []\\n for lab in range(4):\\n  for active in (False,True):\\n   q = (te['lab_id']==lab)&((act>0)==active)\\n   if q.any(): scores.append([np.sqrt(np.mean(e[q]**2)),np.sqrt(np.mean(r[q]**2))])\\n print('public pooled strain/rate RMSE', np.sqrt(np.mean(e**2)), np.sqrt(np.mean(r**2)), 'worst lab x gate',np.max(scores,axis=0))\\n c = d['calibration_load_cells']; base = m._calibrate(d); cc = {k:v.copy() for k,v in c.items()}; mask = c['lab_id']==2; rows = np.flatnonzero(mask)\\n cc['true_stress'][rows[-1]] += 12\\n np.testing.assert_allclose(m._calibrate(dict(d,calibration_load_cells=cc)),base,atol=6e-4,rtol=0)\\n for count in (0,1):\\n  keep = ~mask; keep[rows[:count]] = True\\n  sparse = m._calibrate(dict(d,calibration_load_cells={k:v[keep] for k,v in c.items()}))\\n  np.testing.assert_allclose(sparse,base,atol=.003,rtol=0)\\n print('Independent recurrence, initial derivative, and EMI/sparse calibration passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine calibration and cell-balanced alignment) -> H2 (damage-gated logarithmic plateau with pooled robust strain weighting); the pooled method achieved worst held-out lab-by-regime clipped strain RMSE 0.03365 and initial-rate RMSE 0.02019 before integration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Revert to the archived baseline\",\n      \"rejected_reason\": \"The failure is a broadcast error in the integration, not a failure of the pooled fit, which reduced worst held-out error for both outputs.\"\n    }\n  ],\n  \"rationale\": \"Apply the shared strain scale to every time column and reserve the final scale for initial rate. Run the schema validator and independent recurrence, derivative, and calibration checks on the repaired artifact before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "807552ce44533a242db85ed23d3482b041437cc0fbabbf97de97d733232940cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35913.41,
+      "usage_known": true,
+      "prompt_tokens": 34780,
+      "cached_tokens": 6784,
+      "completion_tokens": 1327
+    }
+  ]
+}

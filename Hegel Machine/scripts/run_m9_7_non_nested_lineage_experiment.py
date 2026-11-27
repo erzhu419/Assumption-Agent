@@ -92,8 +92,11 @@ from hegel_machine.cognition.m9_7_non_nested_counterfactual_lineage_world import
 )
 
 DEFAULT_V7_BUNDLE = REPO_ROOT / "docs/evidence/m9_2_1_audit_closure_and_regrade_20261126/pretrained_autogenous_forest_v7_m921.json"
-DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_7_non_nested_counterfactual_lineage_run2_20261127"
-ABORTED_RUN1_MANIFEST = REPO_ROOT / "docs/evidence/m9_7_aborted_run1_openblas_setup_timeout_20261127/00_aborted_run1_forensic_manifest.json"
+DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_7_non_nested_counterfactual_lineage_run3_20261127"
+ABORTED_RUN_MANIFESTS = (
+    REPO_ROOT / "docs/evidence/m9_7_aborted_run1_openblas_setup_timeout_20261127/00_aborted_run1_forensic_manifest.json",
+    REPO_ROOT / "docs/evidence/m9_7_aborted_run2_beta_self_guard_witness_kind_20261127/00_aborted_run2_forensic_manifest.json",
+)
 
 _CALL_CONTEXT = threading.local()
 
@@ -634,6 +637,11 @@ def _run_one_m97_world_arm_stream(
                     "arm": arm,
                     "episode_short_name": task.short_name,
                 }
+                cov_pairs_ok = {
+                    (cr.new_binding_id, cr.old_binding_id)
+                    for cr in lineage_ctrl.coverage_receipts
+                    if cr.status == "supported_on_witnesses"
+                }
                 ind_res = propose_and_validate_m97_multibranch_split(
                     client=comp_client,
                     stage_subdir=f"{ep_run_tag}__ind",
@@ -647,6 +655,7 @@ def _run_one_m97_world_arm_stream(
                     current_public_item=pub_item,
                     current_param_payload=cur_pay,
                     parent_wiring_meta=parent_wiring_meta,
+                    covered_branch_pairs=cov_pairs_ok,
                 )
                 ind_receipt = {k: v for k, v in ind_res.items() if k != "provider_call_receipts"}
                 lineage_induction_events.append(
@@ -1291,14 +1300,17 @@ def main() -> None:
     all_dag_files = sorted(out_dir.rglob("01_decision_provenance_dag.json"))
     dag_valid_count = sum(1 for fp in all_dag_files if json.loads(fp.read_text(encoding="utf-8"))["provenance_verification"]["valid"])
 
-    scope3_run2 = aggregate_call_usages(master_provider_receipts, deduplicate_uuid=True)
-    scope3_plus_grand: dict[str, Any] | None = None
-    if ABORTED_RUN1_MANIFEST.is_file():
-        r1_man = json.loads(ABORTED_RUN1_MANIFEST.read_text(encoding="utf-8"))
-        r1_sp = r1_man["aborted_run1_physical_spend"]
-        from hegel_machine.cognition.cost_policy import sum_aggregated_ledgers
+    scope3_this_run = aggregate_call_usages(master_provider_receipts, deduplicate_uuid=True)
+    aborted_ledgers = []
+    for mp_ab in ABORTED_RUN_MANIFESTS:
+        if mp_ab.is_file():
+            ab_j = json.loads(mp_ab.read_text(encoding="utf-8"))
+            ab_sp = ab_j.get("aborted_physical_spend") or ab_j.get("aborted_run1_physical_spend")
+            if isinstance(ab_sp, dict):
+                aborted_ledgers.append(ab_sp)
+    from hegel_machine.cognition.cost_policy import sum_aggregated_ledgers
 
-        scope3_plus_grand = sum_aggregated_ledgers([r1_sp, scope3_run2])
+    scope3_plus_grand = sum_aggregated_ledgers([*aborted_ledgers, scope3_this_run]) if aborted_ledgers else scope3_this_run
 
     master_summary = {
         "schema": "hegel_m9_7_non_nested_counterfactual_lineage_summary_v1",
@@ -1317,8 +1329,8 @@ def main() -> None:
         "tracked_tree_dirty_at_end": bool(tracked_dirty),
         "wall_clock_sec": round(monotonic() - t0_all, 2),
         "stage_S_cost_ledger": {"shared_stage_S_solve_6clusters": stage_s_solve_agg},
-        "scope_3_campaign_physical_spend_all_calls": scope3_run2,
-        "scope_3_plus_grand_campaign_spend_including_aborted_run1": scope3_plus_grand,
+        "scope_3_campaign_physical_spend_all_calls": scope3_this_run,
+        "scope_3_plus_grand_campaign_spend_including_aborted_runs": scope3_plus_grand,
         "arm_comparison": arm_agg,
         "paired_statistics_Hegel_vs_Flat_n6_clusters": paired_stats,
         "multibranch_lineage_and_counterfactual_funnel": lineage_funnel,

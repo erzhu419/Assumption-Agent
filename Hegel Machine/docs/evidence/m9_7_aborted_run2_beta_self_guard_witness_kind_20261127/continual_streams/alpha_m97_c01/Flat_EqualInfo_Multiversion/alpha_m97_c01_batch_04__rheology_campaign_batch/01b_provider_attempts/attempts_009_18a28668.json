@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "18a28668277b4334879dc435e52b2e7c",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:06:15.401787+00:00",
+  "ended_at_utc": "2026-11-27T08:06:39.567724+00:00",
+  "request_sha256": "86f33eb9e758c8e89ef462499eb3eedb5e7ed765b50a7790b93c2b3bcf0d3470",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56036,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31687,
+    "cached_tokens": 6784,
+    "completion_tokens": 891
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\nsed '/^model\\\\.flow\\\\[/d; /^model\\\\.drift=/d' /tmp/batch04_plateau.py > /tmp/batch04_final_cv.py\\npython3 -I /tmp/batch04_final_cv.py | grep -E 'full tau|worst slice'\\npython3 -I - <<'PY'\\nexec(open('/tmp/batch04_cv.py').read().split(\\\"print('damage counts\\\")[0])\\nout = m.solve_alpha_m97_c01_batch_04(d)\\ntau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\nt, dt = np.asarray(d['eval_times']), np.asarray(d['past_dt'])\\np, h = past[n:], hold[n:]\\nz = np.zeros((len(h), 2))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step / tau)\\n    z = decay * z + (1 - decay) * p[:, j, None]\\ndamage = (np.maximum(np.abs(p) - d['crit_stress'], 0)**2 * dt).sum(axis=1)\\nbanding = np.broadcast_to(d['shear_banding_index'], hold.shape)[n:]\\nactive = (damage > 0) & (banding <= 0.50)\\nassert active.any() and (~active).any()\\na = np.where(active, np.tanh(damage), 0.0)\\namplitude = (h[:, None] - z) * hw[:2]\\namplitude[:, 0] += rw[0] * a * h\\ndrift = hw[2] + x[n:] @ hw[3:] + rw[1] * a * z[:, 0]\\nnp.testing.assert_allclose(out['predicted_strain'], e0[n:, None] + amplitude @ (-np.expm1(-t[None, :] / tau[:, None])) + drift[:, None] * np.log1p(t), rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'], amplitude @ (1 / tau) + drift, rtol=0, atol=1e-12)\\nprint('Independent recurrence and initial-rate checks passed for', active.sum(), 'active and', (~active).sum(), 'inactive test coupons; taus:', tau)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: shared logarithmic drift with gated crystallization and complete-case fitting yielded worst held-out median absolute errors of 0.01418 for strain and 0.01551 for initial rate; verification on the exact artifact is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the solver to make the flow array writable\",\n      \"rejected_reason\": \"The solver never mutates this array; only the old comparison harness did.\"\n    }\n  ],\n  \"rationale\": \"Both failures came from the verification harness: it tried to overwrite the flow array and slice a scalar banding index. Correct the harness, then rerun cross-validation and the independent recurrence in isolated processes. A mismatch would identify either a regression in the fitted model or an error in its prediction equations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8950680f8ab7ccfe74c1caf45b1927362b32e4061611eff4988eaf7d802800d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26651.95,
+      "usage_known": true,
+      "prompt_tokens": 31687,
+      "cached_tokens": 6784,
+      "completion_tokens": 891
+    }
+  ]
+}

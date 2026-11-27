@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "460ad3bf26a9417ba8b8c8c70e98841e",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:51:29.576027+00:00",
+  "ended_at_utc": "2026-11-27T07:51:57.151763+00:00",
+  "request_sha256": "c701d73ab41b46bdbd1f16c7aa080f65760414d8b7d687ede8b7e38712a685fa",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37161,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24259,
+    "cached_tokens": 6784,
+    "completion_tokens": 980
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nworst_loo = worst_bank = worst_shift = 0.0\\nwith (root / 'public_beta_m97_c01_batch_03.pkl').open('rb') as f:\\n    studies = pickle.load(f)\\nfor item in studies:\\n    s, gt = item['study'], item['gt']\\n    sweeps = s['sensor_calibration_sweeps']\\n    banks, ref, raw = (np.asarray(sweeps[key]) for key in ('bank_id', 'ref_signal', 'raw_readout'))\\n    z = np.asarray(s['Z_nuisance'])\\n    ridge = s['nuisance_ridge']\\n    def profile(a):\\n        return a - z @ np.linalg.solve(z.T @ z + ridge * np.eye(z.shape[1]), z.T @ a)\\n    y = profile(m._calibrate(s))\\n    rows = np.asarray(s['row_bank_id'])\\n    for b in range(4):\\n        x, t = ref[banks == b], raw[banks == b]\\n        for j in range(x.size):\\n            keep = np.arange(x.size) != j\\n            err = abs(t[j] - np.polyval(np.polyfit(x[keep], t[keep], 1), x[j]))\\n            worst_loo = max(worst_loo, float(err))\\n        worst_bank = max(worst_bank, float(np.max(np.abs(y[rows == b] - gt['r_y'][rows == b]))))\\n    sensor, _ = m._forward(s)\\n    for idx in np.array_split(np.arange(y.size), len(s['mu_shifts'])):\\n        expected = gt['S_tilde'][idx]\\n        error = np.linalg.norm(profile(sensor)[idx] - expected) / np.linalg.norm(expected)\\n        worst_shift = max(worst_shift, float(error))\\nprint('Worst held-out sweep residual:', worst_loo, 'vs EMI threshold 3.0')\\nprint('Worst bank profiled observation max error:', worst_bank)\\nprint('Worst shift profiled sensor relative L2 error:', worst_shift)\\nassert worst_loo < 1e-5 and worst_bank < 1e-6 and worst_shift < 1e-10\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived wall branches -> periodic transport with bankwise affine calibration and ridge profiling; worst public relative L2 error is 9.82e-7 and worst independently checked KKT gap is 3.91e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or relay audits\",\n      \"rejected_reason\": \"There are no classification labels or relay states; bank and shift slices are the relevant checks for this inverse problem.\"\n    }\n  ],\n  \"rationale\": \"Hold out sweep points to detect calibration that depends on a high-leverage reading, and inspect bank and shift slices for errors hidden by pooled norms. A failure would direct a change to calibration, row indexing, or shift assembly; a pass supports retaining the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3719e465276e2c5aa4a2018525fa51b6b0b39a66fccc094ae18f9c06ac86c627",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30019.86,
+      "usage_known": true,
+      "prompt_tokens": 24259,
+      "cached_tokens": 6784,
+      "completion_tokens": 980
+    }
+  ]
+}

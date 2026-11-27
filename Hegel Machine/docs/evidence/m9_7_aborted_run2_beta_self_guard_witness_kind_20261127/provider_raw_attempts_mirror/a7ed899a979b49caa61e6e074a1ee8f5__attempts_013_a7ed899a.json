@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7ed899a979b49caa61e6e074a1ee8f5",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:09:20.157317+00:00",
+  "ended_at_utc": "2026-11-27T08:09:58.244522+00:00",
+  "request_sha256": "47bfe7ab9e88b100087fbf0fc17fd95646553a86f8f8068375e674f302041e2c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65888,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33141,
+    "cached_tokens": 11136,
+    "completion_tokens": 1509
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_03_solver.py')\\ns = p.read_text()\\nold = '        design = np.column_stack((x, np.ones(len(x))))\\\\n        coefficients[lab] = np.linalg.lstsq(design, y, rcond=None)[0]\\\\n'\\nnew = '''        design = np.column_stack((x, np.ones(len(x))))\\n        if len(x) == 2:\\n            # A two-point line has zero residual by construction. In this\\n            # campaign the nominal command is within half the EMI threshold\\n            # of physical stress on the calibration sweep, so screen against\\n            # the command before deciding whether the archive is needed.\\n            if np.any(np.abs(y - x) > 1.5):\\n                prior = archived_line(lab)\\n                if np.any(np.abs(y - design @ prior) > 3.0 - 2 * noise):\\n                    # At most one clean reading remains; it cannot identify\\n                    # both the gain and the bias.\\n                    coefficients[lab] = prior\\n                    continue\\n            coefficients[lab] = np.linalg.lstsq(design, y, rcond=None)[0]\\n            continue\\n        coefficients[lab] = np.linalg.lstsq(design, y, rcond=None)[0]\\n'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new).replace('for j in range(len(x)) if len(x) >= 3 else ():', 'for j in range(len(x)):'))\\nPY\\npython3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nsp=importlib.util.spec_from_file_location('candidate','alpha_m97_c03_batch_03_solver.py'); s=importlib.util.module_from_spec(sp); sp.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_03.pkl','rb') as f: row=pickle.load(f)[0]\\nd,gt=row['dataset'],row['gt']; cal=d['calibration_load_cells']; te=d['test']; archive=s._ARCHIVE\\nprint('maximum nominal-to-measured difference on clean calibration sweep',np.max(abs(cal['true_stress']-cal['cmd_stress'])))\\nworst={False:0.,True:0.}; tested=0\\nfor lab in range(4):\\n    ids=np.flatnonzero(cal['lab_id']==lab); t=te['lab_id']==lab\\n    cmd=np.r_[te['past_stress_cmd'][t].ravel(),te['stress_hold_cmd'][t]]\\n    for pair in itertools.combinations(ids,2):\\n        keep=cal['lab_id']!=lab; keep[list(pair)]=True\\n        c={k:v[keep].copy() for k,v in cal.items()}; ii=np.flatnonzero(c['lab_id']==lab)\\n        s._ARCHIVE='/tmp/no_archive_required_for_clean_pair.json'\\n        g,b=s._calibrate(c)\\n        np.testing.assert_allclose(g[lab]*c['cmd_stress'][ii]+b[lab], c['true_stress'][ii],rtol=0,atol=1e-11)\\n        worst[False]=max(worst[False],float(np.max(abs((g[lab]-gt['stress_gains'][lab])*cmd+b[lab]-gt['stress_biases'][lab]))))\\n        s._ARCHIVE=archive\\n        for j,spike in itertools.product(ii,(-3.001,3.001)):\\n            z=dict(c); z['true_stress']=c['true_stress'].copy(); z['true_stress'][j]+=spike\\n            g,b=s._calibrate(z)\\n            err=float(np.max(abs((g[lab]-gt['stress_gains'][lab])*cmd+b[lab]-gt['stress_biases'][lab])))\\n            worst[True]=max(worst[True],err); tested+=1\\nprint('one-spike placements/signs tested',tested,'worst stress error clean/spiked',worst)\\nassert worst[True] < 0.001\\nout=s.solve_alpha_m97_c03_batch_03(d)\\nfor a,b in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]: print(a,'public RMSE',np.sqrt(np.mean((out[a]-gt[b])**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 two-point EMI screening against nominal command before archive fallback -> H2 unchanged jammed-slip projection; baseline worst two-point spiked stress error was 35.343 units, and the fix is pending verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\n      \"ng_t12\"\n    ]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use archived coefficients for every two-point sweep.\",\n      \"rejected_reason\": \"Clean two-point sweeps can be fit directly and should not read the archive.\"\n    }\n  ],\n  \"rationale\": \"Screen against the nominal command rather than the interpolating line, then confirm suspected EMI against the archive. Test both spike signs and placements for every real calibration pair, require clean pairs to work without the archive, and rerun isolated schema validation to detect a regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "22e834012f895f147c499f244ed09ac266474ae802f84d987407f3848363b021",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40508.25,
+      "usage_known": true,
+      "prompt_tokens": 33141,
+      "cached_tokens": 11136,
+      "completion_tokens": 1509
+    }
+  ]
+}

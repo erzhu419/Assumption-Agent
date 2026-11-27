@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61c6399336ca4d22804429829aedc833",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:45:50.742372+00:00",
+  "ended_at_utc": "2026-11-27T07:46:18.021256+00:00",
+  "request_sha256": "7d7b34d291d7efc9c2cbe0401b8f3f04d6fcae210d189fe51dcf3019be9c03cd",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48112,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29282,
+    "cached_tokens": 6784,
+    "completion_tokens": 1059
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights | head -45; cat /holdout_task/public_asset_index.json | head -125; OPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_cv.py | awk '/^ (linear|gated|global_log|linear_drift)$/ {print; p=1} /pooled MAE|horizon median/ {print} /^lab,active/ && p {print} /gated median signed/ {p=0}'; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'; s=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_alpha_m97_c01_batch_01.pkl','rb'))[0]['dataset']; past,hold,x,s0=m._inputs(d); tr=d['train']; n=len(tr['lab_id']); y=np.column_stack((tr['strain_curves_obs']-s0[:n,None],tr['instant_rate_obs'])); z=m._Model(d,past[:n],hold[:n],x[:n]); z.terminal[:,:-1]=np.log1p(z.t); z.drift_basis=z.terminal[:,:,None]*z.x[:,None,:]; tau,w=m._fit(z,y); r=z.design(np.log(tau))[0]@w-y; miss=np.isnan(tr['coupon_features_raw']).any(1); print('global_log taus and weights',tau,w)\\nfor active in (False,True):\\n for missing in (False,True):\\n  b=abs(r[(z.active==active)&(miss==missing)]); print('active/missing/n',active,missing,len(b),'median 90p strain',np.quantile(b[:,:-1],[.5,.9]),'median 90p rate',np.quantile(b[:,-1],[.5,.9]))\\nprint('large strain residuals by horizon',np.sum(abs(r[:,:-1])>.25,axis=0));print('samples with multiple large strain errors',np.bincount(np.sum(abs(r[:,:-1])>.25,axis=1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage gates the terminal clock -> H2 the low-shear phase sets the logarithmic clock while damage gates only the extra memory terms; H2 leave-one-lab-out worst lab-by-activation median errors are 0.01724 for strain and 0.01957 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Zero specimen damage switches the terminal clock back to linear even in the low-shear plateau campaign.\",\n    \"empirical_witness\": \"With the same calibrated inputs, active-only logarithmic clock gave 0.1501 final-horizon median error in sample; a phase-wide logarithmic clock gave 0.01379 at that horizon even with leave-one-lab-out fitting, with late median bias no larger than 0.00516 across activation-by-lab slices.\",\n    \"causal_blanket_diagnosis\": \"Specimen activation was incorrectly allowed to switch the shared drift basis as well as the damage-specific terms.\",\n    \"sublated_pivot\": \"Use a logarithmic clock throughout the low-shear campaign and retain zero damage-specific corrections when D_cryst is zero.\",\n    \"risk_kind\": \"phase boundary extrapolation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the shared drift linear and apply log(1+t) only to the damage correction\",\n      \"rejected_reason\": \"Leave-one-lab-out pooled median rate error was 0.12505 versus 0.01459 with the phase-wide clock.\"\n    }\n  ],\n  \"rationale\": \"Recover comparable out-of-fold slice metrics from the truncated log and determine whether residual tails come from missing coupon features or isolated curve observations. That distinction determines whether to revisit the panel convention or keep the existing robust fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "daf34fd2bb933f8761d2bb036ef807bcfe307364dc6d4568ec4a96a4f2839046",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29711.89,
+      "usage_known": true,
+      "prompt_tokens": 29282,
+      "cached_tokens": 6784,
+      "completion_tokens": 1059
+    }
+  ]
+}

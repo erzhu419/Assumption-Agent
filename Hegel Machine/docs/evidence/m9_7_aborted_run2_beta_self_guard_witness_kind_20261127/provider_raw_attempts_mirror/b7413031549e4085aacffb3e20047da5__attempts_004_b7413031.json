@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b7413031549e4085aacffb3e20047da5",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:09:15.287999+00:00",
+  "ended_at_utc": "2026-11-27T08:09:44.344233+00:00",
+  "request_sha256": "575d25696a44bcd8fe8c459c0b731981b5d2602a6065a5bbd9431b4a05124748",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23261,
+    "cached_tokens": 6784,
+    "completion_tokens": 1051
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '108,175p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_04_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection' | head -c 2600\\nsed 's/solve_alpha_m97_c01_batch_04/solve_alpha_m97_c01_batch_05/' /tmp/hegel_continual_archive/alpha_m97_c01_batch_04_solver.py > /holdout_task/alpha_m97_c01_batch_05_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/alpha_m97_c01_batch_05_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem=pickle.load(open('public_alpha_m97_c01_batch_05.pkl','rb'))[0]; d=item['dataset']; gt=item['gt']; print('validation keys',[(k,np.shape(v)) for k,v in gt.items()]); out=m.solve_alpha_m97_c01_batch_05(d)\\nfor k in ('estimated_taus','hereditary_weights','regime_mode_weights'): print(k,out[k]);\\nfor k in ('taus','theta','vp_theta'): \\n if k in gt: print('validation',k,gt[k])\\np,h,x,b=m._inputs(d); mdl=m._Model(d,p,h,x); n=len(d['train']['lab_id']); print('training and test active counts',np.count_nonzero(mdl.act[:n]),np.count_nonzero(mdl.act[n:])); print('alignment mae',[(k,float(np.mean(abs(gt[k]-a)))) for k,a in [('te_hist_true',p[n:]),('te_hold_true',h[n:])] if k in gt]);\\nfor key in ('predicted_strain','initial_rate_pred'):\\n target=next((k for k,v in gt.items() if np.shape(v)==np.shape(out[key]) and (('rate' in k) if 'rate' in key else True)),None)\\n if target is None: continue\\n e=out[key]-gt[target]; print(key,'vs',target,'rmse',np.sqrt(np.mean(e**2)),'worst row rms',np.max(np.sqrt(np.mean(e.reshape(len(e),-1)**2,axis=1))));\\n for lab in range(4):\\n  for regime in (False,True):\\n   take=(d['test']['lab_id']==lab)&((mdl.act[n:]>0)==regime);\\n   if take.any(): print('slice',lab,regime,take.sum(),round(float(np.sqrt(np.mean(e[take]**2))),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (clean in-batch affine calibration, maximum residual 3.4e-4) -> H2 (damage-gated Prony plateau with pointwise robust fitting); prediction slice errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Every observed strain sample represents the smooth specimen response.\",\n    \"empirical_witness\": \"Training specimen 156 jumps from roughly 2.02 to 1658.77 and back to 1.13 at adjacent times; its independently observed initial rate is 2.865.\",\n    \"causal_blanket_diagnosis\": \"An isolated strain observation is corrupted without a corresponding specimen-wide response.\",\n    \"sublated_pivot\": \"Keep the specified constitutive law and robustly weight the individual strain observations while retaining the specimen's usable measurements.\",\n    \"risk_kind\": \"Pointwise measurement contamination\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Discard the entire affected specimen\",\n      \"rejected_reason\": \"Most of its curve and its independent initial rate remain informative.\"\n    }\n  ],\n  \"rationale\": \"Test the closest archived model as a baseline. Public validation by channel and damage regime will show whether the transferred alignment, plateau gate, and robust fit hold up without using test truth in the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "308a1fe4e39ba38d679bfd4b379ed075f0e6099199fd210976cd89f7efdbde22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31474.03,
+      "usage_known": true,
+      "prompt_tokens": 23261,
+      "cached_tokens": 6784,
+      "completion_tokens": 1051
+    }
+  ]
+}

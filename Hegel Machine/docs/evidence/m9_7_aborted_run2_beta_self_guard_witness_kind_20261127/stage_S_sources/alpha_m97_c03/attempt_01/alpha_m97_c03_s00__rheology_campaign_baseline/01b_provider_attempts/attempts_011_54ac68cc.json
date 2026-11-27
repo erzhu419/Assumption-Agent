@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54ac68cc313e4c239ef25cbfc0f8978c",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:41:09.816413+00:00",
+  "ended_at_utc": "2026-11-27T07:41:42.330383+00:00",
+  "request_sha256": "c4b77ea566b08b1f6561b20cda2479a3ce10dae1b060928ed5e314370d076f1a",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 54779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29652,
+    "cached_tokens": 11136,
+    "completion_tokens": 1304
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheology_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c03_s00_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open(root + 'public_alpha_m97_c03_s00.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\ng, b = s._calibrate(d['calibration_load_cells'])\\nx, xt = s._align(tr, te)\\nassert d['shear_banding_index'] <= .50\\nout = s.solve_alpha_m97_c03_s00(d)\\ntau, w = out['estimated_taus'], out['hereditary_weights']\\nfor split, xa in ((tr, x), (te, xt)):\\n    lab = split['lab_id']\\n    hist = g[lab, None] * split['past_stress_cmd'] + b[lab, None]\\n    hold = g[lab] * split['stress_hold_cmd'] + b[lab]\\n    assert np.max(np.abs(hist)) <= d['crit_stress']\\n    z = np.zeros((len(lab), 2))\\n    for stress, step in zip(hist.T, dt):\\n        decay = np.exp(-step/tau)\\n        z = decay*z + (1-decay)*stress[:, None]\\n    gap = hold[:, None]-z\\n    drift = w[2] + xa @ w[3:]\\n    c, r = s._design(split, xa, g, b, dt, t)(np.log(tau))\\n    np.testing.assert_allclose(c @ w, (gap*w[:2]) @ (-np.expm1(-t[:, None]/tau)).T + drift[:, None]*t, atol=1e-12)\\n    np.testing.assert_allclose(r @ w, gap @ (w[:2]/tau) + drift, atol=1e-12)\\nprint('Both splits satisfy the linear regime; branch recurrence, strain envelope, and initial slope agree with their independent formulas.')\\n\\nlab = tr['lab_id']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nfor c in np.unique(lab):\\n    held = lab == c\\n    def design(mask):\\n        return s._design({k: tr[k][mask] for k in ('lab_id','past_stress_cmd','stress_hold_cmd')}, x[mask], g, b, dt, t)\\n    lt, beta = s._fit(design(~held), y[~held], r[~held], dt, t)\\n    a, z = design(held)(lt)\\n    ec, er = y[held]-a@beta, r[held]-z@beta\\n    for ss in np.unique(tr['stratum'][held]):\\n        m = complete[held] & (tr['stratum'][held] == ss)\\n        if m.any():\\n            print(f'lab={c} stratum={ss} complete n={m.sum()} signed medians strain/rate={np.nanmedian(ec[m]):+.5f}/{np.nanmedian(er[m]):+.5f} absolute P80={np.nanquantile(np.abs(ec[m]), .8):.5f}/{np.nanquantile(np.abs(er[m]), .8):.5f}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: verify that the two-branch response is algebraically exact and test for residual lab-by-stratum bias; the current worst public slice is missing-feature rows, with strain RMSE 0.34651 and onset-rate RMSE 0.10965.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational drift terms or relay states.\",\n      \"rejected_reason\": \"The specified regime has a linear flow envelope and no relay or classification endpoint. The relevant algebraic check is the exact memory recurrence and its initial-time derivative.\"\n    }\n  ],\n  \"rationale\": \"A recurrence mismatch would require correcting the memory kernel. A consistent signed error across strata in a held-out lab would warrant revisiting alignment even if pooled error looked good. This audit uses real measurements without test targets and leaves the verified artifact unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4cdef039ee3148c60e92cb8512b76e511d989e567e75761653e4dce113baa75c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37394.88,
+      "usage_known": true,
+      "prompt_tokens": 29652,
+      "cached_tokens": 11136,
+      "completion_tokens": 1304
+    }
+  ]
+}

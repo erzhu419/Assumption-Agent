@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6aced0638704f67a78569533c2a22bc",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:55:06.133917+00:00",
+  "ended_at_utc": "2026-11-27T07:55:45.368310+00:00",
+  "request_sha256": "c5ea919eccd67d71b2ae9130f00b1a2b44cea066765bc1b67f8902edc181e556",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56626,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30298,
+    "cached_tokens": 11136,
+    "completion_tokens": 1564
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ns = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nfor item in pickle.load(open('public_alpha_m97_c02_batch_03.pkl', 'rb')):\\n    d, gt = item['dataset'], item['gt']\\n    tr, te = d['train'], d['test']\\n    p = m.solve_alpha_m97_c02_batch_03(d)\\n    assert d['shear_banding_index'] > 0.5\\n    x = m._align(d)[len(tr['lab_id']):]\\n    t = np.asarray(d['eval_times'])\\n    past, hold = m._physical(te, m._calibration(d))\\n    def law(tau, hw, rw, h, u, times):\\n        dt = np.asarray(d['past_dt'])\\n        remaining = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\\n        z = h @ ((1 - np.exp(-dt[:, None]/tau)) * np.exp(-remaining[:, None]/tau))\\n        g = u[:, None] - z\\n        a = 1 - np.exp(-times[:, None]/tau)\\n        phi = times/(1 + .85*times)\\n        flow = hw[2] + x @ hw[3:] + rw[0]*np.sign(u)*np.sqrt(abs(u))\\n        return (g*hw[:2]) @ a.T + flow[:, None]*phi + rw[1]*(g[:, 0]-g[:, 1])[:, None]*a[:, 0]\\n    params = tuple(p[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\n    exact = te['strain_0'][:, None] + law(*params, past, hold, t)\\n    derivative = law(*params, past, hold, np.array([1e-5, -1e-5])) @ np.array([5e4, -5e4])\\n    print('independent closed-form curve and onset max differences', np.max(abs(exact-p['predicted_strain'])), np.max(abs(derivative-p['initial_rate_pred'])))\\n    np.testing.assert_allclose(exact, p['predicted_strain'], rtol=0, atol=1e-11)\\n    np.testing.assert_allclose(derivative, p['initial_rate_pred'], rtol=0, atol=1e-8)\\n    ref = (gt['taus'], gt['theta'], gt['vp_theta'])\\n    oracle_curve = te['strain_0'][:, None] + law(*ref, gt['te_hist_true'], gt['te_hold_true'], t)\\n    oracle_rate = law(*ref, gt['te_hist_true'], gt['te_hold_true'], np.array([1e-5, -1e-5])) @ np.array([5e4, -5e4])\\n    pred = (p['predicted_strain'], p['initial_rate_pred']); truth = (gt['te_clean'], gt['te_true_rate0'])\\n    missing = np.isnan(te['coupon_features_raw']).any(axis=1)\\n    for label, mask in [('complete', ~missing), ('imputed', missing)] + [(f'lab {i}', te['lab_id']==i) for i in range(4)]:\\n        if mask.any():\\n            print(label, int(mask.sum()), 'strain/rate fitted MAE', [round(np.mean(abs(a[mask]-b[mask])), 7) for a,b in zip(pred, truth)], 'reference-parameter MAE with same panel', [round(np.mean(abs(a[mask]-b[mask])), 7) for a,b in zip((oracle_curve, oracle_rate), truth)])\\n    shifted = dict(d)\\n    for part in ('train', 'test'):\\n        v = d[part]; lab = v['lab_id']; gain = np.array([.65, 1.3, .9, 1.6])[lab, None]; bias = np.array([1., -.7, 2., -.8])[lab, None]\\n        shifted[part] = dict(v, coupon_features_raw=v['coupon_features_raw']*gain+bias, ref_coupons=v['ref_coupons']*gain+bias)\\n    q = m.solve_alpha_m97_c02_batch_03(shifted)\\n    print('per-lab affine-gauge max output difference', max(np.max(abs(p[k]-q[k])) for k in p))\\n    for k in p:\\n        np.testing.assert_allclose(p[k], q[k], rtol=0, atol=1e-8)\\nPY\\npython3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibration and panel alignment remove lab-specific measurement offsets -> H2: the exact jammed-slip law explains the remaining dynamics; the worst clean-reference slice is imputed rows, with strain MAE 0.06032 and onset-rate MAE 0.08018.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck operators, or classification balanced accuracy\",\n      \"rejected_reason\": \"The data contain continuous strain and rate measurements, not relay states, a stochastic drift operator, or class labels. The applicable checks are the rational saturation, branch-gap difference, and lab-specific alignment.\"\n    }\n  ],\n  \"rationale\": \"An independent closed-form memory calculation and numerical onset derivative detect omitted terms or sign errors. Comparing fitted and reference parameters under the same panel alignment distinguishes missing-feature error from errors the fit can reduce. An independent affine shift in each lab tests whether nuisance units leak into the outputs; if it fails, revisit alignment before changing the dynamics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5b21550a57e1d58c11f93c0c1210da851810cb34cc88788bacb93ea6b20a4b97",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41647.4,
+      "usage_known": true,
+      "prompt_tokens": 30298,
+      "cached_tokens": 11136,
+      "completion_tokens": 1564
+    }
+  ]
+}

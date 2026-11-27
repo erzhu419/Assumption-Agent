@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6abd0660ba7147a0a7f14dc3c9083e45",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:08:22.902402+00:00",
+  "ended_at_utc": "2026-11-27T08:08:54.902950+00:00",
+  "request_sha256": "e514cb12422dadcf47230c4e0c055bb1af33b761a036707a9219809b2e2a5372",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 52794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29363,
+    "cached_tokens": 6784,
+    "completion_tokens": 1281
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('candidate','alpha_m97_c03_batch_03_solver.py'); s=importlib.util.module_from_spec(sp); sp.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_03.pkl','rb') as f: row=pickle.load(f)[0]\\nd=row['dataset']; truth=row['gt']; tr,te=d['train'],d['test']; cal=d['calibration_load_cells']; gain,bias=s._calibrate(cal)\\nout=s.solve_alpha_m97_c03_batch_03(d)\\nfor key,target in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n    print(key,'absolute parameter error',np.round(np.abs(out[key]-truth[target]),6))\\nraw=np.concatenate([tr['coupon_features_raw'],te['coupon_features_raw']]); panel=np.concatenate([tr['ref_coupons'],te['ref_coupons']]); labs=np.r_[tr['lab_id'],te['lab_id']]; strata=np.r_[tr['stratum'],te['stratum']]; aligned=np.concatenate(s._align(tr,te)); checked=0\\nfor i,k in zip(*np.where(np.isnan(raw))):\\n    lab=labs==labs[i]; observed=lab&(strata==strata[i])&np.isfinite(raw[:,k]); ref=panel[lab]; ref=ref[:,np.isfinite(ref).sum(0)>=2]\\n    if observed.any():\\n        expected=(raw[observed,k].mean()-np.median(np.nanmean(ref,axis=0)))/np.median(np.nanstd(ref,axis=0)); np.testing.assert_allclose(aligned[i,k],expected,atol=1e-12,rtol=0); checked+=1\\nprint('missing entries matching independently calculated within-cell means',checked,'of',np.isnan(raw).sum())\\nworst={}\\nfor count in (0,1,2,3,10):\\n    worst[count]=0.\\n    for lab in range(4):\\n        ids=np.flatnonzero(cal['lab_id']==lab); cmds=np.r_[te['past_stress_cmd'][te['lab_id']==lab].ravel(),te['stress_hold_cmd'][te['lab_id']==lab]]\\n        keep=cal['lab_id']!=lab; keep[ids[:count]]=True\\n        for spike in ((0.,) if count==0 else (-3.001,0.,3.001)):\\n            c={k:v[keep].copy() for k,v in cal.items()}\\n            if count: c['true_stress'][np.flatnonzero(c['lab_id']==lab)[-1]]+=spike\\n            g,b=s._calibrate(c); err=np.max(np.abs((g[lab]-truth['stress_gains'][lab])*cmds+b[lab]-truth['stress_biases'][lab])); worst[count]=max(worst[count],float(err))\\nprint('worst absolute physical-stress errors on real test commands, by retained sweep count',worst)\\nfor sign in (-1,1):\\n    c=te['lab_id']; hold=te['stress_hold_cmd']*gain[c]+bias[c]; m=(hold*sign>0)&np.isfinite(te['coupon_features_raw']).all(1)\\n    if m.any(): print('complete coupons, hold sign',sign,'n',m.sum(),'strain/rate RMSE',*[np.sqrt(np.mean((out[a][m]-truth[b][m])**2)) for a,b in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]])\\nPY\\npython3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 lab-specific calibration and reference alignment -> H2 robust jammed-slip projection; the worst public slice remains missing-feature coupons, with strain RMSE 0.0843 and initial-rate RMSE 0.1083.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the expanded-basis and lab-confounding checks.\",\n      \"rejected_reason\": \"The prior held-out lab audit found no consistent improvement from the extra terms; the remaining useful checks are sparse calibration, cell-mean conformance, and the signed-slip slices.\"\n    }\n  ],\n  \"rationale\": \"Check sparse and spiked calibration directly on the original stress commands, including the untested zero-point and two-point cases. A large stress error would warrant fixing the archive fallback. Independently verify the imputation on the hardest slice and split complete-coupon errors by stress sign to detect a signed-slip failure before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "07801bda9da462bb96c4225349465e1855c7422cf6ad0becc0d922d0b8417d04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34495.5,
+      "usage_known": true,
+      "prompt_tokens": 29363,
+      "cached_tokens": 6784,
+      "completion_tokens": 1281
+    }
+  ]
+}

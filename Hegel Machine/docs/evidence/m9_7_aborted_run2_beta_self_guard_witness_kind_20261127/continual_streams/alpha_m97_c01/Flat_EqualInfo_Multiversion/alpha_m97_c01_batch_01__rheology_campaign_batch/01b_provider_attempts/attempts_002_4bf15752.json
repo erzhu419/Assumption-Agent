@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4bf15752575a4fd3a6f83134df528052",
+  "call_seq": 2,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:43:18.065566+00:00",
+  "ended_at_utc": "2026-11-27T07:43:39.261487+00:00",
+  "request_sha256": "4289e44dd528dd83c17cc2a3629165999856acee9b437475ea81f7c0063d7f93",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 13281,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16777,
+    "cached_tokens": 6784,
+    "completion_tokens": 641
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,155p' /tmp/hegel_continual_archive/alpha_m97_c01_s00_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/holdout_task/public_alpha_m97_c01_batch_01.pkl'\\na=pickle.load(open(p,'rb'));print('cases',len(a))\\nfor it in a:\\n d=it['dataset'];print('dataset fields',list(d),'index',d['shear_banding_index'],'times',d['eval_times'],'dt range',np.min(d['past_dt']),np.max(d['past_dt']))\\n cal=d['calibration_load_cells'];fits=[]\\n for c in range(4):\\n  q=cal['lab_id']==c;x=cal['cmd_stress'][q];y=cal['true_stress'][q];b=np.polyfit(x,y,1);fits.append(b);print('cal',c,len(x),b,'max residual',max(abs(y-np.polyval(b,x))))\\n for part in ('train','test'):\\n  v=d[part];print(part,{k:np.shape(w) for k,w in v.items()});labs=v['lab_id'];g,b=np.asarray(fits)[labs].T;s=v['past_stress_cmd']*g[:,None]+b[:,None];damage=np.maximum(abs(s)-d['crit_stress'],0)**2@d['past_dt'];print('damaged/total by lab',[(int(c),int(sum((labs==c)&(damage>0))),int(sum(labs==c))) for c in np.unique(labs)],'positive damage quantiles',np.quantile(damage[damage>0],[0,.1,.5,.9,1]) if any(damage>0) else [])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived linear creep → H2 damage-gated logarithmic creep; no holdout error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the plateau to every coupon\",\n      \"rejected_reason\": \"The regime requires positive damage; checking coverage by lab determines whether both branches need validation.\"\n    }\n  ],\n  \"rationale\": \"Read the archived panel normalization and measure public calibration residuals and damage coverage. These checks determine whether to use in-batch calibration alone and whether the public data exercise the undamaged branch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "f4927a635f6a3af93215fb9c9ea65bea72739a1af1fa7108b41d98bb87dc329f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21158.97,
+      "usage_known": true,
+      "prompt_tokens": 16777,
+      "cached_tokens": 6784,
+      "completion_tokens": 641
+    }
+  ]
+}

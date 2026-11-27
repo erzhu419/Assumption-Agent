@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b9e1f65f2d34c4693b24b10f56a9700",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:49:24.608351+00:00",
+  "ended_at_utc": "2026-11-27T07:49:56.495026+00:00",
+  "request_sha256": "2ef8503c2b94c6d6ce6180315c340d900b54e2f067e9aa91375413e1502b011f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 82567,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38601,
+    "cached_tokens": 11136,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open(p+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=i['dataset'],i['gt']; tr,te=d['train'],d['test']; o=m.solve_alpha_m97_c03_batch_01(d)\\nx,xt=m._align(tr,te); dt,t=d['past_dt'],d['eval_times']; cal=m._calibrate(d['calibration_load_cells']); tau=o['estimated_taus']; hw=o['hereditary_weights']; rw=o['regime_mode_weights']; gain,bias=cal[te['lab_id']].T\\npast=te['past_stress_cmd']*gain[:,None]+bias[:,None]; hold=te['stress_hold_cmd']*gain+bias\\nz=np.zeros((len(hold),2)); damage=np.zeros(len(hold))\\nfor stress,step in zip(past.T,dt):\\n    decay=np.exp(-step/tau)\\n    z=decay*z+(1-decay)*stress[:,None]\\n    damage+=np.maximum(np.abs(stress)-d['crit_stress'],0)**2*step\\nact=np.tanh(damage); amp=hw[:2]*(hold[:,None]-z); amp[:,0]+=rw[0]*act*hold\\nslope=hw[2]+xt@hw[3:]+rw[1]*act*z[:,0]\\nassert d['shear_banding_index']<=.50\\ncurve=te['strain_0'][:,None]+amp@(1-np.exp(-t[None,:]/tau[:,None]))+slope[:,None]*np.log1p(t)\\nrate=(amp/tau).sum(axis=1)+slope\\nfor label,mask in [('zero damage',damage==0),('positive damage',damage>0)]:\\n    assert np.any(mask)\\n    handoff=max(np.max(abs(curve[mask]-o['predicted_strain'][mask])),np.max(abs(rate[mask]-o['initial_rate_pred'][mask])))\\n    print(label,'count',mask.sum(),'maximum independent recurrence discrepancy',handoff); assert handoff<1e-10\\nlab=tr['lab_id']; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; build=m._design(tr,x,cal,dt,t,d['crit_stress'],d['shear_banding_index'])\\nfor j in np.unique(lab):\\n    fit=lab!=j; use=(lab==j)&complete\\n    q,b=m._fit(lambda v:tuple(a[fit] for a in build(v)),yc[fit],yr[fit],dt,t,complete[fit]); c,r=build(np.log(q)); ec=(c[use]@b-yc[use]); er=r[use]@b-yr[use]\\n    print('held lab',j,'curve/rate signed median',np.median(ec),np.median(er),'rate RMSE',np.sqrt(np.mean(er**2)))\\nprint('pooled public strain MAE',np.mean(abs(curve-g['te_clean'])),'relative tau errors',abs(tau/g['taus']-1))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: verify that the fitted plateau exactly implements the physical recurrence and check for signed residual bias across held-out labs; incomplete-coupon strain and rate RMSE remain 0.1105 and 0.0852.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB operators, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This task has continuous rheology outcomes and no relay, control PDE, or class labels. The applicable checks are exact recurrence agreement and conditional residual bias across labs.\"\n    }\n  ],\n  \"rationale\": \"The independent stepwise recurrence would expose a sign, coordinate, time-basis, or missing-term error hidden by the matrix formulation. Signed leave-one-lab-out residuals would expose a lab offset hidden by pooled error. If either check reveals a material discrepancy, investigate that mechanism; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "73daba9c783b2302bed1d56716f839eab08058a2ba94d8a885b7205bdf7886c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34337.72,
+      "usage_known": true,
+      "prompt_tokens": 38601,
+      "cached_tokens": 11136,
+      "completion_tokens": 1224
+    }
+  ]
+}

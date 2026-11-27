@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "caa81087118f4f4db187499ca58a1dfb",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:52.126957+00:00",
+  "ended_at_utc": "2026-11-27T07:48:32.385803+00:00",
+  "request_sha256": "12596919e03ae108db8809c1b96d919bccf29015f6412c735b6fbe4b01d70004",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 70584,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35228,
+    "cached_tokens": 6784,
+    "completion_tokens": 1606
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nout=/holdout_task/alpha_m97_c03_batch_01_solver.py\\npython3 - \\\"$out\\\" <<'PY'\\nfrom pathlib import Path\\nimport sys\\np = Path(sys.argv[1]); s = p.read_text()\\na = s.index('def _calibrate('); b = s.index('def _design(', a)\\ns = s[:a] + '''def _calibrate(cal):\\n    result = np.empty((4, 2))\\n    history = None\\n\\n    def prior(lab):\\n        nonlocal history\\n        if history is None:\\n            try:\\n                with open(_ARCHIVE) as handle:\\n                    history = json.load(handle)\\n            except FileNotFoundError:\\n                history = []\\n        return _archive_line(history, lab)\\n\\n    for lab in range(4):\\n        use = cal['lab_id'] == lab\\n        x, y = cal['cmd_stress'][use], cal['true_stress'][use]\\n        valid = np.isfinite(x) & np.isfinite(y)\\n        x, y = x[valid], y[valid]\\n        if len(x) < 2:\\n            result[lab] = prior(lab)\\n            continue\\n        # A spike at the end of a short sweep can rotate a median-slope fit.\\n        # Score pair lines by tight affine consensus before testing for EMI.\\n        pairs = []\\n        peak = 0.\\n        if len(x) >= 3:\\n            i, j = np.triu_indices(len(x), 1)\\n            for u, v in zip(i, j):\\n                if x[v] == x[u]:\\n                    continue\\n                gain = (y[v]-y[u])/(x[v]-x[u])\\n                prediction = y[u] + gain*(x-x[u])\\n                error = np.abs(prediction-y)\\n                # The load-cell sweeps are resolved below 0.001 stress units.\\n                inliers = error <= .003\\n                count = np.count_nonzero(inliers)\\n                if count > peak:\\n                    peak, pairs = count, []\\n                if count == peak:\\n                    pairs.append((inliers, np.max(error)))\\n        if pairs and peak < len(x) and max(error for _, error in pairs) > 3.:\\n            archived = prior(lab)\\n            archive_prediction = np.polyval(archived, x)\\n            candidates = [_line(x[mask], y[mask]) for mask, error in pairs if error > 3.]\\n            result[lab] = min(candidates, key=lambda ab: np.mean((np.polyval(ab, x)-archive_prediction)**2))\\n        else:\\n            result[lab] = _line(x, y)\\n    return result\\n\\n\\n''' + s[b:]; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch01.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nfrom unittest.mock import patch\\np='/holdout_task/'; s=importlib.util.spec_from_file_location('m',p+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; h=json.load(open(m._ARCHIVE)); clean=m._calibrate(c)\\nfor n in (1,2,3,5,10):\\n errs=[]\\n for lab in range(4):\\n  idx=np.flatnonzero(c['lab_id']==lab); idx=idx[np.argsort(c['cmd_stress'][idx])]; other=np.flatnonzero(c['lab_id']!=lab); sel=idx[np.linspace(0,len(idx)-1,n,dtype=int)]; rows=np.r_[other,sel]; sub={k:np.array(v[rows],copy=True) for k,v in c.items()}\\n  if n==1:\\n   assert np.allclose(m._calibrate(sub)[lab],m._archive_line(h,lab)); continue\\n  with patch.object(m,'_archive_line',side_effect=AssertionError('unexpected archive fallback')):\\n   errs.append(np.max(abs(np.polyval(m._calibrate(sub)[lab]-clean[lab],c['cmd_stress'][idx]))))\\n  if n>=3:\\n   for locus in range(n):\\n    for emi in (-4., 4.):\\n     z={k:v.copy() for k,v in sub.items()}; z['true_stress'][len(other)+locus]+=emi\\n     errs.append(np.max(abs(np.polyval(m._calibrate(z)[lab]-clean[lab],c['cmd_stress'][idx]))))\\n if errs:\\n  print('sweep size',n,'worst reconstructed stress deviation',max(errs)); assert max(errs)<.002\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace median-slope EMI detection with affine consensus and use the prefix calibration to resolve sparse ambiguities; the prior three-point spike test missed by up to 3.8801 stress units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A median pairwise slope exposes a qualifying EMI spike even in three-point calibration sweeps.\",\"empirical_witness\":\"A +4 stress spike at an endpoint of a three-point sweep drawn from the public calibration rows produced up to 3.8801 stress units of reconstruction error.\",\"causal_blanket_diagnosis\":\"With three samples, a contaminated endpoint affects two of the three pairwise slopes and can mask its own residual.\",\"sublated_pivot\":\"Score affine lines by clean-point consensus; where short spiked sweeps admit competing lines, use the archived line to distinguish them.\",\"risk_kind\":\"Sparse calibration with EMI\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Always use the archived line on short sweeps\",\"rejected_reason\":\"The archived gains are near unity, while the current clean gains range from about 0.76 to 1.29. Clean in-batch points are more informative.\"}],\"rationale\":\"Test both signs of a qualifying EMI spike at every sampled position, as well as the one-point fallback and clean in-batch fits. If any supported sweep still misses, revise the calibration before submission; public slice scores check that the change leaves clean-sweep predictions intact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b0c453526fa0efaf0bfacf5c21d3aa0b4109c9f07effad2cbef6c379e39f756d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42677.18,
+      "usage_known": true,
+      "prompt_tokens": 35228,
+      "cached_tokens": 6784,
+      "completion_tokens": 1606
+    }
+  ]
+}

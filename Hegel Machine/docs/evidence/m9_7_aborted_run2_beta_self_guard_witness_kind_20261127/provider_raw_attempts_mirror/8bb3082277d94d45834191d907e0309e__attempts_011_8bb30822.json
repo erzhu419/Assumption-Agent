@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bb3082277d94d45834191d907e0309e",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:17.841791+00:00",
+  "ended_at_utc": "2026-11-27T07:47:45.591511+00:00",
+  "request_sha256": "539f2118f482d8eee31f24a04cf556324f2a430fdfb5ddacaefc601966cd7963",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 59884,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31233,
+    "cached_tokens": 6784,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import linprog\\np = Path('beta_m97_c02_batch_01_solver.py')\\nspec = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d =')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nfor item in pickle.loads(Path('public_beta_m97_c02_batch_01.pkl').read_bytes()):\\n    s, gt = item['study'], item['gt']\\n    q = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    z = s['Z_nuisance']\\n    gram = z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1])\\n    def project(v):\\n        return v - z @ np.linalg.solve(gram, z.T @ v)\\n    D = project(m._forward(s)[0])\\n    ridge, cap, budget = (s[k] for k in ('source_ridge', 'u_box', 'total_budget'))\\n    for b in (0, 2):\\n        ids = np.flatnonzero(q['bank_id'] == b)\\n        x = q['ref_signal']\\n        keep4 = min(itertools.combinations(ids, 4), key=lambda ix: np.var(x[list(ix)]))\\n        keep = (q['bank_id'] != b) | np.isin(np.arange(x.size), keep4)\\n        reduced = dict(s, sensor_calibration_sweeps={k: v[keep] for k, v in q.items()})\\n        actual = project(m._calibrate(reduced))\\n        cert = m.solve_beta_m97_c02_batch_01(reduced)['kkt_certificate']\\n        correct = verify(D, actual, ridge, cap, budget, cert)\\n        w = cert['weights']\\n        refgrad = gt['S_tilde'].T @ (gt['S_tilde'] @ w - gt['r_y']) + ridge * w\\n        lp = linprog(refgrad, A_eq=np.ones((1,w.size)), b_eq=[budget], bounds=(0,cap), method='highs')\\n        assert lp.success and correct['valid'], (b, correct)\\n        print(f'bank={b} reference_span={np.ptp(x[list(keep4)]):.3e} revised_target_max_delta={np.max(np.abs(actual-gt[\\\"r_y\\\"])):.3e} matched_gap={correct[\\\"gap\\\"]:.3e} best_fixed_weight_original_reference_tangent_gap={refgrad @ w-lp.fun:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full-sweep calibration -> distinguish a true KKT failure from verifying reduced-sweep weights against an unchanged target; all 48 leave-one-out slices passed, but two tight-four slices failed the original-reference check.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use archive calibration for the two tight-four slices\",\n      \"rejected_reason\": \"Each slice has four clean in-batch points, so the specification requires fitting those points directly.\"\n    }\n  ],\n  \"rationale\": \"Verify each failing slice against the objective it actually supplies, and compute the best possible tangent bound at its fixed weights under the original reference. If the matched-objective certificate fails, fix the inverse solver; if only the original-reference bound fails, report the sensitivity to narrow sweep coverage rather than changing the certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9e31ac49da19347267c4c759bfc90235546bf10298117c445542486ae04cf480",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30159.89,
+      "usage_known": true,
+      "prompt_tokens": 31233,
+      "cached_tokens": 6784,
+      "completion_tokens": 1050
+    }
+  ]
+}

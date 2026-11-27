@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4684a6e1b2c43de924352b1aef8929f",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:48:24.698549+00:00",
+  "ended_at_utc": "2026-11-27T07:49:10.699413+00:00",
+  "request_sha256": "6e1891f111bd66d1234a0aeba845de6e24f0c179e80319d46c4136e721b9116e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 73230,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37222,
+    "cached_tokens": 6784,
+    "completion_tokens": 1720
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/rheo_margin_audit.py <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'alpha_m97_c02_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith (root / 'public_alpha_m97_c02_batch_01.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ndt, t, (b, _) = m._prepare(d)\\ns = d['train']\\ny = s['strain_curves_obs'] - s['strain_0'][:, None]\\nr = s['instant_rate_obs']\\nlab = s['lab_id']\\ncomplete = np.isfinite(s['coupon_features_raw']).all(axis=1)\\nactive = b[3] > 0\\nsub = lambda b, mask: tuple(x[mask] for x in b)\\nrmse = lambda x: np.sqrt(np.mean(x*x))\\nprint('dataset fields', sorted(d), 'train counts by lab (complete, incomplete)', [(int(np.sum((lab == k)&complete)), int(np.sum((lab == k)&~complete))) for k in range(4)])\\nfor method in ('baseline', 'complete-fit', 'nonlinear-drift-probe'):\\n    ec = np.empty_like(y)\\n    er = np.empty_like(r)\\n    folds = []\\n    for k in range(4):\\n        te = lab == k\\n        tr = (lab != k) & complete if method == 'complete-fit' else lab != k\\n        tau, w = m._fit(dt, t, sub(b, tr), y[tr], r[tr])\\n        folds.append(tau)\\n        c, a = m._basis(tau, dt, t, sub(b, te))\\n        ec[te], er[te] = c @ w - y[te], a @ w - r[te]\\n        if method == 'nonlinear-drift-probe':\\n            # A drift correction must act through the same time law and its initial slope.\\n            # Fit the prespecified directions only on the outer training labs.\\n            i, j = b[2][:, 1], b[2][:, 2]\\n            z = np.column_stack(((i-j)**2, (i+j)**2, i/(1+j*j)-i))\\n            tr = (lab != k) & complete\\n            ct, at = m._basis(tau, dt, t, sub(b, tr))\\n            x = z[tr]\\n            offset = np.median((y[tr] - ct @ w)/np.log1p(t), axis=1)\\n            slope = r[tr] - at @ w\\n            beta = np.linalg.lstsq(x, (np.clip(offset, -.08, .08) + np.clip(slope, -.08, .08))/2, rcond=None)[0]\\n            delta = z[te] @ beta\\n            ec[te] += delta[:, None]*np.log1p(t)\\n            er[te] += delta\\n    groups = [(lab==k)&(active==on) for k in range(4) for on in (False, True)]\\n    print(method, 'worst complete terminal median, curve P90, rate RMSE, raw curve RMSE', np.round([max(np.median(abs(ec[g&complete,-1])) for g in groups), max(np.quantile(abs(ec[g]), .9) for g in groups), max(rmse(er[g]) for g in groups), rmse(ec)], 6), 'tau fold span', np.round(np.ptp(folds, axis=0), 6), 'complete signed rate medians by lab', np.round([np.median(er[(lab==k)&complete]) for k in range(4)], 6))\\n\\n# Check that one transient in a real sweep does not move a well-supported in-batch fit.\\ncal = d['calibration_load_cells']\\nx, z, channel = (np.asarray(cal[key]) for key in ('cmd_stress', 'true_stress', 'lab_id'))\\nbase = m._calibration(d)\\nworst = 0.\\nfor k in range(4):\\n    mask = channel == k\\n    for row in np.flatnonzero(mask):\\n        for spike in (-3.1, 3.1):\\n            noisy = z.copy(); noisy[row] += spike\\n            got = m._calibration(dict(d, calibration_load_cells=dict(cal, true_stress=noisy)))\\n            delta = (got[k,0]-base[k,0])*x[mask]+got[k,1]-base[k,1]\\n            worst = max(worst, float(np.max(abs(delta))))\\nprint('max calibrated stress change after one +/-3.1 transient', worst)\\nassert worst < .001\\nPY\\npython3 -I /tmp/rheo_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (verified shared logarithmic drift) -> H2 (test whether missing-panel rows or nonlinear drift explain remaining errors); current worst held-out lab/regime strain P90 is 0.264 and rate RMSE is 0.087.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, control PDEs, or classification balanced accuracy\",\n      \"rejected_reason\": \"This batch contains continuous strain and rate measurements, not relays, a control PDE, or class labels. The relevant nuisance check is transfer across labs and signed residuals within labs.\"\n    }\n  ],\n  \"rationale\": \"Compare the saved fit against prespecified nonlinear drift corrections and a fit that excludes imputed rows from parameter estimation while still predicting them. A consistent improvement on held-out labs would justify a fit change; otherwise retain the verified basis. The transient test checks whether an EMI spike can displace a well-supported calibration; failure would call for revising spike detection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7c4138ef7a09b2d135f131471a1de441f4e910048f4f71674d7383e398168e87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50725.93,
+      "usage_known": true,
+      "prompt_tokens": 37222,
+      "cached_tokens": 6784,
+      "completion_tokens": 1720
+    }
+  ]
+}

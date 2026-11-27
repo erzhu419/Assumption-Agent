@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "218631f93f20481da22351d65ddbd119",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:46:21.856028+00:00",
+  "ended_at_utc": "2026-11-27T07:47:06.702563+00:00",
+  "request_sha256": "9387b53a9a40276352e711df63866f509dc885fc01b90082fee3283874e570f2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55483,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31127,
+    "cached_tokens": 11136,
+    "completion_tokens": 1969
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\nold = '        phi = np.where(self.active[:, None], np.log1p(self.t), self.t)'\\nnew = '        # Shear selects the phase clock; specimen damage gates only the extra memory terms.\\\\n        clock = np.log1p(self.t) if dataset[\\\\'shear_banding_index\\\\'] <= .50 else self.t\\\\n        phi = np.broadcast_to(clock, (len(x), len(self.t)))'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_01.pkl', 'rb'))[0]['dataset']\\nout = m.solve_alpha_m97_c01_batch_01(d)\\npast, hold, x, s0 = m._inputs(d)\\ntr = d['train']; lab = tr['lab_id']; n = len(lab)\\ny = np.column_stack((tr['strain_curves_obs'] - s0[:n, None], tr['instant_rate_obs']))\\n\\ndef direct(tau, hw, rw, phase, p, h, v):\\n    z = np.zeros((len(h), 2)); dose = np.zeros(len(h))\\n    for j, dt in enumerate(d['past_dt']):\\n        e = np.exp(-dt / tau)\\n        z = e * z + (1 - e) * p[:, j, None]\\n        dose += np.maximum(0, abs(p[:, j]) - d['crit_stress'])**2 * dt\\n    act = np.tanh(dose) if phase <= .5 else np.zeros_like(dose)\\n    amp = (h[:, None] - z) * hw[:2]\\n    amp[:, 0] += rw[0] * act * h\\n    drift = hw[2] + v @ hw[3:] + rw[1] * act * z[:, 0]\\n    t = d['eval_times']; clock = np.log1p(t) if phase <= .5 else t\\n    curve = amp @ (1 - np.exp(-t[None, :] / tau[:, None])) + drift[:, None] * clock\\n    return curve, amp @ (1 / tau) + drift\\n\\ntau, hw, rw = [out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights')]\\nprint('public shear, taus, weights:', d['shear_banding_index'], tau, hw, rw)\\nfor phase in (.50, np.nextafter(.50, 1), d['shear_banding_index']):\\n    q = dict(d, shear_banding_index=phase)\\n    model = m._Model(q, past[n:], hold[n:], x[n:])\\n    expected, rate = direct(tau, hw, rw, phase, past[n:], hold[n:], x[n:])\\n    z = model.design(np.log(tau))[0] @ np.r_[hw, rw]\\n    np.testing.assert_allclose(z, np.column_stack((expected, rate)), rtol=1e-11, atol=1e-12)\\n    print('shear/damage gated rows:', phase, int(model.active.sum()), 'of', len(model.active))\\nexpected, rate = direct(tau, hw, rw, d['shear_banding_index'], past[n:], hold[n:], x[n:])\\nnp.testing.assert_allclose(out['predicted_strain'], expected + s0[n:, None], atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rate, atol=1e-12)\\nactive = m._Model(d, past[:n], hold[:n], x[:n]).active\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor name, groups in [('lab', lab), ('stratum', tr['stratum'])]:\\n    r = np.empty_like(y); params = []\\n    for g in np.unique(groups):\\n        a = groups != g; b = ~a\\n        t, w = m._fit(m._Model(d, past[:n][a], hold[:n][a], x[:n][a]), y[a])\\n        r[b] = m._Model(d, past[:n][b], hold[:n][b], x[:n][b]).design(np.log(t))[0] @ w - y[b]\\n        params.append(t)\\n    err = abs(r)\\n    slices = [(groups == g) & (active == a) for g in np.unique(groups) for a in (False, True)]\\n    worst = np.max([[np.median(err[f, :-1]), np.median(err[f, -1]), np.median(err[f, -2]), abs(np.median(r[f, -2]))] for f in slices if f.any()], axis=0)\\n    print(name, 'worst slice median strain/rate/final strain and absolute final bias:', worst.round(5), 'pooled median strain/rate:', np.median(err[:, :-1]), np.median(err[:, -1]), 'tau ranges:', np.ptp(params, axis=0))\\n    for miss in (False, True):\\n        print('missing:', miss, 'n:', (missing == miss).sum(), 'median strain/rate:', np.median(err[missing == miss, :-1]), np.median(err[missing == miss, -1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage gates the terminal clock -> H2 shear sets the clock and damage gates only the extra memory terms; the phase-wide challenger had worst leave-one-lab-out slice medians of 0.01724 for strain and 0.01957 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the required cell-balanced imputation\",\n      \"rejected_reason\": \"Missing coupons show larger residuals, but the imputation convention is specified and no validated replacement is needed.\"\n    }\n  ],\n  \"rationale\": \"Promote the clock that reduced held-out error and late bias. Verify the exact artifact against an independent memory recurrence on both sides of the shear cutoff, then check whether any held-out lab or stratum regresses on either output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f6f1eb7055dcac031a41c4c079b8c15a0c9228a7f24d39cf287146ce8608c33f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49812.32,
+      "usage_known": true,
+      "prompt_tokens": 31127,
+      "cached_tokens": 11136,
+      "completion_tokens": 1969
+    }
+  ]
+}

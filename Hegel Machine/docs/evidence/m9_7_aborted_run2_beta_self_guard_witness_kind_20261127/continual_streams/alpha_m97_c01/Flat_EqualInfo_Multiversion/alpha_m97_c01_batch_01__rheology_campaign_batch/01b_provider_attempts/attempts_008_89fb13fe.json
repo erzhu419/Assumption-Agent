@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89fb13fe116a4caeb57a4a662a13be2d",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:47:07.021016+00:00",
+  "ended_at_utc": "2026-11-27T07:47:30.681783+00:00",
+  "request_sha256": "3df88e5183e91fe81e1b9d38b1e81a90478e682dbc0e121c3b838c28758dd21f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55926,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30967,
+    "cached_tokens": 6784,
+    "completion_tokens": 889
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, json, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_01.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nbase=m._calibrate(d); rows=d['calibration_load_cells']; ch=rows['lab_id']; j=np.flatnonzero(ch==0)\\nspike={k:v.copy() for k,v in rows.items()}; spike['true_stress'][j[len(j)//2]]+=5.0\\nemi=m._calibrate(dict(d,calibration_load_cells=spike)); print('EMI coefficient deviation',np.max(abs(emi-base))); np.testing.assert_allclose(emi,base,atol=2e-4,rtol=0)\\nhistory=json.loads(m._HISTORY.read_text()); print('history type:',type(history).__name__,'schema:',list(history.keys()) if isinstance(history,dict) else list(history[0].keys()))\\nfor n in (0,1,2):\\n    keep=(ch!=0); keep[j[:n]]=True\\n    subset={k:v[keep] for k,v in rows.items()}; got=m._calibrate(dict(d,calibration_load_cells=subset)); print('channel 0 with',n,'rows:',got[0]); assert np.isfinite(got[0]).all()\\n    np.testing.assert_allclose(got[1:],base[1:],atol=1e-12,rtol=0)\\n    if n==1: np.testing.assert_allclose(got[0,0]*rows['cmd_stress'][j[0]]+got[0,1],rows['true_stress'][j[0]],atol=1e-12)\\n    if n==2: np.testing.assert_allclose(got[0,0]*rows['cmd_stress'][j[:2]]+got[0,1],rows['true_stress'][j[:2]],atol=1e-12)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupon-gated drift → H2 batch-gated drift with damage-dependent corrections; worst held-out lab×damage curve median absolute error is 0.01704 and rate MAE is 0.04532.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Submit after trajectory and rate verification\",\"rejected_reason\":\"The public sweep has ten clean points per channel, so it did not exercise the specified EMI and sparse-calibration paths.\"}],\"rationale\":\"Test only the previously unexercised calibration paths on the verified artifact. If an EMI spike distorts the fit or a sparse sweep cannot read the archive, fix that calibration path without changing the validated creep model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "99ee064c2b6e6cc8a960a46899c763300d1c17c200d47859c81d9ed3c22bd498",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26107.24,
+      "usage_known": true,
+      "prompt_tokens": 30967,
+      "cached_tokens": 6784,
+      "completion_tokens": 889
+    }
+  ]
+}

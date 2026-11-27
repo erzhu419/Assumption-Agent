@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88b003a3e56f4f12a699af461ca616c6",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:56:42.682279+00:00",
+  "ended_at_utc": "2026-11-27T07:57:23.413452+00:00",
+  "request_sha256": "80ddb3c4ba1e49b4ed9c01b5f6e4c9d8b73c03e083cb7ed0eeb7064f6e75444e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65793,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33929,
+    "cached_tokens": 11136,
+    "completion_tokens": 1586
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/b03_gate_audit.py <<'PY'\\nimport contextlib, copy, io\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    exec(open('/tmp/b03_validate.py').read())\\n\\n# All candidate corrections are trained on other labs, then scored separately\\n# on the held-out trajectories and initial rates.\\ngap = np.broadcast_to(h[:n, None], (n, 2)).copy()\\nstate = np.zeros_like(gap)\\nfor j, dt in enumerate(d['past_dt']):\\n    w = np.exp(-dt / tau)\\n    state = w * state + (1 - w) * p[:n, j, None]\\ngap -= state\\nstress = h[:n]\\nX = x[:n]\\nphi = times / (1 + 0.85 * times)\\nflow = np.r_[phi, 1.]\\ncontrast = np.r_[-np.expm1(-times / tau[0]), 1 / tau[0]]\\nmissing = np.isnan(a['coupon_features_raw']).any(axis=1)\\nmaterial = np.column_stack([X[:, i] * X[:, j] for i in range(4) for j in range(i, 4)] + [X[:, i] * X[:, j] * X[:, k] for i in range(4) for j in range(i+1, 4) for k in range(j+1, 4)])\\ncorrections = {\\n    'prescribed': np.empty((*y.shape, 0)),\\n    'nonlinear material pairs/triples': material[:, None, :] * flow[None, :, None],\\n    'extra rational stress slip': np.column_stack([stress / (1 + stress**2), np.sign(stress)*np.sqrt(abs(stress))/(1+stress**2)])[:, None, :] * flow[None, :, None],\\n    'second contrast kernel': (gap[:, 0] - gap[:, 1])[:, None, None] * np.r_[-np.expm1(-times / tau[1]), 1 / tau[1]][None, :, None],\\n    'missingness diagnostic': missing[:, None, None] * flow[None, :, None],\\n}\\nfor name, A in corrections.items():\\n    metrics = []\\n    for lab in np.unique(a['lab_id']):\\n        held = a['lab_id'] == lab\\n        mask = np.broadcast_to(~held[:, None], y.shape)\\n        t, b = s._fit(m, y, mask)\\n        err = m.design(t) @ b - y\\n        if A.shape[-1]:\\n            keep = mask & np.isfinite(err)\\n            scales = np.nanmedian(np.abs(np.where(mask, err, np.nan)), axis=0) * 1.4826\\n            w = np.broadcast_to(np.maximum(scales, 1e-6), y.shape)[keep]\\n            z = least_squares(lambda coeff: (A[keep] @ coeff + err[keep])/w,\\n                              np.zeros(A.shape[-1]), loss='cauchy', f_scale=2.5).x\\n            err = err + A @ z\\n        e = err[held]\\n        metrics.append((np.nanmedian(abs(e[:,:-1])), rmse(e[:,-1]), np.nanmedian(e[:,-1])))\\n    scores = np.asarray(metrics)\\n    print(name, 'worst median strain / rate RMSE', np.round(scores[:,:2].max(axis=0), 6), 'rate bias by lab', np.round(scores[:,2], 6))\\n\\nbase = s._calibrate(d)\\nworst = {}\\nsweep = d['calibration_load_cells']\\nfor lab in range(4):\\n    rows = np.flatnonzero(sweep['lab_id'] == lab)\\n    for count in (2, 3, 4, 5, 10):\\n        shifts = (0.,) if count == 2 else (0., -3.01, 3.01, -5., 5.)\\n        for amount in shifts:\\n            for position in (range(count) if amount else (0,)):\\n                c = {k:v.copy() for k,v in sweep.items()}\\n                c['true_stress'][rows[position]] += amount\\n                keep = np.ones(len(c['lab_id']), dtype=bool)\\n                keep[rows[count:]] = False\\n                c = {k:v[keep] for k,v in c.items()}\\n                err = float(np.max(abs(s._calibrate(dict(d, calibration_load_cells=c))[lab]-base[lab])))\\n                key = (count, abs(amount))\\n                if key not in worst or err > worst[key][0]:\\n                    worst[key] = (err, lab, position, amount)\\nfor key, v in sorted(worst.items()):\\n    print('calibration count / spike magnitude', key, 'worst error / lab / position / signed spike', tuple(round(c,7) for c in v))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b03_gate_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: prescribed calibrated jammed-slip model → H2: retain it unless held-out residuals support a missing term or near-threshold EMI tests expose a calibration failure; current worst-lab median strain error is 0.01691 and initial-rate RMSE is 0.06380.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, Fokker–Planck, or classification tests\",\n      \"rejected_reason\": \"This dataset contains continuous strain and rate measurements, with no relay state, diffusion operator, or class labels. Held-out lab errors and signed residuals test the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Test whether plausible omitted terms improve prediction on unseen labs. Probe four- and five-row calibration sweeps and spikes just above the specified threshold, which the previous checks did not cover. A material calibration error would warrant a targeted fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "55824198c81a8b4fb9c8efa93a1a15766a8f44cdfd74a51b32d59dcf6292a1bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43199.38,
+      "usage_known": true,
+      "prompt_tokens": 33929,
+      "cached_tokens": 11136,
+      "completion_tokens": 1586
+    }
+  ]
+}

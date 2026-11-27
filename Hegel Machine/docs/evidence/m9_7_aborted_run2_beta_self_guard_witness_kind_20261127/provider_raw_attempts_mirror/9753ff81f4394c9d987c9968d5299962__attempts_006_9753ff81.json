@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9753ff81f4394c9d987c9968d5299962",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:24:27.094973+00:00",
+  "ended_at_utc": "2026-11-27T08:25:01.661431+00:00",
+  "request_sha256": "95d77c8d0a3e51072e8b254bf5195fa7d7b684d2c12d015d213f3da90f97c3b1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47925,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28542,
+    "cached_tokens": 6784,
+    "completion_tokens": 1354
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 -I validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nd = pickle.load(open('public_alpha_m97_c02_batch_07.pkl', 'rb'))[0]['dataset']\\nout = s.solve_alpha_m97_c02_batch_07(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau = out['estimated_taus']\\nh, w = out['hereditary_weights'], out['regime_mode_weights']\\nassert 0 < tau[0] < tau[1]\\ncal = s._calibration(d)\\nxt, xe = s._aligned(d['train'], d['test'])\\n\\ndef forward(part, x):\\n    gain, bias = cal[part['lab_id']].T\\n    stress = part['past_stress_cmd'] * gain[:, None] + bias[:, None]\\n    hold = part['stress_hold_cmd'] * gain + bias\\n    z = np.zeros((len(hold), 2))\\n    damage = np.zeros(len(hold))\\n    for timestep, sigma in zip(d['past_dt'], stress.T):\\n        decay = np.exp(-timestep / tau)\\n        z = z * decay + sigma[:, None] * (1 - decay)\\n        damage += np.maximum(0, np.abs(sigma) - d['crit_stress'])**2 * timestep\\n    act = np.tanh(damage)\\n    amp = (hold[:, None] - z) * h[:2]\\n    amp[:, 0] += w[0] * act * hold\\n    drift = h[2] + x @ h[3:] + w[1] * act * z[:, 0]\\n    times = d['eval_times']\\n    curve = part['strain_0'][:, None] + amp @ (1 - np.exp(-times[None, :] / tau[:, None])) + drift[:, None] * np.log1p(times)\\n    return curve, amp @ (1 / tau) + drift, damage > 0\\n\\ncurve, rate, active = forward(d['test'], xe)\\nnp.testing.assert_allclose(out['predicted_strain'], curve, atol=1e-11, rtol=0)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rate, atol=1e-11, rtol=0)\\nassert active.any() and (~active).any()\\nprint('Exact forward check:', int(active.sum()), 'active and', int((~active).sum()), 'zero-damage test rows; taus:', tau.tolist())\\n\\n# Exercise the supported clean in-batch calibration and single EMI spike paths.\\np = dict(d)\\ncmd = np.tile([-2., -1., 1., 2.], 4)\\nlab = np.repeat(np.arange(4), 4)\\nexpected = cal.copy()\\nexpected[:, 0] += .03\\ntrue = cmd * expected[lab, 0] + expected[lab, 1]\\np['calibration_load_cells'] = dict(lab_id=lab, cmd_stress=cmd, true_stress=true)\\nnp.testing.assert_allclose(s._calibration(p), expected, atol=1e-12, rtol=0)\\ntrue[3] += 8.\\nnp.testing.assert_allclose(s._calibration(p), expected, atol=1e-12, rtol=0)\\nprint('Clean four-point fits and contaminated-sweep recovery passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean per-channel calibration → exact log-plateau fit; worst complete-coupon leave-lab-out p90 absolute errors are 0.039274 for strain and 0.038706 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The older channel-2 load-cell calibration still applies to this campaign.\",\n    \"empirical_witness\": \"With lab 2 excluded from fitting, its p90 absolute strain and rate errors rise from 0.035569 and 0.038706 under the latest clean sweep to 1.093676 and 1.465657 under the older sweep.\",\n    \"causal_blanket_diagnosis\": \"The stale affine transform misstates channel-2 physical stress and classifies only 6 of its 38 training traces as damaged instead of 24.\",\n    \"sublated_pivot\": \"Keep the latest clean channel-2 sweep and retain the exact constitutive model.\",\n    \"risk_kind\": \"Calibration transfer across campaigns\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave-lab-out validation resolves the calibration ambiguity without fitting coefficients to the disputed channel. Check the final artifact against an independent recurrence and analytic rate, and exercise the clean and EMI calibration branches; a failure would identify whether to fix the forward equations or the calibration filter.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c6eb71128445dd89a64cd52810a06cfc19a7699ac153307641c01ff815827862",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36454.9,
+      "usage_known": true,
+      "prompt_tokens": 28542,
+      "cached_tokens": 6784,
+      "completion_tokens": 1354
+    }
+  ]
+}

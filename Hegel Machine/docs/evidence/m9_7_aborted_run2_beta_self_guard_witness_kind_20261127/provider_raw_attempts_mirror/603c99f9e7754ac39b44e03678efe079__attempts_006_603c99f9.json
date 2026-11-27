@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "603c99f9e7754ac39b44e03678efe079",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:58:22.885043+00:00",
+  "ended_at_utc": "2026-11-27T07:58:48.756907+00:00",
+  "request_sha256": "68a031934747ef451741177133bc31021ff6a793911e561bd985cedea11d5809",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 39915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25646,
+    "cached_tokens": 6784,
+    "completion_tokens": 961
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']; tr, te = d['train'], d['test']\\no = m.solve_alpha_m97_c01_batch_03(d)\\nfor key, ref in [('estimated_taus','taus'), ('hereditary_weights','theta'), ('regime_mode_weights','vp_theta'), ('predicted_strain','te_clean'), ('initial_rate_pred','te_true_rate0')]:\\n    e = o[key] - gt[ref]\\n    print(key, 'MAE', np.mean(abs(e)), 'RMSE', np.sqrt(np.mean(e**2)), 'max abs', np.max(abs(e)))\\n    if e.ndim < 2 and len(e) < 10: print('  signed', np.round(e, 6))\\nfor group, labels in [('lab', te['lab_id']), ('stratum', te['stratum']), ('missing_features', np.sum(np.isnan(te['coupon_features_raw']), axis=1))]:\\n    for level in np.unique(labels):\\n        s = labels == level\\n        ec = abs(o['predicted_strain'][s] - gt['te_clean'][s]); er = abs(o['initial_rate_pred'][s] - gt['te_true_rate0'][s]); print(group, level, 'n', s.sum(), 'curve MAE', ec.mean(), 'worst time MAE', ec.mean(axis=0).max(), 'rate MAE', er.mean())\\np, h, x, s0 = m._inputs(d); n = len(tr['lab_id']); print('test stress MAE', np.mean(abs(p[n:] - gt['te_hist_true'])), np.mean(abs(h[n:] - gt['te_hold_true'])))\\nmodel = m._Model(d['past_dt'],d['eval_times'],p,h,x); w = np.r_[o['hereditary_weights'], o['regime_mode_weights']]; pred = model.design(np.log(o['estimated_taus']))[:n] @ w\\nerr = abs(pred[:, :-1] + s0[:n,None] - tr['strain_curves_obs']); print('training curve MAE by time', np.round(err.mean(axis=0),4)); print('training curve median AE by time', np.round(np.median(err,axis=0),4)); print('training curve >0.5 by time', (err > 0.5).sum(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: distinguish corrupted curve observations from systematic model error; worst out-of-fold lab-by-time curve MAE was 0.45318 and worst held-out lab rate MAE was 0.03010.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a horizon-specific correction\",\n      \"rejected_reason\": \"The noisy held-out observations do not establish systematic horizon bias. Check the clean public reference before changing the prescribed basis.\"\n    }\n  ],\n  \"rationale\": \"Compare each returned quantity with its clean public reference and split prediction error by lab, stratum, and feature missingness. Clean errors concentrated in the same slices would motivate a preprocessing or fit change; a large mean–median residual gap confined to noisy labels would support keeping the robust physical model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5dc9a46acbed7323900dcfbaca31df44822fc526ae5f2cdd0b45a000c680741a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28322.96,
+      "usage_known": true,
+      "prompt_tokens": 25646,
+      "cached_tokens": 6784,
+      "completion_tokens": 961
+    }
+  ]
+}

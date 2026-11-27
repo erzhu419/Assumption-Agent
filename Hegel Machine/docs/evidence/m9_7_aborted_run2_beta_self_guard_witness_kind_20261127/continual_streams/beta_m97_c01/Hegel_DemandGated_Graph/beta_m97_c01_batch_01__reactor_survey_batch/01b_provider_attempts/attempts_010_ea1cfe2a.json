@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea1cfe2a890c404b9ecac5f1aa663a21",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:46:46.976557+00:00",
+  "ended_at_utc": "2026-11-27T07:47:17.233506+00:00",
+  "request_sha256": "e328053a425ed87c044d99b5902abbd77a9f53441ae20a8ed12539b5d2a83830",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 44534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26501,
+    "cached_tokens": 11136,
+    "completion_tokens": 1184
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/beta_m97_public_audit.py <<'PY'\\nimport json\\nimport pickle\\nimport runpy\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nm = runpy.run_path(str(root / 'beta_m97_c01_batch_01_solver.py'))\\narchived = runpy.run_path('/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py')\\nwith (root / 'public_beta_m97_c01_batch_01.pkl').open('rb') as f:\\n    cases = pickle.load(f)\\nprior = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())[-1]\\nfor case in cases:\\n    s, gt = case['study'], case['gt']\\n    for label, sweep in [('public', s['sensor_calibration_sweeps']), ('prefix', prior)]:\\n        banks, x, y = (np.asarray(sweep[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n        for bank in range(4):\\n            xb, yb = x[banks == bank], y[banks == bank]\\n            errors = []\\n            for i in range(xb.size):\\n                train = np.arange(xb.size) != i\\n                keep = m['_clean_calibration'](xb[train], yb[train])\\n                g, o = m['_affine'](xb[train][keep], yb[train][keep])\\n                errors.append(abs(g * xb[i] + o - yb[i]))\\n            print(label, 'bank', bank, 'leave-one-reference-out max raw error', max(errors))\\n    out = m['solve_beta_m97_c01_batch_01'](s)\\n    z = s['Z_nuisance']\\n    gram = z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1])\\n    def project(a):\\n        return a - z @ np.linalg.solve(gram, z.T @ a)\\n    design, _ = m['_forward'](s)\\n    robin_design, _ = archived['_forward'](s)\\n    errors = dict(sealed_design=np.max(np.abs(project(design) - gt['S_tilde'])), robin_design=np.max(np.abs(project(robin_design) - gt['S_tilde'])), calibrated_target=np.max(np.abs(project(m['_calibrate'](s)) - gt['r_y'])), raw_target=np.max(np.abs(project(np.asarray(s['y_obs_raw']).reshape(-1)) - gt['r_y'])), weights=np.max(np.abs(out['weights'] - gt['w_opt'])), terminal=np.max(np.abs(out['terminal_field'] - gt['terminal_field_A'])))\\n    print('Public max errors:', errors)\\n    assert errors['sealed_design'] < 1e-12 and errors['weights'] < 1e-6 and errors['terminal'] < 1e-7\\n    for axis in ('x', 'y'):\\n        mat = m['_axis'](s[f'kappa_{axis}'], s[f'vel_{axis}'], 0.0, s[f'L{axis}'])\\n        boundary_sums = (mat @ np.ones(mat.shape[0]))[[0, -1]]\\n        print(axis, 'sealed boundary row sums:', boundary_sums)\\n        np.testing.assert_allclose(boundary_sums, 0.0, atol=1e-12)\\nPY\\npython3 -I /tmp/beta_m97_public_audit.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin-only reactor → H2 vortex-triggered sealed-wall reactor with bank-specific calibration; the worst tested KKT residual is 8.88e-16 and the maximum public weight error is 3.65e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run balanced-accuracy, relay, or stochastic-drift checks\",\n      \"rejected_reason\": \"The task has continuous measurements, a recirculation mode already tested in both states, and no class labels or stochastic drift equation.\"\n    }\n  ],\n  \"rationale\": \"Hold out real calibration rows within each bank to detect whether any coefficient depends on one reference; a large error would trigger a bank-specific calibration review. Compare raw versus calibrated targets and Robin versus sealed designs to isolate the effects of calibration and boundary physics. A nonzero sealed boundary row sum would identify a discretization error rather than a need for a new model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c174b2fb8cece1a8943d9f3aa4c6f6c534252543d42bb0c9a941e44fc9704611",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32704.39,
+      "usage_known": true,
+      "prompt_tokens": 26501,
+      "cached_tokens": 11136,
+      "completion_tokens": 1184
+    }
+  ]
+}

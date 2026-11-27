@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "355a320f56ed4df88a267b638ca4bd85",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_05__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:12:00.130443+00:00",
+  "ended_at_utc": "2026-11-27T08:12:47.340313+00:00",
+  "request_sha256": "552419bc3d522727d6125d19f29c162ccb442c6d83bd724ed950d09b095b7b05",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 62873,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33705,
+    "cached_tokens": 6784,
+    "completion_tokens": 1847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '120,180p' alpha_m97_c01_batch_05_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_05_solver.py')\\ns = p.read_text()\\nassert s.count('def _fit(') == 1\\ns = s.replace('def _fit(', 'def _fit_seed(', 1)\\ni = s.index('\\\\ndef solve_alpha_m97_c01_batch_05')\\ns = s[:i] + '''\\ndef _fit(model, y, indices):\\n    logtau, coeff = _fit_seed(model, y, indices)\\n    target = y[indices]\\n    residual = model.design(logtau, indices) @ coeff - target\\n    # Estimate curve and initial-rate noise separately from the robust seed.\\n    mad = 1.4826 * np.median(np.abs(residual - np.median(residual, axis=0)), axis=0)\\n    floor = max(0.5 * np.median(mad), 1e-10)\\n    scale = np.r_[max(np.median(mad[:-1]), floor), max(mad[-1], floor)]\\n    ncols = 9 if np.any(model.act[indices]) else 7\\n    for _ in range(7):\\n        weight = (1.0 / (scale * np.hypot(1.0, residual / (2.385 * scale)))).ravel()\\n\\n        def project(t):\\n            design = model.design(t, indices)[:, :, :ncols].reshape(-1, ncols)\\n            coef = np.linalg.lstsq(design * weight[:, None], target.ravel() * weight,\\n                                    rcond=None)[0]\\n            return np.pad(coef, (0, 9 - ncols)), (design @ coef).reshape(target.shape) - target\\n\\n        logtau = least_squares(lambda t: project(t)[1].ravel() * weight, logtau,\\n                               bounds=(np.log(0.02), np.log(100.0)), diff_step=1e-4,\\n                               max_nfev=60, ftol=1e-8).x\\n        coeff, residual = project(logtau)\\n    return logtau, coeff\\n\\n''' + s[i:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_05_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitems = pickle.load(open('public_alpha_m97_c01_batch_05.pkl','rb'))\\nfor item in items:\\n d,gt = item['dataset'],item['gt']; a=d['train']; te=d['test']; n=len(a['lab_id']); out=m.solve_alpha_m97_c01_batch_05(d)\\n assert all(np.isfinite(v).all() for v in out.values())\\n for key,actual in [('taus','estimated_taus'),('theta','hereditary_weights'),('vp_theta','regime_mode_weights')]: print(key,'estimated',np.round(out[actual],7),'reference',gt[key]);\\n past,hold,x,b=m._inputs(d); model=m._Model(d,past,hold,x); e=out['predicted_strain']-gt['te_clean']; r=out['initial_rate_pred']-gt['te_true_rate0']; scores=[]\\n for lab in range(4):\\n  for active in (False,True):\\n   q=(te['lab_id']==lab)&((model.act[n:]>0)==active)\\n   if q.any(): scores.append([np.sqrt(np.mean(e[q]**2)),np.sqrt(np.mean(r[q]**2))])\\n print('public pooled',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(r**2)),'max by lab x regime',np.max(scores,axis=0))\\n # Independently evaluate the recurrence and exact zero-time derivative.\\n tau=out['estimated_taus']; hw=out['hereditary_weights']; rw=out['regime_mode_weights']; z=np.zeros((len(te['lab_id']),2)); t=d['eval_times']; p=past[n:]; h=hold[n:]\\n for dt,col in zip(d['past_dt'],p.T): z=np.exp(-dt/tau)*z+(-np.expm1(-dt/tau))*col[:,None]\\n D=np.sum(np.maximum(abs(p)-d['crit_stress'],0)**2*d['past_dt'],axis=1); act=np.tanh(D)*(d['shear_banding_index']<=0.50)\\n amps=(h[:,None]-z)*hw[:2]; amps[:,0]+=rw[0]*act*h; drift=hw[2]+x[n:]@hw[3:7]+rw[1]*act*z[:,0]\\n np.testing.assert_allclose(out['predicted_strain'],b[n:,None]+amps@(-np.expm1(-t[None,:]/tau[:,None]))+drift[:,None]*np.log1p(t),atol=1e-10)\\n np.testing.assert_allclose(out['initial_rate_pred'],amps@(1/tau)+drift,atol=1e-10)\\n # Calibration stress: single large EMI, then zero and one in-batch rows.\\n c=d['calibration_load_cells']; base=m._calibrate(d); cc={k:v.copy() for k,v in c.items()}; mask=cc['lab_id']==2; cc['true_stress'][np.flatnonzero(mask)[-1]]+=12\\n np.testing.assert_allclose(m._calibrate(dict(d,calibration_load_cells=cc)),base,atol=6e-4,rtol=0)\\n for count in (0,1):\\n  keep=~mask; keep[np.flatnonzero(mask)[:count]]=True\\n  sparse=m._calibrate(dict(d,calibration_load_cells={k:v[keep] for k,v in c.items()})); np.testing.assert_allclose(sparse,base,atol=.003,rtol=0)\\n print('Explicit recurrence, derivative, finite outputs, and EMI/sparse calibration passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (in-batch calibration and cell-balanced alignment) -> H2 (gated logarithmic plateau with robust reweighting); pooled reweighting reduced worst held-out lab-by-regime clipped strain RMSE from 0.05195 to 0.03365 and rate RMSE from 0.04219 to 0.02019.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use separate robust scales by horizon or hard rejection\",\n      \"rejected_reason\": \"Neither materially improves worst-slice strain error over pooled scaling, and both slightly worsen worst-slice rate error.\"\n    }\n  ],\n  \"rationale\": \"Promote the measured improvement without changing the prescribed alignment. Verify the exact artifact in an isolated process: independent recurrence and derivative checks catch errors in either output, while sparse and spiked calibration checks exercise branches absent from the clean public rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "352c5e4bf42d443c429b1a1789aa3feaec4606103d0a38a232f6f5cef4c75c16",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49642.74,
+      "usage_known": true,
+      "prompt_tokens": 33705,
+      "cached_tokens": 6784,
+      "completion_tokens": 1847
+    }
+  ]
+}

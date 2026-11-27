@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2927a62372cb40b288cdb9bb5b33d642",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:22:10.589736+00:00",
+  "ended_at_utc": "2026-11-27T08:22:38.579459+00:00",
+  "request_sha256": "ba07a74e43735b63e2d40596c2521ea9748e39ec2d7dfe5c8a7090b49454d7d9",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 54058,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30092,
+    "cached_tokens": 11136,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c03_batch_06_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_06.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te, cal = (d[k] for k in ('train', 'test', 'calibration_load_cells'))\\nq = s._calibrate(cal)\\nwith open(s._ARCHIVE) as f:\\n    history = json.load(f)\\nfor lab in range(4):\\n    ix = cal['lab_id'] == lab\\n    cmd, obs = (cal[k][ix] for k in ('cmd_stress', 'true_stress'))\\n    residual = obs - np.polyval(q[lab], cmd)\\n    clean = np.abs(residual) < .001\\n    prior = next(h for h in reversed(history) if np.sum(np.asarray(h['lab_id']) == lab) >= 2)\\n    p = np.asarray(prior['lab_id']) == lab\\n    a = np.polyfit(np.asarray(prior['cmd_stress'])[p], np.asarray(prior['true_stress'])[p], 1)\\n    print('calibration', lab, 'clean/spike counts', clean.sum(), (~clean).sum(), 'small/large residual max', np.max(np.abs(residual[clean])), np.max(np.abs(residual)), 'latest prefix', prior['episode_short_name'], 'clean residual max against prefix', np.max(np.abs(obs[clean] - np.polyval(a, cmd[clean]))))\\n    if clean.sum() >= 4:\\n        np.testing.assert_allclose(q[lab], np.polyfit(cmd[clean], obs[clean], 1), rtol=0, atol=1e-10)\\n    else:\\n        np.testing.assert_allclose(q[lab], a, rtol=0, atol=1e-10)\\n        recovered = {k: v[(cal['lab_id'] != lab) | (np.abs(cal['true_stress'] - np.polyval(q[lab], cal['cmd_stress'])) < .001)] for k, v in cal.items()}\\n        np.testing.assert_allclose(s._calibrate(recovered), q, rtol=0, atol=1e-10)\\nfor lab in range(4):\\n    hold = tr['lab_id'] == lab\\n    fold = dict(d, train={k:v[~hold] for k,v in tr.items()}, test={k:np.concatenate((v,tr[k][hold])) for k,v in te.items()})\\n    o = s.solve_alpha_m97_c03_batch_06(fold)\\n    n = hold.sum()\\n    signed_stress = np.polyval(q[lab], tr['stress_hold_cmd'][hold])\\n    complete = np.isfinite(tr['coupon_features_raw'][hold]).all(axis=1)\\n    e = o['predicted_strain'][-n:] - tr['strain_curves_obs'][hold]\\n    r = o['initial_rate_pred'][-n:] - tr['instant_rate_obs'][hold]\\n    for sign in (-1, 1):\\n        m = complete & (sign * signed_stress > 0)\\n        if m.any():\\n            print('held lab/sign', lab, sign, 'N', m.sum(), 'max horizon absolute median bias', round(np.nanmax(np.abs(np.nanmedian(e[m], axis=0))),5), 'rate bias', round(np.nanmean(r[m]),5), 'rate RMSE', round(np.sqrt(np.nanmean(r[m]**2)),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: retain the specified jammed-slip basis and audit calibration fallback and signed-stress transfer; current worst held-out complete-coupon horizon median absolute strain error is 0.01786 and worst all-coupon lab rate RMSE is 0.07669.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes or within-batch classification accuracy\",\"rejected_reason\":\"The task has no relay, class labels, or classification threshold. Lab-by-stress-sign residuals test the relevant nuisance and symmetry risks for this regression.\"}],\"rationale\":\"Check that clean channels use direct fits and that sparse channels retain the same historical calibration when only their measured EMI spikes are removed. A mismatch would require a calibration fix. Check signed held-out residuals within each lab to see whether pooled scores mask a calibration or signed-slip error. The independent recurrence check already verified the pairwise gap term, rational saturation, and initial derivative.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5a87ba1aaca18dc139fe43c78991f2db188ecd375112c720195f655cd9617de4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31168.14,
+      "usage_known": true,
+      "prompt_tokens": 30092,
+      "cached_tokens": 11136,
+      "completion_tokens": 1268
+    }
+  ]
+}

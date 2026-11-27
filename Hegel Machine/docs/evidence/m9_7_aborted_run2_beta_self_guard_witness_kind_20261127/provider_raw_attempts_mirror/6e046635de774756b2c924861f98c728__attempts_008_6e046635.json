@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e046635de774756b2c924861f98c728",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:53:42.349977+00:00",
+  "ended_at_utc": "2026-11-27T07:54:08.068041+00:00",
+  "request_sha256": "62255f5fc64cc506cc393fa933f3f7b5727f4eabb0b604ec1d5e515a2617dc20",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 35970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23920,
+    "cached_tokens": 6784,
+    "completion_tokens": 954
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',root+'alpha_m97_c03_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open(root+'public_alpha_m97_c03_batch_02.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; xtr,xte=m._align(tr,te); gain,bias=m._calibrate(d['calibration_load_cells']); print('split fields:',sorted(tr),sorted(te)); print('max gain/bias error:',max(abs(gain-g['stress_gains'])),max(abs(bias-g['stress_biases'])))\\na=m._design(tr,xtr,gain,bias,dt,t); b=m._design(te,xte,gain,bias,dt,t); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; complete=np.isfinite(tr['coupon_features_raw']).all(axis=1); observed=np.isfinite(te['coupon_features_raw']).all(axis=1)\\ndef rmse(x): return np.sqrt(np.mean(x*x))\\nfor lab in np.unique(te['lab_id']):\\n    train=complete & (tr['lab_id']!=lab); keep=observed & (te['lab_id']==lab)\\n    lt,w=m._fit(a,np.where(train[:,None],y,np.nan),np.where(train,tr['instant_rate_obs'],np.nan),dt,t); c,r=b(lt)\\n    ec=(te['strain_0'][:,None]+c@w-g['te_clean'])[keep]; er=(r@w-g['te_true_rate0'])[keep]\\n    print('held-out lab',lab,'complete n',keep.sum(),'strain/rate RMSE',rmse(ec),rmse(er),'signed strain/rate bias',ec.mean(),er.mean(),'max horizon |bias|',max(abs(ec.mean(0))))\\no=m.solve_alpha_m97_c03_batch_02(d); eps=1e-6; c,r=m._design(te,xte,gain,bias,dt,np.array([eps]))(np.log(o['estimated_taus'])); finite_diff=c[:,0,:]@o['hereditary_weights']/eps; delta=max(abs(finite_diff-o['initial_rate_pred'])); print('max derivative closure error',delta); assert delta < 1e-5; assert np.array_equal(o['regime_mode_weights'],np.zeros(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and panel alignment → H2 robust two-branch linear flow; the worst public slice remains missing-feature coupons, with strain RMSE 0.4874 and initial-rate RMSE 0.1542.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear terms, relay states, or classification diagnostics\",\n      \"rejected_reason\": \"The specified regime is continuous linear terminal flow with zero regime weights. Held-out signed residuals test lab confounding directly without conflating it with imputation error.\"\n    }\n  ],\n  \"rationale\": \"Isolate complete-feature lab slices to detect systematic signed bias that missing-feature error could mask. Large lab bias would warrant revisiting alignment; derivative mismatch would warrant correcting the rate operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ed8316b61e971e398cd2931734dc3209eb7361c212d5289677f20e3bcae1498c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28162.53,
+      "usage_known": true,
+      "prompt_tokens": 23920,
+      "cached_tokens": 6784,
+      "completion_tokens": 954
+    }
+  ]
+}

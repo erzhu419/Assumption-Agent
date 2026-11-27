@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8ef0b143652419eaf96a9baff3cf7be",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:22:58.836473+00:00",
+  "ended_at_utc": "2026-11-27T08:23:26.463120+00:00",
+  "request_sha256": "59dd9760a05d4410d410f9e81ddc4b46cb9d5a47f545b46793d8d15693963828",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44155,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26933,
+    "cached_tokens": 6784,
+    "completion_tokens": 1096
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_07_solver.py')\\ns = p.read_text()\\na = s.index('        for sweep in reversed(history):')\\nb = s.index(\\\"        raise ValueError(f'No usable calibration sweep\\\", a)\\ns = s[:a] + '''        for minimum in (4, 2):\\n            for sweep in reversed(history):\\n                take = np.asarray(sweep['lab_id']) == channel\\n                x, y = (np.asarray(sweep[k])[take] for k in ('cmd_stress', 'true_stress'))\\n                finite = np.isfinite(x) & np.isfinite(y)\\n                x, y = x[finite], y[finite]\\n                if len(x) < minimum:\\n                    continue\\n                clean, emi = _clean_line(x, y)\\n                if clean.sum() >= minimum and (minimum == 4 or not emi) and np.ptp(x[clean]) > 0:\\n                    return _affine(x[clean], y[clean])\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c01_batch_07_solver as s\\nd=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]['dataset']; tr=d['train']; n=len(tr['lab_id'])\\np,h,x,z=s._inputs(d); m=s._Model(d,p,h,x)\\ny=np.column_stack((tr['strain_curves_obs']-z[:n,None],tr['instant_rate_obs']))\\nlab=tr['lab_id']; full=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nprint('calibration',s._calibrate(d)); print('active train/test',m.active[:n].sum(),m.active[n:].sum())\\nfor c in [-1,0,1,2,3]:\\n rows=np.flatnonzero(full & (lab!=c)); tau,w=s._fit(m,y,rows)\\n test=np.arange(n) if c==-1 else np.flatnonzero(lab==c)\\n err=m.design(tau,test)@w-y[test]\\n print('fold',c,'tau',np.exp(tau).round(6),'weights',w.round(6))\\n for gate in [False,True]:\\n  for complete in [False,True]:\\n   mask=(m.active[test]==gate)&(full[test]==complete)\\n   if mask.any():\\n    print(' active',gate,'complete',complete,'n',mask.sum(),'median/p90 curve',np.quantile(abs(err[mask,:-1]),[.5,.9]).round(5),'rate',np.quantile(abs(err[mask,-1]),[.5,.9]).round(5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the latest fitted archive line is reliable → H2: prefer the latest well-supported sweep when current calibration is sparse; baseline worst-lab p90 absolute rate error is 2.7642.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The latest archive sweep that yields an affine fit provides a reliable transferable calibration.\",\n    \"empirical_witness\": \"The latest lab 0 and lab 2 sweeps each lose one of three points to the EMI filter, leaving lines with biases +2.12143 and -4.76286 instead of the repeatedly supported +0.15 and -0.12; both labs then classify every training coupon as damaged.\",\n    \"causal_blanket_diagnosis\": \"With only two retained points, the fitted line has no independent residual check. Its error propagates through both branch memory and the crystallization gate.\",\n    \"sublated_pivot\": \"Keep direct in-batch calibration and the exact constitutive basis. For archive fallback, prefer the latest sweep with four or more accepted points, retaining a sparse non-EMI fallback only when no such sweep exists.\",\n    \"risk_kind\": \"Calibration contamination\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool all archive sweeps\",\n      \"rejected_reason\": \"Pooling would obscure the well-supported recent gain and bias change for lab 1.\"\n    }\n  ],\n  \"rationale\": \"Run leave-one-lab-out validation after correcting the unsupported fallback. If large residuals persist on complete coupons, inspect the regime basis or response noise; if they concentrate on incomplete coupons, inspect imputation instead.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a11c419302ec735a7fa2ca04faf98a66c2192c18365c4497871f2c255a6b50fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29228.51,
+      "usage_known": true,
+      "prompt_tokens": 26933,
+      "cached_tokens": 6784,
+      "completion_tokens": 1096
+    }
+  ]
+}

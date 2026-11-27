@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "74204b4b9cfc46e68cc011a5d47ba3ea",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:53:14.457191+00:00",
+  "ended_at_utc": "2026-11-27T07:53:54.433666+00:00",
+  "request_sha256": "56247fee9b9e0207b49d7396da00f97840490d245c99de1e24e88bd4bfa88714",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44062,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26817,
+    "cached_tokens": 6784,
+    "completion_tokens": 1510
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c02_batch_03_solver.py')\\ns = p.read_text()\\ns = s.replace('history = list(_history_rows(json.load(file)))', 'history = json.load(file)')\\ns = s.replace('            pairs = np.array([(u, v) for c, u, v in history if int(c) == lab and np.isfinite(u) and np.isfinite(v)])\\\\n            gain, bias = _line(*pairs.T)', '''            # A hardware change separates the identity sweep from the recent prefix.\\n            # Use the latest sweep that can estimate this channel's gain.\\n            for sweep in reversed(history):\\n                pairs = np.array([(u, v) for c, u, v in _history_rows(sweep)\\n                                  if int(c) == lab and np.isfinite(u) and np.isfinite(v)])\\n                if len(pairs) >= 2 and np.ptp(pairs[:, 0]) > 0:\\n                    gain, bias = _line(*pairs.T)\\n                    break\\n            else:\\n                raise ValueError(f'No usable archived calibration for channel {lab}')''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('public_alpha_m97_c02_batch_03.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; base=m._calibration(d)\\nfor lab in range(4):\\n    ind=np.flatnonzero(c['lab_id']==lab)\\n    for n in (0,1,2,3,4):\\n        keep=np.ones(len(c['lab_id']),bool); keep[ind[n:]]=False\\n        few={k:v[keep] for k,v in c.items()}\\n        estimate=m._calibration(dict(d,calibration_load_cells=few))\\n        if n<2: np.testing.assert_allclose(estimate[lab],base[lab],atol=0.001,rtol=0)\\n        else: np.testing.assert_allclose(estimate[lab],m._line(c['cmd_stress'][ind[:n]],c['true_stress'][ind[:n]]),atol=1e-12,rtol=0)\\n    for j in ind:\\n        for amplitude in (-6.,6.):\\n            spike={k:v.copy() for k,v in c.items()}; spike['true_stress'][j]+=amplitude\\n            estimate=m._calibration(dict(d,calibration_load_cells=spike))\\n            clean=ind[ind!=j]\\n            np.testing.assert_allclose(estimate[lab],m._line(c['cmd_stress'][clean],c['true_stress'][clean]),atol=1e-12,rtol=0)\\nprint('Calibration checks passed: 0–4 retained points and isolated positive/negative EMI on every public calibration row.')\\nPY\\nTIMEFORMAT='default elapsed %R s'; time timeout 90s python3 -I validate_public_schema.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS viscoelastic relaxation' | head -n 12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: pooled historical calibration -> H2: latest usable calibration sweep for sparse channels; worst held-out lab strain MAE was 0.2202 (p95 0.1900), and worst lab onset-rate MAE was 0.03315.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"All archived sweeps share one physical gain and bias per channel.\",\n    \"empirical_witness\": \"The first sweep had gains near 1.00 for all channels, whereas the two recent sweeps and current batch agree near [0.79, 1.31, 0.85, 1.24].\",\n    \"causal_blanket_diagnosis\": \"Pooling across the hardware calibration change biases the stress inputs and therefore both memory gaps and slip on sparse channels.\",\n    \"sublated_pivot\": \"Keep direct fits on clean in-batch data and use the latest usable sweep only in the documented fallback.\",\n    \"risk_kind\": \"stale calibration\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool every archived sweep\",\n      \"rejected_reason\": \"The first sweep belongs to a different calibration regime and would move the fallback away from both recent sweeps and this batch.\"\n    }\n  ],\n  \"rationale\": \"The worst trajectory MAE includes a roughly 60-unit residual at a single observation, while fitted relaxation times remain stable across held-out labs. The actionable failure is the historical fallback: test missing calibration and isolated EMI on each channel, then verify the edited solver in an isolated process under the default runtime settings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3729621b630a2e76518865f9e105527822d01ceedcdbe0237538240ddf4f4653",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42432.13,
+      "usage_known": true,
+      "prompt_tokens": 26817,
+      "cached_tokens": 6784,
+      "completion_tokens": 1510
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bf3dbd6f9d64a2da36c8f483bf933dd",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:22:56.763769+00:00",
+  "ended_at_utc": "2026-11-27T08:23:26.203871+00:00",
+  "request_sha256": "7e4e3c71b22fa9e39437aa43d91839d39aa091cf6bf3b4a0ec64f2ebf8421366",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 60230,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31443,
+    "cached_tokens": 6784,
+    "completion_tokens": 1168
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/rheology_spike_audit.py <<'PY'\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\npath = root / 'alpha_m97_c03_batch_06_solver.py'\\nsource = path.read_text()\\nneedle = 'w = base / (scale * np.sqrt(1 + (r / (2.5 * scale))**2))**0.5'\\nassert source.count(needle) == 1\\nvariants = {'baseline': source, 'strain_spike_gate': source.replace(needle, needle + '\\\\n        w[(groups < len(times)) & (np.abs(r) > 8 * scale)] = 0.0').replace('project(p, w)[0] / w', 'project(p, np.ones_like(base), w)[0]').replace('def project(p, w):','def project(p, w, fit_w=None):').replace('a = matrix * w[:, None]\\\\n        b = y * w', 'fit_w = w if fit_w is None else fit_w\\\\n        a = matrix * fit_w[:, None]\\\\n        b = y * fit_w').replace(\\\"return np.einsum('ij,j->i', a, weights) - b, weights\\\", \\\"return (np.einsum('ij,j->i', matrix, weights) - y) * w, weights\\\")}\\nwith (root / 'public_alpha_m97_c03_batch_06.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\nfor label, src in variants.items():\\n    ns = {}\\n    exec(compile(src, str(path), 'exec'), ns)\\n    solve = ns['solve_alpha_m97_c03_batch_06']\\n    metrics, taus = [], []\\n    for lab in np.unique(tr['lab_id']):\\n        m = tr['lab_id'] == lab\\n        n = m.sum()\\n        fold = dict(d, train={k:v[~m] for k,v in tr.items()}, test={k:np.concatenate((v,tr[k][m])) for k,v in te.items()})\\n        o = solve(fold)\\n        taus.append(o['estimated_taus'])\\n        ae = np.abs(o['predicted_strain'][-n:] - tr['strain_curves_obs'][m])\\n        r = o['initial_rate_pred'][-n:] - tr['instant_rate_obs'][m]\\n        complete = np.isfinite(tr['coupon_features_raw'][m]).all(axis=1)\\n        row = [np.nanmax(np.nanmedian(ae[complete], axis=0)), np.nanmean(np.minimum(ae[complete], .08)), np.sqrt(np.nanmean(r[complete]**2)), np.sqrt(np.nanmean(r**2)), np.nanmax(np.sqrt(np.nanmean(ae**2, axis=0))) ]\\n        metrics.append(row)\\n        print(label, lab, np.round(row, 6))\\n    print(label, 'worst', np.round(np.max(metrics, axis=0), 6), 'tau ranges', np.round(np.ptp(taus, axis=0), 6), 'full taus', np.round(solve(d)['estimated_taus'], 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_spike_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: test whether excluding extreme strain residuals inside each fit improves transfer over soft downweighting; baseline worst held-out horizon median absolute strain error is 0.01786 on complete coupons and worst-lab rate RMSE is 0.07669 overall.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebra and calibration audit\",\n      \"rejected_reason\": \"The saved artifact already passed independent evaluation of the rational saturation, signed slip, gap difference, and initial derivative, plus the clean-channel and EMI-fallback checks. Relay modes and classification metrics do not apply.\"\n    }\n  ],\n  \"rationale\": \"Test one remaining failure mode on real measurements: extreme strain readings may still pull the relaxation-time estimate under soft weighting. The challenger gates only training strain residuals, uses no held-out labels during fitting, and scores held-out data without exclusions. Promote it only if it improves relaxation-time stability or worst-slice strain error without materially worsening rate predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4304c376ffbbb3df1f389bcc8a8116740db296187abb36e2c6fa78f5d3e2174e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31039.89,
+      "usage_known": true,
+      "prompt_tokens": 31443,
+      "cached_tokens": 6784,
+      "completion_tokens": 1168
+    }
+  ]
+}

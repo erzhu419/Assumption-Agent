@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff1d092e089c4a4599d94d080fdf2d45",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:08:25.737979+00:00",
+  "ended_at_utc": "2026-11-27T08:09:04.316216+00:00",
+  "request_sha256": "1ab9d59d25ac195f5ad8e31f5f7363bfed03a94bdd2ae4887a5cd2ff9d3f9fb2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32632,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23546,
+    "cached_tokens": 6784,
+    "completion_tokens": 1658
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\np=alpha_m97_c02_batch_04_solver.py\\nsrc=/tmp/hegel_continual_archive/alpha_m97_c02_batch_03_solver.py\\nsed -n '/^import json/,/^def _inputs/{ /^def _inputs/!p; }' \\\"$src\\\" > \\\"$p\\\"\\ncat >> \\\"$p\\\" <<'PY'\\ndef _inputs(split, x, calibration, dt, critical, bands):\\n    gain, bias = calibration[split['lab_id']].T\\n    past = gain[:, None] * split['past_stress_cmd'] + bias[:, None]\\n    hold = gain * split['stress_hold_cmd'] + bias\\n    damage = np.maximum(np.abs(past) - critical, 0.0)**2 @ dt\\n    active = (bands <= 0.50) & (damage > 0.0)\\n    activation = np.where(active, np.tanh(damage), 0.0)\\n    return past, hold, np.column_stack((np.ones(len(x)), x)), activation, active\\n\\n\\ndef _design(tau, dt, t, past, hold, flow, activation, active):\\n    response = -np.expm1(-dt[:, None] / tau)\\n    decay = np.exp(-dt[:, None] / tau)\\n    z = np.zeros((len(hold), 2))\\n    for stress, a, b in zip(past.T, decay, response):\\n        z = a * z + b * stress[:, None]\\n    gap = hold[:, None] - z\\n    growth = -np.expm1(-t[:, None] / tau)\\n    plateau = np.log1p(t)\\n    phi = np.where(active[:, None], plateau, t)\\n    mode0 = activation * hold\\n    mode1 = activation * z[:, 0]\\n    a = np.empty((len(hold), len(t), 9))\\n    a[:, :, :2] = gap[:, None, :] * growth\\n    a[:, :, 2:7] = flow[:, None, :] * phi[:, :, None]\\n    a[:, :, 7] = mode0[:, None] * growth[:, 0]\\n    a[:, :, 8] = mode1[:, None] * plateau\\n    b = np.column_stack((gap / tau, flow, mode0 / tau[0], mode1))\\n    return a, b\\n\\n\\nPY\\nsed -n '/^def _fit/,/^def solve/{ /^def solve/!p; }' \\\"$src\\\" >> \\\"$p\\\"\\ncat >> \\\"$p\\\" <<'PY'\\ndef solve_alpha_m97_c02_batch_04(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Fit the calibrated two-branch damage-gated crystallization law.\\\"\\\"\\\"\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = dataset['past_dt'], dataset['eval_times']\\n    calibration = _calibration(dataset)\\n    x_train, x_test = _aligned(train, test)\\n    conditions = (calibration, dt, dataset['crit_stress'], dataset['shear_banding_index'])\\n    tau, coef = _fit(dt, t, _inputs(train, x_train, *conditions),\\n                     train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\\n    a, b = _design(tau, dt, t, *_inputs(test, x_test, *conditions))\\n    return {'estimated_taus': tau, 'hereditary_weights': coef[:7],\\n            'regime_mode_weights': coef[7:],\\n            'predicted_strain': test['strain_0'][:, None] + np.einsum('nkj,j->nk', a, coef),\\n            'initial_rate_pred': b @ coef}\\nPY\\nsed -i '1i\\\"\\\"\\\"Two-branch load-memory inversion for the crystallization plateau.\\\"\\\"\\\"' \\\"$p\\\"\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\nsed -n '/^def _column_mean/,/^def _inputs/p' \\\"$p\\\"\\npython3 - <<'PY'\\nimport pickle, numpy as np\\nimport alpha_m97_c02_batch_04_solver as s\\np=pickle.load(open('public_alpha_m97_c02_batch_04.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=s._calibration(d); x,y=s._aligned(tr,te)\\nkw=(cal,dt,d['crit_stress'],d['shear_banding_index']); args=s._inputs(tr,x,*kw); out=s.solve_alpha_m97_c02_batch_04(d)\\nprint('calibration',cal.tolist()); print('active train/test',int(args[-1].sum()),int(s._inputs(te,y,*kw)[-1].sum())); print('fit parameters',[(k,np.round(out[k],5).tolist()) for k in ('estimated_taus','hereditary_weights','regime_mode_weights')]); print('train inactive per lab',[int(np.sum((tr['lab_id']==l)&~args[-1])) for l in range(4)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated hereditary response -> H2 damage-gated logarithmic plateau; worst-lab validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the rejected gate's calibration parameters\",\n      \"rejected_reason\": \"The in-batch pair identifies channel 1, and recent archived sweeps agree for channels without current measurements. Neither needs the rejected payload.\"\n    },\n    {\n      \"option\": \"Fit all observations by ordinary least squares\",\n      \"rejected_reason\": \"The observed curve extremes warrant a robust loss so a few contaminated measurements do not determine the time constants.\"\n    }\n  ],\n  \"rationale\": \"Build the specified strain and initial-rate designs from the same memory state and retain the archived calibration and panel conventions. The schema check catches missing or nonfinite outputs; the active counts show whether the inactive flow assumption can be tested on public measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d62d397f06e79e7d7eee6941532733ab0961f2a04fd48612d1650e9ae83e3972",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43615.93,
+      "usage_known": true,
+      "prompt_tokens": 23546,
+      "cached_tokens": 6784,
+      "completion_tokens": 1658
+    }
+  ]
+}

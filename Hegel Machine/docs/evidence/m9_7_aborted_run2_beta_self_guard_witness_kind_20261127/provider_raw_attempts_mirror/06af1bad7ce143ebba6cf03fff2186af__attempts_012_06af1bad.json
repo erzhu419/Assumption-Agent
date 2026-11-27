@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06af1bad7ce143ebba6cf03fff2186af",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:00:50.542391+00:00",
+  "ended_at_utc": "2026-11-27T08:01:18.425296+00:00",
+  "request_sha256": "61dedcad4fbd258edb4192665e367dfd566e0b40081e652218bcc089887822f2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61582,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32131,
+    "cached_tokens": 6784,
+    "completion_tokens": 1080
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_03.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']; tr, te = d['train'], d['test']\\nout = m.solve_alpha_m97_c01_batch_03(d)\\nperturbed = {**d}\\nfor split in ('train','test'):\\n    t = d[split]\\n    perturbed[split] = {**t, 'aux_chamber_telemetry': np.asarray(t['aux_chamber_telemetry'])[::-1].copy()}\\nalt = m.solve_alpha_m97_c01_batch_03(perturbed)\\nassert all(np.array_equal(out[k], alt[k]) for k in out), 'uncoupled telemetry affected the solver'\\nprint('Telemetry permutation: all five outputs unchanged')\\nfor name, mask in [('negative hold',gt['te_hold_true']<0),('positive hold',gt['te_hold_true']>0),('largest |hold|',abs(gt['te_hold_true'])>=np.quantile(abs(gt['te_hold_true']),.9))]:\\n    if mask.any():\\n        e = out['predicted_strain'][mask]-gt['te_clean'][mask]\\n        r = out['initial_rate_pred'][mask]-gt['te_true_rate0'][mask]\\n        print(name, int(mask.sum()), 'worst horizon MAE', np.mean(abs(e),axis=0).max(), 'rate MAE', np.mean(abs(r)), 'signed rate bias', np.mean(r))\\np,h,x,s0=m._inputs(d); n=len(tr['lab_id']); model=m._Model(d['past_dt'],d['eval_times'],p,h,x)\\ny=np.column_stack((tr['strain_curves_obs']-s0[:n,None],tr['instant_rate_obs']))\\nfor label, use in [('negative hold',h[:n]<0),('positive hold',h[:n]>0)]:\\n    if not (use.any() and (~use).any()): continue\\n    tau,w=m._fit(model,y,np.flatnonzero(~use)); e=(model.design(tau)[:n]@w-y)[use]\\n    print('hold-sign extrapolation',label,int(use.sum()),'taus',np.exp(tau).round(5),'curve/rate median AE',np.round([np.median(abs(e[:,:-1])),np.median(abs(e[:,-1]))],5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: check whether slip predictions transfer across stress signs and remain invariant to uncoupled telemetry; the worst clean missing-feature slice has strain MAE 0.05723 and rate MAE 0.07500.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the recurrence, lab, and calibration checks\",\n      \"rejected_reason\": \"Those checks passed. They do not measure signed-stress transfer or test whether telemetry can affect the outputs.\"\n    }\n  ],\n  \"rationale\": \"Permute the uncoupled telemetry to catch unintended input dependence. Inspect stress-sign and high-stress slices, where the signed square-root term has the most leverage. If errors concentrate there, compare the fitted slip term across sign holdouts before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "7741fb04889e58127c56679ec555cb0d55f506c952c87739701c2555418cb6f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30404.95,
+      "usage_known": true,
+      "prompt_tokens": 32131,
+      "cached_tokens": 6784,
+      "completion_tokens": 1080
+    }
+  ]
+}

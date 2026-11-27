@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7bc1107813074af3814c00da093f616d",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:19:42.790727+00:00",
+  "ended_at_utc": "2026-11-27T08:20:19.641734+00:00",
+  "request_sha256": "48ed89404fb725c04fceb71c0c2fc36751b52f6ed434c69ccc550c742fff8cfb",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 53221,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30298,
+    "cached_tokens": 11136,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\ncat > /tmp/audit_alpha_batch06.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c02_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c02_batch_06.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\ntr, te = d['train'], d['test']\\ncal = m._calibration(d)\\nc = d['calibration_load_cells']\\nfor lab in range(4):\\n    rows = c['lab_id'] == lab\\n    x, y = c['cmd_stress'][rows], c['true_stress'][rows]\\n    residual = y - cal[lab, 0]*x - cal[lab, 1]\\n    clean = abs(residual) <= 3\\n    print('channel', lab, 'clean/spikes', clean.sum(), (~clean).sum(), 'max clean residual', max(abs(residual[clean])))\\n    if clean.sum() >= 4:\\n        np.testing.assert_allclose(cal[lab], np.linalg.lstsq(np.c_[x[clean], np.ones(clean.sum())], y[clean], rcond=None)[0], atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(cal, np.c_[g['stress_gains'],g['stress_biases']], atol=1e-4,rtol=0)\\n_, aligned = m._aligned(tr, te)\\nout = m.solve_alpha_m97_c02_batch_06(d)\\n_, hold, _ = m._inputs(te, aligned, cal)\\ncomplete = np.isfinite(te['coupon_features_raw']).all(axis=1)\\nt = d['eval_times']\\nphi = t/(1+0.85*t)\\n\\ndef rmse(e):\\n    return float(np.sqrt(np.mean(e*e)))\\n\\n# Reference parameters are used only to separate alignment error from fit error.\\npast, _, _ = m._inputs(te, aligned, cal)\\ntau = g['taus']\\nz = np.zeros((len(hold), 2))\\nfor stress, dt in zip(past.T, d['past_dt']):\\n    decay = np.exp(-dt/tau)\\n    z = z*decay + stress[:, None]*(1-decay)\\ngap = hold[:, None]-z\\nhw, rw = g['theta'], g['vp_theta']\\nexp_terms = -np.expm1(-t[:, None]/tau)\\nflow = hw[2]+aligned @ hw[3:7]+rw[0]*np.sign(hold)*np.sqrt(abs(hold))\\ncontrast = rw[1]*(gap[:,0]-gap[:,1])\\nref_curve = te['strain_0'][:, None]+(gap*hw[:2]) @ exp_terms.T+flow[:, None]*phi+contrast[:, None]*exp_terms[:,0]\\nref_rate = (gap/tau) @ hw[:2]+flow+contrast/tau[0]\\nerr = out['predicted_strain']-g['te_clean']\\nrate_err = out['initial_rate_pred']-g['te_true_rate0']\\nfor name, mask in [('negative hold, complete', complete & (hold < 0)), ('nonnegative hold, complete', complete & (hold >= 0)), ('imputed', ~complete)]:\\n    assert mask.any(), name\\n    print(name, 'n', mask.sum(), 'fit early/late/rate RMSE', rmse(err[mask,:3]), rmse(err[mask,-3:]), rmse(rate_err[mask]), 'reference-model early/late/rate RMSE', rmse((ref_curve-g['te_clean'])[mask,:3]), rmse((ref_curve-g['te_clean'])[mask,-3:]), rmse((ref_rate-g['te_true_rate0'])[mask]))\\n    if name != 'imputed':\\n        assert max(rmse(err[mask,:3]), rmse(err[mask,-3:]), rmse(rate_err[mask])) < 0.02\\nr = ref_curve-g['te_clean']\\nref_rate_error = ref_rate-g['te_true_rate0']\\nprint('reference residual left after removing shared drift on imputed rows', rmse((r-ref_rate_error[:, None]*phi)[~complete]))\\nassert rmse((r-ref_rate_error[:, None]*phi)[~complete]) < 0.002\\nPY\\npython3 -I /tmp/audit_alpha_batch06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine calibration and cell-mean panel alignment) -> H2 (robust jammed-slip fit); the worst public slice is imputed coupons, with strain/rate RMSE of 0.09840/0.12774.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, PDE, and balanced-accuracy checks\",\n      \"rejected_reason\": \"The dataset specifies continuous strain and rate, with no relay state, spatial PDE, or class labels. Hold-stress sign and horizon slices test the applicable algebra.\"\n    }\n  ],\n  \"rationale\": \"Verify that clean channels use direct regression and that both slip signs predict accurately at early and late horizons. If a residual remains after removing the shared drift at reference parameters, revisit the constitutive implementation; if not, retain the prescribed imputation and report its measured limitation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "13c6b65d483b3864264b206b334c2280dadedc9d2365f4a144da32af2a689905",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39327.53,
+      "usage_known": true,
+      "prompt_tokens": 30298,
+      "cached_tokens": 11136,
+      "completion_tokens": 1462
+    }
+  ]
+}

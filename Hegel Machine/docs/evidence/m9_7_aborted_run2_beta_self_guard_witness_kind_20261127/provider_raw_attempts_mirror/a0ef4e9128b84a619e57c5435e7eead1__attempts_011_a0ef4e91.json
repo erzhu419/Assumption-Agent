@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a0ef4e9128b84a619e57c5435e7eead1",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:48:37.840701+00:00",
+  "ended_at_utc": "2026-11-27T07:49:00.127060+00:00",
+  "request_sha256": "c9155370270af096a7732747ee1dd4ead82ca4902aa9872b26cb1f48557f95db",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 80182,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38074,
+    "cached_tokens": 11136,
+    "completion_tokens": 809
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open(p+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d=i['dataset']; g=i['gt']; c=d['calibration_load_cells']; solve=m.solve_alpha_m97_c03_batch_01\\nbaseline=solve(d); ref=m._calibrate(c); keys=list(baseline); max_diff=np.zeros(len(keys)); stress_error=0.\\nrows=[]\\nfor lab in range(4):\\n j=np.flatnonzero(c['lab_id']==lab); j=j[np.argsort(c['cmd_stress'][j])]; rows.extend(j[[0,len(j)//2,-1]])\\nfor location in range(3):\\n for sign in (-1,1):\\n  sweep={k:v[rows].copy() for k,v in c.items()}; sweep['true_stress'][location::3]+=sign*4.\\n  case=dict(d,calibration_load_cells=sweep); pred=solve(case); estimate=m._calibrate(sweep)\\n  for lab in range(4):\\n   x=c['cmd_stress'][c['lab_id']==lab]; stress_error=max(stress_error,np.max(abs(np.polyval(estimate[lab]-ref[lab],x))))\\n  max_diff=np.maximum(max_diff,[np.max(abs(pred[k]-baseline[k])) for k in keys])\\nprint('simultaneous 3-point EMI sweeps, worst stress deviation:',stress_error)\\nprint('worst absolute changes by output:',dict(zip(keys,max_diff)))\\nassert stress_error<.002 and np.all(max_diff<np.array([.02,.005,.005,.005,.005]))\\nprint('clean public strain MAE:',np.mean(abs(baseline['predicted_strain']-g['te_clean'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: affine consensus with an archive tie-break reduced the tested three-point EMI stress error from 3.8801 to 0.0002371; worst clean test RMSE remains 0.1105 for strain and 0.0852 for initial rate on incomplete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t10\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The channel-level stress test passed. This end-to-end check tests whether simultaneous three-point EMI sweeps amplify small calibration errors through the damage gate or the fit. If any returned field moves materially, trace that sensitivity before submitting; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "58da5871d62fa1ca07288b05a7e49c865af465ecf4117586714218dc536fb633",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24706.25,
+      "usage_known": true,
+      "prompt_tokens": 38074,
+      "cached_tokens": 11136,
+      "completion_tokens": 809
+    }
+  ]
+}

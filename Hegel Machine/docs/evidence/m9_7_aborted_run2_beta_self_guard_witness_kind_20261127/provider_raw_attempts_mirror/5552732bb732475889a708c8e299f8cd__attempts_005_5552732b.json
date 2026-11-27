@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5552732bb732475889a708c8e299f8cd",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:53:37.880025+00:00",
+  "ended_at_utc": "2026-11-27T07:54:05.602268+00:00",
+  "request_sha256": "ac450d021f0f6cc370d25e0a85dde4dcaccc52fd034e5fc19e3e9a9d2c308345",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26428,
+    "cached_tokens": 11136,
+    "completion_tokens": 960
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/b03_validate.py <<'PY'\\nimport importlib.util,json,pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('b03',root+'alpha_m97_c01_batch_03_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open(root+'public_alpha_m97_c01_batch_03.pkl','rb'))[0]['dataset']\\na=d['train']; n=len(a['lab_id']); times=d['eval_times']; p,h,x,z=s._prepare(d)\\nm=s._Model(d['past_dt'],times,p[:n],h[:n],x[:n]); y=np.column_stack((a['strain_curves_obs']-z[:n,None],a['instant_rate_obs']))\\nrmse=lambda r: float(np.sqrt(np.nanmean(r*r)))\\ntau,b=s._fit(m,y); full=m.design(tau)@b-y\\nprint('full fit',tau,b,'residual RMSE by time then rate',np.sqrt(np.nanmean(full**2,axis=0)).round(5),'max residual',np.nanmax(abs(full),axis=0).round(5))\\nr=np.empty_like(y)\\nfor lab in np.unique(a['lab_id']):\\n hold=a['lab_id']==lab\\n t,c=s._fit(m,y,np.broadcast_to(~hold[:,None],y.shape)); r[hold]=(m.design(t)@c-y)[hold]\\n print('LOLO lab',lab,'tau',t.round(5),'curve RMSE',round(rmse(r[hold,:-1]),6),'initial-rate RMSE',round(rmse(r[hold,-1]),6),'max weight shift',round(max(abs(c-b)),6))\\nmissing=np.isnan(a['coupon_features_raw']).any(axis=1)\\nfor name,sel in [('missing coupon',missing),('complete coupon',~missing),('negative hold',h[:n]<0),('nonnegative hold',h[:n]>=0)]:\\n print(name,'n',sum(sel),'early/late/rate RMSE',*[round(rmse(q),6) for q in (r[sel,:3],r[sel,7:-1],r[sel,-1])])\\nfor j in (0,len(times)-1,len(times)):\\n mask=np.ones_like(y,dtype=bool);mask[:,j]=False\\n t,c=s._fit(m,y,mask); print('withheld horizon',j,'RMSE',round(rmse((m.design(t)@c-y)[:,j]),6),'taus',t.round(5))\\nbase=s._calibrate(d); print('in-batch calib',base.round(6))\\nfor sweep in json.loads(s._HISTORY.read_text()):\\n ll,xx,yy=(np.asarray(sweep[k]) for k in ('lab_id','cmd_stress','true_stress'))\\n print('prefix',sweep.get('episode_short_name'),np.array([s._line(xx[ll==c],yy[ll==c]) for c in range(4)]).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/b03_validate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated jammed-slip equation -> H2: profile nine linear weights over two relaxation times; isolated schema passes, worst-slice error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema check\",\"rejected_reason\":\"Finite outputs of the correct shape do not show that the fitted model generalizes across labs or predicts initial rates accurately.\"}],\"rationale\":\"Measure held-out errors by lab, horizon, stress sign, and coupon missingness. Compare prefix and current calibration coefficients to see whether the latest sweep is a reliable fallback when current measurements are sparse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dd1bccab46de864169576ad71c8329ca146cfdaf267aec70be1e6eee2bbad8e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27681.65,
+      "usage_known": true,
+      "prompt_tokens": 26428,
+      "cached_tokens": 11136,
+      "completion_tokens": 960
+    }
+  ]
+}

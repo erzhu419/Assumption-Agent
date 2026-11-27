@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e440c10717df41ff946a2543ef3ca612",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:41:02.727046+00:00",
+  "ended_at_utc": "2026-11-27T07:41:52.361976+00:00",
+  "request_sha256": "d245946ff3edaf16e1f8709b553e0d907ad59a26929dcb754b953c562f6950c2",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 54317,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29574,
+    "cached_tokens": 6784,
+    "completion_tokens": 2098
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_s00_solver.py')\\ns = p.read_text()\\nold = '''        clean = np.ones(x.size, dtype=bool)\\n        if len(i):\\n            slopes = (y[i] - y[j]) / (x[i] - x[j])\\n            # Use the line with greatest clean support to screen isolated EMI.\\n            lines = y[i, None] + slopes[:, None] * (x - x[i, None])\\n            err = np.abs(lines - y)\\n            best = min(range(len(i)), key=lambda k: (-np.sum(err[k] <= 3), np.median(err[k])))\\n            clean = err[best] <= 3.0\\n        if (len(x) < 2 or not clean.all()) and archive_path.is_file():'''\\nnew = '''        clean = np.ones(x.size, dtype=bool)\\n        emi = False\\n        if len(i):\\n            slopes = (y[i] - y[j]) / (x[i] - x[j])\\n            lines = y[i, None] + slopes[:, None] * (x - x[i, None])\\n            err = np.abs(lines - y)\\n            # Estimate the affine relation from the tight majority first. A\\n            # count at the EMI cutoff alone favors lines tilted toward a spike.\\n            typical = np.median(err, axis=1)\\n            best = np.argmin(typical)\\n            core = err[best] <= 8 * typical[best] + 1e-12\\n            design = np.column_stack((x, np.ones(x.size)))\\n            provisional = np.linalg.lstsq(design[core], y[core], rcond=None)[0]\\n            residual = np.abs(design @ provisional - y)\\n            # Allow for calibration noise in deciding which near-cutoff rows\\n            # to exclude, without relaxing the trigger for archive lookup.\\n            margin = min(0.01, 8 * np.median(residual[core]))\\n            clean = residual <= 3.0 - margin\\n            emi = np.any(residual > 3.0)\\n        if (len(x) < 2 or emi) and clean.sum() < 4 and archive_path.is_file():'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old,new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nsp = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_s00_solver.py')\\ns = importlib.util.module_from_spec(sp); sp.loader.exec_module(s)\\nwith open('public_alpha_m97_c01_s00.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\nrows = d['calibration_load_cells']; y = np.asarray(rows['true_stress']); labs = np.asarray(rows['lab_id']); x = np.asarray(rows['cmd_stress']); baseline = s._calibrate(d)\\nfor c in range(4):\\n    m = labs == c\\n    np.testing.assert_allclose(baseline[c], np.polyfit(x[m], y[m], 1), atol=1e-12, rtol=0)\\n    cmds = np.concatenate([np.r_[a['past_stress_cmd'][a['lab_id']==c].ravel(), a['stress_hold_cmd'][a['lab_id']==c]] for a in (d['train'],d['test'])])\\n    for magnitude in (3.0001, 3.001, 3.01, 3.1, 6.):\\n        worst = 0.\\n        for idx in np.flatnonzero(m):\\n            for sign in (-1., 1.):\\n                yy = y.copy(); yy[idx] += sign * magnitude\\n                ds = dict(d, calibration_load_cells=dict(rows, true_stress=yy))\\n                delta = s._calibrate(ds)[c] - baseline[c]\\n                worst = max(worst, np.max(abs(delta[0]*cmds+delta[1])))\\n        print('channel', c, 'EMI', magnitude, 'worst stress deviation', worst)\\n        assert worst < 0.001\\nout = s.solve_alpha_m97_c01_s00(d)\\nfor k, t in [('predicted_strain','te_clean'), ('initial_rate_pred','te_true_rate0')]:\\n    print(k, 'public MAE', np.mean(abs(out[k]-g[t])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cutoff-first calibration → H2 tight-majority affine fit before EMI screening; the old screen caused a worst stress deviation of 1.289 on measured commands.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Maximizing the number of calibration rows within the 3.0 cutoff identifies the clean affine relation.\",\n    \"empirical_witness\": \"On the measured calibration grid, a single 3.0001 spike caused stress deviations above 1.18 in every channel, and a 3.1 spike caused a deviation of 1.289 in channel 2.\",\n    \"causal_blanket_diagnosis\": \"A line tilted toward the corrupted row can keep all rows inside the cutoff, beating the clean line on inlier count and biasing converted stresses.\",\n    \"sublated_pivot\": \"Estimate the tight majority line first, then apply the EMI cutoff to residuals around that line.\",\n    \"risk_kind\": \"Calibration masking near the documented EMI cutoff\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Lower the inlier-count cutoff alone\",\n      \"rejected_reason\": \"It moves the masking boundary without separating estimation of the clean line from spike detection.\"\n    }\n  ],\n  \"rationale\": \"The supported EMI stress test exposed a large calibration error despite a passing schema. Change only the calibration screen, then verify on the exact artifact that clean fits are unchanged and near-cutoff spikes no longer materially shift physical stress.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c3252c1d9ad4eac1463e01931279ba85bcaa51de7941a2d919a6d8cfc377fab7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54520.04,
+      "usage_known": true,
+      "prompt_tokens": 29574,
+      "cached_tokens": 6784,
+      "completion_tokens": 2098
+    }
+  ]
+}

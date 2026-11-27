@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a3dfe23927264d9680904eb3332d5558",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:59:07.522193+00:00",
+  "ended_at_utc": "2026-11-27T07:59:36.929973+00:00",
+  "request_sha256": "3dcbd50641196354dfa1deb6141c77095153b0f723600b5b548a418541865b30",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 38751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24959,
+    "cached_tokens": 11136,
+    "completion_tokens": 1132
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '1,88p' alpha_m97_c01_batch_03_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']; out = m.solve_alpha_m97_c01_batch_03(d)\\npast, hold, x, s0 = m._inputs(d)\\ntau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\nz = np.zeros((len(hold), 2))\\nfor j, dt in enumerate(d['past_dt']):\\n    a = np.exp(-dt/tau)\\n    z = a*z + (1-a)*past[:, j, None]\\ng0, g1 = (hold[:, None]-z).T\\nflow = hw[2] + x @ hw[3:7] + rw[0]*np.sign(hold)*np.sqrt(np.abs(hold))\\nc0 = hw[0]*g0 + rw[1]*(g0-g1); c1 = hw[1]*g1\\ndef strain(t):\\n    t = np.asarray(t)\\n    return s0[:, None] + np.outer(c0, -np.expm1(-t/tau[0])) + np.outer(c1, -np.expm1(-t/tau[1])) + np.outer(flow, t/(1+0.85*t))\\nn = len(d['train']['lab_id'])\\nchecks = {'recursive strain': np.max(abs(strain(d['eval_times'])[n:]-out['predicted_strain'])), 'zero-time boundary': np.max(abs(strain([0.])[:, 0]-s0)), 'recursive rate': np.max(abs((c0/tau[0]+c1/tau[1]+flow)[n:]-out['initial_rate_pred'])), 'finite difference rate': np.max(abs(((strain([1e-5])[:, 0]-strain([-1e-5])[:, 0])/2e-5)[n:]-out['initial_rate_pred']))}\\nprint(checks)\\nassert max(v for k,v in checks.items() if k != 'finite difference rate') < 1e-10\\nassert checks['finite difference rate'] < 1e-7\\nprint('dataset fields', sorted(d), 'test fields', sorted(d['test']))\\nte = d['test']; complete = np.isfinite(te['coupon_features_raw']).all(axis=1)\\ne = out['predicted_strain']-gt['te_clean']; r = out['initial_rate_pred']-gt['te_true_rate0']\\nfor lab in np.unique(te['lab_id']):\\n    mask = complete & (te['lab_id'] == lab)\\n    if mask.any():\\n        print('complete lab', lab, 'n', mask.sum(), 'max abs signed horizon bias', abs(e[mask].mean(axis=0)).max(), 'signed rate bias', r[mask].mean())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: verify the exact jammed-slip formula independently and check for residual lab bias; the worst clean missing-feature slice had strain MAE 0.05723 and initial-rate MAE 0.07500.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck drift, or classification balance\",\n      \"rejected_reason\": \"The specified model has continuous strain and rate outputs, a rational flow term, and no relay state, stochastic drift operator, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Compare the artifact with a direct memory recurrence and a finite-difference derivative to catch indexing, sign, or basis errors. Inspect signed residuals on complete coupons by lab: a coherent lab offset would warrant revisiting calibration or panel alignment rather than attributing all error to missing features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "93bbffea5a0fa6cfeccdc56c6be1caf624319c6be818379a611db18bac6b3081",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31827.82,
+      "usage_known": true,
+      "prompt_tokens": 24959,
+      "cached_tokens": 11136,
+      "completion_tokens": 1132
+    }
+  ]
+}

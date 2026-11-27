@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0678078f2b764d1ea15d6968f148953e",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:55:34.041766+00:00",
+  "ended_at_utc": "2026-11-27T07:56:02.484634+00:00",
+  "request_sha256": "64b95c8cbe602095bb83aab039682679bc867e7f295533d92f891d827e50c987",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 51334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28487,
+    "cached_tokens": 6784,
+    "completion_tokens": 942
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle, numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',root+'alpha_m97_c03_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(root+'public_alpha_m97_c03_batch_02.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; labs=cal['lab_id']; baseline=np.array(m._calibrate(cal));\\nfor n in (3,4):\\n    worst=(0,None); clean_worst=0; failures=0; total=0\\n    for lab in range(4):\\n        for rows in itertools.combinations(np.flatnonzero(labs==lab),n):\\n            if np.ptp(cal['cmd_stress'][list(rows)])<0.5: continue\\n            keep=(labs!=lab); keep[list(rows)]=True\\n            small={k: v[keep].copy() for k,v in cal.items()}; clean=np.array(m._calibrate(small)); clean_worst=max(clean_worst,float(max(abs(clean[:,lab]-baseline[:,lab]))))\\n            for i in np.flatnonzero(small['lab_id']==lab):\\n                for spike in (-4.,4.,-8.,8.):\\n                    case={**small,'true_stress':small['true_stress'].copy()}; case['true_stress'][i]+=spike\\n                    actual=np.array(m._calibrate(case)); err=float(max(abs(actual[:,lab]-baseline[:,lab]))); total+=1; failures+=err>0.05\\n                    if err>worst[0]: worst=(err,(lab,small['cmd_stress'][small['lab_id']==lab].tolist(),float(small['cmd_stress'][i]),spike,actual[:,lab].tolist()))\\n    print(n,'rows; clean worst gain/bias delta',clean_worst,'spiked cases above 0.05',failures,'of',total,'worst',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and panel alignment → H2 two-branch linear flow; worst complete-feature held-out horizon/lab strain RMSE was 0.0385, and missing-feature strain/rate RMSE was 0.4874/0.1542.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the flow-model audit\",\n      \"rejected_reason\": \"Direct recurrence, derivative closure, and held-out horizons already test the specified flow model.\"\n    }\n  ],\n  \"rationale\": \"Prior tests exercised sparse calibration and EMI separately. A spike can dominate the median pairwise slope when only three or four readings remain. Test that interaction on subsets of the measured sweeps; if it materially changes gain or bias, revise spike detection without changing clean in-batch fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "91363dd25f3659bc09fadfeac360af67367e0bf6e917f23d8e75407731a0d697",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28394.97,
+      "usage_known": true,
+      "prompt_tokens": 28487,
+      "cached_tokens": 6784,
+      "completion_tokens": 942
+    }
+  ]
+}

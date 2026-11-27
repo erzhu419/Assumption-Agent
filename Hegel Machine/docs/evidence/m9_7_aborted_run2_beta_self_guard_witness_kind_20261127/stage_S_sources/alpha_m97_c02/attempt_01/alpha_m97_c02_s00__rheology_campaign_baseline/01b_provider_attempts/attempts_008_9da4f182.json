@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9da4f182f5e340e3bae9b13f90fb232a",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T073609Z__alpha_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:40:03.067150+00:00",
+  "ended_at_utc": "2026-11-27T07:40:36.653845+00:00",
+  "request_sha256": "d1837957aa35178e19477accd276859f169cde0c57264485f212762b92af2e50",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 42276,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26595,
+    "cached_tokens": 11136,
+    "completion_tokens": 1317
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m97_gate.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.stats import spearmanr\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'alpha_m97_c02_s00_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open(root+'public_alpha_m97_c02_s00.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\ncal = s._calibration(d)\\np, h = s._physical(tr, cal)\\npte, hte = s._physical(te, cal)\\nprint('linear regime margins: banding', .50-d['shear_banding_index'], 'past stress train/test', [d['crit_stress']-np.abs(a).max() for a in (p,pte)])\\nn = len(p)\\nX = np.c_[np.ones(n), s._align(d)[:n]]\\ny = tr['strain_curves_obs']-tr['strain_0'][:,None]\\nv = tr['instant_rate_obs']\\nlab, stratum = tr['lab_id'], tr['stratum']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nr, q = np.empty_like(y), np.empty_like(v)\\nfor l in np.unique(lab):\\n    held = lab == l\\n    u,w = s._fit(p[~held],h[~held],dt,t,X[~held],y[~held],v[~held])\\n    a,b = s._design(u,p[held],h[held],dt,t,X[held])\\n    r[held], q[held] = a@w-y[held], b@w-v[held]\\nrow = np.median(r[:, -4:]/t[-4:], axis=1)\\nprint('held-out complete coupons by lab: n, signed late slope, median absolute late slope, signed rate, median absolute rate')\\nfor l in np.unique(lab):\\n    m = (lab == l) & complete\\n    print(l, m.sum(), np.round([np.median(row[m]),np.median(abs(row[m])),np.median(q[m]),np.median(abs(q[m]))],6))\\nprint('held-out complete coupons by stratum: n, signed late slope and rate')\\nfor j in np.unique(stratum):\\n    m = (stratum == j) & complete\\n    print(j, m.sum(), np.round([np.median(row[m]),np.median(q[m])],6))\\nfor name,x in [('hold stress',h),('abs hold stress',abs(h)),('peak history stress',abs(p).max(1))]:\\n    def rho(m):\\n        return [spearmanr(x[m],z[m]).statistic for z in (row,q)]\\n    print(name, 'pooled then within lab late slope / rate rank correlations', np.round([rho(complete)]+[rho(complete & (lab == l)) for l in np.unique(lab)],3).tolist())\\nu = np.log(s.solve_alpha_m97_c02_s00(d)['estimated_taus'])\\n_,_,da,db = s._design(u,p,h,dt,t,X,True)\\nfor j in range(2):\\n    step = np.eye(2)[j]*1e-5\\n    ap,bp = s._design(u+step,p,h,dt,t,X)\\n    am,bm = s._design(u-step,p,h,dt,t,X)\\n    np.testing.assert_allclose((ap-am)/(2e-5), np.eye(7)[j]*da[:,:,j,None], atol=1e-8)\\n    np.testing.assert_allclose((bp-bm)/(2e-5), np.eye(7)[j]*db[:,j,None], atol=1e-8)\\nprint('Both branch Jacobians agree with finite differences on measured histories.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m97_gate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: audit the shared linear-flow model for signed stress- or lab-dependent residuals; the worst held-out lab-by-time median strain error is 0.05680 and the worst held-out lab median rate error is 0.01644.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit rational corrections, relay modes, or a classification model\",\n      \"rejected_reason\": \"The task specifies continuous strain and rate targets in a linear-flow regime with zero mode weights. The relevant checks are regime margins, exact branch derivatives, and pooled versus within-lab residual patterns.\"\n    }\n  ],\n  \"rationale\": \"Negative stress margins would invalidate the assumed regime, and derivative mismatches would warrant fixing the optimizer Jacobian. Comparing held-out residuals across and within labs tests whether the worst slice reflects systematic drift or larger error spread before changing the fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9c0aecd9e986a092bfeada9ff2638b16eb3d695e2aa04faaecc2fc7ffc6a6f38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36024.96,
+      "usage_known": true,
+      "prompt_tokens": 26595,
+      "cached_tokens": 11136,
+      "completion_tokens": 1317
+    }
+  ]
+}
