@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bfe018dcd5be49f8997d947a672ac9dd",
+  "call_seq": 13,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:15:34.931760+00:00",
+  "ended_at_utc": "2026-11-27T03:16:17.257359+00:00",
+  "request_sha256": "7ebd324da2d4ef93a315765204bab6439b5615800129afaa96c854bb6178654a",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 73616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37264,
+    "cached_tokens": 6784,
+    "completion_tokens": 1763
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m96_w03_s00_solver.py')\\ns = p.read_text()\\ncandidate = Path('/tmp/creep_sparse_candidate.py').read_text()\\nhelpers = candidate[candidate.index('def _calibration_options('):candidate.index(\\\"if __name__ == '__main__':\\\")].rstrip()\\nresolve = '''\\n\\n\\ndef _resolve_calibration(dataset, train, test, x, dt, times):\\n    checks = dataset['calibration_load_cells']\\n    calibration = np.array(_calibrate(checks))\\n    ambiguous = []\\n    donor_calibration = []\\n    for lab in range(4):\\n        cmd = np.concatenate([\\n            block[key][block['lab_id'] == lab].ravel()\\n            for block in (train, test) for key in ('past_stress_cmd', 'stress_hold_cmd')\\n        ])\\n        if not cmd.size:\\n            continue\\n        limits = np.array([cmd.min(), cmd.max()])\\n        xc, yc = (np.asarray(checks[k]) for k in ('cmd_stress', 'true_stress'))\\n        use = (np.asarray(checks['lab_id']) == lab) & np.isfinite(xc) & np.isfinite(yc)\\n        options = _calibration_options(xc[use], yc[use], limits, dataset['yield_stress'], calibration[:, lab].copy())\\n        calibration[:, lab] = options[0]\\n        differences = (np.asarray(options) - options[0]) @ np.vstack((limits, np.ones(2)))\\n        if np.max(np.abs(differences)) > .01:\\n            ambiguous.append((lab, options))\\n        elif use.sum() >= 4 and np.ptp(xc[use]) > 1e-10:\\n            donor_calibration.append(lab)\\n    if ambiguous:\\n        labels = train['lab_id']\\n        donors = np.isin(labels, donor_calibration)\\n        if donors.any():\\n            block = {k: train[k][donors] for k in ('lab_id', 'past_stress_cmd', 'stress_hold_cmd', 'strain_0', 'strain_curves_obs', 'instant_rate_obs')}\\n            fit = _fit(_Hold(dt, times, block, x[donors], calibration), block)\\n            for lab, options in ambiguous:\\n                target = labels == lab\\n                if target.any():\\n                    subset = {k: train[k][target] for k in block}\\n                    calibration[:, lab] = _select_calibration(options, fit, subset, x[target], dt, times, _Hold)\\n    return calibration\\n'''\\ns = s.replace('\\\\n\\\\ndef solve_alpha_m96_w03_s00(', '\\\\n\\\\n' + helpers + resolve + '\\\\n\\\\ndef solve_alpha_m96_w03_s00(')\\ns = s.replace(\\\"    cal = _calibrate(dataset['calibration_load_cells'])\\\\n    xt, xe = _align(train, test)\\\\n    dt, time = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\\", \\\"    xt, xe = _align(train, test)\\\\n    dt, time = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\\\n    cal = _resolve_calibration(dataset, train, test, xt, dt, time)\\\")\\np.write_text(s)\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_creep.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns=runpy.run_path('/holdout_task/alpha_m96_w03_s00_solver.py')\\ne,=pickle.load(open('/holdout_task/public_alpha_m96_w03_s00.pkl','rb'))\\nd=e['dataset']; c=d['calibration_load_cells']; tr,te=d['train'],d['test']; ref=s['solve_alpha_m96_w03_s00'](d)\\nfor key, truth in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    err=ref[key]-e['gt'][truth]; print('public',key,'worst-lab RMSE',max(np.sqrt(np.mean(err[te['lab_id']==i]**2)) for i in range(4)))\\nassert 0.2 <= ref['estimated_taus'][0] < ref['estimated_taus'][1] <= 8.\\nassert np.array_equal(ref['viscoplastic_weights'],np.zeros(2))\\nfor commands, bad, spike in [([-2.034727535837634,0.7471966655472153,0.746429652138227,2.023283393026344],3,-.8),([2.0834802618644392,0.7471966655472153,0.746429652138227,-1.2024002406378629],3,.8)]:\\n    ids=np.flatnonzero(c['lab_id']==2)\\n    selected=ids[np.argmin(abs(c['cmd_stress'][ids,None]-commands),axis=0)]\\n    ix=np.r_[np.flatnonzero(c['lab_id']!=2),selected]\\n    checks={k:v[ix].copy() for k,v in c.items()}; checks['true_stress'][-4+bad]+=spike\\n    z={**d,'calibration_load_cells':checks}; x,_=s['_align'](tr,te)\\n    fit=s['_resolve_calibration'](z,tr,te,x,d['past_dt'],d['eval_times']); base=np.array(s['_calibrate'](c)); drift=np.max(abs((fit[0,2]-base[0,2])*c['cmd_stress'][ids]+fit[1,2]-base[1,2])); assert drift<.001,drift\\n    out=s['solve_alpha_m96_w03_s00'](z)\\n    delta=[np.max(abs(out[k]-ref[k])) for k in ('predicted_strain','initial_rate_pred')]; print('end-to-end sparse EMI witness: calibration error',drift,'prediction deltas',delta); assert max(delta)<.003,delta\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine consensus alone → H2 use cross-lab creep to resolve competing lines; the sparse-EMI audit reduced maximum calibration error from 1.014 to 0.00388 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the calibration-only consensus\",\n      \"rejected_reason\": \"It accepted a false but sub-yield affine line on the measured lab 2 settings, with more than one stress unit of error.\"\n    }\n  ],\n  \"rationale\": \"Promote the tested ambiguity resolver without changing the hereditary law or using test responses. Run isolated schema and stress checks on the saved artifact, including the two sparse-EMI cases that distinguished the estimators.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "3f1f314ba44b8c6e5bb4b17894cc2d7043196c6a527f4979b1529089502425e5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46477.02,
+      "usage_known": true,
+      "prompt_tokens": 37264,
+      "cached_tokens": 6784,
+      "completion_tokens": 1763
+    }
+  ]
+}

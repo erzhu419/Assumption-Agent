@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ccef64a7b8d4432cac6107336eba4a69",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:36:36.453880+00:00",
+  "ended_at_utc": "2026-11-27T03:37:10.356264+00:00",
+  "request_sha256": "ea6dd3267373a9c6d15b8aeeb0ccbc214c03d6ceb949f0546d4c56dc3d71b183",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 62631,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31987,
+    "cached_tokens": 6784,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\ncat > /tmp/batch03_novel_probe.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/beta_m96_w03_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open('public_beta_m96_w03_batch_03.pkl','rb'))[0]; s,g=it['study'],it['gt']; archive=json.loads(m._HISTORY.read_text())\\nA,_=m._forward(s); D=np.column_stack((A,s['Z_nuisance'])); rows=np.asarray(s['row_bank_id']); obs=m._calibrated_observations(s); S=g['S_tilde']; r=g['r_y']; ridge=s['source_ridge']; cap=s['u_box']\\nfor ep, data in [(archive[2]['episode_short_name'],archive[2]),('public',s['sensor_calibration_sweeps'])]:\\n bank,x,y=(np.asarray(data[k]) for k in ['bank_id','ref_signal','raw_readout']); truth=m._calibration_coefficients(data); raw=truth[rows,0]*obs+truth[rows,1]\\n for mode in ['bank-0-checks','bank-1-check','wing-0-checks']:\\n  worst=np.zeros(4)\\n  for b in range(2 if mode.startswith('wing') else 4):\\n   missing=(rows//2==b if mode.startswith('wing') else rows==b)\\n   coef=np.linalg.lstsq(D[~missing],obs[~missing],rcond=None)[0]; pred=D@coef\\n   selections=np.flatnonzero(bank==b) if mode=='bank-1-check' else [None]\\n   for j in selections:\\n    inferred=truth.copy()\\n    for k in np.unique(rows[missing]):\\n     q=rows==k\\n     if j is None: inferred[k]=m._fit_affine(pred[q],raw[q])\\n     else:\\n      px=pred[q]-x[j]; gain=px@(raw[q]-y[j])/(px@px); inferred[k]=gain,y[j]-gain*x[j]\\n    calibrated=(raw-inferred[rows,1])/inferred[rows,0]; X,v=m._profile(s,A,calibrated)\\n    for budget,w0 in zip(s['budget_grid'],g['weights_by_budget']):\\n     w,nu=m._box_simplex(X,v,ridge,cap,float(budget)); c=m._certificate(X,v,ridge,cap,float(budget),w,nu); e=S@w-r; grad=S.T@e+ridge*w; obj=(e@e+ridge*(w@w))/2; lower=obj-grad@w+nu*budget+cap*np.minimum(grad-nu,0).sum()\\n     worst=np.maximum(worst,[np.max(abs(inferred-truth)),np.max(abs(w-w0)),obj-min(lower,c['dual_lower_bound']),np.max(abs(grad-nu-c['lam_lower']+c['lam_upper']))])\\n  print(ep,mode,'worst coefficient / weight / oracle gap / stationarity:',*worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch03_novel_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archive-only fallback → H2 transport-assisted calibration only for a clearly novel state; withholding a bank during the first archived shift produced 0.563 reference error, versus a 3.83×10⁻⁷ worst KKT gap for recurring states.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy transport-assisted calibration based on coefficient error alone\",\n      \"rejected_reason\": \"Even small gain and offset errors can invalidate the certificates; score the inferred calibration on all three budgets against the public reference.\"\n    }\n  ],\n  \"rationale\": \"Replay the measured archived shift on the public transport observations and fit only from the retained banks. Measure whether transport assistance closes the novel-state gap without exceeding the certificate tolerance. This is a targeted replay, not an independent transport cohort; it will determine whether to change the solver or retain the documented limitation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "372750b5f09491e2b15679a79db44fdee36508311ffdcb05211287fd602bfade",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35965.16,
+      "usage_known": true,
+      "prompt_tokens": 31987,
+      "cached_tokens": 6784,
+      "completion_tokens": 1296
+    }
+  ]
+}

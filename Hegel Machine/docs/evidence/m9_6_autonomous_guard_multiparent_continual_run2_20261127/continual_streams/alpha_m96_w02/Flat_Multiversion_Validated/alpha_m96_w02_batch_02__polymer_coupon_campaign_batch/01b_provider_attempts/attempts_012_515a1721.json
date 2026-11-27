@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "515a172108054f1e89772ef1a965804f",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:36:45.645497+00:00",
+  "ended_at_utc": "2026-11-27T03:37:18.815347+00:00",
+  "request_sha256": "7ce8cafd673cce104aa290a7c921d7cc47f5499e32e0dd7be650d10ba6a82dd2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 75913,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37420,
+    "cached_tokens": 6784,
+    "completion_tokens": 1343
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp /tmp/polymer_sparse.py alpha_m96_w02_batch_02_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('alpha_m96_w02_batch_02_solver.py').resolve()\\nsp = importlib.util.spec_from_file_location('solver', p)\\ns = importlib.util.module_from_spec(sp); sp.loader.exec_module(s)\\nns = {}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d = ', 1)[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nwith open('public_alpha_m96_w02_batch_02.pkl','rb') as f: e, = pickle.load(f)\\nd,g=e['dataset'],e['gt']\\n\\ndef check(dd, label):\\n    out=s.solve_alpha_m96_w02_batch_02(dd)\\n    p=out['predicted_strain']; taus=out['estimated_taus']; w=out['allocation_weights']; cert=out['kkt_certificate']\\n    assert p.shape==g['te_clean'].shape and np.isfinite(p).all() and .05<taus[0]<taus[1]<25\\n    Z=dd['Z_nuisance']; proj=np.linalg.solve(Z.T@Z+dd['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n    S=dd['S_alloc_modes']*(1+.25*np.tanh(p[:,-1]-dd['test']['strain_0']))[:,None]; y=dd['y_alloc_obs'].ravel()\\n    v=verify(S-Z@(proj@S), y-Z@(proj@y), dd['source_ridge'], dd['u_box'], dd['total_budget'], cert)\\n    assert v['valid'] and np.max(abs(w-cert['weights']))<1e-10, v\\n    err=p-g['te_clean']; labs=dd['test']['lab_id']; miss=np.isnan(dd['test']['coupon_features_raw']).any(axis=1)\\n    rel=np.max(abs(taus/g['taus']-1)); late=np.sqrt(np.mean(err[:,-1]**2)); worst_lab=max(np.sqrt(np.mean(err[labs==l,-1]**2)) for l in np.unique(labs)); miss_rmse=np.sqrt(np.mean(err[miss]**2)); werr=np.max(abs(w-g['w_alloc_opt']))\\n    print(label, 'tau_rel', f'{rel:.5f}', 'late_rmse', f'{late:.5f}', 'worst_lab_late', f'{worst_lab:.5f}', 'missing_rmse', f'{miss_rmse:.5f}', 'weight_max_error', f'{werr:.6f}', 'gap', f\\\"{v['gap']:.2e}\\\")\\n    assert rel<.02 and late<.04 and worst_lab<.055 and miss_rmse<.055\\n    if dd['total_budget']==d['total_budget']: assert werr<.002\\n\\ncheck(d, 'public')\\nfor wing in ((0,1),(2,3)):\\n    dd=copy.deepcopy(d); c=dd['calibration_load_cells']; keep=~np.isin(c['lab_id'],wing)\\n    for l,gain,bias,spike in zip(wing,(1.045,.955),(.022,-.021),(0.,.50)):\\n        for split in ('train','test'):\\n            v=dd[split]; mask=v['lab_id']==l\\n            for key in ('past_stress_cmd','stress_hold_cmd'): v[key][mask]=(v[key][mask]-bias)/gain\\n        ix=np.flatnonzero(c['lab_id']==l); c['cmd_stress'][ix]=(c['cmd_stress'][ix]-bias)/gain\\n        j=ix[np.argmax(abs(c['cmd_stress'][ix]))]; keep[j]=True; c['true_stress'][j]+=spike\\n    dd['calibration_load_cells']={k:a[keep] for k,a in c.items()}\\n    check(dd, f'shifted sparse wing {wing}')\\nfor b in (1., 11., 11.99):\\n    check(dict(d,total_budget=b), f'allocation budget={b}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archive-only sparse calibration → H2 infer sparse-lab gain from preloaded transients; worst calibration-stress final-horizon RMSE fell from 0.07501 to 0.02586 with unchanged public predictions.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the archive-only calibration\",\n      \"rejected_reason\": \"It produced 0.09631 final-horizon RMSE in the shifted singleton lab, versus 0.02249 for the transient fit.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger because it resolves sparse gain shifts without changing clean public predictions. Verify the installed file in a clean process and test simultaneous sparse checks in both wings and near-saturated allocation; failures would narrow the calibration update or require revisiting the QP active face.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "54e6f7e17e8dd436440d421be9fa6878c816dd8d358ba527bc22935786b2be65",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35207.79,
+      "usage_known": true,
+      "prompt_tokens": 37420,
+      "cached_tokens": 6784,
+      "completion_tokens": 1343
+    }
+  ]
+}

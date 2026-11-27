@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3e5c66dc4404bd889b4511ef238c6f5",
+  "call_seq": 7,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:52.206268+00:00",
+  "ended_at_utc": "2026-11-27T03:34:20.385435+00:00",
+  "request_sha256": "2dfa2480206f6186d8186232f5433f68a03d73e84ed93938deb4c5c930d440e3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42984,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26201,
+    "cached_tokens": 6784,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m96_w03_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m96_w03_batch_03.pkl','rb') as f: r=pickle.load(f)[0]\\nd,gt=r['dataset'],r['gt']; tr,te=d['train'],d['test']; x,_=m._align(tr,te); dt,t=d['past_dt'],d['eval_times']; cal=m._calibrate(d['calibration_load_cells'])\\nprint('calibration',np.asarray(cal).tolist(),'history duration',sum(dt),'hold times',t)\\no=m.solve_alpha_m96_w03_batch_03(d); c=o['kkt_certificate']; w=c['weights']; print('taus',o['estimated_taus'],'gap',c['primal_objective']-c['dual_lower_bound'],'complementarity',max(np.max(w*c['lam_lower']),np.max((d['u_box']-w)*c['lam_upper'])))\\nprint('truth keys',[(k,np.shape(a)) for k,a in gt.items()]); rmse=lambda e: float(np.sqrt(np.nanmean(e**2)))\\nfor k in ('estimated_taus','predicted_strain','allocation_weights'):\\n if k in gt and np.shape(gt[k])==np.shape(o[k]):\\n  e=o[k]-gt[k]; print(k,'RMSE',rmse(e),'max abs',np.max(np.abs(e)))\\n  if k=='predicted_strain': print('test lab RMSE and final RMSE',[(int(l),rmse(e[te['lab_id']==l]),rmse(e[te['lab_id']==l,-1])) for l in np.unique(te['lab_id'])])\\nlabs=tr['lab_id']\\nfor lab in np.unique(labs):\\n fit=labs!=lab; val=~fit; train={k:np.asarray(a)[fit] for k,a in tr.items()}; held={k:np.asarray(a)[val] for k,a in tr.items()}; row=[]\\n for preload in (True,False):\\n  a=m._Hold(dt,t,train,x[fit],cal); b=m._Hold(dt,t,held,x[val],cal)\\n  if not preload: a.memory=np.zeros_like(a.memory); b.memory=np.zeros_like(b.memory)\\n  p=m._fit(a,train); pred=b.design(p[:2])[0]@p[2:]; e=pred[:,:-1]+b.base[:,None]-held['strain_curves_obs']; er=pred[:,-1]-held['instant_rate_obs']; row.append((np.round(p[:2],5).tolist(),rmse(e),rmse(e[:,-1]),rmse(er),float(np.nanmedian(np.abs(e)))))\\n print('LOLO',lab,'preloaded / zero: (taus, curve RMSE, final RMSE, rate RMSE, curve median AE)',row)\\nh=m._Hold(dt,t,tr,x,cal); taus=o['estimated_taus']; q=h.design(taus)[0]; z=h.memory.copy()\\nfor j,step in enumerate(dt):\\n decay=np.exp(-step/taus); z=decay*z+(1-decay)*h.hist[:,j,None]\\nexpected=(h.stress[:,None]-z)[:,None,:]*(-np.expm1(-t[:,None]/taus))[None,:,:]\\nerr=np.max(np.abs(expected-q[:,:-1,:2])); print('closed-form vs stepped recurrence max error',err); assert err<1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 zero-initialized recurrence -> H2 measured preload with certified allocation; the public schema passes, but worst-lab error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the schema-verified candidate\",\n      \"rejected_reason\": \"The previous validation script stopped while formatting the calibration output, before it could test strain accuracy, lab transfer, or the recurrence.\"\n    }\n  ],\n  \"rationale\": \"Fix the diagnostic without editing the solver. A recurrence mismatch would trigger an indexing or decay correction, and a large held-out lab error would trigger investigation of calibration or the strain model. The public truth comparison separates prediction accuracy from certificate validity.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "df7bf256f942f4a544d6652eaa380b0375542da34417688e85ff96988b53f27d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30214.58,
+      "usage_known": true,
+      "prompt_tokens": 26201,
+      "cached_tokens": 6784,
+      "completion_tokens": 1100
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4b00f25b71ca481ca7088065886786f3",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:14:36.050905+00:00",
+  "ended_at_utc": "2026-11-27T03:15:28.778476+00:00",
+  "request_sha256": "9f6521181f406e23535055a1c026cde4b896469fd64d067b4227cb673e8f3bfa",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 66544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35062,
+    "cached_tokens": 6784,
+    "completion_tokens": 2231
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/creep_sparse_candidate.py <<'PY'\\nimport itertools\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\n\\ndef _calibration_options(x, y, limits, yield_stress, baseline):\\n    # The check noise on the public panel is about 1e-4 stress units.\\n    tol = 6e-4\\n    if len(x) < 4:\\n        return [baseline]\\n    a, b = np.triu_indices(len(x), 1)\\n    distinct = np.abs(x[a] - x[b]) > 1e-10\\n    a, b = a[distinct], b[distinct]\\n    g = (y[a] - y[b]) / (x[a] - x[b])\\n    r = y[None, :] - y[a, None] - g[:, None] * (x[None, :] - x[a, None])\\n    masks = np.unique(np.abs(r) <= tol, axis=0)\\n    design = np.column_stack((x, np.ones(len(x))))\\n    minimum = len(x) - (len(x) - 1) // 3\\n    options = []\\n    for m in masks:\\n        n = m.sum()\\n        if n < minimum or np.ptp(x[m]) <= 1e-10:\\n            continue\\n        fit = np.linalg.lstsq(design[m], y[m], rcond=None)[0]\\n        if np.max(np.abs(fit[0] * limits + fit[1])) > yield_stress + tol:\\n            continue\\n        err = y - design @ fit\\n        options.append((n, np.ptp(x[m]), err[m] @ err[m], fit))\\n    if not options:\\n        return [baseline]\\n    n = max(v[0] for v in options)\\n    if n == len(x):\\n        return [baseline]\\n    ranked = sorted((v for v in options if v[0] == n), key=lambda v: (-v[1], v[2]))\\n    return [v[-1] for v in ranked]\\n\\n\\ndef _select_calibration(options, fit, block, x, dt, times, hold_cls):\\n    obs = block['instant_rate_obs']\\n    good = np.isfinite(obs)\\n    curves = block['strain_curves_obs']\\n    scores = []\\n    for gb in options:\\n        # Only the affine calibration varies; coefficients come from other labs.\\n        arrays = np.broadcast_to(np.asarray(gb)[:, None], (2, 4))\\n        hold = hold_cls(dt, times, block, x, arrays)\\n        pred = hold.design(fit[:2])[0] @ fit[2:]\\n        de = np.abs(pred[:, :-1] + hold.base[:, None] - curves)\\n        score = np.nanmedian(de)\\n        if good.any():\\n            score += np.median(np.abs(pred[good, -1] - obs[good]))\\n        scores.append(score)\\n    return options[np.argmin(scores)]\\n\\n\\nif __name__ == '__main__':\\n    root = '/holdout_task/'\\n    s = runpy.run_path(root + 'alpha_m96_w03_s00_solver.py')\\n    e, = pickle.load(open(root + 'public_alpha_m96_w03_s00.pkl', 'rb'))\\n    d = e['dataset']; tr, te = d['train'], d['test']; c = d['calibration_load_cells']\\n    cal = np.array(s['_calibrate'](c)); x, _ = s['_align'](tr, te); dt, t = d['past_dt'], d['eval_times']\\n    for lab in range(4):\\n        m = tr['lab_id'] == lab\\n        other = {k:v[~m] for k,v in tr.items()}; target = {k:v[m] for k,v in tr.items()}\\n        fit = s['_fit'](s['_Hold'](dt,t,other,x[~m],cal),other)\\n        cm = c['lab_id'] == lab; cmd, y = c['cmd_stress'][cm], c['true_stress'][cm]\\n        g0,b0 = cal[:,lab]\\n        commands = np.concatenate([d[k][v][d[k]['lab_id']==lab].ravel() for k in ('train','test') for v in ('past_stress_cmd','stress_hold_cmd')])\\n        baseline_err, new_err = [], []; decisions = 0\\n        for g,b in [(g0,b0),(.86+.085*lab,.11-.08*lab)]:\\n            base = y+(g-g0)*cmd+b-b0\\n            to_cmd = lambda z: (g0*z+b0-b)/g\\n            limits = to_cmd(np.array([commands.min(), commands.max()]))\\n            tb = {**target, **{v:to_cmd(target[v]) for v in ('past_stress_cmd','stress_hold_cmd')}}\\n            for ids in itertools.combinations(range(len(cmd)),4):\\n                xx = cmd[list(ids)]\\n                if np.ptp(xx) < .7*np.ptp(cmd): continue\\n                for j in range(4):\\n                    for spike in (-.8,.8):\\n                        yy = base[list(ids)].copy(); yy[j] += spike\\n                        old = np.array(s['_calibrate']({'lab_id':np.full(4,lab),'cmd_stress':xx,'true_stress':yy}))[:,lab]\\n                        opts = _calibration_options(xx,yy,limits,d['yield_stress'],old)\\n                        new = opts[0]\\n                        if np.max(np.abs((np.asarray(opts)-new) @ np.vstack((limits, np.ones(2))))) > .01:\\n                            decisions += 1\\n                            new = _select_calibration(opts,fit,tb,x[m],dt,t,s['_Hold'])\\n                        for z,r in [(old,baseline_err),(new,new_err)]:\\n                            r.append(np.max(abs((z[0]-g)*cmd+z[1]-b)))\\n        print(lab,'cross-lab tie breaks',decisions,'baseline p95/max',np.quantile(baseline_err,[.95,1]),'candidate p95/max',np.quantile(new_err,[.95,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/creep_sparse_candidate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sub-yield consensus alone → H2 resolve competing calibration lines using creep fitted on other labs; the previous consensus still missed a measured-range sparse EMI case by 1.142 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Break consensus ties by calibration residual or stress span alone\",\n      \"rejected_reason\": \"Both rules chose a false but admissible line on the lab 2 stress settings.\"\n    }\n  ],\n  \"rationale\": \"Test whether creep coefficients learned without the affected lab distinguish plausible calibration lines using that lab's training measurements, without using test responses or changing the hereditary law. Promote the candidate only if it improves the worst sparse-EMI error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "146cb50f1ecc96fd6e95cad6f530a997b6dc83762985783cc1b1c9e8f1bba2e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54708.28,
+      "usage_known": true,
+      "prompt_tokens": 35062,
+      "cached_tokens": 6784,
+      "completion_tokens": 2231
+    }
+  ]
+}

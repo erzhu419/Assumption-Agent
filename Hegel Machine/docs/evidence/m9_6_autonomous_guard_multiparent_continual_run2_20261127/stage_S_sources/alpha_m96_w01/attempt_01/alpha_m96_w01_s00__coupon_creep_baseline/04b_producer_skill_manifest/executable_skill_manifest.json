@@ -1,0 +1,121 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m96_w01_s00_a69f85e561ba",
+    "source_hash": "a69f85e561baa966e4e4bc5a772fc2119902dddf8ce8f317067a4d1daa81249a",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m96_w01_s00__coupon_creep_baseline",
+    "task_id": "alpha_m96_w01_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/coupon_diagnose.py",
+        "archived_relpath": "producers/tmp__coupon_diagnose.py",
+        "bytes": 1842,
+        "sha256": "43689f70b311fc4d19b0a9e3bf2afc706611f41d9e8f291b4df78547cb807d97"
+      },
+      {
+        "container_path": "/tmp/coupon_eval.py",
+        "archived_relpath": "producers/tmp__coupon_eval.py",
+        "bytes": 1148,
+        "sha256": "03f39d36d01b5a5f8f8a83d21ac0bd90f46965c668de827b8e57d46b59b59e0b"
+      },
+      {
+        "container_path": "/tmp/coupon_gate.py",
+        "archived_relpath": "producers/tmp__coupon_gate.py",
+        "bytes": 3950,
+        "sha256": "9f036f61659bac7fabe17c0205675489acb304bcb98a309231f2cb1e779774ea"
+      },
+      {
+        "container_path": "/tmp/coupon_sparse_stress.py",
+        "archived_relpath": "producers/tmp__coupon_sparse_stress.py",
+        "bytes": 3526,
+        "sha256": "a4e4098821a62721aae359e4489c52a65b0578e9400b73c77106373f2c014698"
+      },
+      {
+        "container_path": "/tmp/coupon_stress.py",
+        "archived_relpath": "producers/tmp__coupon_stress.py",
+        "bytes": 3370,
+        "sha256": "99951cb4072465716f2059c04c8a6f802aa4ffd1366accc442c786b98cabb249"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -lh /tmp/hegel_continual_archive 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment imputation Cauchy robust IRLS viscoelastic relaxation' 2>&1; python3 - <<'PY'\nimport pickle\np='/holdout_task/public_alpha_m96_w01_s00.pkl'\nwith open(p,'rb') as f:d=pickle.load(f)\ndef show(x,name='',depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():show(v,name+'/'+str(k),depth+1)\n elif hasattr(x,'shape'):print(name,type(x).__name__,x.shape,x.dtype,str(x.flatten()[:10]))\n el",
+      "cd /holdout_task; cat public_asset_index.json; tail -50 validate_public_schema.py; ls -lh /tmp/hegel_continual_archive 2>/dev/null; for fn in autogenous_prim_reference_panel_balancing.weighted_column_fill autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; do PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe \"$fn\" | head -22; done; python3 - <<'PY'\nimport pickle,numpy as np\ncase=pickle.load(open('public_alpha_m96_w01_s00.pkl','rb'))[0]\ndef show(x,name):\n if isinstance(x,dict):\n  for k,v in x.items():show(v,name+'/'+k)\n elif isinstance(x,np.ndarray):\n  if x.ndim==0: print(na",
+      "cd /holdout_task; tail -24 validate_public_schema.py; ls -l /tmp/hegel_continual_archive/ 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.balanced_cell_weights | head -24; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit | head -24; cat > /tmp/coupon_diagnose.py <<'PY'\nimport numpy as np, pickle\nc=pickle.load(open('/holdout_task/public_alpha_m96_w01_s00.pkl','rb'))[0]; d=c['dataset']; gt=c['gt']; tr=d['train']; te=d['test']; t=d['eval_times']; lab=np.r_[tr[",
+      "cat > /holdout_task/alpha_m96_w01_s00_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _load_calibration(checks):\n    gain, bias = np.ones(4), np.zeros(4)\n    lab = np.asarray(checks['lab_id'])\n    cmd, true = map(np.asarray, (checks['cmd_stress'], checks['true_stress']))\n    pooled = []\n    for j in range(4):\n        m = (lab == j) & np.isfinite(cmd) & np.isfinite(true)\n        x, y = cmd[m], true[m]\n        if len(x) < 2 or np.ptp(x) < 1e-8:\n            continue\n        i, k = np.triu_indices(len(x), 1)\n        spread = abs(x[k] - x[i]) > max(1e-8, .05 * np.",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/alpha_m96_w01_s00_solver.py')\ns=p.read_text().replace('    weights = np.ones(len(yc) + len(yr))\\n','').replace('return np.r_[ce / scales[0], re / scales[1]] * weights','return np.r_[ce / scales[0], re / scales[1]]').replace('return tau, theta, scales[1]/2.5','return tau, theta').replace('tau, theta, sigma_rate = _fit','tau, theta = _fit')\ns=s.replace(\"    rate = r @ theta\\n    return\", \"    rate = r @ theta\\n    # If a feature is missing, the observed onset rate can identify the\\n    # otherwise uncertain linear creep slope after ",
+      "cat > /tmp/coupon_stress.py <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\n\np = '/holdout_task/alpha_m96_w01_s00_solver.py'\nspec = importlib.util.spec_from_file_location('solver', p)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\ncase = pickle.load(open('/holdout_task/public_alpha_m96_w01_s00.pkl', 'rb'))[0]\nd, gt = case['dataset'], case['gt']\nsolve = m.solve_alpha_m96_w01_s00\nbase = solve(d)\nrmse = lambda x: float(np.sqrt(np.mean(np.square(x))))\nfor j in range(4):\n    fold = copy.deepcopy(d)\n    tr = fold['train']\n    held = tr['lab_id'] == j\n    target = ",
+      "python3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/alpha_m96_w01_s00_solver.py')\ns=p.read_text().replace('def _load_calibration(checks):','def _load_calibration(checks, *, return_identified=False):').replace('    return gain, bias\\n','    if return_identified:\\n        return gain, bias, np.isin(np.arange(4), pooled)\\n    return gain, bias\\n',1)\npos=s.index('\\ndef solve_alpha_m96_w01_s00')\ns=s[:pos]+'''\ndef _refine_sparse_calibration(checks, gain, bias, identified, lab, cmd_past,\n                               cmd_hold, dt, t, x, y, rate, complete):\n    # Share the creep law acros",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\np='/holdout_task/alpha_m96_w01_s00_solver.py'\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nwith open('/holdout_task/public_alpha_m96_w01_s00.pkl','rb') as f: case=pickle.load(f)[0]\nrefine=m._refine_sparse_calibration\ncaptured=[]\ndef capture(checks,gain,bias,*args):\n    refine(checks,gain,bias,*args)\n    captured.append((gain.copy(),bias.copy()))\nm._refine_sparse_calibration=capture\nfor nchecks in (1,0):\n    d=copy.deepcopy(case",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\np = '/holdout_task/alpha_m96_w01_s00_solver.py'\nspec = importlib.util.spec_from_file_location('solver', p)\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_alpha_m96_w01_s00.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\nd = copy.deepcopy(case['dataset']); c = d['calibration_load_cells']\nlab = c['lab_id']; gain = np.array([.89, 1.13, 1.20, .79]); bias = np.array([.12, -.14, .24, -.17])\nc['cmd_stress'] = (c['cmd_stress'] - bias[lab]) / gain[lab]\n",
+      "cat > /tmp/coupon_gate.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\npath = '/holdout_task/alpha_m96_w01_s00_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_alpha_m96_w01_s00.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\nd, gt = case['dataset'], case['gt']\ntr, te = d['train'], d['test']\nx, missing = m._features(tr, te)\nlab = tr['lab_id']\nn = len(lab)\na, b = m._load_calibration(d['calibration_load_cells'])\ndt,"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__coupon_gate.py",
+      "primary_producer_container_path": "/tmp/coupon_gate.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m96_w01_s00_solver.py",
+        "filename": "alpha_m96_w01_s00_solver.py",
+        "bytes": 9550,
+        "sha256": "930b49335c1588ca899ed9d3b24cac539e8049d23918b813819648f55725167a",
+        "content_addressed_ref": "content_addressed_blobs/930b49335c1588ca899ed9d3b24cac539e8049d23918b813819648f55725167a.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m96_w01_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a69f85e561baa966e4e4bc5a772fc2119902dddf8ce8f317067a4d1daa81249a",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/coupon_gate.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\npath = '/holdout_task/alpha_m96_w01_s00_solver.py'\nspec = importlib.util.spec_from_file_location('solver', pat",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a69f85e561baa966e4e4bc5a772fc2119902dddf8ce8f317067a4d1daa81249a",
+        "expected_candidate_sha256": "a69f85e561baa966e4e4bc5a772fc2119902dddf8ce8f317067a4d1daa81249a",
+        "computed_candidate_sha256": "a69f85e561baa966e4e4bc5a772fc2119902dddf8ce8f317067a4d1daa81249a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m96_w01_s00_solver.py",
+            "bytes": 9550
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_a69f85e5"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": []
+  }
+}

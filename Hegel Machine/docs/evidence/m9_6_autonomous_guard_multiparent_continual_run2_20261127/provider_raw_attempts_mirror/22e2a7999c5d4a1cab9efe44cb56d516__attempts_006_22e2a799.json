@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22e2a7999c5d4a1cab9efe44cb56d516",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:14.963753+00:00",
+  "ended_at_utc": "2026-11-27T03:33:41.664682+00:00",
+  "request_sha256": "157170e7e7df5125838e8ce562c92142b6047eda37994be15bb3659bf227dae3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48784,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29456,
+    "cached_tokens": 11136,
+    "completion_tokens": 858
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('solver','alpha_m96_w02_batch_02_solver.py'); s=importlib.util.module_from_spec(sp);sp.loader.exec_module(s)\\nfor e in pickle.load(open('public_alpha_m96_w02_batch_02.pkl','rb')):\\n d,g=e['dataset'],e['gt']; tr,te=d['train'],d['test']; x=s._align(tr,te); n=len(tr['lab_id']); c=s._stress_calibration(d['calibration_load_cells']); t=d['eval_times']; dt=d['past_dt']; a=s._Design(dt,t,s._inputs(tr,x[:n],c)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; tau,theta=s._fit(a,y,tr['instant_rate_obs']); print('tau relative error',tau/g['taus']-1,'theta',theta,'max cal errors',np.max(abs(c.T-np.stack((g['stress_gains'],g['stress_biases']))),axis=1)); r=a.make(tau)@theta-np.c_[y,tr['instant_rate_obs']]; print('train residual absolute percentiles',np.quantile(abs(r[:,:-1]),[.5,.9,.99,1]),np.quantile(abs(r[:,-1]),[.5,.9,.99,1])); p=s._Design(dt,t,s._inputs(te,x[n:],c)).make(tau)@theta; obs=te['instant_rate_obs']; print('onset obs error',np.quantile(abs(obs-g['te_true_rate0']),[.5,.9,.99,1])); miss=~np.isfinite(te['coupon_features_raw']).all(axis=1); clean=g['te_clean']-te['strain_0'][:,None];\\n for name,correction in [('none',np.zeros_like(obs)),('missing',np.where(miss,obs-p[:,-1],0)),('all',obs-p[:,-1])]:\\n  pr=p[:,:-1]+correction[:,None]*t; er=pr-clean; print(name,'RMSE',np.sqrt(np.mean(er**2)),'by lab',[float(np.sqrt(np.mean(er[te['lab_id']==l]**2))) for l in range(4)],'missing/nonmissing',[float(np.sqrt(np.mean(er[a]**2))) for a in (miss,~miss)],'late',np.sqrt(np.mean(er[:,-1]**2))); w,cert=s._allocate(d,pr[:,-1]); print('allocation max weight error/gap',np.max(abs(w-g['w_alloc_opt'])),cert['primal_objective']-cert['dual_lower_bound'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 zero-initialized memory → H2 measured preload with robust creep fitting and certified allocation; the public schema passes, but worst-slice prediction error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare missing-only onset correction with no correction and unconditional correction. This detects whether onset noise is being amplified at late horizons and whether that changes allocation, independently of the KKT certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "960ad2974f09e4d9ac4467904b5489dd0df617369f1d962ce9fb4439b5f12858",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26661.26,
+      "usage_known": true,
+      "prompt_tokens": 29456,
+      "cached_tokens": 11136,
+      "completion_tokens": 858
+    }
+  ]
+}

@@ -1,0 +1,421 @@
+{
+  "task_id": "beta_m96_w01_s00__tracer_tomography_baseline",
+  "short_name": "beta_m96_w01_s00",
+  "benchmark": "Hegel-M96-Autonomous-Structure-Continual-World",
+  "wave": "beta_m96_w01_source",
+  "scientific_domain": "Multi-Wing Tracer Reaction-Transport & Continual Sensor Tomography Stream",
+  "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_M6_9_Antithesis_LiveGPT",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 0.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 18,
+  "final_candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+  "validated_incumbent_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w01_s00_solver.py')\nm = importlib.util",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+        "expected_candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+        "computed_candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w01_s00_solver.py",
+            "bytes": 6583
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_099054c0"
+    },
+    {
+      "candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m96_w01_s00_solver.py')\ns = p.read_text()\nold = '        if x.size >= 5:\\n'\nnew = '''        if x.size == 4:\n            # Three agreeing reference points can ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+        "expected_candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+        "computed_candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w01_s00_solver.py",
+            "bytes": 7463
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_66a1c67c"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t05",
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "transport operator misspecification",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "Using the separable 2D reaction map alone accounts for the complete diagonal of the transport operator.",
+      "empirical_witness": "Map-only cell upwind incurred 4.75% relative terminal-field error and 10.66% relative design error; adding both axis reaction terms reduced these to 1.99e-14 and 7.63e-14.",
+      "causal_blanket_diagnosis": "The axis reaction inputs and the separable 2D map contribute distinct additive diagonal terms.",
+      "sublated_pivot": "Include the baseline reactions in the axis stencil and add the exact separable reaction split before solving.",
+      "pending_resolution_proposed_at_turn": 7,
+      "agent_claimed_probe": {
+        "turn": 8,
+        "command_preview": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\n\npath = '/holdout_task/beta_m96_w01_s",
+        "stdout_preview": "Public leave-one-sweep-out and operator audit: {'sweep_prediction': '2.258e-08', 'weight': '1.698e-08', 'field': '1.825e-08', 'all_shift_pde': '4.694e-14', 'nuisance_gradient': '2.531e-13'}\n"
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 8,
+      "resolved_candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc",
+        "worker_process_isolated": true,
+        "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
+        "probe_code_digest": "e4a85e107f3e8fff94e24a9fe69359f02ba7d851fe553571b2133999c9662d72",
+        "public_input_digest": "3e36e8ed647ea1b0c5fe9c383fef3e1535f99350539db4d3a1de6ff27da8f494",
+        "candidate_bundle_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "daf6ad216a856a03244dcd5b649f9a66b693fb70233da8b31de1950ac50118a7",
+          "/holdout_task/public_beta_m96_w01_s00.pkl": "3e36e8ed647ea1b0c5fe9c383fef3e1535f99350539db4d3a1de6ff27da8f494",
+          "/holdout_task/validate_public_schema.py": "a7f0822401d91cbe37c77e4fb79046d40fbc97b2dfe5339dedcc055c2594a5d7"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 3.6e-09,
+          "weights_rel_l2": 3e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals"
+    },
+    {
+      "nogood_id": "ng_t11",
+      "turn_idx": 11,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "sparse calibration under isolated EMI",
+      "candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+      "resolved": false,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "Four-point sparse calibration can be treated as clean and fitted by ordinary least squares.",
+      "empirical_witness": "With four measured reference levels and one injected spike per affected bank, relative field error rose to 10.50% in wing A and 9.02% in wing B.",
+      "causal_blanket_diagnosis": "The unfiltered spike biases bank gain and offset before nuisance profiling and transport inversion.",
+      "sublated_pivot": "Use agreement among three affine calibration points to identify a distinctly inconsistent fourth point; retain the full fit when that evidence is absent.",
+      "pending_resolution_proposed_at_turn": 12
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 7,
+      "verified_turn": 8,
+      "resolved_nogood_ids": [
+        "ng_t05"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc",
+        "worker_process_isolated": true,
+        "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
+        "probe_code_digest": "e4a85e107f3e8fff94e24a9fe69359f02ba7d851fe553571b2133999c9662d72",
+        "public_input_digest": "3e36e8ed647ea1b0c5fe9c383fef3e1535f99350539db4d3a1de6ff27da8f494",
+        "candidate_bundle_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "daf6ad216a856a03244dcd5b649f9a66b693fb70233da8b31de1950ac50118a7",
+          "/holdout_task/public_beta_m96_w01_s00.pkl": "3e36e8ed647ea1b0c5fe9c383fef3e1535f99350539db4d3a1de6ff27da8f494",
+          "/holdout_task/validate_public_schema.py": "a7f0822401d91cbe37c77e4fb79046d40fbc97b2dfe5339dedcc055c2594a5d7"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1e-08,
+          "kkt_duality_gap": 3.6e-09,
+          "weights_rel_l2": 3e-08
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "099054c0a75b3ee3f81da96610b8598bfb73fcedc50f537c3f305a18d682cb08",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_beta_m96_w01_s00_66a1c67cf055",
+    "binding_status": "opaque_full_producer_retained",
+    "full_producer_count": 1,
+    "exported_pure_functions": [],
+    "temporal_readout_mode": "present_or_adiabatic_ode"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 4,
+    "describe_skill_queries": [
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "66a1c67cf055f7502910b4a823765d956caf9a691cb24365b18bf09bc60c4ee7",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_beta_m96_w01_s00"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "beta_m96_w01_s00_solver.py",
+          "final_file_sha256": "fb7f1e17394b610f48724d62f99c3a8168a7ce249d1863a89cef7dcd19441181",
+          "public_entrypoints": [
+            "solve_beta_m96_w01_s00"
+          ],
+          "effective_entrypoints": [
+            "solve_beta_m96_w01_s00"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "beta_m96_w01_s00_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_beta_m96_w01_s00.pkl",
+      "/holdout_task/validate_public_schema.py"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_asset_index.json": "daf6ad216a856a03244dcd5b649f9a66b693fb70233da8b31de1950ac50118a7",
+      "/holdout_task/public_beta_m96_w01_s00.pkl": "3e36e8ed647ea1b0c5fe9c383fef3e1535f99350539db4d3a1de6ff27da8f494",
+      "/holdout_task/validate_public_schema.py": "a7f0822401d91cbe37c77e4fb79046d40fbc97b2dfe5339dedcc055c2594a5d7"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5300,
+    "initial_user_payload_chars": 2895,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 13933
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 12,
+    "logical_agent_decision_calls": 12,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 12,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_c4c67093.json",
+      "attempts_002_4f65b88f.json",
+      "attempts_003_e7bc2719.json",
+      "attempts_004_ed8bfecd.json",
+      "attempts_005_94a95423.json",
+      "attempts_006_65a35bc3.json",
+      "attempts_007_f4264a21.json",
+      "attempts_008_720566b9.json",
+      "attempts_009_e1a5480a.json",
+      "attempts_010_bc9638cc.json",
+      "attempts_011_cbe75b4b.json",
+      "attempts_012_4e0a0ade.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 30,
+  "prompt_tokens": 296353,
+  "cached_tokens": 83328,
+  "completion_tokens": 12217,
+  "total_tokens": 308570,
+  "token_cost_proxy": 246074,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 246074,
+  "wall_ms": 384948.97,
+  "provenance_verified": true,
+  "terminal_record_sha256": "d2429f330cfb5832ee2244b5b7913ff813237b6d3e428a6b80c875a0798725a7",
+  "provenance_dag_verification": {
+    "valid": true,
+    "decision_count": 33,
+    "terminal_record_sha256": "ad670ea3c88477b2b98af28d849fe8f4a281a84ab99896b8ae7d4eb70eff4c47",
+    "verified_measurement_cost": 0.0,
+    "verified_compute_cost": 9.5059,
+    "verified_composite_cost": 0.475295,
+    "verified_total_tokens": 308570
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/beta_m96_w01_s00_solver.py": "FILE:7463"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_weights_rel_l2": 5e-08,
+      "max_field_rel_l2": 3e-08,
+      "max_kkt_gap": 6.6e-09,
+      "student_elapsed_sec": 0.0809,
+      "instance_diagnostics": [
+        {
+          "seed": 981501,
+          "w_rel_l2": 5e-08,
+          "field_rel_l2": 2e-08,
+          "kkt_gap": 3.9e-09
+        },
+        {
+          "seed": 981502,
+          "w_rel_l2": 4e-08,
+          "field_rel_l2": 3e-08,
+          "kkt_gap": 6.6e-09
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.042673,
+        "import_cpu_sec": 0.03952,
+        "candidate_call_wall_sec": 0.017642,
+        "candidate_call_cpu_sec": 0.016345,
+        "ipc_and_codec_wall_sec": 0.13875,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.019123,
+        "verifier_and_gt_cpu_sec": 0.05348,
+        "total_supervisor_wall_sec": 0.218187
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_weights_rel_l2\": 5e-08, \"max_field_rel_l2\": 3e-08, \"max_kkt_gap\": 6.6e-09, \"student_elapsed_sec\": 0.0809, \"instance_diagnostics\": [{\"seed\": 981501, \"w_rel_l2\": 5e-08, \"field_rel_l2\": 2e-08, \"kkt_gap\": 3.9e-09}, {\"seed\": 981502, \"w_rel_l2\": 4e-08, \"field_rel_l2\": 3e-08, \"kkt_gap\": 6.6e-09}]}\n__HEGEL_VERIFIER_AUTH_c5890af8abb44a10bb04ca113bf3167f__:{\"strict_pass\": true, \"reward\": 1.0, \"max_weights_rel_l2\": 5e-08, \"max_field_rel_l2\": 3e-08, \"max_kkt_gap\": 6.6e-09, \"student_elapsed_sec\": 0.0809, \"instance_diagnostics\": [{\"seed\": 981501, \"w_rel_l2\": 5e-08, \"field_rel_l2\": 2e-08, \"kkt_gap\": 3.9e-09}, {\"seed\": 981502, \"w_rel_l2\": 4e-08, \"field_rel_l2\": 3e-08, \"kkt_gap\": 6.6e-09}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.042673, \"import_cpu_sec\": 0.03952, \"candidate_call_wall_sec\": 0.017642, \"candidate_call_cpu_sec\": 0.016345, \"ipc_and_codec_wall_sec\": 0.13875, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.019123, \"verifier_and_gt_cpu_sec\": 0.05348, \"total_supervisor_wall_sec\": 0.218187}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 5427.07,
+    "failure_taxonomy": "PASSED_ALL_CHECKS",
+    "readonly_dependencies_sha256": {}
+  }
+}

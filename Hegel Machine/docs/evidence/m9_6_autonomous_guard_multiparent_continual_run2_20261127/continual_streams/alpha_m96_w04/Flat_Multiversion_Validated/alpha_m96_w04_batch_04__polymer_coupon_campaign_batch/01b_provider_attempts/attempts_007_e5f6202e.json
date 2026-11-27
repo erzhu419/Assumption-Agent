@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5f6202e024b4bfab835d61b955d2c78",
+  "call_seq": 7,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:41:39.469575+00:00",
+  "ended_at_utc": "2026-11-27T03:42:12.698886+00:00",
+  "request_sha256": "267cea18ad002ed14361bded1854fbbcba655b143f9171c222af3873097c1685",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46681,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28968,
+    "cached_tokens": 6784,
+    "completion_tokens": 1330
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,time\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m96_w04_batch_04_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('public_alpha_m96_w04_batch_04.pkl','rb') as f: case=pickle.load(f)[0]\\nd,g=case['dataset'],case['gt']; tr,te=d['train'],d['test']; dt,t,yield_=d['past_dt'],d['eval_times'],d['yield_stress']; checks=d['calibration_load_cells']; coef=s._calibration(checks); truth=np.column_stack((g['stress_gains'],g['stress_biases']))\\nstart=time.monotonic(); out=s.solve_alpha_m96_w04_batch_04(d); print('runtime_seconds',round(time.monotonic()-start,3)); print('calibration_abs_error_by_lab',np.abs(coef-truth).round(7).tolist())\\nfor key,gt in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(key,'estimate',out[key].round(7),'truth',g[gt],'max_abs_error',np.max(np.abs(out[key]-g[gt])))\\ndef slices(lab,past,hold,ce,re):\\n hist=(np.abs(past)>yield_).any(axis=1); ov=np.abs(hold)>yield_\\n def report(name,m):\\n  if m.any(): print(name,m.sum(),f'curve_rmse={np.sqrt(np.mean(ce[m]**2)):.6g}',f'rate_rmse={np.sqrt(np.mean(re[m]**2)):.6g}')\\n report('all',np.ones(len(lab),bool))\\n for a in range(4): report(f'lab{a}',lab==a)\\n for i,j in [(0,0),(1,0),(0,1),(1,1)]:\\n  m=(hist==i)&(ov==j); report(f'history{i}_hold{j}',m)\\n  for a in range(4): report(f'lab{a}_history{i}_hold{j}',m&(lab==a))\\nprint('PUBLIC TEST AGAINST CLEAN MEASUREMENTS'); slices(te['lab_id'],g['te_hist_true'],g['te_hold_true'],out['predicted_strain']-g['te_clean'],out['initial_rate_pred']-g['te_true_rate0'])\\nx=s._aligned((tr,te))[:len(tr['lab_id'])]; y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; pred=np.empty_like(y)\\nfor c in range(4):\\n m=tr['lab_id']==c\\n def model(q): return s._Model({k:v[q] for k,v in tr.items()},x[q],coef,dt,t,yield_)\\n tau,w=s._fit(model(~m),y[~m]); pred[m]=model(m).basis(tau)[0]@w\\nmodel_all=s._Model(tr,x,coef,dt,t,yield_)\\nprint('LEAVE-ONE-LAB-OUT AGAINST NOISY TRAIN MEASUREMENTS'); slices(tr['lab_id'],model_all.past,model_all.hold,pred[:,:-1]-y[:,:-1],pred[:,-1]-y[:,-1])\\nfor wing in [0,1]:\\n ids=np.asarray(checks['lab_id']); select=np.ones(len(ids),bool)\\n for c in [2*wing,2*wing+1]: select[np.flatnonzero(ids==c)[1:]]=False\\n subset={k:np.asarray(v)[select].copy() for k,v in checks.items()}; sparse=s._calibration(subset)\\n contaminated={k:np.asarray(v).copy() for k,v in checks.items()}\\n for c in [2*wing,2*wing+1]: contaminated['true_stress'][np.flatnonzero(ids==c)[:3]]+=np.array([.35,-.6,.9])\\n emi=s._calibration(contaminated); print('stress wing',wing,'sparse max calibration error',np.abs(sparse-truth).max(),'EMI max calibration error',np.abs(emi-truth).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear Prony law → H2 calibrated Prony law with distinct hold and history overstress terms; schema passes, but worst-slice prediction error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema validation alone\",\n      \"rejected_reason\": \"Correct shapes would not detect a wrong initial-rate formula, a missing history contribution after unloading, or a failed archive fallback.\"\n    }\n  ],\n  \"rationale\": \"Measure curve and initial-rate errors separately against public clean references, then hold out each lab's response observations to test transfer. Thin and contaminate each wing's measured sweeps to check archive selection and EMI rejection. A localized failure would identify which mechanism or calibration rule needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b63863aceab81b47b43ef9caf8d13225bc98077775b96f3ebe20f4887714a846",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35313.95,
+      "usage_known": true,
+      "prompt_tokens": 28968,
+      "cached_tokens": 6784,
+      "completion_tokens": 1330
+    }
+  ]
+}

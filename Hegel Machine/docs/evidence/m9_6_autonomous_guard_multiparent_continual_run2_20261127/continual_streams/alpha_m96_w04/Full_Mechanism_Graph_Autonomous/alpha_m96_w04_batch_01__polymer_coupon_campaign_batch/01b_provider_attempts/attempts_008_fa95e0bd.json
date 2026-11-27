@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa95e0bde197468aa046dfab1eda191a",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:51.374159+00:00",
+  "ended_at_utc": "2026-11-27T03:35:33.679287+00:00",
+  "request_sha256": "90500e527723c0858ba8d9887d0ecb74839ec043625550725f58432c917f514c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30958,
+    "cached_tokens": 6784,
+    "completion_tokens": 1738
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m96_w04_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('    coef = np.empty((4, 2))')\\nb = s.index('\\\\n\\\\ndef _aligned', a)\\ns = s[:a] + '''    def consensus(x, y):\\n        # Each well-separated pair proposes an affine line; require support\\n        # from a third check and a majority before overriding the archive.\\n        if x.size < 3 or np.ptp(x) < 0.1:\\n            return None\\n        i, j = np.triu_indices(x.size, 1)\\n        keep = abs(x[i] - x[j]) >= 0.1\\n        i, j = i[keep], j[keep]\\n        gain = (y[i] - y[j]) / (x[i] - x[j])\\n        bias = y[i] - gain * x[i]\\n        error = abs(y[None, :] - gain[:, None] * x[None, :] - bias[:, None])\\n        inside = error < 0.002\\n        count = inside.sum(axis=1)\\n        best = np.lexsort((np.minimum(error, 0.002).sum(axis=1), -count))[0]\\n        mask = inside[best]\\n        if count[best] >= max(3, x.size // 2 + 1) and np.ptp(x[mask]) >= 0.1:\\n            return fit(x[mask], y[mask])\\n        return None\\n\\n    coef = np.empty((4, 2))\\n    history = None\\n    for c in range(4):\\n        x, y = rows(checks, c)\\n        p = consensus(x, y)\\n        if p is not None:\\n            coef[c] = p\\n            continue\\n        if history is None:\\n            history = json.loads(_HISTORY.read_text()) if _HISTORY.is_file() else []\\n        priors = []\\n        for sweep in history:\\n            a, b = rows(sweep, c)\\n            p = consensus(a, b)\\n            if p is not None:\\n                priors.append(p)\\n        prior = np.median(priors, axis=0) if priors else np.array([1., 0.])\\n        # With only two agreeing checks, use their current slope only if\\n        # consistent with the archive; tightly spaced pairs cannot identify it.\\n        residual = y - (prior[0] * x + prior[1])\\n        i, j = np.triu_indices(x.size, 1)\\n        dx = abs(x[i] - x[j])\\n        candidates = (dx >= 0.1) & (abs(residual[i] - residual[j]) < 0.02 * dx + 0.002)\\n        if np.any(candidates):\\n            score = np.where(candidates, abs(residual[i] - residual[j]) / np.maximum(dx, 0.1)\\n                             + 0.5 * (abs(residual[i]) + abs(residual[j])), np.inf)\\n            k = np.argmin(score)\\n            if max(abs(residual[i[k]]), abs(residual[j[k]])) < 0.02:\\n                take = [i[k], j[k]]\\n                coef[c] = fit(x[take], y[take])\\n                continue\\n        near = residual[abs(residual) < 0.02]\\n        coef[c] = prior + [0., np.median(near) if near.size else 0.]\\n    return coef\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'; s=importlib.util.spec_from_file_location('solver',p+'alpha_m96_w04_batch_01_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_alpha_m96_w04_batch_01.pkl','rb'))[0]['dataset']; checks=d['calibration_load_cells']; base=m._calibration(checks); print('public lab gain/bias',base.tolist()); rng=np.random.default_rng(13)\\nfor n,spikes in [(10,0),(10,2),(5,1),(3,1),(2,1),(1,0)]:\\n errs=[]\\n for rep in range(60):\\n  keep=[]; bad=[]\\n  for lab in range(4):\\n   group=rng.choice(np.flatnonzero(checks['lab_id']==lab),n,replace=False); keep.extend(group); bad.extend(group[:spikes])\\n  trial={k:v.copy() for k,v in checks.items()}; trial['true_stress'][bad]+=rng.choice([-.3,.3],len(bad)); est=m._calibration({k:v[keep] for k,v in trial.items()}); errs.append(np.max(2.42*abs(est[:,0]-base[:,0])+abs(est[:,1]-base[:,1])))\\n print('calibration checks/spikes',n,spikes,'p50/p95/max stress discrepancy',np.quantile(errs,[.5,.95,1]))\\nout=m.solve_alpha_m96_w04_batch_01(d); c=out['kkt_certificate']; print('taus',out['estimated_taus'],'public KKT gap',c['primal_objective']-c['dual_lower_bound'])\\nPY\\nsed -n '29,49p' /tmp/hegel_continual_archive/alpha_m96_w04_s00_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse unanchored affine fit → H2 majority-supported affine fit with archive fallback; with three checks and one injected spike, the previous fit had a worst stress discrepancy of 3.61.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use archived coefficients for every lab\",\n      \"rejected_reason\": \"A clear in-batch majority should take precedence over the archive so a genuine gain or bias change is not suppressed.\"\n    }\n  ],\n  \"rationale\": \"One injected spike caused severe affine extrapolation from sparse checks even though the public schema and allocation passed. Require majority support before overriding the archive, then repeat the same stress test and isolated public validation to check that the change fixes sparse calibration without degrading the clean case.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d21992e75862062d64000db21979927768ccfa23b0135de4c3c2522e936ba51e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44403.53,
+      "usage_known": true,
+      "prompt_tokens": 30958,
+      "cached_tokens": 6784,
+      "completion_tokens": 1738
+    }
+  ]
+}

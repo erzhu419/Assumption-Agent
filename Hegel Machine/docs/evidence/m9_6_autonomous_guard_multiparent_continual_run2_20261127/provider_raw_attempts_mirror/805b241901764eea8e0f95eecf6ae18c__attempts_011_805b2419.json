@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "805b241901764eea8e0f95eecf6ae18c",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:42:46.144982+00:00",
+  "ended_at_utc": "2026-11-27T03:43:16.434367+00:00",
+  "request_sha256": "9807dc97b38d492c41efd39bff94df5c4cf4b603532940a04fa2a21e95a5741d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 64563,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33800,
+    "cached_tokens": 6784,
+    "completion_tokens": 1112
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_batch04.py <<'PY'\\nexec(open('/tmp/check_batch04.py').read().split('out=errors')[0])\\nimport json\\nfor rec in json.load(open(s._ARCHIVE)):\\n    a,x,y=(np.asarray(rec[k]) for k in ('lab_id','cmd_stress','true_stress'))\\n    fit=np.array([s._line(x[a==c],y[a==c]) for c in range(4)])\\n    print('archive sweep deviation from current [gain,bias]',np.round(fit-cal,6).tolist())\\nprint('archive prior deviation',np.round(s._prior()-cal,6).tolist())\\nfor c in range(4):\\n    ids=np.flatnonzero(ck['lab_id']==c); x=ck['cmd_stress'][ids]; ends=ids[[x.argmin(),x.argmax()]]\\n    for n in (1,2,3):\\n        use=ends[:n] if n<=2 else np.r_[ends,ids[np.argmin(abs(x))]]\\n        worst=np.zeros(3)\\n        for i in use:\\n            altered={k:v.copy() for k,v in ck.items()}; altered['true_stress'][i]+=.20\\n            sparse=subset(altered,(ck['lab_id']!=c)|np.isin(np.arange(len(ck['lab_id'])),use))\\n            delta=s._calibrate(sparse)[c]-cal[c]\\n            worst=np.maximum(worst,np.r_[abs(delta),max(abs(delta[0]*x+delta[1]))])\\n        print('lab / checks / worst gain, bias, sweep-range stress error with one EMI spike',c,n,worst.round(6))\\n# Test the two plastic basis columns independently on the measured stress histories.\\nx=s._align(tr,d['test']); model=s._Design(tr,x[:len(lab)],cal,d['past_dt'],d['eval_times'],d['yield_stress']); tau=np.array([.55,3.8]); a=model.matrix(tau); hist=np.any(abs(model.past)>d['yield_stress'],axis=1); hold=abs(model.hold)>d['yield_stress']; t=d['eval_times']; work=(np.maximum(abs(model.past)-d['yield_stress'],0.)**2*d['past_dt']).sum(axis=1)*model.hold; over=np.maximum(abs(model.hold)-d['yield_stress'],0.)**2*np.sign(model.hold)\\nnp.testing.assert_allclose(a[:,:-1,7],over[:,None]*t); np.testing.assert_allclose(a[:,-1,7],over)\\nnp.testing.assert_allclose(a[:,:-1,8],work[:,None]*(1-np.exp(-t/tau[0]))); np.testing.assert_allclose(a[:,-1,8],work/tau[0])\\nprint('measured training coupon regimes [both sub-yield, history only, hold only, both]',[int((~hist&~hold).sum()),int((hist&~hold).sum()),int((~hist&hold).sum()),int((hist&hold).sum())]); print('plastic basis curve and initial derivative identities passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate sparse and EMI checks -> H2 test sparse sweeps contaminated by EMI and verify both plastic basis terms independently; the current public worst-horizon strain RMSE is 0.0127.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch balanced accuracy\",\n      \"rejected_reason\": \"This is a continuous constitutive regression task with neither a relay state nor class labels; leave-one-lab-out errors are the relevant subgroup check.\"\n    }\n  ],\n  \"rationale\": \"Previous verification tested sparse and spiked sweeps separately. Testing them together on the measured sweep coordinates can expose a corrupted affine fit; prefix-to-current deviations establish whether the archive is accurate enough to reject unsupported shifts. The basis assertions exercise the applicable algebraic contract without adding unrelated model terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "684d968f76da178dd52e90b5ac24a100bcf111137dd8785167f8420b7846fc01",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30251.39,
+      "usage_known": true,
+      "prompt_tokens": 33800,
+      "cached_tokens": 6784,
+      "completion_tokens": 1112
+    }
+  ]
+}

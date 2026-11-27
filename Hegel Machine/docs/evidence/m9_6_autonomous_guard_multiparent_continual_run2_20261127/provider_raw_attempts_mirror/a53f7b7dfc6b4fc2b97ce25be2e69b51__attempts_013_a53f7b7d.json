@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a53f7b7dfc6b4fc2b97ce25be2e69b51",
+  "call_seq": 13,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:37:01.123164+00:00",
+  "ended_at_utc": "2026-11-27T03:37:43.934290+00:00",
+  "request_sha256": "58098912d250ee4fb3017952f842f4e20cf761bf43374837757dd0b027ba40dc",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74533,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36465,
+    "cached_tokens": 6784,
+    "completion_tokens": 1691
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/creep_gate_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m96_w04_batch_01_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nrows = pickle.load(open(root + 'public_alpha_m96_w04_batch_01.pkl', 'rb'))\\nprint('public campaigns:', len(rows))\\nfor row in rows:\\n    d = row['dataset']; a, b = d['train'], d['test']; labs = a['lab_id']; n = len(labs)\\n    coef = s._calibrate(d['calibration_load_cells']); x = s._align(a, b)[:n]\\n    dt, t = d['past_dt'], d['eval_times']; m = s._Creep(a, x, coef, dt, t)\\n    y = np.column_stack((a['strain_curves_obs'] - a['strain_0'][:, None], a['instant_rate_obs']))\\n    assert np.all(dt > 0) and np.all(t > 0)\\n    print('dataset keys:', sorted(d))\\n    miss = ~np.isfinite(a['coupon_features_raw']).all(axis=1)\\n    residuals = {name: np.zeros_like(y[:, :-1]) for name in ('physical', 'nonlinear')}\\n    transient_error = 0.\\n    # Fixed low-order challenger: pairwise feature/stress terms and a bounded rational stress term.\\n    q = np.column_stack((x * m.hold[:, None], x[:, 0] * x[:, 1], x[:, 2] * x[:, 3], m.hold / (1 + m.hold**2)))\\n    for lab in np.unique(labs):\\n        held = labs == lab; p = s._fit(m, y, ~held); design = m.basis(p[:2])[0]\\n        for mode, tau in enumerate(p[:2]):\\n            z = a['initial_memory_states'][:, mode].copy()\\n            for j, h in enumerate(dt):\\n                z += (m.past[:, j] - z) * -np.expm1(-h / tau)\\n            f = np.r_[-np.expm1(-t / tau), 1 / tau]\\n            transient_error = max(transient_error, float(np.max(abs(design[..., mode] - (m.hold-z)[:, None]*f))))\\n        pv = design @ p[2:]\\n        # Fit only on the outer training labs; missing features are not evidence for nonlinear drift.\\n        train = ~held & ~miss\\n        base = pv-y\\n        new = q[:, None, :] * np.r_[t, 1.][None, :, None]\\n        scale = np.maximum(2*s._mad(base[train], axis=0), 1e-6)\\n        def error(w):\\n            return ((base[train] + new[train] @ w)/scale).ravel()\\n        w = least_squares(error, np.zeros(q.shape[1]), loss='soft_l1').x\\n        for name, response in [('physical', pv.copy()), ('nonlinear', pv + new @ w)]:\\n            response[miss, :-1] += (y[miss, -1] - response[miss, -1])[:, None]*t\\n            residuals[name][held] = (response-y)[held, :-1]\\n    assert transient_error < 1e-12, transient_error\\n    print('direct recurrence max error across both branches and held-out fits:', transient_error)\\n    for name, r in residuals.items():\\n        for lab in np.unique(labs):\\n            sel = labs == lab\\n            complete = sel & ~miss; missing = sel & miss\\n            r0 = r[complete]\\n            print(name, 'held lab', lab, 'complete median coupon curve AE/endpoint AE/signed endpoint bias:', np.round([np.median(np.median(abs(r0), axis=1)), np.median(abs(r0[:, -1])), np.median(r0[:, -1])], 6), 'incomplete endpoint RMSE:', np.sqrt(np.mean(r[missing, -1]**2)) if np.any(missing) else 'no slice')\\n    # Three spot checks put the candidate just above its explicit sparse cutoff.\\n    checks = {k: np.asarray(v) for k, v in d['calibration_load_cells'].items()}; worst = 0.\\n    for wing in (0, 1):\\n        group = [np.where(checks['lab_id'] == c)[0] for c in (wing*2, wing*2+1)]\\n        ordered = [ix[np.argsort(checks['cmd_stress'][ix])] for ix in group]\\n        for crop in ((0, 1, 2), (0, 4, -1), (-3, -2, -1)):\\n            for spike in range(3):\\n                altered = {k: v.copy() for k,v in checks.items()}\\n                keep = checks['lab_id']//2 != wing\\n                for ix in ordered:\\n                    kept = ix[list(crop)]; keep[kept] = True; altered['true_stress'][kept[spike]] += .15\\n                c = s._calibrate({k:v[keep] for k,v in altered.items()})\\n                worst = max(worst, float(np.max(abs(c-coef))))\\n    print('worst three-check calibration coefficient shift:', worst)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/creep_gate_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived two-mode creep with aligned drift → H2 audit the exact preload recurrence and test nonlinear drift on held-out labs; the verified worst sparse-EMI strain shift is 0.00157.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay, or stochastic-control diagnostics\",\n      \"rejected_reason\": \"This task predicts continuous strain in one public campaign; held-out lab and missingness slices test nuisance effects without inventing classes, relay states, or a stochastic control model.\"\n    }\n  ],\n  \"rationale\": \"Compare the closed-form recurrence with direct propagation to catch sign or preload errors in either branch. Test interaction and rational drift terms on held-out labs; retain them only for a consistent improvement. Probe three spot checks because that is the first case above the archive-anchoring cutoff; if one EMI spike still dominates there, revise the cutoff logic.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "45d5eb9f5a439642e8227040bbec9b57487d979aeaddbf4bfb2e3712a6185766",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44835.66,
+      "usage_known": true,
+      "prompt_tokens": 36465,
+      "cached_tokens": 6784,
+      "completion_tokens": 1691
+    }
+  ]
+}

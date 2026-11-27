@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c36b91ffa1534e5782a03d07de648f1c",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_03__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:25.613097+00:00",
+  "ended_at_utc": "2026-11-27T03:34:11.800653+00:00",
+  "request_sha256": "4f6889bf25202eacca2059fe0487ae1da210518491c038e83eb36513e132f196",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38321,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25331,
+    "cached_tokens": 11136,
+    "completion_tokens": 2057
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_m96_w03_batch_03_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\nfrom pathlib import Path\\\\n\\\\nimport numpy as np', 1)\\na = s.index('def _calibrated_observations(')\\nb = s.index('def _forward(', a)\\ns = s[:a] + '''_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\ndef _bank_sweeps(sweeps, bank):\\n    selected = np.asarray(sweeps['bank_id']) == bank\\n    return (np.asarray(sweeps['ref_signal'], dtype=float)[selected],\\n            np.asarray(sweeps['raw_readout'], dtype=float)[selected])\\n\\n\\ndef _affine_candidates(x, y):\\n    \\\"\\\"\\\"Find the largest set of checks consistent with one affine line.\\\"\\\"\\\"\\n    if len(x) < 2:\\n        return []\\n    i, j = np.triu_indices(len(x), 1)\\n    spread = x[j] - x[i]\\n    # Prefix sweeps are reported to six decimals. Near-coincident checks\\n    # give a poor slope even when both raw readings are uncontaminated.\\n    pairs = np.flatnonzero(np.abs(spread) > 1e-4)\\n    tol = 2e-6\\n    best, candidates = 1, []\\n    for k in pairs:\\n        gain = (y[j[k]] - y[i[k]]) / spread[k]\\n        if gain <= 0:\\n            continue\\n        offset = y[i[k]] - gain * x[i[k]]\\n        good = np.abs(y - (gain * x + offset)) <= tol\\n        n = int(good.sum())\\n        if n < best:\\n            continue\\n        if n > best:\\n            candidates, best = [], n\\n        if not any(np.array_equal(good, mask) for mask in candidates):\\n            candidates.append(good)\\n    return [_fit_affine(x[mask], y[mask]) for mask in candidates]\\n\\n\\ndef _fit_affine(x, y):\\n    centered = x - x.mean()\\n    gain = centered @ (y - y.mean()) / (centered @ centered)\\n    return np.array([gain, y.mean() - gain * x.mean()])\\n\\n\\ndef _calibration_coefficients(sweeps):\\n    checks = [_bank_sweeps(sweeps, bank) for bank in range(4)]\\n    candidates = [_affine_candidates(x, y) for x, y in checks]\\n    if all(len(fits) == 1 for fits in candidates):\\n        return np.array([fits[0] for fits in candidates])\\n\\n    # Keep the archived episodes separate: averaging their coefficients\\n    # would mix distinct sensor states. Use history only for unresolved banks.\\n    history = []\\n    if _HISTORY.is_file():\\n        for episode in json.loads(_HISTORY.read_text()):\\n            fits = [_affine_candidates(*_bank_sweeps(episode, bank)) for bank in range(4)]\\n            if all(len(f) == 1 for f in fits):\\n                history.append([f[0] for f in fits])\\n    if not history:\\n        history = [np.tile([1., 0.], (4, 1))]\\n    history = np.asarray(history)\\n    result = []\\n    for bank, fits in enumerate(candidates):\\n        if len(fits) == 1:\\n            result.append(fits[0])\\n            continue\\n        x, y = checks[bank]\\n        priors = history[:, bank]\\n        # If this bank has no adequate sweep, prefer matching states from its\\n        # wing partner, then the other wing when the partner is unresolved.\\n        partner = bank ^ 1\\n        peers = [partner] if len(candidates[partner]) == 1 else [\\n            k for k in range(4) if k != bank and len(candidates[k]) == 1]\\n        peer_error = np.zeros(len(history))\\n        for k in peers:\\n            peer_error += np.sum((history[:, k] - candidates[k][0])**2, axis=1)\\n        if fits:\\n            trial = np.asarray(fits)\\n            distances = np.sum((trial[:, None, :] - priors[None, :, :])**2, axis=2)\\n            selected = np.argmin(np.min(distances + peer_error[None, :], axis=1))\\n            result.append(trial[selected])\\n        elif len(x):\\n            residuals = y[None, :] - (priors[:, :1] * x[None, :] + priors[:, 1:])\\n            correction = np.median(residuals, axis=1)\\n            index = np.argmin(correction**2 + peer_error)\\n            gain, offset = priors[index]\\n            result.append([gain, offset + correction[index]])\\n        else:\\n            result.append(priors[np.argmin(peer_error)])\\n    return np.asarray(result)\\n\\n\\ndef _calibrated_observations(study):\\n    gain, offset = _calibration_coefficients(study['sensor_calibration_sweeps']).T\\n    rows = np.asarray(study['row_bank_id'])\\n    return (np.asarray(study['y_obs_raw']) - offset[rows]) / gain[rows]\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent affine bank sweeps → H2 largest-consensus calibration with archive fallback for unresolved banks; the previous public candidate’s worst KKT gap was 8.51×10⁻⁹ and terminal-field relative error was 2.79×10⁻⁸.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the public-passing calibration unchanged\",\n      \"rejected_reason\": \"It raises an exception when a bank lacks two distinct reference levels, a case the task explicitly calls out.\"\n    }\n  ],\n  \"rationale\": \"The public comparison supports leaving transport, profiling, and the KKT solver unchanged. Replace only calibration, where sparse checks can make a current-only fit impossible and EMI spikes can invalidate an all-points fit. Run the isolated validator to catch regression before testing sparse and contaminated sweeps.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0342f87b4330f2e93f250626c0d0717cae41fce68f5ef969f6634646b3fd64ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50326.82,
+      "usage_known": true,
+      "prompt_tokens": 25331,
+      "cached_tokens": 11136,
+      "completion_tokens": 2057
+    }
+  ]
+}

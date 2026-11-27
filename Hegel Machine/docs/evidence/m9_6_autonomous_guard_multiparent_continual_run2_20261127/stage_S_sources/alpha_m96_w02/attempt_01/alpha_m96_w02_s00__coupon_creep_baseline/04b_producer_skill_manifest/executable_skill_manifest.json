@@ -1,0 +1,131 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m96_w02_s00_eadc6c2b0960",
+    "source_hash": "eadc6c2b09604035010cf4e7d15336e8dc81ceefd053a48489862af59642ca5e",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m96_w02_s00__coupon_creep_baseline",
+    "task_id": "alpha_m96_w02_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/alpha_before_sparse.py",
+        "archived_relpath": "producers/tmp__alpha_before_sparse.py",
+        "bytes": 7398,
+        "sha256": "33b73ff6c8d2dbd4e7ee1208329da75d4db48b64f8606cb61256788002f64ddf"
+      },
+      {
+        "container_path": "/tmp/alpha_sparse_probe.py",
+        "archived_relpath": "producers/tmp__alpha_sparse_probe.py",
+        "bytes": 4669,
+        "sha256": "02441f35cc1db9b00a3d54042e0e69396e9dcc9ad6ce304d9c0ff0627f99b042"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np,os\nwith open('public_alpha_m96_w02_s00.pkl','rb') as f: d=pickle.load(f)\ndef brief(d,depth=0):\n for k,v in d.items():\n  print('  '*depth,k,type(v).__name__,getattr(v,'shape',''),getattr(v,'dtype',''), (str(v)[:200] if np.isscalar(v) else (len(v) if hasattr(v,'__len__') else '')))\n  if isinstance(v,dict): brief(v,depth+1)\n  if isinstance(v,(tuple,list)) and v: print('  '*depth,'first',str(v[0])[:350])\nbrief(d)\np='/tmp/hegel_continual_archive'; print('Archive:',os.listdir(p) if os.path.isdir(p) else '",
+      "cd /holdout_task && ls -lh && tail -42 validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np,os,json\nwith open('public_alpha_m96_w02_s00.pkl','rb') as f: d=pickle.load(f)\ndef brief(v,p='root',depth=0):\n if isinstance(v,dict):\n  print(p,'dict',list(v));\n  for k,x in v.items(): brief(x,p+'.'+str(k),depth+1)\n elif isinstance(v,(tuple,list)):\n  print(p,type(v).__name__,len(v))\n  if v and depth<3: brief(v[0],p+'[0]',depth+1)\n elif isinstance(v,np.ndarray):\n  a=v.ravel();print(p,v.shape,v.dtype,'sample',a[:8], 'nonfinite',np.count_nonzero(~np.isfinite(a)) if np.issubdtype(v.dtype,n",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, os, numpy as np\np=pickle.load(open('public_alpha_m96_w02_s00.pkl','rb'))\nprint('public cases',len(p))\nfor c in p:\n d=c['dataset']; print('case fields',list(c),'dataset fields',list(d))\n for name in ['train','test','calibration_load_cells','eval_times','yield_stress']:\n  v=d.get(name); print(name,type(v).__name__)\n  if isinstance(v,dict):\n   for k,x in v.items():\n    a=np.asarray(x); print(' ',k,a.shape,a.dtype,a.ravel()[:5])\n   if 'lab_id' in v: print(' counts:',np.unique(v['lab_id'],return_counts=True))\n   if name=='calibration_load_cells':\n",
+      "cd /holdout_task && cat > alpha_m96_w02_s00_solver.py <<'PY'\n\"\"\"Calibrated sub-yield creep fit for the multi-wing coupon stream.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _stress_calibration(checks):\n    lab = np.asarray(checks['lab_id'])\n    cmd = np.asarray(checks['cmd_stress'], float)\n    true = np.asarray(checks['true_stress'], float)\n    params = np.tile([1., 0.], (4, 1))\n    for c in range(4):\n        use = (lab == c) & np.isfinite(cmd) & np.isfinite(true)\n        x, y = cmd[use], true[use]\n        if not len(x):\n            continue\n        i, j = np.triu_indi",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\np='/holdout_task/alpha_m96_w02_s00_solver.py'\nspec=importlib.util.spec_from_file_location('solver',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('public_alpha_m96_w02_s00.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; out=s.solve_alpha_m96_w02_s00(d)\nrmse=lambda a: np.sqrt(np.mean(np.square(a)))\ne=out['predicted_strain']-g['te_clean']; r=out['initial_rate_pred']-g['te_true_rate0']; tr,te=d['train'],d['test']\nprint('taus abs errors',abs(out['estimated_t",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m96_w02_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('public_alpha_m96_w02_s00.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; tr,te=d['train'],d['test']; t=d['eval_times']; rmse=lambda e: np.sqrt(np.mean(e**2))\ndef audit(name,o,b,truth,ref):\n missing=np.isnan(b['coupon_features_raw']).any(axis=1); available=missing & np.isfinite(b['instant_rate_obs']); correction=np",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m96_w02_s00_solver.py')\ns = p.read_text()\nold = \"    pred = np.einsum('ntj,j->nt', dte.make(tau), theta)\\n    return dict(estimated_taus=tau, hereditary_weights=theta,\"\nnew = \"    pred = np.einsum('ntj,j->nt', dte.make(tau), theta)\\n    # Missing features affect only the linear drift. The measured onset\\n    # identifies that drift after the hereditary onset has been accounted for.\\n    if 'instant_rate_obs' in test:\\n        onset = np.asarray(test['instant_rate_obs'])\\n        use = np.isnan(test['coupon_features_r",
+      "cd /holdout_task && sed -n '1,160p' public_asset_index.json && find /pretrain_task /tmp/hegel_continual_archive -maxdepth 3 -type f \\( -iname '*calib*' -o -iname '*manifest*' \\) -printf '%p %s bytes\\n' 2>/dev/null | head -25; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m96_w02_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('public_alpha_m96_w02_s00.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; b=d['calibration_load_cells']; labs=",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/alpha_m96_w02_s00_solver.py'\nspec=importlib.util.spec_from_file_location('solver',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('public_alpha_m96_w02_s00.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; tr,te=d['train'],d['test']; t=d['eval_times']; o=s.solve_alpha_m96_w02_s00(d)\nrmse=lambda x: np.sqrt(np.mean(np.square(x)))\ne=o['pre",
+      "cd /holdout_task && cat > /tmp/alpha_sparse_probe.py <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import least_squares\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m96_w02_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nc=pickle.load(open('/holdout_task/public_alpha_m96_w02_s00.pkl','rb'))[0]; d,g=c['dataset'],c['gt']; tr,te=d['train'],d['test']\n\ndef joint(d):\n    tr,te=d['train'],d['test']; lab=tr['lab_id']; checks=d['calibration_load_cells']; cl=checks['lab_id']; cmd=checks['cmd_stress']; val=checks['t",
+      "set -e\ncd /holdout_task\ncp alpha_m96_w02_s00_solver.py /tmp/alpha_before_sparse.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m96_w02_s00_solver.py')\ns = p.read_text()\nold = 'def solve_alpha_m96_w02_s00(dataset: dict) -> dict:\\n'\nnew = '''def _fit_sparse_calibration(train, checks, x, dt, t, cal, curves):\n    \"\"\"Complete a singleton affine check using the training creep response.\"\"\"\n    lab = np.asarray(train['lab_id'])\n    cmd = np.asarray(checks['cmd_stress'])\n    true = np.asarray(checks['true_stress'])\n    check_lab = np.asarray(checks['lab_id'])\n    sparse = []\n    identifie"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__alpha_before_sparse.py",
+      "primary_producer_container_path": "/tmp/alpha_before_sparse.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m96_w02_s00_solver.py",
+        "filename": "alpha_m96_w02_s00_solver.py",
+        "bytes": 9788,
+        "sha256": "5def8dc7ea526f0bc8a9d880521b6b49f29b423c3d7b75fa2d60a10be026aae7",
+        "content_addressed_ref": "content_addressed_blobs/5def8dc7ea526f0bc8a9d880521b6b49f29b423c3d7b75fa2d60a10be026aae7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m96_w02_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_stress_calibration",
+      "_align",
+      "_inputs",
+      "_fit",
+      "recode"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "eadc6c2b09604035010cf4e7d15336e8dc81ceefd053a48489862af59642ca5e",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\ncp alpha_m96_w02_s00_solver.py /tmp/alpha_before_sparse.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m96_w02_s00_solver.py')\ns = p.read_text()\nold = 'def solve_alpha_m96_w02_s00(dataset: dict) -> dict",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "eadc6c2b09604035010cf4e7d15336e8dc81ceefd053a48489862af59642ca5e",
+        "expected_candidate_sha256": "eadc6c2b09604035010cf4e7d15336e8dc81ceefd053a48489862af59642ca5e",
+        "computed_candidate_sha256": "eadc6c2b09604035010cf4e7d15336e8dc81ceefd053a48489862af59642ca5e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m96_w02_s00_solver.py",
+            "bytes": 9788
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_eadc6c2b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_stress_calibration",
+        "code": "def _stress_calibration(checks):\n    lab = np.asarray(checks['lab_id'])\n    cmd = np.asarray(checks['cmd_stress'], float)\n    true = np.asarray(checks['true_stress'], float)\n    params = np.tile([1.0, 0.0], (4, 1))\n    for c in range(4):\n        use = (lab == c) & np.isfinite(cmd) & np.isfinite(true)\n        x, y = (cmd[use], true[use])\n        if not len(x):\n            continue\n        i, j = np.triu_indices(len(x), 1)\n        distinct = abs(x[i] - x[j]) > 1e-08\n        i, j = (i[distinct], j[distinct])\n        if not len(i):\n            params[c, 1] = np.median(y - x)\n            continue\n        slopes = (y[i] - y[j]) / (x[i] - x[j])\n        errors = y[None, :] - slopes[:, None] * x[None, :]\n        intercepts = np.median(errors, axis=1)\n        errors -= intercepts[:, None]\n        best = np.argmin(np.median(abs(errors), axis=1))\n        cutoff = max(0.0007, 4.5 * 1.4826 * np.median(abs(errors[best])))\n        inliers = abs(errors[best]) <= cutoff\n        params[c] = np.linalg.lstsq(np.column_stack((x[inliers], np.ones(sum(inliers)))), y[inliers], rcond=None)[0]\n    return params"
+      },
+      {
+        "name": "_align",
+        "code": "def _align(train, test):\n    lab = np.concatenate((train['lab_id'], test['lab_id']))\n    stratum = np.concatenate((train['stratum'], test['stratum']))\n    x = np.concatenate((train['coupon_features_raw'], test['coupon_features_raw'])).astype(float)\n    refs = np.concatenate((train['ref_coupons'], test['ref_coupons']))\n    for c in np.unique(lab):\n        use = lab == c\n        panel = refs[use]\n        offset = np.nanmedian(np.nanmean(panel, axis=0))\n        gain = np.nanmedian(np.nanstd(panel, axis=0))\n        x[use] = (x[use] - offset) / gain\n    _, cell, counts = np.unique(np.column_stack((lab, stratum)), axis=0, return_inverse=True, return_counts=True)\n    w = 1.0 / counts[cell, None]\n    valid = np.isfinite(x)\n    mass = np.sum(w * valid, axis=0)\n    fill = np.divide(np.sum(w * np.where(valid, x, 0.0), axis=0), mass, out=np.zeros(x.shape[1]), where=mass > 0.0)\n    return np.where(valid, x, fill)"
+      },
+      {
+        "name": "_inputs",
+        "code": "def _inputs(data, x, calibration):\n    gain, bias = calibration[np.asarray(data['lab_id'])].T\n    past = gain[:, None] * data['past_stress_cmd'] + bias[:, None]\n    hold = gain * data['stress_hold_cmd'] + bias\n    return (past, hold, np.column_stack((np.ones(len(x)), x)))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(design, curves, initial_rate):\n    from scipy.optimize import least_squares\n    y = np.column_stack((curves, initial_rate))\n\n    def scales(r):\n\n        def mad(a):\n            return 1.4826 * np.median(abs(a - np.median(a)))\n        s = max(1e-07, mad(r[:, :-1]))\n        return np.r_[np.full(y.shape[1] - 1, s), max(1e-07, mad(r[:, -1]))]\n\n    def linear_start(a):\n        a = a.reshape(-1, 7)\n        yflat = y.ravel()\n        b = np.linalg.lstsq(a, yflat, rcond=None)[0]\n        for _ in range(3):\n            r = (np.einsum('ij,j->i', a, b) - yflat).reshape(y.shape)\n            s = 2.5 * scales(r)\n            w = (1.0 / np.hypot(s, r)).ravel()\n            b = np.linalg.lstsq(a * w[:, None], yflat * w, rcond=None)[0]\n        return (b, (np.einsum('ij,j->i', a, b) - yflat).reshape(y.shape))\n    seeds = []\n    grid = (0.22, 0.38, 0.68, 1.2, 2.15, 3.8, 6.5, 7.9)\n    for i, t1 in enumerate(grid[:-1]):\n        for t2 in grid[i + 1:]:\n            b, r = linear_start(design.make((t1, t2)))\n            seeds.append((np.r_[t1, t2, b], r))\n    pilot = min(seeds, key=lambda sr: np.median(abs(sr[1][:, :-1])))\n    scale = 2.5 * scales(pilot[1])\n    bounds = (np.r_[0.2, 0.2, np.full(7, -np.inf)], np.r_[8.0, 8.0, np.full(7, np.inf)])\n\n    def score(r):\n        return np.sum(np.log1p((r / scale) ** 2))\n\n    def optimize(p):\n\n        def residual(q):\n            a = design.make(q[:2])\n            return ((np.einsum('ntj,j->nt', a, q[2:]) - y) / scale).ravel()\n\n        def jac(q):\n            a, da = design.make(q[:2], derivative=True)\n            j = np.concatenate((da * q[2:4], a), axis=2)\n            return (j / scale[None, :, None]).reshape(-1, 9)\n        return least_squares(residual, p, jac=jac, bounds=bounds, loss='cauchy', tr_solver='exact', x_scale='jac', max_nfev=120, ftol=2e-09, xtol=2e-09, gtol=2e-07)\n    seeds.sort(key=lambda sr: score(sr[1]))\n    fitted = min((optimize(p) for p, _ in seeds[:4]), key=lambda result: result.cost)\n    scale = 2.5 * scales(fitted.fun.reshape(y.shape) * scale)\n    p = optimize(fitted.x).x\n    if p[0] > p[1]:\n        p[[0, 1, 2, 3]] = p[[1, 0, 3, 2]]\n    if p[0] == p[1]:\n        if p[1] < 8.0:\n            p[1] = np.nextafter(p[1], np.inf)\n        else:\n            p[0] = np.nextafter(p[0], -np.inf)\n    return (p[:2], p[2:])"
+      },
+      {
+        "name": "recode",
+        "code": "def recode(d, pair, spot):\n    q = {k: v.copy() for k, v in d['calibration_load_cells'].items()}\n    recoded = {}\n    for name in ('train', 'test'):\n        b = d[name]\n        recoded[name] = dict(b, past_stress_cmd=b['past_stress_cmd'].copy(), stress_hold_cmd=b['stress_hold_cmd'].copy())\n    mask = np.ones(len(q['lab_id']), bool)\n    for lab, a, bias in pair:\n        m = q['lab_id'] == lab\n        q['cmd_stress'][m] = (q['cmd_stress'][m] - bias) / a\n        for z in recoded.values():\n            sel = z['lab_id'] == lab\n            for k in ('past_stress_cmd', 'stress_hold_cmd'):\n                z[k][sel] = (z[k][sel] - bias) / a\n        idx = np.flatnonzero(m)\n        idx = idx[np.argsort(q['cmd_stress'][idx])]\n        mask[idx] = False\n        mask[idx[spot]] = True\n    return dict(d, **recoded, calibration_load_cells={k: v[mask] for k, v in q.items()})"
+      }
+    ]
+  }
+}

@@ -1,0 +1,82 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m96_w02_s00_9303bd8fb642",
+    "source_hash": "9303bd8fb642704ccba9bd10b29bc7e8e668ade5209f934feb40c4853520fc72",
+    "parent_ids": [],
+    "source_episode_id": "beta_m96_w02_s00__tracer_tomography_baseline",
+    "task_id": "beta_m96_w02_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_m96_w02_s00.pkl','rb') as f:s=pickle.load(f)\nprint('root:',type(s))\nfor k,v in s.items():\n if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,repr(v.ravel()[:6]))\n elif isinstance(v,(list,tuple)): print(k,type(v).__name__,len(v),str(v[:2])[:400])\n elif isinstance(v,dict): print(k,list(v))\n else: print(k,type(v).__name__,str(v)[:300])\nPY\nls -la /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null || true\nPYTHONPATH=/tmp python3 -m hegel_",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_m96_w02_s00.pkl','rb') as f: cases=pickle.load(f)\nprint('case count:',len(cases))\nfor i,case in enumerate(cases):\n s=case['study']; print('case',i,'keys',list(case),'max circulation',np.max(s['past_vortex_circulation_trace']))\n if i==0:\n  for k,v in s.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:8])\n   else: print(k,str(v)[:1000])\n for b in range(4):\n  rows=[(d['ref_signal'],d['raw_readout']) for d in s['sensor_calibration_sweeps'] if d['bank_id",
+      "cd /holdout_task && tail -55 validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\ncases=pickle.load(open('public_beta_m96_w02_s00.pkl','rb')); print('cases',len(cases))\nfor i,c in enumerate(cases):\n s=c['study']; V=s['V_reaction_2d']; print('case',i,'circulation',np.max(s['past_vortex_circulation_trace']),'separable defect',np.max(abs(V-V[:,0,None]-V[None,0,:]+V[0,0])))\n if i==0:\n  for k,v in s.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:4])\n   elif k=='sensor_calibration_sweeps': print(k,type(v),list(v) if isinstance(v,dict) else len(v))\n   e",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.linalg import eigh, solve_sylvester\ns,g=map(pickle.load(open('public_beta_m96_w02_s00.pkl','rb'))[0].get,('study','gt'))\nZ=s['Z_nuisance']; P,sv,_=np.linalg.svd(Z,full_matrices=False); r=s['nuisance_ridge']; y=s['y_obs_raw']; Sg=g['S_tilde']; yg=g['r_y']; V=s['V_reaction_2d']; rx=s['reaction_x']; ry=s['reaction_y']; ii,jj=s['sensor_ij'].T\nprint('reaction difference range',np.min(V-rx[:,None]-ry),np.max(V-rx[:,None]-ry))\ndef prof(x,p):\n t=(1-(r/(sv**2+r))**p); return x-P@(t*(P.T@x) if x.ndim==1 els",
+      "cat > /holdout_task/beta_m96_w02_s00_solver.py <<'PY'\n\"\"\"Calibrate the banks and recover laminar tracer source weights.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import solve_sylvester\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    kappa = np.asarray(kappa, dtype=float)\n    vel = np.asarray(vel, dtype=float)\n    h = L / n\n    face = 2 * kappa[:-1] * kappa[1:] / (kappa[:-1] + kappa[1:]) / h**2\n    pos = np.maximum(vel, 0) / h\n    neg = np.maximum(-vel, 0) / h\n    diag = np.asarray(diag_add, dtype=float) + np.r_[0, face] + np.r_[face, 0] + pos + neg\n    for b in (0, n - 1):\n        diag[",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np=importlib.util.spec_from_file_location('candidate','/holdout_task/beta_m96_w02_s00_solver.py'); a=importlib.util.module_from_spec(p); p.loader.exec_module(a)\ns=pickle.load(open('public_beta_m96_w02_s00.pkl','rb'))[0]['study']; base=a.solve_beta_m96_w02_s00(s)\nfor label,noisy_wing,sparse in [('wing_A_EMI',0,False),('wing_B_EMI',1,False),('two_checks_per_bank',None,True)]:\n    x=np.asarray(s['sensor_calibration_sweeps']['ref_signal']); b=np.asarray(s['sensor_calibration_sweeps']['bank_id']",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.sparse import csr_matrix, eye, kron\nfrom scipy.sparse.linalg import splu\n\ndef load(name, path):\n    spec = importlib.util.spec_from_file_location(name, path)\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\nsolver = load('candidate', '/holdout_task/beta_m96_w02_s00_solver.py')\nvalidator = load('validator', '/holdout_task/validate_public_schema.py')\nworst = dict(stencil=0., design=0., obs=0., field=0., certificate_gap=0., held",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\nif p.is_file():\n    a = json.loads(p.read_text())\n    print('archive schema:', type(a).__name__, list(a)[:12] if isinstance(a, dict) else len(a))\n    if isinstance(a, dict):\n        for k,v in list(a.items())[:12]:\n            print(k, type(v).__name__, list(v)[:8] if isinstance(v, dict) else len(v) if isinstance(v,list) else '')\nelse:\n    print('archive absent')\ncase = pickle.loa",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m96_w02_s00_solver.py')\ns = p.read_text()\ns = s.replace('import numpy as np', 'import json\\nfrom pathlib import Path\\n\\nimport numpy as np', 1)\nstart = '\\ndef _calibrate(study):\\n'\nassert s.count(start) == 1\ns = s.replace(start, '\\n_CALIBRATION_HISTORY = Path(\"/tmp/hegel_continual_archive/archive_calibration_history.json\")\\n\\n\\ndef _historical_affine(history, bank):\\n    \"\"\"Read the archived bank_gain and bank_offset vectors or bank-ID maps.\"\"\"\\n    coeff = []\\n    for name in (\"bank_gain\", \"bank_offset\"):\\n        va",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_m96_w02_s00_solver.py')\na = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(a)\n\ndef check(s, g, out):\n    w = out['weights']; cert = out['kkt_certificate']; S, y = g['S_tilde'], g['r_y']\n    cap, total, ridge = (s[k] for k in ('u_box', 'total_budget', 'source_ridge'))\n    res = S @ w - y; grad = S.T @ res + ridge*w; nu = cert['nu_sum']\n    obj = .5*(re"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m96_w02_s00_solver.py",
+        "filename": "beta_m96_w02_s00_solver.py",
+        "bytes": 8089,
+        "sha256": "77ae72d1d3ef9ba0a3323b0b0fdcb03f3600486fe29bad7c83e8de1e71e4b642",
+        "content_addressed_ref": "content_addressed_blobs/77ae72d1d3ef9ba0a3323b0b0fdcb03f3600486fe29bad7c83e8de1e71e4b642.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m96_w02_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9303bd8fb642704ccba9bd10b29bc7e8e668ade5209f934feb40c4853520fc72",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_m96_w02_",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9303bd8fb642704ccba9bd10b29bc7e8e668ade5209f934feb40c4853520fc72",
+        "expected_candidate_sha256": "9303bd8fb642704ccba9bd10b29bc7e8e668ade5209f934feb40c4853520fc72",
+        "computed_candidate_sha256": "9303bd8fb642704ccba9bd10b29bc7e8e668ade5209f934feb40c4853520fc72",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w02_s00_solver.py",
+            "bytes": 8089
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_9303bd8f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

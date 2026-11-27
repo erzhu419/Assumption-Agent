@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64cc955c3a964626b1c873ecdffb5e2d",
+  "call_seq": 13,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:37:01.124083+00:00",
+  "ended_at_utc": "2026-11-27T03:37:28.380931+00:00",
+  "request_sha256": "d6087429582a3f53a33e3741bee69664cf3be0baed6540cc705b0684e01d2fe4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 72996,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36239,
+    "cached_tokens": 6784,
+    "completion_tokens": 1049
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nbase='/holdout_task/'; spec=importlib.util.spec_from_file_location('solver',base+'alpha_m96_w02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ne=pickle.load(open(base+'public_alpha_m96_w02_batch_02.pkl','rb'))[0]; d=e.get('dataset',e.get('data',e)); tr,te=d['train'],d['test']; c=d['calibration_load_cells']; hist=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); cal=m._stress_calibration(c); gt=e['gt']; truth=np.c_[gt['stress_gains'],gt['stress_biases']]\\nfor j in range(4):\\n print('lab',j,'fit',np.round(cal[j],6),'public error',np.round(cal[j]-truth[j],6));\\n for label,s in [('prefix '+str(i),s) for i,s in enumerate(hist)]+[('current',c)]:\\n  k=np.asarray(s['lab_id'])==j; x=np.asarray(s['cmd_stress'])[k]; y=np.asarray(s['true_stress'])[k]; r=y-cal[j,0]*x-cal[j,1]; print(label,'n',len(x),'span',round(np.ptp(x),5) if len(x) else None,'abs residual quantiles',np.round(np.quantile(abs(r),[0,.5,.8,1]),6).tolist() if len(x) else [])\\nfor split,s in [('train',tr),('test',te)]:\\n p,h,*_=m._inputs(s,np.zeros((len(s['lab_id']),4)),cal); print(split,'peak physical stress',max(np.max(abs(p)),np.max(abs(h))),'initial memory range',np.round(np.quantile(s['initial_memory_states'],[0,.5,1]),6))\\nprint('yield threshold',d.get('yield_stress')); print('observational fields',sorted(tr)); print('test clean calibration-isolation RMS',end=' ')\\nn=len(tr['lab_id']); x=m._align(tr,te); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; mask=np.isfinite(te['coupon_features_raw']).all(axis=1); lab=te['lab_id'];\\nfor cc in (cal,truth):\\n A=m._Design(dt,t,m._inputs(tr,x[:n],cc)); tau,b=m._fit(A,y,tr['instant_rate_obs']); M=m._Design(dt,t,m._inputs(te,x[n:],cc)).make(tau); r=M[:,:-1]@b+te['strain_0'][:,None]-gt['te_clean']; print([round(np.sqrt(np.mean(r[mask&(lab==j)]**2)),6) for j in range(4)],end=' ')\\nprint()\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated preloaded recurrence with rate correction → H2 retain it unless real load-cell checks reveal a calibration bottleneck; worst public complete-feature lab RMSE is 0.00827 and worst held-out missing-feature lab RMSE is 0.33154.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic control operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"This task models continuous strain from stress histories and solves a convex allocation problem. It contains no relay state, stochastic control operator, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Compare real load-cell residuals by lab and epoch, then use the public reference calibration only as a diagnostic to isolate how much calibration contributes to complete-feature error. A material difference would justify improving the sparse or contaminated calibration fit; otherwise the verified model stays unchanged. The observed stress range also tests whether a yield branch is relevant.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "3c661bc3b50673b2dc7800d0bf68333d5baed7cba98a824a6b620e95a5521ae7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29280.46,
+      "usage_known": true,
+      "prompt_tokens": 36239,
+      "cached_tokens": 6784,
+      "completion_tokens": 1049
+    }
+  ]
+}

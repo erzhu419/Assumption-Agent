@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eaadce7992dc41689260af7c9b56a628",
+  "call_seq": 9,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:53.850579+00:00",
+  "ended_at_utc": "2026-11-27T03:35:26.742332+00:00",
+  "request_sha256": "e27fa873d40465444a28cac84dd6816c35d7e6bb9dfd88a26fae57fd8d3cb1ed",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 52163,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29619,
+    "cached_tokens": 6784,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m96_w04_batch_01_solver.py')\\ns = p.read_text().replace('        gains = [prior[0]]\\\\n', '').replace('                        gains.append(gain)\\\\n', '')\\na = \\\"    delta = _Creep(test, x[n:], *args).basis(p[:2])[0][:, :-1] @ p[2:]\\\\n    pred = delta + test['strain_0'][:, None]\\\"\\nb = \\\"    response = _Creep(test, x[n:], *args).basis(p[:2])[0] @ p[2:]\\\\n    delta = response[:, :-1]\\\\n    # The rate residual estimates the linear drift left unresolved by imputation.\\\\n    missing = ~np.isfinite(test['coupon_features_raw']).all(axis=1)\\\\n    delta[missing] += (np.asarray(test['instant_rate_obs'])[missing] - response[missing, -1])[:, None] * args[2]\\\\n    pred = delta + test['strain_0'][:, None]\\\"\\nassert s.count(a) == 1\\np.write_text(s.replace(a, b))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, json, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('s',p+'alpha_m96_w04_batch_01_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nrows=pickle.load(open(p+'public_alpha_m96_w04_batch_01.pkl','rb')); history=json.loads(s._HISTORY.read_text()); print('campaign count',len(rows),'history sweeps',len(history))\\nfor i,row in enumerate(rows):\\n d=row['dataset']; a,b=d['train'],d['test']; checks=d['calibration_load_cells']; coef=s._calibrate(checks)\\n o=s.solve_alpha_m96_w04_batch_01(d); cert=o['kkt_certificate']; print(i,'taus',o['estimated_taus'],'missing test',np.isnan(b['coupon_features_raw']).any(axis=1).sum(),'calibration',np.round(coef,5).tolist(),'allocation gap',cert['primal_objective']-cert['dual_lower_bound'])\\n if i==0:\\n  for c in range(4):\\n   x,y=s._checks(checks,c); xp,yp=s._checks(history[-1],c); print('lab',c,'checks',len(x),'archived',len(xp),'historical fit',np.round(np.polyfit(xp,yp,1),5).tolist() if len(xp)>1 and np.ptp(xp)>.1 else None)\\nrng=np.random.default_rng(2026); worst=np.zeros(4)\\nfor i in range(500):\\n s0=rng.normal(size=(20,12)); s0[:,1]=s0[:,0]+.01*s0[:,1]; y=rng.normal(size=20)*rng.uniform(.1,10); u=rng.uniform(.15,2.); b=u*([0, .001, 1, 2.6, 4, 11, 11.999, 12][i%8]); ridge=.04\\n c=s._box_simplex(s0,y,ridge,u,b); w=c['weights']; g=s0.T@(s0@w-y)+ridge*w; lo=c['lam_lower']; hi=c['lam_upper'];\\n err=np.array([abs(w.sum()-b),max(np.max(-w),np.max(w-u),0),np.max(abs(g-c['nu_sum']-lo+hi)),c['primal_objective']-c['dual_lower_bound']]); worst=np.maximum(worst,err)\\nassert np.max(worst)<1e-8,worst\\nprint('500 QPs: max sum error, bound error, stationarity error and gap',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cell-balanced imputation alone → H2 missing-only rate correction; worst held-out incomplete lab endpoint RMSE fell from 1.290 to 0.316, with complete predictions unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Correct all initial-rate residuals\",\n      \"rejected_reason\": \"That worsened complete-coupon median endpoint error in all four held-out labs.\"\n    },\n    {\n      \"option\": \"Refit only on complete coupons\",\n      \"rejected_reason\": \"The held-out comparison showed no consistent gain beyond the missing-only correction.\"\n    }\n  ],\n  \"rationale\": \"Promote the correction supported by the held-out labs. Re-run the isolated schema check because the corrected endpoint changes the allocation matrix, and stress the active set near box-simplex vertices to catch failures the public budget may not exercise. Compare archived and current lab coefficients to identify where sparse checks could make the fallback unreliable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d5eada6436edb6b4ee948088d0a80e40d5ab4ae419d08411f6823dda2551729f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34990.91,
+      "usage_known": true,
+      "prompt_tokens": 29619,
+      "cached_tokens": 6784,
+      "completion_tokens": 1296
+    }
+  ]
+}

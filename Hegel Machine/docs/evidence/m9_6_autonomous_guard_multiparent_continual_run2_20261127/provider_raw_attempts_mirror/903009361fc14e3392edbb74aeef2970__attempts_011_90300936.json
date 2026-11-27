@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "903009361fc14e3392edbb74aeef2970",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w01__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:57.947521+00:00",
+  "ended_at_utc": "2026-11-27T03:35:21.513526+00:00",
+  "request_sha256": "f1842e2b3b5a9eeae1b654f5a8018994937c123f3edaadb1596831e42727c3ea",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 48758,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27492,
+    "cached_tokens": 6784,
+    "completion_tokens": 881
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_m96_w01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor case in pickle.load(open('public_beta_m96_w01_batch_01.pkl', 'rb')):\\n    s, gt = case['study'], case['gt']\\n    print('study keys:', sorted(s))\\n    p = s['sensor_calibration_sweeps']\\n    bank, ref, raw = (np.asarray(p[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    rows = np.asarray(s['row_bank_id'])\\n    base = m.solve_beta_m96_w01_batch_01(s)\\n    design, _ = m._forward(s)\\n    q = m._residualize(s['Z_nuisance'], s['nuisance_ridge'], np.column_stack((design,m._calibrate(s))))\\n    print('max reference profiled design/target residual:', np.max(abs(q[:,:-1]-gt['S_tilde'])), np.max(abs(q[:,-1]-gt['r_y'])))\\n    for b in np.unique(bank):\\n        worst = np.zeros(3)\\n        for i in np.flatnonzero(bank == b):\\n            keep = np.arange(bank.size) != i\\n            t = dict(s, sensor_calibration_sweeps={k: np.asarray(v)[keep] for k,v in p.items()})\\n            y = np.asarray(s['y_obs_raw']).copy()\\n            y[rows == b] = raw[i]\\n            pred = m._calibrate(dict(t, y_obs_raw=y))[rows == b][0]\\n            out = m.solve_beta_m96_w01_batch_01(t)\\n            f = base['terminal_field_mid_budget']\\n            worst = np.maximum(worst,[abs(pred-ref[i]),np.max(abs(out['weights_by_budget']-base['weights_by_budget'])),np.linalg.norm(out['terminal_field_mid_budget']-f)/np.linalg.norm(f)])\\n        print('bank', b, 'leave-one-sweep-out [held-out reference error, weight shift, relative field shift]:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse affine consensus → test calibration stability by leaving out real sweeps within each bank; the verified public worst-budget KKT gap is 5.00e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit additional drift terms or run a balanced-accuracy audit\",\n      \"rejected_reason\": \"This task specifies a laminar transport operator and continuous observations, not relay dynamics or class labels. The relevant nuisance test is bank-stratified calibration and agreement with the independently profiled target.\"\n    }\n  ],\n  \"rationale\": \"The injected EMI tests established recovery on constructed cases. This isolated audit tests whether any real sweep disproportionately determines a bank's calibration or the inferred field. If one bank fails, revisit its calibration; if the profiled design disagrees independently of calibration, revisit the stencil or nuisance algebra.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d1c053543bd4d219b903c1009f94b3128596b88e4ff63e5d740f01d1a0e4a174",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25667.14,
+      "usage_known": true,
+      "prompt_tokens": 27492,
+      "cached_tokens": 6784,
+      "completion_tokens": 881
+    }
+  ]
+}

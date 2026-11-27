@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0813f2b1eb4d478ab8a065ba673cdd2f",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_s00__tracer_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:12:14.397268+00:00",
+  "ended_at_utc": "2026-11-27T03:12:44.133155+00:00",
+  "request_sha256": "6a4f4eafea039b2a6e37e199552e92ae7e6e00d0d296cbabddbb26eb5fe6780c",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 45720,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27934,
+    "cached_tokens": 6784,
+    "completion_tokens": 1171
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pathlib, pickle\\nimport numpy as np\\nroot = pathlib.Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'beta_m96_w03_s00_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ncases = pickle.loads((root/'public_beta_m96_w03_s00.pkl').read_bytes())\\nfor case in cases:\\n    s, gt = case['study'], case['gt']\\n    base = m.solve_beta_m96_w03_s00(s)\\n    print('public relative weight, field errors:',*[np.linalg.norm(base[k]-gt[j])/np.linalg.norm(gt[j]) for k,j in [('weights','w_opt'),('terminal_field','terminal_field_A')]])\\n    t = s['sensor_calibration_sweeps']; b = np.asarray(t['bank_id']); x = np.asarray(t['ref_signal']); raw = np.asarray(t['raw_readout']); ref = m._calibrated_observations(s)\\n    print('sweep counts and distinct levels:', [(int(np.sum(b==k)),len(np.unique(x[b==k]))) for k in range(4)])\\n    for wing in (0,1):\\n        altered = raw.copy()\\n        for k in (2*wing,2*wing+1):\\n            ii = np.flatnonzero(b==k)\\n            altered[ii[np.argmax(x[ii])]] += 10 * (-1)**k\\n        dirty = dict(s, sensor_calibration_sweeps=dict(t,raw_readout=altered))\\n        out = m.solve_beta_m96_w03_s00(dirty)\\n        errors = [float(np.max(np.abs(out[k]-base[k]))) for k in ('weights','terminal_field')]\\n        print('wing',wing,'single spike per bank; max obs, weight, field changes:',np.max(np.abs(m._calibrated_observations(dirty)-ref)),*errors)\\n        assert max(errors) < 1e-5\\np=pathlib.Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\nif p.exists():\\n    a=json.loads(p.read_text()); print('calibration archive structure:',repr(a)[:1000])\\nelse:\\n    print('calibration archive not mounted')\\nrng = np.random.default_rng(842); maxes=np.zeros(4); vertices=0\\nfor i in range(600):\\n    S = rng.normal(size=(23,12)) * 10.**rng.uniform(-2,1)\\n    if i%3==0: S[:,6:] = S[:,:6]\\n    y = rng.normal(size=23) * 10.**rng.uniform(-1,2); ridge=10.**rng.uniform(-6,0); cap=rng.uniform(.02,1)\\n    budget = [0,12*cap,cap,6*cap,11*cap,rng.uniform(0,12*cap)][i%6]\\n    w, nu = m._box_simplex(S,y,ridge,cap,budget)\\n    g = S.T@(S@w-y)+ridge*w\\n    gap = g@w-nu*budget-cap*np.minimum(g-nu,0).sum()\\n    vertices += int(np.all((w <= 1e-10) | (w >= cap-1e-10)))\\n    maxes = np.maximum(maxes,[abs(w.sum()-budget),max(0,-w.min(),w.max()-cap),abs(gap),max(0,np.max(nu-g[w<cap-1e-9],initial=0),np.max(g[w>1e-9]-nu,initial=0))])\\nprint('600 QPs, vertices:',vertices,'worst sum, box, gap, stationarity:',*maxes)\\nassert np.all(maxes < [1e-10,1e-12,1e-7,1e-7])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 reference-matched FVM -> H2 calibrated box-simplex inversion; the independent public probe reports relative weight error 4e-8, relative field error 1e-8, and KKT gap 1.82e-8.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Stress the two wing calibration slices and the active-set vertex and endpoint cases, which the single public certificate does not cover. A failure would require revising calibration rejection or active-set handling. Check archive availability because a bank with fewer than two distinct reference levels cannot be fit from its current sweep alone.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "016f84b7e7da96c31b31c33d3ad00f7b0f8ddbafc936e12eb42505645f0dda62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31871.1,
+      "usage_known": true,
+      "prompt_tokens": 27934,
+      "cached_tokens": 6784,
+      "completion_tokens": 1171
+    }
+  ]
+}

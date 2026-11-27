@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0123d5da63954440b52a7c77a63fc284",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:36:20.027806+00:00",
+  "ended_at_utc": "2026-11-27T03:36:54.231071+00:00",
+  "request_sha256": "86b93fd18feff39aeb16961e20f4cb9d63f7d4e832e9f228bf90696e7d4718a9",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 71326,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34462,
+    "cached_tokens": 6784,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'beta_m96_w02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nsolve=m.solve_beta_m96_w02_batch_02\\nfor e in pickle.load(open(root+'public_beta_m96_w02_batch_02.pkl','rb')):\\n    s,g=e['study'],e['gt']; p=solve(s); S,r=g['S_tilde'],g['r_y']; ridge,u=s['source_ridge'],s['u_box']\\n    def audit_kkt(out, budgets, tol):\\n        worst=0.\\n        for w,b,c in zip(out['weights_by_budget'],budgets,out['kkt_certificates']):\\n            lo,hi=np.asarray(c['lam_lower']),np.asarray(c['lam_upper']); d=S@w-r\\n            obj=(d@d+ridge*(w@w))/2; gap=obj-c['dual_lower_bound']\\n            assert np.array_equal(w,c['weights']) and np.all(lo>=0) and np.all(hi>=0)\\n            assert abs(w.sum()-b)<1e-9 and w.min()>=-1e-10 and w.max()<=u+1e-10\\n            worst=max(worst,np.max(np.abs(S.T@d+ridge*w-c['nu_sum']-lo+hi)),np.max(np.abs(w*lo)),np.max(np.abs((u-w)*hi)),abs(obj-c['primal_objective']),abs(gap))\\n        assert worst<tol,worst\\n        return worst\\n    werr=np.max(np.abs(p['weights_by_budget']-g['weights_by_budget']),axis=1); ferr=np.max(np.abs(p['terminal_field_mid_budget']-g['terminal_field_mid_budget']))\\n    print('public max weight errors',werr,'field max error',ferr,'worst KKT residual',audit_kkt(p,s['budget_grid'],1e-6))\\n    assert max(werr)<1e-6 and ferr<1e-7\\n    endpoints=[0.,7.,u*p['weights_by_budget'].shape[1]]\\n    print('endpoint/interior worst KKT residual',audit_kkt(solve(dict(s,budget_grid=endpoints)),endpoints,1e-6))\\n    rows=m._sweep_rows(s['sensor_calibration_sweeps']); y=m._calibrate(s); rb=s['row_bank_id']; worst=np.zeros(2)\\n    for missing in (0,1):\\n        for n in (3,4):\\n            a=np.ones(4); h=np.zeros(4); blocks=[rows[rows[:,0]==1-missing]]\\n            for bank in (2,3):\\n                q=rows[rows[:,0]==bank].copy(); q=q[np.argsort(q[:,1])]; q=q[np.linspace(0,len(q)-1,n,dtype=int)]\\n                if n==4:\\n                    a[bank],h[bank]=(1.13,.09) if bank==2 else (.91,-.07)\\n                    q[:,2]=a[bank]*q[:,1]+h[bank]\\n                q[0 if bank==2 else -1,2]+=.4 if bank==2 else -.4\\n                blocks.append(q)\\n            sweeps=dict(zip(('bank_id','ref_signal','raw_readout'),np.vstack(blocks).T)); raw=s['y_obs_raw'].copy()\\n            for bank in (2,3):\\n                if n==4: raw[rb==bank]=a[bank]*y[rb==bank]+h[bank]\\n            out=solve(dict(s,sensor_calibration_sweeps=sweeps,y_obs_raw=raw)); audit_kkt(out,s['budget_grid'],1e-6)\\n            worst=np.maximum(worst,[np.max(np.abs(out[k]-p[k])) for k in ('weights_by_budget','terminal_field_mid_budget')])\\n    print('combined missing-bank and sparse Wing B EMI worst weight / field deviations',worst)\\n    assert worst[0]<1e-6 and worst[1]<1e-7\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Median-slope fitting → sparse affine consensus with historical tie-breaking; the worst tested sparse Wing B weight deviation fell from 0.755 to 4.01e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer arbitrary current gain and offset from three checks with one spike\",\n      \"rejected_reason\": \"Each pair can define a different affine map. When consensus ties, the archive supplies a prior, not independent identification.\"\n    }\n  ],\n  \"rationale\": \"The revised solver passed the individual sparse-bank EMI tests. Check whether simultaneous spikes in both Wing B banks and a missing Wing A bank cause errors that the individual tests missed, and independently verify the public and endpoint KKT certificates on the revised artifact. A combined-case failure would reopen calibration; a certificate failure would reopen the budget solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "bf6f5b8b01facd5c188336b5af3747153c6b67a2ecc24070084690fba73bee04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36276.04,
+      "usage_known": true,
+      "prompt_tokens": 34462,
+      "cached_tokens": 6784,
+      "completion_tokens": 1387
+    }
+  ]
+}

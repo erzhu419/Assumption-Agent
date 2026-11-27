@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0869265719dc40b8aa3cda34165e24de",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w01__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:42:14.345884+00:00",
+  "ended_at_utc": "2026-11-27T03:42:43.091410+00:00",
+  "request_sha256": "f8c4caa00a9aa0db1bc3f2ef5ddfc794e4b7fc34d13669887e94ede3b4f85514",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47056,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28859,
+    "cached_tokens": 11136,
+    "completion_tokens": 1147
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m96_w01_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_m96_w01_batch_04.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; o=m.solve_alpha_m96_w01_batch_04(d)\\nt,dt=d['eval_times'],d['past_dt']; sy=d['yield_stress']; c=m._calibration(d['calibration_load_cells']); x,missing=m._features(tr,te); n=len(tr['lab_id']); lab=tr['lab_id']; pa,ho=m._stresses(te,c)\\nyhat, rhat=o['predicted_strain'],o['initial_rate_pred']; y,r=g['te_clean'],g['te_true_rate0']; h=np.abs(g['te_hold_true'])>sy; w=(np.abs(g['te_hist_true'])>sy).any(axis=1)\\ndef rm(e): return np.sqrt(np.mean(e**2))\\nfor name,mask in [('all',np.ones(len(h),bool)),*((f'lab{j}',te['lab_id']==j) for j in range(4)),('elastic',~h&~w),('history only',~h&w),('hold only',h&~w),('both',h&w),('negative hold',h&(ho<0)),('missing',missing[n:].any(axis=1))]:\\n if mask.any(): print('public',name,mask.sum(),'curve RMSE',round(rm(yhat[mask]-y[mask]),6),'rate RMSE',round(rm(rhat[mask]-r[mask]),6))\\nprint('absolute parameter errors',abs(o['estimated_taus']-g['taus']),abs(o['hereditary_weights']-g['theta']),abs(o['viscoplastic_weights']-g['vp_theta'])); print('calibration max abs gain/bias errors',np.max(abs(c-np.column_stack((g['stress_gains'],g['stress_biases']))),axis=0))\\na,b=m._design(o['estimated_taus'],m._basis(pa,ho,dt,x[n:],sy),t); theta=np.r_[o['hereditary_weights'],o['viscoplastic_weights']]; mask=missing[n:].any(axis=1); print('no onset adjustment, missing curve/rate RMSE',rm((te['strain_0'][:,None]+a@theta-y)[mask]),rm((b@theta-r)[mask])); print('history-only curve RMSE without history term',rm((yhat-y-a[:,:,8]*theta[8])[~h&w]))\\npt,ht=m._stresses(tr,c); yt=tr['strain_curves_obs']-tr['strain_0'][:,None]; rt=tr['instant_rate_obs']; z=~missing[:n].any(axis=1)\\nfor j in range(4):\\n k=(lab!=j)&z; v=lab==j; tau,th=m._fit(pt[k],ht[k],dt,t,x[:n][k],sy,yt[k],rt[k]); a,b=m._design(tau,m._basis(pt[v],ht[v],dt,x[:n][v],sy),t); ec=a@th-yt[v]; er=b@th-rt[v]; print('held-out lab',j,'curve/rate RMSE',round(rm(ec),6),round(rm(er),6),'median AE',round(np.median(abs(ec)),6),round(np.median(abs(er)),6),'tau',np.round(tau,5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated two-branch Prony response → H2 signed hold flow plus accumulated-work relaxation; public schema passes and worst-slice prediction error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation alone\",\n      \"rejected_reason\": \"Shape and finiteness checks cannot detect a missing history effect or a lab-specific prediction failure.\"\n    }\n  ],\n  \"rationale\": \"Score all five outputs against public truth and refit with each lab held out. The history-term and onset-adjustment comparisons will show whether either modeling choice needs revision before sparse-calibration stress tests.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "57eb1b3cdf84205cc3970580adbb20964f0b1ba88be3f4481695865b60fa7e1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30761.66,
+      "usage_known": true,
+      "prompt_tokens": 28859,
+      "cached_tokens": 11136,
+      "completion_tokens": 1147
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c24e570cdef34198b5603f4a87776cb3",
+  "call_seq": 5,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:38:08.815306+00:00",
+  "ended_at_utc": "2026-11-27T03:38:37.555033+00:00",
+  "request_sha256": "3c6575265c86979ce48d53c4cdb6f7135fece347d80e2dae9973d294be6589e7",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38008,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25097,
+    "cached_tokens": 6784,
+    "completion_tokens": 1129
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/holdout_task/beta_m96_w04_batch_04_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_beta_m96_w04_batch_04.pkl','rb'))[0]; s=item['study']; gt=item['gt']; o=m.solve_beta_m96_w04_batch_04(s); print('public reference keys:', [(k,np.shape(v)) for k,v in gt.items()]); S,U=m._forward(s); P,y=m._profile(s,S,m._calibrate(s)); print('public max profile errors:',np.max(abs(P-gt['S_tilde'])),np.max(abs(y-gt['r_y'])),'candidate gap:',o['kkt_certificate']['primal_objective']-o['kkt_certificate']['dual_lower_bound'])\\nfor k,v in gt.items():\\n if k in ('weights','terminal_field'): print(k,'relative error:',np.linalg.norm(o[k]-v)/np.linalg.norm(v))\\na=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))+[dict(s['sensor_calibration_sweeps'],episode_short_name='current')]\\nfor d in a:\\n b=np.array(d['bank_id']); x=np.array(d['ref_signal']); y=np.array(d['raw_readout']); row=[]\\n for i in range(4):\\n  f,g=x[b==i],y[b==i]; co=np.polyfit(f,g,1); row.append((len(f),*np.round(co,6),round(np.max(abs(np.polyval(co,f)-g)),7)))\\n print(d['episode_short_name'],row)\\n# Check terminal and all sampled modes against the PDE residual on both triggers independently.\\nfrom scipy import sparse\\nV0=s['reaction_x'][:,None]+s['reaction_y'][None,:]; V=s['V_reaction_2d']; nx,ny=s['nx'],s['ny']; idx=s['sensor_ij']@[ny,1]; F=s['source_modes'].reshape(12,-1).T\\nfor label,map_,trace,scale,add in [('quiescent archive map',V0,[0.5,0.1],1,False),('quiescent distinct map',.25*V0,[0.1],1,True),('memory only',V0,[.8,.1],1.45,True),('cross coupling only',V,[.1],1.45,True),('both triggers',V,[.8,.1],1.45,True)]:\\n st=dict(s,V_reaction_2d=map_,past_vortex_circulation_trace=np.array(trace)); pred,term=m._forward(st)\\n A,B=[m._build_1d(st['L'+a],n,scale*st['kappa_'+a],st['vel_'+a],st['robin_'+a],st['reaction_'+a]) for a,n in [('x',nx),('y',ny)]]\\n base=sparse.kron(A,sparse.eye(ny),format='csc')+sparse.kron(sparse.eye(nx),B,format='csc'); base=base+sparse.diags(map_.ravel(),format='csc') if add else base\\n ref=[]\\n for mu in st['mu_shifts']:\\n  op=base+mu*sparse.eye(nx*ny,format='csc'); T=sparse.linalg.spsolve(op,F); ref.append(T[idx]);\\n e=np.max(abs(pred-np.concatenate(ref))); r=np.linalg.norm(op@term-F)/np.linalg.norm(F); print(label,'max sensor delta:',e,'relative terminal PDE residual:',r); assert e<1e-9 and r<1e-9\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unscaled archive stencil -> H2: history- or cross-coupling-triggered eddy scaling; the public schema and KKT gate passed at a 2e-4 gap tolerance, but the independent trigger slices have not yet been tested.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"A certificate pass does not verify terminal-field accuracy or isolate the two transport triggers. Compare those branches with explicit sparse systems and inspect historical gain and offset drift to decide what prior data can identify when current sweep coverage is sparse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c633b28201b7d06363191fccbe5dfaf92a59eb8f22558f7498489d45037d9d15",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30771.77,
+      "usage_known": true,
+      "prompt_tokens": 25097,
+      "cached_tokens": 6784,
+      "completion_tokens": 1129
+    }
+  ]
+}

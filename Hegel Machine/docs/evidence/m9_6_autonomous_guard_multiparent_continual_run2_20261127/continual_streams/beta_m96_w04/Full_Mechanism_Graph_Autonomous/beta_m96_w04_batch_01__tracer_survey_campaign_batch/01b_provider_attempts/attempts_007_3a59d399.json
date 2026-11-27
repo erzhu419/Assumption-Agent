@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a59d39916b8491dab4dddeebd4bfd95",
+  "call_seq": 7,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:31.310382+00:00",
+  "ended_at_utc": "2026-11-27T03:33:56.962738+00:00",
+  "request_sha256": "ced0f5ad4f0bec9bc7a1f9a81a7715773427d3982720f95ff6db98cdf01a1de7",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41344,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25766,
+    "cached_tokens": 6784,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\np='/holdout_task/'\\na=runpy.run_path(p+'beta_m96_w04_batch_01_solver.py'); solve=a['solve_beta_m96_w04_batch_01']\\ns=pickle.load(open(p+'public_beta_m96_w04_batch_01.pkl','rb'))[0]['study']; base=solve(s); y=a['_calibrate'](s); old=a['_archived_calibration'](); bank=np.asarray(s['row_bank_id']); print('prefix fits',old)\\nfor label in ('current_drift_and_emi','one_level_and_missing','two_levels_one_spike'):\\n gains=np.array([0.84,1.16,0.91,1.24]); offsets=np.array([0.019,-0.012,0.021,-0.016]); sweep=[]\\n for b in range(4):\\n  if label!='current_drift_and_emi' and b in (2,3): gains[b],offsets[b]=old[b]\\n  refs=list(np.linspace(-.2,.4,12)); emi={2:.085,8:-.064} if b in (2,3) else {}\\n  if label=='one_level_and_missing' and b==2: refs=[.03,.03]; emi={}\\n  if label=='one_level_and_missing' and b==3: refs=[]; emi={}\\n  if label=='two_levels_one_spike' and b in (2,3): refs=[-.04,.17]; emi={1:.07}\\n  for i,x in enumerate(refs): sweep.append(dict(bank_id=b,ref_signal=x,raw_readout=gains[b]*x+offsets[b]+emi.get(i,0)))\\n t=dict(s,sensor_calibration_sweeps=sweep,y_obs_raw=gains[bank]*y+offsets[bank]); calibrated=a['_calibrate'](t); out=solve(t)\\n e=[np.max(abs(calibrated[bank==b]-y[bank==b])) for b in range(4)]; dw=np.max(abs(out['weights_by_budget']-base['weights_by_budget'])); df=np.max(abs(out['terminal_field_mid_budget']-base['terminal_field_mid_budget'])); dp=max(abs(c['primal_objective']-d['primal_objective']) for c,d in zip(out['kkt_certificates'],base['kkt_certificates'])); print(label, 'max observation error by bank',e,'max weight, field, certificate primal errors',dw,df,dp)\\n assert max(*e,dw,df,dp)<1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived single-budget transport → H2 four-bank calibration and three certified budget fits; public worst-budget KKT gap was 1.05e-8 and max weight error was 1.16e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public study has dense, clean sweeps. Stress the documented sparse and EMI cases on the same transport data to detect calibration failures the public validator cannot expose; if a slice fails, fix its bank calibration without changing the verified stencil.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "e5a9e56b184a813a25f359eceff0e9b36e96c72a47eead0b58881efc4212dd71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27712.58,
+      "usage_known": true,
+      "prompt_tokens": 25766,
+      "cached_tokens": 6784,
+      "completion_tokens": 943
+    }
+  ]
+}

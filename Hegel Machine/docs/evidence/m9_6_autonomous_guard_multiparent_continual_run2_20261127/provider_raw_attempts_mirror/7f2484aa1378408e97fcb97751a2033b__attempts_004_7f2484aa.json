@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f2484aa1378408e97fcb97751a2033b",
+  "call_seq": 4,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:31:56.910259+00:00",
+  "ended_at_utc": "2026-11-27T03:32:16.428185+00:00",
+  "request_sha256": "31dc233d88f88a52adc3adadbcc1bbbe7146a6284bfdfc1946a29f1d3fc61c39",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 30549,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22228,
+    "cached_tokens": 6784,
+    "completion_tokens": 667
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np,runpy\\ns,g=(lambda t:(t['study'],t['gt']))(pickle.load(open('/holdout_task/public_beta_m96_w04_batch_01.pkl','rb'))[0]); a=runpy.run_path('/tmp/hegel_continual_archive/beta_m96_w04_s00_solver.py')\\nfor label,sw in [('current',s['sensor_calibration_sweeps']),('prefix',json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))['sensor_calibration_sweeps'])]:\\n print(label,type(sw).__name__)\\n if isinstance(sw,list): sw={k:[r[k] for r in sw] for k in ('bank_id','ref_signal','raw_readout')}\\n b,x,z=[np.asarray(sw[k]) for k in ('bank_id','ref_signal','raw_readout')]\\n for i in range(4):\\n  q=b==i; t=x[q]; v=z[q]; A=np.column_stack((t,np.ones(t.size))); c=np.linalg.lstsq(A,v,rcond=None)[0]; print(i,len(t),len(np.unique(t)),c,'sorted residuals',np.round(np.sort(abs(v-A@c)),8))\\nprint('reaction difference',np.max(abs(s['V_reaction_2d']-s['reaction_x'][:,None]-s['reaction_y'][None,:])),'circulation',max(s['past_vortex_circulation_trace']))\\nS,U=a['_forward'](s); St,_=a['_profile'](s,S,np.zeros(len(S))); print('archive design max error',np.max(abs(St-g['S_tilde'])),'archive terminal max error',np.max(abs((U@g['weights_by_budget'][1]).reshape(s['nx'],s['ny'])-g['terminal_field_mid_budget'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived single-budget transport -> H2 verified laminar stencil with bank-specific calibration and three certified budget fits; no quantitative error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Normalize the observed sweep representation and check per-bank identifiability and outliers to decide where prefix calibration is needed. Compare the archived forward model against the public design and terminal field before reusing it; a mismatch would require isolating the reaction or terminal-shift convention.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "63c26b5e0719488db0c7dee8298c1e8c1a2c418478dbc120fd8c58a7a6814c5a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21530.3,
+      "usage_known": true,
+      "prompt_tokens": 22228,
+      "cached_tokens": 6784,
+      "completion_tokens": 667
+    }
+  ]
+}

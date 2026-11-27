@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "911c38ce6fc34da1b255a21b36d131a3",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_02__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:12.275471+00:00",
+  "ended_at_utc": "2026-11-27T03:34:34.394471+00:00",
+  "request_sha256": "4311ca4fa6ab2c6fff5a34117c43d3551a938004496c293f5f1977f2285ff8e2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50480,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29700,
+    "cached_tokens": 6784,
+    "completion_tokens": 802
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; sed -n '1,60p' alpha_m96_w02_batch_02_solver.py; sed -n '205,285p' /tmp/hegel_continual_archive/alpha_m96_w02_batch_01_solver.py; tail -65 validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,json,numpy as np\\nsp=importlib.util.spec_from_file_location('solver','alpha_m96_w02_batch_02_solver.py'); s=importlib.util.module_from_spec(sp); sp.loader.exec_module(s)\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')):\\n print('prefix',r['episode_short_name'],s._stress_calibration({k:np.array(r[k]) for k in ('lab_id','cmd_stress','true_stress')}).tolist())\\ne,=pickle.load(open('public_alpha_m96_w02_batch_02.pkl','rb')); d=e['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=s._align(tr,te); cal=s._stress_calibration(d['calibration_load_cells']); a=s._Design(d['past_dt'],d['eval_times'],s._inputs(tr,x[:n],cal)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; t,b=s._fit(a,y,tr['instant_rate_obs']); res=a.make(t)@b-np.c_[y,tr['instant_rate_obs']]; ri,ci=np.where(abs(res[:,:-1])>.7); print('large residuals: entries, rows, horizons',len(ri),len(set(ri)),np.bincount(ci,minlength=12)); print('count by row',np.unique(np.bincount(ri)[np.unique(ri)],return_counts=True)); print('rate scale for these rows',np.quantile(abs(res[np.unique(ri),-1]),[.5,.9,1])); print('alignment groups',np.unique(np.c_[tr['lab_id'],tr['stratum']],axis=0).tolist())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust preload-aware fit → H2 retain the public fit while adding archive-assisted sparse calibration; worst held-out-lab training perturbation gives 0.02899 final-horizon test RMSE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Drop all training rows with missing features\",\"rejected_reason\":\"The complete-only fit worsened both final-horizon and complete-row public RMSE.\"}],\"rationale\":\"Check whether prefix gains and biases are stable enough to anchor sparse or corrupted checks. Also distinguish isolated curve spikes from whole-trajectory mismatch; only the former supports retaining the existing pointwise robust loss.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6973813496f093236410da7463b4999e40dcec6da41b08241f7d2c5fe2c4cb91",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24159.81,
+      "usage_known": true,
+      "prompt_tokens": 29700,
+      "cached_tokens": 6784,
+      "completion_tokens": 802
+    }
+  ]
+}

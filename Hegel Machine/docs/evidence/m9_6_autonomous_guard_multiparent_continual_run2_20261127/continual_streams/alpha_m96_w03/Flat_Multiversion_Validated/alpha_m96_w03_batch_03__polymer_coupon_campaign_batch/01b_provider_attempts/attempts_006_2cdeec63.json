@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2cdeec6364af485aa1be436255253c93",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_batch_03__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:22.975367+00:00",
+  "ended_at_utc": "2026-11-27T03:33:50.697987+00:00",
+  "request_sha256": "500ec5d32558e528303d3204113ec72fb3279cc5fac77e5e9f7d4a953b7b6948",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26724,
+    "cached_tokens": 6784,
+    "completion_tokens": 1049
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='alpha_m96_w03_batch_03_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nr=pickle.load(open('public_alpha_m96_w03_batch_03.pkl','rb'))[0]; d=r['dataset']; gt=r['gt']; tr,te=d['train'],d['test']; x,xt=m._align(tr,te); dt,t=d['past_dt'],d['eval_times']; cal=m._calibrate(d['calibration_load_cells']); print('calibration',cal.tolist(),'history duration',sum(dt),'hold times',t)\\no=m.solve_alpha_m96_w03_batch_03(d); c=o['kkt_certificate']; print('fit',o['estimated_taus'],'gap',c['primal_objective']-c['dual_lower_bound'],'complementarity',max(np.max(c['weights']*c['lam_lower']),np.max((d['u_box']-c['weights'])*c['lam_upper'])))\\nprint('ground truth',[(k,np.shape(a)) for k,a in gt.items()]);\\nfor k in o.keys() & gt.keys() - {'kkt_certificate'}:\\n a=np.asarray(o[k]); b=np.asarray(gt[k]);\\n if a.shape==b.shape: print(k,'rmse',np.sqrt(np.mean((a-b)**2)),'max abs',np.max(np.abs(a-b)),'truth',b if b.ndim==1 else '')\\nh=m._Hold(dt,t,tr,x,cal); labs=tr['lab_id']; fitted=[]\\nfor lab in np.unique(labs):\\n fit=labs!=lab; val=~fit; train={k:np.asarray(a)[fit] for k,a in tr.items()}; holdout={k:np.asarray(a)[val] for k,a in tr.items()}; row=[]\\n for preload in [True,False]:\\n  aa=m._Hold(dt,t,train,x[fit],cal); bb=m._Hold(dt,t,holdout,x[val],cal)\\n  if not preload: aa.memory=np.zeros_like(aa.memory); bb.memory=np.zeros_like(bb.memory)\\n  f=m._fit(aa,train); pred=bb.design(f[:2])[0]@f[2:]; err=pred[:,:-1]+bb.base[:,None]-holdout['strain_curves_obs']; erate=pred[:,-1]-holdout['instant_rate_obs']; row.append((np.round(f[:2],5).tolist(),float(np.sqrt(np.nanmean(err**2))),float(np.sqrt(np.nanmean(err[:,-1]**2))),float(np.sqrt(np.nanmean(erate**2)))))\\n print('LOLO lab',lab,'preloaded / zero',row)\\nq=h.design(o['estimated_taus'])[0]; z=h.memory.copy()\\nfor j,step in enumerate(dt):\\n decay=np.exp(-step/o['estimated_taus']); z=decay*z+(1-decay)*h.hist[:,j,None]\\nexpected=(h.stress[:,None]-z)[:,None,:]*(-np.expm1(-t[:,None]/o['estimated_taus']))[None,:,:]\\nprint('closed-form vs stepped memory max error',np.max(np.abs(expected-q[:,:-1,:2])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 zero-initialized recurrence -> H2 measured preload with certified allocation; the public schema passes, and worst-lab strain error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check\",\n      \"rejected_reason\": \"The schema does not measure strain accuracy or whether the fitted relaxation times hold up when an entire lab is excluded.\"\n    }\n  ],\n  \"rationale\": \"Leave one lab out at a time to detect lab-specific prediction or parameter failures, and compare against the zero-memory baseline. Independently stepping the memory states can catch an indexing or decay error; a certificate gap or complementarity failure would trigger an allocation solver fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "481d1ce1e920b4e4a3ad81bd24ae3694433238179d340e7142543519e37030b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29790.68,
+      "usage_known": true,
+      "prompt_tokens": 26724,
+      "cached_tokens": 6784,
+      "completion_tokens": 1049
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "85a3b34316c24699b4aa6a5a22c189c9",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:14:22.413171+00:00",
+  "ended_at_utc": "2026-11-27T03:15:05.061450+00:00",
+  "request_sha256": "6b51f183819d439f40bcc07807d6d219591896097c3464c5854bb11810df9a4a",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 71991,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35814,
+    "cached_tokens": 11136,
+    "completion_tokens": 1828
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/coupon_gate.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\npath = '/holdout_task/alpha_m96_w01_s00_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m96_w01_s00.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\nd, gt = case['dataset'], case['gt']\\ntr, te = d['train'], d['test']\\nx, missing = m._features(tr, te)\\nlab = tr['lab_id']\\nn = len(lab)\\na, b = m._load_calibration(d['calibration_load_cells'])\\ndt, t = d['past_dt'], d['eval_times']\\n\\ndef stresses(split):\\n    j = split['lab_id']\\n    return split['past_stress_cmd'] * a[j, None] + b[j, None], split['stress_hold_cmd'] * a[j] + b[j]\\n\\nout = m.solve_alpha_m96_w01_s00(d)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\npast, hold = stresses(te)\\nz = np.zeros((len(hold), 2))\\nfor k, interval in enumerate(dt):\\n    decay = np.exp(-interval / tau)\\n    z = z * decay + past[:, k, None] * (1 - decay)\\namp = (hold[:, None] - z) * theta[:2]\\nslope = x[n:] @ theta[2:]\\nupdate = missing[n:].any(1) & np.isfinite(te['instant_rate_obs'])\\nslope[update] = te['instant_rate_obs'][update] - np.sum(amp[update] / tau, axis=1)\\nexplicit_curve = te['strain_0'][:, None] + amp @ (-np.expm1(-t[None, :] / tau[:, None])) + slope[:, None] * t\\nexplicit_rate = np.sum(amp / tau, axis=1) + slope\\nfor key, ref in [('predicted_strain', explicit_curve), ('initial_rate_pred', explicit_rate)]:\\n    err = np.max(np.abs(out[key] - ref))\\n    print(key, 'explicit recurrence/derivative max discrepancy', err)\\n    assert err < 1e-11\\nassert .20 <= tau[0] < tau[1] <= 8 and np.array_equal(out['viscoplastic_weights'], np.zeros(2))\\nprint('public total and worst-horizon strain RMSE', np.sqrt(np.mean((explicit_curve-gt['te_clean'])**2)), np.sqrt(np.max(np.mean((explicit_curve-gt['te_clean'])**2, axis=0))))\\n\\n# Fit challengers only on each fold's training rows. Audit the complete-coupon\\n# prior so the rate-assisted prediction cannot mask model misspecification.\\npast, hold = stresses(tr)\\nx = x[:n]\\ncomplete = ~missing[:n].any(1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrate = tr['instant_rate_obs']\\nfold = np.full(n, -1)\\nrng = np.random.default_rng(12)\\nfor j in np.unique(lab):\\n    ids = rng.permutation(np.flatnonzero(complete & (lab == j)))\\n    fold[ids] = np.arange(len(ids)) % 4\\npair = np.column_stack([x[:, i] + sign*x[:, j] for i in range(1,5) for j in range(i+1,5) for sign in (-1, 1)])\\nnonlinear = np.column_stack((pair**2/(1 + pair**2), pair/(1 + pair**2), x[:,1]*x[:,2]*x[:,3], x[:,2]*x[:,3]*x[:,4]))\\nlab_terms = np.eye(4)[lab][:,1:]\\nerr = {key: np.full_like(y, np.nan) for key in ('base', 'lab', 'nonlinear')}\\nrate_err = {key: np.full(n, np.nan) for key in err}\\nfor k in range(4):\\n    fit = complete & (fold != k)\\n    val = fold == k\\n    taus, w = m._fit(past[fit], hold[fit], dt, t, x[fit], y[fit], rate[fit])\\n    h, r = m._design(taus, past, hold, dt, t, x)\\n    for key, f in [('base', np.empty((n,0))), ('lab', lab_terms), ('nonlinear', nonlinear)]:\\n        cm = fit[:, None] & np.isfinite(y)\\n        rm = fit & np.isfinite(rate)\\n        if f.shape[1]:\\n            hc = np.concatenate((h, f[:,None,:]*t[None,:,None]), axis=2)\\n            rc = np.column_stack((r, f))\\n            v = least_squares(lambda p: np.r_[hc[cm] @ p-y[cm], rc[rm] @ p-rate[rm]], np.r_[w,np.zeros(f.shape[1])], loss='cauchy', f_scale=.025).x\\n        else:\\n            hc, rc, v = h, r, w\\n        err[key][val] = hc[val] @ v - y[val]\\n        rate_err[key][val] = rc[val] @ v - rate[val]\\nfor key in err:\\n    e, r = err[key], rate_err[key]\\n    print(key, 'out-of-fold curve median absolute errors by lab', [round(float(np.nanmedian(abs(e[lab==j]))),6) for j in range(4)], 'rate RMSE by lab', [round(float(np.sqrt(np.nanmean(r[lab==j]**2))),6) for j in range(4)], 'median signed curve errors by lab', [round(float(np.nanmedian(e[lab==j])),6) for j in range(4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/coupon_gate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted nonlinear drift or lab nuisance → H2 the calibrated seven-coefficient creep law suffices; the worst prior leave-one-lab-out refit gave 0.01134 public clean strain RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, Fokker–Planck/HJB drift, or class-balanced accuracy\",\n      \"rejected_reason\": \"The supplied task is a continuous sub-yield coupon regression with no relay state, stochastic control operator, or class labels. Within-lab regression errors test the relevant nuisance hypothesis.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence checks history ordering and the curve/rate handoff; a discrepancy would require fixing the solver. Out-of-fold within-lab comparisons test whether calibrated lab offsets or fixed pairwise and rational terms improve the worst slice enough to justify a change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "46e7acd59d70bb97f140c163867d9a37fb0399dc12b560f4c1466b35d33d07a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46771.7,
+      "usage_known": true,
+      "prompt_tokens": 35814,
+      "cached_tokens": 11136,
+      "completion_tokens": 1828
+    }
+  ]
+}

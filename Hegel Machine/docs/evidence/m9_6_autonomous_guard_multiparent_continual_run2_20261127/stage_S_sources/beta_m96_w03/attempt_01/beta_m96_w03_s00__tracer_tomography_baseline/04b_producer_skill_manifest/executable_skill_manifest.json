@@ -1,0 +1,109 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m96_w03_s00_ca29b21a1423",
+    "source_hash": "ca29b21a142389360e19c2eaf8628332e91e3effccbed5d5e13516763dd3eb45",
+    "parent_ids": [],
+    "source_episode_id": "beta_m96_w03_s00__tracer_tomography_baseline",
+    "task_id": "beta_m96_w03_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tracer_boundary_probe.py",
+        "archived_relpath": "producers/tmp__tracer_boundary_probe.py",
+        "bytes": 2254,
+        "sha256": "f5f8980972bfddd149a8a7d658527bbbe9942fc04badca5a7d5f180bff9dafeb"
+      },
+      {
+        "container_path": "/tmp/tracer_reaction_probe.py",
+        "archived_relpath": "producers/tmp__tracer_reaction_probe.py",
+        "bytes": 2645,
+        "sha256": "bc071b094cb485171e5b971b57c03b7b018368234dd456dc0af39a9bd3440113"
+      },
+      {
+        "container_path": "/tmp/tracer_stencil_probe.py",
+        "archived_relpath": "producers/tmp__tracer_stencil_probe.py",
+        "bytes": 2294,
+        "sha256": "51ab2ebc2d6112775e4644af7bf1a50baff8a4e38a03182baf1284b16b483268"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json && sed -n '1,240p' validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_m96_w03_s00.pkl','rb') as f: d=pickle.load(f)\nfor k,v in d.items():\n if isinstance(v,np.ndarray):\n  print(k, v.shape,v.dtype, (np.min(v),np.max(v)) if v.size and np.issubdtype(v.dtype,np.number) else '')\n elif isinstance(v,(list,tuple)): print(k,type(v).__name__,len(v),repr(v[0])[:450] if v else '')\n else: print(k,type(v).__name__,repr(v)[:700])\nPY\nls -l /tmp/hegel_continual_archive 2>/dev/null || true\nPYTHONPATH=/tmp python3 -m hegel",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_m96_w03_s00.pkl','rb') as f: cases=pickle.load(f)\nprint('cases',len(cases))\nfor i,c in enumerate(cases):\n print('case',i,'keys',list(c)); st=c['study']; print('gt keys',list(c['gt']))\n for k,v in st.items():\n  if isinstance(v,np.ndarray):\n   print(k,v.shape,v.dtype,'range', (v.min(),v.max()) if v.size and np.issubdtype(v.dtype,np.number) else '', 'head', repr(v.reshape(-1)[:5]))\n  elif isinstance(v,(list,tuple)): print(k,type(v).__name__,len(v),repr(v[:2])[:500])\n  else: print",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport json, pathlib, pickle\nimport numpy as np\nwith open('public_beta_m96_w03_s00.pkl','rb') as f: cases=pickle.load(f)\nprint('case count:',len(cases))\nfor i,c in enumerate(cases):\n s,g=c['study'],c['gt']; print('case',i)\n if i==0:\n  for k,v in s.items():\n   if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:4])\n   elif not isinstance(v,dict): print(k,repr(v)[:160])\n   else: print(k,list(v))\n t=s['sensor_calibration_sweeps']; b=np.asarray(t['bank_id']); x=np.asarray(t['ref_signal']); y=np.asarray(t['raw_readout']); a=[]; d=[]\n for j in rang",
+      "cat > /tmp/tracer_stencil_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.sparse import csr_matrix, eye, kron, diags\nfrom scipy.sparse.linalg import splu\nc=pickle.load(open('/holdout_task/public_beta_m96_w03_s00.pkl','rb'))[0]\ns,g=c['study'],c['gt']; V=s['V_reaction_2d']; nx,ny=V.shape\nvx=V[:,0]; vy=V[0,:]-V[0,0]\nprint('V additive defect',np.max(np.abs(V-vx[:,None]-vy)), 'V versus reaction_x+reaction_y',np.max(np.abs(V-s['reaction_x'][:,None]-s['reaction_y'])), 'max circulation',max(s['past_vortex_circulation_trace']))\nZ=s['Z_nuisance']; G=Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1",
+      "cat > /tmp/tracer_boundary_probe.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\nc=pickle.load(open('/holdout_task/public_beta_m96_w03_s00.pkl','rb'))[0]\ns,g=c['study'],c['gt']; nx,ny=s['nx'],s['ny']; N=nx*ny\nZ=s['Z_nuisance']; W=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\ni,j=s['sensor_ij'].T; ix=i*ny+j\nsrc=s['source_modes'].reshape(-1,N).T\nI=eye(N,format='csc'); V=s['V_reaction_2d'].ravel()\n\ndef build(a):\n n,L,k,v,r=[s[key] for key in ('n'+a,'L'+a,'kappa_'+",
+      "python3 - <<'PY'\nfrom pathlib import Path\nsrc=Path('/tmp/tracer_boundary_probe.py').read_text().split('base=np.ones(11)')[0]\nPath('/tmp/tracer_reaction_probe.py').write_text(src+'''\nX=np.broadcast_to(s['reaction_x'][:,None],(nx,ny)).ravel()\nY=np.broadcast_to(s['reaction_y'][None,:],(nx,ny)).ravel()\nB.extend([diags(X,format='csc'),diags(Y,format='csc')])\nbase=np.ones(13); base[[4,9,11,12]]=0\nscores=[]\nfor exc in (0,1):\n for eyc in (0,1):\n  for ix in (0,1,2):\n   for iy in (0,1,2):\n    for ox in (0,1):\n     for oy in (0,1):\n      p=base.copy();p[[3,8,4,9,11,12]]=ix,iy,ox,oy,exc,eyc\n      score=re",
+      "cat > /holdout_task/beta_m96_w03_s00_solver.py <<'PY'\n\"\"\"Calibrated laminar tracer inversion with a box-simplex certificate.\"\"\"\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    h = L / n\n    kappa, vel = np.asarray(kappa), np.asarray(vel)\n    conductance = 2 * kappa[:-1] * kappa[1:] / (kappa[:-1] + kappa[1:]) / h**2\n    diagonal = np.array(diag_add, dtype=float, copy=True)\n    diagonal[:-1] += conductance\n    diagonal[1:] += conductance\n    for edge in (0, n - 1):\n        k = kappa[edge]\n  ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pathlib, pickle\nimport numpy as np\nroot = pathlib.Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', root/'beta_m96_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ncases = pickle.loads((root/'public_beta_m96_w03_s00.pkl').read_bytes())\nfor case in cases:\n    s, gt = case['study'], case['gt']\n    base = m.solve_beta_m96_w03_s00(s)\n    print('public relative weight, field errors:',*[np.linalg.norm(base[k]-gt[j])/np.linalg.norm(gt[j]) for k,j in [('weights',",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pathlib, pickle\nimport numpy as np\np = pathlib.Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'beta_m96_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nfor case in pickle.loads((p/'public_beta_m96_w03_s00.pkl').read_bytes()):\n    s, gt = case['study'], case['gt']\n    blocks, _ = m._forward(s)\n    Z = s['Z_nuisance']; G = Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1])\n    E = blocks - Z @ np.linalg.solve(G, Z.T @ blocks) - gt['S_tilde']\n    shift_error",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'beta_m96_w03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nfor case in pickle.loads((p/'public_beta_m96_w03_s00.pkl').read_bytes()):\n    s = case['study']\n    t = s['sensor_calibration_sweeps']; b, x, y = [np.asarray(t[k]) for k in ('bank_id', 'ref_signal', 'raw_readout')]\n    base = m.solve_beta_m96_w03_s00(s)\n    for wing in (0, 1):\n        selected = np."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tracer_reaction_probe.py",
+      "primary_producer_container_path": "/tmp/tracer_reaction_probe.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m96_w03_s00_solver.py",
+        "filename": "beta_m96_w03_s00_solver.py",
+        "bytes": 7001,
+        "sha256": "9a254a0e3e42ed5c36252a43678043bc107702fe54d1edf4c1fc31707d0e078c",
+        "content_addressed_ref": "content_addressed_blobs/9a254a0e3e42ed5c36252a43678043bc107702fe54d1edf4c1fc31707d0e078c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m96_w03_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ca29b21a142389360e19c2eaf8628332e91e3effccbed5d5e13516763dd3eb45",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', p/'beta_m96_w03_s00_solver.py')\nm = impor",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ca29b21a142389360e19c2eaf8628332e91e3effccbed5d5e13516763dd3eb45",
+        "expected_candidate_sha256": "ca29b21a142389360e19c2eaf8628332e91e3effccbed5d5e13516763dd3eb45",
+        "computed_candidate_sha256": "ca29b21a142389360e19c2eaf8628332e91e3effccbed5d5e13516763dd3eb45",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w03_s00_solver.py",
+            "bytes": 7001
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ca29b21a"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": []
+  }
+}

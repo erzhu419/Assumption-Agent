@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86b054b2a66d4c30bc8f902b917840af",
+  "call_seq": 10,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:13:08.685688+00:00",
+  "ended_at_utc": "2026-11-27T03:13:49.504234+00:00",
+  "request_sha256": "681d133fd53f4199d37207a0fa92e3714a770774c521e28d73d829fd5f936b88",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 52080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29772,
+    "cached_tokens": 11136,
+    "completion_tokens": 1648
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/creep_calibration_audit.py <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\n\\n\\ndef robust_line(x, y):\\n    n = len(x)\\n    design = np.column_stack((x, np.ones(n)))\\n    keep_count = n - (n - 1) // 3\\n    best = None\\n    for a, b in itertools.combinations(range(n), 2):\\n        if abs(x[a] - x[b]) <= 1e-10:\\n            continue\\n        g = (y[a] - y[b]) / (x[a] - x[b])\\n        error = np.abs(y - (g*x + y[a] - g*x[a]))\\n        core = np.argsort(error)[:keep_count]\\n        fit = np.linalg.lstsq(design[core], y[core], rcond=None)[0]\\n        r = (y - design @ fit)[core]\\n        score = r @ r\\n        if best is None or score < best[0]:\\n            best = score, fit\\n    if best is None:\\n        return 1., np.median(y - x) if n else 0.\\n    _, fit = best\\n    r = y - design @ fit\\n    middle = np.median(r)\\n    keep = np.abs(r - middle) <= max(4 * 1.4826 * np.median(np.abs(r - middle)), 1e-8)\\n    if keep.sum() >= keep_count and np.ptp(x[keep]) > 1e-10:\\n        fit = np.linalg.lstsq(design[keep], y[keep], rcond=None)[0]\\n    return fit\\n\\n\\ndef calibrate(checks):\\n    fits = []\\n    for lab in range(4):\\n        x, y = (np.asarray(checks[k]) for k in ('cmd_stress', 'true_stress'))\\n        m = (np.asarray(checks['lab_id']) == lab) & np.isfinite(x) & np.isfinite(y)\\n        fits.append(robust_line(x[m], y[m]))\\n    return np.asarray(fits).T\\n\\n\\nif __name__ == '__main__':\\n    root = '/holdout_task/'\\n    s = runpy.run_path(root+'alpha_m96_w03_s00_solver.py'); old = s['_calibrate']\\n    e, = pickle.load(open(root+'public_alpha_m96_w03_s00.pkl','rb')); d = e['dataset']; c = d['calibration_load_cells']\\n    for i in range(4):\\n        m = c['lab_id'] == i; x = c['cmd_stress'][m]; y = c['true_stress'][m]\\n        base = old(c); sparse = []; jack = []\\n        for j in np.flatnonzero(m):\\n            sel = np.arange(len(m)) != j; g,b = calibrate({k:v[sel] for k,v in c.items()})\\n            jack.append(abs(g[i]*c['cmd_stress'][j]+b[i]-c['true_stress'][j]))\\n        for gtrue,btrue in [(base[0][i],base[1][i]),(.86+.085*i,.11-.08*i)]:\\n            yy0 = y + (gtrue-base[0][i])*x + (btrue-base[1][i])\\n            for ids in itertools.combinations(range(len(x)),4):\\n                xx = x[list(ids)]; yy1 = yy0[list(ids)]\\n                if np.ptp(xx) < .7*np.ptp(x): continue\\n                for j in range(4):\\n                    for spike in (-.8,.8):\\n                        yy = yy1.copy(); yy[j] += spike\\n                        g,b = robust_line(xx,yy)\\n                        sparse.append(np.max(abs((g-gtrue)*x + b-btrue)))\\n        print(i,'sparse EMI median/p95/max',np.quantile(sparse,[.5,.95,1]),'clean jackknife max',max(jack))\\n    for fn in [old, calibrate]:\\n        solve = s['solve_alpha_m96_w03_s00']; solve.__globals__['_calibrate'] = fn\\n        o = solve(d); lab = d['test']['lab_id']; print(fn.__name__,'worst lab public strain/rate',*[max(np.sqrt(np.mean((o[k][lab==i]-e['gt'][truth][lab==i])**2)) for i in range(4)) for k,truth in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/creep_calibration_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 median-slope calibration → H2 trimmed affine consensus before the same hereditary fit; the baseline four-check EMI error reached 1.014 stress units, while worst-lab public strain/rate RMSE was 0.0911/0.0289.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use identity calibration as a prior for sparse labs\",\n      \"rejected_reason\": \"That would favor the public batch's near-identity calibration even when the true lab gain and bias differ.\"\n    }\n  ],\n  \"rationale\": \"One EMI spike contaminates three of six pairwise slopes with four checks. Compare trimmed consensus on the measured stress settings, including shifted gains and biases, and promote it only if it reduces sparse-check error without degrading clean calibration or public predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5b27f533bd9a98e095adbd0f403113d2374193a62a8fd5f5dd1ef2cb7911fddb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42808.56,
+      "usage_known": true,
+      "prompt_tokens": 29772,
+      "cached_tokens": 11136,
+      "completion_tokens": 1648
+    }
+  ]
+}

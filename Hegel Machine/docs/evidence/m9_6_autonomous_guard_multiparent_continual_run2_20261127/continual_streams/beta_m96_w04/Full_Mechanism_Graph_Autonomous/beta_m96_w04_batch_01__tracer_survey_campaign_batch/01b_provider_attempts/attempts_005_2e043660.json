@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e043660b2c84ff7be45192a2470a6d4",
+  "call_seq": 5,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:32:18.209659+00:00",
+  "ended_at_utc": "2026-11-27T03:32:40.906803+00:00",
+  "request_sha256": "ece56160193a525bb22314edef100e0883c5878ae8b88955e295a4e4d6336385",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39506,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25136,
+    "cached_tokens": 6784,
+    "completion_tokens": 742
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np,runpy\\nitem=pickle.load(open('/holdout_task/public_beta_m96_w04_batch_01.pkl','rb'))[0]\\ns,g=item['study'],item['gt']\\na=runpy.run_path('/tmp/hegel_continual_archive/beta_m96_w04_s00_solver.py')\\nS,U=a['_forward'](s)\\nSt,_=a['_profile'](s,S,np.zeros(len(S)))\\nprint('reaction map minus axis sum max',np.max(abs(s['V_reaction_2d']-(s['reaction_x'][:,None]+s['reaction_y'][None,:]))),'max circulation',max(s['past_vortex_circulation_trace']))\\nprint('archive design max error',np.max(abs(St-g['S_tilde'])),'archive terminal max error',np.max(abs((U@g['weights_by_budget'][1]).reshape(s['nx'],s['ny'])-g['terminal_field_mid_budget'])))\\ndef inspect(label,sw):\\n if isinstance(sw,list): sw={k:[r[k] for r in sw] for k in ('bank_id','ref_signal','raw_readout')}\\n b,x,z=[np.asarray(sw[k]) for k in ('bank_id','ref_signal','raw_readout')]\\n for i in range(4):\\n  t,v=x[b==i],z[b==i]; A=np.column_stack((t,np.ones(t.size))); c=np.linalg.lstsq(A,v,rcond=None)[0]; print(label,i,'n',len(t),'levels',len(np.unique(t)),'OLS',c,'residuals',np.round(np.sort(abs(v-A@c)),8))\\ninspect('current',s['sensor_calibration_sweeps'])\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor i,r in enumerate(h if isinstance(h,list) else [h]):\\n print('archive entry',i,'keys',list(r))\\n if 'sensor_calibration_sweeps' in r: inspect(f'prefix {i}',r['sensor_calibration_sweeps'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived single-budget transport -> H2 shared laminar transport with prefix-assisted bank calibration and three certified fits; worst-slice error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Run the forward comparison independently of calibration parsing. A design or terminal mismatch would change the stencil or shift selection; per-bank reference counts and residuals will determine where to use prefix calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7e4751aad24e8d9e0b84f7f9cef2e98f443a44875718621164cf9a31a5bcd572",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22658.99,
+      "usage_known": true,
+      "prompt_tokens": 25136,
+      "cached_tokens": 6784,
+      "completion_tokens": 742
+    }
+  ]
+}

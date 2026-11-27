@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd4a68c0436040c7aa49dff5312903e6",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:50:30.900624+00:00",
+  "ended_at_utc": "2026-11-27T03:51:08.071917+00:00",
+  "request_sha256": "e5733ee36c83f6bd236f61bd8f6eb7d5a838729c6958c8d388ee47e8eece39bb",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 69017,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35150,
+    "cached_tokens": 6784,
+    "completion_tokens": 1513
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '30,50p' /tmp/hegel_continual_archive/alpha_m96_w04_batch_03_solver.py; cat > /tmp/verify_w04_regimes.py <<'PY'\\nexec(open('/tmp/validate_w04_slices.py').read().split('coef =')[0])\\nlab, cmd, obs = m._checks(d['calibration_load_cells'])\\ngain, bias = map(np.asarray, (g['stress_gains'], g['stress_biases']))\\ntruth = np.column_stack((gain, bias))\\nfor wing in (0, 1):\\n    for offset in range(2):\\n        sparse, spiked = 2*wing+offset, 2*(1-wing)+offset\\n        keep = lab != sparse\\n        keep[np.flatnonzero(lab == sparse)[0]] = True\\n        q = obs.copy()\\n        i = np.flatnonzero(lab == spiked)[np.argsort(cmd[lab == spiked])[-2:]]\\n        q[i] += np.array([.7, -.9])\\n        coef = m._calibration(dict(lab_id=lab[keep], cmd_stress=cmd[keep], true_stress=q[keep]))\\n        err = np.max(np.abs(coef-truth))\\n        print('sparse lab, spiked lab, max coefficient error:', sparse, spiked, err)\\n        assert err < .001\\n\\nt, dt, sy = d['eval_times'], d['past_dt'], d['yield_stress']\\nx = m._aligned((tr, te))\\nn = len(tr['lab_id'])\\ntau = np.asarray(g['taus']); w = np.asarray(g['theta']); vp = np.asarray(g['vp_theta'])\\n\\ndef make(part, features, past_limit, hold_limit):\\n    part = dict(part)\\n    c = part['lab_id']\\n    past = np.clip(part['past_stress_cmd']*gain[c,None]+bias[c,None], -past_limit, past_limit)\\n    hold = np.clip(part['stress_hold_cmd']*gain[c]+bias[c], -hold_limit, hold_limit)\\n    part.update(past_stress_cmd=(past-bias[c,None])/gain[c,None], stress_hold_cmd=(hold-bias[c])/gain[c])\\n    o = np.sign(hold)*np.maximum(abs(hold)-sy,0)**2\\n    damage = np.sum(np.maximum(abs(past)-sy,0)**2*dt,axis=1)*hold\\n    slope = w[2]+features@w[3:]+vp[0]*o\\n    curve = part['strain_0'][:,None]+slope[:,None]*t\\n    rate = slope.copy()\\n    for j in range(2):\\n        state = np.zeros(len(c))\\n        for step, delta in enumerate(dt):\\n            a = np.exp(-delta/tau[j]); state = a*state+(1-a)*past[:,step]\\n        amp = w[j]*(hold-state)\\n        if j == 0: amp += vp[1]*damage\\n        curve += amp[:,None]*(1-np.exp(-t/tau[j]))\\n        rate += amp/tau[j]\\n    part['instant_rate_obs'] = rate\\n    return part, curve, rate\\n\\nfor name, p, h, active in [('sub-yield', .85*sy, .85*sy, [False,False]), ('history-only', np.inf, .85*sy, [False,True]), ('hold-only', .85*sy, np.inf, [True,False])]:\\n    a, a_curve, _ = make(tr,x[:n],p,h); a['strain_curves_obs'] = a_curve\\n    b, curve, rate = make(te,x[n:],p,h)\\n    b.pop('instant_rate_obs')\\n    exact_checks = dict(lab_id=lab, cmd_stress=cmd, true_stress=gain[lab]*cmd+bias[lab])\\n    out = solver({**d, 'train':a, 'test':b, 'calibration_load_cells':exact_checks})\\n    error = [np.max(np.abs(out['predicted_strain']-curve)), np.max(np.abs(out['initial_rate_pred']-rate))]\\n    weights = out['viscoplastic_weights']\\n    print(name, 'max curve/rate error', error, 'plastic weights', weights)\\n    assert np.all(weights[~np.array(active)] == 0) and np.allclose(weights[active], vp[active], atol=.001)\\n    assert max(error) < .005\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_w04_regimes.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Hold-only creep → separate hold and history terms: deleting history work raised history-only strain/rate RMSE from 0.0110/0.00347 to 0.438/1.203; missing-feature strain RMSE remains 0.487.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use observed test rates to recover missing-feature drift\",\n      \"rejected_reason\": \"Test rate is an output target, not an established conditioning input.\"\n    }\n  ],\n  \"rationale\": \"The real-data ablations support both plastic terms. The remaining checks target two gaps: recovery when one lab has sparse calibration and the other wing has spikes, and exact term gating in independently simulated sub-yield, history-only, and hold-only regimes. Failure would identify whether to revise the archive selection or the constitutive basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8c6f0d93d3ee7461d41f78e53d0dfd991efc79370a1224b554bc89bfa77555d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39216.41,
+      "usage_known": true,
+      "prompt_tokens": 35150,
+      "cached_tokens": 6784,
+      "completion_tokens": 1513
+    }
+  ]
+}

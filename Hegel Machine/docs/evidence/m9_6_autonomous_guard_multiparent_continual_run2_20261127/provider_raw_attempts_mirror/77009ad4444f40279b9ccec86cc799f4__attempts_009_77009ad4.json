@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77009ad4444f40279b9ccec86cc799f4",
+  "call_seq": 9,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:20.300754+00:00",
+  "ended_at_utc": "2026-11-27T03:34:48.836993+00:00",
+  "request_sha256": "33d54fb6a19311e9ce10eefb351074a69d24a4bc898f02cd423a1ef185370127",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 46229,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27212,
+    "cached_tokens": 6784,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport itertools\\nimport json\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p + 'beta_m96_w04_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nhistory = json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor item in pickle.load(open(p + 'public_beta_m96_w04_batch_01.pkl', 'rb')):\\n    s, gt = item['study'], item['gt']\\n    sw = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    banks, refs = sw['bank_id'], sw['ref_signal']\\n    rows = np.asarray(s['row_bank_id'])\\n    y_full = m._calibrate(s)\\n    S, U = m._forward(s)\\n    design, _ = m._profile(s, S, y_full)\\n    for b in np.unique(rows):\\n        ix = np.flatnonzero(banks == b)\\n        if np.unique(refs[ix]).size < 2:\\n            continue\\n        g_now, _ = m._bank_line(refs[ix], sw['raw_readout'][ix])\\n        for past in reversed(history):\\n            mask = np.asarray(past['bank_id']) == b\\n            px = np.asarray(past['ref_signal'])[mask]\\n            if np.unique(px).size >= 2:\\n                g_old, _ = m._bank_line(px, np.asarray(past['raw_readout'])[mask])\\n                break\\n        for n in (1, 2):\\n            worst = None\\n            for picked in itertools.combinations(ix, n):\\n                if np.unique(refs[list(picked)]).size < n:\\n                    continue\\n                keep = (banks != b) | np.isin(np.arange(len(banks)), picked)\\n                st = dict(s, sensor_calibration_sweeps={k: v[keep] for k, v in sw.items()})\\n                y = m._calibrate(st)\\n                err = float(np.max(abs(y[rows == b] - y_full[rows == b])))\\n                if worst is None or err > worst[0]:\\n                    worst = err, picked, y\\n            err, picked, y = worst\\n            _, r = m._profile(s, S, y)\\n            w = np.stack([m._box_simplex(design, r, s['source_ridge'], s['u_box'], float(budget))[0] for budget in s['budget_grid']])\\n            f = (U @ w[1]).reshape(s['nx'], s['ny'])\\n            print('bank', b, 'remaining_refs', n, 'current/archive_gain', g_now, g_old, 'reference_span', np.ptp(refs[list(picked)]), 'worst_calibration_change', err, 'budget_weight_max_errors', np.max(abs(w - gt['weights_by_budget']), axis=1).tolist(), 'field_max_error', float(np.max(abs(f - gt['terminal_field_mid_budget']))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Sparse calibration may fail when the archived gain drifts or the two surviving references are too close; the latest verified worst KKT gap is 1.05e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the stencil and pooled public checks\",\n      \"rejected_reason\": \"Those checks already passed; they do not establish whether sparse real reference subsets make gain estimation unreliable.\"\n    }\n  ],\n  \"rationale\": \"The earlier sparse stress test assumed an exact historical gain. Thin the measured sweeps by bank to expose archive drift and poorly separated references, then quantify the effect on each budget and the terminal field. If the error is material, the reference span and measured gain drift will show whether a historical anchor is justified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0dd649c74bb418bd8189e1239bdd33090e94a960816b1e7267b419828d619591",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30614.27,
+      "usage_known": true,
+      "prompt_tokens": 27212,
+      "cached_tokens": 6784,
+      "completion_tokens": 1109
+    }
+  ]
+}

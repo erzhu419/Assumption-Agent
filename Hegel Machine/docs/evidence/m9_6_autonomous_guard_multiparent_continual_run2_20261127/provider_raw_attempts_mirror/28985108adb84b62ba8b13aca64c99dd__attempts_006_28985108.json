@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28985108adb84b62ba8b13aca64c99dd",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:13.682236+00:00",
+  "ended_at_utc": "2026-11-27T03:33:43.361568+00:00",
+  "request_sha256": "2cac4d0d86b633e5aa5c5441823e36a306a13b34175e6e39b56b08212567ccad",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26451,
+    "cached_tokens": 6784,
+    "completion_tokens": 1024
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task'); spec=importlib.util.spec_from_file_location('solver',p/'beta_m96_w02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\na=pickle.loads((p/'public_beta_m96_w02_batch_02.pkl').read_bytes())[0]; s,gt=a['study'],a['gt']; q={k:np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}; banks=q['bank_id']; rb=s['row_bank_id']; ref=np.asarray(s['y_obs_raw']); vv={}; exec((p/'validate_public_schema.py').read_text().split('\\\\n_d = ',1)[0],vv); verify=vv['verify_box_simplex_kkt_certificate']\\nloo=0.\\nfor i in range(len(banks)):\\n t=dict(s,sensor_calibration_sweeps={k:np.delete(v,i) for k,v in q.items()}); loo=max(loo,np.max(np.abs(m._calibrate(t)-ref)))\\nprint('worst leave-one-sweep-out signal error',loo)\\nfor name in ('dense_emi','missing_prior_stable','sparse_emi_prior_stable'):\\n errw=errf=gap=0.; bad=[]\\n for b in range(4):\\n  z={k:v.copy() for k,v in q.items()}; raw=ref.copy(); j=np.flatnonzero(banks==b)\\n  if name=='dense_emi':\\n   raw[rb==b]=1.17*ref[rb==b]-.08; z['raw_readout'][j]=1.17*z['ref_signal'][j]-.08; z['raw_readout'][j[0]]+=.37\\n  else:\\n   keep=banks!=b\\n   if name.startswith('sparse'):\\n    keep[j[:3]]=True; z['raw_readout'][j[0]]+=.37\\n   z={k:v[keep] for k,v in z.items()}\\n  out=m.solve_beta_m96_w02_batch_02(dict(s,y_obs_raw=raw,sensor_calibration_sweeps=z)); errw=max(errw,np.max(abs(out['weights_by_budget']-gt['weights_by_budget']))); errf=max(errf,np.max(abs(out['terminal_field_mid_budget']-gt['terminal_field_mid_budget'])))\\n  for B,c in zip(s['budget_grid'],out['kkt_certificates']):\\n   v=verify(gt['S_tilde'],gt['r_y'],s['source_ridge'],s['u_box'],B,c)\\n   if v['valid']: gap=max(gap,v['gap'])\\n   else: bad.append((b,float(B),v['reason']))\\n print(name,'weight max error',errw,'field max error',errf,'worst valid gap',gap,'failures',bad)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived single-budget inverse) -> H2 (three certified budgets with bankwise sweep calibration); worst public KKT gap is 6.64e-9 and maximum field error is 4.05e-10.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public validator\",\"rejected_reason\":\"The public sweeps are dense and clean, so they do not exercise the required archive fallback or EMI handling.\"}],\"rationale\":\"Leave one real sweep point out at a time, then stress each bank with dense EMI, missing sweeps, and sparse EMI where the archived calibration remains valid. If the sparse path fails, use archive agreement to disambiguate it without changing the dense fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ef950f9b332b8c744b1ee21724bc2d064d6fb865b628aa0043d814df42d1db1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29639.76,
+      "usage_known": true,
+      "prompt_tokens": 26451,
+      "cached_tokens": 6784,
+      "completion_tokens": 1024
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c927e1a6b530498d9af97f38ff5c864e",
+  "call_seq": 5,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:39:14.524710+00:00",
+  "ended_at_utc": "2026-11-27T03:39:55.701024+00:00",
+  "request_sha256": "fe873bc22a22f326e19319c51fd37c4c1d00b45e2c46ff478d0d44c83ebe6955",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38474,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25183,
+    "cached_tokens": 6784,
+    "completion_tokens": 1683
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.sparse import lil_matrix, eye\\nfrom scipy.sparse.linalg import splu\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', root/'beta_m96_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nrow = pickle.loads((root/'public_beta_m96_w03_batch_04.pkl').read_bytes())[0]\\ns, gt = row['study'], row['gt']\\nctx = {}\\nexec((root/'validate_public_schema.py').read_text().split('\\\\n_d =', 1)[0], ctx)\\nverify = ctx['verify_box_simplex_kkt_certificate']\\n\\ndef reference(st, scale):\\n    nx, ny = st['nx'], st['ny']\\n    mat = lil_matrix((nx*ny,nx*ny))\\n    for i,j in np.ndindex(nx,ny):\\n        p = i*ny+j\\n        mat[p,p] = st['V_reaction_2d'][i,j]\\n        for a,q,n,stride in [('x',i,nx,ny),('y',j,ny,1)]:\\n            k = scale*st['kappa_'+a]\\n            h = st['L'+a]/n\\n            rg = st['robin_'+a]\\n            vel = st['vel_'+a][q]\\n            mat[p,p] += st['reaction_'+a][q] + abs(vel)/h\\n            for step in (-1,1):\\n                nbr = q+step\\n                if 0 <= nbr < n:\\n                    d = 2/(1/k[q]+1/k[nbr])/h**2\\n                    mat[p,p] += d\\n                    mat[p,p+step*stride] -= d + max(0,-step*vel)/h\\n                else:\\n                    mat[p,p] += rg*k[q]/(h*(rg*h/2+k[q]))\\n    mat = mat.tocsc()\\n    src = st['source_modes'].reshape(-1,nx*ny).T\\n    i,j = st['sensor_ij'].T\\n    fields = [splu(mat + shift*eye(nx*ny,format='csc')).solve(src) for shift in st['mu_shifts']]\\n    return np.vstack([f[i*ny+j] for f in fields]), fields[-1]\\n\\nsw = s['sensor_calibration_sweeps']\\ncal = m._calibration_coefficients(sw)\\njack = 0.\\nfor k in range(len(sw['bank_id'])):\\n    keep = np.arange(len(sw['bank_id'])) != k\\n    bank = sw['bank_id'][k]\\n    fit = m._calibration_coefficients({key:np.asarray(val)[keep] for key,val in sw.items()})[bank]\\n    jack = max(jack,abs(fit@[sw['ref_signal'][k],1]-sw['raw_readout'][k]))\\nprint('leave-one-sweep-out maximum raw error',jack)\\nassert jack < 2e-6\\nspiked = {key:np.array(val,copy=True) for key,val in sw.items()}\\nfor b in (2,3):\\n    k = np.flatnonzero(spiked['bank_id']==b)[:3]\\n    spiked['raw_readout'][k] += [0.22,-0.35,0.41]\\nassert np.max(abs(m._calibration_coefficients(spiked)-cal)) < 2e-6\\n\\nv = s['V_reaction_2d']; sep = v.mean(1,keepdims=True) + v.mean(0)-v.mean()\\nc = s['critical_vortex_circulation']\\nworst = 0.\\nfor name,react,trace,scale in [('public',v,s['past_vortex_circulation_trace'],1.45),('interaction-only',v,[0,c],1.45),('memory-only',sep,[0,c+0.1,0],1.45),('laminar-at-threshold',sep,[0,c],1.0)]:\\n    st = dict(s,V_reaction_2d=react,past_vortex_circulation_trace=np.asarray(trace))\\n    ref, end = reference(st,scale)\\n    obs, field = m._forward(st)\\n    err = max(np.max(abs(obs-ref)),np.max(abs(field-end)))\\n    assert err < 1e-10,(name,err)\\n    result = m.solve_beta_m96_w03_batch_04(st)\\n    field_err = np.max(abs(result['terminal_field'].ravel()-end@result['weights']))\\n    assert field_err < 1e-10,(name,field_err)\\n    S,y = (gt['S_tilde'],gt['r_y']) if name=='public' else m._profile(st,ref,m._calibrated_observations(st))\\n    chk = verify(S,y,st['source_ridge'],st['u_box'],st['total_budget'],result['kkt_certificate'],gap_tol=2e-4 if name=='public' else 1e-6)\\n    assert chk['valid'],(name,chk)\\n    worst = max(worst,chk['gap'])\\n    print(name,'stencil error',err,'terminal error',field_err,'KKT gap',chk['gap'])\\nprint('worst verified gap',worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 laminar carryover -> H2 eddy diffusivity triggered by either reaction coupling or circulation memory; public schema and reference KKT passed, with isolated regime slices pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema pass\",\"rejected_reason\":\"The public case triggers both eddy indicators and checks only the terminal field’s shape; it cannot detect a missed memory-only trigger or incorrect terminal field values.\"}],\"rationale\":\"Use an independently assembled finite-volume stencil to isolate each regime trigger and verify terminal field values and KKT gaps. Use public sweep jackknifing and wing-local spikes to check whether calibration degrades when individual checks are missing or corrupted.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "79275a6c8bb43708a7cd4cea4c82218f0441af0f346a11044b8f60eaefb5cd4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43265.96,
+      "usage_known": true,
+      "prompt_tokens": 25183,
+      "cached_tokens": 6784,
+      "completion_tokens": 1683
+    }
+  ]
+}

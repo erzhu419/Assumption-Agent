@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "52da898eefd648b597fa89a1783802f3",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:41:37.804141+00:00",
+  "ended_at_utc": "2026-11-27T03:41:58.745379+00:00",
+  "request_sha256": "2ad356ce792bb010bc8bc162971c25c871e71e3fcc3c996dc6400193e53734d2",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 45531,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26459,
+    "cached_tokens": 6784,
+    "completion_tokens": 760
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task/beta_m96_w03_batch_04_solver.py')\\nspec = importlib.util.spec_from_file_location('candidate', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nworst = (0., None)\\ncount = 0\\nfor i, episode in enumerate(json.loads(m._HISTORY.read_text())):\\n    fits = [m._affine_candidates(*m._bank_sweeps(episode, b)) for b in range(4)]\\n    if not all(len(f) == 1 for f in fits):\\n        continue\\n    ref = np.array([f[0] for f in fits])\\n    bank = np.asarray(episode['bank_id'])\\n    for b in (2, 3):\\n        rows = np.flatnonzero(bank == b)\\n        if len(rows) < 3:\\n            continue\\n        rows = rows[np.argsort(np.asarray(episode['ref_signal'])[rows])]\\n        selected = rows[[0, len(rows)//2, -1]]\\n        keep = bank != b\\n        keep[selected] = True\\n        for row in selected:\\n            sweeps = {k: np.asarray(episode[k])[keep].copy() for k in ('bank_id','ref_signal','raw_readout')}\\n            sweeps['raw_readout'][np.searchsorted(np.flatnonzero(keep), row)] += .35\\n            err = float(np.max(np.abs(m._calibration_coefficients(sweeps) - ref)))\\n            count += 1\\n            if err > worst[0]:\\n                worst = (err, (i, b, int(row)))\\nprint('joint sparse/EMI cases:', count, 'worst coefficient error and slice:', worst)\\nassert count and worst[0] < 2e-6, worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 laminar carryover -> H2 eddy diffusivity triggered by reaction coupling or circulation history; the worst verified KKT gap remains 1.37e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Prior tests exercised sparse calibration and EMI separately. This audit combines them on archived sweeps to detect whether a spike can make the fallback select the wrong calibration state. If it fails, inspect how ambiguous sweep fits are ranked against the archive.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "13d098d703ce3421fbcc64f4c9ee4789e421e4450807d86a6194838cf3cc42f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23027.92,
+      "usage_known": true,
+      "prompt_tokens": 26459,
+      "cached_tokens": 6784,
+      "completion_tokens": 760
+    }
+  ]
+}

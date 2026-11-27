@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1c95795fbd9b47b7af03adc563c30e31",
+  "call_seq": 9,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:11.910131+00:00",
+  "ended_at_utc": "2026-11-27T03:34:46.017419+00:00",
+  "request_sha256": "cecb4fdde8f9e4ad0bb6f20c5553f8042c3b72957b03322eb7fe66529926d7a3",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39005,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24884,
+    "cached_tokens": 11136,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\np = '/holdout_task/'\\na = runpy.run_path(p + 'beta_m96_w04_batch_01_solver.py')\\nitem = pickle.load(open(p + 'public_beta_m96_w04_batch_01.pkl', 'rb'))[0]\\ns, gt = item['study'], item['gt']\\nbanks, ref, raw = a['_sweep_columns'](s['sensor_calibration_sweeps'])\\nrows = np.asarray(s['row_bank_id'])\\nobs = np.asarray(s['y_obs_raw'])\\npruned = np.ones(len(ref), dtype=bool)\\nfor bank in np.unique(banks):\\n    ids = np.flatnonzero(banks == bank)\\n    gain, offset = a['_calibration_line'](ref[ids], raw[ids])\\n    y = (obs[rows == bank] - offset) / gain\\n    errors, perturbations = [], []\\n    for j in ids:\\n        train = ids[ids != j]\\n        g, o = a['_calibration_line'](ref[train], raw[train])\\n        errors.append(abs(g * ref[j] + o - raw[j]))\\n        perturbations.append(np.max(abs((obs[rows == bank] - o) / g - y)))\\n    pruned[ids[np.argmax(perturbations)]] = False\\n    print(f'bank {bank}: held-out sweep residual {max(errors):.3g}; worst propagated observation change {max(perturbations):.3g}')\\n    assert max(errors) < 1e-6\\nstress = dict(s, sensor_calibration_sweeps=[dict(bank_id=int(b), ref_signal=float(x), raw_readout=float(z)) for b, x, z in zip(banks[pruned], ref[pruned], raw[pruned])])\\nout = a['solve_beta_m96_w04_batch_01'](stress)\\nfor key in ('weights_by_budget', 'terminal_field_mid_budget'):\\n    err = np.max(abs(out[key] - gt[key]))\\n    print(f'worst reference omission: {key} max error {err:.3g}')\\n    assert err < 1e-6\\nfor budget, cert in zip(s['budget_grid'], out['kkt_certificates']):\\n    w = np.asarray(cert['weights']); S = gt['S_tilde']; u = s['u_box']; nu = cert['nu_sum']\\n    g = S.T @ (S @ w - gt['r_y']) + s['source_ridge'] * w\\n    gap = g @ w - nu * budget - u * np.minimum(g - nu, 0).sum()\\n    violation = max(abs(w.sum() - budget), -w.min(), w.max() - u)\\n    print(f'budget {budget:g}: public-reference KKT gap {gap:.3g}; feasibility error {violation:.3g}')\\n    assert abs(gap) < 2e-4 and violation < 1e-7\\nX = np.asarray(s['reaction_x'])[:, None] + np.asarray(s['reaction_y'])[None, :]\\nfor label, study in [('full reaction map', s), ('axes-only reaction', dict(s, V_reaction_2d=X))]:\\n    S, terminal = a['_forward'](study)\\n    St, ry = a['_profile'](study, S, a['_calibrate'](study))\\n    design_err = np.max(abs(St - gt['S_tilde']))\\n    field_err = np.max(abs((terminal @ gt['weights_by_budget'][1]).reshape(X.shape) - gt['terminal_field_mid_budget']))\\n    print(f'{label}: profiled design error {design_err:.3g}; terminal field error {field_err:.3g}')\\n    if label == 'full reaction map':\\n        print(f'profiled observation error {np.max(abs(ry - gt[\\\"r_y\\\"])):.3g}')\\n        assert max(design_err, field_err) < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived transport → H2 four-bank calibration and three certified budget fits; the latest worst public KKT gap is 1.05e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Classification or relay-mode audit\",\n      \"rejected_reason\": \"This contract is a continuous inverse problem with no class labels or relay state. Per-bank held-out residuals test the relevant nuisance directly.\"\n    }\n  ],\n  \"rationale\": \"Hold out real reference readings one at a time to detect a bank fit that depends on a single calibration point, then omit the most influential point from each bank and check all three budgets. Compare the full and axes-only reaction operators against the public design and terminal field; a mismatch in the full operator would require revisiting the stencil before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4cb31a92e3814920534c3f24ebc29bb4ee9325eaaef50d67f01f341213da3541",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36189.16,
+      "usage_known": true,
+      "prompt_tokens": 24884,
+      "cached_tokens": 11136,
+      "completion_tokens": 1366
+    }
+  ]
+}

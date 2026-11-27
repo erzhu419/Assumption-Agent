@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "375d51e16695429c9eb9de6d67288616",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:46:48.650502+00:00",
+  "ended_at_utc": "2026-11-27T03:47:24.101830+00:00",
+  "request_sha256": "083c60366444d5fcfa1f0e3b669177d53b3368590307636c9ab3adcda72007b6",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 62996,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32137,
+    "cached_tokens": 11136,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py /holdout_task/beta_m96_w03_batch_04_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_beta_m96_w03_batch_04.pkl', 'rb') as f:\\n    entry = pickle.load(f)[0]\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)\\ns, gt = entry['study'], entry['gt']\\nout = m.solve_beta_m96_w03_batch_04(s)\\nS, _ = m._forward(s)\\nZ = s['Z_nuisance']\\nU, sig, _ = np.linalg.svd(Z, full_matrices=False)\\nD = np.column_stack((S, m._calibrated_observations(s)))\\nP = D - U @ ((sig**2 / (sig**2 + s['nuisance_ridge']))[:, None] * (U.T @ D))\\nA, y = P[:, :-1], P[:, -1]\\nw = out['weights']\\ng = A.T @ (A @ w - y) + s['source_ridge'] * w\\ncaps = np.clip(s['total_budget'] - s['u_box'] * np.arange(w.size), 0, s['u_box'])\\ngap = g @ w - np.sort(g) @ caps\\nprint('Independent SVD profile vs reference, max errors:', np.max(np.abs(A-gt['S_tilde'])), np.max(np.abs(y-gt['r_y'])), 'sorted tangent gap:', gap)\\nassert np.max(np.abs(A-gt['S_tilde'])) < 1e-12 and abs(gap) < 1e-9\\n\\ndef fits(sw):\\n    return np.array([m._fit_archived_sweep(*m._sweep_points(sw, b)) for b in range(4)])\\n\\narchive = np.array([fits(h) for h in history])\\nfor i, sw in enumerate(history + [s['sensor_calibration_sweeps']]):\\n    if i == 0:\\n        continue\\n    current = fits(sw)\\n    older = archive[:i]\\n    for b in range(4):\\n        peers = np.arange(4) != b\\n        dist = np.max(np.abs(older[:, peers] - current[peers]), axis=2)\\n        support = (dist < 3e-6).sum(axis=1)\\n        choice = len(older) - 1 - int(np.argmax(support[::-1]))\\n        print(sw.get('episode_short_name', 'public'), 'held-out bank', b, 'peer matches', support[choice], 'recent coefficient error', np.max(np.abs(older[-1, b]-current[b])), 'matched coefficient error', np.max(np.abs(older[choice, b]-current[b])))\\n        if i == len(history):\\n            keep = np.asarray(sw['bank_id']) != b\\n            sparse = dict(s, sensor_calibration_sweeps={k: np.asarray(v)[keep] for k, v in sw.items()})\\n            baseline = m.solve_beta_m96_w03_batch_04(sparse)\\n            print('public missing bank baseline weight/field relative errors:', np.linalg.norm(baseline['weights']-gt['w_opt'])/np.linalg.norm(gt['w_opt']), np.linalg.norm(baseline['terminal_field']-gt['terminal_field_A'])/np.linalg.norm(gt['terminal_field_A']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 most-recent fallback for a bank without references → H2 use a prior calibration only when measured peer banks support it; the verified worst single-reference readout deviation is 5.95e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classifier balance, relay modes, or unrelated differential operators\",\n      \"rejected_reason\": \"This study has continuous tracer readouts and a specified finite-volume operator, not class labels, relay states, or stochastic drift dynamics.\"\n    }\n  ],\n  \"rationale\": \"Independently verify the ridge profile and box-simplex tangent bound on the real public measurements. Then withhold each bank’s sweep to test the solver’s existing no-reference fallback. Change that fallback only if the remaining measured banks identify a matching archived calibration and the current fallback materially degrades the delivered outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "32d065b76d5e24bb019966cf3964956827a86e05bf13d98499a1ee97acb0bd84",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37521.1,
+      "usage_known": true,
+      "prompt_tokens": 32137,
+      "cached_tokens": 11136,
+      "completion_tokens": 1392
+    }
+  ]
+}

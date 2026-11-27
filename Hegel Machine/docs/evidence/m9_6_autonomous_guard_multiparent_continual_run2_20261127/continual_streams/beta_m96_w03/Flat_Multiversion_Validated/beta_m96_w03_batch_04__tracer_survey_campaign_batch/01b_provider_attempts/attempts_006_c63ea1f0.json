@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c63ea1f053004c7f8e0724bce540248d",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w03__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w03_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:39:58.717532+00:00",
+  "ended_at_utc": "2026-11-27T03:40:21.235452+00:00",
+  "request_sha256": "cd62332088de4bf4fc6a3bbc5fa82716bde2f5f4fa86ebaf19f46a212d8bf199",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39288,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25485,
+    "cached_tokens": 6784,
+    "completion_tokens": 772
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', root/'beta_m96_w03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.loads((root/'public_beta_m96_w03_batch_04.pkl').read_bytes())[0]\\ns, gt = item['study'], item['gt']\\nprint('public reference keys:', sorted(gt))\\nfor k in ('weights', 'terminal_field'):\\n    if k in gt:\\n        out = m.solve_beta_m96_w03_batch_04(s)\\n        print('public', k, 'max absolute reference error:', np.max(np.abs(out[k]-gt[k])))\\nhistory = json.loads(m._HISTORY.read_text())\\nworst = 0.0\\nfor i, episode in enumerate(history):\\n    fits = [m._affine_candidates(*m._bank_sweeps(episode, b)) for b in range(4)]\\n    if not all(len(f) == 1 for f in fits):\\n        continue\\n    # Keep episode states and archived precision, but withhold a whole bank\\n    # or keep just one of its checks to exercise the documented fallback.\\n    ref = np.array([f[0] for f in fits])\\n    banks = np.asarray(episode['bank_id'])\\n    for b in range(4):\\n        for n in (0,1):\\n            keep = banks != b\\n            keep[np.flatnonzero(banks == b)[:n]] = True\\n            sweeps = {k: np.asarray(episode[k])[keep] for k in ('bank_id','ref_signal','raw_readout')}\\n            err = np.max(np.abs(m._calibration_coefficients(sweeps)[b]-ref[b]))\\n            worst = max(worst,err)\\nprint('worst sparse archived-state coefficient error:', worst)\\nassert worst < 2e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 laminar carryover -> H2 history-aware eddy transport; worst verified KKT gap was 1.3742e-8 across four regime slices, with sparse archive fallback still untested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The prior sweep tests left enough points to fit each bank directly. Withholding all or all but one check from an archived bank tests whether the fallback selects the correct sensor state; a failure would change the archive matching rule.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "13744acd843fee23af2ba8d82fb4e7d6040d6fd73d14c063eed47fb1c0657307",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24621.94,
+      "usage_known": true,
+      "prompt_tokens": 25485,
+      "cached_tokens": 6784,
+      "completion_tokens": 772
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c6bcedf337145029b3e3caee882722e",
+  "call_seq": 10,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:35:33.626588+00:00",
+  "ended_at_utc": "2026-11-27T03:35:57.477999+00:00",
+  "request_sha256": "775c62c85ff5eaba7e35cd743e2d9a976378b2559986dac5ce4a755587f0857e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61094,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32494,
+    "cached_tokens": 11136,
+    "completion_tokens": 875
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'alpha_m96_w04_batch_01_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open(p+'public_alpha_m96_w04_batch_01.pkl','rb'))[0]['dataset']; checks={k:np.asarray(v) for k,v in d['calibration_load_cells'].items()}; lab=checks['lab_id']; base=s.solve_alpha_m96_w04_batch_01(d); coef=s._calibrate(checks); worst=np.zeros(4)\\nfor wing in (0,1):\\n for case in ('single_clean','single_emi','one_of_two_emi','dense_emi'):\\n  keep=np.ones(len(lab),bool); bad=[]\\n  for c in (2*wing,2*wing+1):\\n   i=np.flatnonzero(lab==c); order=i[np.argsort(checks['cmd_stress'][i])]; pick=order[len(i)//2]\\n   if case!='dense_emi':\\n    keep[i]=False; keep[pick]=True\\n   if case=='one_of_two_emi': keep[order[-1]]=True; bad.append(order[-1])\\n   if case=='single_emi': bad.append(pick)\\n   if case=='dense_emi': bad.extend(order[[0,-1]])\\n  altered={k:v.copy() for k,v in checks.items()}\\n  if bad: altered['true_stress'][bad]+=.15\\n  altered={k:v[keep] for k,v in altered.items()}; o=s.solve_alpha_m96_w04_batch_01(dict(d,calibration_load_cells=altered)); cert=o['kkt_certificate']\\n  err=np.array([np.max(abs(s._calibrate(altered)-coef)),np.max(abs(o['predicted_strain']-base['predicted_strain'])),np.max(abs(o['estimated_taus']/base['estimated_taus']-1)),cert['primal_objective']-cert['dual_lower_bound']]); worst=np.maximum(worst,err); print(wing,case,np.round(err,8))\\nassert worst[0]<.005 and worst[1]<.015 and worst[2]<.01 and worst[3]<2e-4,worst\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 imputed drift alone → H2 missing-only initial-rate correction; worst held-out incomplete-lab endpoint RMSE fell from 1.290 to 0.316, and the independent strain MAE was 0.004608.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The public campaign has ten clean checks per lab, so it does not exercise the requested archive fallback. Thin and perturb the checks in each wing; if a contaminated sparse check shifts the calibration or strain beyond tolerance, fix the fallback before submitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "06abc3f3ad25184c953254b174c93abc587e902cab5880e885f5e22369db365b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25844.28,
+      "usage_known": true,
+      "prompt_tokens": 32494,
+      "cached_tokens": 11136,
+      "completion_tokens": 875
+    }
+  ]
+}

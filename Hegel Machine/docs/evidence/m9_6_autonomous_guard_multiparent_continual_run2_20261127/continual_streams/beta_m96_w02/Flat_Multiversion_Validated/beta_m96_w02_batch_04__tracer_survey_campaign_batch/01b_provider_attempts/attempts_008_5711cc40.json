@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5711cc40dcc447a98dac0a56ac030a71",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:40:45.728985+00:00",
+  "ended_at_utc": "2026-11-27T03:41:09.308341+00:00",
+  "request_sha256": "bc78bad766b5b128d70fdb0b22d85e392959e0d4c367b4bb0d3f6ad2b1ff8414",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26478,
+    "cached_tokens": 6784,
+    "completion_tokens": 795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json,pickle,numpy as np\\ns=pickle.load(open('public_beta_m96_w02_batch_04.pkl','rb'))[0]['study']; live=s['sensor_calibration_sweeps']; prior=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))[-1]\\nfor j in range(4):\\n def rows(d):\\n  b,x,y=[np.asarray(d[k]) for k in ('bank_id','ref_signal','raw_readout')]; return x[b==j],y[b==j]\\n x,y=rows(live); h,z=rows(prior); true=np.polyfit(x,y,1); fit=np.polyfit(h,z,1); nominal=np.round(fit,4); obs=np.asarray(s['y_obs_raw'])[np.asarray(s['row_bank_id'])==j]; ref=(obs-true[1])/true[0]\\n err=lambda p:float(np.max(np.abs((obs-p[1])/p[0]-ref)))\\n print(j,'archive-minus-live',fit-true,'archive nominal max residual',np.max(np.abs(z-np.polyval(nominal,h))),'nominal live max residual',np.max(np.abs(y-np.polyval(nominal,x))),'baseline err',err(fit),'worst one-point anchor err',max(err([fit[0],yi-fit[0]*xi]) for xi,yi in zip(x,y)),'nominal err',err(nominal))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct archived affine fallback -> H2 distinguish archive quantization from a live calibration change; worst one-point observation discrepancy is 1.22e-6, versus 6.06e-9 relative field error on the public study.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always anchor the archived gain to the lone current point\",\n      \"rejected_reason\": \"A single contaminated point cannot identify an offset shift; quantify the benefit for clean sparse points before adding that rule.\"\n    }\n  ],\n  \"rationale\": \"The forward-regime, public inversion, and EMI checks passed. Compare the historical fit and a rounded affine candidate against the actual sweep readings to see whether the sparse-bank miss can be corrected using evidence in the archive rather than a looser tolerance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "545e51ed77320b0d4d18a083be3cff32f22fd96bf7daf872be96988ff476972d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23538.17,
+      "usage_known": true,
+      "prompt_tokens": 26478,
+      "cached_tokens": 6784,
+      "completion_tokens": 795
+    }
+  ]
+}

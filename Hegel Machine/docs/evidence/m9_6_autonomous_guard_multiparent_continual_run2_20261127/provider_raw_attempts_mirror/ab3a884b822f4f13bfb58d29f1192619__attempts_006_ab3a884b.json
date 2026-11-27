@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab3a884b822f4f13bfb58d29f1192619",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w01__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:33:07.715751+00:00",
+  "ended_at_utc": "2026-11-27T03:33:38.092590+00:00",
+  "request_sha256": "cb680abbd75c44bb7866f33e6d666e0c16f01ccd592055173454677b23faa19c",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 36068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24677,
+    "cached_tokens": 6784,
+    "completion_tokens": 1199
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nfrom scipy.optimize import minimize\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_m96_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('public_beta_m96_w01_batch_01.pkl','rb'))[0]; s,gt=item['study'],item['gt']; o=m.solve_beta_m96_w01_batch_01(s)\\nd=m._calibrate(s); design,fields=m._forward(s); prof=m._residualize(s['Z_nuisance'],s['nuisance_ridge'],np.column_stack([design,d])); A,y=prof[:,:-1],prof[:,-1]; ridge=s['source_ridge']; cap=s['u_box']\\nerr=lambda x: float(np.max(np.abs(x)))\\nprint('public design, target, weights, terminal errors',*[err(a-b) for a,b in [(A,gt['S_tilde']),(y,gt['r_y']),(o['weights_by_budget'],gt['weights_by_budget']),(o['terminal_field_mid_budget'],gt['terminal_field_mid_budget'])]])\\nfor b,w,c in zip(s['budget_grid'],o['weights_by_budget'],o['kkt_certificates']):\\n f=lambda w:.5*(np.linalg.norm(A@w-y)**2+ridge*w@w)\\n grad=lambda w:A.T@(A@w-y)+ridge*w\\n independent=minimize(f,np.full(len(w),b/len(w)),jac=grad,bounds=[(0,cap)]*len(w),constraints=[{'type':'eq','fun':lambda w:w.sum()-b,'jac':lambda w:np.ones_like(w)}],method='SLSQP',options={'ftol':1e-13})\\n lower,upper=np.asarray(c['lam_lower']),np.asarray(c['lam_upper']); scores=(abs(w.sum()-b),err(grad(w)-c['nu_sum']-lower+upper),max(err(lower*w),err(upper*(cap-w))),c['primal_objective']-c['dual_lower_bound'],abs(f(w)-independent.fun)); print('budget',b,'sum/stationarity/complementarity/gap/independent-objective',scores); assert independent.success and min(lower)>=0 and min(upper)>=0 and min(w)>=0 and max(w)<=cap and max(scores)<1e-9\\nh=json.loads(m._HISTORY.read_text()); sweep=s['sensor_calibration_sweeps']; B,X=sweep['bank_id'],sweep['ref_signal']; row=s['row_bank_id']; params=np.array([[.84,-.04],[1.15,.12],m._historical_line(2,h),m._historical_line(3,h)])\\nraw=X*params[B,0]+params[B,1]; obs=d*params[row,0]+params[row,1]; ids=[np.flatnonzero(B==b) for b in range(4)]\\nfor label,parts,spikes in [('clean',ids,[]),('multiple wing spikes',[ids[0],ids[1],ids[2],ids[3]],list(ids[2][:3])+list(ids[3][-3:])),('sparse prefix',[ids[0],ids[1],ids[2][:1],ids[3][:0]],[]),('sparse plus separate wing spikes',[ids[0],ids[1],ids[2][:1],ids[3][:4]],[ids[3][0]])]:\\n keep=np.concatenate(parts); read=raw.copy(); read[spikes]+=0.8; variant=dict(s,sensor_calibration_sweeps=dict(bank_id=B[keep],ref_signal=X[keep],raw_readout=read[keep]),y_obs_raw=obs); v=m.solve_beta_m96_w01_batch_01(variant); errors=err(m._calibrate(variant)-d),err(v['weights_by_budget']-o['weights_by_budget']),err(v['terminal_field_mid_budget']-o['terminal_field_mid_budget']); print(label,errors); assert max(errors)<1e-9\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive laminar FVM and affine bank calibration → H2 three-budget profiled inversion; public schema passes, and forward sensitivity and terminal reference errors are at most 9.74e-16.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The schema pass does not establish numerical optimality or calibration recovery. Compare each certificate against independently optimized objectives and test whether sparse sweeps or EMI spikes change the recovered observations, weights, or terminal field.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "801daf8f50d9eef1c14e1ade2ddf244fc10e7fefc0012c2f5305455fee01310f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32436.55,
+      "usage_known": true,
+      "prompt_tokens": 24677,
+      "cached_tokens": 6784,
+      "completion_tokens": 1199
+    }
+  ]
+}

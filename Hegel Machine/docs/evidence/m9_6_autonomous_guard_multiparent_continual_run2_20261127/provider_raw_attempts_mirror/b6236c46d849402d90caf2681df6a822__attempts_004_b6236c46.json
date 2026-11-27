@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6236c46d849402d90caf2681df6a822",
+  "call_seq": 4,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:31:50.643127+00:00",
+  "ended_at_utc": "2026-11-27T03:32:13.267832+00:00",
+  "request_sha256": "fd8db824410a5f252301f5379fc5d58df60188465312eb8d921809506ecf1dfc",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 30300,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22980,
+    "cached_tokens": 6784,
+    "completion_tokens": 784
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport pickle, numpy as np, json\\np='/holdout_task/'\\nd=pickle.load(open(p+'public_alpha_m96_w04_batch_01.pkl','rb'))[0]['dataset']\\na=d['train']; b=d['test']\\nfor name in ['lab_id','stratum','coupon_features_raw','ref_coupons','past_stress_cmd','stress_hold_cmd','initial_memory_states','instant_rate_obs','strain_curves_obs','strain_0','residual_plastic_state']:\\n for s,v in [('train',a),('test',b)]:\\n  if name not in v: continue\\n  x=np.asarray(v[name]); print(s,name,np.round(np.nanpercentile(x,[0,10,50,90,100]),5),'missing',np.isnan(x).sum())\\n  if name=='ref_coupons':\\n   for c in range(4):\\n    q=np.concatenate([a[name][a['lab_id']==c],b[name][b['lab_id']==c]]); print(c,round(float(np.median(q.mean(0))),5),round(float(np.median(q.std(0))),5))\\nprint('train lab/stratum counts',np.unique(np.column_stack((a['lab_id'],a['stratum'])),axis=0,return_counts=True))\\nprint('yield exceedance',[(int((v['stress_hold_cmd']>d['yield_stress']).sum()),int((np.abs(v['stress_hold_cmd'])>d['yield_stress']).sum())) for v in (a,b)])\\nj=json.load(open(p+'public_asset_index.json')); print('index keys',list(j) if isinstance(j,dict) else len(j))\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); print('history layout',[(list(i),len(i.get('lab_id',[]))) for i in h])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -30\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived zero-start recurrence -> H2 propagate measured preloads under lab-specific calibration; no held-out strain metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include a plastic term immediately\",\n      \"rejected_reason\": \"A yield field alone does not establish a plastic contribution; check whether measured loads activate the term before fitting it.\"\n    }\n  ],\n  \"rationale\": \"The public spot checks are densely sampled and near identity. Measure the preload, yield, and missingness ranges to identify which effects can be tested on held-out training coupons and which calibration fallbacks must be stress-tested separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "961320dc542a078976808d9f6276ff358794292ef097b7cfcd2874a43ec32e92",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24634.72,
+      "usage_known": true,
+      "prompt_tokens": 22980,
+      "cached_tokens": 6784,
+      "completion_tokens": 784
+    }
+  ]
+}

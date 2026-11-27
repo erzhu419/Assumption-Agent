@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da199347879341f180a9ad6416f40000",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:03.286292+00:00",
+  "ended_at_utc": "2026-11-27T03:34:29.106948+00:00",
+  "request_sha256": "9da2603631fc20f802b4bf0c01531aba51c43475af757cc47a4d0283b339bd99",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38840,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25169,
+    "cached_tokens": 11136,
+    "completion_tokens": 973
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,120p' /holdout_task/beta_m96_w02_batch_02_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\npath='/holdout_task/beta_m96_w02_batch_02_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',path)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_beta_m96_w02_batch_02.pkl','rb') as f: episodes=pickle.load(f)\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f: history=json.load(f)\\nfor item in episodes:\\n    s,g=item['study'],item['gt']\\n    print('inputs', sorted(s))\\n    S0,fields=m._forward(s)\\n    V=s['V_reaction_2d']\\n    S=m._profile(s['Z_nuisance'],S0,s['nuisance_ridge'])\\n    print('reaction mixed-difference infinity norm',np.max(abs(V-V[:,0,None]-V[None,0,:]+V[0,0])))\\n    print('profiled design max absolute error by bank',[float(np.max(abs(S[s['row_bank_id']==b]-g['S_tilde'][s['row_bank_id']==b]))) for b in range(4)])\\n    rows=m._sweep_rows(s['sensor_calibration_sweeps']); y0=m._calibrate(s); full=m.solve_beta_m96_w02_batch_02(s)\\n    for b in range(4):\\n        cur=rows[rows[:,0]==b,1:]; old=[m._bank_affine(m._sweep_rows(h),b) for h in history]; a=m._bank_affine(rows,b)\\n        indices=np.flatnonzero(rows[:,0]==b); err=[]; out_err=[]\\n        for j in indices:\\n            subset=rows[(rows[:,0]!=b)|(np.arange(len(rows))==j)]\\n            st=dict(s,sensor_calibration_sweeps=dict(zip(('bank_id','ref_signal','raw_readout'),subset.T)))\\n            err.append(np.max(abs(m._calibrate(st)-y0)[s['row_bank_id']==b]))\\n            p=m.solve_beta_m96_w02_batch_02(st)\\n            out_err.append(np.max(abs(p['weights_by_budget']-full['weights_by_budget'])))\\n        print('bank',b,'current and archived fits',a,old,'current swept span',np.ptp(cur[:,0]),'worst single-reference observation and weight deviations',max(err),max(out_err))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Axis-only reaction → additive separable reaction with bank-specific calibration and ridge profiling; worst public budget weight error is 3.22e-8 and independently verified maximum KKT duality gap is 6.6e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification balance or relay modes\",\n      \"rejected_reason\": \"This is a continuous inverse problem with no class labels or relay state. Bank-wise design residuals and sparse calibration directly test the relevant nuisance and operator assumptions.\"\n    }\n  ],\n  \"rationale\": \"The previous stress test removed entire banks but did not test the documented single-reference case. Compare current and archived fits on real sweeps and measure the downstream error when each reference is retained alone. A material error would justify revising the fallback; a bank-wise design mismatch would reopen the operator model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "212284707d875354af5818a54fb97609e840c8c014b66d6d80617e205317acd8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27862.28,
+      "usage_known": true,
+      "prompt_tokens": 25169,
+      "cached_tokens": 11136,
+      "completion_tokens": 973
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e4b4f95f6d340afbfb334d0e322eb7d",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:41:52.443410+00:00",
+  "ended_at_utc": "2026-11-27T03:42:36.077278+00:00",
+  "request_sha256": "fd1bd713299ca2c9707e46205e70e9c38c4225b1a598ccf1f62ab47dbe71f8f0",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 46583,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28287,
+    "cached_tokens": 6784,
+    "completion_tokens": 1825
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_m96_w04_batch_04_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\nfrom pathlib import Path\\\\n\\\\nimport numpy as np', 1)\\na = s.index('def _calibrate(')\\nb = s.index('def _forward(', a)\\ns = s[:a] + '''_CALIBRATION_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n_SWEEP_TOL = 3e-6  # Archived reference and readout pairs are rounded to six decimals.\\n\\n\\ndef _sweep_pairs(sweep, bank):\\n    banks = np.asarray(sweep['bank_id'])\\n    use = banks == bank\\n    return (np.asarray(sweep['ref_signal'], dtype=float)[use],\\n            np.asarray(sweep['raw_readout'], dtype=float)[use])\\n\\n\\ndef _fit_sweep(x, y):\\n    # Score each positive affine line by distinct supported reference levels.\\n    # Refit only its consensus so a large EMI spike cannot pull the calibration.\\n    i, j = np.triu_indices(x.size, 1)\\n    best, best_key = None, (0, 0, -np.inf)\\n    for a, b in zip(i, j):\\n        if x[a] == x[b]:\\n            continue\\n        gain = (y[b] - y[a]) / (x[b] - x[a])\\n        if gain <= 0:\\n            continue\\n        error = np.abs(y - (gain * x + y[a] - gain * x[a]))\\n        keep = error <= _SWEEP_TOL\\n        key = (np.unique(x[keep]).size, np.count_nonzero(keep), -np.sum(error[keep]**2))\\n        if key > best_key:\\n            best, best_key = keep, key\\n    if best is None:\\n        return None, 0\\n    design = np.column_stack((x[best], np.ones(best.sum())))\\n    return np.linalg.lstsq(design, y[best], rcond=None)[0], best_key[0]\\n\\n\\ndef _calibrate(study):\\n    sweep = study['sensor_calibration_sweeps']\\n    pairs = [_sweep_pairs(sweep, b) for b in range(4)]\\n    fits = [_fit_sweep(*pair) for pair in pairs]\\n    rows = np.asarray(study['row_bank_id'])\\n    y = np.asarray(study['y_obs_raw'], dtype=float).copy()\\n    observed = np.unique(rows)\\n    if any(fits[b][1] < 3 for b in observed) and _CALIBRATION_HISTORY.is_file():\\n        with _CALIBRATION_HISTORY.open() as stream:\\n            history = json.load(stream)\\n        prior = [[_fit_sweep(*_sweep_pairs(epoch, b))[0] for b in range(4)]\\n                 for epoch in history]\\n        scores = []\\n        for epoch in prior:\\n            scores.append([np.unique(x[np.abs(z - (q[0] * x + q[1])) <= _SWEEP_TOL]).size\\n                           if q is not None else 0 for q, (x, z) in zip(epoch, pairs)])\\n        for b in observed:\\n            if fits[b][1] >= 3:\\n                continue\\n            candidates = [i for i, epoch in enumerate(prior) if epoch[b] is not None]\\n            if candidates:\\n                j = max(candidates, key=lambda i: (scores[i][b], scores[i][b ^ 1], sum(scores[i]), i))\\n                if scores[j][b] or fits[b][0] is None:\\n                    fits[b] = prior[j][b], scores[j][b]\\n    for b in observed:\\n        q, _ = fits[b]\\n        if q is None:\\n            raise ValueError(f'Bank {b} has insufficient calibration references')\\n        use = rows == b\\n        y[use] = (y[use] - q[1]) / q[0]\\n    return y\\n\\n\\n''' + s[b:]\\ns = s.replace(\\\"    base = (sparse.kron(X, sparse.eye(ny), format='csc')\\\", \\\"    # In the separable branch this is the C-order form of the Sylvester equation.\\\\n    base = (sparse.kron(X, sparse.eye(ny), format='csc')\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Use current-sweep consensus and select a matching archived epoch only when a bank is undersampled; the prior candidate's public max weight error was 1.80e-8, and sparse/EMI validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the latest archived calibration or pool all epochs\",\n      \"rejected_reason\": \"The latest archive is identity-calibrated, while batch 02 matches the current nonidentity sweeps. Recency and pooling would discard that distinction.\"\n    }\n  ],\n  \"rationale\": \"The public gate verifies the eddy operator but uses complete sweeps. Add consensus fitting and an evidence-selected archive fallback for the documented sparse and EMI cases, then rerun the public validator to catch any regression before stress testing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9f8e70304321b97878b4f8e48d6c5321d69b6d6345b2d7b13eb717827bcc25f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45657.86,
+      "usage_known": true,
+      "prompt_tokens": 28287,
+      "cached_tokens": 6784,
+      "completion_tokens": 1825
+    }
+  ]
+}

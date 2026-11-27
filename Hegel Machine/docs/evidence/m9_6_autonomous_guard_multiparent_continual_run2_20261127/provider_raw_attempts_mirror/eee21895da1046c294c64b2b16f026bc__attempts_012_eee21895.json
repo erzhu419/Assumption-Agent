@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eee21895da1046c294c64b2b16f026bc",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w01__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:46:52.990199+00:00",
+  "ended_at_utc": "2026-11-27T03:47:31.454316+00:00",
+  "request_sha256": "63f4671caaf6dd52747eba619f799e9305cc50157a80c33541b36d73cd7b64a1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63110,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32995,
+    "cached_tokens": 6784,
+    "completion_tokens": 1479
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\nset -e\\ncp alpha_m96_w01_batch_04_solver.py /tmp/alpha_m96_calibration_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m96_w01_batch_04_solver.py')\\ns = p.read_text()\\nold = '''        if keep.sum() >= 3 and np.ptp(x[keep]) > .1:\\n            result.append(_fit_line(x[keep], y[keep]))'''\\nnew = '''        if keep.sum() >= 3 and np.ptp(x[keep]) > .1:\\n            # Do not extrapolate a narrow, sparse sweep that agrees with the\\n            # archived map to within measurement noise. Clear local drift wins.\\n            if (prior is not None and keep.sum() <= 4 and np.ptp(x[keep]) < .75\\n                    and np.max(abs(y[keep] - (prior[0]*x[keep] + prior[1]))) <= _CHECK_TOL / 2):\\n                result.append(prior)\\n            else:\\n                result.append(_fit_line(x[keep], y[keep]))'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport alpha_m96_w01_batch_04_solver as new\\nspec=importlib.util.spec_from_file_location('old','/tmp/alpha_m96_calibration_baseline.py'); old=importlib.util.module_from_spec(spec); spec.loader.exec_module(old)\\np=pickle.load(open('public_alpha_m96_w01_batch_04.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; q=d['calibration_load_cells']; lab=q['lab_id']; x=q['cmd_stress']; y=q['true_stress']; sy=d['yield_stress']; te=d['test']\\nold_worst=new_worst=0.\\nfor j in range(4):\\n rows=np.flatnonzero(lab==j); errs=[]\\n for k in (3,4):\\n  for ids in itertools.combinations(rows,k):\\n   keep=(lab!=j)|np.isin(np.arange(len(lab)),ids); held=(lab==j)&~keep; panel={name:val[keep] for name,val in q.items()}; es=[]\\n   for s in (old,new):\\n    a,b=s._calibrate(panel); es.append(np.max(abs(a[j]*x[held]+b[j]-y[held])))\\n   errs.append(es)\\n worst=np.max(errs,axis=0); old_worst=max(old_worst,worst[0]); new_worst=max(new_worst,worst[1]); print('lab',j,'worst sparse held-check error, before/after',worst)\\n # Select a narrow real command triple and add a coherent calibration drift.\\n ids=next(ids for ids in itertools.combinations(rows,3) if .2<np.ptp(x[list(ids)])<.75)\\n keep=(lab!=j)|np.isin(np.arange(len(lab)),ids); panel={name:val[keep].copy() for name,val in q.items()}; mask=panel['lab_id']==j\\n panel['true_stress'][mask]+=.03*panel['cmd_stress'][mask]+.07\\n a,b=new._calibrate(panel); assert abs(a[j]-g['stress_gains'][j]-.03)<.002 and abs(b[j]-g['stress_biases'][j]-.07)<.002\\n assert not np.any(~np.isfinite([a[j],b[j]]))\\nassert new_worst < old_worst/2, (old_worst,new_worst)\\na=old.solve_alpha_m96_w01_batch_04(d); b=new.solve_alpha_m96_w01_batch_04(d)\\nfor key in a: np.testing.assert_array_equal(a[key],b[key])\\nmiss=np.isnan(te['coupon_features_raw']).any(1); h=np.max(abs(g['te_hist_true']),axis=1)>sy; c=abs(g['te_hold_true'])>sy\\nfor name,m in [('all',np.ones(len(h),bool)),('history-only',h&~c),('missing',miss)]:\\n print(name,'strain/rate RMSE',*[float(np.sqrt(np.mean((b[k][m]-g[v][m])**2))) for k,v in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Use archive agreement to stabilize narrow, sparse calibration sweeps; the previous solver’s worst held-check error was 0.003159 stress units with three checks, and worst public strain/rate RMSE was 0.038459/0.012313.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use the archive for sparse sweeps\",\n      \"rejected_reason\": \"A sparse but coherent current sweep can identify real drift. Use the archive only when the narrow sweep agrees with it within measurement noise.\"\n    }\n  ],\n  \"rationale\": \"Three closely spaced public checks amplified measurement noise on extrapolation. Compare the fix against the baseline on held-out measured checks, verify that coherent local drift still overrides the archive, and require unchanged full-panel predictions and a passing isolated schema check.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e98f1dcce32b20a50ea7a11e6b6c16f4e6077c361f801f7fac7147b5224fbc31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40532.94,
+      "usage_known": true,
+      "prompt_tokens": 32995,
+      "cached_tokens": 6784,
+      "completion_tokens": 1479
+    }
+  ]
+}

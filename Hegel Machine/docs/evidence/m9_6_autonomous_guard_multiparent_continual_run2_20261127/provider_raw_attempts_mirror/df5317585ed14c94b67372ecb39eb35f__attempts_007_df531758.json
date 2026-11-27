@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df5317585ed14c94b67372ecb39eb35f",
+  "call_seq": 7,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w04_batch_04__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:39:21.614289+00:00",
+  "ended_at_utc": "2026-11-27T03:39:51.158233+00:00",
+  "request_sha256": "f99782a89a291bd0d0c99495d70399daae89d3b156fdaf8b50beb24c7508399e",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41380,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26210,
+    "cached_tokens": 0,
+    "completion_tokens": 1162
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/w04_calibration_stress.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\n\\npath = '/holdout_task/beta_m96_w04_batch_04_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_beta_m96_w04_batch_04.pkl', 'rb') as f:\\n    sample = pickle.load(f)[0]\\ns, gt = sample['study'], sample['gt']\\nsolve = m.solve_beta_m96_w04_batch_04\\nout = solve(s)\\nfor key, reference_key in [('weights','w_opt'), ('terminal_field','terminal_field_A')]:\\n    ref = np.asarray(gt[reference_key]).reshape(out[key].shape)\\n    error = np.linalg.norm(out[key]-ref) / np.linalg.norm(ref)\\n    print('public', key, 'relative L2', error)\\n    assert error < 2e-5\\ncert = out['kkt_certificate']\\ngap = cert['primal_objective'] - cert['dual_lower_bound']\\nprint('public KKT gap', gap)\\nassert 0 <= gap < 2e-4\\nsweep = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\nbanks = sweep['bank_id']\\ny_clean = m._calibrate(s)\\nworst = {}\\n# Every affected bank is tested alone and alongside the other bank in its wing;\\n# the reference remains the corresponding clean in-batch measurement.\\nfor affected in [(0,), (1,), (2,), (3,), (0,1), (2,3)]:\\n    for case in ('missing', 'one-reference', 'three-spikes', 'one-spike-only'):\\n        trial = {k: v.copy() for k, v in sweep.items()}\\n        keep = np.ones(len(banks), dtype=bool)\\n        for b in affected:\\n            ix = np.flatnonzero(banks == b)\\n            if case == 'missing':\\n                keep[ix] = False\\n            elif case in ('one-reference', 'one-spike-only'):\\n                keep[ix[1:]] = False\\n                if case == 'one-spike-only':\\n                    trial['raw_readout'][ix[0]] += 0.5\\n            else:\\n                trial['raw_readout'][ix[[0, len(ix)//2, -1]]] += [0.5, -0.4, 0.7]\\n        study = dict(s, sensor_calibration_sweeps={k: v[keep] for k,v in trial.items()})\\n        y_err = np.max(np.abs(m._calibrate(study) - y_clean))\\n        result = solve(study)\\n        weight_err = np.linalg.norm(result['weights']-out['weights']) / np.linalg.norm(out['weights'])\\n        field_err = np.linalg.norm(result['terminal_field']-out['terminal_field']) / np.linalg.norm(out['terminal_field'])\\n        gap = result['kkt_certificate']['primal_objective'] - result['kkt_certificate']['dual_lower_bound']\\n        worst[case] = np.maximum(worst.get(case, np.zeros(4)), [y_err, weight_err, field_err, gap])\\nfor case, errors in worst.items():\\n    print(case, '| max calibrated observation, relative weights, relative field, KKT gap:', *errors)\\nassert all((errors < [5e-6, 2e-5, 2e-5, 2e-4]).all() for errors in worst.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/w04_calibration_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: in-batch sweeps alone → H2: use archive agreement for underdetermined banks; the current host-verified public field and weight relative errors are 2e-8 and 3e-8, with sparse-bank validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The clean public study never invokes the archive fallback. Remove or corrupt actual sweep measurements one bank or wing at a time, then compare calibrated observations, weights, terminal fields, and KKT gaps with the clean run. A failing slice would identify whether to revise the sweep fit or the archive selection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "acb923299fd2562a17de5a5bf159adcab5f9cb243835f47d84d8fdaf8287430f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31629.71,
+      "usage_known": true,
+      "prompt_tokens": 26210,
+      "cached_tokens": 0,
+      "completion_tokens": 1162
+    }
+  ]
+}

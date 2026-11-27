@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9772d9a9c059494c9f188c52ddf7063a",
+  "call_seq": 10,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w03__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:46:53.392836+00:00",
+  "ended_at_utc": "2026-11-27T03:47:25.926590+00:00",
+  "request_sha256": "8ab9644afcfacee0b88c871cec82f5d7adeb52f0c4732c7f602ebbec1dd73435",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 69879,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34736,
+    "cached_tokens": 6784,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m96_w03_batch_04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m96_w03_batch_04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ngain, bias = s._calibrate(d['calibration_load_cells'])\\nxs = s._align(d['train'], d['test'])\\nt = np.asarray(d['eval_times']); dt = np.asarray(d['past_dt']); sy = d['yield_stress']\\ntaus = np.array([.65, 4.6]); theta = np.array([.68,.55,.08,.15,-.13,.11,-.09])\\nfor mode in ('subyield', 'hold-only', 'history-only'):\\n    new = dict(d); expected = {}\\n    vp = np.array([.24 if mode == 'hold-only' else 0., .21 if mode == 'history-only' else 0.])\\n    for split, x in zip(('train','test'), xs):\\n        b = dict(d[split]); labs = b['lab_id']; g, off = gain[labs], bias[labs]\\n        hist = g[:,None]*b['past_stress_cmd']+off[:,None]; hold = g*b['stress_hold_cmd']+off\\n        hist = .8*sy*hist/np.max(np.abs(hist),axis=1,keepdims=True)\\n        hold = np.clip(hold,-.8*sy,.8*sy)\\n        if mode == 'hold-only':\\n            hold[::2] = np.where(hold[::2]>=0,1.,-1.)*1.55*sy\\n        if mode == 'history-only':\\n            hist[::2,-3:] = np.where(hist[::2,-3:]>=0,1.,-1.)*1.55*sy\\n        b['past_stress_cmd'] = (hist-off[:,None])/g[:,None]\\n        b['stress_hold_cmd'] = (hold-off)/g\\n        drift = theta[2]+x@theta[3:]\\n        drift += vp[0]*np.maximum(np.abs(hold)-sy,0.)**2*np.sign(hold)\\n        curve = b['strain_0'][:,None]+drift[:,None]*t; rate = drift.copy()\\n        work = np.sum(np.maximum(np.abs(hist)-sy,0.)**2*dt,axis=1)*hold\\n        for j,tau in enumerate(taus):\\n            memory = np.zeros(len(hold))\\n            for stress,step in zip(hist.T,dt):\\n                q = np.exp(-step/tau); memory = q*memory+(1.-q)*stress\\n            amplitude = theta[j]*(hold-memory)+(vp[1]*work if j==0 else 0.)\\n            curve += amplitude[:,None]*(1.-np.exp(-t/tau)); rate += amplitude/tau\\n        b['instant_rate_obs'] = rate\\n        if split == 'train': b['strain_curves_obs'] = curve\\n        else: expected = dict(predicted_strain=curve,initial_rate_pred=rate)\\n        new[split] = b\\n    out = s.solve_alpha_m96_w03_batch_04(new)\\n    expected.update(estimated_taus=taus,hereditary_weights=theta,viscoplastic_weights=vp)\\n    assert set(out)==set(expected)\\n    errors = {}\\n    for k,v in expected.items():\\n        assert out[k].shape==v.shape and np.isfinite(out[k]).all()\\n        errors[k] = np.max(np.abs(out[k]-v))\\n        assert errors[k]<2e-5,(mode,k,errors[k])\\n    assert np.all(out['viscoplastic_weights'][vp==0.]==0.)\\n    print(mode,'max absolute errors',errors)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archive-wide median → in-batch selection of the matching calibration epoch; across sparse and EMI stress tests, worst lab-by-regime RMSE was 0.017858 for strain and 0.005711 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The current candidate passed the sparse and EMI calibration probes. The public batch has no hold-only specimens and always contains some plastic histories, so it cannot verify exact zero weights for an entirely subyield batch or activation of the hold term alone. Check these paths against an independent stepwise Prony calculation; if either fails, correct the branch activation or fitting logic before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4a637ec3ea42f11e35f48f2b27ff614357406af92a39e3d39c5a042fcc15fc52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34600.91,
+      "usage_known": true,
+      "prompt_tokens": 34736,
+      "cached_tokens": 6784,
+      "completion_tokens": 1297
+    }
+  ]
+}

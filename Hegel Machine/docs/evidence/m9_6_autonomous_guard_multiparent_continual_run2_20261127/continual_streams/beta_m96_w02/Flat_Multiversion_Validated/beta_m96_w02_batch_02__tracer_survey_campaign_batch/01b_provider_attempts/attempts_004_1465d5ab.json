@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1465d5ab65ab4233aeaf5dfdc566af4a",
+  "call_seq": 4,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:32:06.895258+00:00",
+  "ended_at_utc": "2026-11-27T03:32:27.593689+00:00",
+  "request_sha256": "cefe6c1084cb77d201f153857c858de55f2c9c588241fc3f24cca1d29ead2a85",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 29590,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22560,
+    "cached_tokens": 6784,
+    "completion_tokens": 759
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -18; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json, pickle, numpy as np, importlib.util\\np='/tmp/hegel_continual_archive/'\\nh=json.load(open(p+'archive_calibration_history.json'))\\nprint('history entries',len(h)); print('history sample',json.dumps(h[0])[:2200]); print('entry keys',[list(x) for x in h])\\nspec=importlib.util.spec_from_file_location('prior',p+'beta_m96_w02_batch_01_solver.py'); prior=importlib.util.module_from_spec(spec); spec.loader.exec_module(prior)\\ne=pickle.load(open('/holdout_task/public_beta_m96_w02_batch_02.pkl','rb'))[0]; s=e['study']; g=e['gt']; v=s['V_reaction_2d']\\nfor k in ['budget_grid','mu_shifts','past_vortex_circulation_trace']: print(k,s[k])\\nprint('V separability max error',np.max(np.abs(v-v[:,0,None]-v[None,0,:]+v[0,0])))\\nprint('V minus axis reaction max error',np.max(np.abs(v-s['reaction_x'][:,None]-s['reaction_y'][None,:])))\\nprint('bank counts',np.bincount(s['row_bank_id']))\\nfor name,st in [('archived operator',s),('axis reaction only',dict(s,V_reaction_2d=np.zeros_like(v)))]:\\n try: obs,fields=prior._forward(st)\\n except ValueError as exc: print(name,exc); continue\\n y=prior._calibrate(st); z=prior._profile(st['Z_nuisance'],np.column_stack((obs,y)),st['nuisance_ridge']); S,r=z[:,:-1],z[:,-1]; print(name,'design max error',np.max(np.abs(S-g['S_tilde'])),'target max error',np.max(np.abs(r-g['r_y'])))\\n for i,b in enumerate(s['budget_grid']):\\n  w,nu=prior._box_simplex(S,r,s['source_ridge'],s['u_box'],b); print('budget',i,'weight max error',np.max(np.abs(w-g['weights_by_budget'][i])),'field max error' if i==1 else '',np.max(np.abs(np.tensordot(w,fields,axes=1)-g['terminal_field_mid_budget'])) if i==1 else '')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived single-budget stencil → current laminar transport with three budget solves; worst-budget error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare axis-only and additive reaction conventions against the public design and terminal field before reusing the stencil. Inspect the list-form history so sparse-bank fallback can use its actual schema.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "91d1c28e6a3278eaa4a9901ebac2ff1f4c9f51bf99dd6a2079faa52006061694",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22710.95,
+      "usage_known": true,
+      "prompt_tokens": 22560,
+      "cached_tokens": 6784,
+      "completion_tokens": 759
+    }
+  ]
+}

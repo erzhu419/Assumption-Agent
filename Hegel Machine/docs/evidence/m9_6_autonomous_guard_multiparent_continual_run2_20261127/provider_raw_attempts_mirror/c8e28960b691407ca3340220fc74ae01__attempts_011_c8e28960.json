@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c8e28960b691407ca3340220fc74ae01",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w01__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_batch_01__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:36:41.414263+00:00",
+  "ended_at_utc": "2026-11-27T03:37:14.694002+00:00",
+  "request_sha256": "e62236e6ab9995b852d85f4da7bec74f0155016cc65051fe0d931d6e2cb2a96d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 70056,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36067,
+    "cached_tokens": 6784,
+    "completion_tokens": 1289
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m96_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open('public_alpha_m96_w01_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; o=m.solve_alpha_m96_w01_batch_01(d)\\ndef report(name,q):\\n    o=m.solve_alpha_m96_w01_batch_01(q); e=o['predicted_strain']-g['te_clean']; lab=q['test']['lab_id']; w=o['allocation_weights']; c=o['kkt_certificate']; print(name,'tau_rel',np.round(o['estimated_taus']/g['taus']-1,4),'lab_rmse',np.round([np.sqrt(np.mean(e[lab==j]**2)) for j in range(4)],5),'alloc_maxerr',round(max(abs(w-g['w_alloc_opt'])),6),'gap',c['primal_objective']-c['dual_lower_bound']); return e\\nreport('public',d)\\nfor mode in ('affine_all_checks','shifted_sparse_wing','emi_spikes'):\\n    q=copy.deepcopy(d); checks=q['calibration_load_cells']; lab=np.asarray(checks['lab_id']); cmd=np.asarray(checks['cmd_stress']); true=np.asarray(checks['true_stress']); gain=np.array([1.06,.94,1.09,.92]); bias=np.array([.09,-.06,.08,-.12]); checks['cmd_stress']=(cmd-bias[lab])/gain[lab]; checks['true_stress']=true.copy()\\n    for split in (q['train'],q['test']):\\n        j=split['lab_id']; split['past_stress_cmd']=(split['past_stress_cmd']-bias[j,None])/gain[j,None]; split['stress_hold_cmd']=(split['stress_hold_cmd']-bias[j])/gain[j]\\n    if mode=='shifted_sparse_wing':\\n        keep=lab<2; keep[np.flatnonzero(lab==2)[0]]=True\\n        for k in ('lab_id','cmd_stress','true_stress'): checks[k]=np.asarray(checks[k])[keep]\\n    if mode=='emi_spikes':\\n        for j in (2,3): checks['true_stress'][np.flatnonzero(lab==j)[:3]] += np.array([.18,-.21,.27])\\n    print(mode,'gain/bias max errors',np.max(abs(m._calibration(checks)-np.c_[gain,bias]),axis=0)); report(mode,q)\\nrng=np.random.default_rng(321); worst_gap=0.; worst_stationarity=0.\\nfor rep in range(120):\\n    cap=1. if rep%3 else .23; budget=[0.,1e-8,cap,2.6*cap,11.999999*cap,12*cap][rep%6]; s=rng.normal(size=(80,12))*rng.uniform(.05,3.,(1,12)); y=rng.normal(size=80)*rng.uniform(.1,10.); ridge=.001\\n    w,c=m._allocation(s,y,ridge,cap,budget); gq=s.T@(s@w-y)+ridge*w; gap=c['primal_objective']-c['dual_lower_bound']; worst_gap=max(worst_gap,gap); worst_stationarity=max(worst_stationarity,np.max(abs(gq-c['nu_sum']-c['lam_lower']+c['lam_upper']))); assert abs(w.sum()-budget)<1e-8 and min(w)>=0 and max(w)<=cap and gap<1e-7; assert max(np.max(abs(w*c['lam_lower'])),np.max(abs((cap-w)*c['lam_upper'])))<1e-7\\nprint('allocation stress cases',120,'worst gap',worst_gap,'worst stationarity',worst_stationarity)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether archive-only fallback remains accurate under sparse wing calibration; the improved creep fit has worst held-out-lab RMSE 0.01993 and public slow-tau error 0.51%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply onset correction to complete-feature coupons\",\n      \"rejected_reason\": \"The residual relationship differs by lab; a universal correction would amplify onset noise on coupons whose measured features already predict creep well.\"\n    }\n  ],\n  \"rationale\": \"Use controlled calibration perturbations of the public measurements to distinguish affine-invariance failures from sparse-check or EMI failures. If only stale archive calibration fails, refine the affected labs from training responses. Independently stress the QP at tight and fully active budgets to detect failures the nominal certificate cannot expose.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b05a0bed5fd2610baf533e5b713dce4da040dece36c1e56088a5d95994696b4e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35362.94,
+      "usage_known": true,
+      "prompt_tokens": 36067,
+      "cached_tokens": 6784,
+      "completion_tokens": 1289
+    }
+  ]
+}

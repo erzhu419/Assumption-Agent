@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "07eadf0a1baa4c75aaacaa0b3aab7ebf",
+  "call_seq": 6,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:40:32.456522+00:00",
+  "ended_at_utc": "2026-11-27T03:41:00.345149+00:00",
+  "request_sha256": "99dd4f875d104e67f8875d713f09ca6f487c3dffe56f720a6fc57a30ac0ac89d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29173,
+    "cached_tokens": 6784,
+    "completion_tokens": 1084
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/check_batch04.py <<'PY'\\nimport importlib.util, pickle, time\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'alpha_m96_w02_batch_04_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\ncase=pickle.load(open(root+'public_alpha_m96_w02_batch_04.pkl','rb'))[0]\\nd,g=case['dataset'],case['gt']; tr=d['train']; lab=tr['lab_id']; ck=d['calibration_load_cells']; cal=s._calibrate(ck)\\ndef rms(a): return np.sqrt(np.mean(np.square(a)))\\ndef subset(a,m): return {k:v[m] for k,v in a.items()}\\ndef errors(label, dp, y, r):\\n    t=time.monotonic(); o=s.solve_alpha_m96_w02_batch_04(dp)\\n    e=o['predicted_strain']-y; f=o['initial_rate_pred']-r\\n    z=s._Design(dp['test'],np.zeros((len(r),4)),cal,dp['past_dt'],dp['eval_times'],dp['yield_stress']); hist=np.any(abs(z.past)>dp['yield_stress'],axis=1); hold=abs(z.hold)>dp['yield_stress']\\n    print(label,'time',round(time.monotonic()-t,2),'strain/rate RMS',rms(e),rms(f),'strain/rate medAE',np.median(abs(e)),np.median(abs(f)),'worst horizon RMS',max(rms(e[:,k]) for k in range(e.shape[1])))\\n    for h,j in [(False,False),(True,False),(False,True),(True,True)]:\\n        m=(hist==h)&(hold==j)\\n        if any(m): print('  history/hold',h,j,'n',sum(m),'RMS',rms(e[m]),rms(f[m]))\\n    return o\\nout=errors('public clean',d,g['te_clean'],g['te_true_rate0'])\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta')]: print(k,'fit',out[k],'delta',out[k]-g[j])\\nfor c in range(4):\\n    m=lab==c\\n    errors('LOLO '+str(c),dict(d,train=subset(tr,~m),test=subset(tr,m)),tr['strain_curves_obs'][m],tr['instant_rate_obs'][m])\\nfor c in range(4):\\n    i=np.flatnonzero(ck['lab_id']==c)\\n    bad={k:v.copy() for k,v in ck.items()}; bad['true_stress'][i[[0,-1]]]+=[.25,-.18]\\n    other=ck['lab_id']!=c; x=ck['cmd_stress'][i]; far=i[[x.argmin(),x.argmax()]]\\n    pair=subset(ck,other|np.isin(np.arange(len(other)),far)); one=subset(ck,other| (np.arange(len(other))==far[0]))\\n    print('calibration errors, lab',c,'max abs parameter delta under two spikes / clean pair / singleton',*[np.max(abs(s._calibrate(q)[c]-cal[c])) for q in (bad,pair,one)])\\nfor k in ('gate','metric','constraint'):\\n    print(k,[line.strip() for line in open(root+'public_asset_index.json') if k in line.lower()][:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated affine sweeps and archived Prony basis -> H2 robust strain/rate fit with hold and history plasticity; the public schema passes and maximum in-batch calibration residual is 2.2e-4 stress units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure clean prediction and parameter error, refit with each lab held out, and stress sparse or spiked calibration. Slice history-only coupons separately to catch a missing memory term; use calibration perturbations to determine whether sparse sweeps need a better archive or response-based fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0f64463936cf75ba02efb1bb9759873ed9fa68ec1076ce398a3addc10a2486f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29926.62,
+      "usage_known": true,
+      "prompt_tokens": 29173,
+      "cached_tokens": 6784,
+      "completion_tokens": 1084
+    }
+  ]
+}

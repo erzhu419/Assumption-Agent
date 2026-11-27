@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "feb5acb3d4bd4302ba4040b715fbeee3",
+  "call_seq": 11,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w01__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:46:23.118180+00:00",
+  "ended_at_utc": "2026-11-27T03:46:47.900001+00:00",
+  "request_sha256": "a79b992fc22b5c13f51185f94e96ac837f991972ab6aa45a8b8ab2a7dbb76b18",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 57625,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31212,
+    "cached_tokens": 0,
+    "completion_tokens": 924
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport alpha_m96_w01_batch_04_solver as s\\np = pickle.load(open('public_alpha_m96_w01_batch_04.pkl', 'rb'))[0]\\nd, gt = p['dataset'], p['gt']\\nq = d['calibration_load_cells']; labels = q['lab_id']; x = q['cmd_stress']; y = q['true_stress']\\nfor lab in range(4):\\n    rows = np.flatnonzero(labels == lab)\\n    for k in (1, 2, 3):\\n        errors = []; worst = None\\n        for sample in itertools.combinations(rows, k):\\n            subset = (labels != lab) | np.isin(np.arange(len(labels)), sample)\\n            gain, bias = s._calibrate({key: value[subset] for key, value in q.items()})\\n            held = (labels == lab) & ~subset\\n            err = float(np.max(abs(gain[lab] * x[held] + bias[lab] - y[held])))\\n            errors.append(err)\\n            if worst is None or err > worst[0]:\\n                worst = (err, tuple(float(x[i]) for i in sample))\\n        print(f'lab={lab} retained={k} p95 held-check max={np.quantile(errors,.95):.6g} worst={worst}')\\ngain, bias = s._calibrate(q)\\na, b = s._stress(d['test'], gain, bias)\\nsy = d['yield_stress']\\nfor name, pred, truth in [('history', a, gt['te_hist_true']), ('hold', b, gt['te_hold_true'])]:\\n    err = np.max(abs(pred-truth)); margin = np.min(abs(abs(truth)-sy)); disagreement = np.count_nonzero((abs(pred)>sy)!=(abs(truth)>sy))\\n    print(f'{name} stress max error={err:.6g} minimum yield margin={margin:.6g} gate disagreements={disagreement}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Keep current-sweep calibration when identified and use the archived same-lab sweep when sparse; worst public strain/rate RMSE remains 0.038459/0.012313 on missing-feature coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear or classification audit\",\n      \"rejected_reason\": \"Held-lab nonlinear fits already worsened the history-only slice, and the dataset has no classification or relay outputs.\"\n    }\n  ],\n  \"rationale\": \"The previous sparse test covered one corrupted check per lab, not clean two- or three-check sweeps. Exhaustively withholding measured checks tests whether poorly spaced points amplify calibration error; compare that error with the yield margin to decide whether to tighten the criterion for trusting a sparse local fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8d1544dba9980ac2a5a34527ec71a6d11cf74215726617129dac92a83dd71ebc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26881.15,
+      "usage_known": true,
+      "prompt_tokens": 31212,
+      "cached_tokens": 0,
+      "completion_tokens": 924
+    }
+  ]
+}

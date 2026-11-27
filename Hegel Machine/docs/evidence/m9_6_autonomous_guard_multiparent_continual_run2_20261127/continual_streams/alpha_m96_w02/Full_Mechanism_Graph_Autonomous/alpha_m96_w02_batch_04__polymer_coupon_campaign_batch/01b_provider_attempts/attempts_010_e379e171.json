@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e379e171dd314ab192bdb3c7e8f379e8",
+  "call_seq": 10,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w02__Full_Mechanism_Graph_Autonomous__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w02_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:46:49.706932+00:00",
+  "ended_at_utc": "2026-11-27T03:47:17.857619+00:00",
+  "request_sha256": "eecaff8ecdbc4323d6812f3ab2e53e76d0cfcd350e0bd4278aa5f73aab600898",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56043,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30687,
+    "cached_tokens": 6784,
+    "completion_tokens": 992
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/coupon04_onset.py <<'PY'\\nexec(open('/tmp/coupon04_validate.py').read().split('res = np.empty_like(y)')[0])\\nmiss = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nprint('Test onset finite',np.isfinite(te['instant_rate_obs']).sum(), 'test missing with onset',np.sum(np.isnan(te['coupon_features_raw']).any(axis=1)&np.isfinite(te['instant_rate_obs'])))\\nfor c in range(4):\\n    learn = lab != c\\n    a = {k:v[learn] for k,v in tr.items()}\\n    tau0,w0 = s._fit(s._Design(d,a,x[learn],cal),a)\\n    fit = learn & ~miss\\n    b = {k:v[fit] for k,v in tr.items()}\\n    tau,w = s._fit(s._Design(d,b,x[fit],cal),b)\\n    prior = full.make(tau0) @ w0\\n    pred = full.make(tau) @ w\\n    delta = y[:,-1] - pred[:,-1]\\n    delta = np.where(miss & np.isfinite(delta),delta,0.)\\n    corrections = [np.column_stack((q[:,None]*full.t, q)) for q in (delta, np.clip(delta,-.35,.35), .8*np.clip(delta,-.35,.35))]\\n    print('lab',c,'complete-only fit',tau,'missing onset deltas',np.round(delta[(lab==c)&miss],4))\\n    for name, v in [('original',prior),('complete-fit',pred),*[(f'correction {i}',pred+z) for i,z in enumerate(corrections)]]:\\n        for m in ((lab==c)&miss, (lab==c)&~miss):\\n            err = (v-y)[m,:-1]\\n            print(name,len(err),np.round([np.sqrt(np.nanmean(err**2)), np.nanmedian(abs(err)), np.nanmedian(abs(err[:,-1]))],6))\\nitem = pickle.load(open('/holdout_task/public_alpha_m96_w02_batch_04.pkl','rb'))[0]\\nref = item['gt']; mt = np.isnan(te['coupon_features_raw']).any(axis=1)\\nprint('test onset reference error, missing rows',np.round((te['instant_rate_obs']-ref['te_true_rate0'])[mt],6),'complete RMSE',np.sqrt(np.mean((te['instant_rate_obs'][~mt]-ref['te_true_rate0'][~mt])**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/coupon04_onset.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stresses and balanced coupon alignment -> H2 shared Prony law with an onset-informed drift estimate for missing features; baseline worst public slice RMSE is 0.557 for strain and 0.176 for onset.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace balanced feature imputation\",\n      \"rejected_reason\": \"The contract specifies that alignment. The measured onset instead provides an independent observation of the remaining rate offset, which contributes linearly to strain.\"\n    }\n  ],\n  \"rationale\": \"Use held-lab strain curves, not the onset values used for the correction, to test whether onset assimilation recovers the missing drift. Compare complete-case fitting in the same folds; retain either change only if it improves the intended slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6ab439fadb8a887d9286ed399c65349e0895efdd2b88c0bd046dda52e22c363c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28107.65,
+      "usage_known": true,
+      "prompt_tokens": 30687,
+      "cached_tokens": 6784,
+      "completion_tokens": 992
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4059c020fb9643638aa41939c57635ef",
+  "call_seq": 3,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w02__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w02_batch_02__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:31:46.746685+00:00",
+  "ended_at_utc": "2026-11-27T03:32:05.520318+00:00",
+  "request_sha256": "12f3e5ade460b31b2b0db06e7f956a669e537396a03e93c386ec47ab4c6711d0",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 20807,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19844,
+    "cached_tokens": 6784,
+    "completion_tokens": 569
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '65,199p' /tmp/hegel_continual_archive/beta_m96_w02_batch_01_solver.py; python3 - <<'PY'\\nimport json, pickle, numpy as np\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nprint('history structure:', {k:(type(v).__name__,len(v) if hasattr(v,'__len__') else v) for k,v in h.items()}); print('history preview:',json.dumps(h)[:1100])\\ne=pickle.load(open('/holdout_task/public_beta_m96_w02_batch_02.pkl','rb'))[0]; s=e['study']; g=e['gt']\\nfor k in ['budget_grid','mu_shifts','past_vortex_circulation_trace']: print(k,s[k])\\nprint('reaction separability max error',np.max(np.abs(s['V_reaction_2d']-s['reaction_x'][:,None]-s['reaction_y'][None,:])))\\nprint('bank counts',np.bincount(s['row_bank_id'])); print('reference certificate objective and gap',[(c['primal_objective'],c['primal_objective']-c['dual_lower_bound']) for c in g['certs_by_budget']])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived single-budget solver → shared laminar forward model and three budget-specific KKT solves; worst-budget validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool historical and current sweeps by default\",\n      \"rejected_reason\": \"All four public banks have current sweeps spanning distinct references; pooling could bias the fit if gains changed between batches.\"\n    }\n  ],\n  \"rationale\": \"Check whether the archived forward model preserves the current reaction convention and identify how the history stores sparse-bank calibration. A reaction mismatch would change the operator; a different history schema would change the fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "40fabc23b3bf3629314f1708529d3c91fd965033b8b62c5f54abe7249c6445d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18738.14,
+      "usage_known": true,
+      "prompt_tokens": 19844,
+      "cached_tokens": 6784,
+      "completion_tokens": 569
+    }
+  ]
+}

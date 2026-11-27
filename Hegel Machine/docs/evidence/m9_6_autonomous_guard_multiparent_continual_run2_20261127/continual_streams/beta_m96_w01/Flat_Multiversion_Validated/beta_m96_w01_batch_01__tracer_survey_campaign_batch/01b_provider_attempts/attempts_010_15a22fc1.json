@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "15a22fc128fa46789c742041d5e73abb",
+  "call_seq": 10,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__beta_m96_w01__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m96_w01_batch_01__tracer_survey_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:34:40.382776+00:00",
+  "ended_at_utc": "2026-11-27T03:35:04.109572+00:00",
+  "request_sha256": "50ada2e589e28c99d5baba26911fce745aa3ea7b7f74d1ef0a66885c22c16fe6",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41719,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25796,
+    "cached_tokens": 11136,
+    "completion_tokens": 900
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/beta_m96_w01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nh=json.loads(m._HISTORY.read_text())\\nfor item in pickle.load(open('public_beta_m96_w01_batch_01.pkl','rb')):\\n    s,g=item['study'],item['gt']; q=s['sensor_calibration_sweeps']; b,x,r=(np.asarray(q[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    base=m.solve_beta_m96_w01_batch_01(s); y=m._calibrate(s)\\n    for label,count,spike in [('two clean',2,0.),('one clean',1,0.),('wing absent',0,0.),('two with EMI',2,.8),('one with EMI',1,.8)]:\\n        keep=np.flatnonzero(b<2).tolist(); raw=r.copy()\\n        for bank in (2,3):\\n            ids=np.flatnonzero(b==bank); anchors=ids[[np.argmin(x[ids]),np.argmax(x[ids])]][:count]; keep.extend(anchors)\\n            if count: raw[anchors[0]]+=spike\\n        v=dict(s,sensor_calibration_sweeps=dict(bank_id=b[keep],ref_signal=x[keep],raw_readout=raw[keep])); out=m.solve_beta_m96_w01_batch_01(v)\\n        print(label,'max observation/weight/field change',np.max(np.abs(m._calibrate(v)-y)),np.max(np.abs(out['weights_by_budget']-base['weights_by_budget'])),np.max(np.abs(out['terminal_field_mid_budget']-base['terminal_field_mid_budget'])))\\n        for bank in (2,3):\\n            xx,zz=m._bank_sweep(v['sensor_calibration_sweeps'],bank); a,c=m._historical_line(bank,h); print(' ',bank,'current residuals against prefix',zz-(a*xx+c))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 bank-calibrated additive laminar FVM → H2 nuisance-profiled three-budget inversion; worst measured bank-slice target error was 1.50e-8 and worst verified KKT gap was 4.17e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the clean schema and measured single-reading jackknife checks\",\n      \"rejected_reason\": \"They passed on the saved artifact and cannot reveal whether a spike controls the fit when a bank has only one or two readings.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified forward and KKT model unchanged. Thin the actual Wing B sweeps and inject a controlled EMI spike to test the unverified overlap of sparse and contaminated calibration in the same bank. If the fit follows the spike while the archive agrees with clean readings, use that evidence to revise the sparse calibration rule.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2eba25704f521ccf19663ca57df48bfd73861d8bc34b555339ea9922cee4fcdc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25801.05,
+      "usage_known": true,
+      "prompt_tokens": 25796,
+      "cached_tokens": 11136,
+      "completion_tokens": 900
+    }
+  ]
+}

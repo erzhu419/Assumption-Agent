@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c7700aa4693c49209f3e2659d64a69f2",
+  "call_seq": 12,
+  "stage_subdir": "m9_6_auto_struct_20261127T030815Z__alpha_m96_w04__Flat_Multiversion_Validated__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w04_batch_04__polymer_coupon_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T03:44:10.971396+00:00",
+  "ended_at_utc": "2026-11-27T03:44:50.459176+00:00",
+  "request_sha256": "2612c091c370db59926e6a27fe2b39dd2630c0cb175d3207b3354797441760a2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 70060,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35630,
+    "cached_tokens": 11136,
+    "completion_tokens": 1709
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/polymer_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m96_w04_batch_04_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m96_w04_batch_04.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\nd, g = case['dataset'], case['gt']\\ntr, te = d['train'], d['test']\\nlab = tr['lab_id']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nn = len(lab)\\nx = s._aligned((tr, te))\\nt = d['eval_times']\\ny = np.c_[tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']]\\ncoef = s._calibration(d['calibration_load_cells'])\\nargs = (coef, d['past_dt'], t, d['yield_stress'])\\n\\ndef model(mask):\\n    return s._Model({k: v[mask] for k, v in tr.items()}, x[:n][mask], *args)\\n\\ndef predict(m, tau, w, missing, rate):\\n    pred = m.basis(tau)[0] @ w\\n    use = missing & np.isfinite(rate)\\n    drift = .97 * (rate[use] - pred[use, -1])\\n    pred[use, :-1] += drift[:, None] * t\\n    pred[use, -1] += drift\\n    return pred\\n\\ndef rms(a):\\n    return np.sqrt(np.mean(a*a))\\n\\n# Attribute residual structure using held-out response observations, not calibration-label proxies.\\nfor key, eligible in [('all', np.ones(n, bool)), ('complete_only', complete)]:\\n    stats = []\\n    for c in np.unique(lab):\\n        valid = lab == c\\n        fit = ~valid & eligible\\n        tau, w = s._fit(model(fit), y[fit])\\n        p = predict(model(valid), tau, w, ~complete[valid], y[valid, -1])\\n        err = p - y[valid]\\n        m = complete[valid]\\n        # Orthogonal-to-time residual detects missing memory terms rather than drift imputation.\\n        curve = err[m, :-1]\\n        slope = (curve @ t) / (t @ t)\\n        shape = curve - slope[:, None] * t\\n        stats.append([rms(err[:, :-1]), rms(curve), rms(err[m, -1]), rms(shape), float(np.mean(slope))])\\n    print(key, 'held-out lab rows [all_curve, complete_curve, complete_rate, complete_nondrift_shape, signed_drift]', np.round(stats, 6).tolist())\\n    tau, w = s._fit(model(eligible), y[eligible])\\n    p = predict(s._Model(te, x[n:], *args), tau, w, ~np.isfinite(te['coupon_features_raw']).all(axis=1), te['instant_rate_obs'])\\n    e = p[:, :-1] + te['strain_0'][:, None] - g['te_clean']\\n    r = p[:, -1] - g['te_true_rate0']\\n    hist = (np.abs(g['te_hist_true']) > d['yield_stress']).any(axis=1)\\n    hold = np.abs(g['te_hold_true']) > d['yield_stress']\\n    masks = [(te['lab_id'] == c) & (hist == h) & (hold == j) for c in range(4) for h in (0, 1) for j in (0, 1)]\\n    print(key, 'public worst lab-by-yield', max(rms(e[m]) for m in masks if m.any()), max(rms(r[m]) for m in masks if m.any()), 'tau max rel', np.max(np.abs(tau/g['taus']-1)), 'weight max abs', np.max(np.abs(w-np.r_[g['theta'],g['vp_theta']])))\\n\\n# Independent loading recursion and explicit right derivative verify the contract's algebra.\\nm = model(np.ones(n, bool))\\ntau, w = s._fit(m, y)\\nB = m.basis(tau)[0]\\nfor j, tj in enumerate(tau):\\n    z = np.zeros(n)\\n    for k, step in enumerate(d['past_dt']):\\n        z += (m.past[:, k] - z) * -np.expm1(-step / tj)\\n    np.testing.assert_allclose(B[:, :-1, j], (m.hold-z)[:, None] * -np.expm1(-t/tj), atol=1e-12)\\n    np.testing.assert_allclose(B[:, -1, j], (m.hold-z)/tj, atol=1e-12)\\nnp.testing.assert_allclose(B[:, -1, 7], m.over, atol=1e-12)\\nnp.testing.assert_allclose(B[:, -1, 8], m.work*m.hold/tau[0], atol=1e-12)\\nprint('Independent recurrence and right derivatives agree')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/polymer_margin_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust joint fit on all coupons → H2 fit on complete coupons only if held-out labs show a meaningful improvement; current worst public lab-by-yield-by-missingness RMSE is 0.06248 for strain and 0.01861 for rate (n=3).\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or transport terms\",\n      \"rejected_reason\": \"The coupon contract specifies a two-branch recurrence and two overstress terms, with no relay states or transport operator. The independent recurrence and held-out non-drift residuals test whether the specified algebra is sufficient.\"\n    },\n    {\n      \"option\": \"Judge calibration from a pooled score\",\n      \"rejected_reason\": \"This is a continuous-response task, not classification. Held-out lab errors and signed drift test for lab-specific failure that a pooled RMSE could hide.\"\n    }\n  ],\n  \"rationale\": \"Check whether incomplete training rows bias the shared constitutive fit by comparing both fits on held-out labs and separating drift from curve-shape error. Independently verify the loading recurrence and initial-rate terms. Change the solver only if the challenger improves a meaningful margin without degrading transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "98a774c839ffeebdff044d83417b07889900e85f56953711458c3dcdd80adfeb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43597.11,
+      "usage_known": true,
+      "prompt_tokens": 35630,
+      "cached_tokens": 11136,
+      "completion_tokens": 1709
+    }
+  ]
+}
