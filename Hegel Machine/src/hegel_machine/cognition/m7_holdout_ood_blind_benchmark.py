@@ -47,6 +47,8 @@ class HoldoutOODTask:
     public_setup_py: str
     private_verifier_py: str
     declared_callable_entrypoints: tuple[str, ...] = ()
+    public_pickle_filename: str = ""
+    host_only_public_gt_json: str = ""
 
 
 def build_holdout_ood_12_tasks() -> list[HoldoutOODTask]:

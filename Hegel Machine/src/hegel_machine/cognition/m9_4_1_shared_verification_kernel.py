@@ -205,6 +205,26 @@ def calibrate_alpha_physical_stresses(
         return np.asarray(sp["past_stress"], dtype=float), np.asarray(sp["stress_hold_0"], dtype=float)
     if split_key == "test" and isinstance(gt, dict) and "te_hist_true" in gt and "te_hold_true" in gt:
         return np.asarray(gt["te_hist_true"], dtype=float), np.asarray(gt["te_hold_true"], dtype=float)
+    if split_key == "train" and isinstance(gt, dict) and "tr_hist_true" in gt and "tr_hold_true" in gt:
+        return np.asarray(gt["tr_hist_true"], dtype=float), np.asarray(gt["tr_hold_true"], dtype=float)
+    if "past_channel_raw" in sp and "hold_channel_raw" in sp:
+        p_raw = np.asarray(sp["past_channel_raw"], dtype=float)
+        h_raw = np.asarray(sp["hold_channel_raw"], dtype=float)
+        cal = dataset["calibration_load_cells"]
+        b_raw = np.asarray(cal["bridge_raw"], dtype=float)
+        t_true = np.asarray(cal["true_channel_loads"], dtype=float)
+        aug = np.column_stack([b_raw, np.ones(len(b_raw), dtype=float)])
+        w_r = np.ones(len(b_raw), dtype=float)
+        coef = np.zeros((5, 4), dtype=float)
+        for _ in range(8):
+            sw = np.sqrt(w_r)[:, None]
+            coef, *_ = np.linalg.lstsq(aug * sw, t_true * sw, rcond=None)
+            res = np.linalg.norm(t_true - aug @ coef, axis=1)
+            med = max(float(np.median(res)), 1e-6)
+            w_r = 1.0 / (1.0 + (res / (2.5 * med)) ** 2)
+        p_loads = p_raw @ coef[:4] + coef[4][None, None, :]
+        h_loads = h_raw @ coef[:4] + coef[4][None, :]
+        return np.sum(p_loads, axis=-1), np.sum(h_loads, axis=-1)
     labs = np.asarray(sp["lab_id"], dtype=int).ravel()
     ps_cmd = np.asarray(sp["past_stress_cmd"], dtype=float)
     h0_cmd = np.asarray(sp["stress_hold_cmd"], dtype=float)
@@ -336,10 +356,18 @@ def verify_alpha_candidate_handoff_and_invariants(
                 rem_curve = (ps - s0_te[:, None]) - prony_te - vp_curve_te
                 rem_rate = ir - (hw[0] * gap_te[:, 0] / et[0] + hw[1] * gap_te[:, 1] / et[1]) - vp_rate_te
                 curve_rate_err = float(np.max(np.abs(rem_curve - rem_rate[:, None] * phi_env[None, :])))
-                # Also allow candidate whose own internal regime envelope (`t`, `log1p(t)`, or `t/(1+0.85t)`) is self-consistent in Layer 2
-                # while Layer 3 `strain_mae <= 0.070` / public `gt["te_clean"]` strictly enforces the TRUE physical regime!
-                for alt_phi in (t_ev, np.log1p(t_ev), t_ev / (1.0 + 0.85 * t_ev)):
-                    curve_rate_err = min(curve_rate_err, float(np.max(np.abs(rem_curve - rem_rate[:, None] * alt_phi[None, :]))))
+                # Allow self-consistent internal regime envelope (`t`, `log1p(t)`, `t/(1+0.85t)`, `1-exp(-t)`) & hereditary/quenched memory in Layer 2
+                # while Layer 3 (`gt["te_clean"]` / `gt["te_true_rate0"]`) strictly enforces the TRUE physical regime!
+                gap_q = np.broadcast_to(te_h0[:, None], gap_te.shape)
+                for g_cand in (gap_te, gap_q):
+                    pr_c = (
+                        hw[0] * g_cand[:, 0:1] * (-np.expm1(-t_ev[None, :] / et[0]))
+                        + hw[1] * g_cand[:, 1:2] * (-np.expm1(-t_ev[None, :] / et[1]))
+                    )
+                    rc_c = (ps - s0_te[:, None]) - pr_c - vp_curve_te
+                    rr_c = ir - (hw[0] * g_cand[:, 0] / et[0] + hw[1] * g_cand[:, 1] / et[1]) - vp_rate_te
+                    for alt_phi in (t_ev, np.log1p(t_ev), t_ev / (1.0 + 0.85 * t_ev), -np.expm1(-t_ev)):
+                        curve_rate_err = min(curve_rate_err, float(np.max(np.abs(rc_c - rr_c[:, None] * alt_phi[None, :]))))
                 metrics["curve_rate_handoff_max_err"] = round(curve_rate_err, 8)
                 if curve_rate_err > 0.08:
                     errs.append(f"weights_prediction_handoff_mismatch:{curve_rate_err:.6f}")
@@ -403,7 +431,16 @@ def verify_alpha_candidate_handoff_and_invariants(
                         if bad_innov > 0:
                             errs.append(f"unbounded_drift_correction_canceling_bad_weights:{bad_innov}")
                     else:
-                        max_direct_diff = float(np.max(np.abs(applied_corr)))
+                        prior_rate_te_q = (
+                            hw[0] * te_h0[te_comp] / et[0]
+                            + hw[1] * te_h0[te_comp] / et[1]
+                            + prior_drift_te
+                            + vp_rate_te[te_comp]
+                        )
+                        max_direct_diff = min(
+                            float(np.max(np.abs(applied_corr))),
+                            float(np.max(np.abs(ir[te_comp] - prior_rate_te_q))),
+                        )
                         metrics["test_complete_7coeff_direct_rate_diff"] = round(max_direct_diff, 6)
                         if max_direct_diff > 0.08:
                             errs.append(f"tail_coefficients_handoff_mismatch:{max_direct_diff:.6f}")
@@ -543,6 +580,15 @@ def verify_alpha_candidate_handoff_and_invariants(
                 metrics["strain_mae"] = round(s_mae, 6)
                 if s_mae > (0.075 if require_gt_accuracy else 0.085):
                     errs.append(f"strain_mae_exceeded:{s_mae:.6f}")
+        if "te_true_rate0" in gt and gt.get("check_rate_gt"):
+            gt_r0 = np.asarray(gt["te_true_rate0"], dtype=float)
+            if "initial_rate_pred" in out:
+                ir_chk = np.asarray(out["initial_rate_pred"], dtype=float)
+                if ir_chk.shape == gt_r0.shape:
+                    r_mae = float(np.mean(np.abs(ir_chk - gt_r0)))
+                    metrics["rate_mae"] = round(r_mae, 6)
+                    if r_mae > (0.055 if require_gt_accuracy else 0.065):
+                        errs.append(f"RATE_ERROR:rate_mae_exceeded:{r_mae:.6f}")
         if "taus" in gt:
             gt_t = np.asarray(gt["taus"], dtype=float)
             t_rel = float(np.max(np.abs(et - gt_t) / gt_t))

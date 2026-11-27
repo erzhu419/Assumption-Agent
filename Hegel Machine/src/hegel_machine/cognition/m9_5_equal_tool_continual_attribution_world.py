@@ -1147,7 +1147,8 @@ def m95_task_to_frontier_task(
     allowed_readonly_dependencies: tuple[str, ...] = (),
 ) -> m6f.FrontierBenchmarkTask:
     full_inst = f"{continual_context_block.strip()}\n\n{task.instruction_text}" if continual_context_block.strip() else task.instruction_text
-    pkl_asset = f"/holdout_task/public_{task.short_name}.pkl"
+    pkl_fn = getattr(task, "public_pickle_filename", "") or f"public_{task.short_name}.pkl"
+    pkl_asset = f"/holdout_task/{pkl_fn}"
     req_assets = tuple(dict.fromkeys([pkl_asset, "/holdout_task/validate_public_schema.py", *allowed_readonly_dependencies]))
     return m6f.FrontierBenchmarkTask(
         task_id=task.task_id,
@@ -1170,6 +1171,7 @@ def m95_task_to_frontier_task(
         holdout_public_setup_py=task.public_setup_py,
         required_public_assets=req_assets,
         allowed_readonly_dependencies=tuple(allowed_readonly_dependencies),
+        host_only_public_gt_json=str(getattr(task, "host_only_public_gt_json", "") or ""),
     )
 
 

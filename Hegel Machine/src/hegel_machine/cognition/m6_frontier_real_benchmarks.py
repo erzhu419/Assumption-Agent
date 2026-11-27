@@ -118,6 +118,7 @@ class FrontierBenchmarkTask:
     declared_callable_entrypoints: tuple[str, ...] = ()
     required_public_assets: tuple[str, ...] = ()
     allowed_readonly_dependencies: tuple[str, ...] = ()
+    host_only_public_gt_json: str = ""
     private_verifier_callable: Any = None
 
 
@@ -5112,9 +5113,10 @@ def execute_host_trusted_scientific_probe(
         "    print(json.dumps({'ok': False, 'reason': 'unsupported_public_pickle_structure'})); sys.exit(0)\n"
         "is_alpha = 'dataset' in item0\n"
         "pub_in = copy.deepcopy(item0['dataset'] if is_alpha else item0['study'])\n"
-        "pub_gt = item0.get('gt') or {}\n"
         "kspec = importlib.util.spec_from_file_location('_shared_v_kernel', os.path.join(os.path.dirname(__file__), '_shared_kernel.py'))\n"
         "kmod = importlib.util.module_from_spec(kspec); kspec.loader.exec_module(kmod)\n"
+        "_hgt_path = os.path.join(os.path.dirname(__file__), '_host_gt.json')\n"
+        "pub_gt = kmod.decode_pure_json_numerical_text(open(_hgt_path, encoding='utf-8').read()) if os.path.isfile(_hgt_path) else (item0.get('gt') or {})\n"
         "WORKER_PY = '''\n"
         "import importlib.util, json, os, pickle, sys\n"
         "cand_p, hints_j, in_p, out_p, k_p = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]\n"
@@ -5201,6 +5203,7 @@ def execute_host_trusted_scientific_probe(
     probe_code_sha = hashlib.sha256((probe_py + "\n" + standalone_kernel_py).encode("utf-8")).hexdigest()
     nonce = _uuid_mod.uuid4().hex[:10]
     remote_dir = f"/tmp/_hegel_sci_probe_{nonce}"
+    host_gt_json = str(getattr(task, "host_only_public_gt_json", "") or "")
     with tempfile.TemporaryDirectory(prefix="hegel_sci_pr_") as td:
         td_p = Path(td)
         (td_p / "probe.py").write_text(probe_py, encoding="utf-8")
@@ -5208,6 +5211,9 @@ def execute_host_trusted_scientific_probe(
         exec_container_bash(agent_cid, f"mkdir -p {remote_dir}", timeout_sec=10)
         subprocess.run(["docker", "cp", str(td_p / "probe.py"), f"{agent_cid}:{remote_dir}/probe.py"], capture_output=True, timeout=15)
         subprocess.run(["docker", "cp", str(td_p / "_shared_kernel.py"), f"{agent_cid}:{remote_dir}/_shared_kernel.py"], capture_output=True, timeout=15)
+        if host_gt_json:
+            (td_p / "_host_gt.json").write_text(host_gt_json, encoding="utf-8")
+            subprocess.run(["docker", "cp", str(td_p / "_host_gt.json"), f"{agent_cid}:{remote_dir}/_host_gt.json"], capture_output=True, timeout=15)
     try:
         pr_run = exec_container_bash(
             agent_cid,
