@@ -44,6 +44,7 @@ from hegel_machine.cognition import (
     m6_frontier_real_benchmarks as m6f,
     m7_autogenous_forest_pretraining as m7a,
 )
+from hegel_machine.cognition.cost_policy import score_single_call_usage
 from hegel_machine.cognition.hipporag_wormhole_index import HippoRAGWormholeIndex
 from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import ensure_clean_scipy_sandbox_image
 from hegel_machine.cognition.m8_persistent_variational_planner import (
@@ -64,9 +65,11 @@ from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import 
     expected_public_output_keys,
     initialize_m95_wing_scoped_mechanism_graph,
     m95_task_to_frontier_task,
+    make_continual_archive_entry,
     run_equal_tool_pre_llm_trial,
     run_m95_wing_scoped_calibration_update,
     update_flat_parameter_snapshot_from_public_item,
+    update_flat_validated_wing_parameter_snapshot_from_public_item,
 )
 
 DEFAULT_V7_BUNDLE = REPO_ROOT / "docs/evidence/m9_2_1_audit_closure_and_regrade_20261126/pretrained_autogenous_forest_v7_m921.json"
@@ -257,6 +260,10 @@ def _run_one_world_arm_stream(
             flat_snap = update_flat_parameter_snapshot_from_public_item(
                 family=fam, public_item=pub_item, prior_snapshot=flat_snap
             )
+        elif arm == "Flat_Multiversion_Validated":
+            flat_snap = update_flat_validated_wing_parameter_snapshot_from_public_item(
+                family=fam, public_item=pub_item, prior_snapshot=flat_snap
+            )
         elif arm == "Full_Mechanism_Graph":
             assert graph is not None and planner is not None and registry is not None
             m8_update_rec = run_m95_wing_scoped_calibration_update(
@@ -268,7 +275,14 @@ def _run_one_world_arm_stream(
                 registry=registry,
             )
 
-        # Shared Equal-Tool Pre-LLM Trial (`max_pre_llm_probes = 1` across ALL 3 arms!)
+        # Explicit prefix-only (`<= step_i - 1`) read-only historical calibration dependency manifest (`M9.5.1` `F02`)
+        cal_hist_json = json.dumps(prior_cal_sweeps, indent=2)
+        readonly_deps = {"/tmp/hegel_continual_archive/archive_calibration_history.json": cal_hist_json}
+        readonly_shas = {
+            k: hashlib.sha256(v.encode("utf-8")).hexdigest() for k, v in readonly_deps.items()
+        }
+
+        # Shared Equal-Tool Pre-LLM Trial (`max_pre_llm_probes = 1` across ALL arms!)
         probe_t0 = monotonic()
         pre_trial = run_equal_tool_pre_llm_trial(
             arm=arm,
@@ -276,21 +290,30 @@ def _run_one_world_arm_stream(
             task=task,
             public_item=pub_item,
             prior_archive_entries=prior_entries,
-            flat_param_snapshot=(flat_snap if arm == "Flat_ParameterizedCache" else None),
+            flat_param_snapshot=(flat_snap if arm in {"Flat_ParameterizedCache", "Flat_Multiversion_Validated"} else None),
             graph=graph,
             registry=registry,
+            readonly_dependencies=readonly_deps,
+            expected_dependency_sha256=readonly_shas,
         )
         probe_wall_ms = round((monotonic() - probe_t0) * 1000.0, 2)
 
         if pre_trial.get("accepted_pre_llm") is True:
             cand_code = str(pre_trial["candidate_code"])
+            can_code_sel = str(pre_trial.get("selected_canonical_algorithm_code") or cand_code)
+            can_ep_sel = str(pre_trial.get("selected_canonical_entrypoint") or task.declared_callable_entrypoints[0])
             art_path = str(task.declared_artifacts[0])
             bname = Path(art_path).name
             sdir = ep_dir / "04_submitted_artifacts_snapshot"
             sdir.mkdir(parents=True, exist_ok=True)
             (sdir / f"slot_00__{bname}").write_text(cand_code, encoding="utf-8")
 
-            priv_ver = grade_m94_artifact_map(task, {art_path: cand_code})
+            priv_ver = grade_m94_artifact_map(
+                task,
+                {art_path: cand_code},
+                readonly_dependencies=readonly_deps,
+                expected_dependency_sha256=readonly_shas,
+            )
             cand_sha = hashlib.sha256(cand_code.encode("utf-8")).hexdigest()
             dag_chk = m6f.append_post_episode_verification_to_dag(
                 ep_dir,
@@ -326,11 +349,19 @@ def _run_one_world_arm_stream(
                 "solver_token_cost_proxy": 0,
                 "consolidation_token_cost_proxy": 0,
                 "total_lifecycle_token_cost_proxy": 0,
+                "solver_cost_proxy_v1": 0,
+                "consolidation_cost_proxy_v1": 0,
+                "total_lifecycle_cost_proxy_v1": 0,
                 "pre_llm_probe_wall_ms": probe_wall_ms,
                 "consolidation_wall_ms": 0.0,
                 "wall_ms": wall_ms,
+                "readonly_dependencies_sha256": readonly_shas,
                 "m8_wing_scoped_update": m8_update_rec,
-                "pre_llm_trial_receipt": {k: v for k, v in pre_trial.items() if k != "candidate_code"},
+                "pre_llm_trial_receipt": {
+                    k: v
+                    for k, v in pre_trial.items()
+                    if k not in {"candidate_code", "selected_canonical_algorithm_code"}
+                },
                 "provenance_dag_verification": dag_chk,
                 "provider_attempt_accounting": {
                     "logical_llm_calls_total": 0,
@@ -346,14 +377,18 @@ def _run_one_world_arm_stream(
             }
             (ep_dir / "00_episode_summary.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
             (ep_dir / "03_official_verifier_report.json").write_text(json.dumps(priv_ver, indent=2) + "\n", encoding="utf-8")
+            # `F01 + F14`: Store canonical unwrapped solver (`input_coordinate_contract='raw_measured'`) separately from rendered 1-hop deliverable!
             prior_entries.append(
-                {
-                    "short_name": task.short_name,
-                    "task_id": task.task_id,
-                    "entrypoint": task.declared_callable_entrypoints[0],
-                    "submitted_code": cand_code,
-                    "output_schema_keys": req_keys,
-                }
+                make_continual_archive_entry(
+                    short_name=task.short_name,
+                    task_id=task.task_id,
+                    canonical_entrypoint=can_ep_sel,
+                    canonical_algorithm_code=can_code_sel,
+                    output_schema_keys=req_keys,
+                    public_qualification_status="public_gate_verified",
+                    delivered_artifact_code=cand_code,
+                    delivered_entrypoint=task.declared_callable_entrypoints[0],
+                )
             )
             prior_cal_sweeps.append(_summarize_public_calibration_sweep(fam, pub_item, task.short_name))
             if graph is not None:
@@ -374,7 +409,11 @@ def _run_one_world_arm_stream(
             "guard_evaluations": pre_trial.get("guard_evaluations"),
         }
         aug_task, ctx_hdr = _inject_equal_info_archive_into_task(task, prior_entries, prior_cal_sweeps, diag_for_prompt)
-        ft = m95_task_to_frontier_task(aug_task, continual_context_block=ctx_hdr)
+        ft = m95_task_to_frontier_task(
+            aug_task,
+            continual_context_block=ctx_hdr,
+            allowed_readonly_dependencies=tuple(sorted(readonly_deps.keys())),
+        )
         ep_run_tag = f"{run_id}__{wid}__{arm}"
 
         ep_sum = m6f.run_frontier_episode(
@@ -397,9 +436,29 @@ def _run_one_world_arm_stream(
             staging_policy="net_value_gated",
         )
         sub_map = _extract_submitted_py(ep_dir, task)
-        priv_ver = grade_m94_artifact_map(task, sub_map) if sub_map else {"strict_pass": False, "error": "missing_submitted_artifact"}
         cand_txt = next(iter(sub_map.values()), "")
         cand_sha = hashlib.sha256(cand_txt.encode("utf-8")).hexdigest() if cand_txt else ""
+        # Evaluate clean public gate (`F02 + F14`) with ONLY manifested `readonly_deps` (`0` private verifier leakage into online archive!)
+        pub_gate_post = (
+            execute_single_pre_llm_public_gate_probe_in_container(
+                task=task,
+                candidate_code=cand_txt,
+                readonly_dependencies=readonly_deps,
+                expected_dependency_sha256=readonly_shas,
+            )
+            if cand_txt
+            else {"accepted": False}
+        )
+        priv_ver = (
+            grade_m94_artifact_map(
+                task,
+                sub_map,
+                readonly_dependencies=readonly_deps,
+                expected_dependency_sha256=readonly_shas,
+            )
+            if sub_map
+            else {"strict_pass": False, "error": "missing_submitted_artifact"}
+        )
         dag_chk = m6f.append_post_episode_verification_to_dag(
             ep_dir,
             run_id=ep_run_tag,
@@ -407,12 +466,16 @@ def _run_one_world_arm_stream(
             arm=arm,
             model=model,
             candidate_sha256=cand_sha,
-            public_gate_receipt={"ended_by_finish": bool(ep_sum.get("ended_by_finish")), "verified_claim_ids": ["agent_public_gate_finish"]},
+            public_gate_receipt=(
+                pub_gate_post.get("scientific_probe_receipt")
+                or {"ended_by_finish": bool(ep_sum.get("ended_by_finish")), "verified_claim_ids": ["agent_public_gate_finish"]}
+            ),
             verifier_report=priv_ver,
         )
 
-        # Symmetric Non-Terminal Consolidation Rule (`step_i < n_steps` IDENTICAL across ALL 3 arms!)
+        # Symmetric Non-Terminal Consolidation Rule (`step_i < n_steps` IDENTICAL across ALL arms!)
         cons_proxy = 0
+        cons_proxy_v1 = 0
         cons_wall_ms = 0.0
         if sub_map and step_i < n_steps:
             c_t0 = monotonic()
@@ -434,10 +497,13 @@ def _run_one_world_arm_stream(
                 c_recs = comp_res.get("provider_attempt_receipts") or []
                 stream_compiler_receipts.extend(c_recs)
                 for cr in c_recs:
-                    p_tk = int(cr.get("prompt_tokens", 0) or 0)
-                    ca_tk = int(cr.get("cached_tokens", 0) or 0)
-                    o_tk = int(cr.get("completion_tokens", 0) or 0)
-                    cons_proxy += max(0, p_tk - ca_tk) + (ca_tk // 10) + 4 * o_tk
+                    sc_u = score_single_call_usage(
+                        prompt_tokens=int(cr.get("prompt_tokens", 0) or 0),
+                        cached_tokens=int(cr.get("cached_tokens", 0) or 0),
+                        completion_tokens=int(cr.get("completion_tokens", 0) or 0),
+                    )
+                    cons_proxy += sc_u["proxy_v2_u_010c_4o"]
+                    cons_proxy_v1 += sc_u["proxy_v1_u_025c_1o"]
 
                 c0_falsified = bool(
                     arm == "Full_Mechanism_Graph"
@@ -497,38 +563,49 @@ def _run_one_world_arm_stream(
                         c1_qual = "hegel_public_scientific_gate_v4"
 
                     comp_id = "alpha_facility_composite_calibration" if fam == "alpha" else "beta_facility_composite_calibration"
-                    if f"bind_{wid}_c1" not in registry.bindings:
-                        c1_gate = execute_single_pre_llm_public_gate_probe_in_container(task=task, candidate_code=cand_txt)
-                        if c1_gate["accepted"]:
-                            registry.register_binding(
-                                MechanismExecutableBinding(
-                                    binding_id=f"bind_{wid}_c1",
-                                    chain_id=fam,
-                                    branch_tag="C1_extension",
-                                    mechanism_id=f"mech_{wid}_c1",
-                                    mechanism_version=1,
-                                    forest_node_id=c1_fnid,
-                                    component_id=("viscoplastic_overstress_extension" if fam == "alpha" else "vortex_coupled_dispersion_extension"),
-                                    preserved_component_ids=(
-                                        ["reference_panel_calibration", "variable_step_gap_recursion"]
-                                        if fam == "alpha"
-                                        else ["sensor_bank_calibration", "nuisance_profiling", "box_simplex_kkt_certification"]
-                                    ),
-                                    violated_component_id=ext_guard.applies_to_component_id,
-                                    module_stem=c1_stem,
-                                    module_digest=c1_dig,
-                                    function_name=c1_fn,
-                                    qualification_id=c1_qual,
-                                    parameter_mechanism_id=comp_id,
-                                    parameter_version=int(graph.mechanisms[comp_id].version),
-                                    precondition_guard=ext_guard.to_dict(),
-                                    output_schema_keys=req_keys,
-                                    parameterized_closure_code=cand_txt,
-                                    parameterized_entrypoint=task.declared_callable_entrypoints[0],
-                                    parameterized_closure_sha256=cand_sha,
+                    if f"bind_{wid}_c1" not in registry.bindings and pub_gate_post.get("accepted"):
+                        q_rec_c1 = registry.issue_qualification_receipt(
+                            qualification_protocol=c1_qual,
+                            verified_code_sha256=cand_sha,
+                            forest_node_id=c1_fnid,
+                            contract_schema_sha256=hashlib.sha256(json.dumps(sorted(req_keys)).encode("utf-8")).hexdigest(),
+                            issued_reason=f"c1_public_gate_verified_{task.short_name}",
+                        )
+                        registry.register_binding(
+                            MechanismExecutableBinding(
+                                binding_id=f"bind_{wid}_c1",
+                                chain_id=fam,
+                                branch_tag="C1_extension",
+                                mechanism_id=f"mech_{wid}_c1",
+                                mechanism_version=1,
+                                forest_node_id=c1_fnid,
+                                component_id=("viscoplastic_overstress_extension" if fam == "alpha" else "vortex_coupled_dispersion_extension"),
+                                preserved_component_ids=(
+                                    ["reference_panel_calibration", "variable_step_gap_recursion"]
+                                    if fam == "alpha"
+                                    else ["sensor_bank_calibration", "nuisance_profiling", "box_simplex_kkt_certification"]
                                 ),
-                                reason=f"component_split_consolidated_on_{task.short_name}",
-                            )
+                                violated_component_id=ext_guard.applies_to_component_id,
+                                module_stem=c1_stem,
+                                module_digest=c1_dig,
+                                function_name=c1_fn,
+                                qualification_id=c1_qual,
+                                qualification_protocol=c1_qual,
+                                qualification_receipt_id=q_rec_c1.receipt_id,
+                                parameter_mechanism_id=comp_id,
+                                parameter_version=int(graph.mechanisms[comp_id].version),
+                                precondition_guard=ext_guard.to_dict(),
+                                output_schema_keys=req_keys,
+                                canonical_algorithm_code=cand_txt,
+                                canonical_entrypoint=task.declared_callable_entrypoints[0],
+                                input_coordinate_contract="raw_measured",
+                                parameterized_closure_code=cand_txt,
+                                parameterized_entrypoint=task.declared_callable_entrypoints[0],
+                                parameterized_closure_sha256=cand_sha,
+                            ),
+                            reason=f"component_split_consolidated_on_{task.short_name}",
+                            strict_receipt_check=True,
+                        )
                 elif comp_res.get("compiled_ok"):
                     m7a.consolidate_autogenous_episode_into_forest(
                         forest=forest,
@@ -541,7 +618,13 @@ def _run_one_world_arm_stream(
                 m6f.stop_container_safely(ut_cid)
             cons_wall_ms = round((monotonic() - c_t0) * 1000.0, 2)
 
-        solver_proxy = int(ep_sum.get("token_cost_proxy", 0) or 0)
+        sol_sc = score_single_call_usage(
+            prompt_tokens=int(ep_sum.get("prompt_tokens", 0) or 0),
+            cached_tokens=int(ep_sum.get("cached_tokens", 0) or 0),
+            completion_tokens=int(ep_sum.get("completion_tokens", 0) or 0),
+        )
+        solver_proxy = int(ep_sum.get("token_cost_proxy", 0) or sol_sc["proxy_v2_u_010c_4o"])
+        solver_proxy_v1 = int(sol_sc["proxy_v1_u_025c_1o"])
         ep_sum["world_id"] = wid
         ep_sum["family"] = fam
         ep_sum["arm"] = arm
@@ -554,8 +637,15 @@ def _run_one_world_arm_stream(
         ep_sum["solver_token_cost_proxy"] = solver_proxy
         ep_sum["consolidation_token_cost_proxy"] = cons_proxy
         ep_sum["total_lifecycle_token_cost_proxy"] = solver_proxy + cons_proxy
+        ep_sum["solver_cost_proxy_v1"] = solver_proxy_v1
+        ep_sum["consolidation_cost_proxy_v1"] = cons_proxy_v1
+        ep_sum["total_lifecycle_cost_proxy_v1"] = solver_proxy_v1 + cons_proxy_v1
         ep_sum["pre_llm_probe_wall_ms"] = probe_wall_ms
         ep_sum["consolidation_wall_ms"] = cons_wall_ms
+        ep_sum["readonly_dependencies_sha256"] = readonly_shas
+        ep_sum["public_qualification_status"] = (
+            "public_gate_verified" if pub_gate_post.get("accepted") else "public_gate_failed"
+        )
         ep_sum["m8_wing_scoped_update"] = m8_update_rec
         ep_sum["pre_llm_trial_receipt"] = {k: v for k, v in pre_trial.items() if k != "candidate_code"}
         ep_sum["provenance_dag_verification"] = dag_chk
@@ -565,13 +655,16 @@ def _run_one_world_arm_stream(
 
         if cand_txt:
             prior_entries.append(
-                {
-                    "short_name": task.short_name,
-                    "task_id": task.task_id,
-                    "entrypoint": task.declared_callable_entrypoints[0],
-                    "submitted_code": cand_txt,
-                    "output_schema_keys": req_keys,
-                }
+                make_continual_archive_entry(
+                    short_name=task.short_name,
+                    task_id=task.task_id,
+                    canonical_entrypoint=task.declared_callable_entrypoints[0],
+                    canonical_algorithm_code=cand_txt,
+                    output_schema_keys=req_keys,
+                    public_qualification_status=(
+                        "public_gate_verified" if pub_gate_post.get("accepted") else "public_gate_failed"
+                    ),
+                )
             )
         prior_cal_sweeps.append(_summarize_public_calibration_sweep(fam, pub_item, task.short_name))
         if graph is not None:
@@ -815,6 +908,13 @@ def main() -> None:
                     )
                 )
                 uni_keys = expected_public_output_keys(s_task)
+                q_rec_s = init_reg.issue_qualification_receipt(
+                    qualification_protocol=src_qual,
+                    verified_code_sha256=cand_s_sha,
+                    forest_node_id=src_nid,
+                    contract_schema_sha256=hashlib.sha256(json.dumps(sorted(uni_keys)).encode("utf-8")).hexdigest(),
+                    issued_reason=f"stage_S_public_verified_{w_spec.world_id}",
+                )
                 init_reg.register_binding(
                     MechanismExecutableBinding(
                         binding_id=f"bind_{w_spec.world_id}_c0",
@@ -834,15 +934,21 @@ def main() -> None:
                         module_digest=src_dig,
                         function_name=src_fn,
                         qualification_id=src_qual,
+                        qualification_protocol=src_qual,
+                        qualification_receipt_id=q_rec_s.receipt_id,
                         parameter_mechanism_id=comp_id,
                         parameter_version=1,
                         precondition_guard=c0_guard.to_dict(),
                         output_schema_keys=uni_keys,
+                        canonical_algorithm_code=cand_s_txt,
+                        canonical_entrypoint=s_task.declared_callable_entrypoints[0],
+                        input_coordinate_contract="raw_measured",
                         parameterized_closure_code=cand_s_txt,
                         parameterized_entrypoint=s_task.declared_callable_entrypoints[0],
                         parameterized_closure_sha256=cand_s_sha,
                     ),
                     reason=f"stage_S_freeze_{w_spec.world_id}",
+                    strict_receipt_check=True,
                 )
                 w_freeze_dir = out_dir / "world_freezes" / w_spec.world_id
                 w_freeze_dir.mkdir(parents=True, exist_ok=True)
@@ -857,13 +963,14 @@ def main() -> None:
                     "graph_ckpt_path": ckpt_p,
                     "graph_ckpt_meta": ckpt_meta,
                     "source_nid": src_nid,
-                    "source_archive_entry": {
-                        "short_name": s_task.short_name,
-                        "task_id": s_task.task_id,
-                        "entrypoint": s_task.declared_callable_entrypoints[0],
-                        "submitted_code": cand_s_txt,
-                        "output_schema_keys": uni_keys,
-                    },
+                    "source_archive_entry": make_continual_archive_entry(
+                        short_name=s_task.short_name,
+                        task_id=s_task.task_id,
+                        canonical_entrypoint=s_task.declared_callable_entrypoints[0],
+                        canonical_algorithm_code=cand_s_txt,
+                        output_schema_keys=uni_keys,
+                        public_qualification_status="public_gate_verified",
+                    ),
                     "source_cal_summary": _summarize_public_calibration_sweep(w_spec.family, pub_s_item, s_task.short_name),
                 }
         raise RuntimeError(f"Stage S source for `{w_spec.world_id}` failed private verifier across 2 blind attempts!")
@@ -1026,6 +1133,9 @@ def main() -> None:
             "lifecycle_proxy_exact_sign_flip_two_sided_p": _exact_two_sided_sign_flip_p_value(lifecycle_diffs),
             "turns_mean_world_delta": round(float(np.mean(turn_diffs)), 2),
             "turns_exact_sign_flip_two_sided_p": _exact_two_sided_sign_flip_p_value(turn_diffs),
+            "strict_passes_total_delta": int(round(sum(pass_diffs))),
+            "strict_passes_mean_world_delta": round(float(np.mean(pass_diffs)), 4),
+            "strict_passes_exact_sign_flip_two_sided_p": _exact_two_sided_sign_flip_p_value(pass_diffs),
             "per_world_deltas": per_world,
         }
 

@@ -594,10 +594,26 @@ class TypedMechanism:
     inapplicable_task_ids: set[str] = field(default_factory=set)
     epistemic_status: str = "SUPPORTED_IN_SCOPE"
     provenance_note: str = ""
+    parent_ids: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        if self.parent_ids:
+            dedup = tuple(dict.fromkeys(str(p) for p in self.parent_ids if p))
+            self.parent_ids = dedup
+            if self.parent_id is None and dedup:
+                self.parent_id = dedup[0]
+        elif self.parent_id is not None:
+            self.parent_ids = (str(self.parent_id),)
+
+    def all_parent_ids(self) -> tuple[str, ...]:
+        if self.parent_ids:
+            return self.parent_ids
+        return (self.parent_id,) if self.parent_id else ()
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         d["feature_names"] = list(self.feature_names)
+        d["parent_ids"] = list(self.all_parent_ids())
         d["support_bounds"] = {k: [float(v[0]), float(v[1])] for k, v in self.support_bounds.items()}
         d["dependent_task_ids"] = sorted(self.dependent_task_ids)
         d["inapplicable_task_ids"] = sorted(self.inapplicable_task_ids)
@@ -605,6 +621,7 @@ class TypedMechanism:
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> TypedMechanism:
+        raw_pids = tuple(str(x) for x in (data.get("parent_ids") or ()) if x)
         return cls(
             mechanism_id=str(data["mechanism_id"]),
             parent_id=data.get("parent_id"),
@@ -622,6 +639,7 @@ class TypedMechanism:
             inapplicable_task_ids={str(x) for x in data.get("inapplicable_task_ids", [])},
             epistemic_status=str(data.get("epistemic_status", "SUPPORTED_IN_SCOPE")),
             provenance_note=str(data.get("provenance_note", "")),
+            parent_ids=raw_pids,
         )
 
 
@@ -1037,14 +1055,15 @@ class PersistentMechanismGraph:
                 ),
                 probe_signatures=[f"sig:m8_{mech.role}"],
             )
-            if mech.parent_id and mech.parent_id in self.forest.nodes:
-                self.forest.add_local_implication_edge(
-                    stronger_node_id=mech.mechanism_id,
-                    weaker_node_id=mech.parent_id,
-                    preserved_contract={"role": mech.role, "version": mech.version},
-                    scope={"preconditions": preconds},
-                    evidence_status="derived",
-                )
+            for p_id in mech.all_parent_ids():
+                if p_id and p_id in self.forest.nodes and self.forest.nodes[p_id]["tree_id"] == eff_tree_id:
+                    self.forest.add_local_implication_edge(
+                        stronger_node_id=mech.mechanism_id,
+                        weaker_node_id=p_id,
+                        preserved_contract={"role": mech.role, "version": mech.version},
+                        scope={"preconditions": preconds},
+                        evidence_status="derived",
+                    )
         self.sync_authoritative_state_to_forest()
         return mech.mechanism_id
 
@@ -1054,7 +1073,7 @@ class PersistentMechanismGraph:
         while changed:
             changed = False
             for mid, m in self.mechanisms.items():
-                if m.parent_id in affected_mechs and mid not in affected_mechs:
+                if (set(m.all_parent_ids()) & affected_mechs) and mid not in affected_mechs:
                     affected_mechs.add(mid)
                     changed = True
         tasks: set[str] = set()

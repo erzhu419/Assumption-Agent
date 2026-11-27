@@ -68,15 +68,43 @@ VALID_BINDING_QUALIFICATION_IDS: frozenset[str] = frozenset(
 VALID_EXECUTABLE_KINDS: frozenset[str] = frozenset(
     {"raw_source", "compiled_L2", "primitive_L1", "bound_adapter"}
 )
+VALID_INPUT_COORDINATE_CONTRACTS: frozenset[str] = frozenset(
+    {"raw_measured", "adapter_precalibrated_forbid_rewrap"}
+)
+VALID_STRUCTURE_ORIGINS: frozenset[str] = frozenset(
+    {"author_seeded", "model_proposed", "publicly_contrastively_validated", "successor_adopted"}
+)
+
+
+@dataclass
+class QualificationReceipt:
+    """Content-addressed, registry-bound qualification receipt (`M9.5.1` `F07` — replaces bare protocol-string `qualification_id`)."""
+
+    receipt_id: str
+    qualification_protocol: str
+    verified_code_sha256: str
+    contract_schema_sha256: str
+    environment_digest: str
+    verifier_version: str
+    forest_node_id: str
+    issued_reason: str = ""
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> QualificationReceipt:
+        allowed = {f.name for f in cls.__dataclass_fields__.values()}
+        return cls(**{k: deepcopy(v) for k, v in data.items() if k in allowed})
 
 
 @dataclass
 class MechanismExecutableBinding:
-    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable (`M9.4.1` `Gate B`)."""
+    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable (`M9.4.1` `Gate B` + `M9.5.1` `F01/F07`)."""
 
     binding_id: str
     chain_id: str  # 'alpha' | 'beta'
-    branch_tag: str  # 'C0_base' | 'C1_extension'
+    branch_tag: str  # 'C0_base' | 'C1_extension' | ...
     mechanism_id: str
     mechanism_version: int
     forest_node_id: str
@@ -90,6 +118,14 @@ class MechanismExecutableBinding:
     parameter_mechanism_id: str
     parameter_version: int
     executable_kind: str = "raw_source"
+    qualification_protocol: str = ""
+    qualification_receipt_id: str = ""
+    canonical_algorithm_code: str = ""
+    canonical_entrypoint: str = ""
+    canonical_algorithm_sha256: str = ""
+    input_coordinate_contract: str = "raw_measured"
+    parent_parameter_mechanism_ids: list[str] = field(default_factory=list)
+    structure_origin: str = "author_seeded"
     source_artifact_sha256: str = ""
     compiled_skill_sha256: str = ""
     adapter_code_sha256: str = ""
@@ -121,15 +157,32 @@ def verify_binding_identity_and_foreign_keys(
     binding: MechanismExecutableBinding,
     *,
     graph: PersistentMechanismGraph | None = None,
+    registry: M94BindingRegistry | None = None,
     require_closure_code: bool = False,
+    strict_receipt_check: bool = False,
 ) -> None:
-    """Fail-closed identity, digest, qualification, and foreign-key verifier (`M9.4.1` `Gate B` / `A05`)."""
+    """Fail-closed identity, digest, coordinate-contract, qualification receipt, and foreign-key verifier (`M9.4.1` `Gate B` + `M9.5.1` `F01/F07`)."""
     if binding.executable_kind not in VALID_EXECUTABLE_KINDS:
         raise ValueError(f"Invalid executable_kind `{binding.executable_kind}` on `{binding.binding_id}`")
-    if binding.qualification_id not in VALID_BINDING_QUALIFICATION_IDS:
-        raise ValueError(f"Unqualified or unrecognized qualification_id `{binding.qualification_id}` on `{binding.binding_id}`")
-    if require_closure_code and (not binding.parameterized_closure_code.strip() or not binding.parameterized_entrypoint.strip()):
-        raise ValueError(f"Missing executable closure code/entrypoint on `{binding.binding_id}`")
+    q_proto = binding.qualification_protocol or binding.qualification_id
+    if q_proto not in VALID_BINDING_QUALIFICATION_IDS:
+        raise ValueError(f"Unqualified or unrecognized qualification_protocol `{q_proto}` on `{binding.binding_id}`")
+    if binding.input_coordinate_contract not in VALID_INPUT_COORDINATE_CONTRACTS:
+        raise ValueError(f"Invalid input_coordinate_contract `{binding.input_coordinate_contract}` on `{binding.binding_id}`")
+    if binding.structure_origin not in VALID_STRUCTURE_ORIGINS:
+        raise ValueError(f"Invalid structure_origin `{binding.structure_origin}` on `{binding.binding_id}`")
+
+    eff_code = binding.canonical_algorithm_code or binding.parameterized_closure_code
+    eff_ep = binding.canonical_entrypoint or binding.parameterized_entrypoint
+    if require_closure_code:
+        if not eff_code.strip() or not eff_ep.strip():
+            raise ValueError(f"Missing executable closure code/entrypoint on `{binding.binding_id}`")
+        if binding.input_coordinate_contract != "raw_measured" or "_HEGEL_ADAPTER_PRECALIBRATED_DO_NOT_REWRAP" in eff_code:
+            raise ValueError(f"Refusing to bind/rewrap precalibrated adapter code on `{binding.binding_id}` (`F01` canonical-only rule)")
+    if binding.canonical_algorithm_code:
+        c_sha = hashlib.sha256(binding.canonical_algorithm_code.encode("utf-8")).hexdigest()
+        if binding.canonical_algorithm_sha256 and binding.canonical_algorithm_sha256 != c_sha:
+            raise ValueError(f"Canonical algorithm SHA-256 mismatch on `{binding.binding_id}`")
     if binding.parameterized_closure_code:
         actual_sha = hashlib.sha256(binding.parameterized_closure_code.encode("utf-8")).hexdigest()
         if binding.parameterized_closure_sha256 and binding.parameterized_closure_sha256 != actual_sha:
@@ -142,6 +195,9 @@ def verify_binding_identity_and_foreign_keys(
     if graph is not None:
         if binding.parameter_mechanism_id not in graph.mechanisms:
             raise ValueError(f"Missing parameter_mechanism_id `{binding.parameter_mechanism_id}` in PersistentMechanismGraph")
+        for extra_pid in binding.parent_parameter_mechanism_ids:
+            if extra_pid not in graph.mechanisms:
+                raise ValueError(f"Missing parent_parameter_mechanism_id `{extra_pid}` in PersistentMechanismGraph")
         if int(binding.parameter_version) != int(graph.mechanisms[binding.parameter_mechanism_id].version):
             raise ValueError(
                 f"Stale/mismatched parameter_version on `{binding.binding_id}`: "
@@ -149,26 +205,107 @@ def verify_binding_identity_and_foreign_keys(
             )
         if binding.mechanism_id not in graph.mechanisms:
             raise ValueError(f"Dangling mechanism_id `{binding.mechanism_id}` not registered in PersistentMechanismGraph.mechanisms")
+        if (strict_receipt_check or bool(binding.qualification_receipt_id)) and binding.forest_node_id not in graph.forest.nodes:
+            raise ValueError(f"Dangling forest_node_id `{binding.forest_node_id}` not present in PersistentMechanismGraph.forest.nodes (`F07`)")
+    if strict_receipt_check and not binding.qualification_receipt_id:
+        raise ValueError(f"Missing qualification_receipt_id on `{binding.binding_id}` under strict_receipt_check (`F07`)")
+    if registry is not None and (strict_receipt_check or bool(binding.qualification_receipt_id)):
+        rec = registry.qualification_receipts.get(binding.qualification_receipt_id)
+        if rec is None:
+            raise ValueError(
+                f"Unregistered qualification_receipt_id `{binding.qualification_receipt_id}` on `{binding.binding_id}` (`F07`)"
+            )
+        if rec.qualification_protocol != q_proto:
+            raise ValueError(f"Receipt protocol mismatch `{rec.qualification_protocol}` != `{q_proto}` on `{binding.binding_id}`")
+        valid_code_shas = {
+            s
+            for s in (
+                binding.canonical_algorithm_sha256,
+                binding.parameterized_closure_sha256,
+                binding.compiled_skill_sha256,
+                binding.module_digest,
+                binding.source_artifact_sha256,
+            )
+            if s
+        }
+        if valid_code_shas and rec.verified_code_sha256 not in valid_code_shas:
+            raise ValueError(f"QualificationReceipt code SHA-256 mismatch on `{binding.binding_id}` (`F07`)")
+        if rec.forest_node_id != binding.forest_node_id:
+            raise ValueError(f"QualificationReceipt forest_node_id `{rec.forest_node_id}` != `{binding.forest_node_id}` (`F07`)")
+        if binding.contract_schema_sha256 and rec.contract_schema_sha256 and rec.contract_schema_sha256 != binding.contract_schema_sha256:
+            raise ValueError(f"QualificationReceipt contract_schema_sha256 mismatch on `{binding.binding_id}`")
+        if binding.environment_digest and rec.environment_digest and rec.environment_digest != binding.environment_digest:
+            raise ValueError(f"QualificationReceipt environment_digest mismatch on `{binding.binding_id}`")
 
 
 class M94BindingRegistry:
-    """Persists `MechanismExecutableBinding`s directly inside `PersistentMechanismGraph.forest.questions`."""
+    """Persists `MechanismExecutableBinding`s and `QualificationReceipt`s directly inside `PersistentMechanismGraph.forest.questions`."""
 
     def __init__(self, graph: PersistentMechanismGraph) -> None:
         self.graph = graph
         self.bindings: dict[str, MechanismExecutableBinding] = {}
+        self.qualification_receipts: dict[str, QualificationReceipt] = {}
         self.parameter_epochs: dict[str, dict[str, Any]] = {}
         self.binding_events: list[dict[str, Any]] = []
         self._hydrate()
 
+    def issue_qualification_receipt(
+        self,
+        *,
+        qualification_protocol: str,
+        verified_code_sha256: str,
+        forest_node_id: str,
+        contract_schema_sha256: str = "",
+        environment_digest: str = "hegel_clean_scipy_sandbox_v2",
+        verifier_version: str = "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc",
+        issued_reason: str = "",
+    ) -> QualificationReceipt:
+        if qualification_protocol not in VALID_BINDING_QUALIFICATION_IDS:
+            raise ValueError(f"Invalid qualification_protocol `{qualification_protocol}`")
+        if not verified_code_sha256 or len(verified_code_sha256) < 16:
+            raise ValueError("QualificationReceipt requires non-empty verified_code_sha256")
+        if bool(self.graph.forest.nodes) and forest_node_id not in self.graph.forest.nodes:
+            raise ValueError(f"Cannot issue QualificationReceipt for non-existent forest_node_id `{forest_node_id}`")
+        raw_key = json.dumps(
+            {
+                "protocol": qualification_protocol,
+                "code_sha": verified_code_sha256,
+                "contract_sha": contract_schema_sha256,
+                "env": environment_digest,
+                "verifier": verifier_version,
+                "forest_node_id": forest_node_id,
+            },
+            sort_keys=True,
+        )
+        rid = "qrec_" + hashlib.sha256(raw_key.encode("utf-8")).hexdigest()[:20]
+        rec = QualificationReceipt(
+            receipt_id=rid,
+            qualification_protocol=qualification_protocol,
+            verified_code_sha256=verified_code_sha256,
+            contract_schema_sha256=contract_schema_sha256,
+            environment_digest=environment_digest,
+            verifier_version=verifier_version,
+            forest_node_id=forest_node_id,
+            issued_reason=issued_reason,
+        )
+        self.qualification_receipts[rid] = rec
+        self.sync_to_graph()
+        return rec
+
     def _ensure_typed_mechanism_registered(self, binding: MechanismExecutableBinding) -> None:
         if binding.mechanism_id not in self.graph.mechanisms:
             parent_mech = binding.parameter_mechanism_id if binding.parameter_mechanism_id in self.graph.mechanisms else None
+            all_pids = tuple(
+                dict.fromkeys(
+                    [p for p in ([parent_mech] + list(binding.parent_parameter_mechanism_ids)) if p and p in self.graph.mechanisms]
+                )
+            )
             feat_nms = tuple(sorted(binding.input_role_map.keys())) if binding.input_role_map else (binding.component_id,)
             self.graph.register_mechanism(
                 TypedMechanism(
                     mechanism_id=binding.mechanism_id,
                     parent_id=parent_mech,
+                    parent_ids=all_pids,
                     role="bound_constitutive_executable",
                     feature_names=feat_nms,
                     version=int(binding.mechanism_version),
@@ -180,26 +317,49 @@ class M94BindingRegistry:
 
     def _hydrate(self) -> None:
         blob = self.graph.forest.questions.get(M94_BINDINGS_FOREST_KEY)
-        if isinstance(blob, dict) and blob.get("schema") in {"hegel_m9_4_bindings_v1", "hegel_m9_4_1_bindings_v2"}:
+        if isinstance(blob, dict) and blob.get("schema") in {
+            "hegel_m9_4_bindings_v1",
+            "hegel_m9_4_1_bindings_v2",
+            "hegel_m9_5_1_bindings_v3",
+        }:
             self.parameter_epochs = deepcopy(blob.get("parameter_epochs") or {})
             self.binding_events = list(blob.get("binding_events") or [])
+            self.qualification_receipts = {
+                str(rk): QualificationReceipt.from_dict(rv)
+                for rk, rv in (blob.get("qualification_receipts") or {}).items()
+            }
             self.bindings = {}
             for k, v in (blob.get("bindings") or {}).items():
                 b = MechanismExecutableBinding.from_dict(v)
                 self._ensure_typed_mechanism_registered(b)
-                verify_binding_identity_and_foreign_keys(b, graph=self.graph, require_closure_code=False)
+                verify_binding_identity_and_foreign_keys(b, graph=self.graph, registry=self, require_closure_code=False)
                 self.bindings[str(k)] = b
 
     def sync_to_graph(self) -> None:
         self.graph.forest.questions[M94_BINDINGS_FOREST_KEY] = {
-            "schema": "hegel_m9_4_1_bindings_v2",
+            "schema": "hegel_m9_5_1_bindings_v3",
             "bindings": {k: b.to_dict() for k, b in sorted(self.bindings.items())},
+            "qualification_receipts": {k: r.to_dict() for k, r in sorted(self.qualification_receipts.items())},
             "parameter_epochs": deepcopy(self.parameter_epochs),
             "binding_events": deepcopy(self.binding_events),
         }
         self.graph.sync_authoritative_state_to_forest()
 
-    def register_binding(self, binding: MechanismExecutableBinding, *, reason: str = "registered") -> None:
+    def register_binding(
+        self,
+        binding: MechanismExecutableBinding,
+        *,
+        reason: str = "registered",
+        strict_receipt_check: bool = False,
+    ) -> None:
+        if not binding.qualification_protocol:
+            binding.qualification_protocol = binding.qualification_id
+        if binding.parameterized_closure_code and not binding.canonical_algorithm_code:
+            binding.canonical_algorithm_code = binding.parameterized_closure_code
+        if binding.parameterized_entrypoint and not binding.canonical_entrypoint:
+            binding.canonical_entrypoint = binding.parameterized_entrypoint
+        if binding.canonical_algorithm_code and not binding.canonical_algorithm_sha256:
+            binding.canonical_algorithm_sha256 = hashlib.sha256(binding.canonical_algorithm_code.encode("utf-8")).hexdigest()
         if binding.parameterized_closure_code and not binding.parameterized_closure_sha256:
             binding.parameterized_closure_sha256 = hashlib.sha256(binding.parameterized_closure_code.encode("utf-8")).hexdigest()
         if binding.parameterized_closure_sha256 and not binding.source_artifact_sha256:
@@ -209,18 +369,27 @@ class M94BindingRegistry:
         if not binding.contract_schema_sha256 and binding.output_schema_keys:
             binding.contract_schema_sha256 = hashlib.sha256(json.dumps(sorted(binding.output_schema_keys)).encode("utf-8")).hexdigest()
         self._ensure_typed_mechanism_registered(binding)
-        verify_binding_identity_and_foreign_keys(binding, graph=self.graph, require_closure_code=False)
+        verify_binding_identity_and_foreign_keys(
+            binding,
+            graph=self.graph,
+            registry=self,
+            require_closure_code=False,
+            strict_receipt_check=strict_receipt_check,
+        )
         self.bindings[binding.binding_id] = binding
         self.binding_events.append(
             {
                 "event": reason,
                 "binding_id": binding.binding_id,
                 "executable_kind": binding.executable_kind,
+                "structure_origin": binding.structure_origin,
+                "qualification_receipt_id": binding.qualification_receipt_id,
                 "chain_id": binding.chain_id,
                 "branch_tag": binding.branch_tag,
                 "mechanism_id": binding.mechanism_id,
                 "mechanism_version": binding.mechanism_version,
                 "parameter_mechanism_id": binding.parameter_mechanism_id,
+                "parent_parameter_mechanism_ids": list(binding.parent_parameter_mechanism_ids),
                 "parameter_version": binding.parameter_version,
                 "source_artifact_sha256": binding.source_artifact_sha256[:16],
                 "compiled_skill_sha256": binding.compiled_skill_sha256[:16],
@@ -246,8 +415,11 @@ class M94BindingRegistry:
         }
         updated_ids: list[str] = []
         for bid, b in self.bindings.items():
-            if b.parameter_mechanism_id == parameter_mechanism_id and b.chain_id == affected_chain_id:
-                b.parameter_version = int(new_version)
+            if b.chain_id == affected_chain_id and (
+                b.parameter_mechanism_id == parameter_mechanism_id or parameter_mechanism_id in b.parent_parameter_mechanism_ids
+            ):
+                if b.parameter_mechanism_id == parameter_mechanism_id:
+                    b.parameter_version = int(new_version)
                 updated_ids.append(bid)
         self.binding_events.append(
             {
@@ -1873,11 +2045,63 @@ M94_ALL_TASKS: tuple[HoldoutOODTask, ...] = (
 M94_TASKS_BY_ID: dict[str, HoldoutOODTask] = {t.task_id: t for t in M94_ALL_TASKS}
 
 
-def grade_m94_artifact_map(task: HoldoutOODTask, files_map: dict[str, str]) -> dict[str, Any]:
-    """Package `files_map` (`{'/holdout_task/...': code}`) into an ephemeral POSIX `.tar` and run `run_holdout_private_verifier`."""
+ALLOWED_CONTINUAL_READONLY_DEP_PREFIX = "/tmp/hegel_continual_archive/"
+
+
+def validate_and_stage_readonly_dependencies_setup_py(
+    readonly_dependencies: dict[str, str] | None,
+    *,
+    expected_dependency_sha256: dict[str, str] | None = None,
+) -> tuple[str, dict[str, str]]:
+    """Validate prefix-locked read-only continual dependencies (`M9.5.1` `F02`) and emit `0444` setup snippet + SHA-256 map."""
+    if not readonly_dependencies:
+        return "", {}
+    lines = ["import hashlib as _ro_hl, os as _ro_os"]
+    computed_shas: dict[str, str] = {}
+    for dep_path, dep_content in sorted(readonly_dependencies.items()):
+        norm_p = str(dep_path)
+        if not norm_p.startswith(ALLOWED_CONTINUAL_READONLY_DEP_PREFIX) or ".." in Path(norm_p).parts:
+            raise ValueError(
+                f"Disallowed readonly_dependency path `{norm_p}` (must live strictly inside `{ALLOWED_CONTINUAL_READONLY_DEP_PREFIX}`)"
+            )
+        raw_b = str(dep_content).encode("utf-8")
+        actual_sha = hashlib.sha256(raw_b).hexdigest()
+        if expected_dependency_sha256 and norm_p in expected_dependency_sha256:
+            if expected_dependency_sha256[norm_p] != actual_sha:
+                raise ValueError(
+                    f"Read-only dependency SHA-256 mismatch on `{norm_p}`: expected={expected_dependency_sha256[norm_p][:16]} != actual={actual_sha[:16]}"
+                )
+        computed_shas[norm_p] = actual_sha
+        parent_d = str(Path(norm_p).parent.as_posix())
+        lines.append(f"_ro_os.makedirs({parent_d!r}, exist_ok=True)")
+        lines.append(f"if _ro_os.path.exists({norm_p!r}): _ro_os.chmod({norm_p!r}, 0o644)")
+        lines.append(f"open({norm_p!r}, 'w', encoding='utf-8').write({str(dep_content)!r})")
+        lines.append(f"_ro_os.chmod({norm_p!r}, 0o444)")
+        lines.append(f"assert _ro_hl.sha256(open({norm_p!r}, 'rb').read()).hexdigest() == {actual_sha!r}")
+    return "\n" + "\n".join(lines) + "\n", computed_shas
+
+
+def grade_m94_artifact_map(
+    task: HoldoutOODTask,
+    files_map: dict[str, str],
+    *,
+    readonly_dependencies: dict[str, str] | None = None,
+    expected_dependency_sha256: dict[str, str] | None = None,
+) -> dict[str, Any]:
+    """Package `files_map` (`{'/holdout_task/...': code}`) into an ephemeral POSIX `.tar` and run `run_holdout_private_verifier`
+    with identical prefix-locked `readonly_dependencies` (`0444`, SHA-256 verified, `M9.5.1` `F02`)."""
     import io
     import tarfile
     import tempfile
+
+    ro_snip, ro_shas = validate_and_stage_readonly_dependencies_setup_py(
+        readonly_dependencies, expected_dependency_sha256=expected_dependency_sha256
+    )
+    eff_task = (
+        type(task)(**{**task.__dict__, "public_setup_py": task.public_setup_py + ro_snip})
+        if ro_snip
+        else task
+    )
 
     with tempfile.TemporaryDirectory(prefix="m94_tar_") as td:
         tar_p = Path(td) / "submitted.tar"
@@ -1888,7 +2112,9 @@ def grade_m94_artifact_map(task: HoldoutOODTask, files_map: dict[str, str]) -> d
                 ti.size = len(raw)
                 ti.mode = 0o644
                 tf.addfile(ti, io.BytesIO(raw))
-        return run_holdout_private_verifier(task, tar_p)
+        res = run_holdout_private_verifier(eff_task, tar_p)
+        res["readonly_dependencies_sha256"] = ro_shas
+        return res
 
 
 def m94_task_to_frontier_task(

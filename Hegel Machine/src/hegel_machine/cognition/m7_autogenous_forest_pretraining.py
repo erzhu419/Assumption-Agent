@@ -571,13 +571,21 @@ def discover_cross_tree_operator_wormholes(
                         elif gb is not None:
                             comb_guard = gb
                             guard_compatible = gb.required_features().issubset(body_feats)
-                        wrapped_skel = (
-                            Program("domain_guard", children=(comb_guard, skel_body))
-                            if comb_guard is not None
-                            else skel_body
-                        )
+                        if comb_guard is not None:
+                            wrapped_skel = Program("domain_guard", children=(comb_guard, skel_body))
+                            adjusted_slots = [{"slot": s["slot"], "path": [1, *list(s["path"])]} for s in skel_slots]
+                        else:
+                            wrapped_skel = skel_body
+                            adjusted_slots = [{"slot": s["slot"], "path": list(s["path"])} for s in skel_slots]
+                        for sl_chk in adjusted_slots:
+                            cur_n = wrapped_skel
+                            for p_idx in sl_chk["path"]:
+                                cur_n = cur_n.children[int(p_idx)]
+                            assert cur_n.op == "arg" and cur_n.name == sl_chk["slot"], (
+                                f"Broken open_completion_slot path {sl_chk['path']} for `{sl_chk['slot']}` -> {cur_n.to_dict()}"
+                            )
                         if best_real is None or wrapped_skel.size > best_real[0].size:
-                            best_real = (wrapped_skel, skel_slots)
+                            best_real = (wrapped_skel, adjusted_slots)
                             best_guard_meta = {
                                 "has_domain_guard": comb_guard is not None,
                                 "domain_guard_compatible": guard_compatible,
@@ -1850,39 +1858,41 @@ def evaluate_observable_precondition_guard(
             except Exception:
                 res_pl_ok = False
 
-        has_past = False
-        has_hold = False
         all_finite_stress = True
         peaks: list[float] = []
 
-        def _collect_stress_arr(raw_v: Any, kind_tag: str) -> None:
-            nonlocal has_past, has_hold, all_finite_stress
+        def _collect_stress_arr(raw_v: Any) -> bool:
+            nonlocal all_finite_stress
             try:
                 arr = np.asarray(raw_v, dtype=float)
                 if arr.size == 0 or not bool(np.all(np.isfinite(arr))):
                     all_finite_stress = False
-                    return
+                    return False
                 peaks.append(float(np.max(np.abs(arr))))
-                if kind_tag == "past_stress":
-                    has_past = True
-                else:
-                    has_hold = True
+                return True
             except Exception:
                 all_finite_stress = False
+                return False
 
-        if "past_stress" in ctx:
-            _collect_stress_arr(ctx["past_stress"], "past_stress")
-        if "stress_hold_0" in ctx:
-            _collect_stress_arr(ctx["stress_hold_0"], "stress_hold_0")
-        for split_k in ("train", "test"):
-            sp_d = ctx.get(split_k)
-            if isinstance(sp_d, dict):
-                if "past_stress" in sp_d:
-                    _collect_stress_arr(sp_d["past_stress"], "past_stress")
-                if "stress_hold_0" in sp_d:
-                    _collect_stress_arr(sp_d["stress_hold_0"], "stress_hold_0")
+        # `M9.5.1` `F10`: Verify history & hold coverage per present split (`train` history NEVER masks missing `test` history!)
+        split_dicts_present = [sp_k for sp_k in ("train", "test") if isinstance(ctx.get(sp_k), dict)]
+        top_has_past = _collect_stress_arr(ctx["past_stress"]) if "past_stress" in ctx else False
+        top_has_hold = _collect_stress_arr(ctx["stress_hold_0"]) if "stress_hold_0" in ctx else False
+        hist_free_top = bool(ctx.get("history_free_protocol_declared") is True)
 
-        history_req_met = has_hold and (has_past or ctx.get("history_free_protocol_declared") is True)
+        if split_dicts_present:
+            per_split_ok = True
+            for split_k in split_dicts_present:
+                sp_d = ctx[split_k]
+                sp_past = _collect_stress_arr(sp_d["past_stress"]) if "past_stress" in sp_d else False
+                sp_hold = _collect_stress_arr(sp_d["stress_hold_0"]) if "stress_hold_0" in sp_d else False
+                sp_hist_free = hist_free_top or bool(sp_d.get("history_free_protocol_declared") is True)
+                # Especially on `test` (the predicted target split), missing `past_stress` without explicit history-free proof MUST fail closed (`UNKNOWN`)!
+                if not ((sp_hold or top_has_hold) and (sp_past or (top_has_past and split_k != "test") or sp_hist_free)):
+                    per_split_ok = False
+            history_req_met = per_split_ok
+        else:
+            history_req_met = top_has_hold and (top_has_past or hist_free_top)
         if not (res_pl_ok and all_finite_stress and history_req_met and peaks):
             measured_val = None
         elif ys is None:

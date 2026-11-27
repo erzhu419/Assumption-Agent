@@ -53,6 +53,7 @@ from .m9_4_continual_mechanism_binding_world import (
     M94BindingRegistry,
     MechanismExecutableBinding,
     grade_m94_artifact_map,
+    validate_and_stage_readonly_dependencies_setup_py,
     verify_binding_identity_and_foreign_keys,
 )
 
@@ -61,6 +62,13 @@ M95_ARMS: tuple[str, ...] = (
     "Flat_ParameterizedCache",
     "Full_Mechanism_Graph",
 )
+M95_EXTENDED_ARMS: tuple[str, ...] = (
+    "Archive_AutoReplay",
+    "Flat_ParameterizedCache",
+    "Flat_Multiversion_Validated",
+    "Full_Mechanism_Graph",
+)
+ADAPTER_PRECALIBRATED_SENTINEL = "_HEGEL_ADAPTER_PRECALIBRATED_DO_NOT_REWRAP"
 
 
 @dataclass(frozen=True)
@@ -670,7 +678,18 @@ for sd, ds, gt in cases:
         valid = False; rows.append({{"seed": sd, "error": "shape_mismatch"}}); continue
     if not (np.all(np.isfinite(et)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(sc)) and np.all(np.isfinite(cx)) and 0.05 < et[0] < et[1]):
         valid = False; rows.append({{"seed": sd, "error": "non_finite"}}); continue
-    sec_exp = (ps[:, -1] - ds["test"]["strain_0"]) / np.maximum(np.abs(gt["te_hold_true"]), 0.5)
+    cal_d = ds["calibration_load_cells"]
+    c_l = np.asarray(cal_d["lab_id"], dtype=int).ravel()
+    c_x = np.asarray(cal_d["cmd_stress"], dtype=float).ravel()
+    c_y = np.asarray(cal_d["true_stress"], dtype=float).ravel()
+    g_ols = np.ones(4, dtype=float); b_ols = np.zeros(4, dtype=float)
+    for lb_i in range(4):
+        m_i = c_l == lb_i
+        if int(np.sum(m_i)) >= 2:
+            g_ols[lb_i], b_ols[lb_i] = np.linalg.lstsq(np.column_stack([c_x[m_i], np.ones(int(np.sum(m_i)))]), c_y[m_i], rcond=None)[0]
+    te_lb = np.asarray(ds["test"]["lab_id"], dtype=int).ravel()
+    te_h0_ols = np.asarray(ds["test"]["stress_hold_cmd"], dtype=float) * g_ols[te_lb] + b_ols[te_lb]
+    sec_exp = (ps[:, -1] - ds["test"]["strain_0"]) / np.maximum(np.abs(te_h0_ols), 0.5)
     if float(np.max(np.abs(sc - sec_exp))) > 1e-3:
         valid = False; rows.append({{"seed": sd, "error": "secant_handoff_mismatch"}}); continue
     tr = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
@@ -1121,9 +1140,15 @@ def build_world_tasks(spec: M95WorldSpec) -> tuple[HoldoutOODTask, tuple[Holdout
     return src_task, tuple(stream_tasks), manifest
 
 
-def m95_task_to_frontier_task(task: HoldoutOODTask, *, continual_context_block: str = "") -> m6f.FrontierBenchmarkTask:
+def m95_task_to_frontier_task(
+    task: HoldoutOODTask,
+    *,
+    continual_context_block: str = "",
+    allowed_readonly_dependencies: tuple[str, ...] = (),
+) -> m6f.FrontierBenchmarkTask:
     full_inst = f"{continual_context_block.strip()}\n\n{task.instruction_text}" if continual_context_block.strip() else task.instruction_text
     pkl_asset = f"/holdout_task/public_{task.short_name}.pkl"
+    req_assets = tuple(dict.fromkeys([pkl_asset, "/holdout_task/validate_public_schema.py", *allowed_readonly_dependencies]))
     return m6f.FrontierBenchmarkTask(
         task_id=task.task_id,
         short_name=task.short_name,
@@ -1143,7 +1168,8 @@ def m95_task_to_frontier_task(task: HoldoutOODTask, *, continual_context_block: 
         verifier_timeout_sec=120,
         verifier_network_mode="none",
         holdout_public_setup_py=task.public_setup_py,
-        required_public_assets=(pkl_asset, "/holdout_task/validate_public_schema.py"),
+        required_public_assets=req_assets,
+        allowed_readonly_dependencies=tuple(allowed_readonly_dependencies),
     )
 
 
@@ -1477,6 +1503,113 @@ def update_flat_parameter_snapshot_from_public_item(
     return {"bank_gains": g_out, "bank_offsets": b_out}
 
 
+def update_flat_validated_wing_parameter_snapshot_from_public_item(
+    *,
+    family: str,
+    public_item: dict[str, Any],
+    prior_snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    """`Flat_Multiversion_Validated` per-wing `2/3–1/3` holdout-MSE OLS updater (`M9.5.1` `F03` — zero `M8` graph/planner!).
+    - Evaluates Wing A (`0, 1`) and Wing B (`2, 3`) independently when `n_wing >= 6`.
+    - Fits OLS on contiguous `[:2*n_w//3]` and accepts the wing update iff trailing `[2*n_w//3:]` validation MSE strictly improves
+      over retaining `prior_snapshot` (`mse_new < 0.5 * mse_prior` and `mse_new <= 0.05`).
+    """
+    snap = deepcopy(prior_snapshot)
+    if family == "alpha":
+        cal = public_item["dataset"]["calibration_load_cells"]
+        ids = np.asarray(cal["lab_id"], dtype=int).ravel()
+        xs = np.asarray(cal["cmd_stress"], dtype=float).ravel()
+        ys = np.asarray(cal["true_stress"], dtype=float).ravel()
+        g_cur = list(snap["stress_gains"])
+        b_cur = list(snap["stress_biases"])
+        key_g, key_b = "stress_gains", "stress_biases"
+    else:
+        cal = public_item["study"]["sensor_calibration_sweeps"]
+        ids = np.asarray(cal["bank_id"], dtype=int).ravel()
+        xs = np.asarray(cal["ref_signal"], dtype=float).ravel()
+        ys = np.asarray(cal["raw_readout"], dtype=float).ravel()
+        g_cur = list(snap["bank_gains"])
+        b_cur = list(snap["bank_offsets"])
+        key_g, key_b = "bank_gains", "bank_offsets"
+
+    wing_decisions: dict[str, dict[str, Any]] = {}
+    for w_tag, (c0, c1) in (("wing_a", (0, 1)), ("wing_b", (2, 3))):
+        m_w = (ids == c0) | (ids == c1)
+        n_w = int(np.sum(m_w))
+        if n_w < 6:
+            wing_decisions[w_tag] = {"n_rows": n_w, "accepted": False, "reason": "sparse_retained"}
+            continue
+        id_w = ids[m_w]
+        x_w = xs[m_w]
+        y_w = ys[m_w]
+        n_tr = max(4, (2 * n_w) // 3)
+        id_tr, x_tr, y_tr = id_w[:n_tr], x_w[:n_tr], y_w[:n_tr]
+        id_va, x_va, y_va = id_w[n_tr:], x_w[n_tr:], y_w[n_tr:]
+        cand_g = {c0: g_cur[c0], c1: g_cur[c1]}
+        cand_b = {c0: b_cur[c0], c1: b_cur[c1]}
+        for ch in (c0, c1):
+            mc = id_tr == ch
+            if int(np.sum(mc)) >= 2:
+                gn, bs = np.linalg.lstsq(np.column_stack([x_tr[mc], np.ones(int(np.sum(mc)))]), y_tr[mc], rcond=None)[0]
+                cand_g[ch], cand_b[ch] = float(gn), float(bs)
+        pred_prior = np.array([g_cur[ch] * xv + b_cur[ch] for ch, xv in zip(id_va, x_va)], dtype=float)
+        pred_new = np.array([cand_g[ch] * xv + cand_b[ch] for ch, xv in zip(id_va, x_va)], dtype=float)
+        mse_prior = float(np.mean((y_va - pred_prior) ** 2))
+        mse_new = float(np.mean((y_va - pred_new) ** 2))
+        accept_w = bool(mse_new + 1e-9 < mse_prior and mse_new <= 0.05)
+        if accept_w:
+            g_cur[c0], g_cur[c1] = cand_g[c0], cand_g[c1]
+            b_cur[c0], b_cur[c1] = cand_b[c0], cand_b[c1]
+        wing_decisions[w_tag] = {
+            "n_rows": n_w,
+            "accepted": accept_w,
+            "val_mse_prior": round(mse_prior, 8),
+            "val_mse_new": round(mse_new, 8),
+        }
+    return {key_g: g_cur, key_b: b_cur, "wing_validation_decisions": wing_decisions}
+
+
+def make_continual_archive_entry(
+    *,
+    short_name: str,
+    task_id: str,
+    canonical_entrypoint: str,
+    canonical_algorithm_code: str,
+    output_schema_keys: list[str],
+    public_qualification_status: str = "public_gate_verified",
+    delivered_artifact_code: str | None = None,
+    delivered_entrypoint: str | None = None,
+) -> dict[str, Any]:
+    """Construct a dual-export continual archive entry (`M9.5.1` `F01 + F14`):
+    - `canonical_algorithm_code`: ALWAYS `input_coordinate_contract == 'raw_measured'` (NEVER pre-calibrated adapter code!).
+    - `delivered_artifact_code`: The rendered episode deliverable (which may wrap `canonical_algorithm_code` 1-hop).
+    - `public_qualification_status`: `'public_gate_verified'` or `'public_gate_failed'` (NEVER post-hoc private verifier status!).
+    """
+    if ADAPTER_PRECALIBRATED_SENTINEL in canonical_algorithm_code:
+        raise ValueError(
+            f"Refusing to store pre-calibrated adapter deliverable as `canonical_algorithm_code` on `{short_name}` (`F01` invariant)!"
+        )
+    if public_qualification_status not in {"public_gate_verified", "public_gate_failed"}:
+        raise ValueError(f"Invalid public_qualification_status `{public_qualification_status}` (`F14` — post-hoc private status forbidden!)")
+    deliv_code = delivered_artifact_code if delivered_artifact_code is not None else canonical_algorithm_code
+    deliv_ep = delivered_entrypoint if delivered_entrypoint is not None else canonical_entrypoint
+    return {
+        "short_name": short_name,
+        "task_id": task_id,
+        "entrypoint": canonical_entrypoint,
+        "canonical_entrypoint": canonical_entrypoint,
+        "canonical_algorithm_code": canonical_algorithm_code,
+        "canonical_sha256": hashlib.sha256(canonical_algorithm_code.encode("utf-8")).hexdigest(),
+        "input_coordinate_contract": "raw_measured",
+        "submitted_code": canonical_algorithm_code,
+        "delivered_entrypoint": deliv_ep,
+        "delivered_artifact_code": deliv_code,
+        "delivered_sha256": hashlib.sha256(deliv_code.encode("utf-8")).hexdigest(),
+        "output_schema_keys": list(output_schema_keys),
+        "public_qualification_status": public_qualification_status,
+    }
+
+
 def render_parameterized_input_adapter(
     *,
     family: str,
@@ -1486,17 +1619,22 @@ def render_parameterized_input_adapter(
     param_payload: dict[str, Any] | None,
     binding: MechanismExecutableBinding | None = None,
     graph: PersistentMechanismGraph | None = None,
+    registry: M94BindingRegistry | None = None,
 ) -> str:
-    """Shared Equal-Tool Input Adapter (`0` PDE/constitutive solver lines!):
-    - If `param_payload is None` (`Archive_AutoReplay`), emits a pure 2-line entrypoint alias (`target_entrypoint = source_entrypoint`)
-      so the archived solver runs statelessly on the raw current batch!
-    - If `param_payload is not None` (`Flat_ParameterizedCache` AND `Full_Mechanism_Graph` share the EXACT SAME calibration adapter!),
-      applies ONLY the affine sensor/load-cell calibration and provides a 4-channel unit identity calibration table.
+    """Shared Equal-Tool Input Adapter (`0` PDE/constitutive solver lines!, `M9.5.1` `F01` 1-Hop Canonical Export):
+    - Fail-closed rejects double-wrapping (`ADAPTER_PRECALIBRATED_SENTINEL in source_code` -> `ValueError`!).
+    - If `param_payload is None` (`Archive_AutoReplay`), emits a pure 2-line entrypoint alias (`target_entrypoint = source_entrypoint`).
+    - If `param_payload is not None`, applies ONLY the 1-hop affine sensor/load-cell calibration onto `canonical_algorithm_code`
+      and stamps `_HEGEL_ADAPTER_PRECALIBRATED_DO_NOT_REWRAP = True`.
     """
     import base64
 
     if binding is not None:
-        verify_binding_identity_and_foreign_keys(binding, graph=graph, require_closure_code=True)
+        verify_binding_identity_and_foreign_keys(binding, graph=graph, registry=registry, require_closure_code=True)
+    if param_payload is not None and ADAPTER_PRECALIBRATED_SENTINEL in source_code:
+        raise ValueError(
+            "Refusing to wrap an already-adapted deliverable (`_HEGEL_ADAPTER_PRECALIBRATED_DO_NOT_REWRAP` detected — `F01` double-wrap forbidden)!"
+        )
 
     b64_src = base64.b64encode(source_code.encode("utf-8")).decode("ascii")
     src_sha = hashlib.sha256(source_code.encode("utf-8")).hexdigest()
@@ -1516,10 +1654,11 @@ def render_parameterized_input_adapter(
         gains_lit = [round(float(x), 8) for x in param_payload["stress_gains"]]
         biases_lit = [round(float(x), 8) for x in param_payload["stress_biases"]]
         return (
-            f'"""M9.5 Shared Calibration Input Adapter (`source_sha256={src_sha[:16]}`)."""\n'
+            f'"""M9.5.1 Canonical 1-Hop Calibration Input Adapter (`canonical_sha256={src_sha[:16]}`)."""\n'
             "from __future__ import annotations\n"
             "import base64, copy, types\n"
             "import numpy as np\n\n"
+            f"{ADAPTER_PRECALIBRATED_SENTINEL} = True\n"
             f"_SRC_B64 = {b64_src!r}\n"
             f"_SRC_EP = {source_entrypoint!r}\n"
             f"_GAINS = np.array({gains_lit!r}, dtype=float)\n"
@@ -1547,10 +1686,11 @@ def render_parameterized_input_adapter(
     gains_b = [round(float(x), 8) for x in param_payload["bank_gains"]]
     offs_b = [round(float(x), 8) for x in param_payload["bank_offsets"]]
     return (
-        f'"""M9.5 Shared Calibration Input Adapter (`source_sha256={src_sha[:16]}`)."""\n'
+        f'"""M9.5.1 Canonical 1-Hop Calibration Input Adapter (`canonical_sha256={src_sha[:16]}`)."""\n'
         "from __future__ import annotations\n"
         "import base64, copy, types\n"
         "import numpy as np\n\n"
+        f"{ADAPTER_PRECALIBRATED_SENTINEL} = True\n"
         f"_SRC_B64 = {b64_src!r}\n"
         f"_SRC_EP = {source_entrypoint!r}\n"
         f"_GAINS = np.array({gains_b!r}, dtype=float)\n"
@@ -1587,6 +1727,8 @@ def extract_m95_guard_observables(family: str, public_item: dict[str, Any], para
         obs: dict[str, Any] = {
             "past_stress": np.vstack([cal_past_tr, cal_past_te]),
             "stress_hold_0": np.concatenate([cal_hold_tr, cal_hold_te]),
+            "train": {"past_stress": cal_past_tr, "stress_hold_0": cal_hold_tr},
+            "test": {"past_stress": cal_past_te, "stress_hold_0": cal_hold_te},
             "eval_times": np.asarray(ds["eval_times"], dtype=float),
         }
         if "yield_stress" in ds:
@@ -1613,21 +1755,41 @@ def execute_single_pre_llm_public_gate_probe_in_container(
     *,
     task: HoldoutOODTask,
     candidate_code: str,
+    readonly_dependencies: dict[str, str] | None = None,
+    expected_dependency_sha256: dict[str, str] | None = None,
 ) -> dict[str, Any]:
-    """Identical 1-probe air-gapped public schema + isolated-worker `ScientificProbeReceipt` gate shared by ALL 3 Arms!"""
+    """Identical air-gapped public schema + pure-JSON isolated-worker `ScientificProbeReceipt` gate (`M9.5.1` `F02 + F06`)!
+    - Stages ONLY prefix-locked `readonly_dependencies` (`0444`, SHA-256 verified) and masks unmanifested `/tmp/hegel_continual_archive/*`!
+    """
     import shlex
 
-    ft = m95_task_to_frontier_task(task)
+    ro_snip, ro_shas = validate_and_stage_readonly_dependencies_setup_py(
+        readonly_dependencies, expected_dependency_sha256=expected_dependency_sha256
+    )
+    allowed_ro_paths = tuple(sorted(ro_shas.keys()))
+    ft = m95_task_to_frontier_task(task, allowed_readonly_dependencies=allowed_ro_paths)
     art_path = task.declared_artifacts[0]
     cid = m6f.start_detached_container(CLEAN_SCIPY_SANDBOX_IMAGE, memory_limit="2048m", cpus="2", network_mode="none")
     try:
         with tempfile.TemporaryDirectory(prefix="m95_probe_") as td:
             td_p = Path(td)
-            (td_p / "_setup.py").write_text(task.public_setup_py, encoding="utf-8")
+            (td_p / "_setup.py").write_text(task.public_setup_py + ro_snip, encoding="utf-8")
             (td_p / "cand.py").write_text(candidate_code, encoding="utf-8")
             m6f.exec_container_bash(cid, "mkdir -p /holdout_task", timeout_sec=10)
             subprocess.run(["docker", "cp", str(td_p / "_setup.py"), f"{cid}:/tmp/_setup.py"], check=True, timeout=15)
             m6f.exec_container_bash(cid, "python3 -I /tmp/_setup.py && rm -f /tmp/_setup.py", timeout_sec=45)
+            # Clean any unmanifested files under `/tmp/hegel_continual_archive/` BEFORE running schema validator OR scientific probe (`F02`)!
+            clean_unman_py = (
+                "import json, os\n"
+                f"allowed = set({json.dumps(list(allowed_ro_paths))})\n"
+                "d = '/tmp/hegel_continual_archive'\n"
+                "if os.path.isdir(d):\n"
+                "    for fn in list(os.listdir(d)):\n"
+                "        fp = os.path.join(d, fn)\n"
+                "        if fp not in allowed and os.path.isfile(fp):\n"
+                "            os.chmod(fp, 0o644); os.unlink(fp)\n"
+            )
+            m6f.exec_container_bash(cid, "python3 -I -c " + shlex.quote(clean_unman_py), timeout_sec=15)
             pub_shas_py = (
                 "import hashlib, json, os\n"
                 f"ps = {json.dumps(list(ft.required_public_assets))}\n"
@@ -1661,6 +1823,7 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             "schema_stdout": sch_r["stdout"][-240:],
             "candidate_bundle_sha256": cand_bundle_sha,
             "candidate_raw_sha256": hashlib.sha256(candidate_code.encode("utf-8")).hexdigest(),
+            "readonly_dependencies_sha256": ro_shas,
             "scientific_probe_receipt": sci_rec,
         }
     finally:
@@ -1677,51 +1840,99 @@ def run_equal_tool_pre_llm_trial(
     flat_param_snapshot: dict[str, Any] | None = None,
     graph: PersistentMechanismGraph | None = None,
     registry: M94BindingRegistry | None = None,
+    readonly_dependencies: dict[str, str] | None = None,
+    expected_dependency_sha256: dict[str, str] | None = None,
+    max_pre_llm_probes: int = 1,
 ) -> dict[str, Any]:
-    """Execute AT MOST ONE (`max_pre_llm_probes = 1`) pre-LLM candidate probe under identical public gate rules across all 3 arms!"""
+    """Execute pre-LLM candidate probe(s) (`default max_pre_llm_probes = 1`) under identical public gate rules across all arms (`M9.5.1` `F01–F03, F14`)!
+    - Online auto-replay filters strictly by `public_qualification_status == 'public_gate_verified'` (`F14` — zero private oracle!).
+    - Always adapts 1-hop from `canonical_algorithm_code` (`input_coordinate_contract == 'raw_measured'`, `F01` — zero double-wrapping!).
+    """
     req_keys = expected_public_output_keys(task)
     target_ep = task.declared_callable_entrypoints[0]
+    probe_budget = max(1, int(max_pre_llm_probes))
 
-    if arm in {"Archive_AutoReplay", "Flat_ParameterizedCache"}:
-        # Select most-recent schema-compatible prior solver (standard recency cache without physical regime guards)
-        compat = [e for e in reversed(prior_archive_entries) if sorted(e.get("output_schema_keys") or []) == req_keys]
-        if not compat:
+    if arm in {"Archive_AutoReplay", "Flat_ParameterizedCache", "Flat_Multiversion_Validated"}:
+        compat_raw = [
+            e
+            for e in reversed(prior_archive_entries)
+            if sorted(e.get("output_schema_keys") or []) == req_keys
+            and e.get("public_qualification_status", "public_gate_verified") == "public_gate_verified"
+        ]
+        # Deduplicate distinct canonical solver versions (preserving recency order `[most_recent, older_distinct, ...]`)
+        dedup_compat: list[dict[str, Any]] = []
+        seen_can_shas: set[str] = set()
+        for ent in compat_raw:
+            can_code = str(ent.get("canonical_algorithm_code") or ent["submitted_code"])
+            can_sha = hashlib.sha256(can_code.encode("utf-8")).hexdigest()
+            if can_sha not in seen_can_shas:
+                seen_can_shas.add(can_sha)
+                dedup_compat.append(ent)
+
+        if not dedup_compat:
             return {
                 "arm": arm,
                 "accepted_pre_llm": False,
                 "pre_llm_probes_used": 0,
-                "reason": "no_schema_compatible_prior_solver",
+                "reason": "no_publicly_verified_schema_compatible_prior_solver",
                 "required_output_keys": req_keys,
             }
-        chosen_ent = compat[0]
+
+        cand_list = dedup_compat[: (probe_budget if arm == "Flat_Multiversion_Validated" else 1)]
         param_arg = None if arm == "Archive_AutoReplay" else flat_param_snapshot
-        cand_code = render_parameterized_input_adapter(
-            family=family,
-            source_code=str(chosen_ent["submitted_code"]),
-            source_entrypoint=str(chosen_ent["entrypoint"]),
-            target_entrypoint=target_ep,
-            param_payload=param_arg,
-        )
-        pr = execute_single_pre_llm_public_gate_probe_in_container(task=task, candidate_code=cand_code)
+        probe_history: list[dict[str, Any]] = []
+        for chosen_ent in cand_list:
+            can_code = str(chosen_ent.get("canonical_algorithm_code") or chosen_ent["submitted_code"])
+            can_ep = str(chosen_ent.get("canonical_entrypoint") or chosen_ent["entrypoint"])
+            cand_code = render_parameterized_input_adapter(
+                family=family,
+                source_code=can_code,
+                source_entrypoint=can_ep,
+                target_entrypoint=target_ep,
+                param_payload=param_arg,
+            )
+            pr = execute_single_pre_llm_public_gate_probe_in_container(
+                task=task,
+                candidate_code=cand_code,
+                readonly_dependencies=readonly_dependencies,
+                expected_dependency_sha256=expected_dependency_sha256,
+            )
+            probe_history.append({"short_name": chosen_ent["short_name"], "accepted": pr["accepted"], "probe_result": pr})
+            if pr["accepted"]:
+                return {
+                    "arm": arm,
+                    "accepted_pre_llm": True,
+                    "pre_llm_probes_used": len(probe_history),
+                    "selected_source_short_name": chosen_ent["short_name"],
+                    "selected_canonical_algorithm_code": can_code,
+                    "selected_canonical_entrypoint": can_ep,
+                    "parameter_payload": deepcopy(param_arg),
+                    "candidate_code": cand_code,
+                    "probe_result": pr,
+                    "probe_history": probe_history,
+                    "reason": "accepted_by_shared_public_gate",
+                }
+        last_ent = cand_list[-1]
+        last_pr = probe_history[-1]["probe_result"]
         return {
             "arm": arm,
-            "accepted_pre_llm": pr["accepted"],
-            "pre_llm_probes_used": 1,
-            "selected_source_short_name": chosen_ent["short_name"],
+            "accepted_pre_llm": False,
+            "pre_llm_probes_used": len(probe_history),
+            "selected_source_short_name": last_ent["short_name"],
             "parameter_payload": deepcopy(param_arg),
-            "candidate_code": (cand_code if pr["accepted"] else None),
-            "probe_result": pr,
-            "reason": ("accepted_by_shared_public_gate" if pr["accepted"] else "rejected_by_shared_public_scientific_gate"),
+            "candidate_code": None,
+            "probe_result": last_pr,
+            "probe_history": probe_history,
+            "reason": "rejected_by_shared_public_scientific_gate",
         }
 
-    # Arm 3: `Full_Mechanism_Graph` (`PersistentMechanismGraph` + shuffled 3-valued `ObservablePreconditionGuard` + 1 probe)
+    # Arm 4: `Full_Mechanism_Graph` (`PersistentMechanismGraph` + shuffled 3-valued `ObservablePreconditionGuard` + 1 probe)
     assert graph is not None and registry is not None
     comp_id = "alpha_facility_composite_calibration" if family == "alpha" else "beta_facility_composite_calibration"
     param_ep = registry.parameter_epochs[comp_id]
     param_payload = param_ep["payload"]
     obs_ctx = extract_m95_guard_observables(family, public_item, param_payload)
 
-    # Deterministically shuffle candidate bindings per task_id hash so neither `first-registered` nor `most-recent` order biases routing!
     chain_bindings = [b for b in registry.bindings.values() if b.chain_id == family]
     shuf_seed = int(hashlib.sha256(task.task_id.encode("utf-8")).hexdigest()[:8], 16)
     rng_ord = np.random.default_rng(shuf_seed)
@@ -1763,24 +1974,34 @@ def run_equal_tool_pre_llm_trial(
         }
 
     chosen_b = eligible[0]
+    can_b_code = chosen_b.canonical_algorithm_code or chosen_b.parameterized_closure_code
+    can_b_ep = chosen_b.canonical_entrypoint or chosen_b.parameterized_entrypoint
     cand_code = render_parameterized_input_adapter(
         family=family,
-        source_code=chosen_b.parameterized_closure_code,
-        source_entrypoint=chosen_b.parameterized_entrypoint,
+        source_code=can_b_code,
+        source_entrypoint=can_b_ep,
         target_entrypoint=target_ep,
         param_payload=param_payload,
         binding=chosen_b,
         graph=graph,
+        registry=registry,
     )
     chosen_b.adapter_code_sha256 = hashlib.sha256(cand_code.encode("utf-8")).hexdigest()
     chosen_b.parameter_epoch_sha256 = hashlib.sha256(json.dumps(param_payload, sort_keys=True).encode("utf-8")).hexdigest()
-    pr = execute_single_pre_llm_public_gate_probe_in_container(task=task, candidate_code=cand_code)
+    pr = execute_single_pre_llm_public_gate_probe_in_container(
+        task=task,
+        candidate_code=cand_code,
+        readonly_dependencies=readonly_dependencies,
+        expected_dependency_sha256=expected_dependency_sha256,
+    )
     return {
         "arm": arm,
         "accepted_pre_llm": pr["accepted"],
         "pre_llm_probes_used": 1,
         "selected_binding_id": chosen_b.binding_id,
         "selected_branch_tag": chosen_b.branch_tag,
+        "selected_canonical_algorithm_code": can_b_code,
+        "selected_canonical_entrypoint": can_b_ep,
         "parameter_mechanism_id": comp_id,
         "parameter_version": int(param_ep["version"]),
         "parameter_payload": deepcopy(param_payload),

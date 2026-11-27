@@ -30,7 +30,84 @@ from typing import Any
 
 import numpy as np
 
-SHARED_KERNEL_VERSION = "hegel_shared_math_handoff_kernel_v1_m941"
+SHARED_KERNEL_VERSION = "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc"
+
+ALLOWED_RPC_DTYPES: frozenset[str] = frozenset(
+    {"float64", "float32", "int64", "int32", "uint64", "uint32", "bool"}
+)
+MAX_RPC_DEPTH = 5
+MAX_RPC_ELEMENTS = 2_000_000
+
+
+def encode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:
+    """Serialize candidate output into pure JSON primitives (`F06`: rejects custom objects, NaN/Inf, deep nesting, oversized arrays)."""
+    if depth > MAX_RPC_DEPTH:
+        raise ValueError(f"Candidate output exceeded max nesting depth {MAX_RPC_DEPTH}")
+    if obj is None or isinstance(obj, bool):
+        return obj
+    if isinstance(obj, (int, np.integer)):
+        return int(obj)
+    if isinstance(obj, (float, np.floating)):
+        fv = float(obj)
+        if not math.isfinite(fv):
+            raise ValueError("Non-finite float in candidate output")
+        return fv
+    if isinstance(obj, str):
+        if len(obj) > 4096:
+            raise ValueError("Oversized string in candidate output")
+        return obj
+    if isinstance(obj, np.ndarray):
+        dt_name = str(obj.dtype)
+        if dt_name not in ALLOWED_RPC_DTYPES or obj.dtype.kind == "O":
+            raise ValueError(f"Disallowed ndarray dtype `{dt_name}`")
+        if obj.ndim > 4 or int(obj.size) > MAX_RPC_ELEMENTS:
+            raise ValueError(f"Disallowed ndarray shape/size `{obj.shape}`")
+        if obj.dtype.kind == "f" and not bool(np.all(np.isfinite(obj))):
+            raise ValueError("Non-finite ndarray values in candidate output")
+        return {"__nd__": True, "dtype": dt_name, "shape": list(obj.shape), "data": obj.tolist()}
+    if isinstance(obj, (list, tuple)):
+        if len(obj) > 500_000:
+            raise ValueError("Oversized list/tuple in candidate output")
+        return [encode_pure_json_numerical_payload(v, depth=depth + 1) for v in obj]
+    if isinstance(obj, dict):
+        if len(obj) > 256:
+            raise ValueError("Oversized dict in candidate output")
+        out_d: dict[str, Any] = {}
+        for k, v in obj.items():
+            if not isinstance(k, str) or k == "__nd__":
+                raise ValueError(f"Disallowed dict key `{k!r}`")
+            out_d[k] = encode_pure_json_numerical_payload(v, depth=depth + 1)
+        return out_d
+    raise TypeError(f"Disallowed non-primitive candidate return type `{type(obj).__name__}`")
+
+
+def decode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:
+    """Trusted-side pure JSON decoder reconstructing ONLY validated `dict`/`list`/scalar/`np.ndarray` (`0` pickle!)."""
+    if depth > MAX_RPC_DEPTH + 1:
+        raise ValueError("Decoded JSON exceeded max depth")
+    if obj is None or isinstance(obj, (bool, int, float, str)):
+        if isinstance(obj, float) and not math.isfinite(obj):
+            raise ValueError("Non-finite float in JSON payload")
+        return obj
+    if isinstance(obj, list):
+        return [decode_pure_json_numerical_payload(v, depth=depth + 1) for v in obj]
+    if isinstance(obj, dict):
+        if obj.get("__nd__") is True:
+            dt_name = str(obj.get("dtype") or "")
+            shp = tuple(int(x) for x in (obj.get("shape") or []))
+            if dt_name not in ALLOWED_RPC_DTYPES or len(shp) > 4:
+                raise ValueError(f"Invalid encoded ndarray header: dtype={dt_name}, shape={shp}")
+            arr = np.asarray(obj.get("data"), dtype=np.dtype(dt_name))
+            if arr.shape != shp or int(arr.size) > MAX_RPC_ELEMENTS:
+                raise ValueError(f"Decoded ndarray shape mismatch: {arr.shape} != {shp}")
+            if arr.dtype.kind == "f" and not bool(np.all(np.isfinite(arr))):
+                raise ValueError("Non-finite decoded ndarray")
+            return arr
+        for k in obj.keys():
+            if not isinstance(k, str) or (k.startswith("__") and k.endswith("__")):
+                raise ValueError(f"Disallowed dunder/object marker key `{k!r}` in pure JSON numerical payload (`F06`)")
+        return {str(k): decode_pure_json_numerical_payload(v, depth=depth + 1) for k, v in obj.items()}
+    raise TypeError(f"Unexpected JSON type `{type(obj).__name__}`")
 
 
 def standardize_reference_coupon_panel(
@@ -267,11 +344,22 @@ def verify_alpha_candidate_handoff_and_invariants(
                 if sc.shape != (n_te,) or cx.shape != (n_te,) or not (bool(np.all(np.isfinite(sc))) and bool(np.all(np.isfinite(cx)))):
                     errs.append("bad_secant_or_crossing_shape")
                 else:
-                    exp_sc = (ps[:, -1] - s0_te) / np.maximum(np.abs(te_h0), 0.5)
-                    sc_diff = float(np.max(np.abs(sc - exp_sc)))
+                    # `M9.5.1` `F05`: Separate Layer 1 (algebraic handoff on publicly-supported OLS stress `te_h0_ols`)
+                    # from Layer 2 (physical accuracy against hidden `gt["te_secant"]`)!
+                    _, te_h0_ols = calibrate_alpha_physical_stresses(dataset, "test", gt=None)
+                    exp_sc_ols = (ps[:, -1] - s0_te) / np.maximum(np.abs(te_h0_ols), 0.5)
+                    sc_diff = float(np.max(np.abs(sc - exp_sc_ols)))
+                    if isinstance(gt, dict) and "te_hold_true" in gt:
+                        exp_sc_gt_formula = (ps[:, -1] - s0_te) / np.maximum(np.abs(np.asarray(gt["te_hold_true"], dtype=float)), 0.5)
+                        sc_diff = min(sc_diff, float(np.max(np.abs(sc - exp_sc_gt_formula))))
                     metrics["secant_formula_max_diff"] = round(sc_diff, 8)
                     if sc_diff > 1e-3:
                         errs.append(f"secant_handoff_mismatch:{sc_diff:.6f}")
+                    if isinstance(gt, dict) and "te_secant" in gt:
+                        sc_gt_mae = float(np.mean(np.abs(sc - np.asarray(gt["te_secant"], dtype=float))))
+                        metrics["secant_gt_mae"] = round(sc_gt_mae, 6)
+                        if sc_gt_mae > 0.095:
+                            errs.append(f"secant_gt_mae_exceeded:{sc_gt_mae:.6f}")
                     if "critical_strain" in dataset["test"]:
                         crit = np.asarray(dataset["test"]["critical_strain"], dtype=float)
                         ts_f = np.concatenate([[0.0], t_ev])

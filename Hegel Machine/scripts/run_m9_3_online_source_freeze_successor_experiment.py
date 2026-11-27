@@ -35,9 +35,11 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
+import pickle
 import statistics
 import subprocess
 import sys
+import tempfile
 import threading
 from time import monotonic
 from typing import Any
@@ -49,6 +51,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 from hegel_machine.cognition import m6_4_executable_wormhole_library as m64
 from hegel_machine.cognition import m6_frontier_real_benchmarks as m6f
 from hegel_machine.cognition import m7_autogenous_forest_pretraining as m7a
+from hegel_machine.cognition import m9_3_online_lifecycle_benchmark as m93b
 from hegel_machine.cognition.hipporag_wormhole_index import HippoRAGWormholeIndex
 from hegel_machine.cognition.m7_holdout_ood_blind_benchmark import (
     CLEAN_SCIPY_SANDBOX_IMAGE,
@@ -438,8 +441,48 @@ def main() -> None:
                 "newly_compiled_online_l1_stems": sorted(new_online_l1_stems),
             },
         )
-        float_plugin_ctrl = evaluate_post_freeze_dev_seed_plugin_controls()
-        assert float_plugin_ctrl["dev_seed_direct_float_plugin_fails_all_successors"] is True
+        # Extract actual locked Stage S public outputs (`locked_src01_out`, `locked_src02_out`) so `F08` never silently falls back to oracle!
+        locked_src_outputs: dict[str, dict[str, Any]] = {}
+        for st_obj in source_tasks:
+            w_dir = winning_source_dirs[st_obj.task_id]
+            raw_py = _load_submitted_py_sources(w_dir)
+            src_txt = next(iter(raw_py.values()))
+            m93_t = m93b.M93_TASKS_BY_ID[st_obj.task_id]
+            with tempfile.TemporaryDirectory(prefix="m93_lock_pub_") as td_lp:
+                td_p = Path(td_lp)
+                ns_lp: dict[str, Any] = {}
+                exec(compile(m93_t.public_setup_py.replace("/holdout_task", str(td_p)), "<m93_pub>", "exec"), ns_lp)
+                pkl_fp = sorted(td_p.glob("public_*.pkl"))[0]
+                pub_obj = pickle.loads(pkl_fp.read_bytes())[0]
+                inp_obj = deepcopy(pub_obj.get("dataset") or pub_obj.get("study"))
+                c_fp = td_p / "cand.py"
+                c_fp.write_text(src_txt, encoding="utf-8")
+                in_fp = td_p / "in.pkl"
+                out_fp = td_p / "out.json"
+                in_fp.write_bytes(pickle.dumps(inp_obj))
+                w_rpc = (
+                    "import importlib.util, json, pickle, sys\nimport numpy as np\n"
+                    "spec = importlib.util.spec_from_file_location('_c', sys.argv[1]); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n"
+                    "res = getattr(mod, sys.argv[2])(pickle.loads(open(sys.argv[3], 'rb').read()))\n"
+                    "def _enc(x):\n"
+                    "    if isinstance(x, dict): return {str(k): _enc(v) for k, v in x.items()}\n"
+                    "    if isinstance(x, (list, tuple)): return [_enc(v) for v in x]\n"
+                    "    if isinstance(x, np.ndarray): return x.tolist()\n"
+                    "    if isinstance(x, np.generic): return x.item()\n"
+                    "    return x\n"
+                    "open(sys.argv[4], 'w').write(json.dumps(_enc(res), allow_nan=False))\n"
+                )
+                subprocess.run([sys.executable, "-I", "-c", w_rpc, str(c_fp), m93_t.declared_callable_entrypoints[0], str(in_fp), str(out_fp)], check=True, timeout=45)
+                src_key = "src01" if m93_t.task_id.startswith("src01") else "src02"
+                locked_src_outputs[src_key] = json.loads(out_fp.read_text(encoding="utf-8"))
+
+        float_plugin_ctrl = evaluate_post_freeze_dev_seed_plugin_controls(
+            locked_src01_out=locked_src_outputs.get("src01"),
+            locked_src02_out=locked_src_outputs.get("src02"),
+        )
+        assert float_plugin_ctrl["direct_locked_float_plugin_fails_all_successors"] is True
+        assert float_plugin_ctrl["src01_param_origin"] == "locked_stage_S_candidate_output"
+        assert float_plugin_ctrl["src02_param_origin"] == "locked_stage_S_candidate_output"
         source_node_by_short = {
             ev["l2_compilation"]["source_slug"]: str(ev["consolidation"]["target_node_id"])
             for ev in l2_comp_events

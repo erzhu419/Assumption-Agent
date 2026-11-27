@@ -117,6 +117,7 @@ class FrontierBenchmarkTask:
     holdout_public_setup_py: str | None = None
     declared_callable_entrypoints: tuple[str, ...] = ()
     required_public_assets: tuple[str, ...] = ()
+    allowed_readonly_dependencies: tuple[str, ...] = ()
     private_verifier_callable: Any = None
 
 
@@ -5068,6 +5069,7 @@ def execute_host_trusted_scientific_probe(
 
     decl_arts = tuple(task.declared_artifacts or ())
     entry_fns = tuple(getattr(task, "declared_callable_entrypoints", ()) or ())
+    allowed_ro_deps = tuple(getattr(task, "allowed_readonly_dependencies", ()) or ())
     if not decl_arts:
         return None
 
@@ -5075,7 +5077,7 @@ def execute_host_trusted_scientific_probe(
     from .m9_3_online_lifecycle_benchmark import _SHARED_BOX_SIMPLEX_KKT_CHECKER_PY
 
     probe_py = (
-        "import copy, glob, hashlib, importlib.util, json, math, os, pickle, subprocess, sys, tempfile\n"
+        "import copy, glob, hashlib, importlib.util, json, math, os, pickle, shutil, subprocess, sys, tempfile\n"
         "import numpy as np\n"
         f"expected_shas = {json.dumps(dict(public_setup_files_sha256), sort_keys=True)}\n"
         "for p, exp_h in expected_shas.items():\n"
@@ -5083,6 +5085,7 @@ def execute_host_trusted_scientific_probe(
         "        print(json.dumps({'ok': False, 'reason': f'public_asset_tampered:{p}'})); sys.exit(0)\n"
         f"cand_path = {json.dumps(str(decl_arts[0]))}\n"
         f"entry_hints = {json.dumps(list(entry_fns))}\n"
+        f"allowed_ro_deps = set({json.dumps(list(allowed_ro_deps))})\n"
         "if not os.path.isfile(cand_path) or not cand_path.endswith('.py'):\n"
         "    print(json.dumps({'ok': False, 'reason': 'non_python_or_missing_candidate'})); sys.exit(0)\n"
         "pkls = sorted(glob.glob('/holdout_task/public_*.pkl'))\n"
@@ -5097,9 +5100,12 @@ def execute_host_trusted_scientific_probe(
         "is_alpha = 'dataset' in item0\n"
         "pub_in = copy.deepcopy(item0['dataset'] if is_alpha else item0['study'])\n"
         "pub_gt = item0.get('gt') or {}\n"
+        "kspec = importlib.util.spec_from_file_location('_shared_v_kernel', os.path.join(os.path.dirname(__file__), '_shared_kernel.py'))\n"
+        "kmod = importlib.util.module_from_spec(kspec); kspec.loader.exec_module(kmod)\n"
         "WORKER_PY = '''\n"
         "import importlib.util, json, os, pickle, sys\n"
-        "cand_p, hints_j, in_p, out_p = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]\n"
+        "cand_p, hints_j, in_p, out_p, k_p = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[5]\n"
+        "ks = importlib.util.spec_from_file_location('_k', k_p); km = importlib.util.module_from_spec(ks); ks.loader.exec_module(km)\n"
         "hints = json.loads(hints_j)\n"
         "sys.path.insert(0, os.path.dirname(cand_p))\n"
         "spec = importlib.util.spec_from_file_location('_untrusted_cand', cand_p)\n"
@@ -5113,19 +5119,35 @@ def execute_host_trusted_scientific_probe(
         "if fn is None: sys.exit(3)\n"
         "inp = pickle.load(open(in_p, 'rb'))\n"
         "res = fn(inp)\n"
-        "open(out_p, 'wb').write(pickle.dumps(res))\n"
+        "enc = km.encode_pure_json_numerical_payload(res)\n"
+        "open(out_p, 'w', encoding='utf-8').write(json.dumps(enc, allow_nan=False))\n"
         "'''\n"
         "def _run_isolated_worker(inp_obj):\n"
-        "    with tempfile.TemporaryDirectory(prefix='_hegel_w_') as wtd:\n"
-        "        in_p = os.path.join(wtd, 'in.pkl'); out_p = os.path.join(wtd, 'out.pkl')\n"
-        "        open(in_p, 'wb').write(pickle.dumps(inp_obj))\n"
-        "        clean_env = {k: v for k, v in os.environ.items() if not k.startswith('HEGEL_')}\n"
-        "        r = subprocess.run([sys.executable, '-I', '-c', WORKER_PY, cand_path, json.dumps(entry_hints), in_p, out_p], env=clean_env, capture_output=True, text=True, timeout=35)\n"
-        "        if r.returncode != 0 or not os.path.isfile(out_p):\n"
-        "            return False, {'worker_error': (r.stderr or r.stdout)[-300:], 'rc': r.returncode}\n"
-        "        return True, pickle.load(open(out_p, 'rb'))\n"
-        "kspec = importlib.util.spec_from_file_location('_shared_v_kernel', os.path.join(os.path.dirname(__file__), '_shared_kernel.py'))\n"
-        "kmod = importlib.util.module_from_spec(kspec); kspec.loader.exec_module(kmod)\n"
+        "    masked_pairs = []\n"
+        "    arch_dir = '/tmp/hegel_continual_archive'\n"
+        "    try:\n"
+        "        if os.path.isdir(arch_dir):\n"
+        "            for fn_a in list(os.listdir(arch_dir)):\n"
+        "                fp_a = os.path.join(arch_dir, fn_a)\n"
+        "                if fp_a not in allowed_ro_deps and os.path.exists(fp_a):\n"
+        "                    bak_a = f'/tmp/.masked_hegel_dep_{len(masked_pairs)}_{fn_a}'\n"
+        "                    shutil.move(fp_a, bak_a)\n"
+        "                    masked_pairs.append((fp_a, bak_a))\n"
+        "        with tempfile.TemporaryDirectory(prefix='_hegel_w_') as wtd:\n"
+        "            in_p = os.path.join(wtd, 'in.pkl'); out_p = os.path.join(wtd, 'out.json')\n"
+        "            k_p = os.path.join(os.path.dirname(__file__), '_shared_kernel.py')\n"
+        "            open(in_p, 'wb').write(pickle.dumps(inp_obj))\n"
+        "            clean_env = {k: v for k, v in os.environ.items() if not k.startswith('HEGEL_')}\n"
+        "            r = subprocess.run([sys.executable, '-I', '-c', WORKER_PY, cand_path, json.dumps(entry_hints), in_p, out_p, k_p], env=clean_env, capture_output=True, text=True, timeout=35)\n"
+        "            if r.returncode != 0 or not os.path.isfile(out_p):\n"
+        "                return False, {'worker_error': (r.stderr or r.stdout)[-300:], 'rc': r.returncode}\n"
+        "            raw_j = json.loads(open(out_p, encoding='utf-8').read())\n"
+        "            return True, kmod.decode_pure_json_numerical_payload(raw_j)\n"
+        "    except Exception as exc_w:\n"
+        "        return False, {'worker_decode_error': str(exc_w)[:240]}\n"
+        "    finally:\n"
+        "        for orig_p, bak_p in reversed(masked_pairs):\n"
+        "            if os.path.exists(bak_p): shutil.move(bak_p, orig_p)\n"
         "ok_w, out_main = _run_isolated_worker(copy.deepcopy(pub_in))\n"
         "if not ok_w:\n"
         "    print(json.dumps({'ok': False, 'reason': 'candidate_worker_failed', 'details': out_main})); sys.exit(0)\n"
@@ -5195,9 +5217,10 @@ def execute_host_trusted_scientific_probe(
     return {
         "signed_by_host_probe_executor": True,
         "receipt_kind": "scientific_probe_receipt",
-        "probe_protocol_version": "hegel_host_isolated_worker_scientific_probe_v4",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
         "kernel_version": str(pr_json.get("kernel_version") or ""),
         "worker_process_isolated": True,
+        "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
         "probe_code_digest": probe_code_sha,
         "public_input_digest": str(pr_json.get("public_input_digest") or ""),
         "candidate_bundle_sha256": current_candidate_sha256,

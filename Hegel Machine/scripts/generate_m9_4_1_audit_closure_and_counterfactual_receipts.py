@@ -48,14 +48,22 @@ OUT_DIR = REPO_ROOT / "docs/evidence/m9_4_1_audit_closure_and_counterfactuals_20
 
 
 def _exec_cand_fn(code_txt: str, fn_hint: str, inp: Any) -> Any:
+    """Execute candidate inside an isolated `-I` subprocess using pure JSON numerical output IPC (`M9.5.1` `F06` — zero `pickle.loads`!)."""
     with tempfile.TemporaryDirectory(prefix="m941_cand_") as td:
         p = Path(td) / "cand.py"
         p.write_text(code_txt, encoding="utf-8")
         in_p = Path(td) / "in.pkl"
-        out_p = Path(td) / "out.pkl"
+        out_p = Path(td) / "out.json"
         in_p.write_bytes(pickle.dumps(inp))
+        k_src = (REPO_ROOT / "src/hegel_machine/cognition/m9_4_1_shared_verification_kernel.py").read_text(encoding="utf-8").replace(
+            "from .m9_3_online_lifecycle_benchmark import _SHARED_BOX_SIMPLEX_KKT_CHECKER_PY",
+            f"_SHARED_BOX_SIMPLEX_KKT_CHECKER_PY = {m93._SHARED_BOX_SIMPLEX_KKT_CHECKER_PY!r}",
+        )
+        k_p = Path(td) / "_k.py"
+        k_p.write_text(k_src, encoding="utf-8")
         w_py = (
-            "import importlib.util, pickle, sys\n"
+            "import importlib.util, json, pickle, sys\n"
+            "ks = importlib.util.spec_from_file_location('_k', sys.argv[5]); km = importlib.util.module_from_spec(ks); ks.loader.exec_module(km)\n"
             "spec = importlib.util.spec_from_file_location('_c', sys.argv[1])\n"
             "mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\n"
             "fn = getattr(mod, sys.argv[2], None)\n"
@@ -63,13 +71,13 @@ def _exec_cand_fn(code_txt: str, fn_hint: str, inp: Any) -> Any:
             "    for nm in sorted(dir(mod)):\n"
             "        if nm.startswith('solve') and callable(getattr(mod, nm, None)): fn = getattr(mod, nm); break\n"
             "res = fn(pickle.loads(open(sys.argv[3], 'rb').read()))\n"
-            "open(sys.argv[4], 'wb').write(pickle.dumps(res))\n"
+            "open(sys.argv[4], 'w', encoding='utf-8').write(json.dumps(km.encode_pure_json_numerical_payload(res), allow_nan=False))\n"
         )
         env = dict(os.environ, OPENBLAS_NUM_THREADS="1", OMP_NUM_THREADS="1", MKL_NUM_THREADS="1")
-        r = subprocess.run([sys.executable, "-I", "-c", w_py, str(p), fn_hint, str(in_p), str(out_p)], env=env, capture_output=True, text=True, timeout=45)
+        r = subprocess.run([sys.executable, "-I", "-c", w_py, str(p), fn_hint, str(in_p), str(out_p), str(k_p)], env=env, capture_output=True, text=True, timeout=45)
         if r.returncode != 0 or not out_p.is_file():
             raise RuntimeError(f"Candidate worker failed (rc={r.returncode}): {(r.stderr or r.stdout)[-300:]}")
-        return pickle.loads(out_p.read_bytes())
+        return m941k.decode_pure_json_numerical_payload(json.loads(out_p.read_text(encoding="utf-8")))
 
 
 def _materialize_pub(setup_py: str, pkl_name: str) -> dict[str, Any]:
