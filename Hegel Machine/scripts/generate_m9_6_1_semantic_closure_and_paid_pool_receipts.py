@@ -324,7 +324,11 @@ def build_03_n03_m94_68_instance_errata() -> dict[str, Any]:
         task = tasks_by_id[tid]
         fam = "alpha" if tid.startswith("alpha_") else "beta"
         sdir = ep_fp.parent / "04_submitted_artifacts_snapshot"
-        cand_code = sorted(sdir.rglob("*.py"))[0].read_text(encoding="utf-8")
+        art_bname = Path(str(task.declared_artifacts[0])).name
+        hit_fp = next((p for p in (sdir / art_bname, sdir / f"slot_00__{art_bname}") if p.is_file()), None)
+        if hit_fp is None:
+            hit_fp = next((p for p in sorted(sdir.rglob("*.py")) if p.name.endswith(art_bname)), sorted(sdir.rglob("*.py"))[0])
+        cand_code = hit_fp.read_text(encoding="utf-8")
         entry_nm = task.declared_callable_entrypoints[0]
         pref_sw = alpha_prefix_sweeps if tid.startswith(("alpha_ep03", "alpha_ep04")) else None
 
@@ -374,7 +378,11 @@ def build_03_n03_m94_68_instance_errata() -> dict[str, Any]:
         "paid_model_calls": 0,
         "independent_full_68_rerun_in_this_script": True,
         "total_episodes": len(ep_rows),
+        "original_passed_episodes": sum(1 for r in ep_rows if r["original_strict_pass"]),
         "passed_episodes": sum(1 for r in ep_rows if r["unified_v3_episode_pass"]),
+        "discrepancy_episodes_vs_original_m94": [
+            r["episode_rel_dir"] for r in ep_rows if r["original_strict_pass"] != r["unified_v3_episode_pass"]
+        ],
         "total_private_instances": tot_inst,
         "passed_private_instances": pass_inst,
         "dual_channel_beta_ep03_episodes": [r for r in ep_rows if "beta_ep03" in r["task_id"]],

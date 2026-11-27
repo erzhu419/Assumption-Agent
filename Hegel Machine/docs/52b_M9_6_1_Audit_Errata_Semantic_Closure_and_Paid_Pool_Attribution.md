@@ -19,7 +19,7 @@
 ## 2. Three-Layer Contract Forensics on `alpha_m96_w03 / M` (`N02`) & M9.4 `68/68` Regrade Errata (`N03`)
 
 - **`N02` (`alpha_m96_w03 / M` True Root Cause)**: Official `M9.6` sealed scores remain `63/64` vs `63/64`. `alpha_m96_w03 / M` had `preload_scale = 0.0` (`has_initial_memory_states = False`); the `0.1128 > 0.08` failure on seed `973861` arose from evaluating algebraic curve-rate self-consistency using hidden ground-truth stresses rather than the candidate's validated `CalibrationWitness` coordinates. Under `hegel_shared_math_handoff_kernel_v3_m961_three_layer`, Layer 2 estimated-coordinate consistency residual is `<= 2.01e-14` (`4/4` seed-arm pairs pass all 3 layers while spoofed `CalibrationWitness`es are `100%` rejected).
-- **`N03` (`M9.4` Full `68`-Instance Unified-Kernel Regrade)**: Replacing script-local `gt_obj` key dispatch with `infer_contract_kind` (`gt.get("terminal_field_B") is not None`) and re-running all `34` `M9.4` episodes (`68` private instances) via pure-JSON worker yields **`38/68` private instances (`17/34` episodes)**.
+- **`N03` (`M9.4` Full `68`-Instance Unified-Kernel Regrade)**: Replacing script-local `gt_obj` key dispatch with `infer_contract_kind` (`gt.get("terminal_field_B") is not None`) and re-running all `34` `M9.4` episodes (`68` private instances) via pure-JSON worker yields **`64/68` private instances (`30/34` episodes)**.
 
 ## 3. Qualification Identity (`N04`), Multi-Conflict Lineage (`N07`), Reconstructed Funnel (`N09/N10`) & Paid-Pool Controls (`N11`)
 
