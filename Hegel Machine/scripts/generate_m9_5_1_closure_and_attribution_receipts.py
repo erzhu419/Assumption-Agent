@@ -939,25 +939,14 @@ def run_f11_m94_68_private_instance_vnext_regrade() -> dict[str, Any]:
                     i_ok = bool(vr["ok"])
                     errs = vr["errors"]
                 else:
-                    vr = m941k.verify_beta_candidate_handoff_and_kkt(study=inp_obj, out=out_c, gt=gt_obj)
+                    vr = m941k.evaluate_three_layer_scientific_contract(
+                        family="beta",
+                        inp=inp_obj,
+                        out=out_c,
+                        gt=gt_obj,
+                    )
                     i_ok = bool(vr["ok"])
                     errs = list(vr["errors"])
-                    if i_ok:
-                        if "weights_by_budget" in gt_obj:
-                            wr = float(np.linalg.norm(np.asarray(out_c["weights_by_budget"]) - gt_obj["weights_by_budget"]) / np.linalg.norm(gt_obj["weights_by_budget"]))
-                            fr = float(np.linalg.norm(np.asarray(out_c["terminal_field_mid_budget"]) - gt_obj["terminal_field_mid_budget"]) / np.linalg.norm(gt_obj["terminal_field_mid_budget"]))
-                        elif "terminal_field_channel_b" in gt_obj:
-                            wr = float(np.linalg.norm(np.asarray(out_c["weights"]) - gt_obj["w_opt"]) / np.linalg.norm(gt_obj["w_opt"]))
-                            fr = max(
-                                float(np.linalg.norm(np.asarray(out_c["terminal_field_channel_a"]) - gt_obj["terminal_field_A"]) / np.linalg.norm(gt_obj["terminal_field_A"])),
-                                float(np.linalg.norm(np.asarray(out_c["terminal_field_channel_b"]) - gt_obj["terminal_field_B"]) / np.linalg.norm(gt_obj["terminal_field_B"])),
-                            )
-                        else:
-                            wr = float(np.linalg.norm(np.asarray(out_c["weights"]) - gt_obj["w_opt"]) / np.linalg.norm(gt_obj["w_opt"]))
-                            fr = float(np.linalg.norm(np.asarray(out_c["terminal_field"]) - gt_obj["terminal_field_A"]) / np.linalg.norm(gt_obj["terminal_field_A"]))
-                        if wr > 2e-4 or fr > 2e-4:
-                            i_ok = False
-                            errs.append(f"gt_l2_exceeded:w={wr:.2e},f={fr:.2e}")
             except Exception as exc:
                 i_ok = False
                 errs = [f"worker_error:{type(exc).__name__}:{str(exc)[:120]}"]

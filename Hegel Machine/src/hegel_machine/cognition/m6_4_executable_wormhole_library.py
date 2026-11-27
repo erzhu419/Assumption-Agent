@@ -2248,6 +2248,50 @@ def classify_source_aware_adoption_funnel(
     }
 
 
+def load_and_classify_episode_source_aware_funnel(
+    *,
+    episode_dir: Path,
+    episode_summary: dict[str, Any] | None = None,
+    new_source_l2_stems: set[str],
+    new_source_l1_stems: set[str],
+    prior_l1_stems: set[str] | None = None,
+    arm_has_new_source_assets: bool = True,
+) -> dict[str, Any]:
+    """Unified disk-backed funnel loader (`M9.6.1` `N09` Closure):
+    Reads `00_episode_summary.json` (`skill_activations`) AND `04d_skill_contract_inspections.jsonl` directly from
+    `episode_dir`, eliminating runner-side summary field typos (`full_skill_activations` / `skill_inspections`)!
+    """
+    ep_sum = (
+        episode_summary
+        if isinstance(episode_summary, dict)
+        else json.loads((episode_dir / "00_episode_summary.json").read_text(encoding="utf-8"))
+    )
+    insp_events: list[dict[str, Any]] = []
+    insp_fp = episode_dir / "04d_skill_contract_inspections.jsonl"
+    if insp_fp.is_file():
+        for ln in insp_fp.read_text(encoding="utf-8").splitlines():
+            ln_s = ln.strip()
+            if ln_s:
+                insp_events.append(json.loads(ln_s))
+    elif isinstance(ep_sum.get("skill_inspections"), list):
+        insp_events = list(ep_sum["skill_inspections"])
+
+    raw_acts = ep_sum.get("skill_activations")
+    if not isinstance(raw_acts, list):
+        raw_acts = ep_sum.get("full_skill_activations")
+    act_list = list(raw_acts) if isinstance(raw_acts, list) else []
+
+    return classify_source_aware_adoption_funnel(
+        episode_summary=ep_sum,
+        full_skill_activations=act_list,
+        skill_inspections=insp_events,
+        new_source_l2_stems=set(new_source_l2_stems) if arm_has_new_source_assets else set(),
+        new_source_l1_stems=set(new_source_l1_stems) if arm_has_new_source_assets else set(),
+        prior_l1_stems=set(prior_l1_stems or set()),
+        arm_has_new_source_assets=arm_has_new_source_assets,
+    )
+
+
 def build_knowledge_only_describe_ref_script() -> str:
     """Return the `describe_ref.py` script for `K` (`on_demand_knowledge_only` / `progressive_knowledge_only`),
     generated from the EXACT SAME `_SHARED_CATALOG_READER_CORE_PY` as `E`'s `SKILL_INIT_PY` (`M9.2.1` `A3`)!

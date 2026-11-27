@@ -25,18 +25,21 @@ Guarantees (`C01` + `C02` Closed):
 
 from __future__ import annotations
 
+import json
 import math
 from typing import Any
 
 import numpy as np
 
-SHARED_KERNEL_VERSION = "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc"
+SHARED_KERNEL_VERSION = "hegel_shared_math_handoff_kernel_v3_m961_three_layer"
 
 ALLOWED_RPC_DTYPES: frozenset[str] = frozenset(
     {"float64", "float32", "int64", "int32", "uint64", "uint32", "bool"}
 )
 MAX_RPC_DEPTH = 5
 MAX_RPC_ELEMENTS = 2_000_000
+MAX_RPC_JSON_BYTES = 32_000_000
+MAX_RPC_CONTAINER_NODES = 250_000
 
 
 def encode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:
@@ -81,33 +84,73 @@ def encode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:
     raise TypeError(f"Disallowed non-primitive candidate return type `{type(obj).__name__}`")
 
 
-def decode_pure_json_numerical_payload(obj: Any, *, depth: int = 0) -> Any:
-    """Trusted-side pure JSON decoder reconstructing ONLY validated `dict`/`list`/scalar/`np.ndarray` (`0` pickle!)."""
+def decode_pure_json_numerical_payload(
+    obj: Any,
+    *,
+    depth: int = 0,
+    _budget_state: dict[str, int] | None = None,
+) -> Any:
+    """Trusted-side pure JSON decoder reconstructing ONLY validated `dict`/`list`/scalar/`np.ndarray` (`0` pickle!).
+    `M9.6.1` pre-allocation hardening: enforces total container node count, list/dict length caps, and shape/element
+    product bounds BEFORE calling `np.asarray`!
+    """
+    state = _budget_state if _budget_state is not None else {"nodes": 0, "elements": 0}
+    state["nodes"] += 1
+    if state["nodes"] > MAX_RPC_CONTAINER_NODES:
+        raise ValueError(f"Decoded JSON exceeded max container node budget {MAX_RPC_CONTAINER_NODES}")
     if depth > MAX_RPC_DEPTH + 1:
         raise ValueError("Decoded JSON exceeded max depth")
-    if obj is None or isinstance(obj, (bool, int, float, str)):
-        if isinstance(obj, float) and not math.isfinite(obj):
+    if obj is None or isinstance(obj, bool):
+        return obj
+    if isinstance(obj, int):
+        return int(obj)
+    if isinstance(obj, float):
+        if not math.isfinite(obj):
             raise ValueError("Non-finite float in JSON payload")
         return obj
+    if isinstance(obj, str):
+        if len(obj) > 4096:
+            raise ValueError("Oversized string in JSON payload")
+        return obj
     if isinstance(obj, list):
-        return [decode_pure_json_numerical_payload(v, depth=depth + 1) for v in obj]
+        if len(obj) > 500_000:
+            raise ValueError("Oversized list in JSON payload")
+        return [decode_pure_json_numerical_payload(v, depth=depth + 1, _budget_state=state) for v in obj]
     if isinstance(obj, dict):
         if obj.get("__nd__") is True:
             dt_name = str(obj.get("dtype") or "")
-            shp = tuple(int(x) for x in (obj.get("shape") or []))
-            if dt_name not in ALLOWED_RPC_DTYPES or len(shp) > 4:
-                raise ValueError(f"Invalid encoded ndarray header: dtype={dt_name}, shape={shp}")
+            raw_shp = obj.get("shape")
+            if not isinstance(raw_shp, list) or len(raw_shp) > 4 or dt_name not in ALLOWED_RPC_DTYPES:
+                raise ValueError(f"Invalid encoded ndarray header: dtype={dt_name}, shape={raw_shp}")
+            shp = tuple(int(x) for x in raw_shp)
+            if any(s < 0 for s in shp):
+                raise ValueError(f"Negative dimension in ndarray header: {shp}")
+            expected_elems = math.prod(shp) if shp else 1
+            if expected_elems > MAX_RPC_ELEMENTS or (state["elements"] + expected_elems) > (2 * MAX_RPC_ELEMENTS):
+                raise ValueError(f"Pre-allocation ndarray element budget exceeded: shape={shp}, elems={expected_elems}")
+            state["elements"] += int(expected_elems)
             arr = np.asarray(obj.get("data"), dtype=np.dtype(dt_name))
             if arr.shape != shp or int(arr.size) > MAX_RPC_ELEMENTS:
                 raise ValueError(f"Decoded ndarray shape mismatch: {arr.shape} != {shp}")
             if arr.dtype.kind == "f" and not bool(np.all(np.isfinite(arr))):
                 raise ValueError("Non-finite decoded ndarray")
             return arr
+        if len(obj) > 256:
+            raise ValueError("Oversized dict in JSON payload")
         for k in obj.keys():
             if not isinstance(k, str) or (k.startswith("__") and k.endswith("__")):
                 raise ValueError(f"Disallowed dunder/object marker key `{k!r}` in pure JSON numerical payload (`F06`)")
-        return {str(k): decode_pure_json_numerical_payload(v, depth=depth + 1) for k, v in obj.items()}
+        return {str(k): decode_pure_json_numerical_payload(v, depth=depth + 1, _budget_state=state) for k, v in obj.items()}
     raise TypeError(f"Unexpected JSON type `{type(obj).__name__}`")
+
+
+def decode_pure_json_numerical_text(raw_text: str, *, max_bytes: int = MAX_RPC_JSON_BYTES) -> Any:
+    """Enforce raw byte budget BEFORE `json.loads` and decode via `decode_pure_json_numerical_payload`."""
+    n_bytes = len(raw_text.encode("utf-8"))
+    if n_bytes > max_bytes:
+        raise ValueError(f"Encoded JSON byte length {n_bytes} exceeds max_bytes={max_bytes}")
+    parsed = json.loads(raw_text)
+    return decode_pure_json_numerical_payload(parsed)
 
 
 def standardize_reference_coupon_panel(
@@ -587,4 +630,391 @@ def verify_beta_candidate_handoff_and_kkt(
         "verified_claim_ids": claims,
         "metrics": metrics,
         "kernel_version": SHARED_KERNEL_VERSION,
+    }
+
+
+# ============================================================================
+# Unified Three-Layer Scientific Contract API (`M9.6.1` `N02 + N03` Closure)
+#   Layer 1: `validate_output_structure` (`0` private truth)
+#   Layer 2: `validate_public_witness` (`CalibrationWitness` + estimated-coordinate algebraic consistency, `0` private truth!)
+#   Layer 3: `validate_truth_accuracy` (hidden ground-truth physical error bounds, collecting ALL computable metrics!)
+# ============================================================================
+
+
+def infer_contract_kind(
+    *,
+    family: str,
+    inp: dict[str, Any],
+    gt: dict[str, Any] | None = None,
+    out: Any = None,
+) -> str:
+    """Single canonical `contract_kind` dispatcher eliminating script-local schema dispatch drift (`N03`)."""
+    out_d = out if isinstance(out, dict) else {}
+    gt_d = gt if isinstance(gt, dict) else {}
+    if family == "alpha":
+        if "S_alloc_modes" in inp or "allocation_weights" in out_d or "w_alloc_opt" in gt_d:
+            return "alpha_shared_kkt"
+        if "critical_strain" in (inp.get("test") or {}) or "secant_compliance" in out_d or "te_secant" in gt_d:
+            return "alpha_secant_crossing"
+        if "viscoplastic_weights" in out_d and "hereditary_weights" not in out_d:
+            return "alpha_viscoplastic_standalone"
+        return "alpha_unified_hereditary"
+    if "budget_grid" in inp or "weights_by_budget" in gt_d or "weights_by_budget" in out_d:
+        return "beta_multi_budget_kkt"
+    # Dual-channel Beta check uses BOTH `gt["terminal_field_B"]` (`N03` fix!) AND study/output keys!
+    if (
+        gt_d.get("terminal_field_B") is not None
+        or "B_coupling_2d" in inp
+        or "reaction_B_2d" in inp
+        or "V_channel_B" in inp
+        or "terminal_field_channel_b" in out_d
+    ):
+        return "beta_dual_channel_kkt"
+    return "beta_single_channel_kkt"
+
+
+def estimate_public_or_prefix_alpha_calibration(
+    dataset: dict[str, Any],
+    prefix_calibration_sweeps: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Deterministically derive validated per-lab `(gains, biases)` from public in-batch + prefix calibration sweeps (`0` private truth!)."""
+    cal = dataset.get("calibration_load_cells") or {}
+    c_l = np.asarray(cal.get("lab_id", []), dtype=int).ravel()
+    c_x = np.asarray(cal.get("cmd_stress", []), dtype=float).ravel()
+    c_y = np.asarray(cal.get("true_stress", []), dtype=float).ravel()
+
+    hist_g = np.ones(4, dtype=float)
+    hist_b = np.zeros(4, dtype=float)
+    for sw in prefix_calibration_sweeps or []:
+        sl = np.asarray(sw.get("lab_id", []), dtype=int).ravel()
+        sx = np.asarray(sw.get("cmd_stress", []), dtype=float).ravel()
+        sy = np.asarray(sw.get("true_stress", []), dtype=float).ravel()
+        for lb in range(4):
+            m = sl == lb
+            n_m = int(np.sum(m))
+            if n_m >= 3:
+                n_tr = max(2, (2 * n_m) // 3)
+                g_cand, b_cand = np.linalg.lstsq(np.column_stack([sx[m][:n_tr], np.ones(n_tr)]), sy[m][:n_tr], rcond=None)[0]
+                va_mse = float(np.mean((g_cand * sx[m][n_tr:] + b_cand - sy[m][n_tr:]) ** 2))
+                pr_mse = float(np.mean((hist_g[lb] * sx[m][n_tr:] + hist_b[lb] - sy[m][n_tr:]) ** 2))
+                if va_mse <= min(1e-2, pr_mse + 1e-5):
+                    hist_g[lb], hist_b[lb] = float(g_cand), float(b_cand)
+            elif n_m == 2:
+                g_cand, b_cand = np.linalg.lstsq(np.column_stack([sx[m], np.ones(2)]), sy[m], rcond=None)[0]
+                hist_g[lb], hist_b[lb] = float(g_cand), float(b_cand)
+
+    gains = hist_g.copy()
+    biases = hist_b.copy()
+    max_inbatch_res = 0.0
+    for lb in range(4):
+        m = c_l == lb
+        n_m = int(np.sum(m))
+        if n_m >= 3:
+            n_tr = max(2, (2 * n_m) // 3)
+            g_cand, b_cand = np.linalg.lstsq(np.column_stack([c_x[m][:n_tr], np.ones(n_tr)]), c_y[m][:n_tr], rcond=None)[0]
+            va_mse = float(np.mean((g_cand * c_x[m][n_tr:] + b_cand - c_y[m][n_tr:]) ** 2))
+            pr_mse = float(np.mean((gains[lb] * c_x[m][n_tr:] + biases[lb] - c_y[m][n_tr:]) ** 2))
+            if va_mse <= min(1e-2, pr_mse + 1e-5):
+                gains[lb], biases[lb] = float(g_cand), float(b_cand)
+            max_inbatch_res = max(max_inbatch_res, float(math.sqrt(min(va_mse, pr_mse))))
+        elif n_m == 2:
+            g_cand, b_cand = np.linalg.lstsq(np.column_stack([c_x[m], np.ones(2)]), c_y[m], rcond=None)[0]
+            res2 = float(np.max(np.abs(g_cand * c_x[m] + b_cand - c_y[m])))
+            if res2 <= 0.05:
+                gains[lb], biases[lb] = float(g_cand), float(b_cand)
+                max_inbatch_res = max(max_inbatch_res, res2)
+    return {
+        "stress_gains": gains.tolist(),
+        "stress_biases": biases.tolist(),
+        "max_validated_calibration_residual": round(max_inbatch_res, 8),
+    }
+
+
+def validate_output_structure(
+    *,
+    contract_kind: str,
+    inp: dict[str, Any],
+    out: Any,
+) -> dict[str, Any]:
+    """Layer 1 (`M9.6.1` `N02`): Structural, shape, dtype, finiteness, and ordering checks (`0` private truth access)."""
+    errs: list[str] = []
+    if not isinstance(out, dict):
+        return {"ok": False, "contract_kind": contract_kind, "errors": ["output_not_dict"]}
+
+    if contract_kind.startswith("alpha_"):
+        n_te = len(inp["test"]["lab_id"])
+        k_t = len(inp["eval_times"])
+        for rk in ("estimated_taus", "predicted_strain"):
+            if rk not in out:
+                errs.append(f"missing_key:{rk}")
+        if not errs:
+            et = np.asarray(out["estimated_taus"], dtype=float)
+            ps = np.asarray(out["predicted_strain"], dtype=float)
+            if et.shape != (2,) or not bool(np.all(np.isfinite(et))) or not (0.05 < float(et[0]) < float(et[1]) < 25.0):
+                errs.append("invalid_estimated_taus")
+            if ps.shape != (n_te, k_t) or not bool(np.all(np.isfinite(ps))):
+                errs.append("invalid_predicted_strain")
+        if contract_kind == "alpha_unified_hereditary":
+            for rk, shp in (("hereditary_weights", (7,)), ("initial_rate_pred", (n_te,))):
+                if rk not in out:
+                    errs.append(f"missing_key:{rk}")
+                else:
+                    arr = np.asarray(out[rk], dtype=float)
+                    if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                        errs.append(f"invalid_shape_or_nan:{rk}")
+            if "viscoplastic_weights" in out and out["viscoplastic_weights"] is not None:
+                vw = np.asarray(out["viscoplastic_weights"], dtype=float)
+                if vw.shape != (2,) or not bool(np.all(np.isfinite(vw))):
+                    errs.append("invalid_viscoplastic_weights")
+        elif contract_kind == "alpha_shared_kkt":
+            m_al = int(np.asarray(inp["S_alloc_modes"]).shape[1])
+            if "allocation_weights" not in out or "kkt_certificate" not in out:
+                errs.append("missing_allocation_weights_or_kkt_certificate")
+            else:
+                aw = np.asarray(out["allocation_weights"], dtype=float)
+                if aw.shape != (m_al,) or not bool(np.all(np.isfinite(aw))):
+                    errs.append("invalid_allocation_weights")
+        elif contract_kind == "alpha_secant_crossing":
+            for rk in ("secant_compliance", "hazard_crossing_times"):
+                if rk not in out:
+                    errs.append(f"missing_key:{rk}")
+                else:
+                    arr = np.asarray(out[rk], dtype=float)
+                    if arr.shape != (n_te,) or not bool(np.all(np.isfinite(arr))):
+                        errs.append(f"invalid_shape_or_nan:{rk}")
+    else:
+        M, nx, ny = np.asarray(inp["source_modes"]).shape
+        if contract_kind == "beta_multi_budget_kkt":
+            B = len(inp["budget_grid"])
+            if not {"weights_by_budget", "terminal_field_mid_budget", "kkt_certificates"} <= set(out.keys()):
+                errs.append("missing_multibudget_keys")
+            else:
+                wb = np.asarray(out["weights_by_budget"], dtype=float)
+                tf = np.asarray(out["terminal_field_mid_budget"], dtype=float)
+                certs = out["kkt_certificates"]
+                if wb.shape != (B, M) or tf.shape != (nx, ny) or not isinstance(certs, list) or len(certs) != B:
+                    errs.append("bad_multibudget_shapes")
+                elif not (bool(np.all(np.isfinite(wb))) and bool(np.all(np.isfinite(tf)))):
+                    errs.append("non_finite_multibudget_arrays")
+        elif contract_kind == "beta_dual_channel_kkt":
+            for rk, shp in (("weights", (M,)), ("terminal_field_channel_a", (nx, ny)), ("terminal_field_channel_b", (nx, ny))):
+                if rk not in out:
+                    errs.append(f"missing_key:{rk}")
+                else:
+                    arr = np.asarray(out[rk], dtype=float)
+                    if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                        errs.append(f"invalid_shape_or_nan:{rk}")
+            if "kkt_certificate" not in out:
+                errs.append("missing_key:kkt_certificate")
+        else:
+            for rk, shp in (("weights", (M,)), ("terminal_field", (nx, ny))):
+                if rk not in out:
+                    errs.append(f"missing_key:{rk}")
+                else:
+                    arr = np.asarray(out[rk], dtype=float)
+                    if arr.shape != shp or not bool(np.all(np.isfinite(arr))):
+                        errs.append(f"invalid_shape_or_nan:{rk}")
+            if "kkt_certificate" not in out:
+                errs.append("missing_key:kkt_certificate")
+
+    return {"ok": len(errs) == 0, "contract_kind": contract_kind, "errors": errs}
+
+
+def validate_public_witness(
+    *,
+    contract_kind: str,
+    inp: dict[str, Any],
+    out: dict[str, Any],
+    calibration_witness: dict[str, Any] | None = None,
+    prefix_calibration_sweeps: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Layer 2 (`M9.6.1` `N02`): Verify `CalibrationWitness` against public/prefix calibration data AND verify algebraic
+    self-consistency (`weights -> predicted_strain/rate` & KKT certificates) strictly in VALIDATED ESTIMATED COORDINATES
+    (`0` access to private ground truth!).
+    """
+    errs: list[str] = []
+    metrics: dict[str, Any] = {}
+    coord_prov = "public_and_prefix_validated_ols"
+
+    if contract_kind.startswith("alpha_"):
+        pub_cal = estimate_public_or_prefix_alpha_calibration(inp, prefix_calibration_sweeps)
+        ref_g = np.asarray(pub_cal["stress_gains"], dtype=float)
+        ref_b = np.asarray(pub_cal["stress_biases"], dtype=float)
+        if isinstance(calibration_witness, dict) and "stress_gains" in calibration_witness and "stress_biases" in calibration_witness:
+            cw_g = np.asarray(calibration_witness["stress_gains"], dtype=float)
+            cw_b = np.asarray(calibration_witness["stress_biases"], dtype=float)
+            if cw_g.shape != (4,) or cw_b.shape != (4,) or not (bool(np.all(np.isfinite(cw_g))) and bool(np.all(np.isfinite(cw_b)))):
+                errs.append("malformed_calibration_witness")
+                est_g, est_b = ref_g, ref_b
+            else:
+                # Reject spoofed `CalibrationWitness` that disagrees with public/prefix calibration data!
+                cal_raw = inp.get("calibration_load_cells") or {}
+                cl_i = np.asarray(cal_raw.get("lab_id", []), dtype=int).ravel()
+                cx_i = np.asarray(cal_raw.get("cmd_stress", []), dtype=float).ravel()
+                cy_i = np.asarray(cal_raw.get("true_stress", []), dtype=float).ravel()
+                # Check against clean non-outlier public/prefix reference (`tol = 0.04`)
+                g_dev = float(np.max(np.abs(cw_g - ref_g)))
+                b_dev = float(np.max(np.abs(cw_b - ref_b)))
+                metrics["calibration_witness_vs_public_ref_gain_diff"] = round(g_dev, 6)
+                metrics["calibration_witness_vs_public_ref_bias_diff"] = round(b_dev, 6)
+                if (len(cl_i) > 0 or bool(prefix_calibration_sweeps)) and (g_dev > 0.045 or b_dev > 0.045):
+                    errs.append(f"spoofed_or_unjustified_calibration_witness:g_dev={g_dev:.5f},b_dev={b_dev:.5f}")
+                est_g, est_b = cw_g, cw_b
+                coord_prov = "explicit_validated_calibration_witness"
+        else:
+            est_g, est_b = ref_g, ref_b
+
+        synth_ds = {
+            **inp,
+            "test": {
+                **inp["test"],
+                "past_stress": np.asarray(inp["test"]["past_stress_cmd"], dtype=float) * est_g[np.asarray(inp["test"]["lab_id"], dtype=int), None]
+                + est_b[np.asarray(inp["test"]["lab_id"], dtype=int), None],
+                "stress_hold_0": np.asarray(inp["test"]["stress_hold_cmd"], dtype=float) * est_g[np.asarray(inp["test"]["lab_id"], dtype=int)]
+                + est_b[np.asarray(inp["test"]["lab_id"], dtype=int)],
+            },
+            "train": {
+                **inp["train"],
+                "past_stress": np.asarray(inp["train"]["past_stress_cmd"], dtype=float) * est_g[np.asarray(inp["train"]["lab_id"], dtype=int), None]
+                + est_b[np.asarray(inp["train"]["lab_id"], dtype=int), None],
+                "stress_hold_0": np.asarray(inp["train"]["stress_hold_cmd"], dtype=float) * est_g[np.asarray(inp["train"]["lab_id"], dtype=int)]
+                + est_b[np.asarray(inp["train"]["lab_id"], dtype=int)],
+            },
+        }
+        v_pub = verify_alpha_candidate_handoff_and_invariants(dataset=synth_ds, out=out, gt=None, require_gt_accuracy=False)
+        errs.extend(v_pub["errors"])
+        metrics.update(v_pub["metrics"])
+        return {
+            "ok": len(errs) == 0,
+            "contract_kind": contract_kind,
+            "coordinate_provenance": coord_prov,
+            "estimated_coordinates": {"stress_gains": est_g.tolist(), "stress_biases": est_b.tolist()},
+            "errors": errs,
+            "verified_claim_ids": v_pub["verified_claim_ids"],
+            "metrics": metrics,
+        }
+
+    # Beta Layer 2 (`0` private truth: structural & certificate self-consistency; exact `(S_tilde, r_y)` KKT checked if public/gt provided)
+    v_b = verify_beta_candidate_handoff_and_kkt(study=inp, out=out, gt=None)
+    errs.extend(v_b["errors"])
+    metrics.update(v_b["metrics"])
+    return {
+        "ok": len(errs) == 0,
+        "contract_kind": contract_kind,
+        "coordinate_provenance": "public_sensor_sweeps_and_prefix_history",
+        "errors": errs,
+        "verified_claim_ids": v_b["verified_claim_ids"],
+        "metrics": metrics,
+    }
+
+
+def validate_truth_accuracy(
+    *,
+    contract_kind: str,
+    inp: dict[str, Any],
+    gt: dict[str, Any],
+    out: dict[str, Any],
+    thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Layer 3 (`M9.6.1` `N02 + N03`): Evaluate ALL physical prediction & parameter accuracy metrics against hidden `gt`
+    WITHOUT early-continue zeroing and WITHOUT conflating calibration measurement noise with algebraic identity breakage!
+    """
+    th = dict(thresholds or {})
+    errs: list[str] = []
+    metrics: dict[str, Any] = {}
+
+    if contract_kind.startswith("alpha_"):
+        et = np.asarray(out["estimated_taus"], dtype=float)
+        ps = np.asarray(out["predicted_strain"], dtype=float)
+        if "taus" in gt:
+            tau_rel = float(np.max(np.abs(et - np.asarray(gt["taus"], dtype=float)) / np.asarray(gt["taus"], dtype=float)))
+            metrics["tau_rel_err"] = round(tau_rel, 6)
+            if tau_rel > float(th.get("max_tau_rel_err", 0.10)):
+                errs.append(f"tau_rel_exceeded:{tau_rel:.6f}")
+        if "te_clean" in gt:
+            s_mae = float(np.mean(np.abs(ps - np.asarray(gt["te_clean"], dtype=float))))
+            metrics["strain_mae"] = round(s_mae, 6)
+            if s_mae > float(th.get("max_strain_mae", 0.070)):
+                errs.append(f"strain_mae_exceeded:{s_mae:.6f}")
+        if "initial_rate_pred" in out and "te_true_rate0" in gt:
+            r_mae = float(np.mean(np.abs(np.asarray(out["initial_rate_pred"], dtype=float) - np.asarray(gt["te_true_rate0"], dtype=float))))
+            metrics["rate_mae"] = round(r_mae, 6)
+            if r_mae > float(th.get("max_rate_mae", 0.055)):
+                errs.append(f"rate_mae_exceeded:{r_mae:.6f}")
+        if "hereditary_weights" in out and "theta" in gt:
+            th_err = float(np.max(np.abs(np.asarray(out["hereditary_weights"], dtype=float) - np.asarray(gt["theta"], dtype=float))))
+            metrics["theta_7coeff_linf_err"] = round(th_err, 6)
+            if th_err > float(th.get("max_theta_linf_err", 0.14)):
+                errs.append(f"theta_7coeff_gt_mismatch:{th_err:.6f}")
+        if "viscoplastic_weights" in out and out["viscoplastic_weights"] is not None and "vp_theta" in gt:
+            vw = np.asarray(out["viscoplastic_weights"], dtype=float)
+            vp_gt = np.asarray(gt["vp_theta"], dtype=float)
+            vp_err = float(np.linalg.norm(vw - vp_gt) / max(float(np.linalg.norm(vp_gt)), 1.0))
+            metrics["vp_err"] = round(vp_err, 6)
+            if vp_err > float(th.get("max_vp_err", 0.16)):
+                errs.append(f"vp_err_exceeded:{vp_err:.6f}")
+        if contract_kind == "alpha_shared_kkt" and "w_alloc_opt" in gt:
+            aw = np.asarray(out["allocation_weights"], dtype=float)
+            w_gt = np.asarray(gt["w_alloc_opt"], dtype=float)
+            w_rel = float(np.linalg.norm(aw - w_gt) / max(float(np.linalg.norm(w_gt)), 1e-12))
+            metrics["allocation_weights_rel_l2"] = round(w_rel, 6)
+            if w_rel > float(th.get("max_alloc_w_rel_l2", 0.045)):
+                errs.append(f"allocation_weights_gt_mismatch:{w_rel:.6f}")
+        if contract_kind == "alpha_secant_crossing" and "te_secant" in gt:
+            sc_mae = float(np.mean(np.abs(np.asarray(out["secant_compliance"], dtype=float) - np.asarray(gt["te_secant"], dtype=float))))
+            metrics["secant_gt_mae"] = round(sc_mae, 6)
+            if sc_mae > float(th.get("max_secant_mae", 0.095)):
+                errs.append(f"secant_gt_mae_exceeded:{sc_mae:.6f}")
+    else:
+        v_b_gt = verify_beta_candidate_handoff_and_kkt(study=inp, out=out, gt=gt, gap_tol=float(th.get("gap_tol", 2e-4)))
+        errs.extend(v_b_gt["errors"])
+        metrics.update(v_b_gt["metrics"])
+
+    return {"ok": len(errs) == 0, "contract_kind": contract_kind, "errors": errs, "metrics": metrics}
+
+
+def evaluate_three_layer_scientific_contract(
+    *,
+    family: str,
+    inp: dict[str, Any],
+    out: Any,
+    gt: dict[str, Any] | None = None,
+    calibration_witness: dict[str, Any] | None = None,
+    prefix_calibration_sweeps: list[dict[str, Any]] | None = None,
+    thresholds: dict[str, float] | None = None,
+) -> dict[str, Any]:
+    """Unified Three-Layer Contract Evaluator (`M9.6.1` `N02 + N03` Single Source of Truth)."""
+    ck = infer_contract_kind(family=family, inp=inp, gt=gt, out=out)
+    l1 = validate_output_structure(contract_kind=ck, inp=inp, out=out)
+    if not l1["ok"]:
+        return {
+            "ok": False,
+            "kernel_version": SHARED_KERNEL_VERSION,
+            "contract_kind": ck,
+            "layer1_structure": l1,
+            "layer2_public_witness": None,
+            "layer3_truth_accuracy": None,
+            "errors": list(l1["errors"]),
+        }
+    l2 = validate_public_witness(
+        contract_kind=ck,
+        inp=inp,
+        out=out,
+        calibration_witness=calibration_witness,
+        prefix_calibration_sweeps=prefix_calibration_sweeps,
+    )
+    l3 = (
+        validate_truth_accuracy(contract_kind=ck, inp=inp, gt=gt, out=out, thresholds=thresholds)
+        if isinstance(gt, dict)
+        else None
+    )
+    all_errs = list(l2["errors"]) + (list(l3["errors"]) if l3 is not None else [])
+    return {
+        "ok": len(all_errs) == 0,
+        "kernel_version": SHARED_KERNEL_VERSION,
+        "contract_kind": ck,
+        "layer1_structure": l1,
+        "layer2_public_witness": l2,
+        "layer3_truth_accuracy": l3,
+        "errors": all_errs,
     }

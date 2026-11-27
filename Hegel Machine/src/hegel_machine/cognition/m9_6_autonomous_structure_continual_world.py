@@ -1410,18 +1410,33 @@ def compute_generic_public_structural_features(
 def evaluate_m96_autonomous_guard(
     guard_spec: dict[str, Any] | None,
     feature_map: dict[str, float | None],
+    *,
+    allow_open_feature_keys: bool = False,
 ) -> dict[str, Any]:
-    """Strict 3-valued (`TRUE / FALSE / UNKNOWN`) fail-closed evaluator for model-proposed guards (`M9.6` `§4.1`).
+    """Strict 3-valued (`TRUE / FALSE / UNKNOWN`) Kleene fail-closed evaluator for model-proposed guards (`M9.6` + `M9.6.1` `all_of` conjunctions).
     - When `guard_spec` is `None` or empty (`unconstrained_initial_source` before any counterexample has falsified `C0`),
       returns `state = 'TRUE'` with `guard_mode = 'unconstrained_prior_to_counterexample'`.
-    - Otherwise requires `feature_name in M96_CANDIDATE_GUARD_FEATURES` and finite non-None measured value (else `'UNKNOWN'`, NEVER coerced to `'FALSE'`!).
+    - Supports `{"all_of": [clause1, clause2, ...]}` under exact Kleene 3-valued logic (`FALSE` if any clause is `FALSE`,
+      else `UNKNOWN` if any clause is `UNKNOWN`, else `TRUE`) so multi-conflict branches (`C0 -> C1 -> C2`) refine intervals cleanly!
     """
     if not guard_spec:
         return {"state": "TRUE", "guard_mode": "unconstrained_prior_to_counterexample", "measured_value": None}
+    if isinstance(guard_spec.get("all_of"), list) and guard_spec["all_of"]:
+        sub_evals = [
+            evaluate_m96_autonomous_guard(cl, feature_map, allow_open_feature_keys=allow_open_feature_keys)
+            for cl in guard_spec["all_of"]
+        ]
+        states = [s["state"] for s in sub_evals]
+        if "FALSE" in states:
+            return {"state": "FALSE", "clauses": sub_evals}
+        if "UNKNOWN" in states:
+            return {"state": "UNKNOWN", "clauses": sub_evals}
+        return {"state": "TRUE", "clauses": sub_evals}
     fname = str(guard_spec.get("feature_name") or "")
     op = str(guard_spec.get("op") or "")
     thr_raw = guard_spec.get("threshold")
-    if fname not in M96_CANDIDATE_GUARD_FEATURES or op not in {"<=", "<", ">=", ">"} or thr_raw is None:
+    valid_feat = (fname in feature_map) if allow_open_feature_keys else (fname in M96_CANDIDATE_GUARD_FEATURES)
+    if (not valid_feat) or op not in {"<=", "<", ">=", ">"} or thr_raw is None:
         return {"state": "UNKNOWN", "reason": f"invalid_guard_spec:{fname}:{op}", "measured_value": None}
     val = feature_map.get(fname)
     if val is None or not math.isfinite(float(val)) or not math.isfinite(float(thr_raw)):
@@ -1534,57 +1549,100 @@ def verify_upstream_parent_perturbation_sensitivity(
     c1_entrypoint: str,
     public_item: dict[str, Any],
     base_param_payload: dict[str, Any],
+    intervention_fn_by_upstream_id: dict[str, Any] | None = None,
+    run_in_container: bool = False,
 ) -> dict[str, Any]:
-    """Mechanically test which upstream calibration mechanisms in `candidate_upstream_ids` (`[wing_a, wing_b, sentinel]`)
+    """Mechanically test which upstream calibration mechanisms in `candidate_upstream_ids`
     actually affect `C1`'s public predictions when perturbed (`0` private peek!).
+
+    `M9.6.1` `N04/W03` Hardening:
+      - Supports explicit `intervention_fn_by_upstream_id` metadata (so arbitrary anonymized parent IDs and genuinely
+        wired nuisance parents can be intervened without relying on `'wing_a' in uid` string naming!).
+      - Supports `run_in_container=True` (executing untrusted candidate strictly inside `CLEAN_SCIPY_SANDBOX_IMAGE`
+        `--network none` with pure-JSON typed-array output instead of host `python -I`!).
+      - Compares ALL primary numerical output arrays across full test slices (not only the first 64 elements!).
     """
     import pickle as _pkl
+    import shlex as _shlex
     import sys as _sys
+    from . import m6_frontier_real_benchmarks as _m6f
+    from .m7_autogenous_forest_pretraining import CLEAN_SCIPY_SANDBOX_IMAGE as _SANDBOX_IMG
+    from .m9_4_1_shared_verification_kernel import decode_pure_json_numerical_text
 
-    def _run_c1_with_payload(pay: dict[str, Any]) -> dict[str, Any]:
-        adapted = render_parameterized_input_adapter(
-            family=family,
-            source_code=c1_canonical_code,
-            source_entrypoint=c1_entrypoint,
-            target_entrypoint="_probe_sens_fn",
-            param_payload=pay,
-        )
-        with tempfile.TemporaryDirectory(prefix="m96_sens_") as td:
-            td_p = Path(td)
-            (td_p / "c.py").write_text(adapted, encoding="utf-8")
-            inp = deepcopy(public_item["dataset"] if family == "alpha" else public_item["study"])
-            (td_p / "in.pkl").write_bytes(_pkl.dumps(inp))
-            w_py = (
-                "import importlib.util, json, pickle, sys, numpy as np\n"
-                "s = importlib.util.spec_from_file_location('_m', sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
-                "r = m._probe_sens_fn(pickle.loads(open(sys.argv[2], 'rb').read()))\n"
-                "k = 'predicted_strain' if 'predicted_strain' in r else 'terminal_field'\n"
-                "open(sys.argv[3], 'w').write(json.dumps(np.asarray(r[k], dtype=float).ravel()[:64].tolist()))\n"
+    w_py = (
+        "import importlib.util, json, math, pickle, sys, numpy as np\n"
+        "s = importlib.util.spec_from_file_location('_m', sys.argv[1]); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\n"
+        "r = m._probe_sens_fn(pickle.loads(open(sys.argv[2], 'rb').read()))\n"
+        "vecs = []\n"
+        "for k in ('predicted_strain', 'initial_rate_pred', 'terminal_field', 'weights', 'weights_by_budget', 'allocation_weights'):\n"
+        "    if isinstance(r, dict) and k in r and r[k] is not None:\n"
+        "        a = np.asarray(r[k], dtype=float).ravel()\n"
+        "        vecs.extend(a.tolist())\n"
+        "arr = np.asarray(vecs, dtype=float)\n"
+        "open(sys.argv[3], 'w').write(json.dumps({'__nd__': True, 'dtype': 'float64', 'shape': [int(arr.size)], 'data': arr.tolist()}, allow_nan=False))\n"
+    )
+
+    sandbox_cid: str | None = None
+    if run_in_container:
+        sandbox_cid = _m6f.start_detached_container(_SANDBOX_IMG, memory_limit="1024m", cpus="1.5", network_mode="none")
+
+    try:
+        def _run_c1_with_payload(pay: dict[str, Any], inp_override: dict[str, Any] | None = None) -> dict[str, Any]:
+            adapted = render_parameterized_input_adapter(
+                family=family,
+                source_code=c1_canonical_code,
+                source_entrypoint=c1_entrypoint,
+                target_entrypoint="_probe_sens_fn",
+                param_payload=pay,
             )
-            subprocess.run([_sys.executable, "-I", "-c", w_py, str(td_p / "c.py"), str(td_p / "in.pkl"), str(td_p / "out.json")], check=True, timeout=45)
-            return {"vec": np.asarray(json.loads((td_p / "out.json").read_text(encoding="utf-8")), dtype=float)}
+            inp = deepcopy(inp_override if inp_override is not None else (public_item["dataset"] if family == "alpha" else public_item["study"]))
+            with tempfile.TemporaryDirectory(prefix="m96_sens_") as td:
+                td_p = Path(td)
+                (td_p / "c.py").write_text(adapted, encoding="utf-8")
+                (td_p / "in.pkl").write_bytes(_pkl.dumps(inp))
+                (td_p / "w.py").write_text(w_py, encoding="utf-8")
+                if sandbox_cid is not None:
+                    _m6f.exec_container_bash(sandbox_cid, "rm -rf /tmp/_sens && mkdir -p /tmp/_sens", timeout_sec=10)
+                    for fn_s in ("c.py", "in.pkl", "w.py"):
+                        subprocess.run(["docker", "cp", str(td_p / fn_s), f"{sandbox_cid}:/tmp/_sens/{fn_s}"], check=True, capture_output=True, timeout=15)
+                    ex = _m6f.exec_container_bash(
+                        sandbox_cid,
+                        "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /tmp/_sens/w.py /tmp/_sens/c.py /tmp/_sens/in.pkl /tmp/_sens/out.json && cat /tmp/_sens/out.json",
+                        timeout_sec=45,
+                    )
+                    if ex["exit_code"] != 0:
+                        raise RuntimeError(f"Container sensitivity worker failed: {ex['stderr'][-240:]}")
+                    raw_txt = ex["stdout"].strip().splitlines()[-1]
+                else:
+                    subprocess.run([_sys.executable, "-I", str(td_p / "w.py"), str(td_p / "c.py"), str(td_p / "in.pkl"), str(td_p / "out.json")], check=True, timeout=45)
+                    raw_txt = (td_p / "out.json").read_text(encoding="utf-8")
+                return {"vec": np.asarray(decode_pure_json_numerical_text(raw_txt), dtype=float)}
 
-    base_vec = _run_c1_with_payload(base_param_payload)["vec"]
-    sens_by_id: dict[str, float] = {}
-    empirically_active: list[str] = []
-    for uid in candidate_upstream_ids:
-        pert = deepcopy(base_param_payload)
-        if "wing_a" in uid:
-            kg = "stress_gains" if family == "alpha" else "bank_gains"
-            pert[kg][0] = float(pert[kg][0]) * 1.18
-            pert[kg][1] = float(pert[kg][1]) * 0.84
-        elif "wing_b" in uid:
-            kg = "stress_gains" if family == "alpha" else "bank_gains"
-            pert[kg][2] = float(pert[kg][2]) * 1.18
-            pert[kg][3] = float(pert[kg][3]) * 0.84
-        else:
-            # `sentinel_shared_acoustic_root` has zero coupling to Alpha/Beta payload!
-            pass
-        p_vec = _run_c1_with_payload(pert)["vec"]
-        diff = float(np.max(np.abs(p_vec - base_vec)))
-        sens_by_id[uid] = round(diff, 8)
-        if diff > 1e-5:
-            empirically_active.append(uid)
+        base_inp = deepcopy(public_item["dataset"] if family == "alpha" else public_item["study"])
+        base_vec = _run_c1_with_payload(base_param_payload, base_inp)["vec"]
+        sens_by_id: dict[str, float] = {}
+        empirically_active: list[str] = []
+        for uid in candidate_upstream_ids:
+            pert_pay = deepcopy(base_param_payload)
+            pert_inp = deepcopy(base_inp)
+            if isinstance(intervention_fn_by_upstream_id, dict) and uid in intervention_fn_by_upstream_id:
+                pert_pay, pert_inp = intervention_fn_by_upstream_id[uid](pert_pay, pert_inp)
+            elif "wing_a" in uid:
+                kg = "stress_gains" if family == "alpha" else "bank_gains"
+                pert_pay[kg][0] = float(pert_pay[kg][0]) * 1.18
+                pert_pay[kg][1] = float(pert_pay[kg][1]) * 0.84
+            elif "wing_b" in uid:
+                kg = "stress_gains" if family == "alpha" else "bank_gains"
+                pert_pay[kg][2] = float(pert_pay[kg][2]) * 1.18
+                pert_pay[kg][3] = float(pert_pay[kg][3]) * 0.84
+            p_vec = _run_c1_with_payload(pert_pay, pert_inp)["vec"]
+            diff = float(np.max(np.abs(p_vec - base_vec)))
+            sens_by_id[uid] = round(diff, 8)
+            if diff > 1e-5:
+                empirically_active.append(uid)
+    finally:
+        if sandbox_cid is not None:
+            _m6f.stop_container_safely(sandbox_cid)
 
     prop_clean = [u for u in proposed_upstream_ids if u in candidate_upstream_ids]
     exact_match = set(prop_clean) == set(empirically_active)
@@ -1593,6 +1651,7 @@ def verify_upstream_parent_perturbation_sensitivity(
         "empirically_sensitive_upstream_ids": empirically_active,
         "sensitivity_max_diff_by_upstream_id": sens_by_id,
         "proposal_matches_empirical_sensitivity": exact_match,
+        "executed_in_isolated_container": bool(run_in_container),
     }
 
 
@@ -2284,3 +2343,273 @@ def {entrypoint}(dataset: dict) -> dict:
             "kkt_certificate": {{"weights": w.tolist(), "nu_sum": best_nu, "lam_lower": np.maximum(0.0, g - best_nu).tolist(),
                                  "lam_upper": np.maximum(0.0, best_nu - g).tolist(), "primal_objective": jv, "dual_lower_bound": float(min(best_lb, jv))}}}}
 '''
+
+
+# ============================================================================
+# 6. `M9.6.1` Evidence-Bound Witnesses, Empirical Coverage & Immutable Branch Lineage (`N07/W04/W05`)
+# ============================================================================
+
+
+@dataclass
+class SolverEvaluationWitness:
+    """Evidence-bound evaluation witness (`M9.6.1` `N07` — NEVER inferred from routing choices without execution!)."""
+
+    witness_id: str
+    binding_id: str
+    solver_code_sha256: str
+    parent_parameter_versions: dict[str, int]
+    public_input_sha256: str
+    verifier_version: str
+    result: str  # 'passed' | 'failed' | 'not_tested'
+    failure_kind: str  # 'none' | 'scientific_or_numerical' | 'schema_or_interface' | 'timeout_or_infra'
+    public_structural_features: dict[str, float | None]
+    probe_wall_ms: float = 0.0
+
+    def is_genuine_scientific_counterexample(self) -> bool:
+        return self.result == "failed" and self.failure_kind == "scientific_or_numerical"
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "witness_id": self.witness_id,
+            "binding_id": self.binding_id,
+            "solver_code_sha256": self.solver_code_sha256,
+            "parent_parameter_versions": dict(self.parent_parameter_versions),
+            "public_input_sha256": self.public_input_sha256,
+            "verifier_version": self.verifier_version,
+            "result": self.result,
+            "failure_kind": self.failure_kind,
+            "public_structural_features": dict(self.public_structural_features),
+            "probe_wall_ms": round(float(self.probe_wall_ms), 2),
+        }
+
+
+@dataclass
+class EmpiricalCoverageReceipt:
+    """Finite-witness empirical coverage receipt (`M9.6.1` `§5` — replaces overclaiming mathematical `C_new ⊇ C_old`!)."""
+
+    receipt_id: str
+    new_binding_id: str
+    new_solver_sha256: str
+    old_binding_id: str
+    old_solver_sha256: str
+    witness_ids: list[str]
+    parameter_versions_by_witness: list[dict[str, int]]
+    verifier_version: str
+    status: str  # 'supported_on_witnesses' | 'refuted' | 'unknown'
+    passed_witness_count: int
+    evaluated_witness_count: int
+    total_cpu_probe_wall_ms: float
+    mean_probe_wall_ms_ratio: float
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "receipt_id": self.receipt_id,
+            "new_binding_id": self.new_binding_id,
+            "new_solver_sha256": self.new_solver_sha256,
+            "old_binding_id": self.old_binding_id,
+            "old_solver_sha256": self.old_solver_sha256,
+            "witness_ids": list(self.witness_ids),
+            "parameter_versions_by_witness": deepcopy(self.parameter_versions_by_witness),
+            "verifier_version": self.verifier_version,
+            "status": self.status,
+            "passed_witness_count": self.passed_witness_count,
+            "evaluated_witness_count": self.evaluated_witness_count,
+            "total_cpu_probe_wall_ms": round(float(self.total_cpu_probe_wall_ms), 2),
+            "mean_probe_wall_ms_ratio": round(float(self.mean_probe_wall_ms_ratio), 4),
+            "zero_llm_calls_but_nonzero_cpu": True,
+        }
+
+
+class ImmutableBranchLineageController:
+    """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05`).
+
+    Key Guarantees:
+      1. NEVER overwrites `bind_{wid}_c1` on subsequent conflicts — mints immutable `bind_{wid}_b{k:02d}` + `mech_{wid}_b{k:02d}`.
+      2. NEVER marks an untested branch as refuted (`result = 'not_tested'`) when another branch is selected and passes.
+      3. Separates `applicability_guard` (where a solver satisfies contract, allowing overlap!) from `selection_priority`
+         (preferring lighter/cheaper valid branch or empirically covering branch while preserving all older branches intact!).
+    """
+
+    def __init__(self, *, world_id: str, family: str, graph: PersistentMechanismGraph, registry: M94BindingRegistry) -> None:
+        self.world_id = world_id
+        self.family = family
+        self.graph = graph
+        self.registry = registry
+        self.witness_ledger: list[SolverEvaluationWitness] = []
+        self.coverage_receipts: list[EmpiricalCoverageReceipt] = []
+        self._branch_seq = len([b for b in registry.bindings.values() if b.chain_id == family])
+
+    def record_tested_witness(
+        self,
+        *,
+        binding: MechanismExecutableBinding,
+        public_input_sha256: str,
+        passed: bool,
+        failure_kind: str,
+        features: dict[str, float | None],
+        probe_wall_ms: float = 0.0,
+        verifier_version: str = "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+    ) -> SolverEvaluationWitness:
+        wid = f"wit_{len(self.witness_ledger) + 1:04d}_{binding.binding_id}_{public_input_sha256[:8]}"
+        w = SolverEvaluationWitness(
+            witness_id=wid,
+            binding_id=binding.binding_id,
+            solver_code_sha256=binding.authoritative_executed_code_sha256(),
+            parent_parameter_versions=dict(binding.parent_parameter_versions),
+            public_input_sha256=public_input_sha256,
+            verifier_version=verifier_version,
+            result=("passed" if passed else "failed"),
+            failure_kind=("none" if passed else failure_kind),
+            public_structural_features=deepcopy(features),
+            probe_wall_ms=probe_wall_ms,
+        )
+        self.witness_ledger.append(w)
+        return w
+
+    def positive_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
+        return [w for w in self.witness_ledger if w.binding_id == binding_id and w.result == "passed"]
+
+    def scientific_negative_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
+        return [w for w in self.witness_ledger if w.binding_id == binding_id and w.is_genuine_scientific_counterexample()]
+
+    def mint_immutable_conflict_branch(
+        self,
+        *,
+        failed_binding_id: str,
+        new_canonical_code: str,
+        new_entrypoint: str,
+        forest_node_id: str,
+        qualification_protocol: str,
+        output_schema_keys: list[str],
+        validated_parent_ids: list[str],
+        new_applicability_guard: dict[str, Any],
+        updated_failed_branch_applicability_guard: dict[str, Any] | None,
+        violated_component_id: str,
+        preserved_component_ids: list[str],
+        selection_priority: int,
+        environment_digest: str = "hegel_clean_scipy_sandbox_v2",
+        evidence_digest: str = "",
+    ) -> MechanismExecutableBinding:
+        if failed_binding_id not in self.registry.bindings:
+            raise KeyError(f"Unknown failed_binding_id `{failed_binding_id}`")
+        if not self.scientific_negative_witnesses_for(failed_binding_id):
+            raise ValueError(
+                f"Refusing to split `{failed_binding_id}` without a genuine tested scientific negative witness (`N07`)"
+            )
+        idx = self._branch_seq
+        self._branch_seq += 1
+        b_id = f"bind_{self.world_id}_b{idx:02d}"
+        m_id = f"mech_{self.world_id}_b{idx:02d}"
+        if b_id in self.registry.bindings:
+            raise ValueError(f"Immutable branch ID collision `{b_id}`")
+
+        code_sha = hashlib.sha256(new_canonical_code.encode("utf-8")).hexdigest()
+        c_sha = hashlib.sha256(json.dumps(sorted(output_schema_keys)).encode("utf-8")).hexdigest()
+        q_rec = self.registry.issue_qualification_receipt(
+            qualification_protocol=qualification_protocol,
+            verified_code_sha256=code_sha,
+            forest_node_id=forest_node_id,
+            contract_schema_sha256=c_sha,
+            environment_digest=environment_digest,
+            evidence_digest=evidence_digest,
+            issued_reason=f"immutable_conflict_branch_from_{failed_binding_id}",
+        )
+        p_vers = {pid: int(self.graph.mechanisms[pid].version) for pid in validated_parent_ids}
+        new_b = MechanismExecutableBinding(
+            binding_id=b_id,
+            chain_id=self.family,
+            branch_tag=f"C{idx}_branch",
+            mechanism_id=m_id,
+            mechanism_version=1,
+            forest_node_id=forest_node_id,
+            component_id=f"{violated_component_id}_b{idx:02d}",
+            preserved_component_ids=list(preserved_component_ids),
+            violated_component_id=violated_component_id,
+            module_stem=f"{self.world_id}_b{idx:02d}",
+            module_digest=code_sha,
+            function_name=new_entrypoint,
+            qualification_id=qualification_protocol,
+            qualification_protocol=qualification_protocol,
+            qualification_receipt_id=q_rec.receipt_id,
+            qualification_status="verified",
+            parameter_mechanism_id=validated_parent_ids[0],
+            parent_parameter_mechanism_ids=list(validated_parent_ids),
+            parent_parameter_versions=p_vers,
+            parameter_version=p_vers[validated_parent_ids[0]],
+            structure_origin="publicly_contrastively_validated",
+            environment_digest=environment_digest,
+            evidence_receipt_id=evidence_digest,
+            precondition_guard=deepcopy(new_applicability_guard),
+            applicability_guard=deepcopy(new_applicability_guard),
+            selection_priority=int(selection_priority),
+            output_schema_keys=list(output_schema_keys),
+            canonical_algorithm_code=new_canonical_code,
+            canonical_entrypoint=new_entrypoint,
+            canonical_algorithm_sha256=code_sha,
+            input_coordinate_contract="raw_measured",
+            parameterized_closure_code=new_canonical_code,
+            parameterized_entrypoint=new_entrypoint,
+            parameterized_closure_sha256=code_sha,
+        )
+        # Transactional update: validate & register `new_b` BEFORE updating `failed_b`'s applicability scope (NEVER overwriting `failed_b`'s code!)
+        self.registry.register_binding(new_b, reason=f"mint_immutable_branch_from_{failed_binding_id}", strict_receipt_check=True)
+        if updated_failed_branch_applicability_guard is not None:
+            old_b = self.registry.bindings[failed_binding_id]
+            old_b.applicability_guard = deepcopy(updated_failed_branch_applicability_guard)
+            old_b.precondition_guard = deepcopy(updated_failed_branch_applicability_guard)
+            self.registry.sync_to_graph()
+        return new_b
+
+    def select_branch_deterministically(
+        self,
+        *,
+        req_schema_keys: list[str],
+        feature_evaluator: Any,
+    ) -> dict[str, Any]:
+        """Deterministic selection separating `applicability_guard` (overlap allowed!) from `selection_priority` (`N07/W04` — NO random tie-break!)."""
+        candidates = sorted(
+            [b for b in self.registry.bindings.values() if b.chain_id == self.family and b.qualification_status == "verified"],
+            key=lambda x: (-int(x.selection_priority), x.binding_id),
+        )
+        eval_rows = []
+        applicable: list[tuple[MechanismExecutableBinding, dict[str, float | None]]] = []
+        any_unknown = False
+        for b in candidates:
+            if sorted(b.output_schema_keys) != sorted(req_schema_keys):
+                eval_rows.append({"binding_id": b.binding_id, "schema_ok": False, "guard_state": "SCHEMA_MISMATCH"})
+                continue
+            feats = feature_evaluator(b)
+            eff_g = b.applicability_guard or b.precondition_guard or None
+            g_res = evaluate_m96_autonomous_guard(eff_g, feats, allow_open_feature_keys=True)
+            st = str(g_res.get("state") or "UNKNOWN")
+            eval_rows.append(
+                {
+                    "binding_id": b.binding_id,
+                    "branch_tag": b.branch_tag,
+                    "selection_priority": b.selection_priority,
+                    "schema_ok": True,
+                    "guard_state": st,
+                }
+            )
+            if st == "TRUE":
+                applicable.append((b, feats))
+            elif st == "UNKNOWN":
+                any_unknown = True
+
+        if applicable:
+            chosen_b, chosen_f = applicable[0]
+            return {
+                "selected": chosen_b,
+                "selected_features": chosen_f,
+                "overlapping_applicable_ids": [b.binding_id for b, _ in applicable],
+                "evaluations": eval_rows,
+                "status": ("selected_from_overlap_by_priority" if len(applicable) > 1 else "selected_unique_applicable"),
+            }
+        return {
+            "selected": None,
+            "selected_features": None,
+            "overlapping_applicable_ids": [],
+            "evaluations": eval_rows,
+            "status": ("unknown_requires_probe" if any_unknown else "no_applicable_branch"),
+        }
+

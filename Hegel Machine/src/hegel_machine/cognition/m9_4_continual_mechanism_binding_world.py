@@ -84,7 +84,11 @@ VALID_STRUCTURE_ORIGINS: frozenset[str] = frozenset(
 
 @dataclass
 class QualificationReceipt:
-    """Content-addressed, registry-bound qualification receipt (`M9.5.1` `F07` — replaces bare protocol-string `qualification_id`)."""
+    """Content-addressed, registry-bound qualification receipt (`M9.5.1` `F07` + `M9.6.1` `N04` Closure).
+
+    Recomputes `receipt_id` from canonical content fields on issue, registration, hydration, and execution,
+    and binds uniquely to the ACTUALLY EXECUTED code SHA-256 (`0` multi-digest OR-bypass!).
+    """
 
     receipt_id: str
     qualification_protocol: str
@@ -93,7 +97,22 @@ class QualificationReceipt:
     environment_digest: str
     verifier_version: str
     forest_node_id: str
+    evidence_digest: str = ""
     issued_reason: str = ""
+
+    def compute_expected_receipt_id(self) -> str:
+        payload: dict[str, Any] = {
+            "protocol": self.qualification_protocol,
+            "code_sha": self.verified_code_sha256,
+            "contract_sha": self.contract_schema_sha256,
+            "env": self.environment_digest,
+            "verifier": self.verifier_version,
+            "forest_node_id": self.forest_node_id,
+        }
+        if self.evidence_digest:
+            payload["evidence_digest"] = self.evidence_digest
+        raw_key = json.dumps(payload, sort_keys=True)
+        return "qrec_" + hashlib.sha256(raw_key.encode("utf-8")).hexdigest()[:20]
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -106,11 +125,11 @@ class QualificationReceipt:
 
 @dataclass
 class MechanismExecutableBinding:
-    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable (`M9.4.1` `Gate B` + `M9.5.1` `F01/F07`)."""
+    """Explicit versioned binding between a `PersistentMechanismGraph` node/component and a verified container executable (`M9.4.1` `Gate B` + `M9.6.1` `N04/N07`)."""
 
     binding_id: str
     chain_id: str  # 'alpha' | 'beta'
-    branch_tag: str  # 'C0_base' | 'C1_extension' | ...
+    branch_tag: str  # 'C0_base' | 'C1_extension' | 'C2_extension' | ...
     mechanism_id: str
     mechanism_version: int
     forest_node_id: str
@@ -126,15 +145,18 @@ class MechanismExecutableBinding:
     executable_kind: str = "raw_source"
     qualification_protocol: str = ""
     qualification_receipt_id: str = ""
+    qualification_status: str = "verified"  # 'verified' | 'unknown_requires_reverification' | 'invalidated'
     canonical_algorithm_code: str = ""
     canonical_entrypoint: str = ""
     canonical_algorithm_sha256: str = ""
     input_coordinate_contract: str = "raw_measured"
     parent_parameter_mechanism_ids: list[str] = field(default_factory=list)
+    parent_parameter_versions: dict[str, int] = field(default_factory=dict)
     structure_origin: str = "author_seeded"
     source_artifact_sha256: str = ""
     compiled_skill_sha256: str = ""
     adapter_code_sha256: str = ""
+    adapter_transform_witness: dict[str, Any] = field(default_factory=dict)
     parameter_epoch_sha256: str = ""
     contract_schema_sha256: str = ""
     environment_digest: str = ""
@@ -143,12 +165,30 @@ class MechanismExecutableBinding:
     shapes: dict[str, str] = field(default_factory=dict)
     time_context: dict[str, Any] = field(default_factory=dict)
     precondition_guard: dict[str, Any] = field(default_factory=dict)
+    applicability_guard: dict[str, Any] = field(default_factory=dict)
+    selection_priority: int = 0
     output_schema_keys: list[str] = field(default_factory=list)
     evidence_receipt_id: str = ""
     parameterized_closure_code: str = ""
     parameterized_entrypoint: str = ""
     parameterized_closure_sha256: str = ""
     dependent_artifacts: list[str] = field(default_factory=list)
+
+    def authoritative_executed_code_sha256(self) -> str:
+        """Return the UNIQUE digest of the code actually executed for `self.executable_kind` (`N04`: NO multi-digest OR!)."""
+        if self.executable_kind == "raw_source":
+            if self.canonical_algorithm_code:
+                return hashlib.sha256(self.canonical_algorithm_code.encode("utf-8")).hexdigest()
+            if self.canonical_algorithm_sha256:
+                return self.canonical_algorithm_sha256
+            if self.parameterized_closure_code:
+                return hashlib.sha256(self.parameterized_closure_code.encode("utf-8")).hexdigest()
+            return self.parameterized_closure_sha256 or self.source_artifact_sha256
+        if self.executable_kind in {"compiled_L2", "primitive_L1"}:
+            return self.compiled_skill_sha256 or self.module_digest
+        if self.executable_kind == "bound_adapter":
+            return self.adapter_code_sha256
+        raise ValueError(f"Unsupported executable_kind `{self.executable_kind}`")
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)
@@ -167,7 +207,7 @@ def verify_binding_identity_and_foreign_keys(
     require_closure_code: bool = False,
     strict_receipt_check: bool = False,
 ) -> None:
-    """Fail-closed identity, digest, coordinate-contract, qualification receipt, and foreign-key verifier (`M9.4.1` `Gate B` + `M9.5.1` `F01/F07`)."""
+    """Fail-closed identity, digest, coordinate-contract, content-addressed qualification receipt, and parent-version-vector verifier (`N04`)."""
     if binding.executable_kind not in VALID_EXECUTABLE_KINDS:
         raise ValueError(f"Invalid executable_kind `{binding.executable_kind}` on `{binding.binding_id}`")
     q_proto = binding.qualification_protocol or binding.qualification_id
@@ -177,6 +217,10 @@ def verify_binding_identity_and_foreign_keys(
         raise ValueError(f"Invalid input_coordinate_contract `{binding.input_coordinate_contract}` on `{binding.binding_id}`")
     if binding.structure_origin not in VALID_STRUCTURE_ORIGINS:
         raise ValueError(f"Invalid structure_origin `{binding.structure_origin}` on `{binding.binding_id}`")
+    if (require_closure_code or strict_receipt_check) and binding.qualification_status != "verified":
+        raise ValueError(
+            f"Refusing to execute/bind `{binding.binding_id}` with qualification_status=`{binding.qualification_status}` (`F14/N04`)"
+        )
 
     eff_code = binding.canonical_algorithm_code or binding.parameterized_closure_code
     eff_ep = binding.canonical_entrypoint or binding.parameterized_entrypoint
@@ -198,10 +242,16 @@ def verify_binding_identity_and_foreign_keys(
             )
         if binding.source_artifact_sha256 and binding.source_artifact_sha256 != actual_sha:
             raise ValueError(f"Source artifact SHA-256 mismatch on `{binding.binding_id}`")
+    if binding.executable_kind == "bound_adapter":
+        wit = binding.adapter_transform_witness or {}
+        if not wit.get("canonical_algorithm_sha256") or not wit.get("parent_parameter_versions_sha256"):
+            raise ValueError(f"Missing AdapterTransformWitness on bound_adapter `{binding.binding_id}` (`N04`)")
+
     if graph is not None:
         if binding.parameter_mechanism_id not in graph.mechanisms:
             raise ValueError(f"Missing parameter_mechanism_id `{binding.parameter_mechanism_id}` in PersistentMechanismGraph")
-        for extra_pid in binding.parent_parameter_mechanism_ids:
+        all_pids = list(dict.fromkeys([binding.parameter_mechanism_id, *binding.parent_parameter_mechanism_ids]))
+        for extra_pid in all_pids:
             if extra_pid not in graph.mechanisms:
                 raise ValueError(f"Missing parent_parameter_mechanism_id `{extra_pid}` in PersistentMechanismGraph")
         if int(binding.parameter_version) != int(graph.mechanisms[binding.parameter_mechanism_id].version):
@@ -209,6 +259,14 @@ def verify_binding_identity_and_foreign_keys(
                 f"Stale/mismatched parameter_version on `{binding.binding_id}`: "
                 f"binding={binding.parameter_version} != graph={graph.mechanisms[binding.parameter_mechanism_id].version}"
             )
+        # `N04` Full Multi-Parent Version Vector Check: EVERY linked parent version in `parent_parameter_versions` must match graph!
+        if binding.parent_parameter_versions:
+            for pid_k in all_pids:
+                if pid_k in binding.parent_parameter_versions and int(binding.parent_parameter_versions[pid_k]) != int(graph.mechanisms[pid_k].version):
+                    raise ValueError(
+                        f"Stale/mismatched parent_parameter_versions[{pid_k}] on `{binding.binding_id}`: "
+                        f"{binding.parent_parameter_versions[pid_k]} != {graph.mechanisms[pid_k].version}"
+                    )
         if binding.mechanism_id not in graph.mechanisms:
             raise ValueError(f"Dangling mechanism_id `{binding.mechanism_id}` not registered in PersistentMechanismGraph.mechanisms")
         if (strict_receipt_check or bool(binding.qualification_receipt_id)) and binding.forest_node_id not in graph.forest.nodes:
@@ -221,27 +279,30 @@ def verify_binding_identity_and_foreign_keys(
             raise ValueError(
                 f"Unregistered qualification_receipt_id `{binding.qualification_receipt_id}` on `{binding.binding_id}` (`F07`)"
             )
+        # `N04` Content-Addressed Receipt ID Re-Verification (rejects in-place mutation of verifier/env/sha!)
+        expected_rid = rec.compute_expected_receipt_id()
+        if rec.receipt_id != expected_rid:
+            raise ValueError(
+                f"Tampered QualificationReceipt content on `{binding.binding_id}`: "
+                f"receipt_id `{rec.receipt_id}` != recomputed `{expected_rid}` (`N04`)"
+            )
         if rec.qualification_protocol != q_proto:
             raise ValueError(f"Receipt protocol mismatch `{rec.qualification_protocol}` != `{q_proto}` on `{binding.binding_id}`")
-        valid_code_shas = {
-            s
-            for s in (
-                binding.canonical_algorithm_sha256,
-                binding.parameterized_closure_sha256,
-                binding.compiled_skill_sha256,
-                binding.module_digest,
-                binding.source_artifact_sha256,
+        # `N04` Exact Executed Code SHA Check (NO multi-digest OR-matching across unexecuted module_digest!)
+        exec_sha = binding.authoritative_executed_code_sha256()
+        if exec_sha and rec.verified_code_sha256 != exec_sha:
+            raise ValueError(
+                f"QualificationReceipt verified_code_sha256 `{rec.verified_code_sha256[:16]}` != authoritative executed "
+                f"`{binding.executable_kind}` code SHA-256 `{exec_sha[:16]}` on `{binding.binding_id}` (`N04`)"
             )
-            if s
-        }
-        if valid_code_shas and rec.verified_code_sha256 not in valid_code_shas:
-            raise ValueError(f"QualificationReceipt code SHA-256 mismatch on `{binding.binding_id}` (`F07`)")
         if rec.forest_node_id != binding.forest_node_id:
             raise ValueError(f"QualificationReceipt forest_node_id `{rec.forest_node_id}` != `{binding.forest_node_id}` (`F07`)")
         if binding.contract_schema_sha256 and rec.contract_schema_sha256 and rec.contract_schema_sha256 != binding.contract_schema_sha256:
             raise ValueError(f"QualificationReceipt contract_schema_sha256 mismatch on `{binding.binding_id}`")
         if binding.environment_digest and rec.environment_digest and rec.environment_digest != binding.environment_digest:
             raise ValueError(f"QualificationReceipt environment_digest mismatch on `{binding.binding_id}`")
+        if binding.evidence_receipt_id and rec.evidence_digest and rec.evidence_digest != binding.evidence_receipt_id:
+            raise ValueError(f"QualificationReceipt evidence_digest mismatch on `{binding.binding_id}`")
 
 
 class M94BindingRegistry:
@@ -263,7 +324,8 @@ class M94BindingRegistry:
         forest_node_id: str,
         contract_schema_sha256: str = "",
         environment_digest: str = "hegel_clean_scipy_sandbox_v2",
-        verifier_version: str = "hegel_shared_math_handoff_kernel_v2_m951_jsonrpc",
+        verifier_version: str = "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+        evidence_digest: str = "",
         issued_reason: str = "",
     ) -> QualificationReceipt:
         if qualification_protocol not in VALID_BINDING_QUALIFICATION_IDS:
@@ -272,28 +334,19 @@ class M94BindingRegistry:
             raise ValueError("QualificationReceipt requires non-empty verified_code_sha256")
         if bool(self.graph.forest.nodes) and forest_node_id not in self.graph.forest.nodes:
             raise ValueError(f"Cannot issue QualificationReceipt for non-existent forest_node_id `{forest_node_id}`")
-        raw_key = json.dumps(
-            {
-                "protocol": qualification_protocol,
-                "code_sha": verified_code_sha256,
-                "contract_sha": contract_schema_sha256,
-                "env": environment_digest,
-                "verifier": verifier_version,
-                "forest_node_id": forest_node_id,
-            },
-            sort_keys=True,
-        )
-        rid = "qrec_" + hashlib.sha256(raw_key.encode("utf-8")).hexdigest()[:20]
         rec = QualificationReceipt(
-            receipt_id=rid,
+            receipt_id="",
             qualification_protocol=qualification_protocol,
             verified_code_sha256=verified_code_sha256,
             contract_schema_sha256=contract_schema_sha256,
             environment_digest=environment_digest,
             verifier_version=verifier_version,
             forest_node_id=forest_node_id,
+            evidence_digest=evidence_digest,
             issued_reason=issued_reason,
         )
+        rid = rec.compute_expected_receipt_id()
+        rec.receipt_id = rid
         self.qualification_receipts[rid] = rec
         self.sync_to_graph()
         return rec
@@ -327,23 +380,29 @@ class M94BindingRegistry:
             "hegel_m9_4_bindings_v1",
             "hegel_m9_4_1_bindings_v2",
             "hegel_m9_5_1_bindings_v3",
+            "hegel_m9_6_1_bindings_v4",
         }:
             self.parameter_epochs = deepcopy(blob.get("parameter_epochs") or {})
             self.binding_events = list(blob.get("binding_events") or [])
-            self.qualification_receipts = {
-                str(rk): QualificationReceipt.from_dict(rv)
-                for rk, rv in (blob.get("qualification_receipts") or {}).items()
-            }
+            self.qualification_receipts = {}
+            for rk, rv in (blob.get("qualification_receipts") or {}).items():
+                rec_obj = QualificationReceipt.from_dict(rv)
+                if rec_obj.receipt_id != rec_obj.compute_expected_receipt_id():
+                    raise ValueError(f"Hydration rejected tampered QualificationReceipt `{rk}` (`N04`)")
+                self.qualification_receipts[str(rk)] = rec_obj
             self.bindings = {}
             for k, v in (blob.get("bindings") or {}).items():
                 b = MechanismExecutableBinding.from_dict(v)
+                # `F14 + N04`: Legacy bindings missing `qualification_receipt_id` hydrate as `unknown_requires_reverification`
+                if not b.qualification_receipt_id and "qualification_status" not in v:
+                    b.qualification_status = "unknown_requires_reverification"
                 self._ensure_typed_mechanism_registered(b)
                 verify_binding_identity_and_foreign_keys(b, graph=self.graph, registry=self, require_closure_code=False)
                 self.bindings[str(k)] = b
 
     def sync_to_graph(self) -> None:
         self.graph.forest.questions[M94_BINDINGS_FOREST_KEY] = {
-            "schema": "hegel_m9_5_1_bindings_v3",
+            "schema": "hegel_m9_6_1_bindings_v4",
             "bindings": {k: b.to_dict() for k, b in sorted(self.bindings.items())},
             "qualification_receipts": {k: r.to_dict() for k, r in sorted(self.qualification_receipts.items())},
             "parameter_epochs": deepcopy(self.parameter_epochs),
@@ -374,6 +433,17 @@ class M94BindingRegistry:
             binding.compiled_skill_sha256 = binding.module_digest
         if not binding.contract_schema_sha256 and binding.output_schema_keys:
             binding.contract_schema_sha256 = hashlib.sha256(json.dumps(sorted(binding.output_schema_keys)).encode("utf-8")).hexdigest()
+        all_pids = list(dict.fromkeys([binding.parameter_mechanism_id, *binding.parent_parameter_mechanism_ids]))
+        if not binding.parent_parameter_versions:
+            binding.parent_parameter_versions = {
+                pid: int(self.graph.mechanisms[pid].version) if pid in self.graph.mechanisms else int(binding.parameter_version)
+                for pid in all_pids
+                if pid
+            }
+        if not binding.parameter_epoch_sha256 and binding.parent_parameter_versions:
+            binding.parameter_epoch_sha256 = hashlib.sha256(
+                json.dumps(binding.parent_parameter_versions, sort_keys=True).encode("utf-8")
+            ).hexdigest()
         self._ensure_typed_mechanism_registered(binding)
         verify_binding_identity_and_foreign_keys(
             binding,
@@ -390,12 +460,14 @@ class M94BindingRegistry:
                 "executable_kind": binding.executable_kind,
                 "structure_origin": binding.structure_origin,
                 "qualification_receipt_id": binding.qualification_receipt_id,
+                "qualification_status": binding.qualification_status,
                 "chain_id": binding.chain_id,
                 "branch_tag": binding.branch_tag,
                 "mechanism_id": binding.mechanism_id,
                 "mechanism_version": binding.mechanism_version,
                 "parameter_mechanism_id": binding.parameter_mechanism_id,
                 "parent_parameter_mechanism_ids": list(binding.parent_parameter_mechanism_ids),
+                "parent_parameter_versions": dict(binding.parent_parameter_versions),
                 "parameter_version": binding.parameter_version,
                 "source_artifact_sha256": binding.source_artifact_sha256[:16],
                 "compiled_skill_sha256": binding.compiled_skill_sha256[:16],
@@ -412,7 +484,7 @@ class M94BindingRegistry:
         affected_chain_id: str,
         evidence_note: str,
     ) -> list[str]:
-        """Propagate an `AncestorReweight` shared-parameter update to all dependent `MechanismExecutableBinding`s on `affected_chain_id`."""
+        """Propagate an `AncestorReweight` shared-parameter update selectively across the full `parent_parameter_versions` vector (`N04`)."""
         self.parameter_epochs[parameter_mechanism_id] = {
             "parameter_mechanism_id": parameter_mechanism_id,
             "version": int(new_version),
@@ -426,6 +498,10 @@ class M94BindingRegistry:
             ):
                 if b.parameter_mechanism_id == parameter_mechanism_id:
                     b.parameter_version = int(new_version)
+                b.parent_parameter_versions[parameter_mechanism_id] = int(new_version)
+                b.parameter_epoch_sha256 = hashlib.sha256(
+                    json.dumps(b.parent_parameter_versions, sort_keys=True).encode("utf-8")
+                ).hexdigest()
                 updated_ids.append(bid)
         self.binding_events.append(
             {
