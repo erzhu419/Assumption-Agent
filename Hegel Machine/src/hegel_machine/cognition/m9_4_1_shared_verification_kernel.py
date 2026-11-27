@@ -837,6 +837,16 @@ def validate_public_witness(
     coord_prov = "public_and_prefix_validated_ols"
 
     if contract_kind.startswith("alpha_"):
+        if "past_stress_cmd" not in inp["test"] and "past_stress" in inp["test"]:
+            v_pub_direct = verify_alpha_candidate_handoff_and_invariants(dataset=inp, out=out, gt=None, require_gt_accuracy=False)
+            return {
+                "ok": len(v_pub_direct["errors"]) == 0,
+                "contract_kind": contract_kind,
+                "coordinate_provenance": "precalibrated_physical_input",
+                "errors": list(v_pub_direct["errors"]),
+                "verified_claim_ids": v_pub_direct["verified_claim_ids"],
+                "metrics": dict(v_pub_direct["metrics"]),
+            }
         pub_cal = estimate_public_or_prefix_alpha_calibration(inp, prefix_calibration_sweeps)
         ref_g = np.asarray(pub_cal["stress_gains"], dtype=float)
         ref_b = np.asarray(pub_cal["stress_biases"], dtype=float)

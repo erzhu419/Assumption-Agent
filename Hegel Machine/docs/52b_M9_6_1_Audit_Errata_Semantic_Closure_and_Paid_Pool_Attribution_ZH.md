@@ -25,5 +25,5 @@
 
 - **`N04`**：按 `executable_kind` 唯一绑定实际执行代码 SHA（拒绝未执行模块凭据冒用：`True`），重算内容寻址 `receipt_id`（拒绝篡改内容：`True`），并校验完整多父版本向量 `parent_parameter_versions`（拒绝次父节点过期版本：`True`）。
 - **`N07`**：`ImmutableBranchLineageController` 拒绝无实测科学反例的分叉（`True`），禁止由选中 `C1` 自造 `C0` 负见证（`True`），并在确定性状态测试中完整通过 `C0 -> C1 -> C2 -> 恢复 C0 -> 恢复 C1`（`{'restore_C0_x_0_2': 'bind_dev_b00', 'restore_C1_x_1_1': 'bind_dev_b01', 'route_C2_x_2_4': 'bind_dev_b02'}`）。
-- **`N09 + N10`**：从 `04d_skill_contract_inspections.jsonl` 重建 `Full` 在 `T` 上的真实漏斗：新 `L1` 搜索/描述为 `5/8`、`3/8`；新 `L2` 搜索/描述为 `0/8`、`0/8`；至少描述任一新模块为 `3/8`；动态调用与精确保留仍为 `0/8`、`0/8`（同时明确区分 `4` 个 Alpha 跨域 KKT 机会与 `4` 个 Beta 同族多预算机会，以及部分 L1 缺失完整对偶见证字典的契约缺口）。
+- **`N09 + N10`**：从 `04d_skill_contract_inspections.jsonl` 重建 `Full` 在 `T` 上的真实漏斗：新 `L1` 搜索/描述为 `5/8`、`3/8`；新 `L2` 搜索/描述为 `6/8`、`4/8`；至少描述任一新模块为 `7/8`；动态调用与精确保留仍为 `0/8`、`0/8`（同时明确区分 `4` 个 Alpha 跨域 KKT 机会与 `4` 个 Beta 同族多预算机会，以及部分 L1 缺失完整对偶见证字典的契约缺口）。
 - **`N11`**：顺序受控代码池回放区分了 `OldestFirst_Probes1`（`32/48`）与 `LatestFirst_Probes1`（`40/48`），并证明在固定两翼接线的 `M9.5` 上 `Flat_SharedConditionalTable_Probes1`（`48/48`）与 `Hegel` 图守卫（`48/48`）等价——直接引出下一阶段 `M9.7` 对**非嵌套多次冲突 + 严格同现异史 + 置换多父与真实接线干扰父 + 按需编译**的检验。

@@ -302,6 +302,19 @@ def build_02_n02_three_layer_m_forensics() -> dict[str, Any]:
 
 def build_03_n03_m94_68_instance_errata() -> dict[str, Any]:
     tasks_by_id = m94.M94_TASKS_BY_ID
+    # Materialize public calibration sweep from `alpha_ep02` (`Stage G`, `<= t-1` prefix for `ep03` & `ep04`, `0` private truth!)
+    ep02_task = tasks_by_id["alpha_ep02__facility_recalibrated_coupon_batch"]
+    with tempfile.TemporaryDirectory(prefix="m94_ep02_pub_") as td_g:
+        ns_g: dict[str, Any] = {}
+        exec(compile(ep02_task.public_setup_py.replace("/holdout_task", td_g), "<m94_ep02_pub>", "exec"), ns_g)
+        pub_ep02 = pickle.loads((Path(td_g) / f"public_{ep02_task.short_name}.pkl").read_bytes())[0]["dataset"]["calibration_load_cells"]
+    alpha_prefix_sweeps = [
+        {
+            "lab_id": np.asarray(pub_ep02["lab_id"], dtype=int).tolist(),
+            "cmd_stress": np.asarray(pub_ep02["cmd_stress"], dtype=float).tolist(),
+            "true_stress": np.asarray(pub_ep02["true_stress"], dtype=float).tolist(),
+        }
+    ]
 
     ep_rows = []
     tot_inst = pass_inst = 0
@@ -313,6 +326,7 @@ def build_03_n03_m94_68_instance_errata() -> dict[str, Any]:
         sdir = ep_fp.parent / "04_submitted_artifacts_snapshot"
         cand_code = sorted(sdir.rglob("*.py"))[0].read_text(encoding="utf-8")
         entry_nm = task.declared_callable_entrypoints[0]
+        pref_sw = alpha_prefix_sweeps if tid.startswith(("alpha_ep03", "alpha_ep04")) else None
 
         ns_priv: dict[str, Any] = {}
         gen_cases = "\n".join(
@@ -326,7 +340,13 @@ def build_03_n03_m94_68_instance_errata() -> dict[str, Any]:
         for sd, inp_obj, gt_obj in cases:
             tot_inst += 1
             out_c = _exec_cand_json_rpc(cand_code, entry_nm, deepcopy(inp_obj))
-            vr = m941k.evaluate_three_layer_scientific_contract(family=fam, inp=inp_obj, out=out_c, gt=gt_obj)
+            vr = m941k.evaluate_three_layer_scientific_contract(
+                family=fam,
+                inp=inp_obj,
+                out=out_c,
+                gt=gt_obj,
+                prefix_calibration_sweeps=pref_sw,
+            )
             if vr["ok"]:
                 pass_inst += 1
             else:
@@ -584,34 +604,32 @@ def build_05_n09_n10_reconstructed_funnel() -> dict[str, Any]:
             continue
         raw_fp = mirror_dir / c["mirrored_raw_filename"]
         blob = json.loads(raw_fp.read_text(encoding="utf-8"))
-        atts = blob if isinstance(blob, list) else (blob.get("attempts") or [blob])
-        last_resp = (atts[-1].get("parsed_response") or atts[-1].get("response_json") or {})
-        if isinstance(last_resp, str):
+        raw_txt = blob.get("raw_response_text") if isinstance(blob, dict) else None
+        if not raw_txt and isinstance(blob, dict) and blob.get("attempts"):
+            raw_txt = blob["attempts"][-1].get("raw_response_text")
+        last_resp: dict[str, Any] = {}
+        if isinstance(raw_txt, str) and raw_txt.strip():
             try:
-                last_resp = json.loads(last_resp)
+                last_resp = json.loads(raw_txt)
             except Exception:
                 last_resp = {}
         pid = str(c["pair_cluster_id"])
-        if "__src_l2" in c["stage_subdir"] and isinstance(last_resp, dict) and last_resp.get("module_stem"):
-            pair_l2[pid].add(str(last_resp["module_stem"]))
-        elif "__src_l1" in c["stage_subdir"] and isinstance(last_resp, dict):
-            prims = last_resp.get("primitives") or ([last_resp] if last_resp.get("module_stem") else [])
-            for pr in prims:
-                st = str(pr.get("module_stem") or "")
-                if st and not st.startswith("autogenous_prim_"):
-                    st = f"autogenous_prim_{st}"
-                if st and st not in prior_v7_l1:
-                    pair_l1[pid].add(st)
-                    code_s = str(pr.get("module_code") or pr.get("python_code") or "")
-                    has_kkt_api = ("box" in st or "simplex" in st or "kkt" in code_s.lower())
-                    has_full_dual_dict = all(k in code_s for k in ("nu_sum", "lam_lower", "lam_upper", "dual_lower_bound"))
-                    pair_l1_kkt_contract_audit[pid].append(
-                        {
-                            "module_stem": st,
-                            "has_box_simplex_api": has_kkt_api,
-                            "returns_full_dual_witness_dict": has_full_dual_dict,
-                        }
-                    )
+        if "canonical_module_stem" in last_resp:
+            pair_l2[pid].add(str(last_resp["canonical_module_stem"]))
+        elif "primitive_module_stem" in last_resp:
+            st = str(last_resp["primitive_module_stem"])
+            if st and st not in prior_v7_l1:
+                pair_l1[pid].add(st)
+                code_s = str(last_resp.get("primitive_module_code") or last_resp.get("module_code") or "")
+                has_kkt_api = ("box" in st or "simplex" in st or "kkt" in code_s.lower())
+                has_full_dual_dict = all(k in code_s for k in ("nu_sum", "lam_lower", "lam_upper", "dual_lower_bound"))
+                pair_l1_kkt_contract_audit[pid].append(
+                    {
+                        "module_stem": st,
+                        "has_box_simplex_api": has_kkt_api,
+                        "returns_full_dual_witness_dict": has_full_dual_dict,
+                    }
+                )
 
     # Also scan `04d_skill_contract_inspections.jsonl` across Full `T` episodes to ensure any mounted `autogenous_prim_*` not in `prior_v7_l1` is captured
     run2 = json.loads((M96_RUN2 / "m9_6_continual_summary.json").read_text(encoding="utf-8"))
