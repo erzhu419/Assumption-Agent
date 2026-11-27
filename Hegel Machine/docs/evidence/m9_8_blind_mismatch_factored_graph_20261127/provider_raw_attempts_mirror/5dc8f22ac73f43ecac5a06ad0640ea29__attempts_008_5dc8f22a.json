@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5dc8f22ac73f43ecac5a06ad0640ea29",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:31.464049+00:00",
+  "ended_at_utc": "2026-11-27T14:36:03.758142+00:00",
+  "request_sha256": "2d06697c336498cd6ae8e84a64b5ec4c0808041374fdb661ed6dee9583f10c0d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58200,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34198,
+    "cached_tokens": 9600,
+    "completion_tokens": 1033
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/print(\\\\x27residual\\\\/deployment ranges/,$d' /tmp/identify_chamber.py > /tmp/signature.py; cat >> /tmp/signature.py <<'PY'\\nfrom scipy.optimize import least_squares\\nimport json\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\narchive=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor a in archive:\\n print('apparatus',[(k,str(v)[:400]) for k,v in a.items() if 'trace' not in k]);\\nE=np.vstack([-np.expm1(-t[:,None]/tau),1/tau]); T=np.r_[t,1.]; base=pred-drift[:,None]*T\\nC=yc-base\\nF=f[:,1:]; lab=c['lab_id']; good=~np.isnan(c['coupon_features_raw']).any(axis=1); print('time',T); print('residual rank',np.linalg.svd(C,compute_uv=False)); print('rows of C',np.c_[lab,good,drift,C[:,[0,2,5,8,11,12]]]);\\nfor subset in [np.ones(len(h),bool),good]:\\n u,S,v=np.linalg.svd(C[subset],full_matrices=False); print('subset size',subset.sum(),'singular values',S,'leading signatures'); print(v[:3]/v[:3,-1:]);\\n for label,A in [('drift + constant',np.c_[np.ones(len(h)),drift]),('features',f),('lab-specific drift and intercept',np.c_[f,lab[:,None]==np.unique(lab)[1:],drift[:,None]*(lab[:,None]==np.unique(lab)[1:])]),('lab-specific intercept',np.c_[f,lab[:,None]==np.unique(lab)[1:]])]:\\n  p=np.linalg.lstsq(A[subset],C[subset],rcond=None)[0]; print(label,'fit rmse',np.sqrt(np.mean((C[subset]-A[subset]@p)**2)),'coeffs at start/middle/end/rate',p[:,[0,5,11,12]])\\n  if label=='features': print('residual RMS of individual rows',np.sqrt(np.mean((C-A@p)**2,axis=1)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/signature.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared saturation of the nominal drift → H2 separate the chamber time signature from reference normalization and missing-feature effects; saturation with feature amplitudes leaves worst held-lab strain/rate RMSE of 0.266/0.364.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more saturation parameters\",\"rejected_reason\":\"Several different saturation laws leave similar held-lab errors, so first determine whether the missing structure is temporal or in the coupon amplitudes.\"}],\"rationale\":\"Subtract only the hereditary response, then compare the rank and time signatures of the remaining chamber signal on all coupons and on complete-feature coupons. A shared low-rank signature would direct the next fit toward amplitude normalization rather than more time parameters.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f9aafd778d723e111a02619deafce779046aec09b880809f713c2a8825f5c966",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32737.07,
+      "usage_known": true,
+      "prompt_tokens": 34198,
+      "cached_tokens": 9600,
+      "completion_tokens": 1033
+    }
+  ]
+}

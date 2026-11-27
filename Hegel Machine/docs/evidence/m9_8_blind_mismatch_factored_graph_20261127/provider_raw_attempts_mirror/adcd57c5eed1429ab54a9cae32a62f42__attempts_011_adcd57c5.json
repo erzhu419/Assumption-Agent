@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "adcd57c5eed1429ab54a9cae32a62f42",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:15.152974+00:00",
+  "ended_at_utc": "2026-11-27T14:30:49.362772+00:00",
+  "request_sha256": "e460b3a893a58a0b86bac3b6acb31ba14716adff0be45b3fd476f91c3107da54",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31291,
+    "cached_tokens": 11136,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitems = pickle.load(open(root+'public_batch.pkl', 'rb'))\\nfor rec in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n    print('apparatus entry:', {k:v for k,v in rec.items() if k != 'facility_telemetry_trace'})\\nfor item in items:\\n    s = item['study']\\n    sweeps = s['sensor_calibration_sweeps']\\n    x, y = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    pulses = item.get('campaign_diagnostics') or []\\n    S, _ = m._forward(s)\\n    xp = np.concatenate([(S @ p['w_pulse']).reshape(-1,4) for p in pulses])\\n    yp = np.concatenate([p['y_pulse_raw'].reshape(-1,4) for p in pulses])\\n    def basis(t, model):\\n        a = np.c_[np.ones(len(t)), t]\\n        q = np.column_stack([t[:,i]*t[:,j] for i in range(4) for j in range(i,4)])\\n        pairs = np.column_stack([t[:,i]+sign*t[:,j] for i in range(4) for j in range(i+1,4) for sign in (-1,1)])\\n        if model == 'affine': return a\\n        if model == 'quadratic': return np.c_[a, q]\\n        u = np.c_[t,pairs]\\n        return np.c_[a, u**3/(1+u**2)]\\n    models = ('affine','quadratic','saturating')\\n    ids = np.random.default_rng(81).permutation(len(x))\\n    fold = np.empty(len(x),int)\\n    fold[ids] = np.arange(len(x))%5\\n    def evaluate(train, test, model):\\n        return basis(x[test],model) @ np.linalg.lstsq(basis(x[train],model), y[train],rcond=None)[0] - y[test]\\n    nested = np.empty_like(y)\\n    selected = []\\n    for f in range(5):\\n        train, test = fold!=f, fold==f\\n        scores = [np.mean(np.concatenate([evaluate(train & (fold!=g),fold==g,model) for g in range(5) if g!=f])**2) for model in models]\\n        selected.append(models[np.argmin(scores)])\\n        nested[test] = evaluate(train,test,selected[-1])\\n    print('nested selections', selected, 'worst channel RMSE', np.sqrt(np.mean(nested**2,axis=0)).max())\\n    for model in models:\\n        e = np.concatenate([evaluate(fold!=f,fold==f,model) for f in range(5)])\\n        q = np.linalg.lstsq(basis(x,model),y,rcond=None)[0]\\n        ep = (basis(xp,model) @ q-yp).reshape(-1,len(s['mu_shifts']),len(s['sensor_ij'])//4,4)\\n        print(model, 'OOF sweep channel RMSE', np.sqrt(np.mean(e**2,axis=0)), 'worst pulse/shift/channel raw RMSE', np.sqrt(np.mean(ep**2,axis=2)).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_calibration_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine rosette response) → H2 (nonlinear response only if it improves held-out sweeps and tracer predictions); current worst calibrated tracer slice RMSE is 2.54e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relay, stochastic drift, or classification terms\",\n      \"rejected_reason\": \"This study contains steady transport, continuous tracer measurements, and no relay or classification outcomes; those checks would not test the solver contract.\"\n    }\n  ],\n  \"rationale\": \"Test whether quadratic interactions or saturating pairwise sums and differences explain calibration residuals beyond the full affine model. Select the basis inside the outer sweep folds and check its transfer to untouched tracer pulses; change the solver only if that exposes a repeatable improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5b5a3c4b262162695283f48102b3ffa44f0f70d5848e5f4114a5964fe311f689",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34137.63,
+      "usage_known": true,
+      "prompt_tokens": 31291,
+      "cached_tokens": 11136,
+      "completion_tokens": 1255
+    }
+  ]
+}

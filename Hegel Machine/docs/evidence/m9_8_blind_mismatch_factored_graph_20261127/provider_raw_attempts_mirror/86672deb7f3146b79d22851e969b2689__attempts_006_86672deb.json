@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86672deb7f3146b79d22851e969b2689",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_ConditionalTable_Online__beta_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:50:47.967821+00:00",
+  "ended_at_utc": "2026-11-27T14:51:28.679269+00:00",
+  "request_sha256": "6c96f6f8f9fe18af4f74fcc3a7cd3fde81825a12fadc9950750d6743e108a462",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27653,
+    "cached_tokens": 9600,
+    "completion_tokens": 1622
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\npath='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',path)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; nx,ny=s['nx'],s['ny']; n=nx*ny\\n# Assemble the operator row by row independently of the sparse implementation.\\nA=np.diag(s['V_reaction_2d'].ravel(order='F'))\\nfor j in range(ny):\\n for i in range(nx):\\n  row=i+nx*j\\n  for axis,q,dim in [('x',i,nx),('y',j,ny)]:\\n   k=s['kappa_'+axis]; v=s['vel_'+axis][q]; h=s['L'+axis]/(dim-1)\\n   for d in (-1,1):\\n    p=(q+d)%dim\\n    off=(p+nx*j) if axis=='x' else (i+nx*p)\\n    rate=(k[q]+k[p])/(2*h*h)+max(-d*v,0)/h\\n    A[row,off]-=rate; A[row,row]+=rate\\nmodes=s['source_modes']; rhs=np.array([x.ravel(order='F') for x in modes]).T\\nsensor=tuple(s['sensor_ij'].T)\\nobs=[]\\nfor mu in s['mu_shifts']:\\n fields=np.linalg.solve(A+mu*np.eye(n),rhs)\\n obs.append(np.column_stack([f.reshape(nx,ny,order='F')[sensor] for f in fields.T]))\\nS=np.vstack(obs)\\n# Hold out each clean sweep in turn to validate the fitted calibration basis.\\nsweeps=s['sensor_calibration_sweeps']; ref,raw=sweeps['ref_rosette'],sweeps['raw_rosette']; good=np.flatnonzero(np.max(np.abs(raw),axis=1)<9)\\nerrs=[]\\nfor i in good:\\n train=good[good!=i]; a=m._fit_calibration(ref[train],raw[train]); pred=np.array([(m._calibration_features(ref[i:i+1],j)@a[j]).item() for j in range(4)])\\n errs.append(pred-raw[i])\\ncal_rmse=np.sqrt(np.mean(np.array(errs)**2,axis=0)); assert max(cal_rmse)<3e-5\\npulse_rmse=[]\\nfor p in item['campaign_diagnostics']:\\n y=m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))\\n pulse_rmse.extend(np.sqrt(np.mean((y-S@p['w_pulse']).reshape(len(obs),-1)**2,axis=1)))\\nassert max(pulse_rmse)<1e-5\\nout=m.solve_batch(s); w=out['weights']; c=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']\\nexpected_field=(fields@w).reshape(nx,ny,order='F')\\nfield_error=np.max(np.abs(expected_field-out['terminal_field'])); assert field_error<1e-11\\nZ=s['Z_nuisance']; P=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nX=P@S; y=P@m._calibrate(s)\\ndef obj(w):\\n r=X@w-y; return (r@r+ridge*(w@w))/2\\ndef grad(w): return X.T@(X@w-y)+ridge*w\\nlo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); nu=c['nu_sum']; J=obj(w); g=grad(w)\\nassert np.allclose(c['weights'],w,atol=0,rtol=0)\\nassert min(w)>=-1e-12 and max(w)<=cap+1e-12 and abs(w.sum()-budget)<1e-12\\nassert min(lo)>=0 and min(hi)>=0\\nstationarity=np.max(np.abs(g-nu-lo+hi)); comp=max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w))))\\ndual=J-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\nassert max(stationarity,comp,abs(J-c['primal_objective']),abs(dual-c['dual_lower_bound']),abs(J-dual))<1e-10\\n# Check active-set transitions and budget endpoints against an independent optimizer.\\nqp_gap=[]\\nfor B in [0,cap/100,cap,2*cap,budget,len(w)*cap-cap/100,len(w)*cap]:\\n H=X.T@X+ridge*np.eye(len(w)); q=-X.T@y\\n v,mult=m._box_simplex_qp(H,q,cap,B)\\n derivative=H@v+q-mult\\n assert abs(v.sum()-B)<1e-11 and min(v)>=-1e-12 and max(v)<=cap+1e-12\\n assert max(np.max(np.maximum(derivative,0)*v),np.max(np.maximum(-derivative,0)*(cap-v)))<1e-10\\n ref_opt=minimize(obj,np.full(len(w),B/len(w)),jac=grad,bounds=[(0,cap)]*len(w),constraints={'type':'eq','fun':lambda x:x.sum()-B,'jac':lambda x:np.ones_like(x)},method='SLSQP',options={'ftol':1e-13})\\n assert ref_opt.success, ref_opt.message\\n qp_gap.append(abs(obj(v)-ref_opt.fun))\\nassert max(qp_gap)<1e-10\\nprint('Worst held-out calibration channel RMSE:',max(cal_rmse))\\nprint('Worst pulse/shift RMSE:',max(pulse_rmse))\\nprint('Terminal field max error:',field_error)\\nprint('KKT stationarity, complementarity, primal-dual gap:',stationarity,comp,abs(J-dual))\\nprint('Worst objective difference across seven budgets:',max(qp_gap))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reflecting replay → periodic walls with independently fitted nonlinear rosettes; worst observed pulse/shift RMSE is approximately 2×10⁻⁶, and the public schema passes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit on the schema result alone\",\"rejected_reason\":\"The schema result does not establish terminal-field indexing, calibration generalization, or numerical validity of the certificate.\"}],\"rationale\":\"Verify the exact artifact in an isolated Python process. An independent rowwise operator detects stencil or indexing errors; held-out sweeps detect calibration bias; and a separate optimizer plus certificate checks detect errors in bound handling or dual signs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "5b227b4def55c89d1f1ab7f24fceb90e179cfa4e0d2c07aa2b77c61f66f323ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40668.78,
+      "usage_known": true,
+      "prompt_tokens": 27653,
+      "cached_tokens": 9600,
+      "completion_tokens": 1622
+    }
+  ]
+}

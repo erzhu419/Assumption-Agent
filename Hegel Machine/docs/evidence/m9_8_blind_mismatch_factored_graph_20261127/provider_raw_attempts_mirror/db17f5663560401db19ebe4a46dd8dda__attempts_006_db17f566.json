@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db17f5663560401db19ebe4a46dd8dda",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:07.039800+00:00",
+  "ended_at_utc": "2026-11-27T14:28:39.030351+00:00",
+  "request_sha256": "1f794ce61a9a91dd6b49e3c5f679c4133ce8cb032ad75aa58d75bb18e7df776d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46811,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28564,
+    "cached_tokens": 9600,
+    "completion_tokens": 1209
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rheo_factor.py <<'PY'\\nexec(open('/tmp/rheo_probe.py').read().split(\\\"print('train RMSE'\\\")[0])\\nP,H,D=c; n=len(H); R=D@w[2:];\\nB=np.vstack([np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]])\\nA=np.linalg.lstsq(B,yd.T,rcond=None)[0].T; A2=np.linalg.lstsq(B[:,:2],yd.T,rcond=None)[0].T\\nbase=m._design(c,dt,t,tau)[:,-1,:2]*tau*w[:2]\\ncal=d['calibration_load_cells']; loads=cal['true_channel_loads']; raw=cal['bridge_raw']; fit=np.linalg.lstsq(np.c_[np.ones(len(loads)),loads],raw,rcond=None)[0]; inv=np.linalg.inv(fit[1:]); hp=(dg['hold_channel_raw']-fit[0])@inv; pp=(dg['past_channel_raw']-fit[0])@inv\\nprint('columns lab,stratum, hold, drift, amps, amp/weight-hold, driftobs, channels')\\nprint(np.c_[dg['lab_id'],dg['stratum'],H,R,A2,A2/w[:2]-H[:,None],A[:,-1],hp].round(4)); print('no drift rmse',np.sqrt(np.mean((A2@B[:,:2].T-yd)**2,0)).round(5))\\nfor name,Z in [('hold',H[:,None]),('baseline',base),('drift',R[:,None]),('hold+drift',np.c_[H,R]),('hold+drift2',np.c_[H,R,R**2]),('hold+drift+interaction',np.c_[H,R,H*R]),('hold+features',np.c_[H,D[:,1:]]),('hold+baseline+drift',np.c_[H,base,R]),('holdchannels+drift',np.c_[hp,R]),('hold+drift+past',np.c_[H,R,P]),('hold+drift+lab',np.c_[H,R,np.eye(4)[dg['lab_id']][:,1:]]),('hold+drift+stratum',np.c_[H,R,np.eye(max(dg['stratum'])+1)[dg['stratum']][:,1:]])]:\\n Z=np.c_[np.ones(n),Z]; co=np.linalg.lstsq(Z,A2,rcond=None)[0]; pred=np.zeros_like(A2)\\n for g in np.unique(dg['lab_id']):\\n  v=dg['lab_id']==g; pred[v]=Z[v]@np.linalg.lstsq(Z[~v],A2[~v],rcond=None)[0]\\n print(name,'fit',np.sqrt(np.mean((Z@co-A2)**2,0)).round(5),'worst lab amp',np.max([np.sqrt(np.mean((pred-A2)[dg['lab_id']==g]**2,0)) for g in np.unique(dg['lab_id'])],0).round(5),'coef',co.T.round(4))\\nprint('diag features raw'); print(dg['coupon_features_raw'].round(3)); print('archive trace excerpt'); import json; j=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))[-1]['facility_telemetry_trace']; print(str(j)[:420])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_factor.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 stress-only affine chamber kernel → H2 chamber amplitudes also depend on coupon properties; the best tested affine model still has worst-lab RMSE of 0.4463 for strain and 0.3874 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer a full affine lag kernel\",\"rejected_reason\":\"Its worst-lab strain RMSE is 1.0659; adding coupon features improves it, suggesting that calibrated stress history alone is insufficient.\"}],\"rationale\":\"The fitted chamber drift is near zero, and the two amplitude residuals share similar correlation patterns. Test whether a compact mapping from hold load and intrinsic coupon drift explains both branches, and use held-out labs to decide whether individual load channels or history are needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b7c98fcabbbec0cb4d71512db6fe534e4570f4bbf58ea18cc14b76927dd7636d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31938.21,
+      "usage_known": true,
+      "prompt_tokens": 28564,
+      "cached_tokens": 9600,
+      "completion_tokens": 1209
+    }
+  ]
+}

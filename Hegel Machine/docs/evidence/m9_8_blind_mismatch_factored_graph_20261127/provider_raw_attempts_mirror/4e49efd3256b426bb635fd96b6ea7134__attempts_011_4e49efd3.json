@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e49efd3256b426bb635fd96b6ea7134",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:54.912689+00:00",
+  "ended_at_utc": "2026-11-27T14:31:36.381806+00:00",
+  "request_sha256": "49f06bba43ca46ad0ae4f6de19a1a36991bbcd5f3ec05032f7a40fb335d03820",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69591,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35505,
+    "cached_tokens": 9600,
+    "completion_tokens": 1652
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    p = pickle.load(f)[0]\\nd = p['dataset']; q = p['campaign_diagnostics']; t = d['eval_times']; dt = d['past_dt']\\nout = m.solve_batch(d)\\ntaus = out['estimated_taus']; theta = out['hereditary_weights']\\ncal = d['calibration_load_cells']; loads = cal['true_channel_loads']; raw = cal['bridge_raw']\\ni, j = np.triu_indices(4)\\n\\ndef design(x, quadratic):\\n    a = np.c_[np.ones(len(x)), x]\\n    return np.c_[a, x[:, i]*x[:, j]] if quadratic else a\\n\\nrng = np.random.default_rng(17)\\nfolds = np.array_split(rng.permutation(len(loads)), 5)\\nfor quadratic in (False, True):\\n    err = np.empty(len(loads))\\n    for fold in folds:\\n        keep = np.ones(len(loads), dtype=bool); keep[fold] = False\\n        fit = np.linalg.lstsq(design(raw[keep], quadratic), loads[keep].sum(axis=1), rcond=None)[0]\\n        err[fold] = design(raw[fold], quadratic) @ fit - loads[fold].sum(axis=1)\\n    print('bridge inverse diagnostic quadratic=', quadratic, 'RMSE', np.sqrt(np.mean(err**2)), 'worst', max(abs(err)))\\n\\nx = q['coupon_features_raw'].copy(); lab = q['lab_id']\\nfor g in np.unique(lab):\\n    rows = lab == g; r = q['ref_coupons'][rows]\\n    x[rows] = (x[rows] - np.median(r.mean(0))) / np.median(r.std(0))\\nx = np.where(np.isnan(x), np.nanmean(x, axis=0), x)\\ndrift = theta[2] + x @ theta[3:]\\noff, w = m._calibration(cal)\\nh = (q['hold_channel_raw'] - off) @ w\\npast = (q['past_channel_raw'] - off) @ w\\nobs = np.c_[q['strain_curves_obs']-q['strain_0'][:, None], q['instant_rate_obs']]\\nb = np.r_[-np.expm1(-t[:, None] / taus), [1/taus]]\\nf = b * taus\\nbase = (h[:, None]*theta[:2]) @ b.T + drift[:, None]*f[:, 1]\\nres = obs - base\\npartition = drift[:, None]*(f[:, 0]-f[:, 1])\\nz = np.zeros((len(h), 2))\\nfor s, delta in enumerate(dt):\\n    decay = np.exp(-delta/taus)\\n    z = decay*z + (1-decay)*past[:, s, None]\\ncontrast = (past[:, -1]-past[:, 0])[:, None]\\nmodels = {\\n    'conserved split': [partition],\\n    'retained-memory challenger': [partition, (z*theta[:2]) @ b.T],\\n    'pairwise history contrast challenger': [partition, contrast*b[:, 0], contrast*b[:, 1]],\\n    'rational split challenger': [partition, partition*drift[:, None]**2/(1+drift[:, None]**2)],\\n    'rational gain challenger': [partition, drift[:, None]*f[:, 1]*drift[:, None]**2/(1+drift[:, None]**2)],\\n}\\nfor name, terms in models.items():\\n    a = np.stack(terms, axis=-1); error = np.empty_like(res)\\n    for g in np.unique(lab):\\n        keep = lab != g\\n        fit = np.linalg.lstsq(a[keep].reshape(-1, len(terms)), res[keep].ravel(), rcond=None)[0]\\n        error[~keep] = a[~keep] @ fit - res[~keep]\\n    print(name, 'worst lab strain/rate RMSE', np.round(np.max([np.sqrt(np.mean(error[lab==g, :-1]**2)), np.sqrt(np.mean(error[lab==g, -1]**2))] for g in []),6) if False else np.round(np.max([[np.sqrt(np.mean(error[lab==g, :-1]**2)), np.sqrt(np.mean(error[lab==g, -1]**2))] for g in np.unique(lab)], axis=0),6), 'worst coupon strain RMSE/rate abs', np.round([max(np.sqrt(np.mean(error[:, :-1]**2, axis=1))), max(abs(error[:, -1]))],6))\\nPY\\nsed -i 's/np.round(np.max(\\\\[np.sqrt(np.mean(error\\\\[lab==g, :-1\\\\]\\\\*\\\\*2)), np.sqrt(np.mean(error\\\\[lab==g, -1\\\\]\\\\*\\\\*2))\\\\] for g in \\\\[\\\\]),6) if False else //' /tmp/m98_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unchanged benchtop deployment law → H2: chamber memory reset with a conserved drift split; prior leave-one-benchtop-lab-out refits gave worst chamber coupon strain RMSE 0.00836 and absolute initial-rate error 0.00888.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB operators, or classification balanced accuracy\",\n      \"rejected_reason\": \"The supplied measurements are continuous creep and rate responses, with no relay state, stochastic-control operator, or class label. Worst-lab regression error directly tests the relevant nuisance.\"\n    }\n  ],\n  \"rationale\": \"Withhold entire diagnostic labs while fitting each challenger to detect residual memory, history contrasts, or saturation that generalizes beyond a single lab. Test bridge curvature on held-out calibration sweeps; consider a more complex bridge only if it improves the physical stress signal enough to affect deployment predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7c76101b6d0533c448597265d16ea2fc96c0a6ae13bebe4728d5dc4896f8b12e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41422.65,
+      "usage_known": true,
+      "prompt_tokens": 35505,
+      "cached_tokens": 9600,
+      "completion_tokens": 1652
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c9b959001274c34897d61cdde5a7838",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:53.922308+00:00",
+  "ended_at_utc": "2026-11-27T14:58:26.069009+00:00",
+  "request_sha256": "f2758f86db69f63e0ea94f558a25d02c9f3eaebb9c270f1c9fbfa3b0809d7c1e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31437,
+    "cached_tokens": 9600,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom unittest.mock import patch\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; q=item['campaign_diagnostics']; out=m.solve_batch(d)\\nz,theta=out['estimated_taus'],out['hereditary_weights']; t,dt=d['eval_times'],d['past_dt']; stress=m._stress_calibration(d['calibration_load_cells'])\\n# Score the exact deployment branch on verification coupons using their own reference panel.\\n# Fit neither the material parameters nor the chamber law on these observations.\\nx,_=m._standardize(q,q); xtr,_=m._standardize(d['train'],d['test'])\\nwith patch.object(m,'_standardize',return_value=(xtr,x)), patch.object(m,'_fit',return_value=(z,theta)):\\n    observed=m.solve_batch(dict(d,test=q))\\nystar=q['strain_curves_obs']; rstar=q['instant_rate_obs']; pred=observed['predicted_strain']; rate=observed['initial_rate_pred']\\ndef rmse(e): return np.sqrt(np.mean(e**2))\\nhold=stress(q['hold_channel_raw']); past=stress(q['past_channel_raw']); tail=np.cumsum(dt[::-1])[::-1]-dt\\nphi=-np.expm1(-t[:,None]/z); drift=theta[2]+x@theta[3:]\\nstate=past@(-np.expm1(-dt[:,None]/z)*np.exp(-tail[:,None]/z)); retained_rate=(hold[:,None]-state)@(theta[:2]/z)+drift\\nsat=q['strain_0'][:,None]+hold[:,None]*(phi@theta[:2])+drift[:,None]*(-np.expm1(-t))\\nfor lab in np.unique(q['lab_id']):\\n    k=q['lab_id']==lab; e=(pred-ystar)[k]\\n    print('lab',lab,'count',k.sum(),'early/late strain RMSE',rmse(e[:,:len(t)//2]),rmse(e[:,len(t)//2:]),'rate RMSE',rmse((rate-rstar)[k]))\\n    assert rmse(e)<rmse((sat-ystar)[k]) and rmse((rate-rstar)[k])<rmse((retained_rate-rstar)[k])\\nprint('Pooled reset/log strain RMSE',rmse(pred-ystar),'vs reset/saturating',rmse(sat-ystar))\\nprint('Pooled reset rate RMSE',rmse(rate-rstar),'vs retained-memory',rmse(retained_rate-rstar))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Retained memory → chamber reset with logarithmic creep; verified worst benchtop held-out lab rate RMSE is 0.0101, and the host reports deployment strain MAE of 0.002014.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Accept the pooled chamber diagnostic alone\",\n      \"rejected_reason\": \"It could conceal a lab where the selected law loses to the archived alternatives, warranting investigation of that lab's calibration or normalization.\"\n    }\n  ],\n  \"rationale\": \"Use the exact deployment branch and train-only material fit to isolate the chamber law on measured verification coupons. Compare rate against retained memory and strain against saturating creep independently by lab, without changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "04462a5ccf1eef944bfaebc7c8ead260ed5b75e892694a11eb2ae23e72475679",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32103.69,
+      "usage_known": true,
+      "prompt_tokens": 31437,
+      "cached_tokens": 9600,
+      "completion_tokens": 1050
+    }
+  ]
+}

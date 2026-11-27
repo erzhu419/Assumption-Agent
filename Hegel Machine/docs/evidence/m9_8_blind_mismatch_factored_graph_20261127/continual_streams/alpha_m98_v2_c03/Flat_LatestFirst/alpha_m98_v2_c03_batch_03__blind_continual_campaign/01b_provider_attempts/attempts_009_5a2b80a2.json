@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a2b80a2288b4066be0d34918ae286a0",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:52.856505+00:00",
+  "ended_at_utc": "2026-11-27T14:42:22.805015+00:00",
+  "request_sha256": "ca8b3b16806766436839373e32e2ac7e1f4cce5910dbfac97f21252ed6f1232f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35503,
+    "cached_tokens": 11136,
+    "completion_tokens": 1125
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m98_exact.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m98_factor import *\\n\\ndef features(ix,imp):\\n V=dg['coupon_features_raw'].copy(); st=dg['stratum']; R=dg['ref_coupons'];\\n for l in np.unique(labs):\\n  m=labs==l; z=R[m]; V[m]=(V[m]-np.median(z.mean(0)))/np.median(z.std(0))\\n _,j,n=np.unique(np.c_[labs[ix],st[ix]],axis=0,return_inverse=True,return_counts=True); w=1/n[j].reshape(-1,1); mu=np.nansum(w*V[ix],axis=0)/np.sum(w*~np.isnan(V[ix]),axis=0)\\n return np.where(np.isnan(V),mu if imp=='diag' else D,V)\\n\\ndef fit(ix,mem,amp,imp):\\n r=th[2]+features(ix,imp)@th[3:];\\n def predict(p):\\n  lam=np.exp(p[0]); dk=np.r_[-np.expm1(-t*lam),lam]; v=p[1:];\\n  if mem=='clock': Z=zstate(P,dt,taus*np.exp(v[:2])); j=2\\n  if mem=='tail': Z=zstate(P[:,-3:],dt[-3:],taus*np.exp(v[:2])); j=2\\n  if mem=='clock-age':\\n   dur=dt*np.exp(v[:6]); Z=zstate(P,dur,taus); j=6\\n  if mem=='gate':\\n   gate=np.r_[np.full(3,v[0]),np.ones(3)]; Z=zstate(P*gate,dt,taus*np.exp(v[1:3])); j=3\\n  if mem=='tail-fixed': Z=zstate(P[:,-3:],dt[-3:],taus); j=0\\n  if mem=='fixed': Z=zstate(P,dt,taus); j=0\\n  if amp=='scale': rd=v[j]*r\\n  elif amp=='affine':rd=v[j]*r+v[j+1]\\n  elif amp=='fixed':rd=r\\n  return (H[:,None]-Z)*th[:2]@E.T+rd[:,None]*dk\\n j={'clock':2,'tail':2,'clock-age':6,'gate':3,'tail-fixed':0,'fixed':0}[mem]; a={'scale':[1.],'affine':[1.,0.],'fixed':[]}[amp]; p=np.r_[0.,np.zeros(j),a]; f=least_squares(lambda p:((predict(p)-Y)[ix]*W).ravel(),p,bounds=(-5,5),max_nfev=200);return f.x,predict(f.x)-Y\\nfor mem in ['fixed','tail-fixed','clock','tail','clock-age','gate']:\\n for amp in ['fixed','affine']:\\n  for imp in ['diag','train']:\\n   p,e=fit(ids,mem,amp,imp); cv=np.empty_like(e)\\n   for l in np.unique(labs):\\n    m=labs==l; cv[m]=fit(ids[~m],mem,amp,imp)[1][m]\\n   def met(e):return np.array([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,11]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\n   print(mem,amp,imp,'param',p.round(4),'fit',met(e).round(4),'LOLO',np.max([met(cv[labs==l]) for l in np.unique(labs)],0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_exact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pooled reference alignment → H2 diagnostic-panel alignment with saturating chamber drift; worst held-out-lab final-horizon and initial-rate RMSE fell to 0.064 and 0.069.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit separate drift parameters for each lab\",\"rejected_reason\":\"The common drift law with diagnostic-panel alignment predicts omitted labs better.\"}],\"rationale\":\"Test whether chamber diagnostics use their own cell-balanced imputation and whether the remaining errors come from early-pulse gating or a different history clock. The held-out lab errors determine which correction to ship.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4f8ed8607f231024d3ac867d5b590ed14c88b328407180b11bfb2fd18b79bd1b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30367.52,
+      "usage_known": true,
+      "prompt_tokens": 35503,
+      "cached_tokens": 11136,
+      "completion_tokens": 1125
+    }
+  ]
+}

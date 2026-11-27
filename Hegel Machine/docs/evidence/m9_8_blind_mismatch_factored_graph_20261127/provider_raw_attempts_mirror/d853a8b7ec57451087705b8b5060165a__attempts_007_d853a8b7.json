@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d853a8b7ec57451087705b8b5060165a",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:55:49.896330+00:00",
+  "ended_at_utc": "2026-11-27T14:56:44.526816+00:00",
+  "request_sha256": "6cdd1ec6338eefa8e4dd002620d5d56d6ee7211844e121775b76d1a40d344ea7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49581,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29370,
+    "cached_tokens": 11136,
+    "completion_tokens": 1791
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; sweeps = s['sensor_calibration_sweeps']\\nref, raw = (sweeps[k] for k in ('ref_rosette', 'raw_rosette'))\\nerrors = {k: [] for k in ('six_term', 'quadratic_interactions', 'rational')}\\nfor fold in range(5):\\n    test = np.arange(len(ref)) % 5 == fold\\n    peak = np.max(np.abs(raw), axis=1)\\n    med = np.median(peak[~test]); lim = med + 10 * np.median(abs(peak[~test] - med))\\n    train = (~test) & (peak <= lim); valid = test & (peak <= lim)\\n    for j in range(4):\\n        own, prev, nxt, opp = (ref[:, (j+k)%4] for k in (0,-1,1,2))\\n        base = m['_rosette_design'](ref, j)\\n        # Independent neighbor coefficients already span both sums and differences.\\n        expanded = np.column_stack((base, opp, own**2, own*prev, own*opp, prev*nxt, own*prev*nxt))\\n        for name, X in (('six_term', base), ('quadratic_interactions', expanded)):\\n            c = np.linalg.lstsq(X[train], raw[train,j], rcond=None)[0]\\n            errors[name].extend(abs(X[valid] @ c - raw[valid,j]))\\n        def rational(a):\\n            X = base.copy(); X[:,1:] /= (1+a*own**2)[:,None]\\n            c = np.linalg.lstsq(X[train], raw[train,j], rcond=None)[0]\\n            return np.linalg.norm(X[train] @ c - raw[train,j]), X[valid] @ c\\n        a = minimize_scalar(lambda a: rational(a)[0], bounds=(0,1), method='bounded', options={'xatol':1e-12}).x\\n        errors['rational'].extend(abs(rational(min((0,a), key=lambda x:rational(x)[0]))[1] - raw[valid,j]))\\nfor k, e in errors.items():\\n    print(k, 'held-out sweep absolute p95, max', np.quantile(e,.95), max(e))\\nS, modes = m['_forward'](s); c, _ = m['_fit_rosette'](s)\\npredict = lambda v: np.column_stack([m['_rosette_design'](v.reshape(-1,4), j) @ c[j] for j in range(4)]).ravel()\\npulse_slices = []\\nfor p in item['campaign_diagnostics']:\\n    target = p['y_pulse_raw'].reshape(len(s['mu_shifts']),-1,4)\\n    diff = predict(S @ p['w_pulse']).reshape(target.shape) - target\\n    pulse_slices.extend((np.linalg.norm(diff,axis=1)/np.linalg.norm(target,axis=1)).ravel())\\nprint('worst pulse x shift x bank relative error', max(pulse_slices))\\nassert max(pulse_slices) < 1e-4\\ncal = m['_calibrate'](s)\\nroundtrip = np.max(abs(predict(cal) - s['y_obs_raw']))\\nassert roundtrip < 1e-10\\nprint('observed rosette inverse round-trip max', roundtrip)\\nout = m['solve_batch'](s); w = out['weights']; cert = out['kkt_certificate']; nu = cert['nu_sum']\\nZ = s['Z_nuisance']; n = len(cal); r = s['nuisance_ridge']; cap = s['u_box']; budget = s['total_budget']\\n# Independent projection via its observation-space representation.\\nP = np.linalg.solve(np.eye(n) + (Z @ Z.T)/r, np.eye(n))\\nres = P @ (S @ w - cal)\\ng = (P @ S).T @ res + s['source_ridge']*w\\nll = np.asarray(cert['lam_lower']); lu = np.asarray(cert['lam_upper'])\\nJ = .5*(res@res+s['source_ridge']*(w@w)); dual = J + nu*budget + np.sum(np.minimum(0,g-nu)*cap-g*w)\\nprint('projected residual RMS by shift and bank', np.sqrt(np.mean(res.reshape(len(s['mu_shifts']),-1,4)**2,axis=1)))\\nprint('budget error, KKT stationarity, lower/upper complementarity, dual gap', abs(w.sum()-budget), max(abs(g-nu-ll+lu)), max(abs(w*ll)), max(abs((cap-w)*lu)), J-dual)\\nassert np.min(w) >= -1e-12 and np.max(w) <= cap+1e-12 and abs(w.sum()-budget) < 1e-10\\nassert max(abs(g-nu-ll+lu)) < 1e-10 and max(abs(w*ll)) < 1e-10 and max(abs((cap-w)*lu)) < 1e-10\\nassert abs(J-cert['primal_objective']) < 1e-10 and abs(dual-cert['dual_lower_bound']) < 1e-10 and abs(J-dual) < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: open Robin walls → H2: sealed walls with a six-term, sweep-fitted rosette; public worst pulse-by-shift error is 1.73e-5 and the host-measured KKT gap is 6.45e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, drift, or within-cohort classification tests\",\n      \"rejected_reason\": \"This public input is a steady, single-campaign regression with no relay states, time evolution, or class labels. Pulse slices and an independent nuisance projection test the applicable failure modes.\"\n    }\n  ],\n  \"rationale\": \"Compare the current sensor basis with rational and interaction challengers on held-out sweeps. Check whether averaging hid a bad pulse bank, and independently recompute the projected objective and certificate to catch nuisance or multiplier errors before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8570360655653332f8fc8c579c4331541a4b2720b7221784c843778c89d3bda6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54592.93,
+      "usage_known": true,
+      "prompt_tokens": 29370,
+      "cached_tokens": 11136,
+      "completion_tokens": 1791
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1ef4c5f1ef5a4f809e5b8d548e658508",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:39.873951+00:00",
+  "ended_at_utc": "2026-11-27T14:30:14.079257+00:00",
+  "request_sha256": "24bad5d3ea7fb3ac2e22ace13fec74c3103dc70b058eb2e10e737e88200aaf6c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47234,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27798,
+    "cached_tokens": 11136,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m98_transfer.py <<'PY'\\nimport numpy as np\\nfrom pathlib import Path\\n\\n# Reuse the exploratory forward model, without running its parameter fits.\\np = Path('/tmp/probe_wall.py')\\nexec(compile(p.read_text().split('choices=', 1)[0], str(p), 'exec'))\\nchoices = [(1,1,0), (0,1,0), (0,2,0), (0,1,1), (0,.5,.5), (1,0,0)]\\nerrors = np.array([err(np.array([a]*2+[b]*2)) for a in choices for b in choices])\\nreflect = 1*len(choices)+1\\nworst = 0.\\nfor held in range(Y.shape[1]):\\n    other = np.arange(Y.shape[1]) != held\\n    rmse = np.sqrt(np.mean(errors[:,:,other]**2, axis=(1,2)))\\n    best, runner = np.argsort(rmse)[:2]\\n    held_rmse = np.sqrt(np.mean(errors[best,:,held].reshape(len(shifts),-1)**2,axis=1))\\n    print('held pulse',held,'selected reflecting',best==reflect,'training runner-up RMSE',rmse[runner],'held RMSE by shift',held_rmse)\\n    assert best==reflect and held_rmse.max()<3e-6\\n    worst = max(worst,held_rmse.max())\\nprint('Worst held-out pulse-by-shift RMSE',worst)\\n\\n# Select any rational correction using only inner held-out sweep rows.\\nc = s['sensor_calibration_sweeps']; x,y = c['ref_rosette'],c['raw_rosette']\\nbase = np.c_[x,np.ones(len(x))]\\nqs = [*x.T, *[(x[:,i]+sign*x[:,j])/np.sqrt(2) for i in range(4) for j in range(i+1,4) for sign in (-1,1)]]\\ndesigns = [base]\\nfor q in qs:\\n    z = q/np.std(q)\\n    for a in (.01,.1,1.):\\n        designs.append(np.c_[base, base*(z*z/(1+a*z*z))[:,None]])\\ndef residual(X, train, test):\\n    return X[test]@np.linalg.lstsq(X[train],y[train],rcond=None)[0]-y[test]\\norder=np.argsort(np.max(np.abs(x),axis=1)); worst=np.zeros(2)\\nfor outer in np.array_split(order,5):\\n    tr=order[~np.isin(order,outer)]\\n    inner=np.array_split(tr,4)\\n    scores=[]\\n    for X in designs[1:]:\\n        r=np.concatenate([residual(X,tr[~np.isin(tr,fold)],fold) for fold in inner])\\n        scores.append(np.sqrt(np.mean(r*r,axis=0)).max())\\n    for j,X in enumerate((base,designs[1+int(np.argmin(scores))])):\\n        r=residual(X,tr,outer)\\n        worst[j]=max(worst[j],np.sqrt(np.mean(r*r,axis=0)).max())\\nprint('Worst outer amplitude block x channel RMSE [affine, nested rational]',worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m98_transfer.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 reflecting walls on both axes with affine rosette calibration; worst measured pulse-by-shift-by-bank RMSE is 1.07e-6 before nuisance projection.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the budget stress test or run relay and classification audits\",\n      \"rejected_reason\": \"The budget endpoints already passed on this exact artifact, and the study has neither relay modes nor classification cohorts.\"\n    }\n  ],\n  \"rationale\": \"Select the wall stencil on one measured tracer pulse and test it on the other to detect a pulse-specific fit. Separately, test rational rosette corrections on held-out amplitude blocks with model selection confined to the inner folds. Revisit the solver only if wall selection fails to transfer or the nonlinear calibration provides a material improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "de97d58fd0088b69b3adeab888c52994236194d0ded8f6bfc26fe11e764f4c55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34165.06,
+      "usage_known": true,
+      "prompt_tokens": 27798,
+      "cached_tokens": 11136,
+      "completion_tokens": 1254
+    }
+  ]
+}

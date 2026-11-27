@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa96228f58a548bea725ea766bda20f1",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:56:22.268431+00:00",
+  "ended_at_utc": "2026-11-27T14:57:17.333156+00:00",
+  "request_sha256": "7a49976cadcd0242e05841a86356ee93094d1d830a8d4453da780f25906cb104",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59048,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33578,
+    "cached_tokens": 11136,
+    "completion_tokens": 1608
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy import sparse\\nfrom scipy.optimize import minimize\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n\\ndef axis(k,v,h):\\n    n=len(k); A=np.zeros((n,n))\\n    for i in range(1,n-1):\\n        A[i,i-1]=-(k[i]+k[i-1])/(2*h*h)-max(v[i],0)/h\\n        A[i,i+1]=-(k[i]+k[i+1])/(2*h*h)-max(-v[i],0)/h\\n        A[i,i]=-A[i,i-1]-A[i,i+1]\\n    for i,j in [(0,1),(n-1,n-2)]:\\n        A[i,i]=k[i]/(h*h); A[i,j]=-A[i,i]\\n    return A\\n\\nwith open('/holdout_task/public_batch.pkl','rb') as f: items=pickle.load(f)\\nfor i,item in enumerate(items):\\n    s=item['study']; nx,ny=s['nx'],s['ny']; shifts=s['mu_shifts']; cap=s['u_box']; ridge=s['source_ridge']\\n    Ax,Ay=[axis(s['kappa_'+a],s['vel_'+a],s['L'+a]/(n-1)) for a,n in [('x',nx),('y',ny)]]\\n    L=np.kron(np.eye(ny),Ax)+np.kron(Ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    F=np.column_stack([a.ravel(order='F') for a in s['source_modes']]); x,y=s['sensor_ij'].T; rows=x+nx*y\\n    U=[np.linalg.solve(L+mu*np.eye(nx*ny),F) for mu in shifts]; S=np.vstack([u[rows] for u in U]); n=F.shape[1]\\n    worst=0.\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        cal=m._calibrate({**s,'y_obs_raw':pulse['y_pulse_raw']}); err=(S@pulse['w_pulse']-cal).reshape(len(shifts),-1)\\n        worst=max(worst,float(np.sqrt(np.mean(err**2,axis=1)).max()))\\n    assert worst<5e-6, worst\\n    Z=s['Z_nuisance']; Q=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\n    A,t=Q@S,Q@m._calibrate(s)\\n    J=lambda w: 0.5*(np.linalg.norm(A@w-t)**2+ridge*np.dot(w,w))\\n    grad=lambda w:A.T@(A@w-t)+ridge*w\\n    worst_gap=worst_pde=worst_objective=0.\\n    for total in [s['total_budget'],0.,.03*cap,3*cap,(n-.03)*cap,n*cap]:\\n        out=m.solve_batch({**s,'total_budget':total}); w=out['weights']; c=out['kkt_certificate']; lo,hi=c['lam_lower'],c['lam_upper']; g=grad(w); nu=c['nu_sum']; gap=J(w)-c['dual_lower_bound']\\n        field=out['terminal_field'].ravel(order='F'); pde=np.linalg.norm((L+shifts[-1]*np.eye(len(L)))@field-F@w,np.inf)\\n        assert abs(w.sum()-total)<1e-10 and w.min()>=-1e-10 and w.max()<=cap+1e-10\\n        assert np.array_equal(c['weights'],w) and lo.min()>=0 and hi.min()>=0\\n        assert max(np.linalg.norm(g-nu-lo+hi,np.inf),np.linalg.norm(lo*w,np.inf),np.linalg.norm(hi*(cap-w),np.inf))<1e-9\\n        assert abs(c['primal_objective']-J(w))<1e-10 and abs(gap)<1e-9\\n        assert pde<1e-9 and np.linalg.norm(field-U[-1]@w,np.inf)<1e-10\\n        if 0<total<n*cap:\\n            ref=minimize(J,np.full(n,total/n),jac=grad,bounds=[(0,cap)]*n,constraints=[{'type':'eq','fun':lambda v:v.sum()-total,'jac':lambda v:np.ones(n)}],method='SLSQP',options={'ftol':1e-13,'maxiter':500})\\n            assert ref.success and abs(J(w)-ref.fun)<1e-9, ref.message\\n            worst_objective=max(worst_objective,abs(J(w)-ref.fun))\\n        worst_gap=max(worst_gap,abs(gap)); worst_pde=max(worst_pde,pde)\\n    print(f'item {i}: worst pulse/shift RMSE={worst:.3g}; six budgets: worst PDE residual={worst_pde:.3g}, absolute duality gap={worst_gap:.3g}, independent objective difference={worst_objective:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls on both axes with sweep-fitted nonlinear readout; worst calibrated pulse/shift RMSE is 1.7e-6 and worst-bank held-out sweep p90 is 2.25e-5 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation alone\",\n      \"rejected_reason\": \"Schema validity cannot detect axis-order mistakes, an incorrect terminal field, or bound-multiplier errors.\"\n    }\n  ],\n  \"rationale\": \"Run the exact candidate in isolated Python against an independent dense transport assembly and an independent constrained optimizer. If the pulse or field checks fail, inspect the stencil and ordering; if the budget or KKT checks fail, fix the active-set solver or certificate before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7a5f22a912df7a756cd5c91dd6f58dc6cce6df6d97f6da2a444fc94ce61c9e86",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 55024.2,
+      "usage_known": true,
+      "prompt_tokens": 33578,
+      "cached_tokens": 11136,
+      "completion_tokens": 1608
+    }
+  ]
+}

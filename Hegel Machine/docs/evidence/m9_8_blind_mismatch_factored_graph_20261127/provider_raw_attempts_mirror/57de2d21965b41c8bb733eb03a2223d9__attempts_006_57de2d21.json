@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "57de2d21965b41c8bb733eb03a2223d9",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:56:14.854081+00:00",
+  "ended_at_utc": "2026-11-27T14:57:07.687350+00:00",
+  "request_sha256": "5aedb3db692e577e11d3cb599f075a8192af9e004c6b68f0e752aa22b366c18e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45093,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27363,
+    "cached_tokens": 11136,
+    "completion_tokens": 1787
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s = item['study']\\nZ = s['Z_nuisance']; nx, ny = s['nx'], s['ny']\\ndef dense_axis(k, n):\\n    kap, vel = s['kappa_'+k], s['vel_'+k]; h = s['L'+k]/(n-1)\\n    A = np.zeros((n,n))\\n    for i in range(n):\\n        for j in (i-1,i+1):\\n            if 0 <= j < n:\\n                A[i,j] = -(kap[i]/h**2 if i in (0,n-1) else (kap[i]+kap[j])/(2*h**2) + max((i-j)*vel[i],0)/h)\\n        A[i,i] = -A[i].sum()\\n    return A\\nL = np.kron(np.eye(ny),dense_axis('x',nx))+np.kron(dense_axis('y',ny),np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nB = np.array([v.ravel(order='F') for v in s['source_modes']]).T\\nij = s['sensor_ij']; ix = ij[:,0]+nx*ij[:,1]\\nfields = [np.linalg.solve(L+mu*np.eye(nx*ny),B) for mu in s['mu_shifts']]\\nS = np.vstack([U[ix] for U in fields]); actual, last = m._forward(s)\\nnp.testing.assert_allclose(actual,S,rtol=1e-11,atol=1e-12)\\nnp.testing.assert_allclose(last,fields[-1],rtol=1e-11,atol=1e-12)\\nworst = 0.\\nfor p in item['campaign_diagnostics']:\\n    r = m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) - S @ p['w_pulse']; r -= Z@np.linalg.lstsq(Z,r,rcond=None)[0]\\n    worst = max(worst,np.sqrt(np.mean(r.reshape(len(fields),-1)**2,axis=1)).max())\\nprint('worst held-out pulse/shift RMSE',worst); assert worst < 1e-5\\nsw = s['sensor_calibration_sweeps']; ref, raw = sw['ref_rosette'],sw['raw_rosette']; full = m._fit_calibration(ref,raw)\\n# Test that the clean-sweep fit is reproducible without any individual sweep fold.\\nfull_error = np.linalg.norm(m._features(ref)@full-raw,axis=1)\\nfold_worst = 0.\\nfor fold in range(5):\\n    test = np.arange(len(ref))%5 == fold\\n    C = m._fit_calibration(ref[~test],raw[~test]); e = np.linalg.norm(m._features(ref[test])@C-raw[test],axis=1)\\n    fold_worst = max(fold_worst,np.max(e[full_error[test]<.002]))\\nprint('worst withheld clean-sweep row error',fold_worst,'contaminated rows',sum(full_error>=.002))\\nP = np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nD = P@S; ridge=s['source_ridge']; H=D.T@D+ridge*np.eye(D.shape[1]); n=len(H)\\n# Enumerate box faces independently, minimizing on each equality-constrained face.\\ndef oracle(cap,budget,t):\\n    best = float('inf'); linear=D.T@t\\n    for state in itertools.product((-1,0,1),repeat=n):\\n        state=np.array(state); f=np.flatnonzero(state==0); upper=np.flatnonzero(state==1)\\n        v=cap*(state==1).astype(float); rem=budget-v.sum()\\n        if rem < -1e-12 or rem > cap*len(f)+1e-12: continue\\n        if len(f):\\n            ones=np.ones((len(f),1)); M=np.block([[H[np.ix_(f,f)],ones],[ones.T,np.zeros((1,1))]])\\n            v[f]=np.linalg.solve(M,np.r_[linear[f]-(H@v)[f],rem])[:-1]\\n            if min(v[f]) < -1e-10 or max(v[f]) > cap+1e-10: continue\\n        r=D@v-t; best=min(best,.5*(r@r+ridge*(v@v)))\\n    return best\\nfor budget in (s['total_budget'],0.,s['u_box'],2*s['u_box'],n*s['u_box']-1e-3,n*s['u_box']):\\n    case=dict(s,total_budget=budget); o=m.solve_batch(case); c=o['kkt_certificate']; w=np.asarray(o['weights']); cap=s['u_box']; t=P@m._calibrate(case); r=D@w-t; g=D.T@r+ridge*w; J=.5*(r@r+ridge*(w@w)); lo=np.asarray(c['lam_lower']); up=np.asarray(c['lam_upper']); nu=c['nu_sum']; dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n    err=max(abs(w.sum()-budget),max(0.,-w.min(),w.max()-cap),np.max(abs(g-nu-lo+up)),np.max(abs(lo*w)),np.max(abs(up*(cap-w))),abs(J-c['primal_objective']),abs(dual-c['dual_lower_bound']),abs(J-dual),abs(J-oracle(cap,budget,t)))\\n    assert np.isfinite(err) and err<1e-9 and min(lo.min(),up.min())>=0\\n    np.testing.assert_array_equal(w,c['weights'])\\n    np.testing.assert_allclose(o['terminal_field'],(fields[-1]@w).reshape((nx,ny),order='F'),rtol=1e-11,atol=1e-12)\\n    print('budget',budget,'maximum feasibility, KKT, and oracle error',err)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin walls → H2 reflecting walls with sweep-fitted nonlinear calibration; public schema passes and the latest worst held-out pulse/shift RMSE is approximately 2e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation\",\n      \"rejected_reason\": \"The schema check cannot detect incorrect field ordering, certificate signs, or optimizer failures at budget extremes.\"\n    }\n  ],\n  \"rationale\": \"Use a dense reference to check the forward operator and terminal field, tracer pulses to confirm the wall law, held-out sweeps to assess calibration stability, and an independent box-face oracle to verify the objective and certificate across budget slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e66cb272718becc7c7786f9d1a37185d52cdec580e75f1c7f30d35d508ddebc5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52788.47,
+      "usage_known": true,
+      "prompt_tokens": 27363,
+      "cached_tokens": 11136,
+      "completion_tokens": 1787
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ebf2548341854d2782df9c9dbb649470",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:01:48.422486+00:00",
+  "ended_at_utc": "2026-11-27T15:02:13.153671+00:00",
+  "request_sha256": "4b8f2df8634eb8d82c4c7369706c4078796983851f45de461b4c7c2bc2d117f9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52038,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28749,
+    "cached_tokens": 11136,
+    "completion_tokens": 745
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; raw=np.asarray(cal['bridge_raw']); truth=np.asarray(cal['true_channel_loads'])\\n_, accepted=m.fit_bridge(cal); accepted=np.asarray(accepted,dtype=bool)\\n# Stratify by physical axial load so every fold includes light and heavy measurements.\\norder=np.argsort(truth.sum(axis=1)); folds=np.empty(len(raw),int); folds[order]=np.arange(len(raw))%5\\nerr=np.empty(len(raw))\\nfor fold in range(5):\\n    a=folds!=fold\\n    inv,_=m.fit_bridge(dict(cal,bridge_raw=raw[a],true_channel_loads=truth[a]))\\n    err[~a]=(inv(raw[~a])-truth[~a]).sum(axis=1)\\nfor name,rows in [('low',order[:len(order)//5]),('high',order[-len(order)//5:]),('all',order)]:\\n    clean=rows[accepted[rows]]; print(name,'retained/total',len(clean),len(rows),'axial abs OOF p90 retained/all',np.quantile(abs(err[clean]),.9),np.quantile(abs(err[rows]),.9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop relaxation spectrum -> H2 chronological chamber memory with unit-rate exponential drift; worst public chamber lab p90 errors are 0.02895 for strain and 0.02779 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber drift and pairwise load comparisons\",\n      \"rejected_reason\": \"Those comparisons already covered held-out labs and measured horizons. The remaining useful check is whether bridge errors accumulate in the axial sum at the ends of the measured load range.\"\n    }\n  ],\n  \"rationale\": \"Channel-wise calibration residuals do not establish accuracy of the axial sum used by the constitutive model. Held-out calibration rows can reveal a load-dependent error; a substantial error on retained rows would justify revisiting the bridge model, while errors concentrated on rejected rows would support keeping the robust fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "82526f27db6ad244d6d2837062761a7cd0c65f7b507a22c53a2cbe90ad6b940a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24687.23,
+      "usage_known": true,
+      "prompt_tokens": 28749,
+      "cached_tokens": 11136,
+      "completion_tokens": 745
+    }
+  ]
+}

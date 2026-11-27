@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "00e3ecaf2add40a0b2a430753065a953",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:25.089070+00:00",
+  "ended_at_utc": "2026-11-27T14:42:56.301914+00:00",
+  "request_sha256": "55616d85a5edfcd9319a2ca95e843d3c882ef708d9db9d82df5a4de0166dee96",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43612,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28763,
+    "cached_tokens": 11136,
+    "completion_tokens": 992
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rosette_probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; keep=np.max(abs(y),axis=1)<8; x,y=x[keep],y[keep]; print('sweep ranges',x.min(0),x.max(0),'rejected',np.where(~keep)[0]); print('pure axis raw'); print(np.c_[x,y][np.count_nonzero(x,axis=1)==1].round(5))\\nterms=list(itertools.combinations_with_replacement(range(4),2))+list(itertools.combinations_with_replacement(range(4),3)); T=np.column_stack([np.prod(x[:,q],axis=1) for q in terms]); X=np.c_[np.ones(len(x)),x]; print('term order',terms)\\nfor j in range(4):\\n base=np.c_[X,x[:,j]**3]; e=y[:,j]-base@np.linalg.lstsq(base,y[:,j],rcond=None)[0]; print('\\\\nbank',j,'base residual worst indices',np.where(keep)[0][np.argsort(abs(e))[-9:]]); print('base residual correlations',sorted(zip(abs(np.corrcoef(np.c_[T,e].T)[-1,:-1]),terms),reverse=True)[:8]);\\n for name,A,tt in [('pure cubes + pair products',np.c_[X,x**3,T[:,:10]],[(i,i,i) for i in range(4)]+terms[:10]),('complete degree 3',np.c_[X,T],terms)]:\\n  coef=np.linalg.lstsq(A,y[:,j],rcond=None)[0]; r=y[:,j]-A@coef; loo=r/(1-(np.linalg.qr(A,mode='reduced')[0]**2).sum(1)); print(name,'LOO rms/max',np.sqrt(np.mean(loo**2)),abs(loo).max(),'fit rms',np.sqrt(np.mean(r**2))); print('linear',coef[:5].round(4),'nonlin',[(t,round(v,4)) for t,v in zip(tt,coef[5:]) if abs(v)>.01]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\\ncd /tmp/hegel_continual_archive; grep -A7 '^def _forward' *03_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: independent or additive rosette calibration -> H2: cross-channel interaction model with isolated sweep corruption; additive own-cubic models still reach 0.236 raw units in worst-bank leave-one-out RMS after removing the three corrupted rows.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Independent affine calibration can explain current clean rosette sweeps.\",\"empirical_witness\":\"At fixed zero input on bank 1, changing only reference bank 2 from 0.5 to 1.3 changes raw bank 1 from -0.1156 to -0.4126. Even full affine calibration leaves worst-bank clean LOO RMS of 0.307.\",\"causal_blanket_diagnosis\":\"The readout depends on other channels, not merely own-bank gain and offset. Structured curvature remains after removing the grossly corrupted rows.\",\"sublated_pivot\":\"Keep the archived sealed-wall candidate separate and identify the sparse nonlinear readout from controlled sweeps.\",\"risk_kind\":\"calibration model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use full affine mixing after outlier rejection\",\"rejected_reason\":\"Clean held-out errors remain large relative to the observations; pure-axis and mixed sweeps permit identification of the missing nonlinear terms.\"}],\"rationale\":\"Pure-axis sweeps distinguish self-response from cross-talk; complete low-degree terms test whether the existing cubic fit misses interactions. The stencil check resolves what the rejected latest-first solver actually used.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c03df997de7d6168864e39a48783105255472b7bab2963a8896532c833f7efae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31673.34,
+      "usage_known": true,
+      "prompt_tokens": 28763,
+      "cached_tokens": 11136,
+      "completion_tokens": 992
+    }
+  ]
+}

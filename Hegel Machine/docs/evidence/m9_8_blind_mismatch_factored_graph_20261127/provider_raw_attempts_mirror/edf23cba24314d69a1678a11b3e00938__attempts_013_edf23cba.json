@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "edf23cba24314d69a1678a11b3e00938",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:32:29.226329+00:00",
+  "ended_at_utc": "2026-11-27T14:33:03.158911+00:00",
+  "request_sha256": "ef5c46380cc406a1f87abc1528e17fac74ecbc7f46bc2fc33bec783da3cd7c98",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79850,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41883,
+    "cached_tokens": 9600,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/shape98.py <<'PY'\\nexec(open('/tmp/law98.py').read().split('for mode in range')[0])\\nfrom scipy.optimize import least_squares\\nx=m['_standardize'](a,a)[0]; q=b[2]+x@b[3:]; keep=np.isfinite(a['coupon_features_raw']).all(1); lab=a['lab_id']; G=h[:,None]*(b[:2]@T); D=Y-G\\nH=q[keep]@D[keep]/(q[keep]@q[keep]); print('t',t); print('drift response',H[:-1],H[-1]/.7); print('q and actual initial drift',np.c_[q,D[:,-1]/.7]); print('residual temporal RMS',np.sqrt(np.mean((D[keep]-q[keep,None]*H)**2,axis=0)))\\nmodels={\\n 'exp':([1.8],lambda z:z[0]*(-np.expm1(-t/z[0]))),\\n 'rational':([2.],lambda z:t/(1+t/z[0])),\\n 'rational2':([2.],lambda z:t/(1+(t/z[0])**2)),\\n 'tanh':([1.8],lambda z:z[0]*np.tanh(t/z[0])),\\n 'log':([1.],lambda z:z[0]*np.log1p(t/z[0])),\\n 'clip':([1.8],lambda z:np.minimum(t,z[0])),\\n 'exp taper':([4.],lambda z:t*np.exp(-t/z[0])),\\n 'exp and linear':([1.8,.07],lambda z:(1-z[1])*z[0]*(-np.expm1(-t/z[0]))+z[1]*t),\\n 'exp and quad':([1.8,.07],lambda z:z[0]*(-np.expm1(-t/z[0]))+z[1]*t*t),\\n 'sqrt saturation':([1.8],lambda z:t/np.sqrt(1+(t/z[0])**2)),\\n 'rational power':([2.,1.],lambda z:t/(1+t/z[0])**z[1]),\\n 'exp gain':([2.,.9],lambda z:z[1]*z[0]*(-np.expm1(-t/z[0]))),\\n 'exp quotient':([2.,1.],lambda z:t/(1+(t/z[0])**z[1])),\\n}\\nfor name,(seed,fun) in models.items():\\n def model(idx):\\n  op=least_squares(lambda z:(q[idx,None]*fun(z)-D[idx,:-1]).ravel(),seed,bounds=([.03]+[-3]*(len(seed)-1),[40]+[8]*(len(seed)-1)))\\n  E=q[:,None]*np.r_[fun(op.x),.7]-D;return op.x,E\\n p,E=model(keep); cv=np.array([model(keep&(lab!=g))[1][i] for i,g in enumerate(lab)]); print(name,p, 'fit curve',np.sqrt(np.mean(E[keep,:-1]**2)), 'worst lab curve',max(np.sqrt(np.mean(cv[keep&(lab==g),:-1]**2)) for g in np.unique(lab)), 'worst lab rate',max(np.sqrt(np.mean(cv[keep&(lab==g),-1]**2))/.7 for g in np.unique(lab)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shape98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (memory reset with a single fitted exponential drift response) -> H2 (memory reset with a boundary-consistent drift law); worst held-out lab RMSE is 0.0304 at the final horizon and 0.0612 at initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain fitted stress-history terms\",\n      \"rejected_reason\": \"Once the diagnostic panel was normalized separately, restoring chronological memory did not improve complete-coupon holdout error.\"\n    }\n  ],\n  \"rationale\": \"The fitted exponential underpredicts the measured initial drift. Compare compact response laws whose derivative at zero is one; select a law only if it also reduces curve error on held-out labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "eee05ec7838b2f2acb40a7759265123ccecd6d3583290731d4a8367debdbc5ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33889.87,
+      "usage_known": true,
+      "prompt_tokens": 41883,
+      "cached_tokens": 9600,
+      "completion_tokens": 1224
+    }
+  ]
+}

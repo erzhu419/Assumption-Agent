@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3bd56a9b6e244ceeb992214a5730e12a",
+  "call_seq": 2,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__beta_m98_v2_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:20:42.447247+00:00",
+  "ended_at_utc": "2026-11-27T14:21:04.822629+00:00",
+  "request_sha256": "0c0f95de4ba52663975a2e94c379710af8da65a173b36539e0d0fd481938aed2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 14300,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17142,
+    "cached_tokens": 11136,
+    "completion_tokens": 639
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat validate_public_schema.py; printf '\\\\n--- archive ---\\\\n'; if [ -d /tmp/hegel_continual_archive ]; then du -ah /tmp/hegel_continual_archive | sort -h | tail -40; else echo absent; fi; cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\nb=pickle.load(open('public_batch.pkl','rb')); print('studies',len(b)); s=b[0]['study']; print('keys',list(s)); print('modes',np.shape(s['source_modes'])); print('sensors',s['sensor_ij']); print('banks',s['row_bank_id'].reshape(-1,4)); c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; print('ref range',X.min(0),X.max(0)); print('raw range',Y.min(0),Y.max(0)); D=np.c_[np.ones(len(X)),X]; C=np.linalg.lstsq(D,Y,rcond=None)[0]; print('affine coefficients',C,'rmse',np.sqrt(np.mean((D@C-Y)**2,0))); print('single bank');\\nfor k,v in c['single_bank_sweeps'].items(): print(k,np.shape(v),v[:8]);\\nprint('telemetry first rows',s.get('aux_manifold_telemetry',[])[:6]); print('shifts', s['mu_shifts']); print('diagnostics flags',[i.get('campaign_diagnostics') is not None for i in b]);\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open-wall baseline -> archive-supported boundary model with dynamic rosette calibration; validation metrics are not yet available.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit four independent gain and offset curves immediately\",\n      \"rejected_reason\": \"An affine cross-channel fit and the single-bank sweeps can reveal whether independent calibration would miss rosette coupling.\"\n    }\n  ],\n  \"rationale\": \"The previous log was truncated. Recover the archive listing and validator contract, then quantify the affine calibration error to decide whether a richer calibration model is needed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "c96aeff25b913ed8259335972646f76b597bd6780f35a3c17d1fa475e06f9cd9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22334.78,
+      "usage_known": true,
+      "prompt_tokens": 17142,
+      "cached_tokens": 11136,
+      "completion_tokens": 639
+    }
+  ]
+}

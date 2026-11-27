@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c729aa0de3644f31ac6342a121e47fda",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:41.516018+00:00",
+  "ended_at_utc": "2026-11-27T14:44:23.267795+00:00",
+  "request_sha256": "aaaab0ff0e6b73da8c6007c124ac1feeba441b3ad4f175e2386d1afa67940b40",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31031,
+    "cached_tokens": 11136,
+    "completion_tokens": 1604
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem = pickle.load(open('public_batch.pkl','rb'))[0]; d = item['dataset']; c = d['calibration_load_cells']\\nx, raw = c['true_channel_loads'], c['bridge_raw']; mag = np.linalg.norm(raw-np.median(raw,axis=0),axis=1); clean = mag < 4*np.median(mag)\\naxis = np.count_nonzero(x,axis=1)==1; high = np.max(np.abs(x),axis=1)>1.4\\nfor name, held in [('single-axis',axis),('high amplitude',high)]:\\n    fit = ~held; ix = held & clean\\n    p = m._axial_load_map({'true_channel_loads':x[fit],'bridge_raw':raw[fit]})\\n    err = m._decode_axial(raw[ix],p)-x[ix].sum(1)\\n    print('blocked calibration',name,'n',ix.sum(),'axial RMSE/max',np.sqrt(np.mean(err**2)),np.max(np.abs(err)))\\n# Test whether omitted pairwise, cubic, or leading rational-saturation terms explain clean bridge residuals.\\nfrom itertools import combinations_with_replacement\\nz, y = x[clean], raw[clean]\\nbase = [np.column_stack((np.ones(len(z)),z[:,i],z[:,(i+1)%4],z[:,(i-1)%4],z[:,i]*z[:,(i+1)%4],z[:,i]**3)) for i in range(4)]\\nfull = np.column_stack([np.ones(len(z))]+[np.prod(z[:,k],axis=1) for order in (1,2,3) for k in combinations_with_replacement(range(4),order)])\\nrational_terms = [np.column_stack([z[:,i]*(z[:,i]+sign*z[:,j])**2 for j in range(4) if j!=i for sign in (-1,1)]+[z[:,i]**5]) for i in range(4)]\\nfor label, ds in [('sparse',base),('full cubic',[full]*4),('sparse plus saturation directions',[np.column_stack((a,b)) for a,b in zip(base,rational_terms)])]:\\n    errs=[]\\n    for i,a in enumerate(ds):\\n        u,sv,_=np.linalg.svd(a,full_matrices=False); u=u[:,sv>sv[0]*1e-12]; e=y[:,i]-u@(u.T@y[:,i]); e=e/(1-(u*u).sum(1)); errs.append(np.sqrt(np.mean(e*e)))\\n    print('calibration LOO RMSE',label,np.round(errs,8))\\ntr,te = d['train'],d['test']; xt,_=m._features(tr,te); p,h,f=m._specimen(tr,xt,m._axial_load_map(c)); t,dt=d['eval_times'],d['past_dt']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; lab=tr['lab_id']; strata=tr['stratum']\\nres_y=np.empty_like(y); res_r=np.empty_like(r)\\nfor k in np.unique(lab):\\n    v=lab==k; tau,theta=m._fit((p[~v],h[~v],f[~v]),dt,t,y[~v],r[~v]); a,b=m._branches((p[v],h[v],f[v]),dt,t,tau); q=f[v]@theta[2:]; res_y[v]=a@theta[:2]+q[:,None]*t-y[v]; res_r[v]=b@theta[:2]+q-r[v]\\nfor k,j in np.unique(np.c_[lab,strata],axis=0):\\n    v=(lab==k)&(strata==j)\\n    print('lab/stratum',k,j,'n',v.sum(),'strain median signed early/late',np.round([np.median(res_y[v,:4]),np.median(res_y[v,-4:])],6),'rate median signed',round(float(np.median(res_r[v])),6))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); traces=[np.asarray(e['facility_telemetry_trace']) for e in log]; latest=traces[-1]; print('diagnostics',item['campaign_diagnostics'] is not None)\\nfor e,v in zip(log[:-1],traces[:-1]):\\n    print('prefix trace latest vs',e['completed_short_name'],'mean shift / combined temporal SD',np.round(np.abs(latest.mean(0)-v.mean(0))/np.sqrt(latest.var(0)+v.var(0)),2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived affine bridge → H2 sparse cyclic cubic bridge with archive-matched chamber drift; worst held-out axial-load RMSE was 0.000160 and worst held-out lab strain P90 error was 0.0231.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or stochastic-drift probes\",\n      \"rejected_reason\": \"This benchmark supplies continuous rheology measurements and no class labels, relay modes, or stochastic state equation. Signed errors by lab and stratum are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Blocked calibration splits test whether the cubic inverse depends on nearby sweep points. Broader algebraic bases would warrant an edit only if they materially improve held-out calibration. Signed out-of-lab residuals test whether pooling hides a lab or stratum bias, and trace comparisons distinguish stable lineage evidence from channels that changed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b2a3cff3589a993b1d4acab67ce447f2c3ec0dd4cd417b8e31565ada45185960",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42181.6,
+      "usage_known": true,
+      "prompt_tokens": 31031,
+      "cached_tokens": 11136,
+      "completion_tokens": 1604
+    }
+  ]
+}

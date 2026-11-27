@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e38b69926e224267a27af66b4fffce3a",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:43.983752+00:00",
+  "ended_at_utc": "2026-11-27T14:44:16.027762+00:00",
+  "request_sha256": "0b11f51d31a29ab578193c718784b81a9d4e0f106f1fc0c976247dd077c32ac8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50591,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26852,
+    "cached_tokens": 9600,
+    "completion_tokens": 940
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _inverse\\nD = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nC = D['calibration_load_cells']; X = C['true_channel_loads']; Y = C['bridge_raw']; A = _basis(X)\\nrow_error = np.empty(len(X))\\nfor te in np.array_split(np.random.default_rng(21).permutation(len(X)), 8):\\n    tr = np.setdiff1d(np.arange(len(X)), te)\\n    row_error[te] = np.linalg.norm(A[te] @ _fit_bridge(X[tr], Y[tr]) - Y[te], axis=1)\\n# Use the previously established out-of-fold spike separation to score slices.\\nclean = row_error < .05\\nmixed = np.count_nonzero(X, axis=1) > 1\\nprint('Gross spike rows:', np.flatnonzero(~clean).tolist())\\nworst = 0.\\nfor j in range(4):\\n    for side in (-1, 1):\\n        score = side * X[:, j]\\n        te = mixed & (score > .7)\\n        label = 'beyond 0.7'\\n        if not np.any(te & clean):\\n            print('channel', j, 'direction', side, 'beyond 0.7: measured', te.sum(), 'clean', (te & clean).sum())\\n            te = mixed & (score >= np.quantile(score[mixed], .8))\\n            label = 'outer measured quintile'\\n        test = te & clean\\n        assert test.any()\\n        coef = _fit_bridge(X[~te], Y[~te]); err = _inverse(Y[test], coef) - X[test]\\n        peak = float(np.max(np.abs(err))); worst = max(worst, peak)\\n        print('channel', j, 'direction', side, label, 'clean', test.sum(), 'of', te.sum(), 'max absolute load error', peak)\\nprint('Worst measured directional max absolute load error:', worst)\\nassert worst < .002, 'Directional holdout exceeded the load-error margin'\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled polynomial bridge → unique inverse in the calibration box (normalized Jacobian lower bound 0.262); seven populated directional slices had at most 3.82e-4 absolute load error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the inverse to handle the previous audit failure\",\n      \"rejected_reason\": \"The exception came from taking a maximum over an empty audit slice, not from a failed inversion.\"\n    }\n  ],\n  \"rationale\": \"Distinguish missing calibration coverage from spike exclusion, and test the outer measured quintile where the fixed threshold leaves no clean rows. If that slice exceeds the load-error margin, inspect its residuals before changing the model; otherwise finish isolated verification without editing either artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6f15066d672a89fe833c89d15717f865423a86c78eace92e5b592902ec1fd4c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32468.91,
+      "usage_known": true,
+      "prompt_tokens": 26852,
+      "cached_tokens": 9600,
+      "completion_tokens": 940
+    }
+  ]
+}

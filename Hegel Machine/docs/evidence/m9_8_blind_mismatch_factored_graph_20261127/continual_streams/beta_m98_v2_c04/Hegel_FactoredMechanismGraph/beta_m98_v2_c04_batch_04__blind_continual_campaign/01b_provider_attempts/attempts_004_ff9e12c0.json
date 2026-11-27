@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff9e12c00af3480eab0df1e8ba7f10d9",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Hegel_FactoredMechanismGraph__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:38:23.636435+00:00",
+  "ended_at_utc": "2026-11-27T14:38:51.523005+00:00",
+  "request_sha256": "66dd8450cbe51fa2068ffd2c4ed5223650e5e25069f7ec3e5add8aec2d6ef9c6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 27676,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19983,
+    "cached_tokens": 0,
+    "completion_tokens": 947
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=map(np.asarray,(c['ref_rosette'],c['raw_rosette'])); n=len(x); o=np.ones((n,1)); pairs=list(combinations(range(4),2)); q=np.stack([x[:,i]*x[:,j] for i,j in pairs],axis=1)\\nfor k,v in c['single_bank_sweeps'].items():\\n a=np.asarray(v); print('single',k,a.shape,a.ravel()[:14])\\nprint('axis rows, ref + raw:\\\\n',np.round(np.c_[x,y][:16],6))\\ndef fit(a,b):\\n w=np.ones(len(a)); beta=None\\n for t in range(40):\\n  sw=np.sqrt(w[:,None]); beta=np.linalg.lstsq(a*sw,b*sw,rcond=None)[0]; r=np.linalg.norm(a@beta-b,axis=1); z=max(.00003,np.median(r)); w=1/(1+(r/(2*z))**2)\\n return beta\\nblocks={'affine':[], 'self2':[x*x], 'self3':[x*x,x**3], 'odd3':[x**3], 'bilinear':[q], 'quadratic':[x*x,q], 'quad+odd3':[x*x,q,x**3], 'linear+sat1':[x**3/(1+x*x)], 'linear+sat3':[x**3/(1+3*x*x)], 'mixed_sat1':[x*x,q,x**3/(1+x*x)], 'mixed_sat3':[x*x,q,x**3/(1+3*x*x)]}\\naff=np.c_[o,x]; r=np.linalg.norm(aff@fit(aff,y)-y,axis=1); print('affine residual largest', [(int(i),round(r[i],5)) for i in np.argsort(r)[-15:]])\\nfor name,b in blocks.items():\\n a=np.column_stack([o,x]+b); err=np.empty(n); beta=fit(a,y); rr=np.linalg.norm(a@beta-y,axis=1)\\n for f in range(5):\\n  te=np.arange(n)%5==f; err[te]=np.linalg.norm(a[te]@fit(a[~te],y[~te])-y[te],axis=1)\\n good=r<1.; print(name,'cv axis/random p50,p90,max',np.round(np.quantile(err[:16],[.5,.9,1]),6),np.round(np.quantile(err[16:][good[16:]],[.5,.9,1]),6),'train',np.round(np.quantile(rr,[.5,.8,.9]),6))\\n if name in ('affine','quad+odd3','mixed_sat1'): print(np.round(beta,5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine rosette → H2 coupled saturation with spike-resistant fitting; held-out axis and mixed-sweep errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare affine, pairwise-product, cubic, and rational saturation bases on held-out sweep rows. The axis sweeps isolate self-channel curvature; the mixed sweeps reveal cross-channel terms that would otherwise bias the inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b7bfb60d0dcf8f4e4ac60f6ce17d09c761f871e5f984d0b61906624428a99623",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28327.64,
+      "usage_known": true,
+      "prompt_tokens": 19983,
+      "cached_tokens": 0,
+      "completion_tokens": 947
+    }
+  ]
+}

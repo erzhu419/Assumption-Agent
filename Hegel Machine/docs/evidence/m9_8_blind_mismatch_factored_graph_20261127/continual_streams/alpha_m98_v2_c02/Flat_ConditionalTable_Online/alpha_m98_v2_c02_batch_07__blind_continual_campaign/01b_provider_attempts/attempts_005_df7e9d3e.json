@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df7e9d3e073944f6a05b26a22671546c",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:03:05.054469+00:00",
+  "ended_at_utc": "2026-11-27T15:03:34.515179+00:00",
+  "request_sha256": "d07a708f08f0ef7eda8b0afa51c2ee67f586aba6b3933c91660f03d46f7f6b3a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40615,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24908,
+    "cached_tokens": 9600,
+    "completion_tokens": 1135
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_m98.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_06_solver.py'\\ns=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,di=d['train'],d['test'],i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; a,b=c['bridge_raw'],c['true_channel_loads'];\\ndef groups(y):\\n return np.percentile(np.max(np.abs(y),axis=1),[0,50,75,90,95,98,100]).round(6)\\nfor deg in range(1,5):\\n from itertools import combinations_with_replacement\\n A=np.column_stack([np.prod(b[:,idx],axis=1) for k in range(deg+1) for idx in combinations_with_replacement(range(4),k)])\\n mask=np.max(np.abs(a),axis=1)<4*np.median(np.max(np.abs(a),axis=1));\\n for j in range(4):\\n  co=np.linalg.lstsq(A[mask],a[mask],rcond=None)[0]; y=A@co-a; e=np.max(np.abs(y),axis=1); mask=e<max(12*np.median(e),1e-8)\\n print('full degree',deg,'inliers',sum(mask),'residual percentiles',groups(y))\\nx,_=m._standardize(tr,te); combined={k:np.concatenate([tr[k],te[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}; _,xd=m._standardize(combined,di)\\nf=m._stress_calibration(c); M=m._design(tr,x,f,dt,t); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; taus,th=m._fit(M,y,r); A,B=M(taus); print('taus theta',taus,th,'train median',np.median(abs(A@th-y)),np.median(abs(B@th-r)))\\nh=f(di['hold_channel_raw']); q=f(di['past_channel_raw']); drift=th[2]+xd@th[3:]; tail=np.cumsum(dt[::-1])[::-1]-dt; z=q@(-np.expm1(-dt[:,None]/taus)*np.exp(-tail[:,None]/taus)); yd=di['strain_curves_obs']-di['strain_0'][:,None]; rd=di['instant_rate_obs']; R=-np.expm1(-t[:,None]/taus)*th[:2]; g=th[:2]/taus\\nfor name,C in [('linear',t),('log',np.log1p(t)),('sat',-np.expm1(-t))]:\\n for name2,W in [('keep',np.ones(2)),('reset',np.zeros(2)),('keep0',[1,0]),('keep1',[0,1])]:\\n  gap=h[:,None]-z*W; e=gap@R.T+drift[:,None]*C-yd; er=gap@g+drift-rd; print(name,name2,'median',np.median(abs(e)).round(6),np.median(abs(er)).round(6),'late',np.median(abs(e[:,-3:])).round(6))\\nfor n in ['train','test']:\\n a=d[n]['aux_chamber_telemetry']; print(n,'telemetry',a.mean(0),a.std(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_m98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: nonlinear bridge calibration preserves the shared benchtop spectrum -> H2: chamber diagnostics distinguish memory and drift; affine calibration total-load RMSE is 0.5954.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the entire batch 06 solver unchanged\",\n      \"rejected_reason\": \"Its bridge and chamber laws are independently testable on the current campaign; neither should be assumed to transfer unchanged.\"\n    }\n  ],\n  \"rationale\": \"Check what calibration structure the current sweeps support and screen exact chamber laws against both measured outputs. A bridge residual or a chamber mismatch would change a different part of the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "02455a0ab7529cc2cd5edf1104bedccf7b0b31d7c259d86f46bfd5b29c251d52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29411.34,
+      "usage_known": true,
+      "prompt_tokens": 24908,
+      "cached_tokens": 9600,
+      "completion_tokens": 1135
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3ca5a5485564f4fa178fd1a16831185",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:48:01.292890+00:00",
+  "ended_at_utc": "2026-11-27T14:48:28.696854+00:00",
+  "request_sha256": "47d27b65d762bfd1ab3a65bc05665a6e6828bf750260fe3a06e159537ae09b62",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25389,
+    "cached_tokens": 9600,
+    "completion_tokens": 796
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nsweeps = s['sensor_calibration_sweeps']\\nref, raw = (np.asarray(sweeps[k]) for k in ('ref_rosette', 'raw_rosette'))\\nreference = m.solve_batch(s)\\nS, _ = m._forward(s)\\nworst = np.zeros(3)\\nfor omitted in np.array_split(np.arange(len(ref)), 5):\\n    keep = np.ones(len(ref), dtype=bool)\\n    keep[omitted] = False\\n    sf = {**s, 'sensor_calibration_sweeps': {**sweeps, 'ref_rosette': ref[keep], 'raw_rosette': raw[keep]}}\\n    out = m.solve_batch(sf)\\n    for j, key in enumerate(('weights', 'terminal_field')):\\n        worst[j] = max(worst[j], np.linalg.norm(out[key] - reference[key]) / np.linalg.norm(reference[key]))\\n    for p in item['campaign_diagnostics']:\\n        e = S @ p['w_pulse'] - m._calibrate({**sf, 'y_obs_raw': p['y_pulse_raw']})\\n        worst[2] = max(worst[2], np.sqrt(np.mean(e.reshape(len(s['mu_shifts']), -1)**2, axis=1)).max())\\nprint('Worst contiguous calibration-block deletion: relative weight change, relative field change, pulse-by-shift RMSE:', worst.tolist())\\nassert np.all(worst < [1e-4, 1e-4, 3e-5]), worst\\nPY\\nstatus=$?; if [ \\\"$status\\\" -ne 0 ]; then exit \\\"$status\\\"; fi\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open Robin walls with affine calibration -> H2 sealed walls with robust nonlinear calibration; worst public pulse-by-shift RMSE is 2.45e-6 and independently verified relative field error is 5.09e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the rational-basis and nuisance audits\",\"rejected_reason\":\"The expanded basis already worsened held-out calibration, and the prescribed nuisance projection was verified across shifts.\"}],\"rationale\":\"The prior interleaved folds did not test sensitivity to a contiguous block of sweep rows. Delete each block in turn and measure the effect on weights, field, and pulse predictions. A large change would warrant inspecting which calibration rows drive the fit before changing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5656b141f8ecc6a4088c4f5e3f648080a035bc920e159ddcf8a0f62c697a93c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27818.77,
+      "usage_known": true,
+      "prompt_tokens": 25389,
+      "cached_tokens": 9600,
+      "completion_tokens": 796
+    }
+  ]
+}

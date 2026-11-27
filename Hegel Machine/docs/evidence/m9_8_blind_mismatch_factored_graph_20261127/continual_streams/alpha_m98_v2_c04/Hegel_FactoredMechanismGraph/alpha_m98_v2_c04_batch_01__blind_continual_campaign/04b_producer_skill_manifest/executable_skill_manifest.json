@@ -1,0 +1,127 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_v2_c04_batch_01_8a0188f3c724",
+    "source_hash": "8a0188f3c724ce29aa1e1d2940c04f8744235eea6137200f8addefb7b1055b6a",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+    "task_id": "alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheo_clock.py",
+        "archived_relpath": "producers/tmp__rheo_clock.py",
+        "bytes": 3637,
+        "sha256": "f845ec912d5637a15371e50065cdd81a2589ff840d5d879cfa64ff4c9fa4e776"
+      },
+      {
+        "container_path": "/tmp/rheo_diag.py",
+        "archived_relpath": "producers/tmp__rheo_diag.py",
+        "bytes": 2065,
+        "sha256": "9a967717db1f7a3e4a29944412be1ab3c74b79361924a450d609f7a01046968e"
+      },
+      {
+        "container_path": "/tmp/rheo_final_audit.py",
+        "archived_relpath": "producers/tmp__rheo_final_audit.py",
+        "bytes": 2362,
+        "sha256": "cae2edc231ca6580787754073150dd8c40c1d6ac774a1a67fa0bde9a15a53538"
+      },
+      {
+        "container_path": "/tmp/rheo_loglaw.py",
+        "archived_relpath": "producers/tmp__rheo_loglaw.py",
+        "bytes": 1680,
+        "sha256": "93eeb261f8d525ddec25ddf4c4b13df0e1c1179f221072217b04f34022db897d"
+      },
+      {
+        "container_path": "/tmp/rheo_mech.py",
+        "archived_relpath": "producers/tmp__rheo_mech.py",
+        "bytes": 1927,
+        "sha256": "1d6510207328ae79dd2857148a3f0d02fe79b2235ea54e643a083075aca085ec"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m98_v2_c04_s00_solver.py",
+        "bytes": 4364,
+        "sha256": "89219b8823576c3261fbc889d754deb1e21a0d01a90b73fe3cbb0aa1261fe157"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /tmp/hegel_continual_archive/archive_manifest.json; sed -n '1,260p' /tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation'; python3 - <<'PY'\nimport pickle\nv=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\ndef show(x,k='',d=0):\n print(' '*d,k,type(x).__name__,getattr(x,'shape',''),len(x) if isinstance(x",
+      "cat /tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py; cat /holdout_task/public_asset_index.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.weighted_column_fill; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit",
+      "cat /tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py; python3 - <<'PY'\nimport json,pickle,numpy as np\nj=json.load(open('/holdout_task/public_asset_index.json'));print('asset index:',list(j) if isinstance(j,dict) else type(j));print(str(j)[:1600]);\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=a['dataset']; print('dt,t',d['past_dt'],d['eval_times']); print('sweeps',[(k,np.shape(v)) for k,v in d['calibration_load_cells']['single_channel_sweeps'].items()]);print('telemetry examples',d['train']['aux_chamber_telemetry'][:4],d['test']['aux_chamber_telemetry'][:4]); print",
+      "cat > /tmp/rheo_diag.py <<'PY'\nimport importlib.util,pickle,numpy as np\np='/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py'\ns=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; q=i['campaign_diagnostics']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; t=d['eval_times'];dt=d['past_dt'];b=m._bridge(c);n=len(tr['lab_id']); x=m._features(tr,te); xq=m._features({k:np.concatenate([u[k] for u in (tr,te)]) for k in ('lab_id','stratum','ref",
+      "cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat > /tmp/rheo_mech.py <<'PY'\nexec(open('/tmp/rheo_diag.py').read().split(\"for k,z,xx\")[0])\nfrom scipy.optimize import least_squares\np,h=m._loads(q,b); y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; dr=np.c_[np.ones(len(q['lab_id'])),xq]@th[2:];\ndef basis(ta): return np.r_[np.c_[-np.expm1(-t[:,None]/ta),t],np.r_[1/ta,1][None,:]]\nscale=np.r_[np.full(len(t),.004),.004];\ndef amps(ta):\n M=basis(ta); a=np.linalg.lstsq(M/scale[:,None],(y/scale).T,rcond=None)[0].T;return a,a@M.T-y\nfit=least_squares(lambda z:(a",
+      "cat > /tmp/rheo_clock.py <<'PY'\nexec(open('/tmp/rheo_diag.py').read().split(\"for k,z,xx\")[0])\nfrom scipy.optimize import least_squares\np,h=m._loads(q,b); y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; lab=q['lab_id']; labs=np.unique(lab)\nB=np.r_[-np.expm1(-t[:,None]/tau),(1/tau)[None,:]].T\nT=np.r_[t,1.]; hold=(h[:,None]*th[:2])@B\nmem=h[:,None]-m._design(xq,p,h,dt,t,tau)[1][:,:2]*tau\nM=mem*th[:2]; dr=lambda xx:th[2]+xx@th[3:]\nvariants={'joint3':xq,'diag_only':m._features(q,q)[:len(h)],'train_diag':m._features(tr,q)[n:],'test_diag':m._features(te,q)[len(te['lab_id']",
+      "cat > /tmp/rheo_loglaw.py <<'PY'\nexec(open('/tmp/rheo_clock.py').read().split(\"print('nominal drift\")[0])\nfrom scipy.optimize import least_squares\nrms=lambda a:np.sqrt(np.mean(a*a))\nL=np.r_[np.log1p(t),1.]\nprint('exact reset + log1p; columns fit curve/rate, worst lab curve/rate, worst time, complete/missing pooled')\nfor name,f in variants.items():\n E=hold+dr(f)[:,None]*L-y\n print(name,np.round([rms(E[:,:-1]),rms(E[:,-1]),max(rms(E[lab==g,:-1]) for g in labs),max(rms(E[lab==g,-1]) for g in labs),max(rms(E[:,j]) for j in range(len(t))),rms(E[clean]),rms(E[~clean])],6))\nF=variants['diag_only']; R",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py').read_text()\nbase, sep, old = src.partition('\\ndef solve_batch(')\nassert sep and all(('def '+f+'(') in base for f in ('_features','_bridge','_loads','_fit'))\nPath('/holdout_task/batch_solver.py').write_text(base + '''\n\ndef _chamber_prediction(test, x, bridge, times, taus, theta):\n    # The chamber resets the branch states before applying the hold load.\n    _, hold = _loads(test, bridge)\n    amplitude = hold[:, None] * theta[:2]\n    drift = theta[2] + x @ theta[3:]\n    relax",
+      "set -e\ncat > /tmp/rheo_final_audit.py <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\nd=item['dataset']; tr,te=d['train'],d['test']; q=item['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; b=m._bridge(d['calibration_load_cells']); X=m._features(tr,te)[:len(tr['lab_id'])]; p,h=m._loads(tr,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_ob",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\nd=item['dataset']; cal=d['calibration_load_cells']; raw=cal['bridge_raw']; true=cal['true_channel_loads']; t=d['eval_times']; tr,te=d['train'],d['test']; q=item['campaign_diagnostics']\nbase=np.c_[np.ones(len(raw)),raw]; u,v=np.triu_indices(4); quad=np.c_[base,raw[:,u]*"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m98_v2_c04_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4768,
+        "sha256": "c7e8a632557424fcd1fb819b370d1b9c7ad666b65ee967985641d8d5cdf9381e",
+        "content_addressed_ref": "content_addressed_blobs/c7e8a632557424fcd1fb819b370d1b9c7ad666b65ee967985641d8d5cdf9381e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8a0188f3c724ce29aa1e1d2940c04f8744235eea6137200f8addefb7b1055b6a",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\nm=importlib.util.module_from_spec(spec); spec.loader.ex",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8a0188f3c724ce29aa1e1d2940c04f8744235eea6137200f8addefb7b1055b6a",
+        "expected_candidate_sha256": "8a0188f3c724ce29aa1e1d2940c04f8744235eea6137200f8addefb7b1055b6a",
+        "computed_candidate_sha256": "8a0188f3c724ce29aa1e1d2940c04f8744235eea6137200f8addefb7b1055b6a",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4768
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8a0188f3"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": []
+  }
+}

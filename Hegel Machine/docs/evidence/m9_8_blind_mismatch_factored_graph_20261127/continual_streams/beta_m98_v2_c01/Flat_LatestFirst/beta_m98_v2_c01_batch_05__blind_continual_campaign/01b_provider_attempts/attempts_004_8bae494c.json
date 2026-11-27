@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bae494cf8264f59b3a53314be979446",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:49:08.728731+00:00",
+  "ended_at_utc": "2026-11-27T14:49:37.720768+00:00",
+  "request_sha256": "a1a43a6f32275de3c70f7b2894caeb2decf080c629e68aeda561da0aaced2894",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23327,
+    "cached_tokens": 13440,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/check_m98_cal.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\ndef load(tag):\\n f=next(p.glob('*'+tag+'_solver.py')); spec=importlib.util.spec_from_file_location(tag,f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; sb=c['single_bank_sweeps']; latest=load('batch_04')\\nprint('latest basis source:')\\nimport inspect\\nprint(inspect.getsource(latest._rosette_basis))\\ndef fit(x,y,t,form):\\n if form=='diagonal':\\n  return np.column_stack([np.column_stack((np.ones(len(t)),t[:,j])) @ np.linalg.lstsq(np.column_stack((np.ones(len(x)),x[:,j])),y[:,j],rcond=None)[0] for j in range(4)])\\n basis=(lambda a: np.column_stack((np.ones(len(a)),a))) if form=='affine' else latest._rosette_basis\\n return basis(t) @ np.linalg.lstsq(basis(x),y,rcond=None)[0]\\nfor form in ('diagonal','affine','nonlinear'):\\n e=np.empty_like(y)\\n for k in range(5):\\n  ix=np.arange(len(x))%5==k; e[ix]=fit(x[~ix],y[~ix],x[ix],form)-y[ix]\\n pred=fit(x,y,np.eye(4),form); z=fit(x,y,np.zeros((1,4)),form)[0]\\n print(form,'RMSE by bank',np.sqrt(np.mean(e**2,axis=0)),'max',abs(e).max(),'jac diagnostic',np.round(pred-z,6))\\nbank=sb['bank_id']; xb=sb['ref_signal']; yb=sb['raw_readout']\\nfor j in range(4):\\n coef=np.polynomial.polynomial.polyfit(xb[bank==j],yb[bank==j],1); v=np.zeros((sum(bank==j),4)); v[:,j]=xb[bank==j]\\n print('single',j,coef,'joint prediction rmse',np.sqrt(np.mean((fit(x,y,v,'diagonal')[:,j]-yb[bank==j])**2)))\\nlog=json.load(open(p/'archive_apparatus_log.json')); a=np.array([e['facility_telemetry_trace'] for e in log]); print('latest log centroid distances',np.linalg.norm(a.mean(axis=1)-a[-1].mean(axis=0),axis=1))\\nfor tag in ('s00','batch_01','batch_02','batch_03','batch_04'):\\n m=load(tag); out=m.solve_batch(s); w=out['weights']; kc=out['kkt_certificate']; print(tag,'J',kc['primal_objective'],'gap',kc['primal_objective']-kc['dual_lower_bound'],'w',np.round(w,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check_m98_cal.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 reuse the latest solver wholesale -> H2 retain the s00 Robin wall and test a bankwise affine sensor law; the latest log centroid is 0.093 from s00 versus at least 4.04 from the other prior campaigns.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the wall from the optimized chamber objective\",\"rejected_reason\":\"Differences in source weights can absorb operator errors, so the objective is a diagnostic, not the regime selector.\"}],\"rationale\":\"The wall formulas show that s00 and the latest solver share Robin boundaries. Compare held-out calibration errors and independent single-bank sweeps before choosing which sensor terms to retain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a7c1faeb268a154dc51b8a67ad19598308efe77d12363d7781b25bcd9e621195",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29486.89,
+      "usage_known": true,
+      "prompt_tokens": 23327,
+      "cached_tokens": 13440,
+      "completion_tokens": 1004
+    }
+  ]
+}

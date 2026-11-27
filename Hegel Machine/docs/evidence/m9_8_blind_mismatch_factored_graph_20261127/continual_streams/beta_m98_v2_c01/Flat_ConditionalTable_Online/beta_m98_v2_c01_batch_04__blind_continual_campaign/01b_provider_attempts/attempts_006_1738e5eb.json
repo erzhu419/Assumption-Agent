@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1738e5eb8a3e4f15a2cb2af00646c85f",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_ConditionalTable_Online__beta_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:38:04.738068+00:00",
+  "ended_at_utc": "2026-11-27T14:38:36.971675+00:00",
+  "request_sha256": "ade1ef928486435838e718543f682b079f2b695068b9f4e458408e8419c7cece",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26941,
+    "cached_tokens": 9600,
+    "completion_tokens": 1194
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_cal_compare.py <<'PY'\\nimport itertools,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; good=np.max(abs(y),axis=1)<9\\nprint('excluded rows',np.flatnonzero(~good)); print(np.c_[x[~good],y[~good]])\\nx,y=x[good],y[good]; n=len(x)\\nfor name in ['affine','own2','own3','own5','powers3','powers5','poly2','poly3','own3pair','powers3pair']:\\n    pred=np.empty_like(y); coefficients=[]; train=[]\\n    for j in range(4):\\n        cols=[np.ones(n),*x.T]\\n        if name.startswith('own'):\\n            cols.extend(x[:,j]**d for d in range(2,int(name[3])+1))\\n        if name.startswith('powers'):\\n            cols.extend(x[:,k]**d for d in range(2,int(name[6])+1) for k in range(4))\\n        if name.startswith('poly'):\\n            cols.extend(np.prod(x[:,terms],axis=1) for d in range(2,int(name[-1])+1) for terms in itertools.combinations_with_replacement(range(4),d))\\n        if name.endswith('pair'):\\n            cols.extend(x[:,k]*x[:,l] for k,l in itertools.combinations(range(4),2))\\n        D=np.column_stack(cols); a=np.linalg.lstsq(D,y[:,j],rcond=None)[0]; coefficients.append(a); train.append(np.std(D@a-y[:,j]));\\n        for i in range(n):\\n            tr=np.arange(n)!=i; pred[i,j]=D[i]@np.linalg.lstsq(D[tr],y[tr,j],rcond=None)[0]\\n    r=pred-y\\n    print(name,'RMSE',np.sqrt(np.mean(r*r,axis=0)).round(6),'max',np.abs(r).max().round(6),'train',np.round(train,6))\\n    if name in ('own3','powers3','poly3'):\\n        print(np.round(coefficients,5)); print('signs/large',[(mask.sum(),np.sqrt(np.mean(r[mask]**2)).round(6)) for mask in [np.max(abs(x),axis=1)<.85,np.max(abs(x),axis=1)>1.5]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_cal_compare.py\\npython3 - <<'PY'\\nimport json,numpy as np\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor r in p:\\n t=np.array(r['facility_telemetry_trace']); print(r['completed_short_name']); print('mean',t.mean(0).round(3),'std',t.std(0).round(3));print('lag1',np.mean((t[1:]-t[:-1])**2,axis=0).round(3));print('first,last',t[[0,-1]].round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration H1 → gross-outlier rejection plus structured nonlinear calibration H2; affine leave-one-out RMSE reaches 2.63 and the archived boundary candidates are indistinguishable at roughly 0.67 sensor RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A single unfiltered affine fit adequately describes the rosette sweeps.\",\n    \"empirical_witness\": \"Several near-zero reference rows read approximately (+13, −13, +13, −13), unlike the ordinary sweeps, and the single-bank sweep for bank 2 has increasing slope with amplitude.\",\n    \"causal_blanket_diagnosis\": \"Gross calibration errors and amplitude-dependent response are mixed into the affine residual, obscuring comparisons between boundary operators.\",\n    \"sublated_pivot\": \"Separate gross calibration outliers and compare low-order nonlinear bases on held-out sweeps before reranking the boundary operators.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a generic high-degree response immediately\",\n      \"rejected_reason\": \"The inverse is used near zero, where a needlessly flexible calibration could distort the small campaign signals. Compare held-out errors and near-zero performance first.\"\n    }\n  ],\n  \"rationale\": \"Compare affine, channel-power, and cross-channel terms on clean held-out sweeps to identify which terms improve prediction, then use the telemetry summaries to see whether the earlier trace-distance match is driven by a few channels.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "faedc33547b2cdfc38f310c97603526cd14d3a1fc87dadf5c0ce66e4f4c27416",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32669.4,
+      "usage_known": true,
+      "prompt_tokens": 26941,
+      "cached_tokens": 9600,
+      "completion_tokens": 1194
+    }
+  ]
+}

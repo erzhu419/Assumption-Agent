@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48c74895113940c9a281f35422832a3b",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Hegel_FactoredMechanismGraph__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:57.669395+00:00",
+  "ended_at_utc": "2026-11-27T14:41:31.146208+00:00",
+  "request_sha256": "7fb71400cd77cee4a24ba3939e2dd40435353f0ef3d5fe98accbd4c6cb73e090",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40915,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22948,
+    "cached_tokens": 5504,
+    "completion_tokens": 1281
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _features, _fit, _invert, _jacobian, calibrate_upstream\\nfrom batch_solver import solve_batch\\n\\ndef robust(A, y):\\n    w = np.ones(len(y))\\n    for _ in range(30):\\n        sw = np.sqrt(w)[:, None]\\n        b = np.linalg.lstsq(A * sw, y * sw, rcond=None)[0]\\n        e = np.linalg.norm(A @ b - y, axis=1)\\n        scale = max(np.median(e), 1e-10)\\n        w = 1 / (1 + (e / (2 * scale))**2)\\n    ok = e < 8 * scale\\n    if np.linalg.matrix_rank(A[ok]) == A.shape[1]:\\n        b = np.linalg.lstsq(A[ok], y[ok], rcond=None)[0]\\n    return b\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    study = item['study']; sweep = study['sensor_calibration_sweeps']\\n    x = np.asarray(sweep['ref_rosette']); y = np.asarray(sweep['raw_rosette'])\\n    clean = np.max(np.abs(y), axis=1) < 5  # Evaluation only; training includes EMI rows.\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    code = (x > 0) @ (2**np.arange(4))\\n    A = _features(x)\\n    cross_cubic = [x[:, i]**2 * x[:, j] for i in range(4) for j in range(4) if i != j]\\n    triple = [np.prod(x[:, ids], axis=1) for ids in itertools.combinations(range(4), 3)]\\n    B = np.column_stack([A, *cross_cubic, *triple])\\n    records = []\\n    for k in np.unique(code[mixed]):\\n        test = mixed & (code == k)\\n        train = ~test\\n        valid = test & clean\\n        if not valid.any():\\n            continue\\n        b = _fit(x[train], y[train]); c = robust(B[train], y[train])\\n        base_fw = np.max(np.linalg.norm(A[valid] @ b - y[valid], axis=1))\\n        full_fw = np.max(np.linalg.norm(B[valid] @ c - y[valid], axis=1))\\n        inverse = np.max(np.linalg.norm(_invert(y[valid], b) - x[valid], axis=1))\\n        records.append((inverse, k, int(valid.sum()), base_fw, full_fw))\\n    print('Sign-sector holdouts [inverse, sector, n, base forward, full cubic forward]:', sorted(records, reverse=True))\\n    assert max(r[0] for r in records) < 2e-4\\n    b = _fit(x, y); calibrated = calibrate_upstream(study)\\n    obs = calibrated['y_obs_raw'].reshape(-1, 4)\\n    jac_min = np.linalg.svd(_jacobian(obs, b), compute_uv=False)[:, -1].min()\\n    roundtrip = np.max(np.abs(_features(obs) @ b - np.asarray(study['y_obs_raw']).reshape(-1, 4)))\\n    print('Actual observation minimum Jacobian singular value and max round-trip:', jac_min, roundtrip)\\n    assert jac_min > .2 and roundtrip < 1e-9\\n    cert = solve_batch(study)['kkt_certificate']\\n    assert abs(cert['primal_objective'] - cert['dual_lower_bound']) < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted cross-channel cubic interactions → H2 coupled self-cubics suffice; existing worst clean held-out inverse error is 5.44e-5, with unseen sign-sector results pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and edge-of-range sweep audit\",\n      \"rejected_reason\": \"Those checks already passed; they do not test whether the model generalizes to held-out combinations of channel signs.\"\n    }\n  ],\n  \"rationale\": \"Hold out whole sign sectors to detect missing cross-cubic interactions that interleaved folds could hide. Reconsider the basis if the fuller model fixes a meaningful error, or reconsider the inverse if the Jacobian is poorly conditioned at actual observations. The public data contain one regression study and no relay or classification outcomes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5fc02fb78d8ba9c84a56c52cd06cc180ab84d6059447c42fc49ae8c6b314f655",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33915.01,
+      "usage_known": true,
+      "prompt_tokens": 22948,
+      "cached_tokens": 5504,
+      "completion_tokens": 1281
+    }
+  ]
+}

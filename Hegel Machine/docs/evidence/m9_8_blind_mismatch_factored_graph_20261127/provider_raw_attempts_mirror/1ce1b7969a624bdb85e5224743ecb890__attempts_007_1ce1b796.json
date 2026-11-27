@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1ce1b7969a624bdb85e5224743ecb890",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:59:39.621534+00:00",
+  "ended_at_utc": "2026-11-27T15:00:19.698792+00:00",
+  "request_sha256": "aef228642955b4ab42330ce1f40b57e530872f095ef78631234b1bf3d52b511f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53166,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33479,
+    "cached_tokens": 11136,
+    "completion_tokens": 1555
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^gap=design/,$d' /tmp/chamber_basis.py >/tmp/chamber_law.py; cat >>/tmp/chamber_law.py <<'PY'\\nfrom scipy.optimize import least_squares\\nF=np.vstack((-np.expm1(-tt[:,None]/taus),1/taus))\\nz=H[:,None]-design[:,-1,:2]*taus\\nreset=H[:,None]*(F@b[:2]); base=design[:,:,:2]@b[:2]\\ndef sat(tau): return np.r_[-np.expm1(-tt/tau),1/tau]\\ndef fit(mask,kind):\\n def pred(v):\\n  if kind=='reset_fixed': return reset+v[0]*drift[:,None]*sat(1)\\n  if kind=='reset_free': return reset+v[0]*drift[:,None]*sat(np.exp(v[1]))\\n  if kind=='memory_free': return base+v[0]*drift[:,None]*sat(np.exp(v[1]))\\n  if kind=='reset_two': return reset+drift[:,None]*(F@v)\\n  if kind=='reset_two_stress': return reset+(drift[:,None]*np.c_[np.ones(len(H)),H-3.3])@v.reshape(2,2)@F.T\\n  if kind=='reset_scaled': return (H[:,None]*(F@v[:2]) + drift[:,None]*(F@v[2:]))\\n  if kind=='memory_scaled': return reset+(z*v[:2])@F.T+drift[:,None]*(F@v[2:])\\n  if kind=='reset_fastslow': return reset+drift[:,None]*(v[0]*F[:,0]+v[1]*sat(np.exp(v[2])))\\n  if kind=='reset_offset': return reset+np.c_[np.ones(len(H)),drift,H-3.3]@v.reshape(3,2)@F.T\\n  if kind=='reset_linear': return reset+v[0]*drift[:,None]*np.r_[tt,1.]\\n  if kind=='drift_features': return reset+(X@v.reshape(5,2))@F.T\\n  if kind=='reset_quadratic': return reset+np.c_[drift,drift**2]@v.reshape(2,2)@F.T\\n size={'reset_fixed':1,'reset_free':2,'memory_free':2,'reset_two':2,'reset_two_stress':4,'reset_scaled':4,'memory_scaled':4,'reset_fastslow':3,'reset_offset':6,'reset_linear':1,'drift_features':10,'reset_quadratic':4}[kind]\\n v=np.ones(size)*.3\\n if kind=='reset_scaled': v[:2]=b[:2]\\n free=kind in ('reset_free','memory_free','reset_fastslow')\\n lo=np.full(size,-np.inf); hi=-lo\\n if free: lo[-1],hi[-1]=np.log([.05,40.]); v[-1]=np.log(3.)\\n r=least_squares(lambda p:(pred(p)[mask]-obs[mask]).ravel(),v,bounds=(lo,hi),loss='soft_l1',f_scale=.012)\\n return r.x,pred(r.x)\\nprint('times',tt,'dt',dt,'diagnostic missing',np.isnan(g['coupon_features_raw']).sum(0))\\nprint('reset without drift q90',np.quantile(abs(reset[:,:-1]-obs[:,:-1]),.9),np.quantile(abs(reset[:,-1]-obs[:,-1]),.9))\\nfor kind in ('reset_fixed','reset_free','memory_free','reset_two','reset_two_stress','reset_scaled','memory_scaled','reset_fastslow','reset_offset','reset_linear','drift_features','reset_quadratic'):\\n v,p=fit(np.ones(len(H),bool),kind); cv=np.empty_like(p); groups=[]\\n for lab in np.unique(g['lab_id']):\\n  msk=g['lab_id']==lab; cv[msk]=fit(~msk,kind)[1][msk]; e=abs(cv[msk]-obs[msk]); groups.append([np.quantile(e[:,:-1],.9),np.quantile(e[:,-1],.9)])\\n e=abs(cv-obs); print(kind,v.round(4),'fit90',np.quantile(abs(p-obs),.9).round(4),'cv90',np.array([np.quantile(e[:,:-1],.9),np.quantile(e[:,-1],.9)]).round(4),'worst lab',np.max(groups,0).round(4))\\n if kind in ('reset_free','reset_two','reset_fastslow'): print('  signed median strain and rate by coupon',np.c_[np.median(p[:,:-1]-obs[:,:-1],axis=1),p[:,-1]-obs[:,-1]].round(3).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_law.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chronological chamber memory with linear drift -> H2 reset memory with drift coupled into bounded relaxation; the hold-stress-only fast amplitude has leave-one-lab-out RMSE 0.094 in stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate free amplitudes for each chamber coupon\",\n      \"rejected_reason\": \"That explains measured traces but cannot predict unlabeled deployment coupons.\"\n    }\n  ],\n  \"rationale\": \"Fit candidate chamber laws jointly to strain and initial rate inside each lab holdout. If reset memory transfers better than chronological memory, retain it; if a single bounded drift cannot fit both outputs, test whether adding the fast relaxation basis closes the held-out error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "194bae363137679a35da199be365b7eaa7a040522035936a918bd7afb102d837",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40455.21,
+      "usage_known": true,
+      "prompt_tokens": 33479,
+      "cached_tokens": 11136,
+      "completion_tokens": 1555
+    }
+  ]
+}

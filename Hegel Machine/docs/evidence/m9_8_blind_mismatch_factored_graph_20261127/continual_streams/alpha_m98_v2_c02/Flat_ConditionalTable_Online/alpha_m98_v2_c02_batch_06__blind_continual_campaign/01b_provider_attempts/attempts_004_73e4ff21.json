@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "73e4ff21c55b44efa69d6d1e8308e3de",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:54:52.506966+00:00",
+  "ended_at_utc": "2026-11-27T14:55:29.520729+00:00",
+  "request_sha256": "7b418bf178c297917e9c0601b98b0b80e6fe40635e5ad5d81b90a209891ac7e3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22001,
+    "cached_tokens": 9600,
+    "completion_tokens": 914
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '48,110p' /tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py; sed -n '89,100p' /tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_01_solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.stats import spearmanr\\nnp.set_printoptions(precision=3,suppress=True,linewidth=145)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('true | raw rows',np.c_[x,y][:20]); print('range true and raw',x.min(0),x.max(0),y.min(0),y.max(0)); print('correlations',np.corrcoef(x.T,y.T)[:4,4:],spearmanr(x,y).statistic[:4,4:]); print('sum corr',np.corrcoef(y.T,x.sum(1))[-1,:]); print('sweeps',[(k,v.shape,v[:12]) for k,v in c['single_channel_sweeps'].items()]); print('specimen raw bounds',[(s,np.quantile(d[s]['past_channel_raw'].reshape(-1,4),[0,.05,.5,.95,1],axis=0)) for s in ['train','test']]);\\nfor xx,yy in [(x,y),(y,x)]:\\n for kind in ['affine','quadratic','cubic','tanh','asinh']:\\n  z=xx if kind not in ['tanh','asinh'] else getattr(np,'tanh' if kind=='tanh' else 'arcsinh')(xx); a=np.c_[np.ones(len(z)),z];\\n  if kind in ['quadratic','cubic']: a=np.c_[a,*[z[:,j]*z[:,k] for j in range(4) for k in range(j,4)]]\\n  if kind=='cubic': a=np.c_[a,*[z[:,j]*z[:,k]*z[:,l] for j in range(4) for k in range(j,4) for l in range(k,4)]]\\n  e=np.vstack([a[j::5]@np.linalg.lstsq(a[np.arange(len(z))%5!=j],yy[np.arange(len(z))%5!=j],rcond=None)[0]-yy[j::5] for j in range(5)]); print(kind,np.mean(e**2,0)**.5,'sum',np.mean(np.sum(e,1)**2)**.5)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge → nonlinear or regime-dependent bridge; affine calibration RMSE reaches 0.493 load units on the worst channel.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived global affine bridge adequately calibrates all four channels in the current campaign.\",\"empirical_witness\":\"Even in sample, channel RMSE is 0.371–0.493 against channel load standard deviations of 0.851–0.918.\",\"causal_blanket_diagnosis\":\"An unresolved bridge mapping can masquerade as altered material memory or chamber drift.\",\"sublated_pivot\":\"Compare forward and inverse calibration on held-out sweeps before fitting the constitutive law.\",\"risk_kind\":\"calibration misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the chamber law with archived affine calibration\",\"rejected_reason\":\"The calibration residuals are too large to interpret chamber residuals physically.\"}],\"rationale\":\"Inspect the raw response and measure held-out errors in both directions, including total load. This distinguishes a meaningful constitutive mismatch from a calibration artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "17e7fc7112543ae856cb00d31a810b69d150ed8cb481f84ad52fdb041184ac99",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37400.98,
+      "usage_known": true,
+      "prompt_tokens": 22001,
+      "cached_tokens": 9600,
+      "completion_tokens": 914
+    }
+  ]
+}

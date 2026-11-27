@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7d099faea61142e6bc075961e252ea8e",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:22.888906+00:00",
+  "ended_at_utc": "2026-11-27T14:28:58.353230+00:00",
+  "request_sha256": "ea9a46e0932ab0e9dea22fed73d17e749ab28a168e33b1bfc0188846fd83879e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47151,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29721,
+    "cached_tokens": 0,
+    "completion_tokens": 1302
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/structure98.py <<'PY'\\nexec(open('/tmp/law98.py').read().split('for mode in range')[0])\\nimport json\\nL=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in L:\\n print('apparatus', [(k,v) for k,v in e.items() if k!='facility_telemetry_trace']); z=np.array(e['facility_telemetry_trace']);print('trace avg/std',z.mean(0),z.std(0))\\nprint('dataset keys',list(d), 'diag keys',list(a),'test keys',list(d['test']))\\nfor key in d:\\n if key not in ('train','test','calibration_load_cells'): print('extra',key,str(d[key])[:500])\\ncal=d['calibration_load_cells']; print('sweep', {k:np.round(v,4).tolist() for k,v in cal['single_channel_sweeps'].items()})\\nP,C,p=fit(np.arange(len(h)),3); E=Y-P; V=np.linalg.svd(E,full_matrices=False); print('residual svd',V[1]);\\nfor name,X in [('x',x),('raw',a['coupon_features_raw']),('aux',a.get('aux_chamber_telemetry',np.zeros((len(h),1)))),('hold/past',np.c_[h,s]),('signed-square',np.c_[h*np.abs(h),s*np.abs(s)]),('stress diff square',np.diff(np.c_[s,h],axis=1)**2),('lab/stratum',np.c_[a['lab_id'],a['stratum']]),('refs',a['ref_coupons'])]:\\n X=np.nan_to_num(X);print(name,'top residual correlations',np.corrcoef(np.c_[V[0][:,:2],X].T)[:2,2:])\\n# Identify whether separately projected modal amplitudes support a simpler kernel.\\nfor times in [u,np.array([.5784,2.5911]),np.array([.587,2.2]),np.array([.587,2.7])]:\\n H=np.stack([expb(v) for v in times]); amp=np.linalg.lstsq(H.T,Y.T,rcond=None)[0].T\\n for name,X in [('stress+drift',np.c_[h,s,q]),('stress+intrinsic features',np.c_[h,s,f]),('stress+drift+aux',np.c_[h,s,q,a['aux_chamber_telemetry']])]:\\n  inv=np.linalg.pinv(X); C=inv@amp; D0=amp-X@C; loo=D0/(1-np.einsum('ij,ji->i',X,inv))[:,None]; print('times',times,name,'C.T',C.T,'fit',rm(Y-X@C@H),'loo_amp',rm(loo@H))\\nprint('feature standardization sensitivity')\\nfor nm, (left,right) in {'train_diag':(d['train'],a),'all_diag':(d['train'],xx),'test_diag':(d['test'],a),'diag_only':(a,a)}.items():\\n q1=np.c_[np.ones(len(h)),m['_standardize'](left,right)[1][-len(h):]]@b[2:];print(nm,q1)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/structure98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unconstrained stress kernels plus saturating drift) -> H2 (a shared modal response with identifiable chamber stress and feature terms); leave-one-coupon-out RMSE is 0.075 at the final horizon and 0.061 at initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Ship the unconstrained chamber fit\",\n      \"rejected_reason\": \"Its final-horizon holdout error is well above diagnostic measurement noise, and several inferred stress coefficients lack a clear physical interpretation.\"\n    }\n  ],\n  \"rationale\": \"Check whether the remaining error follows load transformations, chamber telemetry, or the reference panel. A clear association would change the predictor; otherwise use the simplest modal law that transfers across coupon holdouts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "676939eedefa4fb2335dbed59805739b85e5fabfd57a128053a18d1dacfb3a8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35427.02,
+      "usage_known": true,
+      "prompt_tokens": 29721,
+      "cached_tokens": 0,
+      "completion_tokens": 1302
+    }
+  ]
+}

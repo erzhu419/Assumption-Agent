@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7231081818a41a8a90629a9c1b97e2a",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:26.548806+00:00",
+  "ended_at_utc": "2026-11-27T14:53:00.277220+00:00",
+  "request_sha256": "fd1eccd92f7f397653fbf3804f65051708c108e838f2ae454c8d8e428866d2ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38931,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24384,
+    "cached_tokens": 11136,
+    "completion_tokens": 1270
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/hegel_load_margin.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\na = c['bridge_raw']\\nb = c['true_channel_loads'].sum(axis=1)\\ntr, te = d['train'], d['test']\\ncal = m._stress_calibration(c)\\nloads = np.concatenate((cal(te['past_channel_raw']).ravel(), cal(te['hold_channel_raw'])))\\nprint('Calibrated total stress range; deployment range:', np.round([b.min(), b.max(), loads.min(), loads.max()], 5))\\n\\ndef compare(outer):\\n    scores = []\\n    for held in outer:\\n        kept = np.setdiff1d(np.arange(len(a)), held)\\n        center, scale = a[kept].mean(axis=0), a[kept].std(axis=0)\\n        x = (a-center)/scale\\n        base = np.c_[np.ones(len(x)), x]\\n        options = [base]\\n        for axis in [*x.T, *(x[:,i]+sign*x[:,j] for i in range(4) for j in range(i+1,4) for sign in (-1,1))]:\\n            for strength in (.001, .01, .1):\\n                options.append(np.c_[base, x/(1+strength*axis[:,None]**2)])\\n        def mse(f, train, test):\\n            coef = np.linalg.lstsq(f[train], b[train], rcond=None)[0]\\n            return np.mean((f[test]@coef-b[test])**2)\\n        inner = np.array_split(kept, 4)\\n        idx = np.argmin([np.mean([mse(f,np.setdiff1d(kept,test),test) for test in inner]) for f in options])\\n        scores.append((np.sqrt(mse(base, kept, held)),np.sqrt(mse(options[idx], kept, held))))\\n    return np.round(scores,7)\\norder = np.argsort(b)\\nn = max(2,len(b)//5)\\nprint('Extreme stress fold RMSE (affine, nested rational challenger):', compare((order[:n],order[-n:])).tolist())\\nx, _ = m._standardize(tr, te)\\ny = tr['strain_curves_obs']-tr['strain_0'][:,None]\\nr = tr['instant_rate_obs']\\nmat = m._design(tr,x,cal,d['past_dt'],d['eval_times'])\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\ne, q = np.zeros_like(y), np.zeros_like(r)\\nfor lab in np.unique(tr['lab_id']):\\n    h = tr['lab_id']==lab\\n    tau, theta = m._fit(lambda t: tuple(z[~h] for z in mat(t)), y[~h], r[~h])\\n    strain, rate = mat(tau)\\n    e[h],q[h] = strain[h]@theta-y[h],rate[h]@theta-r[h]\\nfor label, h in [('observed',~missing),('imputed',missing)]:\\n    if np.any(h):\\n        print(label, h.sum(), 'OOF strain/rate MedianAE', np.round([np.median(abs(e[h])),np.median(abs(q[h]))],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/hegel_load_margin.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest gated law -> H2 apparatus-matched ungated law; worst held-out lab MedianAE is 0.00969 for strain and 0.00712 for rate, and worst ordinary calibration-fold RMSE is 0.000266.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification or relay-mode audits\",\n      \"rejected_reason\": \"The public measurements contain continuous strain and rate, not class labels or relay states.\"\n    }\n  ],\n  \"rationale\": \"Ordinary folds could hide calibration error at the ends of the load range. Compare an affine fit with a rational challenger selected strictly inside each outer fold, then check whether deployment reaches those loads. The missing-feature slice tests whether the specified imputation concentrates held-out error. Change the solver only if the audit identifies a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f46717a0cd7ef7986d9bf15c95de7e4bd9bff7dac97acf4d7a9012bfaa7f33f0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33627.7,
+      "usage_known": true,
+      "prompt_tokens": 24384,
+      "cached_tokens": 11136,
+      "completion_tokens": 1270
+    }
+  ]
+}

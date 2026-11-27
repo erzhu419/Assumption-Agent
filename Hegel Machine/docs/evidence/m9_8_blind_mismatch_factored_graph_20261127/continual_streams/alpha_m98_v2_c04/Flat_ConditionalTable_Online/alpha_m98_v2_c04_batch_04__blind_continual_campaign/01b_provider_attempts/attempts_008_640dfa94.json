@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "640dfa94c26f4a8f9fd428b7adb8f2c6",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:03.389180+00:00",
+  "ended_at_utc": "2026-11-27T14:45:43.830416+00:00",
+  "request_sha256": "e3b4da0159ad3205ff93ac3b0eb6b1c21509e4deb53e93d1449274cfdf1f63d1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50713,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29966,
+    "cached_tokens": 9600,
+    "completion_tokens": 1507
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_trial.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; dt,t=d['past_dt'],d['eval_times']\\nfull=[()] + [j for n in range(1,4) for j in combinations_with_replacement(range(4),n)]\\naidx=np.arange(4); prev=(aidx-1)%4\\n\\ndef basis(z):\\n return np.c_[np.ones(len(z)),z,z**3,z*z[:,prev]]\\n\\ndef fit(xx,yy):\\n a=np.array([np.prod(xx[:,j],axis=1) for j in full]).T\\n e=yy-a@np.linalg.lstsq(a,yy,rcond=None)[0]; _,_,v=np.linalg.svd(e,full_matrices=False); n=v[0]; proj=np.eye(4)-np.outer(n,n)\\n b=basis(xx); delta=yy-b@np.linalg.lstsq(b,yy@proj,rcond=None)[0]; score=delta@n\\n # Seed the physical fit with the compact nonlinear model on the majority of rows.\\n keep=np.ones(len(xx),bool)\\n for _ in range(5):\\n  k=np.linalg.lstsq(b[keep],score[keep],rcond=None)[0]; r=score-b@k\\n  idx=np.argsort(abs(r))[:int(.9*len(r))]; keep[:]=False; keep[idx]=True\\n k=np.linalg.lstsq(b[keep],yy[keep],rcond=None)[0]; e=yy-b@k\\n keep=np.linalg.norm(e,axis=1)<max(.002,8*np.median(np.linalg.norm(e,axis=1)))\\n return np.linalg.lstsq(b[keep],yy[keep],rcond=None)[0],keep\\n\\ndef invert(raw,k):\\n shape=raw.shape; y=raw.reshape(-1,4); z=np.linalg.solve(k[1:5].T,(y-k[0]).T).T\\n for _ in range(20):\\n  r=basis(z)@k-y\\n  J=np.broadcast_to(k[1:5].T,(len(z),4,4)).copy()\\n  for j in range(4):\\n   J[:,:,j]+=3*z[:,j,None]**2*k[5+j]+z[:,prev[j],None]*k[9+j]\\n   J[:,:,prev[j]]+=z[:,j,None]*k[9+j]\\n  step=np.linalg.solve(J,r[...,None])[...,0]; z-=step/np.maximum(1,np.max(abs(step),axis=1,keepdims=True))\\n  if np.max(abs(r))<1e-10: break\\n return z.reshape(shape),np.linalg.norm(basis(z)@k-y,axis=1)\\n\\nif __name__=='__main__':\\n k,good=fit(x,y); print('excluded',np.flatnonzero(~good),'coefficients',k.round(5)); print('clean forward p90',np.quantile(abs(basis(x[good])@k-y[good]),.9));\\n for split in (np.arange(len(x))%5, np.digitize(np.linalg.norm(x,axis=1),np.quantile(np.linalg.norm(x,axis=1),[.2,.4,.6,.8]))):\\n  for g in np.unique(split):\\n   i=split==g; kf,ok=fit(x[~i],y[~i]); z,_=invert(y[i & good],kf); e=z-x[i & good]; print('cal fold',g,'clean load/sum max',np.max(abs(e)),np.max(abs(e.sum(1))),'retained',ok.sum())\\n loads=[]\\n for b in (tr,te):\\n  for key in ('past_channel_raw','hold_channel_raw'):\\n   z,r=invert(b[key],k); print(key,'max reconstruction',max(r),'load range',z.min(),z.max()); loads.append(z.sum(-1))\\n past,hold=loads[:2]; xx=m._features(tr,te)[:len(hold)]; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; labs=tr['lab_id'];\\n for lab in [*np.unique(labs),None]:\\n  i=labs==lab if lab is not None else np.ones(len(labs),bool); j=~i if lab is not None else i; tau,th=m._fit(xx[j],past[j],hold[j],dt,t,yc[j],yr[j]); A,B=m._design(xx[i],past[i],hold[i],dt,t,tau); print('lab',lab,'tau',tau,'theta',th.round(4),'curve/rate p90',np.quantile(abs(A@th-yc[i].ravel()),.9),np.quantile(abs(B@th-yr[i]),.9))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_trial.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Cubic bridge with rank-one calibration contamination → compact cyclic cross-terms and clean-sweep refit; the affine baseline’s worst held-out lab p90 errors are 0.212 strain and 0.598 rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Discard the contaminated direction at prediction time\",\"rejected_reason\":\"Projection leaves three measurements for four unknown loads; refitting clean sweeps can recover the fourth direction.\"}],\"rationale\":\"The projected coefficients identify four cyclic pair products and four diagonal cubics. Test whether that compact map predicts held-out sweeps, reconstructs coupon readings, and improves the unchanged material fit across labs before replacing the affine bridge.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3a2b0c21654951447defc62a7c911ace1bdbea1f357cfcfc5ad9c79873b3a8e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40902.88,
+      "usage_known": true,
+      "prompt_tokens": 29966,
+      "cached_tokens": 9600,
+      "completion_tokens": 1507
+    }
+  ]
+}

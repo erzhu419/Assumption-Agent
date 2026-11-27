@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c93d92b580e428ba3ab2a430c75dd43",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:59:22.533104+00:00",
+  "ended_at_utc": "2026-11-27T15:00:06.905507+00:00",
+  "request_sha256": "bc5a230bc41dfef2528b309d2473778e55cea6527d8ce54c180534433a3b7d6d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66919,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36418,
+    "cached_tokens": 11136,
+    "completion_tokens": 1785
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/archive_manifest.json; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print('log keys',list(a) if isinstance(a,dict) else len(a)); a=next(v for v in a.values() if isinstance(v,list)) if isinstance(a,dict) else a\\nfor e in a:\\n print({k:(np.round(np.asarray(v).mean(0),3).tolist() if k=='facility_telemetry_trace' else v) for k,v in e.items()})\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('public items',len(b),[list(x) for x in b]); print('dataset keys',list(b[0]['dataset']))\\nPY\\ncat >/tmp/cv_chamber.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for label,A in [')[0])\\nfrom scipy.optimize import least_squares\\nkeys=('coupon_features_raw','ref_coupons','lab_id','stratum')\\n# Use the deployment reference panel to align diagnostic rows without changing the training fit.\\njoined={k:np.concatenate((tr[k],te[k])) for k in keys}\\n_,Xall=archive._standardize(joined,g)\\nXbase=g['coupon_features_raw'].copy()\\nfor lab in np.unique(g['lab_id']):\\n sel=joined['lab_id']==lab; c=joined['ref_coupons'][sel]; mask=g['lab_id']==lab\\n Xbase[mask]=(Xbase[mask]-np.nanmedian(np.nanmean(c,0)))/np.nanmedian(np.nanstd(c,0))\\nXbase=np.where(np.isfinite(Xbase),Xbase,Xall)\\nZ=z(tau); n=len(Y); target=np.c_[Y,R]; lab=g['lab_id']; ids=np.arange(n)\\n\\ndef chamber(p,D,mode):\\n if mode=='full':\\n  q=tau*np.exp(p[:2]); gain=p[2:4]; carry=p[4:6]; a,b,ld,c=p[6:]\\n elif mode=='reset':\\n  q=tau*np.exp(p[:2]); gain=p[2:4]; carry=[0.,p[4]]; a,b,ld,c=p[5:]\\n elif mode=='equilibration':\\n  q=tau*np.exp(p[:2]); gain=p[2:4]; carry=np.exp(-np.exp(p[4])/tau); a,b,ld,c=p[5:]\\n elif mode=='unity':\\n  q=tau*np.exp(p[:2]); gain=[1.,1.]; carry=np.exp(-np.exp(p[2])/tau); a,b,ld,c=p[3:]\\n elif mode=='intrinsic':\\n  q=tau; gain=p[:2]; carry=np.exp(-np.exp(p[2])/tau); a,b,ld,c=p[3:]\\n E=th[:2]*(H[:,None]*gain-Z*carry); dur=np.exp(ld); F=-dur*np.expm1(-t/dur)\\n return np.c_[E@(-np.expm1(-t[:,None]/q)).T+D[:,None]*(a*t+b*F)+c*t,E@(1/q)+D*(a+b)+c]\\nstarts={'full':[0,-.3,.94,1,0,.27], 'reset':[0,-.3,.94,1,.27], 'equilibration':[0,-.3,.94,1,1.6], 'unity':[0,-.3,1.6], 'intrinsic':[.94,1,1.6]}\\nfor label,DD in [('all',np.c_[np.ones(n),Xall]@th[2:]),('base',np.c_[np.ones(n),Xbase]@th[2:])]:\\n for mode,start in starts.items():\\n  start=np.r_[start,.23,.79,-.05,.005]\\n  def fit(keep):\\n   def res(p): return (chamber(p,DD,mode)[keep]-target[keep]).ravel()\\n   return least_squares(res,start,loss='cauchy',f_scale=.009,max_nfev=350).x\\n  p=fit(ids); e=chamber(p,DD,mode)-target; e_cv=np.zeros_like(e)\\n  for k in np.unique(lab):\\n   keep=lab!=k; pp=fit(keep); e_cv[~keep]=chamber(pp,DD,mode)[~keep]-target[~keep]\\n  worst=[max(np.sqrt(np.mean(e_cv[lab==k][:,:-1]**2)) for k in np.unique(lab)),max(np.sqrt(np.mean(e_cv[lab==k][:,-1]**2)) for k in np.unique(lab))]\\n  print(label,mode,'p',np.round(p,5),'typical',np.round(np.median(abs(e_cv),0)[[0,5,11,12]],5),'worst lab',np.round(worst,5),'pooled LOLO',np.round([np.sqrt(np.mean(e_cv[:,:-1]**2)),np.sqrt(np.mean(e_cv[:,-1]**2))],5),'train ranked',np.round(np.sort(np.sqrt(np.mean(e**2,1)))[-5:],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cv_chamber.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 free memory attenuation → H2 a shared equilibration interval and gated drift; the current diagnostic fit has 0.041 strain and 0.037 rate RMSE in sample, with large residuals concentrated on two coupons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit corrections for individual labs using the 18 diagnostics\",\"rejected_reason\":\"The two largest residuals have opposite signs and one affected lab has just one diagnostic coupon; a fitted lab correction would not be validated.\"}],\"rationale\":\"Compare unconstrained carryover with a single equilibration interval in leave-one-lab-out validation, and test whether reference-panel choice changes the result. The outcome determines which chamber parameters are stable enough to transfer to deployment.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "39c79fc7264411dd369505e2aa1bfc24f9d6a300749b613dea12cc288e9517bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44751.08,
+      "usage_known": true,
+      "prompt_tokens": 36418,
+      "cached_tokens": 11136,
+      "completion_tokens": 1785
+    }
+  ]
+}

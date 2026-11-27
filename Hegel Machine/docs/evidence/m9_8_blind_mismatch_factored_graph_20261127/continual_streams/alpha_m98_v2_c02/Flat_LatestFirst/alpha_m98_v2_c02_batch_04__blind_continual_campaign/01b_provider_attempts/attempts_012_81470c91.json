@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81470c91f4e44321854162ce759d05c1",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:49.388187+00:00",
+  "ended_at_utc": "2026-11-27T14:48:29.707720+00:00",
+  "request_sha256": "8cbff61b5f90080c4c8d730bd9357a20477f004df9f6fd469a4c4e6dd9326df6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73133,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35683,
+    "cached_tokens": 11136,
+    "completion_tokens": 1646
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations, combinations_with_replacement\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']; n = len(x)\\ncols = np.arange(4); adjacent = (cols+1)%4\\nbase = np.c_[np.ones(n), x]\\nsparse = [np.c_[base, x[:,j]**3, x[:,j]*x[:,adjacent[j]]] for j in cols]\\ndef fit(A, y, mask):\\n    return A @ np.linalg.lstsq(A[mask], y[mask], rcond=None)[0]\\nmixed = np.count_nonzero(x, axis=1)>1\\npilot = np.column_stack([fit(a, y[:,j], mixed) for j,a in enumerate(sparse)])\\ne = np.linalg.norm(y-pilot, axis=1); med = np.median(e)\\nclean = e <= med+10*1.4826*np.median(abs(e-med))\\nprint('clean and rejected sweep rows:', clean.sum(), np.flatnonzero(~clean), 'minimum rejected / maximum clean raw residual:', e[~clean].min(), e[clean].max())\\npoly = np.c_[base, np.column_stack([np.prod(x[:,i], axis=1) for degree in (2,3) for i in combinations_with_replacement(range(4),degree)])]\\ncontrasts = np.column_stack([x[:,i]+sgn*x[:,j] for i,j in combinations(cols,2) for sgn in (-1,1)])\\nq = np.c_[x, contrasts, x.sum(axis=1)]\\nrational = q/(1+q*q)\\nextended = [np.c_[a, rational] for a in sparse]\\naxis = np.argmax(abs(x),axis=1)\\nblocks = [(f'axis-{j}', clean & (np.count_nonzero(x,axis=1)==1) & (axis==j)) for j in cols]\\nblocks += [('mixed-high', clean & mixed & (np.linalg.norm(x,axis=1)>=np.quantile(np.linalg.norm(x[mixed],axis=1),.75)))]\\nfor name, held in blocks:\\n    if not held.any(): continue\\n    keep = clean & ~held\\n    rates = []\\n    for models in (sparse,[poly]*4,extended):\\n        pred = np.column_stack([fit(a,y[:,j],keep) for j,a in enumerate(models)])\\n        rates.append(np.max(abs(pred[held]-y[held])))\\n    cal_keep = ~held\\n    f=m._stress_calibration({'bridge_raw':y[cal_keep], 'true_channel_loads':x[cal_keep]})\\n    inv=np.max(abs(f(y[held])-x[held].sum(axis=1)))\\n    aff=fit(np.c_[np.ones(n),y],x.sum(axis=1),keep)\\n    print(name,'n=', held.sum(),'max raw sparse/full-cubic/rational:',np.round(rates,7),'max total sparse/affine:',inv,np.max(abs(aff[held]-x[held].sum(axis=1))))\\n    assert inv < .002\\ntrain,test=d['train'],d['test']; u,_=m._standardize(train,test); f=m._stress_calibration(c)\\ndesign=m._design(train,u,f,d['past_dt'],d['eval_times']); s=train['strain_curves_obs']-train['strain_0'][:,None]; r=train['instant_rate_obs']; lab=train['lab_id']; aux=train['aux_chamber_telemetry']\\nfor j in np.unique(lab):\\n    use=lab!=j; held=~use\\n    tau,theta=m._fit(lambda ts:tuple(a[use] for a in design(ts)),s[use],r[use]); A,B=design(tau)\\n    es=s-A@theta; er=r-B@theta\\n    ds=np.median(es,axis=1); dr=er\\n    # Estimate a telemetry slope after removing training-lab means; do not fit an offset on the held lab.\\n    v=aux.copy(); h=np.column_stack([ds,dr]); w=h.copy()\\n    for k in np.unique(lab[use]):\\n        mask=lab==k; v[mask]-=v[mask].mean(0); w[mask]-=w[mask].mean(0)\\n    b=np.linalg.lstsq(v[use],np.clip(w[use],-.05,.05),rcond=None)[0]\\n    adjusted=h[held]-(aux[held]-aux[use].mean(0))@b\\n    print('lab',j,'signed residual medians strain/rate:',np.round(np.median(h[held],axis=0),6),'P90 before/after telemetry:',np.round(np.quantile(abs(h[held]),.9,axis=0),6),np.round(np.quantile(abs(adjusted),.9,axis=0),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: additional bridge terms or lab nuisance corrections improve transfer -> H2: the sparse cyclic bridge and shared material fit suffice; the current worst clean calibration LOO error is 0.000638 and worst held-out-lab P90 errors are 0.024142 for strain and 0.013244 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-state or classification diagnostics\",\n      \"rejected_reason\": \"The specified task has neither a relay state nor class labels. Held-out lab residuals are the relevant test for regression confounding.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire axis sweeps and the highest-load mixed sweeps to test whether pairwise, cubic, or rational terms improve transfer beyond the sparse bridge. Check whether telemetry slopes learned within training labs reduce errors in a held-out lab; a consistent improvement would justify revisiting the nuisance model. Run the public schema validator in an isolated process after the audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ac6c11d02d72bcef6cd96e17ee94aa9c056e1f3be5ca16737d648ba49abed353",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40805.25,
+      "usage_known": true,
+      "prompt_tokens": 35683,
+      "cached_tokens": 11136,
+      "completion_tokens": 1646
+    }
+  ]
+}

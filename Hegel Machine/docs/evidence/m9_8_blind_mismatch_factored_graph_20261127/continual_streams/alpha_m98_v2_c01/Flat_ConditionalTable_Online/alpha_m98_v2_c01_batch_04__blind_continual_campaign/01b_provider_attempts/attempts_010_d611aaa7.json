@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d611aaa7ba954617b289dde5e182ec0c",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:50.194514+00:00",
+  "ended_at_utc": "2026-11-27T14:42:19.567477+00:00",
+  "request_sha256": "3e1c94f2a1dc4ca2705e1c4703e7ed8a19adb41b641ee5a1bc42aedb79264c7e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64134,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33372,
+    "cached_tokens": 9600,
+    "completion_tokens": 1135
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; xtr,xte=m._features(tr,te)\\nb=m._axial_load_map(d['calibration_load_cells']); sp=m._specimen(tr,xtr,b); target=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']\\no=m.solve_batch(d); tau=o['estimated_taus']; th=o['hereditary_weights']; lab=tr['lab_id']; st=tr['stratum']; err=np.empty_like(target); er=np.empty_like(rate)\\nfor k in np.unique(lab):\\n f=lab==k; a,w=m._fit(tuple(v[~f] for v in sp),dt,t,target[~f],rate[~f]); pred,rr=m._branches(tuple(v[f] for v in sp),dt,t,a); dr=sp[2][f]@w[2:]; err[f]=pred@w[:2]+dr[:,None]*t-target[f]; er[f]=rr@w[:2]+dr-rate[f]\\n print('held-out lab',k,'taus',np.round(a,5),'median abs curve/rate errors',np.median(abs(err[f])),np.median(abs(er[f])))\\nfor name,groups in [('lab',lab),('stratum',st)]:\\n scores=[(k,*[float(np.quantile(abs(v[groups==k]),.9)) for v in (err,er)]) for k in np.unique(groups)]; print(name,'90th percentile curve/rate errors',scores)\\nprint('OOF global medians',np.median(abs(err)),np.median(abs(er)))\\nassert .05<tau[0]<tau[1]<25 and th.shape==(7,)\\nassert all(np.isfinite(v).all() for v in o.values())\\nh=m._decode(te['hold_channel_raw'],b).sum(axis=1); xt=np.c_[np.ones(len(xte)),xte]; q=1e-6; near_zero=m._chamber_increment(h,xt,np.array([q]),tau,th)[0][:,0]/q; de=np.max(abs(near_zero-o['initial_rate_pred'])); print('max deployment rate / strain derivative difference',de); assert np.allclose(near_zero,o['initial_rate_pred'],rtol=3e-6,atol=1e-8)\\nl=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); x=np.array([e['facility_telemetry_trace'] for e in l]);\\nfor e in l: print('apparatus metadata',{k:v for k,v in e.items() if k!='facility_telemetry_trace'})\\nfor lab,x0 in [('all means',x.mean(1)),('stable means',x.mean(1)[:,[1,3,4,6,7]]),('stable first half',x[:,:x.shape[1]//2,[1,3,4,6,7]].mean(1)),('stable second half',x[:,x.shape[1]//2:,[1,3,4,6,7]].mean(1))]: print(lab,'latest to older distances',np.linalg.norm(x0[:-1]-x0[-1],axis=1))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and a boundary-hitting lifetime → H2 sparse nonlinear bridge and an interior two-branch fit; worst held-out axial RMSE is 0.000205 and maximum specimen bridge round-trip error is 1.89e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave each lab out of the material fit to detect a lab-driven spectrum; compare both halves of the apparatus trace to detect a misleading pooled match. Validate the deployment rate separately as the derivative of the strain law. If the lab fits or trace match are unstable, revisit the corresponding component before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9d9881f9261f54833691bc052860b4ffa7f245268cbdefa29b304834a6eb0e5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29808.39,
+      "usage_known": true,
+      "prompt_tokens": 33372,
+      "cached_tokens": 9600,
+      "completion_tokens": 1135
+    }
+  ]
+}

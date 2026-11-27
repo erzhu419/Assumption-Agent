@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0e6140c39e394f68a7cb09211ce021ea",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:09.730233+00:00",
+  "ended_at_utc": "2026-11-27T14:30:45.163816+00:00",
+  "request_sha256": "73ed7706a292a18ef3f39fe9e57f654d42e32efc901e344d04488064c6478d6d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62228,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33210,
+    "cached_tokens": 9600,
+    "completion_tokens": 1304
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheo_final_audit.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; tr,te=d['train'],d['test']; q=item['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; b=m._bridge(d['calibration_load_cells']); X=m._features(tr,te)[:len(tr['lab_id'])]; p,h=m._loads(tr,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; labs=tr['lab_id']; out=m.solve_batch(d); tau=out['estimated_taus']; th=out['hereditary_weights']; rms=lambda x: np.sqrt(np.mean(x*x))\\nfor g in np.unique(labs):\\n k=labs==g; a,w=m._fit(X[~k],p[~k],h[~k],dt,t,y[~k],r[~k]); F,G=m._design(X[k],p[k],h[k],dt,t,a); ec=(F@w).reshape(y[k].shape)-y[k]; er=G@w-r[k]; print('benchtop holdout lab',g,'worst horizon MAE, rate MAE, max relative spectrum shift',max(np.mean(abs(ec),axis=0)),np.mean(abs(er)),max(abs(a/tau-1)))\\nif q is not None:\\n x=m._features(q,q)[:len(q['lab_id'])]; qp,qh=m._loads(q,b); lab=q['lab_id']; c,rc=m._chamber_prediction(q,x,b,t,tau,th); E=np.c_[q['strain_curves_obs']-c,q['instant_rate_obs']-rc]; T=np.r_[np.log1p(t),1.]; drift=th[2]+x@th[3:]; _,rate_design=m._design(x,qp,qh,dt,t,tau); memory=qh[:,None]-rate_design[:,:2]*tau; B=np.r_[-np.expm1(-t[:,None]/tau),(1/tau)[None,:]].T; contrast=qh-qp[:,-1]\\n def score(F=None):\\n  o=E.copy()\\n  for g in np.unique(lab):\\n   k=lab==g\\n   if F is not None:\\n    coef=np.linalg.lstsq(F[~k].reshape(-1,F.shape[-1]),E[~k].ravel(),rcond=None)[0]; o[k]-=F[k]@coef\\n  return np.round([max(rms(o[lab==g,:-1]) for g in np.unique(lab)),max(rms(o[lab==g,-1]) for g in np.unique(lab)),max(rms(o[:,j]) for j in range(len(t)))],6)\\n print('diagnostics: worst lab strain RMSE, worst lab rate RMSE, worst horizon RMSE')\\n print('exact',score()); print('residual hereditary memory',score(memory[:,None,:]*B.T[None,:,:])); print('hold-last pairwise contrast',score((contrast[:,None]*T)[...,None]));\\n for a in (.25,1.,4.):\\n  Q=drift/(1+a*contrast**2)-drift\\n  print('rational drift attenuation',a,score((Q[:,None]*T)[...,None]))\\n for g in np.unique(lab):\\n  k=lab==g; print('diagnostic signed lab bias',g,E[k,:-1].mean(),E[k,-1].mean())\\nassert all(np.isfinite(v).all() for v in out.values()) and .05 < tau[0] < tau[1] < 25\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_final_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: reset plus logarithmic drift may omit chamber corrections -> H2: retain it if load contrasts and rational corrections do not improve held-out labs; current worst-lab RMSE is 0.01527 for strain and 0.01150 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, stochastic-control, or classification tests\",\n      \"rejected_reason\": \"This batch has continuous strain and rate outcomes and no relay, control policy, or class labels. Lab-wise residuals and held-out material fits test the relevant nuisance and transfer risks.\"\n    }\n  ],\n  \"rationale\": \"Refit the material law without each benchtop lab to detect leverage, and test whether chamber residuals support a transferable history contrast or rational attenuation. Change the solver only if a correction improves the measured bottleneck without hurting the other output. Re-run the exact artifact in an isolated process to catch import, schema, or nonfinite-output failures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5a75fddefc8b09383f5196861131c200b3789d812651aff57fc50aeae5223f7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35761.39,
+      "usage_known": true,
+      "prompt_tokens": 33210,
+      "cached_tokens": 9600,
+      "completion_tokens": 1304
+    }
+  ]
+}

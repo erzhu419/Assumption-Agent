@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "04cf2dfc90a547d18bbb44ffb95048a1",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_ConditionalTable_Online__beta_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:32:10.112009+00:00",
+  "ended_at_utc": "2026-11-27T14:32:34.392590+00:00",
+  "request_sha256": "ede955e70ac9b0f697b259672e5594c4ef5e4db9d79d63214c0c7d13d4ed416d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34007,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22806,
+    "cached_tokens": 9600,
+    "completion_tokens": 719
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport importlib.util, pathlib, pickle, numpy as np\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; X=np.c_[np.ones(len(x)),x]; B=np.linalg.lstsq(X,y,rcond=None)[0]; hat=np.sum(np.linalg.qr(X,mode='reduced')[0]**2,axis=1); print('affine calibration LOO RMS by bank',np.sqrt(np.mean(((y-X@B)/(1-hat[:,None]))**2,axis=0))); print('offset/map',B.round(6)); print('telemetry mean/std',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0)); Z=s['Z_nuisance']; Q=np.linalg.qr(Z,mode='reduced')[0]\\nfor f in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n spec=importlib.util.spec_from_file_location(f.stem,f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); S,_=m._forward(s)\\n for j,p in enumerate(item['campaign_diagnostics']):\\n  yp=m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])); v=S@p['w_pulse']; r=yp-v; pr=r-Q@(Q.T@r); print(f.stem,j,'signal/rms/projected max, rms by bank',np.linalg.norm(yp)/np.sqrt(len(yp)), np.linalg.norm(r)/np.sqrt(len(r)),np.max(np.abs(pr)),np.sqrt(np.mean(pr.reshape(-1,4)**2,axis=0))); print('residual by shift',np.sqrt(np.mean(pr.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin or reflecting walls → H2 boundary and calibration laws tested separately against both public pulses; worst-pulse error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit new wall coefficients immediately\",\n      \"rejected_reason\": \"An archived operator may already explain both pulses; calibration error should be measured before adding wall parameters.\"\n    }\n  ],\n  \"rationale\": \"Leave-one-sweep-out error tests the affine sensor map independently. Compare both wall operators on each tracer pulse before and after removing the nuisance span: if either operator reaches the calibration error scale on both pulses, retain it; otherwise use the residual patterns to decide whether to revise the sensor map or the wall rows.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "3a3adb5bcd67f50a7015817336285add83d42150cf3f33d8f1a7d067780a0f39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24233.0,
+      "usage_known": true,
+      "prompt_tokens": 22806,
+      "cached_tokens": 9600,
+      "completion_tokens": 719
+    }
+  ]
+}

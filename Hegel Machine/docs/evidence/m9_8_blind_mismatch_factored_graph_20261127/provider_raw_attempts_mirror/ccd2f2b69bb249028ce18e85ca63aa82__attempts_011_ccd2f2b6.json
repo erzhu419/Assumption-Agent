@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ccd2f2b69bb249028ce18e85ca63aa82",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:42.682927+00:00",
+  "ended_at_utc": "2026-11-27T14:40:19.474442+00:00",
+  "request_sha256": "159c72d99570b5c71a45b7ff4b854f216a6d66650c606055aeb51153ebf9c1a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70363,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35377,
+    "cached_tokens": 9600,
+    "completion_tokens": 1412
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/audit_batch03.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd,di=p['dataset'],p['campaign_diagnostics']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; y=cal['true_channel_loads'].sum(1)\\nA=np.c_[np.ones(len(raw)),raw]; B=np.c_[A,*[raw[:,i]*raw[:,j] for i in range(4) for j in range(i,4)]]\\nfor name,a in [('affine',A),('quadratic',B)]:\\n pred=np.empty_like(y)\\n for q in np.array_split(np.argsort(y),5):\\n  k=np.ones(len(y),bool); k[q]=False; pred[q]=a[q]@np.linalg.lstsq(a[k],y[k],rcond=None)[0]\\n errors=abs(pred-y); print('bridge',name,'MAE',errors.mean(),'worst stress band',max(errors[q].mean() for q in np.array_split(np.argsort(y),5)))\\nx,_=m._standardize(tr,te); _,xd=m._standardize({k:v[:0] for k,v in di.items()},di); stress=m._stress_calibration(cal)\\nz=di['strain_curves_obs']-di['strain_0'][:,None]; rate=di['instant_rate_obs']; f=-np.expm1(-t); labs=di['lab_id']; train_y=tr['strain_curves_obs']-tr['strain_0'][:,None]\\nterms=[np.ones(len(xd))]; names=['constant']\\nfor i in range(4):\\n for j in range(i+1,4):\\n  for sign in (-1,1):\\n   for c in (.5,1.,2.):\\n    v=xd[:,i]+sign*c*xd[:,j]; terms.extend([v,v*v]); names.extend([f'pair{i}{sign:+}{c}x{j}',f'pair_sq{i}{sign:+}{c}x{j}'])\\nfor i in range(4):\\n for j in range(4):\\n  for a in (.5,1.,2.):\\n   terms.append(xd[:,i]/(1+a*xd[:,j]**2)); names.append(f'ratio{i}{a}x{j}')\\nterms=np.array(terms).T\\nrows=[]\\nfor g in np.unique(labs):\\n q=labs==g; qtr=tr['lab_id']!=g; source={k:v[qtr] for k,v in tr.items()}\\n tau,b=m._fit(m._design(source,x[qtr],stress,dt,t),train_y[qtr],tr['instant_rate_obs'][qtr]); s,r=m._design(di,xd,stress,dt,t,chamber=True)(tau)\\n ec=z-s@b; er=rate-r@b; amp=np.median(ec/f,axis=1)\\n scores=[]\\n for j,v in enumerate(terms.T):\\n  folds=[]\\n  for h in np.unique(labs[~q]):\\n   test=labs==h; fit=~(q|test); coef=np.linalg.lstsq(v[fit,None],amp[fit],rcond=None)[0][0]; folds.append(np.mean(abs(amp[test]-coef*v[test])))\\n  scores.append((np.mean(folds),j))\\n _,j=min(scores); v=terms[:,j]; coef=np.linalg.lstsq(v[~q,None],amp[~q],rcond=None)[0][0]; corr=coef*v[q]\\n def metrics(curve,rr): return [np.mean(abs(curve)),np.mean(abs(rr))]\\n rows.append([metrics(ec[q],er[q]),metrics(ec[q]-corr[:,None]*f,er[q]-corr)]); print('lab',g,'baseline/challenger',np.round(rows[-1],6),names[j])\\nprint('worst lab baseline/challenger',np.max(rows,axis=0))\\n# Worst-band bridge bias or a repeatable held-out drift gain would justify a candidate edit.\\nout=m.solve_batch(d)\\nassert set(out)=={'estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'}\\nassert all(np.isfinite(v).all() for v in out.values())\\nassert .05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nprint('isolated contract OK')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch03.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (chronological memory plus unit exponential creep) -> H2 (nonlinear bridge or residual drift correction only if supported out of fold); current worst-lab strain/rate MAE is 0.00693/0.00770.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run classification, relay, and PDE checks\",\"rejected_reason\":\"The published inputs describe continuous strain and rate measurements from a two-branch relaxation model, with no labels, relay states, or PDE operator.\"}],\"rationale\":\"Hold out contiguous calibration stress bands to detect bridge curvature that would justify a nonlinear calibration. Select pairwise and rational drift corrections inside each outer lab fold; promote one only if it improves transfer rather than absorbing diagnostic panel variation. Recheck the exact solver in an isolated process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6ee2a370e9de4f857c69a70ae5537156e6d545b7829901a0313a351c111757ef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37236.48,
+      "usage_known": true,
+      "prompt_tokens": 35377,
+      "cached_tokens": 9600,
+      "completion_tokens": 1412
+    }
+  ]
+}

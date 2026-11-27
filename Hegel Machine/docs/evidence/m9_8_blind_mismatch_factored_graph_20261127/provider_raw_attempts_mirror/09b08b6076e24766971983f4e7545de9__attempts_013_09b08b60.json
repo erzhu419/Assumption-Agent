@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09b08b6076e24766971983f4e7545de9",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:53:05.649697+00:00",
+  "ended_at_utc": "2026-11-27T14:53:48.618940+00:00",
+  "request_sha256": "ebe725f395bc298127a3263c41c68a29a9070990af75a8ba733fed531e6a9315",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82900,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40305,
+    "cached_tokens": 9600,
+    "completion_tokens": 1444
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress98.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('public items:',len(items))\\ni=items[0]; d=i['dataset']; g=i['campaign_diagnostics']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; good=np.max(abs(y-np.median(y,axis=0)),axis=1)<8\\n# Hold out all nominal single-axis rows together, or high-norm mixed loads together.\\naxis=(np.count_nonzero(x,axis=1)==1); high=np.linalg.norm(x,axis=1)>=np.quantile(np.linalg.norm(x[~axis],axis=1),.8)\\nfor name,test in [('axis',axis),('strong_mixed',high&~axis)]:\\n    fit=good&~test; test=good&test\\n    model=m._calibration(dict(true_channel_loads=x[fit],bridge_raw=y[fit])); e=(m._loads(y[test],model)-x[test]).sum(1)\\n    print(name,'inverse total-load p90/max',len(e),np.quantile(abs(e),.9),max(abs(e)))\\n    z=np.arange(4); o,L,q,b=model; X=x[test]; R=y[test]-(X@L+o+q*X*X[:,m._NEIGHBOR]+b*X**3)\\n    # A missing pairwise difference/sum or rational saturation would leave a coherent residual.\\n    X=x[fit]; Y=y[fit]; T=x[test]; yh=np.empty_like(R); yc=np.empty_like(R)\\n    for j,k in enumerate(m._NEIGHBOR):\\n        def terms(v): return np.c_[np.ones(len(v)),v,v[:,j]*v[:,k],v[:,j]**3]\\n        a=terms(X); at=terms(T); p=np.linalg.lstsq(a,Y[:,j],rcond=None)[0]; yc[:,j]=at@p\\n        candidates=[]\\n        for sign in (-1,1):\\n            def rat(v): return (v[:,j]+sign*v[:,k])**2\\n            s=rat(X); st=rat(T); groups=np.array_split(np.random.default_rng(27).permutation(len(a)),4)\\n            for h in (0.,.003,.01,.03,.1,.3):\\n                A=a/(1+h*s[:,None]); AT=at/(1+h*st[:,None]); err=[]\\n                for valid in groups:\\n                    tr=~np.isin(np.arange(len(a)),valid); beta=np.linalg.lstsq(A[tr],Y[tr,j],rcond=None)[0]; err.extend((A[valid]@beta-Y[valid,j]).tolist())\\n                candidates.append((np.mean(np.square(err)),h,AT@np.linalg.lstsq(A,Y[:,j],rcond=None)[0]))\\n        _,_,yh[:,j]=min(candidates,key=lambda r:r[0])\\n    print(name,'cubic vs nested rational channel p90',*[float(np.quantile(abs(p-y[test]),.9)) for p in (yc,yh)])\\ntr,te=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; train=d['train']; target=lambda p:np.c_[p['strain_curves_obs']-p['strain_0'][:,None],p['instant_rate_obs']]; tau,theta=m._fit(tr,dt,t,target(train)); cp=m._coupon(g,m._features(g,g)[-len(g['lab_id']):],m._calibration(c)); strain,rate=m._chamber_predict(cp,t,tau,theta); e=np.c_[strain,rate]-target(g)\\nfor lab in np.unique(g['lab_id']):\\n    ix=g['lab_id']==lab; group=e[ix]; print('chamber lab',lab,'signed medians',np.median(group[:,:-1]),np.median(group[:,-1]),'p90',np.quantile(abs(group[:,:-1]),.9),np.quantile(abs(group[:,-1]),.9))\\nfor mask in (np.any(np.isnan(g['coupon_features_raw']),axis=1),np.all(np.isfinite(g['coupon_features_raw']),axis=1)):\\n    if mask.any(): print('missingness slice',mask.sum(),'strain/rate p90',np.quantile(abs(e[mask,:-1]),.9),np.quantile(abs(e[mask,-1]),.9))\\nfor ds in (item['dataset'] for item in items):\\n    out=m.solve_batch(ds); assert all(np.isfinite(a).all() for a in out.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sparse cubic bridge and reset chamber -> H2 retain unless structured holdouts expose a reproducible deficiency; worst held-out benchtop lab p90 errors are 0.02163 strain and 0.01584 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Hold out axis sweeps and strong mixed loads to detect calibration errors that random folds can miss. Compare pairwise rational alternatives with selection inside each training fold, and check chamber residuals by lab and feature missingness for a systematic bias. Relay modes, Fokker–Planck operators, and classification metrics do not apply to this continuous rheology model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "7af504c93ca548a328032e7d8d9c91777dc1b061a90ab29186b6009dce5719ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43342.87,
+      "usage_known": true,
+      "prompt_tokens": 40305,
+      "cached_tokens": 9600,
+      "completion_tokens": 1444
+    }
+  ]
+}

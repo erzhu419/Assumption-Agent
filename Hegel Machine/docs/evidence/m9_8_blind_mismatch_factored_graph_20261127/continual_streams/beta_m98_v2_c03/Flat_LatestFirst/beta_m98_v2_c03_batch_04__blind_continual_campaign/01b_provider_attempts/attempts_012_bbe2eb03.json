@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbe2eb037f304ab2966faed54fca32e5",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:52.130728+00:00",
+  "ended_at_utc": "2026-11-27T14:47:19.540493+00:00",
+  "request_sha256": "799692adaaba7b63c9dd1b56543e42718a9dadc83b0ace11236a2f5d26ae20de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35081,
+    "cached_tokens": 11136,
+    "completion_tokens": 963
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/audit_calibration_propagation.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfit_full = m._fit_calibration\\n\\ndef fit_compact(ref, raw):\\n    design = m._features(ref)\\n    seed = fit_full(ref, raw)\\n    inlier = np.linalg.norm(raw - design @ seed, axis=1) < .002\\n    out = np.zeros_like(seed)\\n    for j in range(raw.shape[1]):\\n        active = abs(seed[:, j]) > .001\\n        out[active, j] = np.linalg.lstsq(design[inlier][:, active], raw[inlier, j], rcond=None)[0]\\n    return out\\n\\ndef relative(a, b):\\n    return np.linalg.norm(a-b) / np.linalg.norm(b)\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; sw = s['sensor_calibration_sweeps']; x = sw['ref_rosette']\\n    cv = np.array_split(np.random.default_rng(13).permutation(len(x)), 10)\\n    results = {}\\n    for name, fit in [('full', fit_full), ('compact', fit_compact)]:\\n        m._fit_calibration = fit\\n        base = m.solve_batch(s)\\n        diffs = []\\n        for te in cv:\\n            keep = np.ones(len(x), dtype=bool); keep[te] = False\\n            sub = dict(s, sensor_calibration_sweeps=dict(sw, ref_rosette=x[keep], raw_rosette=sw['raw_rosette'][keep]))\\n            out = m.solve_batch(sub)\\n            diffs.append([relative(out[k], base[k]) for k in ('weights', 'terminal_field')])\\n        results[name] = base\\n        print(name, 'worst calibration-fold relative variation (weights, field):', np.max(diffs, axis=0))\\n    print('full-to-compact relative change (weights, field):', [relative(results['compact'][k], results['full'][k]) for k in ('weights', 'terminal_field')])\\n    m._fit_calibration = fit_full\\nPY\\npython3 -I /tmp/audit_calibration_propagation.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Reflecting walls -> Robin leakage with robust mixed cubic calibration; worst held-out transport RMSE is 0.02529, and the compact calibration improves worst clean held-out raw error from 1.03e-4 to 3.34e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the wall, rational response, and nuisance comparisons\",\n      \"rejected_reason\": \"Those comparisons already separated the models. The remaining question is whether the compact calibration's improvement carries through to the delivered weights and field.\"\n    }\n  ],\n  \"rationale\": \"Withhold calibration sweeps and rerun the entire inverse solve to detect whether calibration instability materially affects either deliverable. Consider promoting the compact fit only if it improves output stability at a meaningful scale; the production artifact remains unchanged during the comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "cdb08a58174d44f4552fc86bd2ad0f63021188ad18260b8892b3c968cd40990d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27853.36,
+      "usage_known": true,
+      "prompt_tokens": 35081,
+      "cached_tokens": 11136,
+      "completion_tokens": 963
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c0a16abf6ef742729b45d2c3da743aee",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:50:40.476847+00:00",
+  "ended_at_utc": "2026-11-27T14:51:11.085012+00:00",
+  "request_sha256": "a9ed1964fa8d665424129e77fe9cb7ba3509b0bb80fa3e72e0d1c61990acabe2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38925,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23569,
+    "cached_tokens": 9600,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd = pickle.load(open('public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; raw = c['bridge_raw']; load = c['true_channel_loads'].sum(1)\\n# Hold out contiguous true-load bands, including the two extrapolation edges.\\nerrors = {'affine': [], 'pairwise': [], 'rational': []}\\nfor idx in np.array_split(np.argsort(load), 5):\\n    keep = ~np.isin(np.arange(len(load)), idx)\\n    z = (raw - raw[keep].mean(0)) / raw[keep].std(0)\\n    affine = np.c_[np.ones(len(z)), z]\\n    q = np.column_stack([z[:, i] + sign*z[:, j] for i in range(4) for j in range(i+1,4) for sign in (-1,1)])\\n    bases = {'affine': affine, 'pairwise': np.c_[affine, q*q], 'rational': np.c_[affine, q*q/(1+0.25*q*q)]}\\n    for name, a in bases.items():\\n        e = a[idx] @ np.linalg.lstsq(a[keep], load[keep], rcond=None)[0] - load[idx]\\n        errors[name].append(float(np.quantile(abs(e), .95)))\\nprint('load-band absolute error p95 (low to high):', {k: np.round(v, 7).tolist() for k,v in errors.items()})\\ntr, te = d['train'], d['test']; x, _ = m._standardize(tr, te)\\nstress = m._stress_calibration(c); dt, t = d['past_dt'], d['eval_times']\\nys = tr['strain_curves_obs'] - tr['strain_0'][:,None]; yr = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    keep = tr['lab_id'] != lab\\n    def design(mask): return m._design({k:v[mask] for k,v in tr.items()}, x[mask], stress, dt, t)\\n    tau, theta = m._fit(design(keep), ys[keep], yr[keep]); b, r = design(~keep)(tau)\\n    # Remove the within-lab intercept from both prediction errors before comparing.\\n    def centered_rmse(e): return np.sqrt(np.mean((e-e.mean())**2))\\n    e = r @ theta - yr[~keep]; en = r[:,:3] @ theta[:3] - yr[~keep]; s = b @ theta - ys[~keep]\\n    print('lab', lab, 'centered rate RMSE with/without features', centered_rmse(e), centered_rmse(en), 'rate median bias', np.median(e), 'strain median bias', np.median(s))\\nPY\\npython3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and robust shared-memory fit -> H2 retain them unless the load-band or within-lab audit exposes a systematic failure; current worst leave-one-lab-out strain p90 absolute error is 0.0230 and rate RMSE is 0.0107.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay states, HJB drift, or classification balanced accuracy\",\n      \"rejected_reason\": \"This task specifies continuous strain and rate under a two-branch hereditary law. There is no relay state, control objective, or class label.\"\n    }\n  ],\n  \"rationale\": \"Random calibration holdouts can miss error at the edges of the load range. If pairwise or rational terms reduce that error consistently, revisit the bridge fit. If coupon features fail to predict within-lab rate variation after removing the lab mean, revisit lab alignment rather than relying on pooled performance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "20d953904514c0600d2c4e8296d882f4cc9170bac25c9cf95db63e7981e25f09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30567.35,
+      "usage_known": true,
+      "prompt_tokens": 23569,
+      "cached_tokens": 9600,
+      "completion_tokens": 1172
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e496ba1b69644f9ea5672db3c66812c0",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__alpha_m98_v2_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:22:42.447659+00:00",
+  "ended_at_utc": "2026-11-27T14:23:16.792367+00:00",
+  "request_sha256": "9a66b2bc18ddf6b5093778ab4d661883338c3b5b4e303b2208b5d4286f0ca1ab",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34114,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22959,
+    "cached_tokens": 11136,
+    "completion_tokens": 1226
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', Path('batch_solver.py').resolve())\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; cal = d['calibration_load_cells']; raw = cal['bridge_raw']; y = cal['true_channel_loads'].sum(axis=1)\\nprint('chamber diagnostics present:', item.get('campaign_diagnostics') is not None, 'continual archive present:', Path('/tmp/hegel_continual_archive').is_dir())\\nfor basis in ('affine', 'quadratic', 'pair_difference_cubic', 'rational_compression'):\\n    residual = []\\n    for j in range(len(y)):\\n        keep = np.arange(len(y)) != j\\n        z = (raw - raw[keep].mean(axis=0)) / raw[keep].std(axis=0)\\n        cols = [np.ones(len(z)), *z.T]\\n        if basis == 'quadratic':\\n            cols += [z[:,a]*z[:,b] for a in range(4) for b in range(a,4)]\\n        if basis == 'pair_difference_cubic':\\n            cols += [(z[:,a]+sign*z[:,b])**3 for a in range(4) for b in range(a+1,4) for sign in (-1,1)]\\n        if basis == 'rational_compression':\\n            cols += list((z**3/(1+0.25*z*z)).T)\\n        a = np.column_stack(cols)\\n        residual.append(y[j] - a[j] @ np.linalg.lstsq(a[keep],y[keep],rcond=None)[0])\\n    print('summed-load LOO',basis,'RMSE',np.sqrt(np.mean(np.square(residual))),'max',np.max(np.abs(residual)))\\ntr, te = d['train'], d['test']; x, _ = m._standardize(tr,te); stress = m._stress_calibration(cal)\\nstrain = tr['strain_curves_obs']-tr['strain_0'][:,None]; rate = tr['instant_rate_obs']; lab = tr['lab_id']\\ncurve_err = np.empty_like(strain); rate_err = np.empty_like(rate)\\nfor g in np.unique(lab):\\n    h = lab == g\\n    def design(mask):\\n        return m._design({k: tr[k][mask] for k in ('past_channel_raw','hold_channel_raw')},x[mask],stress,d['past_dt'],d['eval_times'])\\n    tau,w = m._fit(design(~h),strain[~h],rate[~h]); a,b = design(h)(tau)\\n    curve_err[h] = strain[h]-a@w; rate_err[h] = rate[h]-b@w\\nfor g in np.unique(lab):\\n    h = lab == g\\n    e = curve_err[h]; r = rate_err[h]\\n    print('lab',g,'signed late-strain median',round(np.median(e[:,-3:]),5),'signed rate median',round(np.median(r),5),'late strain / rate abs p90',np.round([np.quantile(abs(e[:,-3:]),.9),np.quantile(abs(r),.9)],5))\\nfor split in (tr,te):\\n    print('telemetry finite count, q10, q90:',np.isfinite(split['aux_chamber_telemetry']).sum(axis=0),np.nanquantile(split['aux_chamber_telemetry'], [.1,.9],axis=0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine bridge and shared hereditary law → retain the blind fallback unless held-out measurements support a correction; prior worst-slice p90 errors were 0.0243 for strain and 0.0161 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Classification and relay-mode audits\",\n      \"rejected_reason\": \"The documented inputs and outputs are continuous rheology measurements; there are no class labels, relay states, or stochastic control operators.\"\n    }\n  ],\n  \"rationale\": \"Compare nonlinear bridge challengers on the actual summed-load target; a reduction in held-out error could justify changing calibration. Inspect signed held-out lab residuals separately so pooling cannot mask a systematic offset that would warrant a targeted nuisance analysis. Telemetry can flag a distribution shift but cannot establish a chamber correction without response measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d6c1ecb752b9dcc56a9be3797ab368a56bf71a01dbce7cddbbec78ce59641478",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34309.05,
+      "usage_known": true,
+      "prompt_tokens": 22959,
+      "cached_tokens": 11136,
+      "completion_tokens": 1226
+    }
+  ]
+}

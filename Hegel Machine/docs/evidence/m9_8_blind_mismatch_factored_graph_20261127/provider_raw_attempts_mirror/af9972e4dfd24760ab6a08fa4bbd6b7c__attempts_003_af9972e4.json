@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af9972e4dfd24760ab6a08fa4bbd6b7c",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:53:32.690903+00:00",
+  "ended_at_utc": "2026-11-27T14:54:17.027365+00:00",
+  "request_sha256": "4bf4b6c3ded8cba94a99e628b9275de2159a57a0a72c835f39bd030e93af3770",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24190,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20768,
+    "cached_tokens": 11136,
+    "completion_tokens": 1504
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_m98.py <<'PY'\\nimport pickle, itertools, numpy as np, json, runpy\\nfrom scipy.sparse import eye, kron, diags\\nfrom scipy.sparse.linalg import splu\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; st=it['study']; sw=st['sensor_calibration_sweeps']; ref=sw['ref_rosette']; raw=sw['raw_rosette']\\nroot='/tmp/hegel_continual_archive/beta_m98_v2_c04_'; openax=runpy.run_path(root+'batch_04_solver.py')['_axis']; perax=runpy.run_path(root+'batch_03_solver.py')['_axis']\\ndef basis(x,j,kind):\\n a=x[:,j]; l=x[:,(j-1)%4]; r=x[:,(j+1)%4]; o=x[:,(j+2)%4]; P=[np.ones(len(a)),l,a,r]\\n if kind=='linear': return np.column_stack(P)\\n if kind=='full_linear': return np.column_stack(P+[o])\\n if kind=='archive04': return np.column_stack(P+[a**3,a*r])\\n if kind=='full_quad': return np.column_stack(P+[o]+[x[:,i]*x[:,k] for i,k in itertools.combinations_with_replacement(range(4),2)])\\n if kind=='full_cubic': return np.column_stack([np.ones(len(a))]+[np.prod(x[:,inds],axis=1) for d in (1,2,3) for inds in itertools.combinations_with_replacement(range(4),d)])\\n if kind=='own_poly': return np.column_stack(P+[o,a*a,a**3,a*l,a*r,a*o,a**5])\\ndef fit(ref,raw,kind):\\n C=[]\\n for j in range(4):\\n  X=basis(ref,j,kind); y=raw[:,j]; b=np.linalg.lstsq(X,y,rcond=None)[0]\\n  for _ in range(25):\\n   e=y-X@b; m=max(1e-9,1.4826*np.median(abs(e-np.median(e)))); w=np.sqrt(np.minimum(1,1.5*m/np.maximum(abs(e),1e-15))); b=np.linalg.lstsq(X*w[:,None],y*w,rcond=None)[0]\\n  C.append(b)\\n return C\\ndef pred(x,c,k): return np.column_stack([basis(x,j,k)@c[j] for j in range(4)])\\ndef forward(x,y):\\n def ax(q,k):\\n  args=[st['kappa_'+q],st['vel_'+q],st['L'+q]]\\n  return perax(*args) if k=='periodic' else openax(*args,st['robin_'+q] if k=='robin' else 0.)\\n nx,ny=st['nx'],st['ny']; op=kron(eye(ny),ax('x',x),format='csc')+kron(ax('y',y),eye(nx),format='csc')+diags(st['V_reaction_2d'].ravel(order='F'),format='csc'); a,b=st['sensor_ij'].T; i=a+nx*b; f=st['source_modes'].transpose(0,2,1).reshape(-1,nx*ny).T\\n return np.vstack([splu(op+v*eye(nx*ny,format='csc')).solve(f)[i] for v in st['mu_shifts']])\\nif __name__=='__main__':\\n print('sweep ranges',ref.min(0),ref.max(0),np.quantile(abs(raw),[.5,.9,.95,.98,1],axis=0)); print('single', {k:np.round(v[:8],4) for k,v in sw['single_bank_sweeps'].items()})\\n for k in ['linear','full_linear','archive04','full_quad','own_poly','full_cubic']:\\n  c=fit(ref,raw,k); out=np.zeros_like(raw)\\n  for t in range(5):\\n   take=np.arange(len(ref))%5==t; out[take]=pred(ref[take],fit(ref[~take],raw[~take],k),k)\\n  print(k,'CV quantiles',np.round(np.quantile(abs(out-raw),[.5,.8,.9,.95]),7),'coeff',np.round(c,5) if k in ('archive04','own_poly','full_linear') else '')\\n  score=[]\\n  for x,y in itertools.product(['robin','sealed','periodic'],repeat=2):\\n   S=forward(x,y); errs=[]\\n   for p in it['campaign_diagnostics']:\\n    e=(pred((S@p['w_pulse']).reshape(-1,4),c,k).ravel()-p['y_pulse_raw']); errs.append(np.linalg.norm(e)/np.linalg.norm(p['y_pulse_raw']))\\n   score.append((max(errs),x,y,errs))\\n  print('pulse fits',sorted(score))\\n for z in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n  a=np.asarray(z['facility_telemetry_trace']); print(z['completed_batch_index'],a.shape,np.round(a.mean(0),3),np.round(a.std(0),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_m98.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -22\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shared open Robin walls → H2: test archived wall types independently on both axes after sweep-only calibration; pulse error and held-out sweep error are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit wall and sensor parameters jointly to both pulses\",\"rejected_reason\":\"That could conceal a wrong wall operator behind a flexible sensor response. Fit calibration from sweeps first, then test it on the pulses.\"}],\"rationale\":\"Compare exact archived stencils, including mixed-axis combinations, against both pulses. Held-out sweep errors will show whether the archived sensor model transfers or needs additional terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "16aae46cea19c2843f82c834503936eee21f85aee6e719cfed97dfb03eb63a8a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44290.9,
+      "usage_known": true,
+      "prompt_tokens": 20768,
+      "cached_tokens": 11136,
+      "completion_tokens": 1504
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf921270753548b2ab195a36edcd18ce",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:34.830006+00:00",
+  "ended_at_utc": "2026-11-27T14:46:09.978655+00:00",
+  "request_sha256": "7acba30aef62681ec189334de2b300ec1191954a4285438ca496415dcd47b09f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55505,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32925,
+    "cached_tokens": 11136,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nbase = Path('/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py').read_text()\\nbridge = Path('/tmp/bridge_candidate.py').read_text().split('\\\\n', 1)[1].strip()\\nlo = base.index('def _bridge(')\\nhi = base.index('def _design(', lo)\\nloads = '''def _loads(block, bridge):\\n    return tuple(_decode_bridge(block[key], bridge).sum(axis=-1)\\n                 for key in ('past_channel_raw', 'hold_channel_raw'))\\n\\n\\n'''\\nbase = base[:lo] + bridge + '\\\\n\\\\n\\\\n' + loads + base[hi:]\\nbase = base.replace(\\\"bridge = _bridge(dataset['calibration_load_cells'])\\\", \\\"bridge = _fit_bridge(dataset['calibration_load_cells'])\\\")\\nbase = base.replace('    # The blind campaign provides no chamber labels or prior lineage archive.', '    # The archive identifies a telemetry regime but supplies no chamber law\\\\n    # for that regime; use the measured benchtop constitutive law.')\\nPath('/holdout_task/batch_solver.py').write_text(base)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/validate_rheology.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nfor item in items:\\n d=item['dataset']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; n=len(tr['lab_id']); x=m._features(tr,te)[:n]; c=d['calibration_load_cells']; B=m._fit_bridge(c)\\n past,hold=m._loads(tr,B); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; labs=tr['lab_id']; pred=m.solve_batch(d); tau=pred['estimated_taus']; theta=pred['hereditary_weights']; print('all-coupon fit',tau,theta)\\n assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in pred.values())\\n ec=np.empty_like(yc); er=np.empty_like(yr)\\n for lab in np.unique(labs):\\n  u=labs!=lab; v=~u\\n  q,b=m._fit(x[u],past[u],hold[u],dt,t,yc[u],yr[u]); D,R=m._design(x[v],past[v],hold[v],dt,t,q)\\n  ec[v]=(D@b).reshape(-1,len(t))-yc[v]; er[v]=R@b-yr[v]\\n  print('held lab',lab,'taus',q,'max weights change',np.max(np.abs(theta-b)),'curve/rate MAE',np.mean(abs(ec[v])),np.mean(abs(er[v])),'medAE',np.median(abs(ec[v])),np.median(abs(er[v])))\\n for idx in [0,len(t)-1]: print('horizon',t[idx],'lab MAE',[np.mean(abs(ec[labs==l,idx])) for l in np.unique(labs)])\\n pp,hh=m._loads(te,B); z=np.zeros((len(te['lab_id']),2));\\n for j,step in enumerate(dt):\\n  a=np.exp(-step/tau); z=a*z+(1-a)*pp[:,j,None]\\n gap=hh[:,None]-z; drift=theta[2]+m._features(tr,te)[n:]@theta[3:]\\n curve=te['strain_0'][:,None]+(gap*theta[:2])@(-np.expm1(-t[:,None]/tau)).T+drift[:,None]*t\\n rate=(gap*theta[:2]/tau).sum(1)+drift\\n np.testing.assert_allclose(pred['predicted_strain'],curve,atol=1e-10)\\n np.testing.assert_allclose(pred['initial_rate_pred'],rate,atol=1e-10)\\n print('test curve and initial rate agree with independent chronological recurrence')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/validate_rheology.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 robust cubic-plus-pairwise forward bridge; clean leave-one-out axial RMSE is 0.000195 overall and 0.000145 at high load.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Copy the nearest campaign’s chamber correction\",\"rejected_reason\":\"The trace matches campaign 01, but that campaign has no mounted solver; the two mounted solvers both use the benchtop law.\"}],\"rationale\":\"Integrate the validated bridge, then test whether the material fit holds across labs and whether both deployment outputs agree with a direct chronological recurrence. The archive distinguishes regimes but does not establish an equation for the active chamber.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9c6821c31640db11f847d6cea73506beaec4c6266c30f7756a5ccf5f5baccef2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35786.09,
+      "usage_known": true,
+      "prompt_tokens": 32925,
+      "cached_tokens": 11136,
+      "completion_tokens": 1323
+    }
+  ]
+}

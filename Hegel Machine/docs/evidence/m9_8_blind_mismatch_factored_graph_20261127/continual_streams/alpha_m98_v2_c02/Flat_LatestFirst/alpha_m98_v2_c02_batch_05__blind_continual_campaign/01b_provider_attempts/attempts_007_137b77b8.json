@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "137b77b864234e0d866fb356c79c5ac9",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:51:36.000559+00:00",
+  "ended_at_utc": "2026-11-27T14:52:05.948619+00:00",
+  "request_sha256": "7d295ff3eafb7ece0f687cf9ee8d3063a92c9b2f6c827ca1adec3acca70ad5d7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38293,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24883,
+    "cached_tokens": 11136,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; t,dt=d['eval_times'],d['past_dt']; cal=m._stress_calibration(c)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; x,_=m._standardize(tr,te); mat=m._design(tr,x,cal,dt,t)\\nfor lab in np.unique(tr['lab_id']):\\n    h=tr['lab_id']==lab; tau,b=m._fit(lambda q: tuple(z[~h] for z in mat(q)),y[~h],r[~h]); a,g=mat(tau); e=a[h]@b-y[h]; er=g[h]@b-r[h]\\n    print('lab',lab,'early/late signed strain median',np.round([np.median(e[:,:3]),np.median(e[:,-3:])],5),'signed rate median',round(float(np.median(er)),5))\\nraw=c['bridge_raw']; truth=c['true_channel_loads'].sum(axis=1)\\ndef affine(z):\\n    z=z-z.mean(axis=0) if False else z\\n    return np.c_[np.ones(len(z)),z]\\ndef polynomial(z):\\n    return np.column_stack([affine(z)]+[z[:,i]*z[:,j] for i in range(4) for j in range(i,4)])\\nfor f in (affine,polynomial):\\n    a=f(raw); scores=[]\\n    for ids in np.array_split(np.arange(len(raw)),5):\\n        k=~np.isin(np.arange(len(raw)),ids); b=np.linalg.lstsq(a[k],truth[k],rcond=None)[0]; scores.append(np.sqrt(np.mean((a[ids]@b-truth[ids])**2)))\\n    print(f.__name__,'held-out stress RMSE',np.round(scores,7))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); a=np.asarray([np.mean(q['facility_telemetry_trace'],axis=0) for q in log]); stable=[1,4,5,7]\\nfor omitted in stable:\\n    j=[k for k in stable if k!=omitted]; di=np.linalg.norm(a[:-1,j]-a[-1,j],axis=1); print('omit apparatus channel',omitted,'nearest',log[np.argmin(di)]['completed_short_name'],'nearest and runner-up',np.round(np.sort(di)[:2],4))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest archived gated drift -> H2 apparatus-matched ungated drift; worst held-out lab median absolute errors are 0.00969 for strain and 0.00712 for initial rate, and worst calibration-fold stress RMSE is 0.000266.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification balance, or Fokker–Planck drift\",\n      \"rejected_reason\": \"The task has continuous strain and rate outcomes, an explicit hereditary recurrence, and no relay state or class labels. Signed held-out lab residuals directly test for a nuisance shift in the measured outcomes.\"\n    }\n  ],\n  \"rationale\": \"Compare affine bridge calibration against a full quadratic basis, including pairwise channel products, and change calibration only if held-out stress error improves materially. Check signed residuals for lab-specific drift and drop one apparatus channel at a time to test whether the archived law selection depends on a single setpoint.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "59fb27d4931d358d291a3a0b6f834299b484d2088643cb772d12e8f4f52ac0d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30312.51,
+      "usage_known": true,
+      "prompt_tokens": 24883,
+      "cached_tokens": 11136,
+      "completion_tokens": 1070
+    }
+  ]
+}

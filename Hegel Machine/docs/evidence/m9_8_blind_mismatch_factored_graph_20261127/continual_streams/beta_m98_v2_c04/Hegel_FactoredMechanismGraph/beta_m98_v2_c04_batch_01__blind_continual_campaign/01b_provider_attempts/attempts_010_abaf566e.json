@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "abaf566ef6f141cbbf239d45ea096593",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Hegel_FactoredMechanismGraph__beta_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:13.626126+00:00",
+  "ended_at_utc": "2026-11-27T14:29:40.940206+00:00",
+  "request_sha256": "c21704c9691941a9b5edcb1f035bdb85ab09958c5deaa31471a03c0e08102289",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44158,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25579,
+    "cached_tokens": 9600,
+    "completion_tokens": 827
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; c = s['sensor_calibration_sweeps']; a = c['ref_rosette']; b = c['raw_rosette']; bank = c['single_bank_sweeps']\\n    S, _ = m._forward(s)\\n    def fit(pool):\\n        p = []\\n        for j in range(4):\\n            x, y = a[:, j], b[:, j]\\n            if pool:\\n                take = bank['bank_id'] == j\\n                x = np.r_[x, bank['ref_signal'][take]]; y = np.r_[y, bank['raw_readout'][take]]\\n            p.append(np.linalg.lstsq(np.c_[x, np.ones(len(x))], y, rcond=None)[0])\\n        return np.array(p).T\\n    for name, params in [('candidate', None), ('diagonal', fit(False)), ('pooled_diagonal', fit(True))]:\\n        per_pulse = []\\n        for pulse in item.get('campaign_diagnostics') or []:\\n            raw = pulse['y_pulse_raw']\\n            y = m._calibrate(dict(s, y_obs_raw=raw)) if params is None else ((raw.reshape(-1, 4)-params[1])/params[0]).ravel()\\n            e = (y - S @ pulse['w_pulse']).reshape(len(s['mu_shifts']), -1, 4)\\n            per_pulse.append((np.sqrt(np.mean(e**2)), np.sqrt(np.mean(e**2, axis=1)).max()))\\n        print(name, 'pulse (pooled RMSE, worst shift/bank RMSE):', per_pulse)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the largest bank residual reflects calibration-estimation error -> H2: retain the current calibration unless independent single-bank sweeps materially improve both tracer pulses; current worst pulse/shift/bank RMSE is 2.35e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat nonlinear calibration, relay, or class-balance audits\",\n      \"rejected_reason\": \"Nonlinear calibration was already tested on held-out sweeps; this continuous tomography task has no relay modes or class labels.\"\n    }\n  ],\n  \"rationale\": \"Test whether pooling the independent single-bank sweeps reduces the largest pulse residual without fitting anything to the pulse observations. A material improvement on both pulses would justify revisiting calibration; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d23b02895e5348532407c3c8940e84a3f0f51f9e8f9f1fe2df3026dd2dc2c9aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27272.81,
+      "usage_known": true,
+      "prompt_tokens": 25579,
+      "cached_tokens": 9600,
+      "completion_tokens": 827
+    }
+  ]
+}

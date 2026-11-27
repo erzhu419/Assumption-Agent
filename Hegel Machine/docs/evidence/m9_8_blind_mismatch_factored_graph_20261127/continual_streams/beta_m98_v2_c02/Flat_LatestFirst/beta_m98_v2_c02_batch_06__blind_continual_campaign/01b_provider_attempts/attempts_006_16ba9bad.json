@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "16ba9bad9c374afabb6807eac5e80473",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:54:50.004100+00:00",
+  "ended_at_utc": "2026-11-27T14:55:41.915301+00:00",
+  "request_sha256": "a262d7115b26323fef41907b3f875cfbe3165b70a13f2ae3d9c7a10e3d7ebb67",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48386,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30126,
+    "cached_tokens": 11136,
+    "completion_tokens": 1546
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/wall_probe.py <<'PY'\\nfrom cal_probe import item,s,c,x,y,solo,load,robust,bases\\nimport numpy as np\\nfrom itertools import product\\nfrom scipy import sparse\\nfrom scipy.sparse.linalg import splu\\nfrom scipy.optimize import root\\n\\nm = load('batch_04')\\ncoef=m._fit_rosette(c)\\nlin = (m._rosette_raw(np.eye(4), coef * [1,1,1,1,0,0]) - coef[:,0]).T\\n\\ndef invert(obs):\\n    raw=np.asarray(obs).reshape(-1,4)\\n    return np.array([root(lambda a: m._rosette_raw(a,coef)-b,np.linalg.solve(lin,b-coef[:,0]),tol=1e-11).x for b in raw]).ravel()\\n\\npulses=item['campaign_diagnostics']; cal=[invert(p['y_pulse_raw']) for p in pulses]\\nZ=s['Z_nuisance']; project=lambda r:r-Z@np.linalg.lstsq(Z,r,rcond=None)[0]\\nnx,ny=s['nx'],s['ny']; print('geometry and shifts',nx,ny,s['mu_shifts'],'robin',s['robin_x'],s['robin_y']); print('public study keys',list(s))\\nsources=s['source_modes'].reshape(-1,nx*ny,order='F').T\\nij=s['sensor_ij']; rows=ij[:,0]+nx*ij[:,1]; ident=sparse.eye(nx*ny,format='csc')\\nreac=sparse.diags(s['V_reaction_2d'].ravel(order='F'),format='csc'); periodic=load('batch_03')._axis\\n\\ndef forward(kx,ky):\\n    axes=[]\\n    for a,kind,n in [('x',kx,nx),('y',ky,ny)]:\\n        k=s['kappa_'+a]; v=s['vel_'+a]; h=s['L'+a]/(n-1)\\n        axes.append(periodic(k,v,h) if kind=='periodic' else m._axis(k,v,h,s['robin_'+a] if kind=='open' else 0.))\\n    ax,ay=axes\\n    L=sparse.kron(sparse.eye(ny),ax,format='csc')+sparse.kron(ay,sparse.eye(nx),format='csc')+reac\\n    return np.vstack([splu(L+mu*ident).solve(sources)[rows] for mu in s['mu_shifts']])\\n\\ndef slices(r):\\n    return np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)).round(7).tolist()\\n\\nfor kx,ky in product(('open','sealed','periodic'),repeat=2):\\n    S=forward(kx,ky); stats=[]\\n    for p,obs in zip(pulses,cal):\\n        pred=S@p['w_pulse']; raw=m._rosette_raw(pred.reshape(-1,4),coef).ravel()\\n        r=pred-obs\\n        stats.append((slices(raw-p['y_pulse_raw']),slices(r),slices(project(r))))\\n    print(kx,ky,'raw/calibrated/profiled shift RMSE by pulse:',stats)\\n\\nfor j in range(4):\\n    terms='1 a b c ac a3'.split(); A=np.column_stack([bases(x,j)[k] for k in terms]); F=np.c_[np.ones(len(x)),x]; ef=[]; ec=[]\\n    mask=solo['bank_id']==j; yb=solo['raw_readout'][mask]; xb=np.eye(4)[j]*solo['ref_signal'][mask,None]; B=np.column_stack([bases(xb,j)[k] for k in terms]); Fb=np.c_[np.ones(len(xb)),xb]; eb=[]\\n    for fold in range(5):\\n        test=np.arange(len(x))%5==fold\\n        q,r=robust(A[~test],y[~test,j]); good=abs(r)<1e-3\\n        af=np.linalg.lstsq(F[~test][good],y[~test,j][good],rcond=None)[0]\\n        ef.extend((F[test]@af-y[test,j]).tolist()); ec.extend((A[test]@q-y[test,j]).tolist()); eb.append(np.abs(B@q-yb))\\n    print('bank',j,'held-out affine/cubic median abs',np.median(abs(np.array(ef))),np.median(abs(np.array(ec))),'held-out cubic p90',np.quantile(abs(np.array(ec)),.9),'solo median abs',np.median(eb))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/wall_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration with outlier rejection → H2 archived cubic and pairwise rosette terms with outlier rejection; worst-bank 90th-percentile in-sample absolute error for the cubic basis is 2.0e-5 raw units, with held-out error pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Grossly corrupted sweeps alone explain why the affine rosette law fails.\",\n    \"empirical_witness\": \"After robust fitting, median affine residuals still range from 0.0507 to 0.1017 across banks, versus 6e-6 to 8e-6 with the archived cubic and pairwise terms.\",\n    \"causal_blanket_diagnosis\": \"Sparse gross readout corruption coexists with systematic nonlinear sensor response; neither effect is evidence of a wall mismatch.\",\n    \"sublated_pivot\": \"Fit the archived six-term basis from current sweeps, check paired and solo holdouts, and then compare wall stencils on tracer pulses.\",\n    \"risk_kind\": \"calibration_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the wall regime from uncalibrated tracer amplitudes\",\n      \"rejected_reason\": \"Bank offsets, cross-talk, and nonlinear gain change raw amplitudes. Comparing predicted raw readouts and calibrated residuals separates sensor and wall effects.\"\n    }\n  ],\n  \"rationale\": \"Check both pulses at every shift and vary the two wall axes independently. If no candidate fits consistently, use the calibrated residual pattern to determine whether to extend the stencil rather than selecting the closest archived solver by default.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "769b1ebd1839e9114ca9d79eb4fcb0b9341d9d1421a005cb9e7aa8b4de386bde",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52303.96,
+      "usage_known": true,
+      "prompt_tokens": 30126,
+      "cached_tokens": 11136,
+      "completion_tokens": 1546
+    }
+  ]
+}

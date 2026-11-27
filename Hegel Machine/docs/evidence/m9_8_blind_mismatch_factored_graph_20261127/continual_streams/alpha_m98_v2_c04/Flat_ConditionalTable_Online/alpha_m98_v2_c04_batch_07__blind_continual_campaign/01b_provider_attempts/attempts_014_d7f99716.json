@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7f997167da44c45adc7a4c5cf1e3e3b",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:03:54.440230+00:00",
+  "ended_at_utc": "2026-11-27T15:04:28.141500+00:00",
+  "request_sha256": "d58b2136bcc48c599cc853227894f5213e469fd4dfc725967f949d3ea210027c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 86266,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41832,
+    "cached_tokens": 9600,
+    "completion_tokens": 1353
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -e 's/^for name in \\\\[/for name in [/' /dev/null >/dev/null\\ncat >/tmp/m98_panel_fit.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,q=d['train'],d['test'],i['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; b=m._bridge(d['calibration_load_cells']); x=m._features(tr,te); n=len(tr['lab_id']); tau,th=m._fit(x[:n],*m._loads(tr,b),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); past,h=m._loads(q,b)\\nkeys=('lab_id','stratum','coupon_features_raw','ref_coupons'); a={k:np.concatenate((tr[k],te[k])) for k in keys}; emp={k:q[k][:0] for k in keys}; X=m._features(emp,q); Y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; g=q['lab_id']; bad=np.isnan(q['coupon_features_raw']).any(1); later=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; G=(h[:,None]-past@(-np.expm1(-dt[:,None]/tau)*np.exp(-later[:,None]/tau)))*th[:2]; v=th[2]+X@th[3:]; strata=q['stratum']\\nfor l in np.unique(g):\\n def panel(p):\\n  p=p['ref_coupons'][p['lab_id']==l]; return np.r_[np.median(np.nanmean(p,axis=0)),np.median(np.nanstd(p,axis=0))]\\n print('lab',l,'train/test panel',panel(a),'verification panel',panel(q))\\ndef pred(p,mode):\\n fast=0. if mode in ('fixed','fix_time','fix_drift') else p[0]; T=tau*np.exp([fast,p[1]]); S=np.exp(p[3]); D=np.exp(p[2])*v\\n if mode=='fix_time': S=S*np.exp(p[4]*(h-np.median(h)))[:,None]\\n if mode=='fix_drift': D=D*np.exp(p[4]*(h-np.median(h)))\\n return np.c_[G@(-np.expm1(-t[None,:]/T[:,None]))-D[:,None]*S*np.expm1(-t/S),G@(1/T)+D]\\ndef fit(mask,mode):\\n return least_squares(lambda p:((pred(p,mode)-Y)[mask]/np.r_[np.full(len(t),.013),.024]).ravel(),[0.,.15,.21,.06]+([0.] if mode in ('fix_time','fix_drift') else []),loss='soft_l1',f_scale=1.5).x\\ndef metrics(P):\\n e=abs(P-Y); return np.array([*np.max([[np.median(e[g==l,:-1]),np.median(e[g==l,-1])] for l in np.unique(g)],axis=0),*np.max([[np.median(e[strata==l,:-1]),np.median(e[strata==l,-1])] for l in np.unique(strata)],axis=0),np.max(np.median(e[:,:-1],axis=0)),np.quantile(e[:,-2],.9),np.median(e[~bad,:-1]),np.median(e[bad,:-1])]).round(5)\\nold=np.r_[m._CHAMBER_LOG_TIME_SCALE,np.log(m._CHAMBER_DRIFT_GAIN),np.log(m._CHAMBER_DRIFT_TIME)]; print('deployed parameters on verification-specific panel',metrics(pred(old,'free')))\\nfor mode in ('fixed','free','fix_time','fix_drift'):\\n p=fit(np.ones(len(g),bool),mode); print(mode,'parameters',p.round(6),'fit',metrics(pred(p,mode)))\\n for grp in (g,strata):\\n  P=np.zeros_like(Y)\\n  for l in np.unique(grp):\\n   a=grp==l; P[a]=pred(fit(~a,mode),mode)[a]\\n  print('LOO',metrics(P))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_panel_fit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Pooled diagnostic references → verification-specific reference alignment; worst-lab held-out errors fell from 0.02645/0.03043 to 0.01092/0.01994 for strain/rate in the same chamber family.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change deployment preprocessing to use separate panels\",\"rejected_reason\":\"The deployment contract requires joint train/test standardization; only the separate verification block is being reconsidered for chamber-law estimation.\"}],\"rationale\":\"The measured verification-panel shift is large enough to change the chamber fit. Compare the saved coefficients with fits using the verification block's own reference coupons, holding out labs and strata. If the improvement survives both splits, update only the chamber coefficients and leave deployment preprocessing unchanged.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "a166a7e17522010e9e02a5d7fb96a0e02a16a9f79255403f68132d7e2aad8284",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34200.02,
+      "usage_known": true,
+      "prompt_tokens": 41832,
+      "cached_tokens": 9600,
+      "completion_tokens": 1353
+    }
+  ]
+}

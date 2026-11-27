@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c770ee2e31a64449806f505be673ade0",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:16.319885+00:00",
+  "ended_at_utc": "2026-11-27T14:41:43.841478+00:00",
+  "request_sha256": "cbe2a9330719c6b972e1cf29d7fe9cff15c56f8bddd239f5eacf9c0285e9734d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51822,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29506,
+    "cached_tokens": 9600,
+    "completion_tokens": 918
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/^def solve_batch/,$p' /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); a=s.index('    offset, axial = bridge',s.index('def solve_batch')); b=s.index('\\\\n',a)\\ns=s[:a]+s[b+1:]; import re\\ns,n=re.subn(r\\\"\\\\(test\\\\['hold_channel_raw'\\\\] - offset\\\\) @ axial\\\", \\\"_decode(test['hold_channel_raw'], bridge).sum(axis=-1)\\\",s); assert n==1\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; a=np.c_[np.ones(len(x)),x]; er=np.linalg.norm(y-a@np.linalg.lstsq(a,y,rcond=None)[0],axis=1); keep=er<=8*np.median(er); print('excluded',np.flatnonzero(~keep)); b=m._axial_load_map(c)\\nfolds=np.array_split(np.random.default_rng(72).permutation(np.flatnonzero(keep)),5); scores=[]\\nfor f in folds:\\n tr=np.setdiff1d(np.arange(len(x)),f); bb=m._axial_load_map({'true_channel_loads':x[tr],'bridge_raw':y[tr]}); z=m._decode(y[f],bb); e=np.sum(m._bridge_design(x[f])*bb,axis=-1)-y[f]; scores.append((np.sqrt(np.mean(e**2,axis=0)).max(),np.sqrt(np.mean(((z-x[f]).sum(1))**2)),np.max(abs((z-x[f]).sum(1)))))\\nprint('worst fold: raw-channel RMSE, axial RMSE, axial max',np.max(scores,axis=0)); assert np.max(scores)<.002\\nfor g in ['train','test']:\\n for k in ['past_channel_raw','hold_channel_raw']:\\n  raw=d[g][k].reshape(-1,4); z=m._decode(raw,b); err=np.max(abs(np.sum(m._bridge_design(z)*b,axis=-1)-raw)); print(g,k,'round-trip max',err); assert err<1e-8\\no=m.solve_batch(d); print('taus',o['estimated_taus'],'theta',o['hereditary_weights']); assert all(np.isfinite(v).all() for v in o.values())\\nPY\\nsed -n '/^def _features/,/^def solve_batch/p' /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 sparse cyclic nonlinear bridge; the earlier clean-sweep polynomial comparator achieved 0.000153 worst-channel held-out RMSE, but end-to-end validation was blocked by an obsolete affine call.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Route deployment hold readings through the same nonlinear decoder as training. Held-out axial errors test load recovery, and round-trip errors detect Newton failures on the actual specimen readings; a remaining lifetime boundary fit would warrant inspecting the material estimator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b07323c8fe4c5355099e19f4ecbd6ae26abda4a08115d4fd03f455f5fe0d714a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27960.35,
+      "usage_known": true,
+      "prompt_tokens": 29506,
+      "cached_tokens": 9600,
+      "completion_tokens": 918
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b842c092a0e4be08f05aa58c69589de",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:12.555303+00:00",
+  "ended_at_utc": "2026-11-27T14:34:41.860923+00:00",
+  "request_sha256": "3b01dadad671b548485d7371d4c0e54fd886b390b1a9dca9a52910d35997552f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44643,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26842,
+    "cached_tokens": 11136,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_calibration_audit.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n for entry in json.load(f):\\n  print('apparatus fields',[(k,np.shape(v) if isinstance(v,list) else list(v) if isinstance(v,dict) else v) for k,v in entry.items()])\\nc=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; groups=np.arange(len(x))%5; pairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\nq=np.column_stack([x]+[x[:,i:i+1]+sign*x[:,j:j+1] for i,j in pairs for sign in [-1,1]])\\ndef fit_predict(z,tr,te,b):\\n a=np.linalg.lstsq(z[tr],y[tr,b],rcond=None)[0]; return z[te]@a\\nA=np.c_[np.ones(len(x)),x]\\nD=[np.c_[np.ones(len(x)),x[:,b]] for b in range(4)]\\nR=[(i,a,np.c_[A,A/(1+a*q[:,i:i+1]**2)]) for i in range(q.shape[1]) for a in (0.03,0.1,0.3,1.)]\\nerr={name:np.empty_like(y) for name in ['diagonal','affine','rational']}\\nfor f in range(5):\\n te=groups==f; tr=~te\\n for b in range(4):\\n  for name,z in [('diagonal',D[b]),('affine',A)]: err[name][te,b]=fit_predict(z,tr,te,b)-y[te,b]\\n  def score(item):\\n   z=item[2]; return sum(np.sum((fit_predict(z,tr&(groups!=h),groups==h,b)-y[groups==h,b])**2) for h in range(5) if h!=f)\\n  z=min(R,key=score)[2]; err['rational'][te,b]=fit_predict(z,tr,te,b)-y[te,b]\\nfor name,e in err.items(): print(name,'OOF per-channel RMSE',np.sqrt(np.mean(e**2,axis=0)),'worst-fold RMSE',max(np.sqrt(np.mean(e[groups==f]**2)) for f in range(5)))\\nco=np.linalg.lstsq(A,y,rcond=None)[0]; print('largest off-diagonal affine gain',np.max(abs(co[1:]-np.diag(np.diag(co[1:])))))\\no=m.solve_batch(s); k=o['kkt_certificate']; print('isolated solve weights/field shapes',o['weights'].shape,o['terminal_field'].shape,'gap',k['primal_objective']-k['dual_lower_bound'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_calibration_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest sealed walls -> H2 open Robin walls with per-study affine calibration; worst held-out shift-by-bank RMSE is 0.01259 versus 0.16648 for sealed walls.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the four-way boundary comparison\",\n      \"rejected_reason\": \"The existing held-out shift and wall results already distinguish all four boundary variants.\"\n    },\n    {\n      \"option\": \"Run relay or classification tests\",\n      \"rejected_reason\": \"The study has no relay states or class labels; the relevant slice is the sensor bank.\"\n    }\n  ],\n  \"rationale\": \"Test the remaining calibration failure mode: a rational response driven by an individual channel or a pairwise sum or difference. Select rational terms inside each training fold. Change calibration only if it improves held-out sweep error and the downstream transport fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "df99aaf0c1520a57289d0622cd439f4a6f21a7ebd448c3afa2c26832cd7f22f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29264.05,
+      "usage_known": true,
+      "prompt_tokens": 26842,
+      "cached_tokens": 11136,
+      "completion_tokens": 1109
+    }
+  ]
+}

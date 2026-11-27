@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30aa2f7027684339a3c5c8043f103f25",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:19.729304+00:00",
+  "ended_at_utc": "2026-11-27T14:36:45.850261+00:00",
+  "request_sha256": "5d53766cf2d4d55bf0be05f735c2e1b92cd4a919d751dd25619b018203168096",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55535,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35910,
+    "cached_tokens": 11136,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/# Search/,$d' /tmp/memory_probe.py > /tmp/memory_features.py; cat >> /tmp/memory_features.py <<'PY'\\nA=np.asarray(q['aux_chamber_telemetry']); print('telemetry', np.column_stack((A,Zc-Z,yr)).round(4)); print('test telemetry ranges',np.quantile(te['aux_chamber_telemetry'],[0,.5,1],axis=0)); print('memory singular values',np.linalg.svd(Zc-Z,compute_uv=False)); print('rate corrections and memory',np.linalg.lstsq((Zc-Z)[:,1:],yr,rcond=None)[0]);\\nV={f'aux{i}':A[:,i] for i in range(A.shape[1])}; V.update({f'x{i}':x[:,i] for i in range(x.shape[1])}); V.update({f'past{i}':P[:,i] for i in range(P.shape[1])}); V.update({f'diff{i}':u for i,u in enumerate(np.diff(P,axis=1).T)}); V.update(hold=H,z0=Z[:,0],z1=Z[:,1],r=r,loadmean=P.mean(1),loadstd=P.std(1),loadmin=P.min(1),loadmax=P.max(1),negmean=np.minimum(P,0).mean(1),posmean=np.maximum(P,0).mean(1),path=np.abs(np.diff(P,axis=1)).sum(1));\\nv=list(V); B=V.copy();\\nfor i,k in enumerate(v):\\n u=V[k]; B[k+'^2']=u*u; B[k+'+']=u.clip(0); B[k+'-']=(-u).clip(0)\\n for l in v[:i]:\\n  w=V[l]; B[k+'*'+l]=u*w; B[k+'+'+l]=u+w; B[k+'-'+l]=u-w; B['abs('+k+'-'+l+')']=abs(u-w)\\nfor target in [yr,(Zc-Z)[:,0],(Zc-Z)[:,1]]:\\n def best(u):\\n  if np.std(u)<1e-9:return float('inf')\\n  X=np.column_stack((np.ones(len(u)),u)); I=np.linalg.pinv(X); e=target-X@(I@target); return np.mean((e/np.maximum(1-np.sum(X*I.T,axis=1),1e-8))**2)**.5\\n print('linear LOO screen', sorted((round(best(u),5),k) for k,u in B.items())[:25]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/memory_features.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (altered history decay alone) -> H2 (intrinsic drift ramp plus a shared, coupon-dependent branch correction); fixed-drift temporal residual RMSE is 0.00468 and the best screened history-only slow-state LOO RMSE is 0.1384.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an altered relaxation clock for deployment\",\"rejected_reason\":\"Varying the clock and simple load transforms left substantial slow-state error, while the inferred branch-state corrections often move together.\"}],\"rationale\":\"Use initial-rate residuals to screen for the driver of the branch correction without relying on the noisier separation of slow memory and drift. If a shared telemetry or load coordinate explains both branches, test that coupling before fitting separate state models.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8c7a279b75a803e66028d280b4c4253a213b3401739d2658028ef9e5671c59b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26551.69,
+      "usage_known": true,
+      "prompt_tokens": 35910,
+      "cached_tokens": 11136,
+      "completion_tokens": 943
+    }
+  ]
+}

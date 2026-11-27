@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "130e81a7bd624473b8bf474c98238ae8",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:05.106090+00:00",
+  "ended_at_utc": "2026-11-27T14:43:42.584188+00:00",
+  "request_sha256": "8d6584c8f98545e23293aff2b6486daa81709155028d4473622e0dc721d6fdd9",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46258,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25653,
+    "cached_tokens": 9600,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_bridge.py <<'PY'\\nimport sys, pickle, itertools\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _invert, _design, _POWERS, calibrate_upstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    d = item['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    b, clean = _fit(x, y)\\n    norm = np.linalg.norm(x, axis=1)\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    high = norm >= np.quantile(norm[clean], .75)\\n    # Pairwise sums and differences squared/cubed are already in the cubic span.\\n    # Test a bridge-wide rational denominator as a challenger to that span.\\n    directions = list(np.eye(4))\\n    for i, j in itertools.combinations(range(4), 2):\\n        for sign in (-1, 1):\\n            directions.append(np.eye(4)[i] + sign * np.eye(4)[j])\\n    for name, held in [('upper-load quartile', high), ('upper-load mixed', high & mixed)]:\\n        bt, good = _fit(x[~held], y[~held])\\n        xt, yt = x[~held][good], y[~held][good]\\n        xv, yv = x[held & clean], y[held & clean]\\n        at, av = _design(xt, _POWERS), _design(xv, _POWERS)\\n        er = np.abs(_invert(yv, bt) - xv)\\n        base = np.sqrt(np.mean((av @ bt - yv)**2))\\n        best_train = np.inf\\n        for q in directions:\\n            u, v = (xt @ q)**2, (xv @ q)**2\\n            for alpha in (1e-4, 1e-3, 1e-2, .1, .5):\\n                pred = np.empty_like(yv)\\n                rss = 0.\\n                for k in range(4):\\n                    support = bt[:, k] != 0\\n                    z = at[:, support] / (1 + alpha * u[:, None])\\n                    coef = np.linalg.lstsq(z, yt[:, k], rcond=None)[0]\\n                    rss += np.sum((z @ coef - yt[:, k])**2)\\n                    pred[:, k] = av[:, support] @ coef / (1 + alpha * v)\\n                if rss < best_train:\\n                    best_train = rss\\n                    challenger = np.sqrt(np.mean((pred - yv)**2))\\n                    chosen = (q.tolist(), alpha)\\n        print(name, 'n', len(xv), 'max held-out inverse error', er.max(), 'forward RMSE cubic/rational', base, challenger, 'rational denominator', chosen)\\n    out = calibrate_upstream(d)\\n    trial = np.concatenate([out[s][k].reshape(-1, 4) for s in ('train', 'test', 'chamber_verification_trials') if out.get(s) is not None for k in ('past_channel_raw', 'hold_channel_raw') if k in out[s]])\\n    j = np.stack([_design(trial, np.maximum(_POWERS - e, 0)) @ (_POWERS[:, i, None] * b) for i, e in enumerate(np.eye(4, dtype=int))], axis=-1)\\n    print('Minimum singular value at public trial inverses:', np.linalg.svd(j, compute_uv=False)[:, -1].min())\\n    for k in ('lab_id', 'stratum'):\\n        if k in d['test']:\\n            print('Test', k, 'counts:', np.unique(d['test'][k], return_counts=True))\\nPY\\npython3 -I /tmp/audit_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic → H2 sparse cross-coupled cubic; worst leave-one-out inverse error is 3.14e-4 load units on mixed-channel rows, with upper-load block holdout pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or drift-operator diagnostics\",\n      \"rejected_reason\": \"The upstream module fits a static bridge from paired continuous load measurements; it has no class labels, relay state, or dynamical drift operator.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire upper-load slices to test extrapolation that leave-one-out can miss. The cubic basis already spans low-degree pairwise sums and differences; a training-selected rational challenger tests whether denominator curvature improves held-out forward accuracy. If it does, compare inverse accuracy before promotion. A small trial Jacobian singular value would warrant investigating inverse sensitivity.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e5cf3c29e63e013ffab929462d3906ec998a5188c2cefcdeec4ec73fa8a8b445",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37922.29,
+      "usage_known": true,
+      "prompt_tokens": 25653,
+      "cached_tokens": 9600,
+      "completion_tokens": 1451
+    }
+  ]
+}

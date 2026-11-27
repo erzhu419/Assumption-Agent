@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "11d491845d5a466baaab606660ce2811",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:13.238256+00:00",
+  "ended_at_utc": "2026-11-27T14:34:53.591451+00:00",
+  "request_sha256": "64645c1c3ce9214d90d0207ec29a2fa4fd0b65c38bc8954f3f4287b75cb938a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32882,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21749,
+    "cached_tokens": 9600,
+    "completion_tokens": 1628
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json\\nx=json.load(open('public_asset_index.json')); print(str(x)[:2600])\\nPY\\ncat > /tmp/m98_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('base','/tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; cd=i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; b=m._bridge(d['calibration_load_cells']); xt=m._features(tr,te); n=len(tr['lab_id']); tau,th=m._fit(xt[:n],*m._loads(tr,b),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('material',tau,th)\\np,h=m._loads(cd,b); y=cd['strain_curves_obs']-cd['strain_0'][:,None]; r=cd['instant_rate_obs']; Y=np.c_[y,r]; print('chamber first row',Y[0].round(5)); print('chamber ranges',np.ptp(Y,axis=0).round(5),'svd',np.linalg.svd(Y,compute_uv=False).round(5)); print('diagnostic labs',np.unique(cd['lab_id'],return_counts=True),'missing',np.isnan(cd['coupon_features_raw']).sum(0))\\nmerged={k:np.concatenate((te[k],cd[k])) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}; xd={'diag':m._features(cd,cd)[:len(cd['lab_id'])],'train+diag':m._features(tr,cd)[n:],'all':m._features(tr,merged)[len(xt):]}\\nlabs=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); x=cd['coupon_features_raw'].copy()\\nfor lab in np.unique(cd['lab_id']):\\n q=refs[labs==lab]; mask=cd['lab_id']==lab; x[mask]=(x[mask]-np.nanmedian(np.nanmean(q,0)))/np.nanmedian(np.nanstd(q,0))\\n_,ix,cnt=np.unique(np.c_[labs,np.r_[tr['stratum'],te['stratum']]],axis=0,return_inverse=True,return_counts=True); raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); w=1/cnt[ix,None]; fill=(xt*w*(~np.isnan(raw))).sum(0)/(w*(~np.isnan(raw))).sum(0); xd['train+test norm']=np.where(np.isnan(x),fill,x)\\nfor k,X in xd.items():\\n a,z=m._design(X,p,h,dt,t,tau); print('baseline',k,'median abs',np.median(np.abs((a@th).reshape(y.shape)-y)),np.median(np.abs(z@th-r)))\\ndef timebasis(q,ns):\\n u=np.exp(q); V=np.c_[-np.expm1(-t[:,None]/u),t] if ns else t[:,None]; return np.vstack((V,np.r_[1/u,1.]))\\nfor ns in (0,1,2,3):\\n def fun(q):\\n  V=timebasis(q,ns); return (np.linalg.lstsq(V,Y.T,rcond=None)[0].T@V.T-Y).ravel()\\n bounds=(np.full(ns,np.log(.025)),np.full(ns,np.log(35.)))\\n if ns: fit=min((least_squares(fun,np.log(q),bounds=bounds,loss='soft_l1',f_scale=.001) for q in [np.geomspace(a,b,ns) for a,b in [(.13,6),(.5,2.5),(.9,12)]]),key=lambda x:x.cost); q=fit.x\\n else: q=np.array([])\\n V=timebasis(q,ns); co=np.linalg.lstsq(V,Y.T,rcond=None)[0].T; print('time fit',ns,np.exp(q), 'median abs',np.median(np.abs(fun(q))),'rms',np.mean(fun(q)**2)**.5)\\n if ns != 2: continue\\n for k,X in xd.items():\\n  dr=th[2]+X@th[3:]; gaps=h[:,None]-p@(-np.expm1(-dt[:,None]/tau)*np.exp(-np.r_[np.cumsum(dt[:0:-1])[::-1],0.][:,None]/tau));\\n  for label,F in [('hold/drift',np.c_[h,dr]),('hold/gaps/drift',np.c_[h,gaps,dr]),('hold/full past/drift',np.c_[h,p,dr]),('hold/full past/features',np.c_[np.ones(len(h)),h,p,X])]:\\n   c=np.linalg.lstsq(F,co,rcond=None)[0]; resid=F@c@V.T-Y; print(k,label,'med',np.median(abs(resid)).round(6),'rms per output',np.sqrt(np.mean(resid[:,:-1]**2)).round(6),np.sqrt(np.mean(resid[:,-1]**2)).round(6),'coefs',c.T.round(4).tolist() if label=='hold/gaps/drift' else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop transfer → H2 separate chamber time and load response; affine calibration summed-load RMS is 0.000195 on the public sweep.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a nonlinear transducer correction\",\n      \"rejected_reason\": \"The public calibration sweep has small affine residuals; first determine whether the mismatch is in the chamber response.\"\n    }\n  ],\n  \"rationale\": \"Compare chamber residuals across temporal ranks, load-history bases, and diagnostic feature normalizations. This distinguishes a changed memory or drift law from a feature-alignment error and identifies which sparse models merit held-out coupon tests.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5f5d5630a269fd7d5eadb1c9d43c0ab2db6ff46d1e60fc9b1d6893588213ec8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40313.33,
+      "usage_known": true,
+      "prompt_tokens": 21749,
+      "cached_tokens": 9600,
+      "completion_tokens": 1628
+    }
+  ]
+}

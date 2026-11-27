@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f54a7ab9bca4c79885d41ed3bd3fb37",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:05:28.217357+00:00",
+  "ended_at_utc": "2026-11-27T15:06:06.749285+00:00",
+  "request_sha256": "87683ecde84fd9191305f52b8721e963b9e5d683d9be617f134946e5c9086435",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55208,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30370,
+    "cached_tokens": 9600,
+    "completion_tokens": 1410
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\ntr, te, di = d['train'], d['test'], item['campaign_diagnostics']\\ndt, t = d['past_dt'], d['eval_times']\\nresult = m.solve_batch(d)\\ntau, theta = result['estimated_taus'], result['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25\\nfor k, shape in [('estimated_taus', (2,)), ('hereditary_weights', (7,)), ('predicted_strain', (len(te['lab_id']), len(t))), ('initial_rate_pred', (len(te['lab_id']),))]:\\n    assert result[k].shape == shape and np.isfinite(result[k]).all(), k\\ncal = d['calibration_load_cells']\\nstress = m._stress_calibration(cal)\\nxtr, xte = m._standardize(tr, te)\\nxd, _ = m._standardize(di, di)\\nA, B = m._design(di, xd, stress, dt, t, chamber=True)(tau)\\ne = A @ theta + di['strain_0'][:, None] - di['strain_curves_obs']\\nr = B @ theta - di['instant_rate_obs']\\nlab = di['lab_id']\\nworst = [max(np.median(np.abs(v[lab == j])) for j in np.unique(lab)) for v in (e, r, e[:, -3:])]\\nprint('worst diagnostic lab median [strain, rate, late strain]:', worst)\\nassert max(worst) < 0.008\\nh = 1e-5\\nE, _ = m._design(te, xte, stress, dt, np.array([0., h]), chamber=True)(tau)\\ncurves = E @ theta\\nerr = np.max(np.abs((curves[:, 1] - curves[:, 0])/h - result['initial_rate_pred']))\\nprint('test onset derivative max error:', err)\\nassert np.max(np.abs(curves[:, 0])) < 1e-12 and err < 1e-4\\nraw, loads = cal['bridge_raw'], cal['true_channel_loads']\\nmag = np.max(np.abs(raw), axis=1)\\nclean = mag < 4*np.median(mag)\\nworst = 0.\\nfor val in np.array_split(np.argsort(loads.sum(1)), 5):\\n    keep = ~np.isin(np.arange(len(raw)), val)\\n    good = val[clean[val]]\\n    f = m._stress_calibration(dict(cal, bridge_raw=raw[keep], true_channel_loads=loads[keep]))\\n    worst = max(worst, np.max(np.abs(f(raw[good]) - loads[good].sum(1))))\\nprint('load-band holdout worst absolute total-load error:', worst)\\nassert worst < 0.002\\nrows = []\\nfor j in np.unique(tr['lab_id']):\\n    held = tr['lab_id'] == j\\n    a, b = m._design(tr, xtr, stress, dt, t)(tau)\\n    train = {k: v[~held] for k, v in tr.items()}\\n    tt, th = m._fit(m._design(train, xtr[~held], stress, dt, t), train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\\n    a, b = m._design(tr, xtr, stress, dt, t)(tt)\\n    es = a[held] @ th + tr['strain_0'][held, None] - tr['strain_curves_obs'][held]\\n    er = b[held] @ th - tr['instant_rate_obs'][held]\\n    rows.append([np.median(abs(es)), np.median(abs(er)), np.median(abs(es[:, -3:])), np.max(abs(tt/tau - 1))])\\nworst = np.max(rows, axis=0)\\nprint('held benchtop lab worst [median strain, rate, late strain; relative tau shift]:', worst)\\nassert max(worst[:3]) < 0.035 and worst[3] < 0.12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated cubic bridge and shared spectrum -> H2: retained memory with saturating chamber drift; worst diagnostic lab median strain, rate, and late-strain errors are 0.00321, 0.00396, and 0.00355.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact artifact in a clean process. Poor held-load performance would reopen calibration; lab-sensitive spectrum estimates would reopen the robust fit; a derivative mismatch would require fixing the initial-rate output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "74ffa7d088c7a4094cd6c5be2a0f4e15f21be80455df4b39df6425d16d31f8c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38492.3,
+      "usage_known": true,
+      "prompt_tokens": 30370,
+      "cached_tokens": 9600,
+      "completion_tokens": 1410
+    }
+  ]
+}

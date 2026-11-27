@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2785d762d644465f905d2514fc9dba06",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:40.275237+00:00",
+  "ended_at_utc": "2026-11-27T14:44:08.172298+00:00",
+  "request_sha256": "b468765e7745a4ff315d31b27c1a8703384cdae51dc8511bc20a3d143eb8d3a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41317,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24419,
+    "cached_tokens": 9600,
+    "completion_tokens": 1029
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; cal=d['calibration_load_cells']; a=np.c_[np.ones(len(cal['bridge_raw'])),cal['bridge_raw']]; y=cal['true_channel_loads']; M=m._bridge(cal); e=a@M-y\\nprint('bridge condition',np.linalg.cond(a),'raw min/max',a[:,1:].min(0),a[:,1:].max(0)); print('bridge residual quantiles per channel',np.quantile(abs(e),[.5,.9,1],axis=0)); print('total residual quantiles',np.quantile(abs(e.sum(1)),[.5,.9,1])); print('bridge matrix',M)\\nfor j in np.unique(cal['single_channel_sweeps']['lab_id']):\\n q=cal['single_channel_sweeps']; idx=q['lab_id']==j; print('sweep lab',j,np.c_[q['cmd_stress'][idx],q['true_stress'][idx]].round(4).tolist())\\nfor k,b in [('train',tr),('test',te)]:\\n r=np.concatenate((b['hold_channel_raw'][:,None,:],b['past_channel_raw']),axis=1); print(k,'raw min/max',r.min((0,1)),r.max((0,1)))\\nx=m._features(tr,te)[:len(tr['lab_id'])]; past,hold=m._loads(tr,M); tau,th=m._fit(x,past,hold,d['past_dt'],d['eval_times'],tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); A,B=m._design(x,past,hold,d['past_dt'],d['eval_times'],tau); e=(A@th).reshape(len(x),-1)+tr['strain_0'][:,None]-tr['strain_curves_obs']; r=B@th-tr['instant_rate_obs']; print('rate quantiles',np.quantile(r,[0,.1,.25,.5,.75,.9,1])); print('curve median by time',np.median(e,axis=0).round(4));\\nfor lab in np.unique(tr['lab_id']):\\n i=tr['lab_id']==lab; print('lab',lab,'curve/rate signed median',np.median(e[i]),np.median(r[i]),'rate MAD',m._mad(r[i]))\\nF=np.c_[hold,past,x,tr['aux_chamber_telemetry']]; print('correlation with clipped rate residual',np.corrcoef(np.c_[np.clip(r,-.6,.6),F].T)[0,1:].round(3)); print('correlation with clipped curve residual',np.corrcoef(np.c_[np.mean(np.clip(e,-.3,.3),axis=1),F].T)[0,1:].round(3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Matched batch-01 chamber law → diagnose bridge or sensor effects in the material fit; worst held-out lab p90 absolute errors are 0.212 strain and 0.598 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit the schema-valid solver now\",\"rejected_reason\":\"The second relaxation time ranges from 0.62 to 5.63 across held-out labs; calibration residuals and signed sensor residuals can distinguish a correctable bias from weak identification.\"}],\"rationale\":\"Inspect bridge residuals, sweep behavior, and signed residuals by lab and time. Structured calibration error would motivate changing the bridge fit; systematic sensor residuals would motivate testing a different weighting scheme. If neither appears, avoid adding nuisance terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4d45a6eecdace044e54b9592054fb3caf961060dd26a95223bdc288c3ea9c9a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28331.07,
+      "usage_known": true,
+      "prompt_tokens": 24419,
+      "cached_tokens": 9600,
+      "completion_tokens": 1029
+    }
+  ]
+}

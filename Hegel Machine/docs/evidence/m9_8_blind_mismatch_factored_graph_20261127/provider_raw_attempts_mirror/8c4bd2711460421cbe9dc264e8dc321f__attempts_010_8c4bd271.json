@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c4bd2711460421cbe9dc264e8dc321f",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_ConditionalTable_Online__beta_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:18.042296+00:00",
+  "ended_at_utc": "2026-11-27T14:29:41.345284+00:00",
+  "request_sha256": "db8a77c0f4cad71bff4b6446dd90546844e7684197b522f586ff2f7226428d8e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48781,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27364,
+    "cached_tokens": 9600,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; d=s['sensor_calibration_sweeps']; x=np.asarray(d['ref_rosette']); y=np.asarray(d['raw_rosette']); b=d['single_bank_sweeps']; bank=b['bank_id']; ref=b['ref_signal']; raw=b['raw_readout']; S,_=m._forward(s)\\n\\ndef fit(kind,train):\\n    if kind=='full':\\n        B=np.linalg.lstsq(np.c_[np.ones(sum(train)),x[train]],y[train],rcond=None)[0]; return B[0], B[1:]\\n    coeff=[]\\n    for j in range(4):\\n        if kind=='sweep':\\n            a,c=ref[bank==j],raw[bank==j]\\n        else:\\n            a,c=x[train,j],y[train,j]\\n        coeff.append(np.linalg.lstsq(np.c_[np.ones(len(a)),a],c,rcond=None)[0])\\n    off,gain=np.array(coeff).T; return off,np.diag(gain)\\n\\nfor kind in ('full','diagonal','sweep'):\\n    cv=[]\\n    for k in range(5):\\n        train=np.arange(len(x))%5!=k; off,A=fit(kind,train)\\n        cv.append(np.sqrt(np.mean((x[~train]@A+off-y[~train])**2,axis=0)))\\n    off,A=fit(kind,np.ones(len(x),bool)); errors=[]\\n    for pulse in i['campaign_diagnostics']:\\n        obs=np.linalg.solve(A.T,(pulse['y_pulse_raw'].reshape(-1,4)-off).T).T.ravel()\\n        errors.append(np.sqrt(np.mean((obs-S@pulse['w_pulse']).reshape(len(s['mu_shifts']),-1,4)**2,axis=1)))\\n    print(kind,'worst held-out rosette fold/channel RMSE',np.max(cv),'worst pulse/shift/channel RMSE',np.max(errors))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full affine rosette → H2 test whether independent bank gains improve calibration; current worst held-out rosette fold/channel RMSE is 1.28e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat boundary and QP validation\",\n      \"rejected_reason\": \"The unchanged artifact already passed the transport and certificate checks; the remaining empirical question is whether small fitted cross-channel terms improve predictions.\"\n    }\n  ],\n  \"rationale\": \"Compare the full affine transform with diagonal fits from both calibration sources. If the cross-channel terms are fitting noise, a diagonal model should improve both held-out rosette prediction and the worst tracer slice; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ab07643e7d405af463563ac9675da7f7240242ed45f4eb76f1e460a1ab44645d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23268.98,
+      "usage_known": true,
+      "prompt_tokens": 27364,
+      "cached_tokens": 9600,
+      "completion_tokens": 842
+    }
+  ]
+}

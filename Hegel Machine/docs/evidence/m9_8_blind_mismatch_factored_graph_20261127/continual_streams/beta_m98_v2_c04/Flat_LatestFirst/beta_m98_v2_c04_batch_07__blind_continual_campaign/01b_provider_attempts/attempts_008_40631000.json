@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "40631000445c42b9ad4d8c5a5565a5fd",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:02:02.390941+00:00",
+  "ended_at_utc": "2026-11-27T15:02:37.397081+00:00",
+  "request_sha256": "f5a1ea1dbb4a26fdb1384cd93523414e962fad39d1f690408cd6046a7c5f00f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44056,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26889,
+    "cached_tokens": 5504,
+    "completion_tokens": 1282
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; sweep=s['sensor_calibration_sweeps']; x,y=(np.asarray(sweep[k]) for k in ('ref_rosette','raw_rosette'))\\ncoef, keep=m._fit_rosette(s)\\nprint('joint sweep coefficient matrix:',coef.tolist()); print('excluded rows:',np.flatnonzero(~keep).tolist()); print('single-bank sweep layout:',[(k,{kk:np.shape(vv) for kk,vv in v.items()} if isinstance(v,dict) else np.shape(v)) for k,v in sweep['single_bank_sweeps'].items()])\\nidx=np.flatnonzero(keep); rng=np.random.default_rng(972); folds=np.array_split(rng.permutation(idx),5)\\nmodels=('shared','unshared','pairwise','triple','rational')\\nerrors={k:[] for k in models}\\nfor te in folds:\\n    tr=np.setdiff1d(idx,te)\\n    fit=dict(s,sensor_calibration_sweeps=dict(sweep,ref_rosette=x[tr],raw_rosette=y[tr]))\\n    c,_=m._fit_rosette(fit)\\n    residual={k:[] for k in models}\\n    for j in range(4):\\n        a,b,d,e=x[:,[(j-1)%4,j,(j+1)%4,(j+2)%4]].T\\n        D=m._rosette_design(x,j)\\n        X=np.column_stack((D,e,a*b,b*e,a*d,d*e,a*e,a*a,b*b,d*d,e*e))\\n        T=np.column_stack((X,a*b*d,a*b*e,b*d*e,a*d*e,b*a*a,b*d*d,b*e*e))\\n        Q=np.column_stack((b*b,(b-d)**2,(a-d)**2)); ry=y[:,j]\\n        residual['shared'].append(D[te]@c[j]-ry[te])\\n        for k,A in [('unshared',D),('pairwise',X),('triple',T)]:\\n            v=np.linalg.lstsq(A[tr],ry[tr],rcond=None)[0]\\n            residual[k].append(A[te]@v-ry[te])\\n        v=np.linalg.lstsq(np.column_stack((D[tr],-ry[tr,None]*Q[tr])),ry[tr],rcond=None)[0]\\n        residual['rational'].append((D[te]@v[:D.shape[1]])/(1+Q[te]@v[D.shape[1]:])-ry[te])\\n    for k in models: errors[k].append(np.sqrt(np.mean(np.array(residual[k])**2,axis=1)))\\nfor k in models:\\n    a=np.array(errors[k]); print(k,'worst held-out fold/channel RMSE',a.max(),'by channel',a.max(axis=0).tolist())\\nS,_=m._forward(s); Z=s['Z_nuisance']; Q,_=np.linalg.qr(Z,mode='reduced')\\nfor i,pulse in enumerate(item['campaign_diagnostics']):\\n    r=m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))-S@pulse['w_pulse']; r0=r-Q@(Q.T@r)\\n    print('pulse',i,'nuisance share of squared residual',float(1-r0@r0/(r@r)), 'worst nuisance-free shift/channel RMSE',float(np.sqrt(np.mean(r0.reshape(len(s['mu_shifts']),-1,4)**2,axis=1)).max()))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 batch-03 walls with shared nonlinear calibration -> H2 test whether omitted rosette terms improve held-out sweeps; current worst public pulse/shift/channel RMSE is 3.30e-6 and host weight relative error is 6.70e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification and relay-control tests\",\n      \"rejected_reason\": \"This study has neither class labels nor relay states. Nuisance projection on known tracer pulses tests the relevant confounding mechanism directly.\"\n    }\n  ],\n  \"rationale\": \"A repeatable held-out calibration gain would justify testing a challenger on the tracer pulses and checking its effect on the inverse solution. Otherwise, retain the verified solver. The audit runs against the saved artifact in isolated Python without editing it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9958826715603f430c7ed89642551f44d0019bfaf1ea4fdfdce7fe66911e09a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34961.53,
+      "usage_known": true,
+      "prompt_tokens": 26889,
+      "cached_tokens": 5504,
+      "completion_tokens": 1282
+    }
+  ]
+}

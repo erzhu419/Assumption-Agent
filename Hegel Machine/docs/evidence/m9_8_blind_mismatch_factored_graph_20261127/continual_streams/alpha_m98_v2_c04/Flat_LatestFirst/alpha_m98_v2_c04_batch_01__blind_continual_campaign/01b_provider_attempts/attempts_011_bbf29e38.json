@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbf29e38831041b89afcee80efb403d7",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:31:14.121185+00:00",
+  "ended_at_utc": "2026-11-27T14:31:50.326513+00:00",
+  "request_sha256": "85cbdd093afb0492dc48cc962255cde87915d43cebfb6738f341820a1a4e985e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71906,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39349,
+    "cached_tokens": 11136,
+    "completion_tokens": 1380
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; a,b,c=d['train'],d['test'],i['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']\\nout=m.solve_batch(d); tau=out['estimated_taus']; th=out['hereditary_weights']; assert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(v).all() for v in out.values())\\nbridge=m._bridge(d['calibration_load_cells']); P,H=m._loads(a,bridge); X=m._features(a,b)[:len(H)]; Y=a['strain_curves_obs']-a['strain_0'][:,None]; R=a['instant_rate_obs']\\nz=np.zeros((len(H),2))\\nfor ds,stress in zip(dt,P.T):\\n    decay=np.exp(-ds/tau); z=decay*z+(1-decay)*stress[:,None]\\namp=(H[:,None]-z)*th[:2]; drift=th[2]+X@th[3:]; A,D=m._design(X,P,H,dt,t,tau)\\nnp.testing.assert_allclose((A@th).reshape(Y.shape),amp@(-np.expm1(-t[:,None]/tau)).T+drift[:,None]*t,atol=1e-12)\\nnp.testing.assert_allclose(D@th,amp@(1/tau)+drift,atol=1e-12)\\nloo=[]\\nfor lab in np.unique(a['lab_id']):\\n    k=a['lab_id']!=lab; ta,w=m._fit(X[k],P[k],H[k],dt,t,Y[k],R[k]); assert .05<ta[0]<ta[1]<25\\n    A,D=m._design(X[~k],P[~k],H[~k],dt,t,ta)\\n    e=(A@w).reshape(Y[~k].shape)-Y[~k]; r=D@w-R[~k]\\n    loo.append([np.median(abs(e)),np.median(abs(r)),max(abs(ta/tau-1))])\\nprint('Benchtop leave-one-lab-out worst median abs strain, rate and max relative timescale change:',np.max(loo,axis=0))\\nfor label,block in [('diagnostics',c),('deployment',b)]:\\n    P,H=m._loads(block,bridge); Xc=m._chamber_features(block); q=th[2]+Xc@th[3:]; curves,rates=m._chamber_response(H,q,t,tau,th)\\n    early,rate0=m._chamber_response(H,q,np.array([0.,1e-6]),tau,th)\\n    np.testing.assert_allclose(early[:,0],0,atol=1e-12); np.testing.assert_allclose(early[:,1]/1e-6,rate0,atol=2e-6,rtol=2e-6)\\n    if label=='deployment':\\n        np.testing.assert_allclose(out['predicted_strain'],curves+block['strain_0'][:,None]); np.testing.assert_allclose(out['initial_rate_pred'],rates)\\n        continue\\n    e=curves+block['strain_0'][:,None]-block['strain_curves_obs']; r=rates-block['instant_rate_obs']; missing=np.isnan(block['coupon_features_raw']).any(1)\\n    slices=[('lab '+str(l),block['lab_id']==l) for l in np.unique(block['lab_id'])]+[('missing',missing),('complete',~missing),('low hold',H<=np.median(H)),('high hold',H>np.median(H))]\\n    results={name:np.sqrt([np.mean(e[k]**2),np.mean(r[k]**2)]) for name,k in slices if np.any(k)}\\n    for name,v in results.items(): print('Exact artifact diagnostics (fit data)',name,'strain and rate RMSE:',v)\\n    assert np.max(list(results.values()))<0.01\\nprint('Verified all four deliverables; scalar memory and chamber initial derivative agree.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 carried history and shared normalization → H2 chamber reset with hold stress and locally normalized coupon drift; prior worst held-out-lab RMSE was 0.00468 strain and 0.00310 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Stress-test the schema-verified artifact. Diagnostic slices can expose implementation errors hidden by pooled fit, the initial derivative checks the independent rate output, and benchtop lab holdouts show whether the material fit depends on a single lab.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "28d0fd2dbb07eef2879740b4ae25bcd747e5fa91538f779acec1c7fe993ad4fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36156.87,
+      "usage_known": true,
+      "prompt_tokens": 39349,
+      "cached_tokens": 11136,
+      "completion_tokens": 1380
+    }
+  ]
+}

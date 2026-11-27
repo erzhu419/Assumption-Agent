@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c34bce46aedc49c8ad8f8b9c93a3439f",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Hegel_FactoredMechanismGraph__beta_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:00.557682+00:00",
+  "ended_at_utc": "2026-11-27T14:35:34.313457+00:00",
+  "request_sha256": "879bd76c923b2bf5712d53ef26b0c6f040fe0d88bf3fddc4f2664292e4181dc6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55399,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29872,
+    "cached_tokens": 9600,
+    "completion_tokens": 1349
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; bank=c['single_bank_sweeps']; j=bank['bank_id']; bx,by=bank['ref_signal'],bank['raw_readout']; S,U=m._forward(s); ij=s['sensor_ij']; wall=((ij==0)|(ij==[s['nx']-1,s['ny']-1])).any(axis=1)\\ndef fit(a,b): return np.linalg.lstsq(np.c_[np.ones(len(a)),a],b,rcond=None)[0]\\ndef diag(ids,extra=False):\\n return np.array([fit(np.r_[x[ids,k],bx[j==k]] if extra else x[ids,k],np.r_[y[ids,k],by[j==k]] if extra else y[ids,k]) for k in range(4)])\\nids=np.arange(len(x)); d=diag(ids); print('single-bank slope/offset delta',np.array([fit(bx[j==k],by[j==k]) for k in range(4)])-d)\\nperm=np.random.default_rng(42).permutation(ids); errors=[]\\nfor te in np.array_split(perm,5):\\n tr=np.setdiff1d(ids,te); a,b=diag(tr),diag(tr,True); f=fit(x[tr],y[tr]); errors.append([np.sqrt(np.mean((pred-y[te])**2,axis=0)) for pred in [a[:,0]+a[:,1]*x[te],b[:,0]+b[:,1]*x[te],np.c_[np.ones(len(te)),x[te]]@f]])\\nprint('worst held-out sweep RMSE (diagonal, pooled banks, full affine)',np.max(errors,axis=(0,2)))\\nfor name,a in [('current',d),('pooled',diag(ids,True))]:\\n worst=0.; rolls=[]\\n for p in item['campaign_diagnostics']:\\n  obs=((p['y_pulse_raw'].reshape(-1,4)-a[:,0])/a[:,1]).ravel(); e=(S@p['w_pulse']-obs).reshape(len(s['mu_shifts']),-1)\\n  worst=max(worst,*[np.sqrt(np.mean(e[:,mask]**2,axis=1)).max() for mask in [wall,~wall]])\\n  rolls.append(np.sqrt(np.mean(e**2)))\\n print(name,'worst pulse slice',worst,'pulse RMSEs',rolls)\\nZ=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); A=S-Z@(P@S); H=A.T@A+s['source_ridge']*np.eye(A.shape[1]); cap=s['u_box']; worst_gap=worst_comp=0.\\nfor raw in [s['y_obs_raw'],*[p['y_pulse_raw'] for p in item['campaign_diagnostics']]]:\\n yc=m._calibrate(dict(s,y_obs_raw=raw)); b=A.T@(yc-Z@(P@yc))\\n for t in [0,0.01*cap,cap,2*cap,s['total_budget'],len(b)*cap-.01*cap,len(b)*cap]:\\n  w,nu=m._box_budget_qp(H,b,cap,t); g=H@w-b; lo=np.maximum(g-nu,0); hi=np.maximum(nu-g,0); gap=lo@w+hi@(cap-w); comp=max(np.max(lo*w),np.max(hi*(cap-w))); worst_gap=max(worst_gap,abs(gap)); worst_comp=max(worst_comp,abs(comp)); assert abs(w.sum()-t)<1e-10 and w.min()>=-1e-10 and w.max()<=cap+1e-10 and abs(gap)<1e-10\\nprint('21 measured-target QP cases: worst dual gap',worst_gap,'worst complementary residual',worst_comp)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 periodic transport with diagonal sweep calibration -> H2 pool bank sweeps only if they improve transfer; current worst public pulse-by-shift wall/interior RMSE is 1.42e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relay, classification, or drift models\",\n      \"rejected_reason\": \"The inputs are steady tracer and calibration measurements, with no relay states or classification cohorts. The relevant checks are bank calibration transfer and constrained inversion.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration models on held-out sweeps and independent tracer pulses to detect bank mismatch or omitted cross-talk. Stress the active-set solver on measured targets at endpoint and near-endpoint budgets; a feasibility or complementarity failure would require a solver fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5755e1ece1532bec8e528e0125a1b273e6f1c5d74e5666439dc9c55d6c26e527",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34127.74,
+      "usage_known": true,
+      "prompt_tokens": 29872,
+      "cached_tokens": 9600,
+      "completion_tokens": 1349
+    }
+  ]
+}

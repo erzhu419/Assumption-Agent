@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1b6274d559b7427f899489d28db393a5",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:10.648274+00:00",
+  "ended_at_utc": "2026-11-27T14:44:37.393053+00:00",
+  "request_sha256": "b6ef93ff5bdd2c9af5d0a921c7df9a22d35adc3f5dc716ae1d76bb41f7f41254",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43373,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24498,
+    "cached_tokens": 8576,
+    "completion_tokens": 940
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS calibration'; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.stats import skew\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['true_channel_loads']; y=C['bridge_raw']; print('calibration rows',len(x),'true range',x.min(0),x.max(0),'std',x.std(0),'skew',skew(x)); print(np.c_[x,y][:8].round(4)); print('quantiles true',np.quantile(x,[0,.1,.5,.9,1],axis=0).round(3))\\ndef basis(x,d,kind):\\n cols=[np.ones(len(x))]; names=[()];\\n for k in range(1,d+1):\\n  for ix in combinations_with_replacement(range(4),k):\\n   if kind=='diag' and len(set(ix))>1: continue\\n   cols.append(np.prod(x[:,ix],axis=1)); names.append(ix)\\n return np.array(cols).T,names\\nfor u,v in [(x,y),(y,x)]:\\n print('direction', 'forward' if u is x else 'inverse'); f=np.arange(len(u))%5\\n for j,kind in [(1,'all'),(2,'diag'),(2,'all'),(3,'diag'),(3,'all'),(4,'all')]:\\n  a,n=basis(u,j,kind); e=np.zeros_like(v)\\n  for i in range(5):\\n   b=f!=i; e[~b]=a[~b]@np.linalg.lstsq(a[b],v[b],rcond=None)[0]-v[~b]\\n  print(j,kind,'p50/p90',np.quantile(abs(e),[.5,.9]).round(5),'channel med',np.median(abs(e),0).round(5),'sum p90',np.quantile(abs(e.sum(1)),.9).round(5));\\n  if j==3 and kind=='all':\\n   coef=np.linalg.lstsq(a,v,rcond=None)[0]; print('terms',[(k,c.round(4).tolist()) for k,c in zip(n,coef) if np.max(abs(c))>.015])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge → test nonlinear forward and inverse calibration; the affine bridge’s calibration p90 total-stress error is 0.469, and worst held-out lab rate p90 is 0.598.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A single affine raw-to-load map is adequate for this bridge across its calibration range.\",\"empirical_witness\":\"The well-conditioned affine fit leaves p90 total-stress error 0.469 and maximum error 1.147; its inferred hold load correlates 0.594 with clipped benchtop rate residuals.\",\"causal_blanket_diagnosis\":\"The bridge is upstream of both the hereditary excitation and initial-rate predictions; stress-dependent calibration error can masquerade as a change in material relaxation.\",\"sublated_pivot\":\"Fit and cross-validate nonlinear bridge terms using only the paired empirical calibration, then retest the unchanged material law.\",\"risk_kind\":\"transducer model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a lab-specific rate correction\",\"rejected_reason\":\"It would absorb stress-correlated error downstream without addressing the independently measured bridge mismatch.\"}],\"rationale\":\"Calibration-only folds distinguish a reproducible nonlinear bridge from a few bad sweeps. If a compact forward map generalizes better, invert it and check whether it also stabilizes benchtop fits across labs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b80b0c783a32d2bd487baf61f8f61e663e8963431b684a0054af11e6c5d7b0a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26705.01,
+      "usage_known": true,
+      "prompt_tokens": 24498,
+      "cached_tokens": 8576,
+      "completion_tokens": 940
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "653915231061475ca2e68fcfaaa4a8f6",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:31:42.280690+00:00",
+  "ended_at_utc": "2026-11-27T14:32:14.867334+00:00",
+  "request_sha256": "3affb5a901f212ab4778bb0a2e433e8250f80ff8694d07c1de60622f42bbb959",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23520,
+    "cached_tokens": 11136,
+    "completion_tokens": 1204
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; p=Path('/tmp/hegel_continual_archive'); mods=[]\\nfor key in ['s00','batch_01']:\\n spec=importlib.util.spec_from_file_location(key,p/f'beta_m98_v2_c02_{key}_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); mods.append(m)\\nc=s['sensor_calibration_sweeps']; X=c['ref_rosette']; Y=c['raw_rosette']; d=c['single_bank_sweeps']; fits=[]\\nfor f in ('full','diagonal','single-bank'):\\n e=np.zeros_like(Y)\\n for fold in range(5):\\n  test=np.arange(len(X))%5==fold; tr=~test\\n  if f=='full': e[test]=np.c_[np.ones(test.sum()),X[test]]@np.linalg.lstsq(np.c_[np.ones(tr.sum()),X[tr]],Y[tr],rcond=None)[0]-Y[test]\\n  else:\\n   for b in range(4):\\n    k=d['bank_id']==b; x,y=(X[tr,b],Y[tr,b]) if f=='diagonal' else (d['ref_signal'][k],d['raw_readout'][k]); a,z=np.polyfit(x,y,1); e[test,b]=a*X[test,b]+z-Y[test,b]\\n print(f,'OOF channel RMSE',np.sqrt(np.mean(e**2,axis=0)))\\na,z=np.array([np.polyfit(X[:,b],Y[:,b],1) for b in range(4)]).T\\ny=((s['y_obs_raw'].reshape(-1,4)-z)/a).ravel(); Z=s['Z_nuisance']; cap=s['u_box']; total=s['total_budget']; ridge=s['source_ridge']; nr=s['nuisance_ridge']; ns=len(s['sensor_ij']); ij=s['sensor_ij']; groups=np.arange(len(y)).reshape(-1,4); ring=(ij[:,0]==0)|(ij[:,0]==s['nx']-1)|(ij[:,1]==0)|(ij[:,1]==s['ny']-1); ring=np.tile(ring,len(s['mu_shifts']));\\nfor name,m in zip(['open','sealed'],mods):\\n A,U=m._forward(s)\\n def assess(test):\\n  tr=np.ones(len(y),bool); tr[test]=False; B=A[tr]; O=Z[tr]; P=np.linalg.solve(O.T@O+nr*np.eye(O.shape[1]),O.T); C=B-O@(P@B); q=y[tr]-O@(P@y[tr]); w,nu=m._box_budget_qp(C.T@C+ridge*np.eye(C.shape[1]),C.T@q,cap,total); gamma=P@(y[tr]-B@w); return y[test]-A[test]@w-Z[test]@gamma, np.linalg.norm(C@w-q), w\\n _,res,w=assess(np.array([],int)); out=m.solve_batch(s); folds=np.array([assess(g)[0] for g in groups]); shifts=[np.sqrt(np.mean(assess(np.arange(i,i+ns))[0]**2)) for i in range(0,len(y),ns)]; wall=np.sqrt(np.mean(folds.ravel()[ring]**2)) if ring.any() else None; print(name,'train residual',res,'weights',np.round(w,6),'wall count',ring.sum(),'wall OOF',wall,'rosette pooled / worst',np.sqrt(np.mean(folds**2)),np.max(np.sqrt(np.mean(folds**2,axis=1))),'shift RMSEs',shifts,'certificate gap',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 latest archived solver transfers intact -> H2 boundary and rosette transfer independently; full-affine held-out worst-channel RMSE is 1.22e-5, and boundary cross-validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select sealed walls solely because they were used in the latest archived campaign\",\n      \"rejected_reason\": \"The two archived traces separate prior regimes, but the current blind study has no tracer pulses; held-out rosette and shift predictions can test whether the latest boundary transfers.\"\n    }\n  ],\n  \"rationale\": \"Compare the archived boundary operators with the same calibration and nuisance model so sensor effects cannot explain the difference. Held-out calibration sweeps also test whether cross-channel terms help or merely fit sweep noise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5d74a7892e9a7559bfa1fcfa1b0fb8333c64857b1c6babdd07c7e69018b1a5af",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32542.97,
+      "usage_known": true,
+      "prompt_tokens": 23520,
+      "cached_tokens": 11136,
+      "completion_tokens": 1204
+    }
+  ]
+}

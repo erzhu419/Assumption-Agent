@@ -1,0 +1,169 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_v2_c01_batch_01_89d809ee264a",
+    "source_hash": "89d809ee264a58f70b36194bc359428c8ec2c9c185e64c5a967f71a30eac08a6",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+    "task_id": "alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/chamber_final_probe.py",
+        "archived_relpath": "producers/tmp__chamber_final_probe.py",
+        "bytes": 1642,
+        "sha256": "63acc54f143cf4500995c0358747e733e3ac995cf812de6edf417869dbec0871"
+      },
+      {
+        "container_path": "/tmp/chamber_models.py",
+        "archived_relpath": "producers/tmp__chamber_models.py",
+        "bytes": 2428,
+        "sha256": "32f7ab89c356c9601d7f8a1a5542f488bacf494263213c72c15e0c4be297b315"
+      },
+      {
+        "container_path": "/tmp/chamber_probe.py",
+        "archived_relpath": "producers/tmp__chamber_probe.py",
+        "bytes": 2862,
+        "sha256": "71a4516722130027e3ff29e46947128459907912f4c83d606f915cdc4ffd2b34"
+      },
+      {
+        "container_path": "/tmp/chamber_reset.py",
+        "archived_relpath": "producers/tmp__chamber_reset.py",
+        "bytes": 3229,
+        "sha256": "1344cb8c76c552d705687cb91eedfe3303794229360e40f4d445308bd42ed5d6"
+      },
+      {
+        "container_path": "/tmp/m98_margin_audit.py",
+        "archived_relpath": "producers/tmp__m98_margin_audit.py",
+        "bytes": 3522,
+        "sha256": "fb0b9566ea2e79db69204c231152577e4385bf1a4783ef5ef6a5a461f395f39b"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m98_v2_c01_s00_solver.py",
+        "bytes": 5969,
+        "sha256": "6965a69254287febfd575e382e851669c677b7ee279fd98636604be4586da05f"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; cat /tmp/hegel_continual_archive/archive_manifest.json; wc -lc /tmp/hegel_continual_archive/*; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference panel alignment imputation'; python3 - <<'PY'\nimport pickle\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\ndef describe(x,depth=0):\n if isinstance(x,dict) and depth<3: return {k:describe(v,depth+1) for k,v in x.items()}\n if hasattr(x,'shape'): return (x.shape,str(x.dtype))\n if isinstance(x,(list,tupl",
+      "cat /tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /holdout_task/public_asset_index.json; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.align_reference_panel; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.fit_anchored_relaxation; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=p['dataset'];print('times',d['eval_times'],'dt',d['past_dt']);\nfor k,b in [(",
+      "cat /tmp/hegel_continual_archive/archive_apparatus_log.json; sed -n '59,170p' /tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py; python3 - <<'PY'\nimport json\np=json.load(open('/holdout_task/public_asset_index.json'))\nif isinstance(p,dict):\n for k,v in p.items():\n  if not any(s in k.lower() for s in ('skill','wormhole')): print(k,str(v)[:1500])\nelse: print(str(p)[:3000])\nPY",
+      "cat > /tmp/chamber_probe.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.optimize import least_squares\nspec=importlib.util.spec_from_file_location('base','/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=p['dataset']; tr=d['train'];te=d['test'];g=p['campaign_diagnostics'];dt=d['past_dt']; t=d['eval_times']; bm=m._axial_load_map(d['calibration_load_cells']);xt,xe=m._features(tr,te); s=m._specimen(tr,xt,bm); y=tr['strain_curves_obs']-tr['st",
+      "cat > /tmp/chamber_models.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split(\"print('tau theta'\")[0]); from itertools import product\nbase={k:np.concatenate([tr[k],te[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')};_,x=m._features(base,g);Z=m._specimen(g,x,bm);past,hold,F=Z;D=F@th[2:];Y=g['strain_curves_obs']-g['strain_0'][:,None];R=g['instant_rate_obs']; n=len(R); obs=np.c_[Y,R];w=np.r_[np.ones(len(t)),.65]; _,rr=m._branches(Z,dt,t,tau); mem=hold[:,None]-rr*tau\nnp.set_printoptions(precision=5,suppress=True,linewidth=175)\nprint('input range [hold, past 6, drift]',",
+      "cat > /tmp/chamber_reset.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split(\"print('tau theta'\")[0]); from itertools import product\nkeys=('coupon_features_raw','ref_coupons','lab_id','stratum');base={k:np.concatenate([tr[k],te[k]]) for k in keys}; past,hold,_=m._specimen(g,np.zeros((len(g['lab_id']),4)),bm); n=len(hold); labs=g['lab_id']; obs=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; w=np.r_[np.ones(len(t)),.65]\ndef norm(panel):\n out=np.empty_like(g['coupon_features_raw']); bp=np.empty_like(panel['coupon_features_raw']);\n for l in np.unique(labs):\n  mask",
+      "sed -n '1,78p' /tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py; cat /holdout_task/validate_public_schema.py; cat > /tmp/chamber_final_probe.py <<'PY'\nexec(open('/tmp/chamber_reset.py').read().split('rows=[]')[0]);\nprint('bench/test/diag sizes',len(tr['lab_id']),len(te['lab_id']),n)\nfor name,panel in [('train',tr),('test',te),('base',base),('diag',g)]:\n _,bp=norm(panel); print(name,'impute column mean and cell balanced',np.nanmean(bp,axis=0),impute(bp,panel))\nfor name in ['diag:bayes','diag:self','base:self']:\n D=vals[name]\n for free in [False,True]:\n  for link in ['fixed_hold','fre",
+      "python3 - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py').read_text()\nassert 'def solve_batch(' in src\nsrc = src.split('def solve_batch(', 1)[0]\nsrc = src.replace('Calibrate the load bridge and fit a shared two-branch relaxation spectrum.', 'Fit benchtop relaxation and predict the reset-chamber response.')\nPath('/holdout_task/batch_solver.py').write_text(src + '''def _chamber_response(hold, drift, strain_0, times, taus, weights):\n    # The deployment chamber resets preload memory. Coupon drift enters\n    # the transient branch amplitude",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\ns = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(s)\ns.loader.exec_module(m)\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\np = m.solve_batch(d)\ntr, te = d['train'], d['test']\nt, dt = d['eval_times'], d['past_dt']\nassert set(p) == {'estimated_taus', 'hereditary_weights', 'predicted_strain', 'initial_rate_pred'}\nfor name, shape in [('estimated_taus',(2,)), ('hereditary_weights',(7,)), ('predic",
+      "cat > /tmp/m98_margin_audit.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; g=p['campaign_diagnostics']; result=m.solve_batch(d)\nt=d['eval_times']; tau=result['estimated_taus']; theta=result['hereditary_weights']; cal=d['calibration_load_cells']; bridge=m._axial_load_map(cal)\ncp=cal['true_channel_loads'].sum(1); raw=cal['bridge_raw']; err=np.empty_like(cp)\n# Hol"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m98_v2_c01_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 6332,
+        "sha256": "110036f58bdc84b39fb2fc6200d1a2376a2c5bc9da5179cc476b84d02d69d29f",
+        "content_addressed_ref": "content_addressed_blobs/110036f58bdc84b39fb2fc6200d1a2376a2c5bc9da5179cc476b84d02d69d29f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "report",
+      "impute",
+      "_axial_load_map",
+      "_features",
+      "_specimen",
+      "_branches",
+      "_fit",
+      "solve_batch"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "89d809ee264a58f70b36194bc359428c8ec2c9c185e64c5a967f71a30eac08a6",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/m98_margin_audit.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\np=pickl",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "89d809ee264a58f70b36194bc359428c8ec2c9c185e64c5a967f71a30eac08a6",
+        "expected_candidate_sha256": "89d809ee264a58f70b36194bc359428c8ec2c9c185e64c5a967f71a30eac08a6",
+        "computed_candidate_sha256": "89d809ee264a58f70b36194bc359428c8ec2c9c185e64c5a967f71a30eac08a6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 6332
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_89d809ee"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "report",
+        "code": "def report(e, f):\n    print('curve/rate RMSE', np.sqrt((e ** 2).mean()), np.sqrt((f ** 2).mean()), 'MAD scales', *[1.4826 * np.median(abs(a - np.median(a))) for a in (e, f)], 'max specimen', np.max(np.sqrt((e ** 2).mean(1))), np.max(abs(f)))"
+      },
+      {
+        "name": "impute",
+        "code": "def impute(x, panel):\n    (_, cell, counts) = np.unique(np.c_[panel['lab_id'], panel['stratum']], axis=0, return_inverse=True, return_counts=True)\n    ww = 1 / counts[cell, None]\n    return np.nansum(ww * x, axis=0) / (ww * np.isfinite(x)).sum(0)"
+      },
+      {
+        "name": "_axial_load_map",
+        "code": "def _axial_load_map(calibration):\n    loads = np.asarray(calibration['true_channel_loads'], dtype=float)\n    bridge = np.asarray(calibration['bridge_raw'], dtype=float)\n    coeff = np.linalg.lstsq(np.column_stack((loads, np.ones(len(loads)))), bridge, rcond=None)[0]\n    return (coeff[-1], np.linalg.solve(coeff[:4], np.ones(4)))"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(train, test):\n    groups = (train, test)\n    (raw, ref, lab, strata) = (np.concatenate([d[k] for d in groups], axis=0) for k in ('coupon_features_raw', 'ref_coupons', 'lab_id', 'stratum'))\n    x = np.empty(raw.shape, dtype=float)\n    for key in np.unique(lab):\n        rows = lab == key\n        panel = ref[rows]\n        center = np.median(np.mean(panel, axis=0))\n        scale = np.median(np.std(panel, axis=0, ddof=0))\n        x[rows] = (raw[rows] - center) / (scale if scale > 0 else 1.0)\n    (_, cell, counts) = np.unique(np.column_stack((lab, strata)), axis=0, return_inverse=True, return_counts=True)\n    w = 1.0 / counts[cell, None]\n    present = np.isfinite(x)\n    denom = np.sum(w * present, axis=0)\n    center = np.sum(w * np.where(present, x, 0.0), axis=0) / np.where(denom > 0, denom, 1.0)\n    x = np.where(present, x, center)\n    return (x[:len(train['lab_id'])], x[len(train['lab_id']):])"
+      },
+      {
+        "name": "_specimen",
+        "code": "def _specimen(group, x, bridge_map):\n    (offset, gain) = bridge_map\n    return ((group['past_channel_raw'] - offset) @ gain, (group['hold_channel_raw'] - offset) @ gain, np.column_stack((np.ones(len(x)), x)))"
+      },
+      {
+        "name": "_branches",
+        "code": "def _branches(specimen, dt, times, taus, derivatives=False):\n    (past, hold, _) = specimen\n    u = dt[:, None] / taus\n    decay = np.exp(-u)\n    increment = -np.expm1(-u)\n    state = np.zeros((len(hold), 2))\n    dstate = np.zeros_like(state)\n    for j in range(len(dt)):\n        stress = past[:, j, None]\n        if derivatives:\n            dstate = decay[j] * (dstate + u[j] * (state - stress))\n        state = decay[j] * state + increment[j] * stress\n    gap = hold[:, None] - state\n    v = times[:, None] / taus\n    relax = -np.expm1(-v)\n    curves = gap[:, None, :] * relax\n    rates = gap / taus\n    if not derivatives:\n        return (curves, rates)\n    dcurves = -dstate[:, None, :] * relax - gap[:, None, :] * v * np.exp(-v)\n    drates = -dstate / taus - rates\n    return (curves, rates, dcurves, drates)"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(specimen, dt, times, curves_obs, rate_obs):\n    from scipy.optimize import least_squares\n    (n, k) = curves_obs.shape\n    drift = specimen[2]\n    fixed = np.vstack(((times[None, :, None] * drift[:, None, :]).reshape(n * k, 5), drift))\n    obs = np.concatenate((curves_obs.ravel(), rate_obs))\n    group = np.arange(len(obs)) >= n * k\n    floor = 1e-06 * max(1.0, np.median(np.abs(obs)))\n\n    def design(tau):\n        (c, r) = _branches(specimen, dt, times, tau)\n        return np.column_stack((np.vstack((c.reshape(n * k, 2), r)), fixed))\n\n    def mad(err):\n        return max(floor, 1.4826 * np.median(np.abs(err - np.median(err))))\n    grid = np.geomspace(0.065, 23.0, 12)\n    seeds = []\n    for (j, a) in enumerate(grid[:-1]):\n        for b in grid[j + 1:]:\n            mat = design((a, b))\n            coef = np.linalg.lstsq(mat, obs, rcond=None)[0]\n            err = mat @ coef - obs\n            seeds.append((mad(err[~group]) + 0.35 * mad(err[group]), a, b, coef))\n    seeds.sort(key=lambda s: s[0])\n    (_, a, b, coef) = seeds[0]\n    e = design((a, b)) @ coef - obs\n    scales = np.where(group, mad(e[group]), mad(e[~group]))\n    bounds = (np.r_[np.log([0.05000001] * 2), [-np.inf] * 7], np.r_[np.log([24.999999] * 2), [np.inf] * 7])\n\n    def fun(p):\n        return (design(np.exp(p[:2])) @ p[2:] - obs) / scales\n\n    def jac(p):\n        (c, r, dc, dr) = _branches(specimen, dt, times, np.exp(p[:2]), derivatives=True)\n        var = np.vstack((c.reshape(n * k, 2), r))\n        dvar = np.vstack((dc.reshape(n * k, 2), dr)) * p[2:4]\n        return np.column_stack((dvar, var, fixed)) / scales[:, None]\n    fits = [least_squares(fun, np.r_[np.log([a, b]), coef], jac=jac, bounds=bounds, loss='soft_l1', x_scale='jac', max_nfev=80) for (_, a, b, coef) in seeds[:4]]\n    best = min(fits, key=lambda fit: fit.cost)\n    for _ in range(2):\n        e = design(np.exp(best.x[:2])) @ best.x[2:] - obs\n        scales = np.where(group, mad(e[group]), mad(e[~group]))\n        best = least_squares(fun, best.x, jac=jac, bounds=bounds, loss='cauchy', f_scale=2.5, x_scale='jac', max_nfev=100)\n    tau = np.exp(best.x[:2])\n    theta = best.x[2:].copy()\n    order = np.argsort(tau)\n    tau = tau[order]\n    theta[:2] = theta[:2][order]\n    return (tau, theta)"
+      },
+      {
+        "name": "solve_batch",
+        "code": "def solve_batch(dataset: dict) -> dict:\n    (train, test) = (dataset['train'], dataset['test'])\n    times = np.asarray(dataset['eval_times'], dtype=float)\n    dt = np.asarray(dataset['past_dt'], dtype=float)\n    (xtr, xte) = _features(train, test)\n    bridge = _axial_load_map(dataset['calibration_load_cells'])\n    tr = _specimen(train, xtr, bridge)\n    (tau, theta) = _fit(tr, dt, times, train['strain_curves_obs'] - train['strain_0'][:, None], train['instant_rate_obs'])\n    te = _specimen(test, xte, bridge)\n    (curves, rates) = _branches(te, dt, times, tau)\n    drift = te[2] @ theta[2:]\n    return {'estimated_taus': tau, 'hereditary_weights': theta, 'predicted_strain': test['strain_0'][:, None] + curves @ theta[:2] + drift[:, None] * times, 'initial_rate_pred': rates @ theta[:2] + drift}"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9061343429374ae0a7177580c46fee6a",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:36.165032+00:00",
+  "ended_at_utc": "2026-11-27T14:48:06.352043+00:00",
+  "request_sha256": "3688941f52ec66db56c5c29c0b8375b79d153ea5b44ee654866ab40dd58a63b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63792,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33048,
+    "cached_tokens": 5504,
+    "completion_tokens": 941
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheology_blocked_bridge.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nA = m._bridge_basis(x)\\naxis = np.count_nonzero(x, axis=1) == 1\\nfolds = [(f'axis {j}', axis & (x[:,j] != 0)) for j in range(4)]\\nradius = np.linalg.norm(x, axis=1)\\nfolds.extend([('upper mixed-load band', (~axis) & (radius >= np.quantile(radius[~axis], .8)))])\\nfor name, test in folds:\\n    tr = ~test\\n    b = m._fit_bridge({'true_channel_loads':x[tr], 'bridge_raw':y[tr]})\\n    e = np.linalg.norm(A@b-y, axis=1)\\n    ordinary = e < .01\\n    # Infer the sparse response independently in each training fold. The\\n    # 0.002 cutoff separates the observed order-0.1 terms from sensor noise.\\n    bs = b.copy()\\n    for j in range(4):\\n        use = abs(b[:,j]) > .002\\n        bs[:,j] = 0\\n        bs[use,j] = np.linalg.lstsq(A[tr & ordinary][:,use], y[tr & ordinary,j], rcond=None)[0]\\n    v = test & ordinary\\n    print(name, 'ordinary/total', v.sum(), test.sum(), 'min rejected forward residual', min(e[test & ~ordinary], default=float('nan')))\\n    for label, coef in [('current', b), ('sparse', bs)]:\\n        delta = m._decode_bridge(y[v], coef)-x[v]\\n        z = delta.sum(1)\\n        print(label, 'axial RMSE/max', np.sqrt(np.mean(z*z)), max(abs(z)), 'max channel error', np.max(abs(delta)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_blocked_bridge.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 cubic-plus-pairwise forward bridge; high-load leave-one-out axial RMSE is 0.000145, and whole-sweep holdout error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the signed-pair and rational-term comparisons\",\n      \"rejected_reason\": \"Those terms already worsened held-out axial error. Withholding an entire sweep or the upper mixed-load band tests extrapolation that leave-one-out did not.\"\n    }\n  ],\n  \"rationale\": \"Test whether the bridge fit depends on seeing neighboring loads from the same sweep. Compare it with a sparse response fitted independently inside each fold; change the solver only if the alternative fixes a material error in a measured slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a4afcfaed30c879e3d1b7580f50231eef90dac2d1cf28d89e5f2eceb20f09cc9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30681.0,
+      "usage_known": true,
+      "prompt_tokens": 33048,
+      "cached_tokens": 5504,
+      "completion_tokens": 941
+    }
+  ]
+}

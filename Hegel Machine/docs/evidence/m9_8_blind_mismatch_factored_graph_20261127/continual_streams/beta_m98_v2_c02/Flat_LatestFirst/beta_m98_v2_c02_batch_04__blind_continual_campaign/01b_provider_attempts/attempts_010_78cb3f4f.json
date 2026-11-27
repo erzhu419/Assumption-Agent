@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78cb3f4f28e34d1f807939743f829194",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:42.693171+00:00",
+  "ended_at_utc": "2026-11-27T14:46:23.871743+00:00",
+  "request_sha256": "2862c637a9ff714d88c1fc130d2fb9d95232da739c4d4445562e0fff8b859cb6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64234,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33291,
+    "cached_tokens": 11136,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s=pickle.load(f)[0]['study']\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']\\n# The recorded gross corruptions are separated by more than seven raw units.\\n# Score on real retained measurements, but leave the corrupt measurements in training.\\nclean=np.max(abs(y),axis=1)<9\\nids=np.flatnonzero(clean)\\naxis=np.count_nonzero(x,axis=1)==1\\nmixed=ids[~axis[ids]]\\nouter=[('single-axis',ids[axis[ids]])]+[(f'mixed amplitude {i}',v) for i,v in enumerate(np.array_split(mixed[np.argsort(np.linalg.norm(x[mixed],axis=1))],4))]\\nterms=[()] + [t for d in (1,2,3) for t in combinations_with_replacement(range(4),d)]\\nfull=np.column_stack([np.prod(x[:,t],axis=1) for t in terms])\\nfor label,test in outer:\\n    train=np.ones(len(x),dtype=bool); train[test]=False\\n    # Omit all duplicate single-bank sweeps in this audit to prevent holdout leakage.\\n    sub=dict(c,ref_rosette=x[train],raw_rosette=y[train],single_bank_sweeps={k:v[:0] for k,v in c['single_bank_sweeps'].items()})\\n    coef=m._fit_rosette(sub)\\n    compact=m._rosette_raw(x[test],coef)\\n    ref=train & clean\\n    cubic=full[test]@np.linalg.lstsq(full[ref],y[ref],rcond=None)[0]\\n    # Rational challengers get the benefit of oracle screening of training corruption.\\n    q=np.stack([x,x-np.roll(x,-1,axis=1),x+np.roll(x,-1,axis=1)])\\n    rat=[]\\n    for qq in q:\\n        for a in (0.001,0.01,0.1,1.):\\n            preds=[]\\n            for j in range(4):\\n                B=m._rosette_basis(x,j)/(1+a*qq[:,j,None]**2)\\n                preds.append(B[test]@np.linalg.lstsq(B[ref],y[ref,j],rcond=None)[0])\\n            rat.append(np.column_stack(preds))\\n    worst=lambda pred: np.max(np.sqrt(np.mean((pred-y[test])**2,axis=0)))\\n    print(label,'compact',worst(compact),'full cubic',worst(cubic),'best rational (optimistic)',min(map(worst,rat)))\\n    assert worst(compact)<5e-5\\nS,_=m._forward(s); y=m._calibrate(s); Z=s['Z_nuisance']; k=Z.shape[1]; ns=len(s['sensor_ij'])\\nfor j,mu in enumerate(s['mu_shifts']):\\n    test=np.arange(len(y))//ns==j\\n    a,b,z=S[~test],y[~test],Z[~test]\\n    p=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(k),z.T)\\n    A=a-z@(p@a); B=b-z@(p@b)\\n    ridge=s['source_ridge']*np.eye(a.shape[1]); cap,total=s['u_box'],s['total_budget']\\n    w,_=m._box_budget_qp(A.T@A+ridge,A.T@B,cap,total)\\n    w0,_=m._box_budget_qp(a.T@a+ridge,a.T@b,cap,total)\\n    pred=S[test]@w+Z[test]@(p@(b-a@w))\\n    rms=lambda a: np.sqrt(np.mean((a-y[test])**2))\\n    print('held shift',mu,'nuisance profiled RMSE',rms(pred),'nuisance omitted RMSE',rms(S[test]@w0))\\n    assert rms(pred)<0.04\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 periodic walls with affine calibration → H2 open Robin walls with sweep-fitted cyclic cubic calibration; worst RMSE with an entire sensor rosette held out across shifts was 0.01188.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB drift, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This study is a steady transport inverse problem with continuous observations and no relay states or class labels. Whole-shift holdouts directly test whether nuisance profiling transfers across measurement conditions.\"\n    }\n  ],\n  \"rationale\": \"Hold out single-axis sweeps and entire amplitude bands to test whether the cyclic cubic misses measurable curvature or pairwise structure. Hold out each full shift to detect nuisance leakage that within-shift rosette validation would miss. Revisit the solver only if either test exposes a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "eb201ae06d4eff0214adeec2a9fdd69428596a4f88f5a187fc9f2deedb11ed7d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41816.56,
+      "usage_known": true,
+      "prompt_tokens": 33291,
+      "cached_tokens": 11136,
+      "completion_tokens": 1511
+    }
+  ]
+}

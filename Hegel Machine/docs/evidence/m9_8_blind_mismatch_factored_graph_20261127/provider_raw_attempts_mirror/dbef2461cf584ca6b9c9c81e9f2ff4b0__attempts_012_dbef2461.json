@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dbef2461cf584ca6b9c9c81e9f2ff4b0",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:14.629358+00:00",
+  "ended_at_utc": "2026-11-27T14:47:49.285511+00:00",
+  "request_sha256": "eb40aa85f69d8f744d1a9451f7030040d92667425ca2e39126fe7c4e93d4774b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63377,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31887,
+    "cached_tokens": 9600,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/tmp/audit_batch04.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\n\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\n# Challenge the cyclic forward law with omitted quadratic/cubic interactions\\n# and bounded pairwise terms. Freeze all choices before evaluating each fold.\\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\ntriples = [(i,j,k) for i in range(4) for j in range(i+1,4) for k in range(j+1,4)]\\nprev = (np.arange(4)-1)%4\\n\\ndef terms(z, mode):\\n    base = m._bridge_basis(z)\\n    if mode == 'cyclic':\\n        return base\\n    if mode == 'cubic':\\n        return np.column_stack([base, z[:,0]*z[:,2], z[:,1]*z[:,3],\\n            *[z[:,i]**2*z[:,j] for i in range(4) for j in range(4) if i != j],\\n            *[z[:,i]*z[:,j]*z[:,k] for i,j,k in triples]])\\n    return np.column_stack([base, *[(z[:,i]*z[:,j])/(1+a*(z[:,i]+sgn*z[:,j])**2)\\n        for i,j in pairs for sgn in (-1,1) for a in (0.5,)]])\\n\\nresults = {mode:[[],[]] for mode in ('cyclic','cubic','rational')}\\nfor grouping in (np.arange(len(x))%5, np.argsort(np.argsort(np.linalg.norm(x,axis=1)))//16):\\n    for g in np.unique(grouping):\\n        train = grouping != g\\n        k, clean = m._fit_bridge(x[train], y[train])\\n        # Separate sum and decontaminated channel scores: the sum uses every held-out\\n        # observation, while channel scores exclude large within-row discrepancies.\\n        e0 = y[~train] - terms(x[~train], 'cyclic')@k\\n        clean_test = np.linalg.norm(e0,axis=1) < .002\\n        for mode,(sums,channels) in results.items():\\n            a = terms(x[train][clean],mode)\\n            coef = np.linalg.lstsq(a,y[train][clean],rcond=None)[0]\\n            e = terms(x[~train],mode)@coef-y[~train]\\n            sums.extend(abs(e.sum(1)))\\n            channels.extend(np.max(abs(e[clean_test]),axis=1))\\nfor mode,(sums,channels) in results.items():\\n    print(mode, 'all-row raw-sum p90/max',np.quantile(sums,.9),max(sums), 'clean-row channel max',max(channels))\\n\\nlog = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\ntraces = np.asarray([row['facility_telemetry_trace'] for row in log]); means = traces.mean(1)\\nfor omit in range(traces.shape[2]):\\n    distance = np.linalg.norm(np.delete(means[:-1]-means[-1],omit,axis=1),axis=1)\\n    j = np.argsort(distance)\\n    print('omit apparatus channel',omit,'nearest archive row',j[0],'runner-up gap',distance[j[1]]-distance[j[0]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch04.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge → cyclic cubic bridge with the batch-01 chamber law; worst held-out clean calibration stress error is 0.000573, and worst lab p90 errors are 0.0231 strain and 0.0158 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay-mode, classification, or Fokker–Planck checks\",\"rejected_reason\":\"This task has continuous rheology measurements, no relay states or classification labels, and an explicit hereditary constitutive law.\"}],\"rationale\":\"Challenge the cyclic bridge with omitted interactions and rational pair terms on held-out sweeps. Promote a challenger only if it materially improves calibration and transfers to coupon predictions. Dropping each apparatus channel tests whether the chamber match depends on one channel; a change in the nearest regime would reopen that choice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "35233e94eb8b00037cb3aa951912b212cc432dc3508c44181ecf3962bc3ec59c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35099.46,
+      "usage_known": true,
+      "prompt_tokens": 31887,
+      "cached_tokens": 9600,
+      "completion_tokens": 1326
+    }
+  ]
+}

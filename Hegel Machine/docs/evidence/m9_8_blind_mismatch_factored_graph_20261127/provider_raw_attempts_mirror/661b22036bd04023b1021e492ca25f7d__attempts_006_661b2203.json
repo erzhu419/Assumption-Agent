@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "661b22036bd04023b1021e492ca25f7d",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:04.163916+00:00",
+  "ended_at_utc": "2026-11-27T14:28:42.290325+00:00",
+  "request_sha256": "497e831f47e1275813f13529b43aa770c35fbc6354cf8a077ee8cdf7a5beb9bd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51293,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31506,
+    "cached_tokens": 9600,
+    "completion_tokens": 1570
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat > /tmp/joint.py <<'PY'\\nexec(open('/tmp/baseline.py').read().split('for name,b,xx')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import product\\nfrom functools import lru_cache\\nN,K=yd.shape; y=np.c_[yd,rd]; labs=di['lab_id']; xraw=di['coupon_features_raw']; later=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]\\nbenchmem=pd@(-np.expm1(-dt[:,None]/tau)*np.exp(-later[:,None]/tau));\\ndef prep(kind):\\n    ls=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack((tr['ref_coupons'],te['ref_coupons'])); refs0=di['ref_coupons']; xx=np.vstack((tr['coupon_features_raw'],te['coupon_features_raw'])); zz=xraw.copy()\\n    for lab in np.unique(ls):\\n        ref={'diag':refs0[labs==lab],'jointdiag':np.vstack((refs[ls==lab],refs0[labs==lab])),'train':refs[:len(tr['lab_id'])][tr['lab_id']==lab]}.get(kind,refs[ls==lab]); a=np.median(ref.mean(0)); b=np.median(ref.std(0)); xx[ls==lab]=(xx[ls==lab]-a)/b; zz[labs==lab]=(zz[labs==lab]-a)/b\\n    cell=np.c_[ls,np.r_[tr['stratum'],te['stratum']]]; _,ii,counts=np.unique(cell,axis=0,return_inverse=True,return_counts=True); w=1/counts[ii]; fill=np.nansum(w[:,None]*xx,axis=0)/np.sum(w[:,None]*np.isfinite(xx),axis=0)\\n    return np.where(np.isfinite(zz),zz,fill)\\ndef basis(q):\\n u=np.exp(q); return np.vstack((np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1.]))\\ndef run(X, indices, fixed=False):\\n mask=np.ones(N,bool); mask[indices]=False; w=np.r_[np.ones(K),1.]\\n def solve(q,out=False):\\n  B=basis(q); A=np.column_stack([(z[:,None,:]*B[None,:,j,None]).reshape(N*(K+1),-1) for j,z in enumerate(X)]).reshape(N,K+1,-1); D=(A[mask]*w[None,:,None]).reshape(mask.sum()*(K+1),-1); coef=np.linalg.lstsq(D,(y[mask]*w).ravel(),rcond=None)[0]; pred=A@coef\\n  return (pred,coef,np.exp(q)) if out else ((pred[mask]-y[mask])*w).ravel()\\n q=np.log(tau) if fixed else least_squares(solve,np.log([tau[0],.55*tau[1]]),bounds=(np.log([.25,1.]),np.log([.75,10.])),max_nfev=45).x\\n return solve(q,True)\\nfor kind in ('standard','diag','jointdiag','train'):\\n zz=prep(kind); r=th[2]+zz@th[3:]; base=np.c_[np.ones(N),hd,r];\\n models={'a':base,'x':np.c_[base[:,:2],zz],'a+z':np.c_[base,benchmem],'a+p':np.c_[base,pd],'a+q':np.c_[base,r*r,r*hd,hd*hd],'a+cross':np.c_[base,r*hd],'a+lab':np.c_[base,np.eye(4)[labs][:,1:]],'a+stratum':np.c_[base,np.eye(3)[di['stratum']][:,1:]],'a+tanh':np.c_[base,np.tanh(r)],'a+prod':np.c_[base,r*r,r*hd,benchmem,benchmem*r[:,None]]}\\n for name,X in models.items():\\n  for fixed in ([False,True] if name in ('a','x') else [False]):\\n   pred,c,u=run([X]*3,[],fixed); er=pred-y; oo=np.empty_like(y)\\n   for lab in np.unique(labs):\\n    ix=np.flatnonzero(labs==lab); oo[ix]=(run([X]*3,ix,fixed)[0]-y)[ix]\\n   metric=lambda e:np.round([np.sqrt(np.mean(e[:,:K]**2)),np.sqrt(np.mean(e[:,-1]**2)),max(np.sqrt(np.mean(e[labs==i,:K]**2)) for i in np.unique(labs)),max(np.sqrt(np.mean(e[labs==i,-1]**2)) for i in np.unique(labs))],4); print(kind,name,fixed,'tau',u.round(3),'fit',metric(er),'labcv',metric(oo),'c',c.round(4) if name=='a' else '')\\n   if kind=='standard' and name=='a' and not fixed:\\n    print('residual rows by feature missing and r:',np.c_[labs,np.isnan(xraw).any(axis=1),r,er[:,0],er[:,-2:]].round(4)); print('residual svd',np.linalg.svd(er,compute_uv=False).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/joint.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 chamber amplitudes linear in hold stress and intrinsic drift → H2 test memory terms, interactions, and diagnostic reference alignment; the simple slow-branch model has leave-one-coupon-out normalized amplitude RMSE 0.122.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted model to all past loads and coupon features\",\"rejected_reason\":\"The preliminary leave-one-coupon-out results do not support the extra history terms.\"}],\"rationale\":\"Fit strain and rate jointly rather than regressing noisy per-coupon decompositions. Compare reference alignment and physically motivated input terms on entire held-out labs to detect whether the slow-branch error comes from feature alignment or a missing chamber term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c38cf052aa106f346d8c3cfbf41ab55253cba89d252f83634d84d84242e16806",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38482.7,
+      "usage_known": true,
+      "prompt_tokens": 31506,
+      "cached_tokens": 9600,
+      "completion_tokens": 1570
+    }
+  ]
+}

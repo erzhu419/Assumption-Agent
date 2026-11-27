@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aaa271109e0545c89b4a251624a44e46",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:33:54.628217+00:00",
+  "ended_at_utc": "2026-11-27T14:34:45.008813+00:00",
+  "request_sha256": "b8b78bd955bddbe8be0f63dac2024d8cedd9c058ec8d8a323f02a4ec77978a84",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80984,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42773,
+    "cached_tokens": 11136,
+    "completion_tokens": 2159
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m98_gate_cv.py <<'PY'\\nexec(open('/tmp/m98_factor.py').read().split('for tag,x in')[0])\\nX=xx; r=X@b[3:]; y=target; n=len(y); lab=ch['lab_id']; R=y-(b[2]+r)\\nA=np.c_[np.ones(n),X]; u=X[:,0]+.5*X[:,1]; v=X[:,1]; z=X[:,3]\\nF=[('lab'+str(g),lab==g) for g in np.unique(lab)]+[('edge'+str(j),abs(X[:,j])>=np.sort(abs(X[:,j]))[-2]) for j in range(4)]\\nfor i in np.argsort(r): print('amp',i,np.round(np.r_[X[i],r[i],R[i],R[i]/r[i]],4))\\ndef fit(B,y,k,pen=0.):\\n M=B[k]; return np.linalg.lstsq(np.r_[M,np.sqrt(pen)*np.eye(M.shape[1])],np.r_[y[k],np.zeros(M.shape[1])],rcond=1e-9)[0]\\nlib={}\\ndef add(name,Q,base=A,offset=0.,ridge=0.): lib[name]=(np.column_stack((base,Q)),np.broadcast_to(offset,y.shape),ridge)\\nempty=np.empty((n,0)); add('linear',empty); add('cubic',np.c_[u**3,v*v*z]); add('rational winner',((X[:,1]+X[:,2])**3/(1+(v-z)**2))[:,None]); add('rational alternate',((X[:,0]+2*v)**3/(1+(v-z)**2))[:,None]);\\nfor c in (0.,.5,1.,1.5):\\n for p in (2,3):\\n  P=np.maximum(abs(X)-c,0)**p; S=P*np.sign(X); W=b[3:];\\n  add(f'shared signed {c} {p}',S@W); add(f'shared one sided {c} {p}',np.maximum(np.sign(W)*X-c,0)**p@abs(W)); add(f'ratio norm {c} {p}',r*P.sum(1),empty,b[2]+r); add(f'component shrink {c} {p}',S,A,0.,.04)\\n  add(f'ratio diagonals {c} {p}',r[:,None]*P,empty,b[2]+r,.04)\\nfor c in (.025,.05,.1,.2):\\n for p in (2,3):\\n  for mode in ('norm','weighted norm','max','signed max'):\\n   S={'norm':np.linalg.norm(X,axis=1),'weighted norm':np.linalg.norm(X*b[3:],axis=1)/np.linalg.norm(b[3:]),'max':abs(X).max(1),'signed max':(np.sign(b[3:])*X).max(1)}[mode]; add(f'{mode} sat {p} {c}', r*S**p/(1+c*S**p),empty,b[2]+r)\\nfor name,Q in [('calibrated hold',hold),('strain0',ch['strain_0']),('mean history',past.mean(1)),('history spread',past.std(1)),('last gap',hold-past[:,-1])]:\\n add(name,Q); add(name+' gate',r*Q,empty,b[2]+r)\\ndef err(name,v):\\n B,o,p=lib[name]; return B[v]@fit(B,y-o,~v,p)+o[v]-y[v]\\ndef stats(es): return np.round([np.sqrt(np.mean(np.concatenate(es[:4])**2)),np.sqrt(np.mean(np.concatenate(es[4:])**2)),max(np.sqrt(np.mean(e**2)) for e in es)],5)\\nrank=sorted((tuple(stats([err(name,v) for _,v in F])),name) for name in lib); print('best fixed choices',sorted(rank,key=lambda t:max(t[0][:2]))[:14]); print('baselines',[(name,stats([err(name,v) for _,v in F])) for name in list(lib)[:4]])\\nfor label, names in [('sparse',list(lib)[:4]),('shared',list(lib)[4:])]:\\n es=[]; sel=[]\\n for _,v in F:\\n  losses=[]\\n  for name in names:\\n   B,o,p=lib[name]; chunks=[]\\n   for g in np.unique(lab[~v]):\\n    m=(lab==g)&~v; k=(lab!=g)&~v; chunks.extend(B[m]@fit(B,y-o,k,p)+o[m]-y[m]);\\n   losses.append(np.sqrt(np.mean(np.square(chunks))))\\n  name=names[np.argmin(losses)]; sel.append(name); es.append(err(name,v))\\n print('nested',label,stats(es),sel)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_gate_cv.py | grep -E '^amp|^best|^baselines|^nested'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: sparse cubic amplitude → H2: prefer a simpler or bounded correction if it transfers; the cubic's worst held-out slice has amplitude RMSE 0.1520.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the best rational term from the full-data search now\",\n      \"rejected_reason\": \"Its apparent edge improvement was measured on the same folds used to select the term.\"\n    }\n  ],\n  \"rationale\": \"Use inner lab folds to choose among amplitude corrections before scoring outer lab and feature-edge holdouts. If the apparent gain disappears, retain the simpler law rather than promote a term selected on the stress slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e2a76c66f054bc642a56a29cf91709a79ba0cbcc762ea94da12aa1cccd6aa6ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50336.58,
+      "usage_known": true,
+      "prompt_tokens": 42773,
+      "cached_tokens": 11136,
+      "completion_tokens": 2159
+    }
+  ]
+}

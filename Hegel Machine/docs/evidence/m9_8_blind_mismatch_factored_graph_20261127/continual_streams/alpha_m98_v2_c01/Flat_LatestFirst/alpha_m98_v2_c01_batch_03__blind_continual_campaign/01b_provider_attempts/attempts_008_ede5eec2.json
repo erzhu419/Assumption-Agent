@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ede5eec2ed9848c0bbc013fec99a8340",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:16.862005+00:00",
+  "ended_at_utc": "2026-11-27T14:36:49.387166+00:00",
+  "request_sha256": "26d59b1d96e55d8760b7c5f3726157722dfa5d3b51c84aa634ec40f13f470130",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47562,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29824,
+    "cached_tokens": 11136,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py').read_text()\\nsrc = src.replace('Calibrate the load bridge and fit a shared two-branch relaxation spectrum.', 'Calibrate the bridge, fit the benchtop spectrum, and predict chamber creep.')\\nold = '    # This blind campaign supplies neither chamber responses nor a lineage archive.\\\\n'\\nassert src.count(old) == 1\\nsrc = src.replace(old, '')\\nold = '    drift = te[2] @ theta[2:]\\\\n'\\nassert src.count(old) == 1\\nsrc = src.replace(old, old + '    # Chamber drift rate decays as exp(-t); its initial value is unchanged.\\\\n    drift_time = -np.expm1(-times)\\\\n')\\nold = 'curves @ theta[:2] + drift[:, None] * times,'\\nassert src.count(old) == 1\\nPath('/holdout_task/batch_solver.py').write_text(src.replace(old, 'curves @ theta[:2] + drift[:, None] * drift_time,'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; q = item['campaign_diagnostics']; out = m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau = out['estimated_taus']; theta = out['hereditary_weights']; assert .05 < tau[0] < tau[1] < 25\\n_, x = m._features(d['train'], q); sp = m._specimen(q, x, m._axial_load_map(d['calibration_load_cells']))\\nu = np.asarray(d['eval_times']); dt = d['past_dt']; C, R = m._branches(sp, dt, u, tau); drift = sp[2] @ theta[2:]\\ne = np.abs(q['strain_0'][:,None] + C @ theta[:2] + drift[:,None] * (-np.expm1(-u)) - q['strain_curves_obs']); r = np.abs(R @ theta[:2] + drift - q['instant_rate_obs'])\\nmissing = np.isnan(q['coupon_features_raw']).any(1); groups = {f'lab{l}':q['lab_id']==l for l in np.unique(q['lab_id'])}; groups.update({f'stratum{s}':q['stratum']==s for s in np.unique(q['stratum'])}); groups.update(complete=~missing,missing=missing)\\nprint('Diagnostic strain/rate MAE:', {k: (round(e[ix].mean(),6),round(r[ix].mean(),6)) for k,ix in groups.items() if ix.any()})\\nprint('Worst diagnostic horizon MAE:',e.mean(0).max())\\nassert e[~missing].mean() < .007 and r[~missing].mean() < .006\\naug = dict(d,eval_times=np.array([0.,1e-6,4.,8.,16.])); pred=m.solve_batch(aug)\\nassert np.array_equal(out['estimated_taus'], pred['estimated_taus']) and np.array_equal(out['hereditary_weights'],pred['hereditary_weights'])\\ny = pred['predicted_strain']; np.testing.assert_allclose(y[:,0],d['test']['strain_0'],atol=1e-12,rtol=0)\\nnp.testing.assert_allclose((y[:,1]-y[:,0])*1e6,pred['initial_rate_pred'],atol=5e-6,rtol=0)\\nnp.testing.assert_allclose(y[:,2],out['predicted_strain'][:,-1],atol=1e-12,rtol=0)\\nprint('Zero-time condition, initial derivative and horizon invariance verified.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear chamber drift → H2 integrated exponential decay at unit rate; complete-coupon worst leave-one-lab-out strain MAE is 0.00399 versus 0.67650 for linear drift.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a two-parameter time transform\",\n      \"rejected_reason\": \"The tested alternatives did not improve worst held-out-lab error; the single fitted decay rate was 1.000367.\"\n    }\n  ],\n  \"rationale\": \"Apply the chamber correction only to drift during prediction. Keep bridge calibration dynamic and material fitting train-only. Verify the output contract, diagnostic slices including missing features, and agreement between the predicted initial rate and the strain derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e8513151593e0fd2828ba9f76f0da3efbd1cc023174770912538bb1ae3007b19",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32957.68,
+      "usage_known": true,
+      "prompt_tokens": 29824,
+      "cached_tokens": 11136,
+      "completion_tokens": 1267
+    }
+  ]
+}

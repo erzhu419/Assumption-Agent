@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c2c07a003da491c9b18b8243fe0ff79",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:46.381046+00:00",
+  "ended_at_utc": "2026-11-27T14:43:27.065604+00:00",
+  "request_sha256": "8b6e8b054838b91098c5999f4310122cdecace3b965fbed89750f5107902ce33",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64637,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31511,
+    "cached_tokens": 9600,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\ncat >/tmp/bridge_margin_audit.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; axis=np.count_nonzero(x,axis=1)<=1\\n# Known gross common-mode readout jumps are held apart from the clean-load accuracy test.\\nvalid=np.max(np.abs(y-np.median(y,axis=0)),axis=1)<8\\nrng=np.random.default_rng(71); pools=[np.array_split(rng.permutation(np.flatnonzero(valid & mask)),5) for mask in (axis,~axis)]\\nresult=[]\\nfor j in range(5):\\n f=np.r_[pools[0][j],pools[1][j]]; tr=np.setdiff1d(np.arange(len(x)),f)\\n b=m._axial_load_map({'true_channel_loads':x[tr],'bridge_raw':y[tr]}); z=m._decode(y[f],b); yhat=np.sum(m._bridge_design(x[f])*b,axis=-1)\\n a=np.c_[np.ones(len(x)),x]; keep=tr.copy(); err=np.linalg.norm(y[tr]-a[tr]@np.linalg.lstsq(a[tr],y[tr],rcond=None)[0],axis=1); keep=keep[err<=8*np.median(err)]\\n aff=np.linalg.lstsq(a[keep],y[keep],rcond=None)[0]; za=np.linalg.solve(aff[1:].T,(y[f]-aff[0]).T).T\\n # Challenge the sparse numerator with rational attenuation depending on an adjacent-channel sum or difference.\\n qtr=np.stack(((x[keep]+np.roll(x[keep],-1,axis=1))**2,(x[keep]-np.roll(x[keep],-1,axis=1))**2),axis=-1)\\n qte=np.stack(((x[f]+np.roll(x[f],-1,axis=1))**2,(x[f]-np.roll(x[f],-1,axis=1))**2),axis=-1)\\n gtr,gte=m._bridge_design(x[keep]),m._bridge_design(x[f]); rational=np.empty_like(yhat)\\n for k in range(4):\\n  def resid(p): return (gtr[:,k]@p[:6])/(1+qtr[:,k]@p[6:])-y[keep,k]\\n  fit=least_squares(resid,np.r_[b[k],0.,0.],bounds=(np.r_[[-np.inf]*6,0.,0.],np.inf),gtol=1e-12)\\n  rational[:,k]=(gte[:,k]@fit.x[:6])/(1+qte[:,k]@fit.x[6:])\\n for label,mask in [('axis',axis[f]),('mixed',~axis[f])]:\\n  av,bv=((v[mask]-x[f][mask]).sum(axis=1) for v in (za,z)); raw=[np.sqrt(np.mean((v[mask]-y[f][mask])**2,axis=0)).max() for v in (yhat,rational)]\\n  result.append((label,np.sqrt(np.mean(av**2)),np.sqrt(np.mean(bv**2)),np.max(abs(bv)),*raw))\\nfor label in ('axis','mixed'):\\n values=np.array([r[1:] for r in result if r[0]==label]); print(label,'worst-fold metrics [robust affine axial RMSE, cyclic axial RMSE, cyclic axial max, cyclic raw RMSE, rational raw RMSE]:',values.max(0))\\n assert values[:,2].max()<0.002\\n# Check for signed lab bias rather than classification metrics on a continuous-response task.\\ntr,te=d['train'],d['test']; xt,_=m._features(tr,te); sp=m._specimen(tr,xt,m._axial_load_map(c)); t,dt=d['eval_times'],d['past_dt']; obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; lab=tr['lab_id']\\nfor k in np.unique(lab):\\n test=lab==k; at=lambda f:tuple(v[f] for v in sp); tau,w=m._fit(at(~test),dt,t,obs[~test],rate[~test]); curves,rates=m._branches(at(test),dt,t,tau); drift=sp[2][test]@w[2:]; print('held-out lab',k,'median signed strain/rate residual',np.median(curves@w[:2]+drift[:,None]*t-obs[test]),np.median(rates@w[:2]+drift-rate[test]))\\nPY\\npython3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine or rational bridge → H2 sparse cyclic bridge; the existing candidate has 0.000205 worst held-out axial RMSE and 0.0254 worst-stratum out-of-fold strain error at the 90th percentile.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare robust affine, cyclic, and rational calibration on identical held-out single-channel and mixed-load sweeps. Promote a challenger only if it improves physical load recovery. Inspect signed leave-one-lab-out residuals for offset bias that absolute errors could hide; classification, relay, and Fokker–Planck checks do not apply to the supplied rheology model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "fb2cde14faa61e75962731d8dec0c5fbde8ab53233e2cc0d98647560dea1ec63",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41108.78,
+      "usage_known": true,
+      "prompt_tokens": 31511,
+      "cached_tokens": 9600,
+      "completion_tokens": 1543
+    }
+  ]
+}

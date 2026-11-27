@@ -1,0 +1,163 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_v2_c04_batch_03_509719e8cdff",
+    "source_hash": "509719e8cdff9381be47dd032d3ed1b87f8ad2b41cc8d07daf62d22c26b7f2f5",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+    "task_id": "alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/m98_choose.py",
+        "archived_relpath": "producers/tmp__m98_choose.py",
+        "bytes": 8057,
+        "sha256": "78e243a93af7b2357e23d8cc9c73a76bf6ea04c61a452f78996725564be87302"
+      },
+      {
+        "container_path": "/tmp/m98_compare.py",
+        "archived_relpath": "producers/tmp__m98_compare.py",
+        "bytes": 5726,
+        "sha256": "182eb03f92e9ded3ef2ecc9ef07f5a38412bfd099b6f73359db7eaa317ad1575"
+      },
+      {
+        "container_path": "/tmp/m98_joint.py",
+        "archived_relpath": "producers/tmp__m98_joint.py",
+        "bytes": 4261,
+        "sha256": "5c9a96ba1a6b4213291a489a23c844b22094c12cea25ee27fe642329305ea3c7"
+      },
+      {
+        "container_path": "/tmp/m98_law.py",
+        "archived_relpath": "producers/tmp__m98_law.py",
+        "bytes": 7304,
+        "sha256": "7f596870a0a39e7c84b92c02c27e04ad9c9739330c04abc2e04089f416b089f0"
+      },
+      {
+        "container_path": "/tmp/m98_probe.py",
+        "archived_relpath": "producers/tmp__m98_probe.py",
+        "bytes": 3370,
+        "sha256": "3a8cbfa5e6ce44dea2f729a68651394422730dffdb66a3437c202378bfbbe20b"
+      },
+      {
+        "container_path": "/tmp/m98_resid.py",
+        "archived_relpath": "producers/tmp__m98_resid.py",
+        "bytes": 4619,
+        "sha256": "3a68ede199988584347b1abca99e7074188c53045fccbfa16dbd2e0a13085bdc"
+      },
+      {
+        "container_path": "/tmp/m98_separate.py",
+        "archived_relpath": "producers/tmp__m98_separate.py",
+        "bytes": 6629,
+        "sha256": "71196a8e081bb910d00f7d5c609899bd7d3f9d4511ba57e3e0a5b2055e3dc0e1"
+      },
+      {
+        "container_path": "/tmp/m98_sparse.py",
+        "archived_relpath": "producers/tmp__m98_sparse.py",
+        "bytes": 4683,
+        "sha256": "ce5e6ee4cd58126d0dcb228e286e7b7f03c59c0331b84df554fbc2ad5f4989a3"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m98_v2_c04_batch_01_solver.py",
+        "bytes": 4882,
+        "sha256": "b517ff2e30b2c1c2f3693cffa3e80dfa2ce0532fdcff3c2d04b80e82a856543a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m98_v2_c04_batch_02_solver.py",
+        "bytes": 4364,
+        "sha256": "89219b8823576c3261fbc889d754deb1e21a0d01a90b73fe3cbb0aa1261fe157"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m98_v2_c04_s00_solver.py",
+        "bytes": 4364,
+        "sha256": "89219b8823576c3261fbc889d754deb1e21a0d01a90b73fe3cbb0aa1261fe157"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l /tmp/hegel_continual_archive && cat validate_public_schema.py && cat /tmp/hegel_continual_archive/archive_apparatus_log.json && python3 - <<'PY'\nimport pickle\nx=pickle.load(open('public_batch.pkl','rb'))[0]\ndef show(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,getattr(v,'shape',''),len(v) if isinstance(v,(dict,list,tuple)) else '')\n  if isinstance(v,dict) and depth<2: show(v,depth+1)\nshow(x)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation'",
+      "cd /holdout_task && for f in /tmp/hegel_continual_archive/*solver.py; do echo \"=== $f ===\"; cat \"$f\"; done; cat /tmp/hegel_continual_archive/archive_manifest.json; python3 - <<'PY'\nimport pickle,json,numpy as np\nx=pickle.load(open('public_batch.pkl','rb')); print('batch items',len(x));\nd=x[0]['dataset']; print('dataset keys',list(d)); print('calibration keys',list(d['calibration_load_cells'])); print('eval_times',d['eval_times'],'past_dt',d.get('past_dt')); print('diag',list(x[0]['campaign_diagnostics'] or {}));\nfor s in ['train','test']:\n a=d[s]; print(s,[(k,np.shape(v)) for k,v in a.items()]",
+      "cd /holdout_task && a=/tmp/hegel_continual_archive && for f in \"$a\"/*solver.py; do echo \"=== $(basename \"$f\") ===\"; sed -n '/^def _fit/,$p' \"$f\"; done && python3 - <<'PY'\nimport pickle,numpy as np\nitems=pickle.load(open('public_batch.pkl','rb'))\nfor i,item in enumerate(items):\n d=item['dataset']; p=item.get('campaign_diagnostics'); c=d['calibration_load_cells']; raw=c['bridge_raw']; y=c['true_channel_loads']; A=np.c_[np.ones(len(raw)),raw]; fit=np.linalg.lstsq(A,y,rcond=None)[0]; r=A@fit-y\n print('item',i,'keys',list(d),'diag',None if p is None else list(p),'times',d['eval_times'],'durations',",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nx=json.load(open('public_asset_index.json')); print(str(x)[:2600])\nPY\ncat > /tmp/m98_probe.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.optimize import least_squares\ns=importlib.util.spec_from_file_location('base','/tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; cd=i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; b=m._bridge(d['ca",
+      "sed -i \"/for k,X in xd.items():$/a\\  if not np.isfinite(X).all(): continue\" /tmp/m98_probe.py\n# Normalize the indentation in the outer loop and avoid constructing a one-coupon reference panel.\nsed -i \"/^for k,X in xd.items():$/{n;s/^  / /;}\" /tmp/m98_probe.py\nsed -i \"s/xd={'diag':m._features(cd,cd)\\[:len(cd\\['lab_id'\\])\\],'train+diag'/xd={'train+diag'/\" /tmp/m98_probe.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_probe.py",
+      "sed '/^for k,X in xd.items():$/,$d' /tmp/m98_probe.py > /tmp/m98_joint.py\ncat >> /tmp/m98_joint.py <<'PY'\nlater=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]\ndef memory(u):\n return p@(-np.expm1(-dt[:,None]/np.atleast_1d(u))*np.exp(-later[:,None]/np.atleast_1d(u)))\ndef design(q,X,mode):\n u=np.sort(np.exp(q[:2])); v=np.exp(q[2:]); dr=th[2]+X@th[3:]; one=np.ones(len(h)); gaps=h[:,None]-memory(tau)\n T=np.vstack((np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1]))\n if mode=='intrinsic_gap': blocks=[np.c_[gaps[:,0],dr],np.c_[gaps[:,1],dr],dr[:,None]]\n if mode=='chamber_gap':\n  g=h[:,None]-memory(u); blocks=[np.c",
+      "cd /holdout_task; sed -n '1,85p' /tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_02_solver.py; python3 - <<'PY'\nimport json,numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\nz=json.load(open(p))\nprint('log structure',type(z).__name__)\nfor x in z if isinstance(z,list) else z.values():\n if isinstance(x,dict):\n  print({k:(f'shape={np.shape(v)}' if isinstance(v,list) else v) for k,v in x.items()})\nPY\nsed '/^for name,X in xd.items():/,$d' /tmp/m98_joint.py | sed \"/^ return np.concatenate/i\\ if mode=='kernel': blocks=[np.c_[gaps[:,0],h,dr],np.c_[gaps[:,1],h,dr],np.c_[h,dr]]",
+      "for f in /tmp/hegel_continual_archive/*solver.py; do echo \"=== $(basename \"$f\") ===\"; sed -n '/^def solve_batch/,$p' \"$f\"; done; python3 - <<'PY'\nimport json,pickle,numpy as np\nz=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log keys',list(z) if isinstance(z,dict) else len(z));\nfor x in z if isinstance(z,list) else z.values():\n if isinstance(x,dict):\n  print({k:(np.array(v).shape if isinstance(v,list) else v) for k,v in x.items()});\n  for k,v in x.items():\n   if isinstance(v,list):\n    a=np.asarray(v); print(k,a.mean(0).round(4),a.std(0).round(4))\ni=pickle.",
+      "sed '/^for name,X in xd.items():/,$d' /tmp/m98_joint.py > /tmp/m98_separate.py\ncat >> /tmp/m98_separate.py <<'PY'\nfor k in ['ref_coupons','past_channel_raw','hold_channel_raw','coupon_features_raw']:\n a=cd[k].reshape(len(h),-1); b=np.concatenate((tr[k],te[k])).reshape(len(xt),-1); print('exact matches',k,np.sum(np.any(np.all(a[:,None]==b[None],axis=-1),axis=1)))\nprint('diagnostic load quantiles', np.quantile(h,[0,.5,1]), 'train/test',*[np.quantile(m._loads(bk,b)[1],[0,.5,1]) for bk in []]); print('missing mask',np.isnan(cd['coupon_features_raw']).astype(int).T)\nfor name,X in xd.items():\n dr=th",
+      "cd /holdout_task && sed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_02_solver.py > batch_solver.py && cat >> batch_solver.py <<'PY'\n# Chamber response fitted to the public verification sweep. Each row belongs\n# to one time mode; columns are the branch gap, hold load, history, and drift.\n_CHAMBER_TIMES = np.array([0.466, 1.488])\n_CHAMBER_FAST = np.array([.60010, -.00570, .00140, -.00170, -.00250, -.00050, .00170, -.00930, .16960])\n_CHAMBER_SLOW = np.array([.21910, -.00850, .01090, -.03190, -.02300, -.01530, .01330, -.05490, 1.38720])\n_CHAMBER_DRIFT = np.array([-.",
+      "sed '/^for name,X in xd.items():/,$d' /tmp/m98_joint.py > /tmp/m98_resid.py\ncat >> /tmp/m98_resid.py <<'PY'\nimport importlib.util\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); f=importlib.util.module_from_spec(s); s.loader.exec_module(f)\nP,H=m._loads(te,b)\nprint('load min/max by block',[(a.min().round(3),a.max().round(3)) for a in [h,H,p,P]])\nfor name,X in xd.items():\n z,rr=f._chamber(X,p,h,dt,t,tau,th); R=Y-np.c_[z,rr]\n print(name,'RMSE',stats(R),'first singular values',np.linalg.svd(R,compute_uv=False)[:4].round(4))\n if name=='all':\n  for j,row in enu",
+      "sed '/^for name,X in xd.items():/,$d' /tmp/m98_joint.py > /tmp/m98_compare.py\ncat >> /tmp/m98_compare.py <<'PY'\nfrom itertools import combinations\nfrom scipy.optimize import minimize\nlabs=cd['lab_id']; drift=th[2]+xd['all']@th[3:]; X=xd['all']; g=h[:,None]-memory(tau)\nB0=np.c_[drift,h,p]; B=[np.c_[g[:,0],h,p,drift],np.c_[g[:,1],h,p,drift],B0]\npen=[np.array([.005]+[.2]*7+[.01])]*2+[np.array([.01]+[.2]*7)]\nch=b if False else None\n# Remove total-load information from raw channel contrasts.\nrawh=cd['hold_channel_raw']; rawp=cd['past_channel_raw']; Dh=rawh-rawh.mean(1,keepdims=True); Dp=rawp-rawp.m",
+      "sed '/^for key in E:/,$d' /tmp/m98_compare.py > /tmp/m98_law.py\ncat >> /tmp/m98_law.py <<'PY'\nfrom itertools import product\n# Single-mode extensions preserve identifiability and avoid giving every added term three coefficients.\nZ=drift-th[2]; z=h[:,None]-g\nF={'none':None,'drift2':drift**2,'drift3':Z**3,'drift_sat':np.tanh(2*Z)-2*Z,'hold_drift':(h-3.6)*Z,'fastgap_drift':g[:,0]*Z,'slowgap_drift':g[:,1]*Z,'hold2':(h-3.6)**2,'fastgap2':g[:,0]**2,'slowgap2':g[:,1]**2,'mem0_sq':z[:,0]**2,'mem1_sq':z[:,1]**2,'signed_past0':np.maximum(-p[:,0],0.),'mem_abs':np.abs(p)@(-np.expm1(-dt/tau[1])*np.exp(-late",
+      "sed '/^cands=/,$d' /tmp/m98_law.py | sed 's/return calc(q,True)$/return (*calc(q,True),np.exp(q))/' > /tmp/m98_choose.py\ncat >> /tmp/m98_choose.py <<'PY'\n# Select within each outer training fold; inner folds never see its held-out coupon measurements.\ncands=[('none',0,s) for s in (1.,4.,8.)]+[('hold_drift',j,1.) for j in range(3)]\nbase=('none',0,1.)\nfor j,outer in enumerate(folds):\n inner=[outer & f for f in folds if np.sum(outer & ~f) >= 2 and np.sum(outer & f) >= 8]\n def criterion(c):\n  scores=[stats(fit1(f,*c)[0][outer & ~f]-Y[outer & ~f]) for f in inner]\n  return (np.mean(scores,axis=0)+np",
+      "sed -i '/^ def criterion(c):/i\\ if not inner:\\n  inner=[outer & (np.arange(len(Y)) != j) for j in np.flatnonzero(outer)]' /tmp/m98_choose.py\nset -o pipefail\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_choose.py | tail -8",
+      "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nfrom pathlib import Path\nimport numpy as np\np = Path('batch_solver.py')\ns = p.read_text()\nf = np.load('/tmp/m98_hold_drift.npz')\nc = f['c']\n# Fold the fitted interaction normalization into the chamber coefficients.\ninteraction = float(c[18] / f['sigma'])\noffset = float(-interaction * f['mu'])\nparams = (\n    '# Two-mode chamber response fitted to the public verification coupons.\\n'\n    '# The slow mode couples hold load to the coupon-dependent part of drift.\\n'\n    f'_CHAMBER_TIMES = np.array({f[\"q\"].tolist()!r})\\n'\n    f'_CHAMBER_FAST = np.array({c[:"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__m98_choose.py",
+      "primary_producer_container_path": "/tmp/m98_choose.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5907,
+        "sha256": "d011e46ed4aa33d681c21757a28f0a7ad1a05711bc99f95417b19bf910828f0d",
+        "content_addressed_ref": "content_addressed_blobs/d011e46ed4aa33d681c21757a28f0a7ad1a05711bc99f95417b19bf910828f0d.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "509719e8cdff9381be47dd032d3ed1b87f8ad2b41cc8d07daf62d22c26b7f2f5",
+      "verified_post_package": true,
+      "verified_turn": 16,
+      "verification_command": "set -e\ncd /holdout_task\npython3 -I - <<'PY'\nfrom pathlib import Path\nimport numpy as np\np = Path('batch_solver.py')\ns = p.read_text()\nf = np.load('/tmp/m98_hold_drift.npz')\nc = f['c']\n# Fold the fitted interaction normalization into the cha",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "509719e8cdff9381be47dd032d3ed1b87f8ad2b41cc8d07daf62d22c26b7f2f5",
+        "expected_candidate_sha256": "509719e8cdff9381be47dd032d3ed1b87f8ad2b41cc8d07daf62d22c26b7f2f5",
+        "computed_candidate_sha256": "509719e8cdff9381be47dd032d3ed1b87f8ad2b41cc8d07daf62d22c26b7f2f5",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5907
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_509719e8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 11,
+    "reusable_ast_function_closures": []
+  }
+}

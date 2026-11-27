@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84406bcd63174de7b945afaa249ac38c",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:58:55.052072+00:00",
+  "ended_at_utc": "2026-11-27T14:59:31.231266+00:00",
+  "request_sha256": "29af693e3750f81b3e9cf8c56462b03358a31739468fa4f6f7c2d01ed72d4a0d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46367,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27408,
+    "cached_tokens": 9600,
+    "completion_tokens": 1210
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/m98_kernel.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nz=np.load('/tmp/m98_arrays.npz'); globals().update({k:z[k] for k in z.files}); drift=th[2]+x@th[3:]; later=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]\\ndef maps(p,mode):\\n    T=tau.copy(); H=tau.copy(); a=np.ones(2); d=1.; L=0.\\n    if 'T' in mode: T*=np.exp(p[:2]); p=p[2:]\\n    if 'H' in mode: H*=np.exp(p[:2]); p=p[2:]\\n    if 'A' in mode: a+=p[:2]; p=p[2:]\\n    if 'L' in mode: L=p[0]; p=p[1:]\\n    G=(hold[:,None]-past@(-np.expm1(-dt[:,None]/H)*np.exp(-later[:,None]/H)))*th[:2]*a\\n    if mode[0]=='b': f,r=t,1.\\n    else:\\n        d=np.exp(p[0]); s=np.exp(p[1]);\\n        if mode[0]=='e': f,r=-d*s*np.expm1(-t/s),d\\n        if mode[0]=='r': f,r=d*t/(1+t/s),d\\n        if mode[0]=='g': f,r=d*s*np.log1p(t/s),d\\n        if mode[0]=='q': f,r=d*t/(1+(t/s)**2),d\\n    return G@(-np.expm1(-t[None,:]/T[:,None]))+drift[:,None]*(f+L*t),G@(1/T)+drift*(r+L)\\ndef fit(mode,m):\\n    N=sum(2*int(k in mode) for k in 'THA')+('L' in mode)+(0 if mode[0]=='b' else 2)\\n    p=np.zeros(N)\\n    def err(p):\\n        c,r=maps(p,mode); return np.r_[((c[m]-yc[m])/.02).ravel(),(r[m]-yr[m])/.05]\\n    return least_squares(err,p,loss='soft_l1',f_scale=1.5,bounds=(-4.,4.),max_nfev=300).x if N else p\\nfor mode in ['b','e','r','g','q','eL','eA','eT','eH','eTH','eATH','eATHL','rATHL','gATHL','qATHL']:\\n    ec=np.zeros_like(yc); er=np.zeros_like(yr)\\n    for g in np.unique(labs):\\n        m=labs==g; c,r=maps(fit(mode,~m),mode); ec[m]=(c-yc)[m]; er[m]=(r-yr)[m]\\n    p=fit(mode,np.ones(len(labs),bool)); c,r=maps(p,mode);\\n    def metric(c,r): return np.round([np.median(abs(c)),np.median(abs(r)),max(np.median(abs(c[labs==g])) for g in np.unique(labs)),max(np.median(abs(r[labs==g])) for g in np.unique(labs)),max(np.median(abs(c),axis=0))],5)\\n    print(mode,'OOF',metric(ec,er),'fit',metric(c-yc,r-yr),'p',p.round(5))\\n    if mode in ('e','eTH','eATHL'): print(' temporal signed median',np.median(c-yc,axis=0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_kernel.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Linear chamber drift → saturating chamber drift with chronological memory; baseline worst-lab median errors are 0.539 strain and 0.056 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy independent regressions at each observation time\",\"rejected_reason\":\"They do not enforce a shared time law or connect the measured initial rate to its derivative.\"}],\"rationale\":\"The nonlinear bridge is supported by held-out calibration residuals near 0.0003 at the 90th percentile. The chamber residual grows with time while initial rates remain close, so leave-one-lab-out comparisons will distinguish saturation kernels and test whether changing branch history or relaxation times is necessary.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "49554788151e0a66c087f73224d2af9f33c520f53acfd76dea50b1c19451f4cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36133.06,
+      "usage_known": true,
+      "prompt_tokens": 27408,
+      "cached_tokens": 9600,
+      "completion_tokens": 1210
+    }
+  ]
+}

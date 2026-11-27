@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_v2_c02_s00_f0684c7ff626",
+    "source_hash": "f0684c7ff626639a54ba265de1598c56b407c68bf5b13ce1f167f818cfc8ad28",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_v2_c02_s00__blind_continual_campaign",
+    "task_id": "alpha_m98_v2_c02_s00__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -la /tmp/hegel_continual_archive /tmp/hegel_wormhole_skills 2>/dev/null; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nitem=pickle.load(open('public_batch.pkl','rb'))[0]\ndef scan(v,p='',dep=0):\n if isinstance(v,dict) and dep<5:\n  for k,w in v.items(): scan(w,p+'/'+str(k),dep+1)\n elif isinstance(v,np.ndarray):\n  print(p,v.shape,v.dtype,v.ravel()[:8])\n elif isinstance(v,(list,tuple)):\n  print(p,type(v).__name__,len(v),repr(v[:1])[:300])\n else: print(p,type(v).__name__,repr(v)[:320])\nscan(item)",
+      "cd /holdout_task; python3 - <<'PY'\nimport pickle,numpy as np\nv=pickle.load(open('public_batch.pkl','rb')); i=v[0]; d=i['dataset']; print('items',len(v),'top',i.keys())\nfor k,x in d.items():\n if isinstance(x,dict):\n  print(k,[(a,getattr(b,'shape',None)) for a,b in x.items()]);\n  for a,b in x.items():\n   if isinstance(b,dict): print(' nested',a,[(c,getattr(e,'shape',None)) for c,e in b.items()])\n   if a in ('lab_id','stratum'): print(a,np.unique(b,return_counts=True))\n else: print(k,np.asarray(x).shape,np.array(x).ravel()[:18])\nc=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Fit the shared relaxation spectrum and predict blind chamber coupons.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _standardize(train, test):\n    x, ref, lab, stratum = (np.concatenate((train[k], test[k]), axis=0)\n                            for k in ('coupon_features_raw', 'ref_coupons', 'lab_id', 'stratum'))\n    for group in np.unique(lab):\n        mask = lab == group\n        controls = ref[mask]\n        offset = np.nanmedian(np.nanmean(controls, axis=0))\n        scale = np.nanmedian(np.nanstd(controls, axis=0))\n        x",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nfrom pathlib import Path\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', Path.cwd() / 'batch_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_batch.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nd = item['dataset']; tr, te = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\nstress = m._stress_calibration(d['calibration_load_cells'])\nx, xe = m._standardize(tr, te)\ny = tr['strain_curves_obs'] - tr['strain_0'][:,No",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', Path('batch_solver.py').resolve())\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('public_batch.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\nd = item['dataset']; cal = d['calibration_load_cells']; raw = cal['bridge_raw']; y = cal['true_channel_loads'].sum(axis=1)\nprint('chamber diagnostics present:', item.get('campaign_diagnostics') is not None, 'continual archive pr",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_batch.pkl','rb') as f:\n    d=pickle.load(f)[0]['dataset']\nc=d['calibration_load_cells']; raw=c['bridge_raw']; y=c['true_channel_loads'].sum(axis=1)\nmu=raw.mean(0); sd=raw.std(0); z=(raw-mu)/sd\nfor name in ('train','test'):\n    g=d[name]; traces=np.vstack((g['past_channel_raw'].reshape(-1,4),g['hold_channel_raw']))\n    zz=(traces-mu)/sd\n    print(name,'max standardized bridge radius',round(float(np.linalg.norm(zz,axis=1).max()),3),'outside calibration component ranges',int(np.any((t"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4241,
+        "sha256": "861213b1d602081f2b7d2b3069f8fde4d6ca98f54adbf6791a75f2cf450f28f2",
+        "content_addressed_ref": "content_addressed_blobs/861213b1d602081f2b7d2b3069f8fde4d6ca98f54adbf6791a75f2cf450f28f2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f0684c7ff626639a54ba265de1598c56b407c68bf5b13ce1f167f818cfc8ad28",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('candidate', Path('batch_solver.py').resolve())\nm = impor",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f0684c7ff626639a54ba265de1598c56b407c68bf5b13ce1f167f818cfc8ad28",
+        "expected_candidate_sha256": "f0684c7ff626639a54ba265de1598c56b407c68bf5b13ce1f167f818cfc8ad28",
+        "computed_candidate_sha256": "f0684c7ff626639a54ba265de1598c56b407c68bf5b13ce1f167f818cfc8ad28",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4241
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_f0684c7f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

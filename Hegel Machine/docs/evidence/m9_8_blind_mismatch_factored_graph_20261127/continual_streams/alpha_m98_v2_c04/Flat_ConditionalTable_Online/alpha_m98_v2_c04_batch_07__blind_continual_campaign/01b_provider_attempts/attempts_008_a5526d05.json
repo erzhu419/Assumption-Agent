@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a5526d056e5b4781bf76c9499abbc4e8",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:00:23.762393+00:00",
+  "ended_at_utc": "2026-11-27T15:01:02.466583+00:00",
+  "request_sha256": "3baf2813aca32822273f06e5781d62e077f0c987367271da2df340d2064fc1be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52969,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29843,
+    "cached_tokens": 9600,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; tr,te,q=d['train'],d['test'],item['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; n=len(tr['lab_id']); k=len(te['lab_id']); out=m.solve_batch(d)\\nfor key,shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(k,len(t)), 'initial_rate_pred':(k,)}.items():\\n a=out[key]; assert a.shape==shape and np.isfinite(a).all(), key\\nu,h=out['estimated_taus'],out['hereditary_weights']; assert .05<u[0]<u[1]<25\\nb=m._bridge(d['calibration_load_cells']); x=m._features(tr,te)[:n]; p,v=m._loads(tr,b); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; train=[]\\nfor lab in np.unique(tr['lab_id']):\\n a=tr['lab_id']==lab; tf,hf=m._fit(x[~a],p[~a],v[~a],dt,t,yc[~a],yr[~a]); c,r=m._design(x[a],p[a],v[a],dt,t,tf); train.append([np.median(abs((c@hf).reshape(yc[a].shape)-yc[a])),np.median(abs(r@hf-yr[a])),np.max(abs(tf/u-1))])\\nprint('Benchtop leave-one-lab-out maxima (strain MAE median, rate MAE median, relative tau change):',np.max(train,axis=0)); print('Intrinsic taus:',u)\\na={key:np.concatenate((tr[key],te[key])) for key in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; labs=q['lab_id']; xq=m._features(a,q)[-len(labs):]; p,v=m._loads(q,b); yc=q['strain_curves_obs']-q['strain_0'][:,None]; yr=q['instant_rate_obs']; saved=np.r_[m._CHAMBER_LOG_TIME_SCALE,np.log(m._CHAMBER_DRIFT_GAIN),np.log(m._CHAMBER_DRIFT_TIME)]\\ndef pred(qp, times=t):\\n m._CHAMBER_LOG_TIME_SCALE=qp[:2]; m._CHAMBER_DRIFT_GAIN,m._CHAMBER_DRIFT_TIME=np.exp(qp[2:]); return m._chamber(xq,p,v,dt,times,u,h)\\nc,r=pred(saved); eps=1e-6; zero,_=pred(saved,np.array([0.])); small,_=pred(saved,np.array([eps])); assert np.allclose(zero,0) and np.allclose(small[:,0]/eps,r,rtol=2e-6,atol=2e-6)\\nec=np.zeros_like(yc); er=np.zeros_like(yr)\\nfor lab in np.unique(labs):\\n a=labs==lab\\n def residual(qp):\\n  c,r=pred(qp); return np.r_[((c[~a]-yc[~a])/.02).ravel(),(r[~a]-yr[~a])/.05]\\n qf=least_squares(residual,np.zeros(4),loss='soft_l1',f_scale=1.5,bounds=(-4,4)).x; c,r=pred(qf); ec[a]=c[a]-yc[a]; er[a]=r[a]-yr[a]\\ndef metric(c,r):\\n return np.array([max(np.median(abs(c[labs==l])) for l in np.unique(labs)),max(np.median(abs(r[labs==l])) for l in np.unique(labs)),max(np.median(abs(c),axis=0))])\\ncv=metric(ec,er); cb,rb=m._design(xq,p,v,dt,t,u); base=metric((cb@h).reshape(yc.shape)-yc,rb@h-yr); c,r=pred(saved)\\nprint('Chamber metrics (worst-lab strain, worst-lab initial rate, worst-time strain):'); print('  exact artifact:',metric(c-yc,r-yr)); print('  held-out labs:',cv); print('  benchtop law:',base)\\nassert np.all(cv<base)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Linear chamber drift → saturating drift with adjusted hold times; worst-lab held-out medians are 0.02645 strain and 0.03043 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a quadratic drift amplitude\",\"rejected_reason\":\"Its small median strain gain came with worse held-out rate error and a larger late-time strain tail.\"}],\"rationale\":\"Verify the saved solver in an isolated process. Benchtop lab holdouts test intrinsic-fit stability; chamber lab holdouts test that the implemented kernel improves both outputs; the numerical derivative catches a strain–rate inconsistency that the schema validator cannot detect.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2ee31e4dc70ca7c4ef35c93a51b99ab34de62cb25e4f8ddf8a6ae1d457eea6e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39175.36,
+      "usage_known": true,
+      "prompt_tokens": 29843,
+      "cached_tokens": 9600,
+      "completion_tokens": 1439
+    }
+  ]
+}

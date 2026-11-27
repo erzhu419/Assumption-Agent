@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b633f291c5e474ebe09c31f1c3c4f23",
+  "call_seq": 15,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:28.350968+00:00",
+  "ended_at_utc": "2026-11-27T14:36:01.844373+00:00",
+  "request_sha256": "c3bd6f3c813cf5b9bf91b9cc31cef79d506841a52c74c4d04edcc038b0d9c5de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 93334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 47370,
+    "cached_tokens": 11136,
+    "completion_tokens": 1292
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m98_finalprobe.py <<'PY'\\nexec(open('/tmp/m98_gate_cv.py').read().split('rank=sorted')[0])\\nfrom itertools import combinations\\nfor g in (0.,.25,.5,.75,1.):\\n names=['cubic','rational winner','rational alternate','ratio norm 1.0 2','ratio norm 0.0 3']; w=np.array([g,(1-g)*.25,(1-g)*.25,(1-g)*.35,(1-g)*.15]); es=[sum(a*err(name,v) for a,name in zip(w,names)) for _,v in F]; print('ENSEMBLE',g,stats(es))\\nfor name in ('cubic','rational winner','rational alternate','ratio norm 1.0 2','ratio norm 0.0 3'):\\n B,o,p=lib[name]; c=fit(B,y-o,np.ones(n,bool),p); print('COEF',name,c)\\n# Test whether a simple load-history contrast, as opposed to a dense quadratic, explains the drift gain.\\nload=np.c_[hold,past]; dv={f'p{j}':load[:,j] for j in range(load.shape[1])}; dv.update({'mean':past.mean(1),'std':past.std(1),'range':np.ptp(past,axis=1),'roughness':np.sqrt(np.mean(np.diff(past,axis=1)**2,axis=1))});\\nfor i,j in combinations(range(load.shape[1]),2):\\n for s in (-1.,-.5,.5,1.): dv[f'p{i}{s:+}p{j}']=load[:,i]+s*load[:,j]\\nfor name,q in dv.items():\\n for z,zz in [('sq',q*q),('abs',abs(q)),('cube',q**3),('centered_sq',(q-np.mean(q))**2)]: add('load '+name+' '+z,r*zz,np.c_[r],b[2]+r)\\nloadout=[]\\nfor name in lib:\\n if name.startswith('load '):\\n  e=[err(name,v) for _,v in F]; z=stats(e); loadout.append((max(z[:2]),tuple(z),name))\\nprint('LOAD',sorted(loadout)[:6]); print('FALLBACK',stats([err('linear',v) for _,v in F]));\\nXtest=xp[len(tr['lab_id']):]; u=Xtest[:,0]+.5*Xtest[:,1]; v=Xtest[:,1]; z=Xtest[:,3]; rt=Xtest@b[3:]; Btest=[np.c_[np.ones(len(rt)),Xtest,u**3,v*v*z],np.c_[np.ones(len(rt)),Xtest,(v+Xtest[:,2])**3/(1+(v-z)**2)],np.c_[np.ones(len(rt)),Xtest,(Xtest[:,0]+2*v)**3/(1+(v-z)**2)],(rt*np.maximum(abs(Xtest)-1,0).__pow__(2).sum(1))[:,None],(rt*(abs(Xtest)**3).sum(1))[:,None]]\\nfor name,Bt in zip(names,Btest):\\n B,o,p=lib[name]; c=fit(B,y-o,np.ones(n,bool),p); a=Bt@c+(b[2]+rt if name.startswith('ratio') else 0.); print('DEPLOY',name,np.round(np.quantile(a,[0,.05,.5,.95,1]),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_finalprobe.py | grep -E '^(ENSEMBLE|COEF|LOAD|FALLBACK|DEPLOY)'; cat /tmp/hegel_continual_archive/archive_manifest.json; head -12 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: single cubic amplitude → H2: blend compact chamber laws to reduce extrapolation; nested sparse selection lowered worst-slice amplitude RMSE from 0.1520 to 0.1024.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote a dense load-history gain\",\n      \"rejected_reason\": \"Its near-zero fit error did not transfer to held-out labs or feature extremes.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed blends on lab and feature-edge slices and inspect their deployment amplitude ranges. Promote a blend only if it reduces the worst held-out error without producing unsupported extremes. Test simple load contrasts separately; retain the reset law if they do not improve transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "728b456864093cc7efd517164e98978090ad24bf0b56d0eb39f96357167814cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33945.58,
+      "usage_known": true,
+      "prompt_tokens": 47370,
+      "cached_tokens": 11136,
+      "completion_tokens": 1292
+    }
+  ]
+}

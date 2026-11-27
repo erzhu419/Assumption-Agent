@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56805db5d10843aba5b2ac7c91ef5c73",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:26:27.723786+00:00",
+  "ended_at_utc": "2026-11-27T14:26:57.582282+00:00",
+  "request_sha256": "3516f2df0b487a2709420b2f3459d71a6268d9bc9ae49c098c083b1a9f684835",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19681,
+    "cached_tokens": 12928,
+    "completion_tokens": 683
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/pulse.py <<'PY'\\nimport glob,runpy,pickle,numpy as np\\nm=runpy.run_path(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); s0=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=s0['study']; P=s0['campaign_diagnostics']; C=s['sensor_calibration_sweeps']; x=C['ref_rosette']; y=C['raw_rosette']; d=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(d,y,rcond=None)[0]; print('ref range',x.min(0),x.max(0),'affine rms',np.sqrt(np.mean((d@b-y)**2,axis=0)),'coefficients',b,sep='\\\\n');\\nfor a in [1,2,3]:\\n from itertools import combinations_with_replacement\\n D=np.c_[d,*[np.prod(x[:,i],axis=1) for j in range(2,a+1) for i in combinations_with_replacement(range(4),j)]]; r=[]\\n for k in range(5):\\n  t=np.arange(len(x))%5==k; r.extend(D[t]@np.linalg.lstsq(D[~t],y[~t],rcond=None)[0]-y[t])\\n print('CV',a,np.sqrt(np.mean(np.array(r)**2,axis=0)))\\nfor k,v in C['single_bank_sweeps'].items(): print(k,v.reshape(4,-1))\\nS,_=m['_forward'](s)\\nfor p in P:\\n pred=S@p['w_pulse']; obs=m['_calibrate'](dict(s,y_obs_raw=p['y_pulse_raw'])); err=obs-pred; print('pulse signals/rms by shift',np.linalg.norm(pred),np.sqrt(np.mean(err.reshape(3,-1)**2,axis=1)), 'projected rms',np.std(err-s['Z_nuisance']@np.linalg.lstsq(s['Z_nuisance'],err,rcond=None)[0])); print('first rosettes pred/obs',pred[:12],obs[:12]);\\nprint('sensor coords',s['sensor_ij'].tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pulse.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine calibration and open-wall transport -> H2 independently validated sensor response and boundary; pulse metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure calibration error on held-out sweeps before attributing known-weight pulse residuals to transport. Shift-wise errors and nuisance projection will determine which model component to revise.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "0159eb70067e05b2de7b6c6a8e7926ab18853555968a504feab4fcaad6e57164",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29813.79,
+      "usage_known": true,
+      "prompt_tokens": 19681,
+      "cached_tokens": 12928,
+      "completion_tokens": 683
+    }
+  ]
+}

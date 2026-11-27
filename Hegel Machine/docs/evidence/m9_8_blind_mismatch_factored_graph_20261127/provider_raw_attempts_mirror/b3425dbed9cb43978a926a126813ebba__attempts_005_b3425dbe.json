@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3425dbed9cb43978a926a126813ebba",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:04.418139+00:00",
+  "ended_at_utc": "2026-11-27T14:34:37.973504+00:00",
+  "request_sha256": "8d3eb563c8b58701e40ca71aa3b761f4183bb43abfcc2df5b668d5191c40c9e5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23414,
+    "cached_tokens": 9600,
+    "completion_tokens": 1281
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/tmp/hegel_continual_archive/alpha_m98_v2_c03_batch_02_solver.py'\\ns=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; train,test=m._prepare(d)\\nxall=m._features(tr,te); x=c['coupon_features_raw'].copy(); lab=np.r_[tr['lab_id'],te['lab_id']]; ref=np.vstack((tr['ref_coupons'],te['ref_coupons'])); st=np.r_[tr['stratum'],te['stratum']]; _,inv,cnt=np.unique(np.c_[lab,st],axis=0,return_inverse=True,return_counts=True); w=1/cnt[inv]; rx=np.vstack((tr['coupon_features_raw'],te['coupon_features_raw'])).copy()\\nfor j in np.unique(lab):\\n r=ref[lab==j]; center=np.median(r.mean(0)); scale=np.median(r.std(0)); x[c['lab_id']==j]=(x[c['lab_id']==j]-center)/scale; rx[lab==j]=(rx[lab==j]-center)/scale\\nfill=np.nansum(w[:,None]*rx,axis=0)/(w[:,None]*np.isfinite(rx)).sum(0); x=np.where(np.isfinite(x),x,fill)\\no,b=m._calibration(d['calibration_load_cells']); past=(c['past_channel_raw']-o)@b; hold=(c['hold_channel_raw']-o)@b; feat=np.c_[np.ones(len(x)),x]; ch=(past,hold,feat)\\ny=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; v=np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]; taus,theta=m._fit(train,dt,t,y); drift=feat@theta[2:]; E=-np.expm1(-t[:,None]/taus)\\nprint('parameters',taus,theta); print('cal residual rms',np.sqrt(np.mean(((d['calibration_load_cells']['bridge_raw']-o)@b-d['calibration_load_cells']['true_channel_loads'].sum(1))**2)))\\ndef metrics(name,pred):\\n r=pred-v; print(name, 'RMSE',np.sqrt(np.mean(r[:,:-1]**2)),np.sqrt(np.mean(r[:,-1]**2)),'medAE',np.median(abs(r[:,:-1])),np.median(abs(r[:,-1])))\\nbase=m._design(ch,dt,t,taus)@theta; mem=hold[:,None]-m._design(ch,dt,np.array([1.]),taus)[:,-1,:2]*taus\\nreset=np.c_[hold[:,None]*(E@theta[:2])+drift[:,None]*t,hold*np.sum(theta[:2]/taus)+drift]\\narch=np.c_[(hold[:,None]*theta[:2]+drift[:,None]*taus*[.41,.59])@E.T,reset[:,-1]]\\nmetrics('benchtop',base);metrics('reset-linear',reset);metrics('archived reset-modal',arch)\\nprint('per-time free regression against stress/nominal memory/drift'); A=np.c_[hold,mem,drift,np.ones(len(x))]; coef=np.linalg.lstsq(A,v,rcond=None)[0]; print(np.round(coef,4)); print('expected hold',np.round(np.r_[E@theta[:2],np.sum(theta[:2]/taus)],4)); print('nominal memory',np.round(np.vstack((E*theta[:2],theta[:2]/taus)).T,4));print('drift residual temporal shape',np.round(np.linalg.lstsq(drift[:,None],v-base,rcond=None)[0],4)); metrics('free',A@coef)\\nprint('raw train residual',np.median(abs(m._design(train,dt,t,taus)@theta-y),axis=0)); print('diag feature missing count',np.isnan(c['coupon_features_raw']).sum())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\\npython3 - <<'PY'\\nimport json\\nx=json.load(open('/holdout_task/public_asset_index.json')); print(list(x) if isinstance(x,dict) else type(x).__name__)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived baseline or reset law -> H2 separate chamber memory and drift responses; worst-slice error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare the archived laws against chamber strain and onset rate separately. If both miss, the timewise residual decomposition will distinguish a changed stress history response from a changed drift law and guide the next fits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c868fd6122ebc3f6e65bf4e0f1c2eb9c26323fb1ccd4c6af4809d56599345ce3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33513.05,
+      "usage_known": true,
+      "prompt_tokens": 23414,
+      "cached_tokens": 9600,
+      "completion_tokens": 1281
+    }
+  ]
+}

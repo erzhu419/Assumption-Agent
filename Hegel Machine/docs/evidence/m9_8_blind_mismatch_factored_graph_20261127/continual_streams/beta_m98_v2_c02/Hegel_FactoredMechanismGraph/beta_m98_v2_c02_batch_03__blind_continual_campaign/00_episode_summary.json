@@ -1,0 +1,650 @@
+{
+  "task_id": "beta_m98_v2_c02_batch_03__blind_continual_campaign",
+  "short_name": "beta_m98_v2_c02_batch_03",
+  "benchmark": "Hegel-M98-Blind-Mismatch-Factored-Lineage-World",
+  "wave": "wave_1",
+  "scientific_domain": "2D Advection-Diffusion-Reaction Tomography & Blind Continual Campaign",
+  "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_FactoredMechanismGraph",
+  "allow_l1_primitives": true,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 18,
+  "final_candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+  "validated_incumbent_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_modul",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+        "expected_candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+        "computed_candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4884
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_81c0c942"
+    },
+    {
+      "candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "python3 - <<'PY'\nfrom pathlib import Path\npath = Path('/holdout_task/batch_solver.py')\ntext = path.read_text()\na = text.index('    # The independent banks')\nb = text.index('\\n\\n\\ndef _box_budget_qp', a)\ntext = text[:a] + '''    banks = swee",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+        "expected_candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+        "computed_candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5192
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_7eca8243"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t06",
+      "turn_idx": 6,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "boundary_operator_misspecification",
+      "candidate_sha256": null,
+      "resolved": true,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "The archived uniform Robin or zero-flux boundary rows suffice for the current campaign.",
+      "empirical_witness": "Zero-flux pulse RMSEs are 0.0273 and 0.0250, versus 0.1266 and 0.1070 for baseline Robin; nuisance projection barely reduces either discrepancy, and held-out affine calibration error is at most 1.41e-5 per channel.",
+      "causal_blanket_diagnosis": "Known pulse weights remove the source inversion ambiguity, and separate calibration sweeps make an omitted boundary term a better first explanation than sensor nonlinearity.",
+      "sublated_pivot": "Test nested endpoint row families, fitting either pulse alone and predicting the other.",
+      "pending_resolution_proposed_at_turn": 8,
+      "agent_claimed_probe": {
+        "turn": 8,
+        "command_preview": "python3 - <<'PY'\nfrom pathlib import Path\nsrc=Path('/tmp/hegel_continual_archive/beta_m98_v2_c02_batch_02_solver.py').read_text()\na=src.index('def _axis('); b=src.index('def _forward(',a)\nsrc=src[:a]+",
+        "stdout_preview": "\"\"\"Steady transport tomography with periodic walls and empirical rosette calibration.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, h):\n    \"\"\"Periodic diffusion with share"
+      },
+      "probe_support_status": "verified_gauge_and_scientific_probe_in_scope",
+      "resolved_at_turn": 8,
+      "resolved_candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+        "worker_process_isolated": true,
+        "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
+        "probe_code_digest": "ced8468fcd03de995dec4e18f901d1f5a12cca9afea20c667e9fdf698fbe03d7",
+        "public_input_digest": "ffc397f7846e7ac7ba8529d57c4a171c17d73426a70b292d51461c30ad6b549f",
+        "candidate_bundle_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "5992b25a51415f02acd3f88eb0ff99ed313d63960983e69d04b12540e0b7ed44",
+          "/holdout_task/public_batch.pkl": "ffc397f7846e7ac7ba8529d57c4a171c17d73426a70b292d51461c30ad6b549f",
+          "/holdout_task/validate_public_schema.py": "1124945efd35a28a7b97b2daae9f3447f319f05cf844c3089ddd0cfc94d0ef11",
+          "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1.33e-06,
+          "kkt_duality_gap": 9.7203e-06,
+          "weights_rel_l2": 5.15e-06
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "resolution_witness_scope_verified": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals"
+    }
+  ],
+  "nogood_resolution_events": [
+    {
+      "proposed_turn": 8,
+      "verified_turn": 8,
+      "resolved_nogood_ids": [
+        "ng_t06"
+      ],
+      "superseded_by": null,
+      "verified_candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+      "host_probe_receipt": {
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+        "worker_process_isolated": true,
+        "output_ipc_protocol": "pure_json_typed_array_rpc_no_pickle",
+        "probe_code_digest": "ced8468fcd03de995dec4e18f901d1f5a12cca9afea20c667e9fdf698fbe03d7",
+        "public_input_digest": "ffc397f7846e7ac7ba8529d57c4a171c17d73426a70b292d51461c30ad6b549f",
+        "candidate_bundle_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_asset_index.json": "5992b25a51415f02acd3f88eb0ff99ed313d63960983e69d04b12540e0b7ed44",
+          "/holdout_task/public_batch.pkl": "ffc397f7846e7ac7ba8529d57c4a171c17d73426a70b292d51461c30ad6b549f",
+          "/holdout_task/validate_public_schema.py": "1124945efd35a28a7b97b2daae9f3447f319f05cf844c3089ddd0cfc94d0ef11",
+          "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+        },
+        "verified_scope": "independent_box_simplex_kkt_certificate,quantitative_transport_field_and_weights_residuals",
+        "verified_claim_ids": [
+          "independent_box_simplex_kkt_certificate",
+          "quantitative_transport_field_and_weights_residuals"
+        ],
+        "unverified_scopes": [
+          "cross_epoch_parameter_persistence",
+          "unseen_regime_extrapolation"
+        ],
+        "scientific_invariants_verified": true,
+        "gauge_invariance_verified": true,
+        "measured_scientific_metrics": {
+          "field_rel_l2": 1.33e-06,
+          "kkt_duality_gap": 9.7203e-06,
+          "weights_rel_l2": 5.15e-06
+        },
+        "result": "verified_gauge_and_scientific_probe_in_scope"
+      },
+      "witness_kind": "host_controlled_typed_probe_receipt"
+    }
+  ],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "81c0c94202b356e0bb0581523709bc32862aa52f4f56965e931a67b92b232b4e",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_beta_m98_v2_c02_batch_03_7eca82430d76",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 4,
+    "exported_pure_functions": [
+      "unpack",
+      "_axis",
+      "_forward",
+      "_calibrate",
+      "_box_budget_qp",
+      "solve_batch"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": true,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 6,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 6,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 2,
+    "describe_skill_queries": [
+      "autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "7eca82430d76573230e04d090b1b78b9f0c5c5f4139faa482a8fd1a23b16bd11",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 1,
+      "declared_entrypoints": [
+        "solve_batch"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "batch_solver.py",
+          "final_file_sha256": "4f3c1fcf8d0e95aa5f07d577d5717a23ff58716f8b2bb37ee5ae92fd4f3570d4",
+          "public_entrypoints": [
+            "solve_batch"
+          ],
+          "effective_entrypoints": [
+            "solve_batch"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "batch_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_batch.pkl",
+      "/holdout_task/validate_public_schema.py",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json"
+    ],
+    "files_sha256": {
+      "/holdout_task/public_asset_index.json": "5992b25a51415f02acd3f88eb0ff99ed313d63960983e69d04b12540e0b7ed44",
+      "/holdout_task/public_batch.pkl": "ffc397f7846e7ac7ba8529d57c4a171c17d73426a70b292d51461c30ad6b549f",
+      "/holdout_task/validate_public_schema.py": "1124945efd35a28a7b97b2daae9f3447f319f05cf844c3089ddd0cfc94d0ef11",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5289,
+    "initial_user_payload_chars": 5212,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 13221
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 12,
+    "logical_agent_decision_calls": 12,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 12,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_054397c7.json",
+      "attempts_002_09fca640.json",
+      "attempts_003_315fb5f9.json",
+      "attempts_004_197b5ccc.json",
+      "attempts_005_93339ef1.json",
+      "attempts_006_f1fdd8ff.json",
+      "attempts_007_4c7b87f4.json",
+      "attempts_008_cc4dc58d.json",
+      "attempts_009_b40e5060.json",
+      "attempts_010_c34bce46.json",
+      "attempts_011_8ec1333c.json",
+      "attempts_012_06d46b4b.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 30,
+  "prompt_tokens": 301126,
+  "cached_tokens": 105600,
+  "completion_tokens": 10018,
+  "total_tokens": 311144,
+  "token_cost_proxy": 231944,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 231944,
+  "wall_ms": 333283.87,
+  "provenance_verified": true,
+  "terminal_record_sha256": "a70be45434b485c23c68fefb390d5c5b573521f6cdd7ff3101fec977185d95da",
+  "world_id": "beta_m98_v2_c02",
+  "cluster_id": "cluster_m98_v2_06_beta",
+  "family": "beta",
+  "stream_step": 3,
+  "causal_event": "C2_down",
+  "true_regime": "U0__D2",
+  "event_category": "downstream_discovery_2",
+  "execution_mode": "llm_synthesis_after_equal_tool_gate",
+  "pre_llm_probe_wall_ms": 6147.62,
+  "readonly_dependencies_sha256": {
+    "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+  },
+  "public_qualification_status": "public_gate_verified",
+  "calibration_update_receipt": {
+    "parent_receipts": {
+      "cal_node_p0": {
+        "selected_action": "AncestorReweight",
+        "version": 4,
+        "max_drift": 1.72e-05
+      },
+      "cal_node_p1": {
+        "selected_action": "AncestorReweight",
+        "version": 4,
+        "max_drift": 8.98e-06
+      }
+    },
+    "sentinel_p3_drift": 0.0
+  },
+  "empirical_coverage_receipts": [
+    {
+      "receipt_id": "ecov_c8ae3ace9bb26b3426a29337",
+      "new_binding_id": "bind_beta_m98_v2_c02_dn_b02",
+      "new_solver_sha256": "4f3c1fcf8d0e95aa5f07d577d5717a23ff58716f8b2bb37ee5ae92fd4f3570d4",
+      "old_binding_id": "bind_beta_m98_v2_c02_dn_b00",
+      "old_solver_sha256": "d86090fcb89458e504346c070bcb1066a0b2f72106445488aee798b94f3fae1f",
+      "witness_ids": [
+        "wit_src_beta_m98_v2_c02"
+      ],
+      "witness_input_sha256s": [
+        "129b63eafcaa726d7124274058dc69090893b133b9bdef961f4f5db5136e568d"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "constitutive_root_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "5c7b5f4e039bf5eb293b576a8f1bf6c37c0f31304062d721331968cb215faf48"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 6052.58,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true
+    },
+    {
+      "receipt_id": "ecov_e7d584cd32f6c2093b9146f6",
+      "new_binding_id": "bind_beta_m98_v2_c02_dn_b02",
+      "new_solver_sha256": "4f3c1fcf8d0e95aa5f07d577d5717a23ff58716f8b2bb37ee5ae92fd4f3570d4",
+      "old_binding_id": "bind_beta_m98_v2_c02_dn_b01",
+      "old_solver_sha256": "dd0ca2b76f7d6492fd18238fa6d2d479067a76024586e6a66e05fc71318d8fb7",
+      "witness_ids": [
+        "wit_beta_m98_v2_c02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "221ddefdf8c61230b1773faaad46a4ab1f12996287f9224c6571b3cab31be55a"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "constitutive_root_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "0514c2877cc0327c06d0651bde71a36a4972d79db94080ae512afc7392114f3b"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5650.25,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true
+    }
+  ],
+  "guard_induction_receipt": {
+    "accepted": true,
+    "attempts_used": 1,
+    "diagnosis": "Each guard is TRUE on all of its own positive witnesses and FALSE on every other supplied witness.",
+    "new_branch_guard": {
+      "all_of": [
+        {
+          "feature_name": "dn_stat_01_log_channel_0_mean",
+          "op": ">",
+          "threshold": 0
+        }
+      ]
+    },
+    "existing_branch_guards": {
+      "bind_beta_m98_v2_c02_dn_b00": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_02_log_channel_1_mean",
+            "op": "<",
+            "threshold": 0
+          }
+        ]
+      },
+      "bind_beta_m98_v2_c02_dn_b01": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_07_log_channel_6_mean",
+            "op": ">",
+            "threshold": 0
+          }
+        ]
+      }
+    },
+    "attempts_log": [
+      {
+        "attempt": 1,
+        "partition_check": {
+          "valid": true,
+          "reasons": []
+        }
+      }
+    ]
+  },
+  "pre_llm_trial_receipt": {
+    "arm": "Hegel_FactoredMechanismGraph",
+    "accepted_pre_llm": false,
+    "pre_llm_probes_used": 1,
+    "probe_wall_ms": 6147.62,
+    "upstream_selection_mode": "selected_unique_applicable",
+    "downstream_selection_mode": "selected_unique_applicable",
+    "selected_upstream_binding_id": "bind_beta_m98_v2_c02_up_b00",
+    "selected_downstream_binding_id": "bind_beta_m98_v2_c02_dn_b01",
+    "selected_canonical_algorithm_code": "\"\"\"Steady transport tomography for the zero-flux wall campaign.\"\"\"\n\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, h):\n    faces = (0.5 / h**2) * (kappa[:-1] + kappa[1:])\n    lower = -faces - np.maximum(velocity[1:], 0) / h\n    upper = -faces - np.maximum(-velocity[:-1], 0) / h\n    lower[-1] = -kappa[-1] / h**2\n    upper[0] = -kappa[0] / h**2\n    diag = np.empty_like(kappa, dtype=float)\n    diag[1:-1] = -lower[:-1] - upper[1:]\n    # Tracer pulses identify zero wall leakage on both axes.\n    diag[0] = -upper[0]\n    diag[-1] = -lower[-1]\n    return sparse.diags((lower, diag, upper), (-1, 0, 1), format='csc')\n\n\ndef _forward(study):\n    nx, ny = study['nx'], study['ny']\n    ax = _axis(study['kappa_x'], study['vel_x'], study['Lx'] / (nx-1))\n    ay = _axis(study['kappa_y'], study['vel_y'], study['Ly'] / (ny-1))\n    reaction = np.asarray(study['V_reaction_2d']).ravel(order='F')\n    operator = (sparse.kron(sparse.eye(ny), ax, format='csc')\n                + sparse.kron(ay, sparse.eye(nx), format='csc')\n                + sparse.diags(reaction, format='csc'))\n    ident = sparse.eye(nx * ny, format='csc')\n    sources = np.asarray(study['source_modes']).reshape(-1, nx * ny, order='F').T\n    ii, jj = np.asarray(study['sensor_ij']).T\n    rows = ii + nx * jj\n    blocks = []\n    for shift in study['mu_shifts']:\n        fields = splu(operator + shift * ident).solve(sources)\n        blocks.append(fields[rows])\n    return np.vstack(blocks), fields.T.reshape(-1, nx, ny, order='F')\n\n\ndef _calibrate(study):\n    sweeps = study['sensor_calibration_sweeps']\n    ref = np.asarray(sweeps['ref_rosette'])\n    raw = np.asarray(sweeps['raw_rosette'])\n    offset, *rows = np.linalg.lstsq(np.c_[np.ones(len(ref)), ref], raw, rcond=None)[0]\n    observation = np.asarray(study['y_obs_raw']).reshape(-1, 4)\n    return np.linalg.solve(np.asarray(rows).T, (observation - offset).T).T.ravel()\n\n\ndef _box_budget_qp(H, b, cap, total):\n    \"\"\"Feasible active-set minimization of 0.5*w.T@H@w - b.T@w.\"\"\"\n    n = len(b)\n    if total == 0 or total == n * cap:\n        w = np.full(n, 0 if total == 0 else cap, dtype=float)\n        g = H @ w - b\n        return w, float(g.min() if total == 0 else g.max())\n    w = np.full(n, total / n)\n    active = np.zeros(n, dtype=int)\n    tol = 1e-12\n    for _ in range(20 * n * n):\n        free = np.flatnonzero(active == 0)\n        g = H @ w - b\n        if free.size:\n            ones = np.ones(free.size)\n            inv_g, inv_one = np.linalg.solve(H[np.ix_(free, free)], np.vstack((g[free], ones)).T).T\n            nu = float(inv_g.sum() / inv_one.sum())\n            p = nu * inv_one - inv_g\n            to_bound = np.full(free.size, np.inf)\n            down, up = p < -tol, p > tol\n            to_bound[down] = -w[free[down]] / p[down]\n            to_bound[up] = (cap - w[free[up]]) / p[up]\n            j = np.argmin(to_bound)\n            if to_bound[j] < 1:\n                w[free] += max(0., to_bound[j]) * p\n                i = free[j]\n                active[i] = 1 if p[j] > 0 else -1\n                w[i] = cap if active[i] == 1 else 0.\n                continue\n            w[free] += p\n            g = H @ w - b\n        else:\n            nu = float((g[active == 1].max() + g[active == -1].min()) / 2)\n        # A lower bound needs g >= nu; an upper bound needs g <= nu.\n        violation = -active * (g - nu)\n        i = np.argmin(violation)\n        if violation[i] >= -tol:\n            return w, nu\n        active[i] = 0\n    raise RuntimeError('Box-budget active set did not converge')\n\n\ndef solve_batch(study: dict) -> dict:\n    S, last = _forward(study)\n    y = _calibrate(study)\n    Z = np.asarray(study['Z_nuisance'])\n    data = np.column_stack((S, y))\n    P = np.linalg.solve(Z.T @ Z + study['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\n    projected = data - Z @ (P @ data)\n    A, target = projected[:, :-1], projected[:, -1]\n    ridge, cap, total = (float(study[k]) for k in ('source_ridge', 'u_box', 'total_budget'))\n    H = A.T @ A + ridge * np.eye(S.shape[1])\n    w, nu = _box_budget_qp(H, A.T @ target, cap, total)\n    residual = A @ w - target\n    value = float(0.5 * (residual @ residual + ridge * (w @ w)))\n    g = A.T @ residual + ridge * w\n    lower = np.maximum(0, g - nu)\n    upper = np.maximum(0, nu - g)\n    bound = float(value - g @ w + nu * total - cap * upper.sum())\n    return {'weights': w, 'terminal_field': np.tensordot(w, last, axes=(0, 0)),\n            'kkt_certificate': {'weights': w.tolist(), 'nu_sum': nu,\n                                'lam_lower': lower, 'lam_upper': upper,\n                                'primal_objective': value, 'dual_lower_bound': bound}}\n",
+    "selected_canonical_entrypoint": "solve_batch",
+    "conflict_locus_diagnosis": {
+      "locus": "downstream_constitutive",
+      "diagonal_ols_r2": 1.0,
+      "off_diagonal_corr_max": 0.30362,
+      "chosen_up_holdout_rmse": 0.0,
+      "upstream_observables": {
+        "up_stat_01_diagonal_ols_r2": 1.0,
+        "up_stat_02_off_diagonal_corr_max": 0.30362,
+        "up_stat_03_cal_frobenius_rms": 0.934124,
+        "up_stat_04_cal_row_count": 80.0
+      }
+    },
+    "upstream_tested_witness": {
+      "witness_id": "wit_0004_bind_beta_m98_v2_c02_up_b00_4c4c5471",
+      "binding_id": "bind_beta_m98_v2_c02_up_b00",
+      "solver_code_sha256": "132e2ac113aab6679f2a70af5563e123f5bd40ef9f3d57c01ffe0c020ba1e185",
+      "parent_parameter_versions": {
+        "cal_node_p0": 4,
+        "cal_node_p1": 4
+      },
+      "public_input_sha256": "4c4c54719ed986e271b1e9df3fb0a9c88d9953f3a56d89153fc67272d02cc2a6",
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "result": "passed",
+      "failure_kind": "none",
+      "public_structural_features": {
+        "up_stat_01_diagonal_ols_r2": 1.0,
+        "up_stat_02_off_diagonal_corr_max": 0.30362,
+        "up_stat_03_cal_frobenius_rms": 0.934124,
+        "up_stat_04_cal_row_count": 80.0
+      },
+      "probe_wall_ms": 0.0,
+      "witness_content_sha256": "240e1aa6ea8f3cfe98b83d17c76adce919d825d6e8e14a1dec58c45692224022"
+    },
+    "downstream_tested_witness": {
+      "witness_id": "wit_0005_bind_beta_m98_v2_c02_dn_b01_4c4c5471",
+      "binding_id": "bind_beta_m98_v2_c02_dn_b01",
+      "solver_code_sha256": "dd0ca2b76f7d6492fd18238fa6d2d479067a76024586e6a66e05fc71318d8fb7",
+      "parent_parameter_versions": {
+        "constitutive_root_dn": 1
+      },
+      "public_input_sha256": "4c4c54719ed986e271b1e9df3fb0a9c88d9953f3a56d89153fc67272d02cc2a6",
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "result": "failed",
+      "failure_kind": "scientific_or_numerical",
+      "public_structural_features": {
+        "dn_stat_01_log_channel_0_mean": 2.551082,
+        "dn_stat_02_log_channel_1_mean": 1.158134,
+        "dn_stat_03_log_channel_2_mean": -0.250096,
+        "dn_stat_04_log_channel_3_mean": 0.09121,
+        "dn_stat_05_log_channel_4_mean": 1.118984,
+        "dn_stat_06_log_channel_5_mean": -0.239168,
+        "dn_stat_07_log_channel_6_mean": -0.329606,
+        "dn_stat_08_log_channel_7_mean": 1.141188
+      },
+      "probe_wall_ms": 6147.62,
+      "witness_content_sha256": "a5b5d512333f6abc5dc0f2cbcb2a0da467139141b9e521f361f5557d19169fc1"
+    },
+    "upstream_observables": {
+      "up_stat_01_diagonal_ols_r2": 1.0,
+      "up_stat_02_off_diagonal_corr_max": 0.30362,
+      "up_stat_03_cal_frobenius_rms": 0.934124,
+      "up_stat_04_cal_row_count": 80.0
+    },
+    "downstream_observables": {
+      "dn_stat_01_log_channel_0_mean": 2.551082,
+      "dn_stat_02_log_channel_1_mean": 1.158134,
+      "dn_stat_03_log_channel_2_mean": -0.250096,
+      "dn_stat_04_log_channel_3_mean": 0.09121,
+      "dn_stat_05_log_channel_4_mean": 1.118984,
+      "dn_stat_06_log_channel_5_mean": -0.239168,
+      "dn_stat_07_log_channel_6_mean": -0.329606,
+      "dn_stat_08_log_channel_7_mean": 1.141188
+    },
+    "probe_result": {
+      "accepted": false,
+      "setup_ok": true,
+      "setup_exit_code": 0,
+      "schema_valid": true,
+      "schema_exit_code": 0,
+      "timed_out": false,
+      "schema_stdout": "{\"schema_valid\": true, \"errors\": []}\n",
+      "schema_stderr": "",
+      "candidate_bundle_sha256": "a5afcd03bafddb4903da44417428134efcaf27d498d433dee4554d28d7816bae",
+      "candidate_raw_sha256": "89314abb8ba9753f486524606d5bff6c0fb2e2a61d0ecf2626f3a9acbd41d5d8",
+      "readonly_dependencies_sha256": {
+        "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+      },
+      "scientific_probe_receipt": null
+    },
+    "reason": "composed_bind_beta_m98_v2_c02_up_b00_x_bind_beta_m98_v2_c02_dn_b01_failed_downstream_constitutive_scientific_or_numerical"
+  },
+  "provenance_dag_verification": {
+    "valid": true,
+    "decision_count": 33,
+    "terminal_record_sha256": "3e509a54868ff0aedb5db4a9dcc07eea9bf4769df7fd22413612fa4ae69c23a1",
+    "verified_measurement_cost": 0.0,
+    "verified_compute_cost": 11.7951,
+    "verified_composite_cost": 0.589755,
+    "verified_total_tokens": 311144
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/batch_solver.py": "FILE:5192"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_w_rel_l2": 5.1e-06,
+      "max_field_rel_l2": 1.1e-06,
+      "max_kkt_gap": 8.714e-06,
+      "student_elapsed_sec": 0.0174,
+      "instance_diagnostics": [
+        {
+          "seed": 942311,
+          "w_rel": 8e-07,
+          "f_rel": 0.0,
+          "kkt_gap": 8.68e-06
+        },
+        {
+          "seed": 942312,
+          "w_rel": 5.1e-06,
+          "f_rel": 1.1e-06,
+          "kkt_gap": 8.714e-06
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.044819,
+        "import_cpu_sec": 0.04452,
+        "candidate_call_wall_sec": 0.007348,
+        "candidate_call_cpu_sec": 0.0073,
+        "ipc_and_codec_wall_sec": 0.097145,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.012968,
+        "verifier_and_gt_cpu_sec": 0.018474,
+        "total_supervisor_wall_sec": 0.16228
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_w_rel_l2\": 5.1e-06, \"max_field_rel_l2\": 1.1e-06, \"max_kkt_gap\": 8.714e-06, \"student_elapsed_sec\": 0.0174, \"instance_diagnostics\": [{\"seed\": 942311, \"w_rel\": 8e-07, \"f_rel\": 0.0, \"kkt_gap\": 8.68e-06}, {\"seed\": 942312, \"w_rel\": 5.1e-06, \"f_rel\": 1.1e-06, \"kkt_gap\": 8.714e-06}]}\n__HEGEL_VERIFIER_AUTH_b72674b80c3fbea0b88c707a9e894c3f__:{\"strict_pass\": true, \"reward\": 1.0, \"max_w_rel_l2\": 5.1e-06, \"max_field_rel_l2\": 1.1e-06, \"max_kkt_gap\": 8.714e-06, \"student_elapsed_sec\": 0.0174, \"instance_diagnostics\": [{\"seed\": 942311, \"w_rel\": 8e-07, \"f_rel\": 0.0, \"kkt_gap\": 8.68e-06}, {\"seed\": 942312, \"w_rel\": 5.1e-06, \"f_rel\": 1.1e-06, \"kkt_gap\": 8.714e-06}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.044819, \"import_cpu_sec\": 0.04452, \"candidate_call_wall_sec\": 0.007348, \"candidate_call_cpu_sec\": 0.0073, \"ipc_and_codec_wall_sec\": 0.097145, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.012968, \"verifier_and_gt_cpu_sec\": 0.018474, \"total_supervisor_wall_sec\": 0.16228}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 4413.01,
+    "failure_taxonomy": "PASSED_ALL_CHECKS",
+    "readonly_dependencies_sha256": {
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "86e599d27698c40479a6cdb924062b5bc1cea0b575baa6b8c3af9d19ac0abf28"
+    }
+  }
+}

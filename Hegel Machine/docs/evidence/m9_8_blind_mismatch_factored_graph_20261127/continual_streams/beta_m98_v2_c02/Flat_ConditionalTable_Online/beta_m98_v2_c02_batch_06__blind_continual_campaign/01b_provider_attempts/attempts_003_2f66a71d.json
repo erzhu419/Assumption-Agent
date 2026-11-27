@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f66a71d1c3649778784f281faf3dbd6",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_ConditionalTable_Online__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:06.799913+00:00",
+  "ended_at_utc": "2026-11-27T14:44:30.268406+00:00",
+  "request_sha256": "cdb84051bc957900048e1bd9f94827e719c0c85029f90c1a66394d59b1a32fd0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24474,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19524,
+    "cached_tokens": 9600,
+    "completion_tokens": 765
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo \\\"=== $f\\\"; sed -n '1,55p' \\\"$f\\\" | grep -E '^(def |    (ax |ay |diag\\\\[|lower\\\\[|upper\\\\[|return |.*sweeps\\\\[))'; done; sed -n '/^def _calibrate/,/^def _box_budget_qp/p' beta_m98_v2_c02_batch_04_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport glob,importlib.util,pickle,numpy as np\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; X=np.c_[np.ones(len(c['ref_rosette'])),c['ref_rosette']]; Y=np.asarray(c['raw_rosette']); B=np.linalg.lstsq(X,Y,rcond=None)[0]; print('affine coefficients:',B.round(6)); E=Y-X@B; print('affine per-channel RMS:',np.sqrt(np.mean(E**2,axis=0))); print('single bank:',[(k,np.shape(v),np.asarray(v).ravel()[:8]) for k,v in c['single_bank_sweeps'].items()]); print('pulse weight sums:',[sum(p['w_pulse']) for p in item['campaign_diagnostics']]); Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nfor f in sorted(glob.glob('*solver.py')):\\n spec=importlib.util.spec_from_file_location('archive_solver',f); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); S,U=m._forward(s); print(f)\\n for p in item['campaign_diagnostics']:\\n  st=dict(s,y_obs_raw=p['y_pulse_raw']); y=m._calibrate(st); e=S@p['w_pulse']-y; print('  pulse rms raw-calibrated, nuisance-profiled, by shift:', np.sqrt(np.mean(e**2)), np.sqrt(np.mean((e-Z@(P@e))**2)), np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived wall and calibration combinations -> H2 selection by direct pulse RMS across shifts; comparative residuals are not yet available.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use archived batch 03 solely because the preliminary gate cited row 03\",\"rejected_reason\":\"The gate reported a failure, not evidence that batch 03 has the correct wall stencil or calibration.\"}],\"rationale\":\"Measure forward error on the known tracer weights rather than letting tomography refit the source weights to hide a wrong boundary. Compare error before and after nuisance profiling, and inspect sweep residuals separately to distinguish wall mismatch from calibration mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "aa3c65587c21f865530fa98c3e9952d679838667add52ebe385f21cb9425f24f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23427.85,
+      "usage_known": true,
+      "prompt_tokens": 19524,
+      "cached_tokens": 9600,
+      "completion_tokens": 765
+    }
+  ]
+}

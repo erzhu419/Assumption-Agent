@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6001f478cf874f1697c446aa7cb33cb5",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:31:04.332650+00:00",
+  "ended_at_utc": "2026-11-27T14:31:34.675747+00:00",
+  "request_sha256": "c2f8e8d376430d9ce901a46d11bcf019a8476935a682cff833b93b9e950aea70",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32397,
+    "cached_tokens": 9600,
+    "completion_tokens": 1083
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; cal=d['calibration_load_cells']; raw=cal['bridge_raw']; true=cal['true_channel_loads']; t=d['eval_times']; tr,te=d['train'],d['test']; q=item['campaign_diagnostics']\\nbase=np.c_[np.ones(len(raw)),raw]; u,v=np.triu_indices(4); quad=np.c_[base,raw[:,u]*raw[:,v]]\\ndef rms(a): return np.sqrt(np.mean(a*a))\\n# Axial stress tails are the portions of the sweep where nonlinear transfer would matter most.\\norder=np.argsort(true.sum(axis=1)); tails=np.array_split(order,5)\\nfor name,A in [('affine',base),('quadratic',quad)]:\\n scores=[]\\n for fold in tails:\\n  keep=np.ones(len(raw),bool); keep[fold]=False\\n  E=A[fold]@np.linalg.lstsq(A[keep],true[keep],rcond=None)[0]-true[fold]\\n  scores.append([rms(E),rms(E.sum(axis=1))])\\n print(name,'stress-range holdouts: worst channel RMS, worst total-stress RMS, low/high-tail total RMS',np.round([*np.max(scores,axis=0),scores[0][1],scores[-1][1]],8))\\n# Measure how much the unconstrained quadratic terms could move the deployment prediction.\\nfit=np.linalg.lstsq(quad,true,rcond=None)[0].sum(axis=1); br=m._bridge(cal); p=te['hold_channel_raw']; delta=np.c_[np.ones(len(p)),p,p[:,u]*p[:,v]]@fit-m._loads(te,br)[1]\\nn=len(tr['strain_0']); x=m._features(tr,te); tau,th=m._fit(x[:n],*m._loads(tr,br),d['past_dt'],t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('quadratic bridge substitution max deployment strain/rate shifts',np.max(abs(delta[:,None]*(-np.expm1(-t[:,None]/tau)@th[:2]))),np.max(abs(delta*np.sum(th[:2]/tau))))\\n# Check whether the observed diagnostic bottleneck is concentrated in imputation or large stress.\\nif q is not None:\\n xq=m._features(q,q)[:len(q['lab_id'])]; strain,rate=m._chamber_prediction(q,xq,br,t,tau,th); es=strain-q['strain_curves_obs']; er=rate-q['instant_rate_obs']; h=m._loads(q,br)[1]; missing=np.isnan(q['coupon_features_raw']).any(axis=1); large=abs(h)>=np.median(abs(h))\\n for name,mask in [('complete',~missing),('imputed',missing),('large absolute hold',large),('smaller absolute hold',~large)]:\\n  if mask.any(): print('chamber',name,mask.sum(),'worst horizon strain RMSE and rate RMSE',np.max(np.sqrt(np.mean(es[mask]**2,axis=0))),rms(er[mask]))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine bridge plus chamber memory reset and logarithmic drift -> H2: promote a nonlinear bridge only if it improves stress-tail calibration and materially affects predictions; current worst-lab diagnostic RMSE is 0.01527 for strain and 0.01150 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the chamber history and rational-drift comparisons\",\"rejected_reason\":\"The previous held-out-lab audit already showed all tested corrections worsened both outputs.\"}],\"rationale\":\"Test a distinct remaining failure mode: an affine bridge can look accurate overall while failing at the stress extremes. Promote the quadratic model only if held-out calibration and deployment sensitivity justify it. Split diagnostic errors by missingness and stress magnitude to see which slice actually limits accuracy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "61baa147082137eb261483b2163d20f66c8fa6ad2145c0364dab77f1acb7c1e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30297.77,
+      "usage_known": true,
+      "prompt_tokens": 32397,
+      "cached_tokens": 9600,
+      "completion_tokens": 1083
+    }
+  ]
+}

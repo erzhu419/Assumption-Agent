@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "44e030a76ed74de594b1d182d27fdc19",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:51:05.839071+00:00",
+  "ended_at_utc": "2026-11-27T14:51:47.257080+00:00",
+  "request_sha256": "7c5bebdf1237a44770f06f0bb180b638b5d082d417f7b1a28b6bcd96a6b0f56a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40394,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25120,
+    "cached_tokens": 11136,
+    "completion_tokens": 1682
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, itertools, json, pickle\\nimport numpy as np\\nfrom scipy.stats import spearmanr\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; truth=c['true_channel_loads']; target=truth.sum(axis=1)\\nprint('calibration rows',len(raw),'sweep structure',[(k,getattr(v,'shape',None)) for k,v in c['single_channel_sweeps'].items()] if isinstance(c['single_channel_sweeps'],dict) else type(c['single_channel_sweeps']).__name__)\\nbase=np.column_stack((np.ones(len(raw)),raw)); q=raw/np.max(np.abs(raw),axis=0); pairs=list(itertools.combinations(range(4),2)); diffs=[q[:,i]+sign*q[:,j] for i,j in pairs for sign in (-1,1)]\\n# Positive fixed denominator families span shallow to strong saturation; choose inside each outer fold.\\naxes=[*q.T,*diffs,q.sum(axis=1)/2]; options=[base]; labels=['affine']\\nfor name, columns in [('pair squares',[v*v for v in diffs]),('three-channel products',[np.prod(q[:,idx],axis=1) for idx in itertools.combinations(range(4),3)])]:\\n    labels.append(name); options.append(np.column_stack([base,*columns]))\\nfor j,v in enumerate(axes):\\n    for a in (.05,.2,1.):\\n        labels.append(f'rational axis {j}, a={a}'); options.append(base/(1+a*v[:,None]**2))\\n# Hold out whole stress-magnitude bands, including the boundary band.\\nband=np.empty(len(raw),int); order=np.argsort(np.max(np.abs(truth),axis=1)); band[order]=np.arange(len(raw))*5//len(raw)\\ndef residual(A,k,j): return A[j]@np.linalg.lstsq(A[k],target[k],rcond=None)[0]-target[j]\\nfor b in range(5):\\n    test=band==b; train=~test\\n    def inner(A):\\n        return sum(np.sum(residual(A,train&(band!=h),band==h)**2) for h in range(5) if h!=b)\\n    extras=[min(range(1,len(options)),key=lambda i:inner(options[i])),min(range(3,len(options)),key=lambda i:inner(options[i]))]\\n    print('cal band',b,'axial RMSE',[(labels[i],round(float(np.sqrt(np.mean(residual(options[i],train,test)**2))),8)) for i in [0,*extras]])\\ntr,te=d['train'],d['test']; x=m._features(tr,te)[:len(tr['lab_id'])]; past,hold=m._loads(tr,m._bridge(c)); dt=d['past_dt']; t=d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; ec=np.empty_like(y); er=np.empty_like(r)\\nfor lab in np.unique(tr['lab_id']):\\n    j=tr['lab_id']==lab; k=~j; tau,w=m._fit(x[k],past[k],hold[k],dt,t,y[k],r[k]); A,B=m._design(x[j],past[j],hold[j],dt,t,tau); ec[j]=(A@w).reshape(j.sum(),len(t))-y[j]; er[j]=B@w-r[j]\\n    print('lab',lab,'signed curve/rate bias',round(float(np.median(ec[j])),5),round(float(np.median(er[j])),5),'terminal bias',round(float(np.median(ec[j,-1])),5))\\nfor s in np.unique(tr['stratum']):\\n    j=tr['stratum']==s; print('stratum',s,'n',j.sum(),'curve/rate p90',round(float(np.quantile(abs(ec[j]),.9)),5),round(float(np.quantile(abs(er[j]),.9)),5))\\nlab=tr['lab_id']; telemetry=tr['aux_chamber_telemetry'];\\ndef center(a): return a-np.array([np.median(a[lab==i],axis=0) for i in lab])\\nfor name,e in [('terminal strain',ec[:,-1]),('initial rate',er)]:\\n    print(name,'telemetry Spearman pooled/within-lab',[(round(float(spearmanr(v,e).statistic),3),round(float(spearmanr(center(v),center(e)).statistic),3)) for v in telemetry.T])\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: log=json.load(f)\\nfor entry in log: print('apparatus metadata',{k:v for k,v in entry.items() if k!='facility_telemetry_trace'})\\nPY\\n tail -36 /tmp/hegel_continual_archive/alpha_m98_v2_c04_batch_04_solver.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine bridge and archived benchtop fallback → H2: revise only if blocked calibration or held-out coupon residuals support a missing term; current worst-lab 90th-percentile errors are 0.0229 for strain and 0.0129 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay states, Fokker–Planck/HJB operators, or classification accuracy\",\n      \"rejected_reason\": \"The task has no relay, stochastic control model, or classification labels. The relevant confounding check is whether continuous prediction residuals show systematic lab or telemetry effects.\"\n    }\n  ],\n  \"rationale\": \"Hold out calibration magnitude bands, including the sweep boundary, and select nonlinear challengers inside the outer folds. This can uncover bridge saturation missed by leave-one-sweep-out checks. Inspect signed held-out residuals by lab and errors by stratum; compare pooled and within-lab telemetry associations to see whether a nuisance correction warrants validation. Neither check can establish blind chamber accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5efdbd2a2a9aaaee8c80390f15b3a87aad2d6b3caa4ab9bd43df5dce6595bda6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41379.67,
+      "usage_known": true,
+      "prompt_tokens": 25120,
+      "cached_tokens": 11136,
+      "completion_tokens": 1682
+    }
+  ]
+}

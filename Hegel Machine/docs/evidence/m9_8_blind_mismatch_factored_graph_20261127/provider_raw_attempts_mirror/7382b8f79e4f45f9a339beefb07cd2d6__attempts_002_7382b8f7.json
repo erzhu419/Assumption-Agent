@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7382b8f79e4f45f9a339beefb07cd2d6",
+  "call_seq": 2,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:23.443725+00:00",
+  "ended_at_utc": "2026-11-27T14:39:43.487062+00:00",
+  "request_sha256": "ff17c44d49d6411361fae50abc6c59a222225b26c978d1ed25247ed136043567",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 13566,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15762,
+    "cached_tokens": 0,
+    "completion_tokens": 679
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/'\\na=json.load(open(p+'archive_apparatus_log.json')); print('APPARATUS', type(a).__name__); print(json.dumps(a,indent=1)[:14500]); print('MANIFEST',open(p+'archive_manifest.json').read())\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print('KEYS',list(s)); print('OBS',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0)); print('SWEEP EXAMPLES index/ref/raw');\\nfor i in range(len(x)):\\n if i<12 or np.max(np.abs(y[i]))>4 or np.count_nonzero(x[i])<2: print(i,np.round(x[i],5),np.round(y[i],5))\\nb=c['single_bank_sweeps'];print('BANK', np.round(np.c_[b['bank_id'],b['ref_signal'],b['raw_readout']],5))\\nPY\\nprintf '\\\\nDOWNSTREAM CONTRACT\\\\n'; grep -nE 'sweep|pulse|y_obs|nuisance|def ' _verified_downstream.py; printf '\\\\nARCHIVE CALIBRATION SYMBOLS\\\\n'; grep -inE 'tanh|sweep|rosette|pulse|calib' /tmp/hegel_continual_archive/*solver.py | head -45\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy IRLS multivariate row weights regression outliers' | head -7\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 coupled saturation with sparse EMI spikes; the public sweep has 80 rows and raw magnitudes up to 13.66, but held-out calibration error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a direct inverse to all raw sweep rows\",\n      \"rejected_reason\": \"Large raw spikes would be high-leverage predictors; a forward fit keeps the clean references on the predictor side.\"\n    }\n  ],\n  \"rationale\": \"Compare the apparatus entries for a regime change, and inspect zero, single-channel, and extreme sweep rows to distinguish channel coupling and saturation from EMI. The observation ranges determine whether inverse validation needs an extrapolation slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "4f147c7988384262d57a245d441c7e93079bffdce8aa950f7f00693ccdeb006f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20000.19,
+      "usage_known": true,
+      "prompt_tokens": 15762,
+      "cached_tokens": 0,
+      "completion_tokens": 679
+    }
+  ]
+}

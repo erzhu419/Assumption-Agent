@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea36f2576d0a42b5b26dc8a179807c7f",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:03:21.532243+00:00",
+  "ended_at_utc": "2026-11-27T15:04:01.386539+00:00",
+  "request_sha256": "c5671710937fc582d93aaec24c89e88739336c37fb5d433534c5e65a5b389da3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 83947,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42167,
+    "cached_tokens": 11136,
+    "completion_tokens": 1638
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ns = s.replace('def solve_batch(dataset: dict) -> dict:', '''def _chamber(hold, features, times, taus, theta):\\n    # The chamber starts from a reset memory state and creeps logarithmically.\\n    kernels = -np.expm1(-times[:, None] / taus)\\n    drift = features @ theta[2:]\\n    strain = hold[:, None] * (kernels @ theta[:2]) + drift[:, None] * np.log1p(times)\\n    rate = hold * np.sum(theta[:2] / taus) + drift\\n    return strain, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:''')\\na = s.index('    basis =', s.index('def solve_batch('))\\ns = s[:a] + '''    strain, rate = _chamber(test[1], test[2], times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': te['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}\\n'''\\np.write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['campaign_diagnostics']\\nout = m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nc = d['calibration_load_cells']\\nload, raw = c['true_channel_loads'], c['bridge_raw']\\nraw_oof = np.empty(len(load))\\nfor take in np.array_split(np.random.default_rng(0).permutation(len(load)), 5):\\n    keep = np.ones(len(load), dtype=bool)\\n    keep[take] = False\\n    q = m._calibration({'true_channel_loads': load[keep], 'bridge_raw': raw[keep]})\\n    raw_oof[take] = np.max(abs(m._bridge_basis(load[take]) @ q - raw[take]), axis=1)\\nprint('Bridge held-out max-channel residual median/p90:', np.quantile(raw_oof, [.5, .9]))\\nassert np.quantile(raw_oof, .9) < .002\\nq = m._calibration(c)\\n# Verification coupons use their own reference panel and pooled imputation;\\n# deployment uses the specified joint train/test panel and cell-balanced imputation.\\nfeat = m._features(g, g)[len(g['lab_id']):]\\nmissing = np.isnan(g['coupon_features_raw'])\\nfeat = np.where(missing, np.nanmean(np.where(missing, np.nan, feat), axis=0), feat)\\nX = np.c_[np.ones(len(feat)), feat]\\nH = m._stress(g['hold_channel_raw'], q)\\nT = np.asarray(d['eval_times'])\\ncurve, rate = m._chamber(H, X, T, tau, theta)\\nce = abs(curve + g['strain_0'][:, None] - g['strain_curves_obs'])\\nre = abs(rate - g['instant_rate_obs'])\\ndef worst_lab(ce, re, ids):\\n    return np.max([[np.quantile(ce[ids == lab], .9), np.quantile(re[ids == lab], .9)] for lab in np.unique(ids)], axis=0)\\nw = worst_lab(ce, re, g['lab_id'])\\nprint('Fixed chamber law, worst verification lab p90 (strain, rate):', w)\\nassert max(w) < .01\\nprint('Fixed chamber law, worst verification horizon p90 strain:', np.max(np.quantile(ce, .9, axis=0)))\\nfor flag in (False, True):\\n    rows = missing.any(axis=1) == flag\\n    print('Verification missing features:', flag, 'n:', rows.sum(), 'max strain/rate:', ce[rows].max(), re[rows].max())\\ntr, _ = m._prepare(d)\\ns = d['train']\\ny = np.c_[s['strain_curves_obs'] - s['strain_0'][:, None], s['instant_rate_obs']]\\ne = np.empty_like(y)\\nfor lab in np.unique(s['lab_id']):\\n    rows = s['lab_id'] == lab\\n    t, b = m._fit(tuple(v[~rows] for v in tr), d['past_dt'], T, y[~rows])\\n    e[rows] = abs(m._design(tuple(v[rows] for v in tr), d['past_dt'], T, t) @ b - y[rows])\\nprint('Benchtop refit, worst held-out lab p90 (strain, rate):', worst_lab(e[:, :-1], e[:, -1], s['lab_id']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 rounded two-exponential chamber drift -> H2 reset memory with unit-scale log1p drift; worst verification-lab p90 errors fell from 0.1813/0.1172 to 0.0063/0.0056 for strain/rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit free logarithmic gain and time scale\",\n      \"rejected_reason\": \"Both stayed near unity across lab folds, and the fixed law achieved essentially the same worst-lab errors.\"\n    }\n  ],\n  \"rationale\": \"Implement the fixed law and verify the exact artifact in an isolated process. Held-out bridge residuals would reveal an unstable calibration fit; chamber lab and missing-feature slices would reveal a waveform or panel mismatch; benchtop lab refits quantify uncertainty in the shared material estimate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "d5f20e3b6e2a2d43511287ec873c093dbb43c950f99cd85e2ceffcd6df16826e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39809.22,
+      "usage_known": true,
+      "prompt_tokens": 42167,
+      "cached_tokens": 11136,
+      "completion_tokens": 1638
+    }
+  ]
+}

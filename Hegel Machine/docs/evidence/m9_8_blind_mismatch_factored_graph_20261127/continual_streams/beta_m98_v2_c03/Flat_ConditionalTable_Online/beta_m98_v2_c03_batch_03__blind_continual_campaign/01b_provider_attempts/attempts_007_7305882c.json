@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7305882c5cd64af0aaacac8f177a8fde",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:14.322420+00:00",
+  "ended_at_utc": "2026-11-27T14:34:38.847430+00:00",
+  "request_sha256": "03ecfe4cec12424c99e25de916f66c9c465da77d97187b2690bd0db4bfd0efaf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42723,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25584,
+    "cached_tokens": 0,
+    "completion_tokens": 899
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '1,55p' /holdout_task/batch_solver.py\\ncat > /tmp/calibration_audit.py <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; sw=s['sensor_calibration_sweeps']; X,Y=sw['ref_rosette'],sw['raw_rosette']; S,U=m._forward(s)\\nprint('study keys:', sorted(s)); print('nuisance column norms:',np.linalg.norm(s['Z_nuisance'],axis=0))\\nfor name in ('diagonal','affine','quadratic'):\\n    q=np.triu_indices(4); pairs=lambda x:x[:,q[0]]*x[:,q[1]]\\n    def basis(x): return np.c_[np.ones(len(x)),x,pairs(x)] if name=='quadratic' else np.c_[np.ones(len(x)),x]\\n    def fit(idx):\\n        B=basis(X[idx]); coef=np.linalg.lstsq(B,Y[idx],rcond=None)[0]\\n        if name=='diagonal':\\n            coef[:]=0\\n            for j in range(4): coef[[0,j+1],j]=np.linalg.lstsq(B[:,[0,j+1]],Y[idx,j],rcond=None)[0]\\n        return coef\\n    errors=[]; pulses=[]\\n    for ids in np.array_split(np.arange(len(X)),5):\\n        c=fit(np.setdiff1d(np.arange(len(X)),ids)); errors.append(np.sqrt(np.mean((basis(X[ids])@c-Y[ids])**2,axis=0)))\\n        for p in i['campaign_diagnostics']:\\n            x=(S@p['w_pulse']).reshape(-1,4); e=basis(x)@c-p['y_pulse_raw'].reshape(-1,4); pulses.append(np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\n    print(name,'held sweep max channel RMS',np.max(errors),'independent tracer max shift RMS in raw units',np.max(pulses))\\nprint('current calibrated pulse worst shift RMS', max(np.max(np.sqrt(np.mean((S@p['w_pulse']-m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))).reshape(len(s['mu_shifts']),-1)**2,axis=1))) for p in i['campaign_diagnostics']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/calibration_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 periodic closure with archived calibration method -> H2 retain the closure and test calibration complexity on held-out sweeps and independent pulses; current worst pulse-by-shift RMSE is 9.02e-7.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply classifier or relay stress tests\",\"rejected_reason\":\"This is a continuous steady-state inversion with no class labels or relay state; the applicable nuisance check is regression profiling.\"}],\"rationale\":\"Compare diagonal, affine, and pairwise-quadratic calibration on real held-out sweeps and independent tracer measurements. Change calibration only if the comparison shows a meaningful transfer gain; confirm the unchanged solver still satisfies the schema in isolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6a10eb812aa3270954d25c42a52565ac963da3f2f3a109931fafaabb85fe248a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24486.55,
+      "usage_known": true,
+      "prompt_tokens": 25584,
+      "cached_tokens": 0,
+      "completion_tokens": 899
+    }
+  ]
+}

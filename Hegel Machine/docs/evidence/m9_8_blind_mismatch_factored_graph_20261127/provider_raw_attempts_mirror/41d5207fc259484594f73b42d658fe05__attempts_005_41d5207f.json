@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41d5207fc259484594f73b42d658fe05",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:12.976966+00:00",
+  "ended_at_utc": "2026-11-27T14:41:48.220404+00:00",
+  "request_sha256": "ea211c4cb9fa1149b88903c61e491759e18e610ac6c155f9c9185a4f994360d4",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41356,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25972,
+    "cached_tokens": 9600,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _inverse, calibrate_upstream\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nC=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']\\naxis=np.count_nonzero(X,axis=1)<2\\nrng=np.random.default_rng(21); groups=np.array_split(rng.permutation(len(X)),8)\\nforward=np.empty(len(X)); errors=np.full_like(X,np.nan)\\nfor te in groups:\\n    tr=np.setdiff1d(np.arange(len(X)),te); b=_fit_bridge(X[tr],Y[tr]); forward[te]=np.linalg.norm(_basis(X[te])@b-Y[te],axis=1)\\n    clean=te[forward[te]<0.05]; errors[clean]=_inverse(Y[clean],b)-X[clean]\\nclean=forward<0.05\\nprint('OOF spike separation: clean max',forward[clean].max(),'excluded errors',np.round(forward[~clean],4).tolist())\\nfor name, mask in [('zero/axis',axis),('mixed',~axis),('outer',np.max(np.abs(X),axis=1)>1.4)]:\\n    err=errors[mask&clean]; print(name,'n',len(err),'RMSE per channel',np.round(np.sqrt(np.mean(err**2,axis=0)),7),'max abs',np.max(np.abs(err)))\\nassert np.max(np.abs(errors[clean]))<0.002, 'Held-out inversion exceeded the noise-scale margin or chose a wrong root'\\nb=_fit_bridge(X,Y)\\nassert np.count_nonzero(b[9:15])>0 and np.count_nonzero(b[15:])>0\\nout=calibrate_upstream(D); norm=out['calibration_load_cells']; sw=norm['single_channel_sweeps']\\nassert np.array_equal(norm['bridge_raw'],C['true_channel_loads']) and not np.shares_memory(norm['bridge_raw'],C['true_channel_loads'])\\nassert np.array_equal(sw['cmd_stress'],sw['true_stress']) and not np.shares_memory(sw['cmd_stress'],sw['true_stress'])\\nassert calibrate_upstream(dict(D,chamber_verification_trials=None))['chamber_verification_trials'] is None\\nchamber=calibrate_upstream(dict(D,chamber_verification_trials=D['test']))['chamber_verification_trials']\\nfor split in ('train','test'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        a=out[split][key]; raw=D[split][key]; x=a.reshape(-1,4)\\n        assert a.shape==raw.shape and not np.shares_memory(a,raw)\\n        err=np.max(np.abs(_basis(x)@b-raw.reshape(-1,4)))\\n        print(split,key,'reprojection max',err,'load minima/maxima',np.round(np.stack((x.min(0),x.max(0))),3).tolist())\\n        assert err<1e-9\\n        if split=='test': assert np.array_equal(chamber[key],a)\\nP=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); P=next(v for v in P.values() if isinstance(v,list)) if isinstance(P,dict) else P\\nmeans=np.array([np.mean(row['facility_telemetry_trace'],axis=0) for row in P]); print('latest apparatus trace mean distances to earlier entries:',np.round(np.linalg.norm(means[:-1]-means[-1],axis=1),3).tolist())\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']; runpy.run_path(sys.argv[0],run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled polynomial forward bridge -> sparse coefficients and a damped inverse; the public schema passes, and the preceding held-out forward fit reached 1.15e-4 worst-slice RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"Shape and finiteness checks cannot detect an incorrect inverse root or missed chamber conversion.\"\n    }\n  ],\n  \"rationale\": \"Test the exact candidate on held-out known loads, including high-amplitude rows where the nonlinear inverse could choose a wrong root. If that happens, revise the inverse rather than the downstream solver. Also verify the identity copies and optional chamber path, and run the composed validator in an isolated Python process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3660ff824b434bf5b3594d1c283e3bbcb59ccf4c2365221d45963338f783f94a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35676.74,
+      "usage_known": true,
+      "prompt_tokens": 25972,
+      "cached_tokens": 9600,
+      "completion_tokens": 1297
+    }
+  ]
+}

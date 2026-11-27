@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e8e6a9b49ed478b84e06c131a38ca72",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:00:21.910399+00:00",
+  "ended_at_utc": "2026-11-27T15:01:00.609711+00:00",
+  "request_sha256": "3a3b97c7f3deb14a10d7203d412cbc3b9552ea3642bcc1141e931d2ec56a8aa5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32305,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23751,
+    "cached_tokens": 11136,
+    "completion_tokens": 1536
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_compare.py <<'PY'\\nimport glob, importlib.util, inspect, pickle, json\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\n\\nbase='/tmp/hegel_continual_archive/'\\nmods={}\\nfor p in sorted(glob.glob(base+'*_solver.py')):\\n    key=p.split('_')[-2]\\n    spec=importlib.util.spec_from_file_location('m'+key,p)\\n    m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n    mods[key]=m\\n    print(key, inspect.signature(m._axis), [k for k in vars(m) if 'rosette' in k])\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']\\nprint('sweep max abs sorted',np.round(np.sort(np.max(abs(y),axis=1))[-15:],4))\\nprint('single banks',[(k,type(v).__name__,getattr(v,'shape',None)) for k,v in c['single_bank_sweeps'].items()])\\nprint('pulse weights',[p['w_pulse'].tolist() for p in item['campaign_diagnostics']])\\ngood=np.max(abs(y),axis=1)<8\\nm=mods['06']; phi=m._rosette_basis(x)\\naff=lambda a: np.column_stack([np.ones(len(a)),a])\\nfor parity in [0,1]:\\n    tr=good & (np.arange(len(x))%2==parity); te=good & ~tr\\n    aa=np.linalg.lstsq(aff(x[tr]),y[tr],rcond=None)[0]\\n    cc=m._fit_rosette({'ref_rosette':x[tr],'raw_rosette':y[tr]})\\n    print('sweep fold',parity,'affine/nonlinear raw RMSE',np.sqrt(np.mean((aff(x[te])@aa-y[te])**2)),np.sqrt(np.mean((np.einsum('njk,jk->nj',phi[te],cc)-y[te])**2)))\\ncc=m._fit_rosette(c); aa=np.linalg.lstsq(aff(x[good]),y[good],rcond=None)[0]\\nprint('rosette coefficients',np.round(cc,6))\\nZ=s['Z_nuisance']; Q=np.linalg.qr(Z)[0]; pp=item['campaign_diagnostics']\\nfor p in pp:\\n    p['affine']=np.linalg.solve(aa[1:].T,(p['y_pulse_raw'].reshape(-1,4)-aa[0]).T).T.ravel()\\n    p['nonlinear']=m._invert_rosette(p['y_pulse_raw'].reshape(-1,4),cc).ravel()\\n\\ndef matrices(s,rx,ry):\\n    nx,ny=s['nx'],s['ny']; A=[]\\n    for name,n,reg in [('x',nx,rx),('y',ny,ry)]:\\n        a=mods[reg]._axis; args=(s['kappa_'+name],s['vel_'+name],s['L'+name]/(n-1))\\n        A.append(a(*args,s['robin_'+name]) if len(inspect.signature(a).parameters)==4 else a(*args))\\n    L=kron(eye(ny),A[0],format='csc')+kron(A[1],eye(nx),format='csc')+diags(s['V_reaction_2d'].ravel(order='F'),format='csc')\\n    rhs=np.stack([a.ravel(order='F') for a in s['source_modes']],axis=1); i,j=s['sensor_ij'].T\\n    D=[splu(L+mu*eye(nx*ny,format='csc')).solve(rhs) for mu in s['mu_shifts']]\\n    return np.vstack([a[i+nx*j] for a in D]), D\\nfor rx in ['01','02','03','06']:\\n    for ry in ['01','02','03','06']:\\n        S,_=matrices(s,rx,ry)\\n        vals=[]\\n        for p in pp:\\n            z=S@p['w_pulse']; raw=p['y_pulse_raw'];\\n            rr=[z-p['affine'],z-p['nonlinear'], (aff(z.reshape(-1,4))@aa).ravel()-raw,np.einsum('njk,jk->nj',m._rosette_basis(z.reshape(-1,4)),cc).ravel()-raw]\\n            vals.append([round(np.linalg.norm(v)/np.sqrt(v.size),6) for v in rr]+[round(np.linalg.norm(rr[1]-Q@(Q.T@rr[1]))/np.sqrt(z.size),6)])\\n        print(rx,ry,vals)\\nlog=json.load(open(base+'archive_apparatus_log.json')); traces=np.asarray([r['facility_telemetry_trace'] for r in log]); print('trace shape',traces.shape); print('latest trace distances',np.round(np.linalg.norm((traces-traces[-1]).reshape(len(traces),-1),axis=1),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_compare.py; sed -n '8,20p' /tmp/hegel_continual_archive/beta_m98_v2_c01_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived boundary families -> independently select the rosette on held-out sweeps and score each boundary on both tracer pulses; worst-pulse RMSE pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose the calibration and boundary jointly by fitting pulse residuals\",\n      \"rejected_reason\": \"Independent calibration sweeps can distinguish rosette error from boundary error without fitting the tracer data.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweep error determines whether nonlinear calibration is needed. Per-pulse errors in raw and calibrated units then show whether an archived boundary, including mixed axis regimes, explains both measurements or whether the boundary model needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "85774b639e08ed8ebccd391be834ded340a3ce4e4103a7b8b3509d9afd7982f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39153.48,
+      "usage_known": true,
+      "prompt_tokens": 23751,
+      "cached_tokens": 11136,
+      "completion_tokens": 1536
+    }
+  ]
+}

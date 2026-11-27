@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95346faf0ed2432eb524ac46e3b8c4a9",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:50.482050+00:00",
+  "ended_at_utc": "2026-11-27T14:29:23.386581+00:00",
+  "request_sha256": "b2690a682219b2a8fedc5fb0dad91ab892afc47fc3ffe37bdbfaf8c3162b2a1b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26836,
+    "cached_tokens": 5504,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m98.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: it=pickle.load(f)[0]\\ns=it['study']; S,_=m._forward(s); pulses=it['campaign_diagnostics']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']\\naff=np.c_[x,np.ones(len(x))]; quad=np.column_stack([aff,*[x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]])\\nfor name,X in [('affine',aff),('pairwise products and squares',quad)]:\\n worst=0.\\n for fold in np.array_split(np.argsort(np.max(np.abs(x),axis=1)),5):\\n  train=np.setdiff1d(np.arange(len(x)),fold); coef=np.linalg.lstsq(X[train],raw[train],rcond=None)[0]; e=X[fold]@coef-raw[fold]; worst=max(worst,np.sqrt(np.mean(e**2,axis=0)).max())\\n print(name,'worst held-out amplitude block and channel RMSE',worst)\\n if name=='affine': assert worst<3e-5\\nbank=c['single_bank_sweeps']; coef=np.linalg.lstsq(aff,raw,rcond=None)[0]; disagreement=[]\\nfor j in range(4):\\n mask=bank['bank_id']==j; q=bank['ref_signal'][mask]; fit=np.linalg.lstsq(np.c_[q,np.ones(len(q))],bank['raw_readout'][mask],rcond=None)[0]; disagreement.append(np.max(np.abs(fit-coef[[j,4],j])))\\nprint('Max independent single-bank gain/offset disagreement',max(disagreement)); assert max(disagreement)<5e-5\\nfor tag in 'xy':\\n A=m._axis(s['kappa_'+tag],s['vel_'+tag],s['L'+tag]/(s['n'+tag]-1)); err=np.max(np.abs(A@np.ones(A.shape[0]))); print(tag,'axis constant-field residual',err); assert err<1e-10\\nZ=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); banks=np.asarray(s['row_bank_id']).reshape(-1); shifts=np.repeat(np.arange(len(s['mu_shifts'])),len(s['sensor_ij'])); assert len(shifts)==len(banks)==len(Z)\\nworst=np.zeros(2)\\nfor t in pulses:\\n d=m._calibrate(dict(s,y_obs_raw=t['y_pulse_raw']))-S@t['w_pulse']; d_res=d-Z@(P@d)\\n for k in np.unique(shifts):\\n  for b in np.unique(banks):\\n   mask=(shifts==k)&(banks==b)\\n   if mask.any(): worst=np.maximum(worst,[np.sqrt(np.mean(v[mask]**2)) for v in (d,d_res)])\\nprint('Worst pulse x shift x bank RMSE, before/after nuisance profiling:',worst); assert np.max(worst)<3e-6\\nA=S-Z@(P@S); beta=np.linalg.svd(A,compute_uv=False); print('Profiled source design smallest singular value:',beta[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 reflecting walls on both axes; public worst pulse-by-shift RMSE is 8.53e-7 and the independent KKT duality gap is 3.60e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification balance, or stochastic drift operators\",\n      \"rejected_reason\": \"The published task has continuous observations, a steady deterministic operator, and no relay states or class labels. Shift-by-bank residuals before and after nuisance profiling test the confounding risk that applies here.\"\n    }\n  ],\n  \"rationale\": \"Check whether nonlinear calibration terms improve held-out sweep accuracy, whether fitted gains and offsets agree with independent bank sweeps, and whether any bank or shift hides a forward-model error. A material failure would reopen calibration or the corresponding stencil; otherwise keep the verified artifact unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a878b8ebdad5f9b0d4030f05357b449b485080bb76a9a34b842c47bf73176dea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32857.16,
+      "usage_known": true,
+      "prompt_tokens": 26836,
+      "cached_tokens": 5504,
+      "completion_tokens": 1268
+    }
+  ]
+}

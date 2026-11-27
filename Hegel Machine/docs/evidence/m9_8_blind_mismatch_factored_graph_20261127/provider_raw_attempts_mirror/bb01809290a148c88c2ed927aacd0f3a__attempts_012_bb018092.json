@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb01809290a148c88c2ed927aacd0f3a",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:01:00.234225+00:00",
+  "ended_at_utc": "2026-11-27T15:01:35.114407+00:00",
+  "request_sha256": "9cd081cdb0dd62229446f5a66cf9503e5e5a67b6cb50a915d7d09a53a5dcc2ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 87304,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44034,
+    "cached_tokens": 5504,
+    "completion_tokens": 1280
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('batch_solver',path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; tr,te=d['train'],d['test']; dt=d['past_dt']; t=d['eval_times']; cal=d['calibration_load_cells']; x,y=cal['true_channel_loads'],cal['bridge_raw']; g=it['campaign_diagnostics']\\nout=m.solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values()); print('spectrum',tau,'weights',theta)\\n# Check whether the final sparse bridge selection survives withholding each sweep in turn.\\nclean=np.max(abs(y),axis=1)<8\\nerr=[]\\nfor ids in np.array_split(np.random.default_rng(6).permutation(len(x)),5):\\n    keep=np.setdiff1d(np.arange(len(x)),ids); pred=m._stress_calibration({'true_channel_loads':x[keep],'bridge_raw':y[keep]})(y[ids][clean[ids]]); e=pred-x[ids][clean[ids]].sum(1); err.append(np.sqrt(np.mean(e*e)))\\nprint('bridge held-out total-load RMSE by fold',np.round(err,7))\\n# Validate benchtop parameter stability and both observables on omitted labs.\\nxt,_=m._standardize(tr,te); stress=m._stress_calibration(cal); Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; labs=tr['lab_id']; print('benchtop by held-out lab: tau relative shift, strain median AE, rate median AE')\\nfor lab in np.unique(labs):\\n    keep=labs!=lab; a={k:v[keep] for k,v in tr.items()}; b={k:v[~keep] for k,v in tr.items()}; q,w=m._fit(m._design(a,xt[keep],stress,dt,t),Y[keep],R[keep]); S,V=m._design(b,xt[~keep],stress,dt,t)(q); print(lab,np.max(abs(q/tau-1)),np.median(abs(S@w-Y[~keep])),np.median(abs(V@w-R[~keep])))\\n# Verify that the chamber curve derivative at zero agrees with the separate rate output.\\n_,xe=m._standardize(tr,te); h=1e-6; C,A=m._chamber(te,xe,stress,dt,np.array([0.,h]),tau,theta); derivative_gap=np.max(abs((C[:,1]-C[:,0])/h-A)); assert derivative_gap<1e-4 and np.allclose(A,out['initial_rate_pred']); print('initial derivative max gap',derivative_gap)\\n# Characterize diagnostic errors separately by lab and horizon; these coupons informed law selection.\\nref={k:np.concatenate([tr[k],te[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}; _,xg=m._standardize(ref,g); C,A=m._chamber(g,xg,stress,dt,t,tau,theta); E=C+g['strain_0'][:,None]-g['strain_curves_obs']; F=A-g['instant_rate_obs']; print('diagnostic by lab: early strain, late strain, rate RMSE'); rms=lambda a:np.sqrt(np.mean(a*a));\\nfor lab in np.unique(g['lab_id']):\\n    k=g['lab_id']==lab; print(lab,rms(E[k,:4]),rms(E[k,-4:]),rms(F[k]))\\nprint('diagnostic pooled strain/rate MAE',np.mean(abs(E)),np.mean(abs(F)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 free chamber gains and time scales → H2 shared kernels with preload equilibration and gated drift; the unity-gain probe’s worst held-out lab RMSE was 0.107 for strain and 0.090 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add lab-specific chamber corrections\",\n      \"rejected_reason\": \"One diagnostic lab has only one coupon, and the more flexible chamber laws showed no consistent held-out improvement.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in an isolated process. If calibration loses accuracy on omitted rows, revisit sparse basis selection; if the benchtop spectrum shifts on omitted labs, revisit robust fitting; if the zero-time derivative disagrees with the rate output, correct the chamber equations before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f23fbd3d3da0555e597f72bb5c20b3d3cdbd17bbbdb5d49c2305ff70c61f7adf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34834.72,
+      "usage_known": true,
+      "prompt_tokens": 44034,
+      "cached_tokens": 5504,
+      "completion_tokens": 1280
+    }
+  ]
+}

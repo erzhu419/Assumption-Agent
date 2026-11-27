@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b33408fb548b473f83b1154aae4ee864",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:57.629414+00:00",
+  "ended_at_utc": "2026-11-27T14:58:27.742864+00:00",
+  "request_sha256": "d335d01c5565c4d07eedc7f34a864346252b27f7a8339ec85e93635ce445a049",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32770,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23483,
+    "cached_tokens": 11136,
+    "completion_tokens": 929
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; sed -n '1,48p;91,137p' *batch_04_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'cauchy IRLS' | grep -Ei 'cauchy|robust' | cut -c1-500 | head -5; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle, numpy as np, glob, importlib.util\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; g=p['campaign_diagnostics']; c=d['calibration_load_cells']; l=c['true_channel_loads']; r=c['bridge_raw'];\\nfor file in sorted(glob.glob('*batch*solver.py')):\\n s=importlib.util.spec_from_file_location('m',file); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\n if hasattr(m,'_bridge_basis'):\\n  q=m._calibration(c); a=m._bridge_basis(l); er=np.linalg.norm(a@q-r,axis=1); print('cubic residual',np.quantile(er,[0,.25,.5,.75,.85,.9,.95,1]),'largest indices',np.argsort(er)[-16:]); print('q',q.round(3)); print('cal sum predicted',np.quantile(abs(m._stress(r,q)-l.sum(1)),[.5,.8,.9,.95,1]));\\n else:\\n  a=np.c_[np.ones(len(l)),l]; q=np.linalg.lstsq(a,r,rcond=None)[0]; er=np.linalg.norm(a@q-r,axis=1); print('linear residual',np.quantile(er,[0,.25,.5,.75,.85,.9,.95,1]))\\n dd=dict(d,test=g); tr,ge=m._prepare(dd); tt=d['eval_times']; dt=d['past_dt']; y=np.c_[d['train']['strain_curves_obs']-d['train']['strain_0'][:,None],d['train']['instant_rate_obs']]; t,b=m._fit(tr,dt,tt,y); e=m._design(tr,dt,tt,t)@b-y; o=m.solve_batch(dd); ce=o['predicted_strain']-g['strain_curves_obs']; re=o['initial_rate_pred']-g['instant_rate_obs']; print(file,'tau/w',t,b,'train abs q',np.quantile(abs(e[:,:-1]),[.5,.9,.95]),np.quantile(abs(e[:,-1]),[.5,.9,.95]),'chamber abs q',np.quantile(abs(ce),[.5,.9,.95]),np.quantile(abs(re),[.5,.9,.95])); print('diag stress range',np.quantile(ge[0],[0,.1,.5,.9,1]),np.quantile(ge[1],[0,.1,.5,.9,1]));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge and archived chamber response -> H2 outlier-aware nonlinear bridge and independently validated chamber response; affine raw-channel RMSE is 2.42–2.72, with chamber validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the large affine residual as proof of nonlinear clean calibration\",\"rejected_reason\":\"Sparse corrupted rows can also produce a large residual; the archived cubic fit and residual distribution will distinguish these cases.\"}],\"rationale\":\"Run the archived models against the current measurements as a diagnostic, not as final validation. Calibration residuals and benchtop errors will show whether to repair the bridge before interpreting chamber discrepancies.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "bbb35dd0b89e79116bf5499a47ee0a865c2ed6e88c9efb80801245fead4d4034",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30076.52,
+      "usage_known": true,
+      "prompt_tokens": 23483,
+      "cached_tokens": 11136,
+      "completion_tokens": 929
+    }
+  ]
+}

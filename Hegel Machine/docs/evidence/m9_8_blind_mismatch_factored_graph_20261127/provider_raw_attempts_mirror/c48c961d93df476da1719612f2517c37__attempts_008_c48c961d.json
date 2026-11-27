@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c48c961d93df476da1719612f2517c37",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_ConditionalTable_Online__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:26.511084+00:00",
+  "ended_at_utc": "2026-11-27T14:47:07.809383+00:00",
+  "request_sha256": "ddfff91baf9ec9aeb9da3fb90dc59a358f9e075fed73e4b830a424a4bebf5c17",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26839,
+    "cached_tokens": 9600,
+    "completion_tokens": 1581
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /tmp\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\nS, _ = m._forward(s)\\npairs = [(a,b) for a in range(4) for b in range(a+1,4)]\\ndef features(x, name):\\n    f = m._rosette_features(x)\\n    if name == 'quadratic pairs':\\n        return np.column_stack((f, x*x, *(x[:,a]*x[:,b] for a,b in ((0,2),(1,3)))))\\n    if name == 'rational contrasts':\\n        d = np.column_stack([x[:,a]-x[:,b] for a,b in pairs])\\n        return np.column_stack((f, d/(1+d*d)))\\n    return f\\nworst = {}\\nfor fold in range(5):\\n    train = np.arange(len(x)) % 5 != fold\\n    c_train = dict(c, ref_rosette=x[train], raw_rosette=raw[train])\\n    base = m._fit_rosette(c_train)\\n    err = np.max(abs(m._rosette_features(x[train]) @ base - raw[train]), axis=1)\\n    good = err <= max(5*np.median(err), 1e-10)\\n    for name in ('current', 'quadratic pairs', 'rational contrasts'):\\n        coef = base if name == 'current' else np.linalg.lstsq(features(x[train][good], name), raw[train][good], rcond=None)[0]\\n        for p in item['campaign_diagnostics']:\\n            ref = (S @ p['w_pulse']).reshape(-1,4)\\n            err_pulse = (features(ref, name) @ coef - p['y_pulse_raw'].reshape(-1,4)).reshape(len(s['mu_shifts']),-1,4)\\n            v = float(np.sqrt(np.mean(err_pulse**2,axis=1)).max())\\n            worst[name] = max(worst.get(name,0), v)\\nprint('Worst held-pulse raw RMS by shift and channel, across sweep folds:', worst)\\nassert worst['current'] < 1e-4\\nwout = m.solve_batch(s)\\nw = wout['weights']\\nu = wout['terminal_field']\\nforcing = np.tensordot(w, s['source_modes'], axes=(0,0))\\ndef apply_axis(u, k, vel, h):\\n    out = np.empty_like(u)\\n    d = np.diff(u, axis=0)\\n    flux = ((k[:-1]+k[1:])/(2*h*h))[:,None]*d\\n    out[1:-1] = flux[:-1]-flux[1:] + (np.maximum(vel[1:-1],0)[:,None]*d[:-1]-np.maximum(-vel[1:-1],0)[:,None]*d[1:])/h\\n    out[0] = -k[0]*d[0]/h**2\\n    out[-1] = k[-1]*d[-1]/h**2\\n    return out\\nr = apply_axis(u, s['kappa_x'], s['vel_x'], s['Lx']/(s['nx']-1)) + apply_axis(u.T, s['kappa_y'], s['vel_y'], s['Ly']/(s['ny']-1)).T + (s['V_reaction_2d']+s['mu_shifts'][-1])*u - forcing\\nedge = np.ones(u.shape,dtype=bool); edge[1:-1,1:-1] = False\\nprint('Independent terminal PDE max residual, wall/interior:', np.max(abs(r[edge])), np.max(abs(r[~edge])))\\nassert np.max(abs(r)) < 1e-9\\nZ = s['Z_nuisance']\\ny = m._calibrate(s)\\nD = np.column_stack((S,y)); D -= Z @ np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@D)\\nA, target = D[:,:-1], D[:,-1]\\ng = A.T@(A@w-target)+s['source_ridge']*w\\nk = wout['kkt_certificate']; lo, hi = k['lam_lower'], k['lam_upper']; cap = s['u_box']\\ncert = max(np.max(abs(g-k['nu_sum']-lo+hi)), np.max(abs(lo*w)), np.max(abs(hi*(cap-w))), abs(sum(w)-s['total_budget']), abs(k['primal_objective']-k['dual_lower_bound']))\\nprint('Independent nuisance-profiled certificate max residual:',cert)\\nassert cert < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin or periodic walls -> H2 reflecting walls with nonlinear rosette calibration; worst pulse-by-shift RMS across five calibration folds was 5.50e-6, and worst QP stress residual was 4.44e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay, or stochastic drift checks\",\n      \"rejected_reason\": \"This study has no cohort labels, relay state, or stochastic drift operator. Its applicable nuisance check is the specified ridge projection.\"\n    }\n  ],\n  \"rationale\": \"Use measured sweeps and tracer pulses to test whether additional pair or rational terms repair a channel-specific calibration error. Independently check the returned field against the wall and interior PDE rows and the certificate against the nuisance-profiled gradient. Revise only if an applicable check exposes a real mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ef33bf8a3fe90e4b393f979e664099f457179c40dede6f9e6ee858d77d81a917",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42251.86,
+      "usage_known": true,
+      "prompt_tokens": 26839,
+      "cached_tokens": 9600,
+      "completion_tokens": 1581
+    }
+  ]
+}

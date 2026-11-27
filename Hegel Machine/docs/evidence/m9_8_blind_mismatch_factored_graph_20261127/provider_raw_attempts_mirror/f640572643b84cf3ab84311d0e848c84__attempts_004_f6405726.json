@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f640572643b84cf3ab84311d0e848c84",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:15.949465+00:00",
+  "ended_at_utc": "2026-11-27T14:43:42.176753+00:00",
+  "request_sha256": "7a190c138fae906fc03beeb46fde2912e2f1da1064b5cad349d1f93cfaa63926",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33716,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23565,
+    "cached_tokens": 5504,
+    "completion_tokens": 970
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,88p' /tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py; ls -1 /pretrain_task; cat > /tmp/m98_bridge_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; R=c['bridge_raw']; L=c['true_channel_loads']\\nnp.set_printoptions(precision=4,suppress=True)\\nprint('load ranges',L.min(0),L.max(0),'large raw rows:'); print(np.column_stack((L,R))[np.argsort(np.linalg.norm(R,axis=1))[-12:]])\\ndef bases(x):\\n yield 'affine',np.c_[np.ones(len(x)),x]\\n for n in (2,3,4,5):\\n  yield f'diagonal {n}',np.column_stack([np.ones(len(x))]+[x**k for k in range(1,n+1)])\\n  if n<=3:\\n   yield f'full {n}',np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for k in range(1,n+1) for j in combinations_with_replacement(range(4),k)])\\n yield 'abs quadratic',np.c_[np.ones(len(x)),x,x*abs(x)]\\n yield 'tanh cubic',np.c_[np.ones(len(x)),x,x**2,x**3,np.tanh(x)]\\nfor u,v,name in [(L,R,'forward'),(R,L,'inverse')]:\\n print(name)\\n for tag,X in bases(u):\\n  B=np.linalg.lstsq(X,v,rcond=None)[0]; err=v-X@B; h=(np.linalg.qr(X)[0]**2).sum(1); e=err/(1-h[:,None]); print(tag,'LOO rmse',np.mean(e**2,0)**.5,'median/max total',np.median(abs(e.sum(1))),np.max(abs(e.sum(1))),'train',np.mean(err**2,0)**.5)\\n  if tag in ('diagonal 2','diagonal 3'): print(B)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_bridge_probe.py; python3 - <<'PY'\\nimport json,numpy as np\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); z=np.array([r['facility_telemetry_trace'] for r in rows]); print('per-channel trace distance latest vs each prior\\\\n',np.sqrt(np.mean((z[:-1]-z[-1])**2,axis=1)).round(4)); print('last two aligned means differences\\\\n',(z[-1].mean(0)-z[1].mean(0)).round(4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine inverse bridge and wholesale lineage reuse -> H2: nonlinear forward bridge fitted independently of chamber lineage; affine total-load RMSE is 0.620 in-sample, with leave-one-out results pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a high-order inverse polynomial immediately\",\"rejected_reason\":\"An inverse fit can hide unstable tails or channel coupling; first compare forward and inverse bases on the same held-out sweeps.\"}],\"rationale\":\"Leave-one-out sweep errors will show whether the affine error comes from missing nonlinear terms or a few bad readings. Per-channel trace distances will show whether the closest apparatus match is broad or driven by only one coordinate, informing which archived chamber law to transfer.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d0c5c6c4cb30d0d7ad620007b8842fe646f4589a44ff4dc7d73e08064af9982f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26663.35,
+      "usage_known": true,
+      "prompt_tokens": 23565,
+      "cached_tokens": 5504,
+      "completion_tokens": 970
+    }
+  ]
+}

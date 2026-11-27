@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ae1c30eb37774a70bee811a0e0e2b615",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:30.705968+00:00",
+  "ended_at_utc": "2026-11-27T14:48:05.176370+00:00",
+  "request_sha256": "c108813c4aaf48de8a1ad1728abbcdc5ad4aabc695525dcbb40e4cfb10a05ee3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33013,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21619,
+    "cached_tokens": 9600,
+    "completion_tokens": 1282
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe98.py <<'PY'\\nimport pickle,sys,numpy as np, importlib.util\\np='/tmp/hegel_continual_archive/alpha_m98_v2_c03_batch_01_solver.py'; s=importlib.util.spec_from_file_location('arc',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; g=i['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; tr,te=m._prepare(d); y=np.column_stack((d['train']['strain_curves_obs']-d['train']['strain_0'][:,None],d['train']['instant_rate_obs'])); tau,th=m._fit(tr,dt,t,y); print('tau, theta, dt,t',tau,th,dt,t); print('train residual MAD',np.median(abs(m._design(tr,dt,t,tau)@th-y),axis=0)); print('shapes',len(tr[0]),len(te[0]),len(g['lab_id'])); print('cal', {k:type(v) for k,v in d['calibration_load_cells'].items()})\\no,c=m._calibration(d['calibration_load_cells']); gy=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; past=(g['past_channel_raw']-o)@c; hold=(g['hold_channel_raw']-o)@c\\n\\ndef combine(*groups):\\n return {k:np.concatenate([q[k] for q in groups]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}\\nfor ref in (g, combine(d['train'],g),combine(d['train'],d['test'],g)):\\n f=m._features(ref,ref)[len(ref['lab_id'])-len(hold):]; cp=past,hold,np.c_[np.ones(len(hold)),f]; a=m._design(cp,dt,t,tau); elastic=a[:,:,:2]@th[:2]; drift=cp[2]@th[2:]; e=lambda u:np.vstack((-np.expm1(-t[:,None]/np.atleast_1d(u)),1/np.atleast_1d(u))); lin=np.r_[t,1.]; exp=e(tau); ws=np.r_[np.repeat(.02,len(t)),.03]; print('normalization rows',len(ref['lab_id']), 'f mean',f.mean(0));\\n for mode,base in [('forward',elastic),('reset',hold[:,None]*(exp@th[:2])),('reverse',(m._design((past[:,::-1],hold,cp[2]),dt[::-1],t,tau)[:,:,:2]@th[:2]))]:\\n  for k,b in [('linear',lin[:,None]),('unit',e(1.)),('branch',exp),('all',np.c_[lin,e(1.),exp])]:\\n   A=drift[:,None,None]*b; r=gy-base; a0=np.linalg.lstsq((A/ws[None,:,None]).reshape(-1,b.shape[1]),(r/ws).ravel(),rcond=None)[0]; from scipy.optimize import least_squares\\n   coef=least_squares(lambda q:((A@q-r)/ws).ravel(),a0,loss='soft_l1').x; err=A@coef-r; print(mode,k,np.round(coef,4),np.round([np.median(abs(err[:,:-1])),np.median(abs(err[:,-1])),np.quantile(abs(err),.9)],4));\\n for k in ['01','02','03']:\\n  path=p.replace('01_solver',k+'_solver'); spec=importlib.util.spec_from_file_location('arc'+k,path); mod=importlib.util.module_from_spec(spec);spec.loader.exec_module(mod)\\n  if not hasattr(mod,'_chamber_predict'): pr= np.c_[a@th]\\n  elif k=='01': pr=np.column_stack(mod._chamber_predict(cp,t,tau,th))\\n  else: pr=np.column_stack(mod._chamber_predict(cp,dt,t,tau,th))\\n  er=pr-gy; print('archived',k,np.round([np.median(abs(er[:,:-1])),np.median(abs(er[:,-1])),np.quantile(abs(er),.9)],4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop spectrum -> H2 diagnostic selection of the chamber memory and drift laws; chamber residuals have not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the chamber law by telemetry alone\",\n      \"rejected_reason\": \"The current campaign has 18 labeled chamber coupons that can distinguish candidate laws directly.\"\n    }\n  ],\n  \"rationale\": \"Compare strain and initial-rate residuals independently. Testing memory and drift bases separately will show whether to reuse an archived law or identify a new one, while checking that feature alignment is not driving the apparent mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "515629ee35a356ec737683ad3c72771e1b2cac5ed8ade89d3468f9ebee876314",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35329.79,
+      "usage_known": true,
+      "prompt_tokens": 21619,
+      "cached_tokens": 9600,
+      "completion_tokens": 1282
+    }
+  ]
+}

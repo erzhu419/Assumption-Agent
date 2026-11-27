@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7c53cdc00ab4b1a88d412b151635488",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:32:08.090238+00:00",
+  "ended_at_utc": "2026-11-27T14:32:44.797397+00:00",
+  "request_sha256": "521b15c3fe4b1d8d916f01972b890a9cb91b20e692c30aeaf3a53b9efb6522eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24460,
+    "cached_tokens": 5504,
+    "completion_tokens": 1463
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/hegel_continual_archive/beta_m98_v2_c01_s00_solver.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.linalg import solve\\np='/holdout_task/'\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\ndef load(path):\\n spec=importlib.util.spec_from_file_location('candidate',path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load(p+'batch_solver.py'); refl=load('/tmp/hegel_continual_archive/beta_m98_v2_c01_batch_01_solver.py')\\nnx,ny=s['nx'],s['ny']\\ndef axis(k,v,h,r):\\n a=np.zeros((len(k),len(k)))\\n for i in range(1,len(k)-1):\\n  km,kp=(k[i]+k[i-1])/2,(k[i]+k[i+1])/2\\n  a[i,i-1]=-km/h**2-max(v[i],0)/h\\n  a[i,i+1]=-kp/h**2-max(-v[i],0)/h\\n  a[i,i]=(kp+km)/h**2+abs(v[i])/h\\n for i,j in ((0,1),(len(k)-1,len(k)-2)):\\n  a[i,i]=k[i]/h**2+r/h; a[i,j]=-k[i]/h**2\\n return a\\nax,ay=[axis(s['kappa_'+q],s['vel_'+q],s['L'+q]/(n-1),s['robin_'+q]) for q,n in [('x',nx),('y',ny)]]\\nL=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nrhs=np.array([u.ravel(order='F') for u in s['source_modes']]).T\\nij=s['sensor_ij']; idx=ij[:,0]+nx*ij[:,1]\\nout=m.solve_batch(s); w=out['weights']; cert=out['kkt_certificate']\\nsolutions=[solve(L+mu*np.eye(nx*ny),rhs) for mu in s['mu_shifts']]\\nD=np.vstack([u[idx] for u in solutions]); y=m._calibrate(s)\\nterminal=(solutions[-1]@w).reshape(nx,ny,order='F'); field_error=np.max(np.abs(out['terminal_field']-terminal))\\nassert field_error < 1e-11\\nZ=s['Z_nuisance']; gram=Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]); P=np.eye(len(y))-Z@solve(gram,Z.T,assume_a='pos')\\nr=P@(D@w-y); g=(P@D).T@r+s['source_ridge']*w\\nlo,hi=np.array(cert['lam_lower']),np.array(cert['lam_upper']); nu=cert['nu_sum']; cap=s['u_box']; budget=s['total_budget']; obj=(r@r+s['source_ridge']*(w@w))/2\\ne=max(np.max(np.abs(g-nu-lo+hi)),np.max(np.abs(w*lo)),np.max(np.abs((cap-w)*hi)),abs(w.sum()-budget),abs(obj-cert['primal_objective']),abs(obj-g@w+nu*budget-cap*hi.sum()-cert['dual_lower_bound']))\\nassert e < 1e-10\\nprint('Independent max terminal field error',field_error,'max KKT error',e)\\n# Leave each shift out of source and nuisance fitting, then predict its observations.\\nfor name,M in [('Robin',m),('reflecting',refl)]:\\n d,_=M._forward(s); errors=[]\\n for idx_test in np.array_split(np.arange(len(y)),len(s['mu_shifts'])):\\n  train=np.ones(len(y),bool); train[idx_test]=False\\n  z=Z[train]; dd=d[train]; yy=y[train]; data=np.column_stack((dd,yy)); projection=data-z@solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@data,assume_a='pos'); a,b=projection[:,:-1],projection[:,-1]\\n  wc,_=m._box_simplex_qp(a.T@a+s['source_ridge']*np.eye(len(w)),-a.T@b,cap,budget)\\n  gamma=solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@(yy-dd@wc),assume_a='pos')\\n  residual=d[idx_test]@wc+Z[idx_test]@gamma-y[idx_test]; errors.append(float(np.sqrt(np.mean(residual**2))))\\n print(name,'held-out shift RMSE',errors,'worst',max(errors))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reflecting-wall reuse → open-wall Robin with dynamically fitted affine calibration; the worst held-out calibration channel RMSE is 9.99e-6 and the full-study objective is 0.00867 for Robin versus 0.33071 for reflecting.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit a nonlinear rosette map\",\"rejected_reason\":\"Higher polynomial degrees did not improve worst-channel cross-validated RMSE over the affine map.\"},{\"option\":\"Use the latest reflecting-wall solver\",\"rejected_reason\":\"With the same sweep calibration, its public objective is 38 times higher; held-out shift prediction will test whether the difference generalizes.\"}],\"rationale\":\"Reuse the archived Robin solver, then test its boundary choice on held-out shifts and independently reconstruct the field and KKT certificate so schema validity alone cannot mask an operator or objective error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "21dd31bfcb8735ec4a5daeda26435d4f8ed1936fc0d0d13931cd2f9a2ada9c06",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36656.35,
+      "usage_known": true,
+      "prompt_tokens": 24460,
+      "cached_tokens": 5504,
+      "completion_tokens": 1463
+    }
+  ]
+}

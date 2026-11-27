@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fddde49e93f6421bbc24f5de196edab2",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:54:08.026827+00:00",
+  "ended_at_utc": "2026-11-27T14:54:48.441442+00:00",
+  "request_sha256": "a1c2ed759ade983af96d39684e39406eb52d72dc29acb5e1df4adcd185a95665",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27780,
+    "cached_tokens": 11136,
+    "completion_tokens": 1175
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS outliers calibration' 2>&1 | head -8\\ncat > /tmp/cal_probe.py <<'PY'\\nimport glob, importlib.util, pickle, itertools\\nimport numpy as np\\nfrom scipy.linalg import lstsq\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; solo=c['single_bank_sweeps']\\ndef load(tag):\\n p=glob.glob('/tmp/hegel_continual_archive/*'+tag+'_solver.py')[0]; sp=importlib.util.spec_from_file_location('a'+tag,p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); return m\\n\\ndef robust(A,z):\\n w=np.ones(len(A)); q=np.linalg.lstsq(A,z,rcond=None)[0]\\n for _ in range(45):\\n  e=z-A@q; scale=max(3e-5, .8*np.median(abs(e))); w=1/np.hypot(1,e/scale)**2\\n  q=lstsq(A*w[:,None]**.5,z*w**.5,lapack_driver='gelsy')[0]\\n return q,z-A@q\\n\\ndef bases(v,j):\\n a,b,d,e=v[:,[(j+i)%4 for i in (0,-1,1,2)]].T\\n B={'1':np.ones(len(a)),'a':a,'b':b,'c':d,'d':e,'ac':a*d,'a3':a**3}\\n for k,h in list(B.items())[1:5]:\\n  for n in (2,3,4,5): B[k+str(n)]=h**n\\n  for l,g in list(B.items())[1:5]:\\n   if k<l: B[k+l]=h*g\\n   if k!=l: B[k+'2'+l]=h*h*g\\n for i,j,k in itertools.combinations('abcd',3): B[i+j+k]=B[i]*B[j]*B[k]\\n return B\\n\\nif __name__=='__main__':\\n m=load('batch_04')\\n for j in range(4):\\n  mask=solo['bank_id']==j; X=np.vstack([x,np.eye(4)[j]*solo['ref_signal'][mask,None]]); z=np.r_[y[:,j],solo['raw_readout'][mask]]; B=bases(X,j)\\n  for name,terms in [('affine','1 a b c d'.split()),('prior','1 a b c ac a3'.split()),('quadratic',['1']+[k for k in B if len(k)==1 or len(k)==2 and not k.endswith(tuple('345'))]),('cubic',[k for k in B if not k.endswith(tuple('45'))]),('all',list(B))]:\\n   q,r=robust(np.column_stack([B[k] for k in terms]),z); print(j,name,np.quantile(abs(r),[.5,.8,.9,.95,1]).round(6),[(k,round(v,5)) for k,v in zip(terms,q) if abs(v)>0.005]);\\n  print('solo',np.c_[solo['ref_signal'][mask],z[-6:]].round(5))\\n for tag in ['s00','batch_01','batch_02','batch_03','batch_04']:\\n  S,_=load(tag)._forward(s); print('wall',tag,'prediction norm by pulse and shift',[[round(np.linalg.norm(t),5) for t in np.split(S@p['w_pulse'],3)] for p in item['campaign_diagnostics']])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 ordinary affine calibration → H2 sparse sweep corruption plus a structured rosette response; worst-bank affine RMSE is 2.561 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the archived cubic calibration unchanged\",\n      \"rejected_reason\": \"Large sweep excursions could mask either a valid archived basis or a different constitutive law. Robust fits against nested bases distinguish those cases.\"\n    }\n  ],\n  \"rationale\": \"Compare the affine and archived constitutive bases after downweighting gross sweep corruption. If a compact basis explains the clean sweeps, use it to calibrate the tracer pulses and discriminate wall regimes independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "a84b45e02a8c606b09d06e6782e807eb158753c113c577efaf2f6aeae982eed1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40373.4,
+      "usage_known": true,
+      "prompt_tokens": 27780,
+      "cached_tokens": 11136,
+      "completion_tokens": 1175
+    }
+  ]
+}

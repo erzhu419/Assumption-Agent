@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6351b37b3a1d4c7790fecd7506d561fa",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:38:22.100168+00:00",
+  "ended_at_utc": "2026-11-27T14:38:43.001575+00:00",
+  "request_sha256": "93ad4bff1e90eaa338fe5f1e29225e3b1d3938d6c519fa12db4f5ec04f516431",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25961,
+    "cached_tokens": 9600,
+    "completion_tokens": 611
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport pickle,numpy as np,json\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; print('keys',list(s)); a=s['sensor_calibration_sweeps']; x,y=a['ref_rosette'],a['raw_rosette']; print('ref/raw first 10',np.c_[x,y][:10]); print('ref/raw quantiles',np.quantile(np.c_[x,y],[0,.1,.5,.9,1],axis=0)); print('raw obs quantiles',np.quantile(s['y_obs_raw'].reshape(-1,4),[0,.1,.5,.9,1],axis=0)); print('bank sweep',np.column_stack(list(a['single_bank_sweeps'].values()))); print('bank layout',s['row_bank_id'].reshape(-1,4)[:8]); print('aux stats',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0)); print('log top keys',list(json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')).keys())); d=np.c_[np.ones(len(x)),x]; c=np.linalg.lstsq(d,y,rcond=None)[0]; e=y-d@c; print('row residual norms',np.linalg.norm(e,axis=1).reshape(-1,10)); print('coeff',c)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 global affine rosette fit → H2 sweep-structured calibration; worst held-out channel MAE is 2.081 raw units despite a passing schema check.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the boundary operator by the current residual objective\",\n      \"rejected_reason\": \"The held-out calibration errors make those residuals unreliable for comparing boundary operators.\"\n    }\n  ],\n  \"rationale\": \"Inspect the sweep design and residual pattern to distinguish missing calibration terms from a separate sweep regime. That distinction determines whether to expand the calibration model or fit it on the appropriate sweep subset.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d714047671ee59a32e6254a85a48ef6a2d08fd119f498e135ebd1b6e92bf6b1c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20854.83,
+      "usage_known": true,
+      "prompt_tokens": 25961,
+      "cached_tokens": 9600,
+      "completion_tokens": 611
+    }
+  ]
+}

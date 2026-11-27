@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0389c620c3b7435d8c622e9b2f10e044",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_ConditionalTable_Online__beta_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:55.061006+00:00",
+  "ended_at_utc": "2026-11-27T14:41:34.608551+00:00",
+  "request_sha256": "7fc6554aa249192fc346638f7ccfd3fef704fe80b146882dca6dbc5018cdfde3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33758,
+    "cached_tokens": 9600,
+    "completion_tokens": 1430
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/m98_margin_audit.py <<'PY'\\nimport pickle, runpy, itertools\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; ref,raw=c['ref_rosette'],c['raw_rosette']\\nkeep=np.max(np.abs(raw),axis=1)<9\\nprint('retained raw maximum / rejected raw minimum',np.max(np.abs(raw[keep])),np.min(np.max(np.abs(raw[~keep]),axis=1)))\\nx,y=ref[keep],raw[keep]; idx=np.arange(len(x)); fold=np.random.default_rng(89).permutation(len(x))%5\\nsettings=[('pair',0.)]+[(name,a) for name in ('own','difference','sum') for a in (0.001,0.01,0.05,0.2,0.5,1.)]\\nerrors=np.empty((3,*y.shape)); choices=[]\\nfor j in range(4):\\n    u,v=x[:,j],x[:,(j+1)%4]\\n    base=m['_calibration_features'](x,j)\\n    extra=np.column_stack((base,u*u,v*v,u*u*v,u*v*v))\\n    mats=[]\\n    for name,a in settings:\\n        q={'pair':u,'own':u,'difference':u-v,'sum':u+v}[name]\\n        mats.append(extra if name=='pair' else np.column_stack((base[:,0],base[:,1:]/(1+a*q[:,None]**2))))\\n    def predict(D,tr,te):\\n        return D[te]@np.linalg.lstsq(D[tr],y[tr,j],rcond=None)[0]\\n    for k in range(5):\\n        te=fold==k; tr=~te\\n        scores=[np.mean(np.concatenate([predict(D,tr&(fold!=l),fold==l)-y[fold==l,j] for l in range(5) if l!=k])**2) for D in mats]\\n        best=np.argmin(scores); choices.append(settings[best]);\\n        for row,D in enumerate((base,extra,mats[best])):\\n            errors[row,te,j]=predict(D,tr,te)-y[te,j]\\nrm=lambda e:np.sqrt(np.mean(e**2))\\nnear=np.max(abs(x),axis=1)<=0.85\\nfor name,e in zip(('compact','pair-augmented','inner-selected challenger'),errors):\\n    print(name,'pooled / worst-channel / near-zero / wide RMSE',rm(e),max(rm(v) for v in e.T),rm(e[near]),rm(e[~near]))\\nprint('inner-fold choices',dict((str(k),choices.count(k)) for k in set(choices)))\\nb=c['single_bank_sweeps']; a=m['_fit_calibration'](x,y)\\nbank=np.asarray(b['bank_id']); v=np.asarray(b['ref_signal']); r=np.asarray(b['raw_readout'])\\nif bank.shape==v.shape==r.shape:\\n    predicted=a[bank,0]+a[bank,2]*v+a[bank,5]*v**3\\n    print('single-bank sweep RMSE by bank',[rm((predicted-r)[bank==j]) for j in range(4)])\\nelse:\\n    print('single-bank sweep shapes',bank.shape,v.shape,r.shape)\\nd,_=m['_forward'](s); w=m['solve_batch'](s)['weights']; yc=m['_calibrate'](s); z=s['Z_nuisance']; g=z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]); e=d@w-yc; centered=e-z@np.linalg.solve(g,z.T@e)\\nfor group,lab in ((np.repeat(s['mu_shifts'],len(s['sensor_ij'])),'shift'),(s['row_bank_id'],'bank')):\\n    print(lab,'slice RMSE (before, after nuisance projection)',[(float(k),rm(e[group==k]),rm(centered[group==k]),float(np.mean(centered[group==k]))) for k in np.unique(group)])\\nprint('numerical certificate and field check already completed on the unchanged artifact in isolated Python on turn 9')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Richer rational or pair-interaction calibration H1 → compact cyclic calibration H2 if nested sweep validation supports it; the current worst held-out sensor RMSE is 0.02094.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply batch balanced accuracy or test relay modes\",\"rejected_reason\":\"The public study is a continuous steady-state regression with no classification labels, cohort variable, or relay state; the relevant nuisance check is residual error by shift and sensor bank.\"}],\"rationale\":\"Test whether omitted pairwise or rational terms materially improve held-out calibration, especially near the observed operating range. Check shift and bank residuals for a systematic failure hidden by pooled error. A reproducible improvement or a large residual slice would trigger a targeted model revision; otherwise retain the already verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "84aa1bc825a73a737c4c0fe08ad01d6b37fadba8d0cb9adf35bc0179e0e21b1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40453.12,
+      "usage_known": true,
+      "prompt_tokens": 33758,
+      "cached_tokens": 9600,
+      "completion_tokens": 1430
+    }
+  ]
+}

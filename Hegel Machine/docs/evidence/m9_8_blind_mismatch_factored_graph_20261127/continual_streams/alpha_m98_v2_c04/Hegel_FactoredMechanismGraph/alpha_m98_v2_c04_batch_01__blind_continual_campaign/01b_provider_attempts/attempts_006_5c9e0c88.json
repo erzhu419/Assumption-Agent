@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c9e0c881b6c4163ac6cbdb0097ec1a5",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:27:48.830292+00:00",
+  "ended_at_utc": "2026-11-27T14:28:43.957691+00:00",
+  "request_sha256": "438dd918b0734269d4cd3bd5367d30cdbb11ca3a45a4e22e4ca466d6788336e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47015,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28072,
+    "cached_tokens": 9600,
+    "completion_tokens": 1858
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheo_clock.py <<'PY'\\nexec(open('/tmp/rheo_diag.py').read().split(\\\"for k,z,xx\\\")[0])\\nfrom scipy.optimize import least_squares\\np,h=m._loads(q,b); y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; lab=q['lab_id']; labs=np.unique(lab)\\nB=np.r_[-np.expm1(-t[:,None]/tau),(1/tau)[None,:]].T\\nT=np.r_[t,1.]; hold=(h[:,None]*th[:2])@B\\nmem=h[:,None]-m._design(xq,p,h,dt,t,tau)[1][:,:2]*tau\\nM=mem*th[:2]; dr=lambda xx:th[2]+xx@th[3:]\\nvariants={'joint3':xq,'diag_only':m._features(q,q)[:len(h)],'train_diag':m._features(tr,q)[n:],'test_diag':m._features(te,q)[len(te['lab_id']):]}\\n# Apply the public train/test reference and imputation map without refitting it on diagnostics.\\nlaball=np.r_[tr['lab_id'],te['lab_id']]; rs=np.vstack((tr['ref_coupons'],te['ref_coupons'])); xx=np.vstack((tr['coupon_features_raw'],te['coupon_features_raw'])).copy(); qq=q['coupon_features_raw'].copy()\\nfor g in labs:\\n panel=rs[laball==g]; mid=np.nanmedian(np.nanmean(panel,0)); sd=np.nanmedian(np.nanstd(panel,0)); xx[laball==g]=(xx[laball==g]-mid)/sd; qq[lab==g]=(qq[lab==g]-mid)/sd\\n_,cells,counts=np.unique(np.c_[laball,np.r_[tr['stratum'],te['stratum']]],axis=0,return_inverse=True,return_counts=True); w=1/counts[cells,None]; fill=np.nansum(w*xx,axis=0)/np.sum(w*~np.isnan(xx),axis=0); variants['joint2_map']=np.where(np.isnan(qq),fill,qq)\\nclean=~np.isnan(q['coupon_features_raw']).any(1)\\nprint('nominal drift from different reference sets:'); print(np.c_[*[dr(v) for v in variants.values()],clean].round(4));\\nfor name,xx in variants.items():\\n D=np.c_[np.ones(len(h)),dr(xx)]; coef=np.linalg.lstsq(D,y-hold,rcond=None)[0]; print(name,'fit slope by time then rate:',coef[1].round(4),'intercept',coef[0].round(4),'RMSE',np.sqrt(np.mean((y-hold-D@coef)**2)))\\n\\ndef ex(k): return np.r_[-np.expm1(-t/k),1/k]\\ndef expint(k): return T-k*ex(k)\\ndef rational(k): return np.r_[t/(1+t/k),1.]\\ndef tanh(k): return np.r_[k*np.tanh(t/k),1.]\\ndef gauss(k):\\n from scipy.special import erf\\n return np.r_[k*np.sqrt(np.pi)/2*erf(t/k),1.]\\ndef log(k): return np.r_[k*np.log1p(t/k),1.]\\n\\ndef run(features, form, f, addmem=False, intercept=False):\\n R=dr(features); shapepar=form not in ('branch','linear');\\n def design(k):\\n  b=np.atleast_2d(f(k)); F=[R[:,None]*v for v in b];\\n  if intercept: F += [np.broadcast_to(v,y.shape) for v in b]\\n  if addmem: F += [M[:,j,None]*B[j] for j in range(2)]\\n  return np.stack(F,-1)\\n def fit(mask):\\n  def inner(k):\\n   a=design(k); mat=a[mask].reshape(-1,a.shape[-1]); c=np.linalg.lstsq(mat,(y-hold)[mask].ravel(),rcond=None)[0]; return (hold+a@c-y),c\\n  k=1.\\n  if shapepar: k=np.exp(least_squares(lambda z:inner(np.exp(z[0]))[0][mask].ravel(),[0.],bounds=([-3],[4])).x[0]);\\n  return *inner(k),k\\n E,c,k=fit(np.ones(len(h),bool)); errors=np.zeros_like(E)\\n for g in labs:\\n  s=lab==g; errors[s]=fit(~s)[0][s]\\n rms=lambda z: np.sqrt(np.mean(z**2));\\n return np.round([rms(E),max(rms(errors[lab==g,:-1]) for g in labs),max(rms(errors[lab==g,-1]) for g in labs),max(rms(errors[:,j]) for j in range(len(t))),rms(E[clean]),k],5),c.round(5)\\nforms=[('linear',lambda k:T),('branch',lambda k:np.r_[B,T[None,:]]),('ex',ex),('ex+T',lambda k:[ex(k),T]),('exint',expint),('rational',rational),('tanh',tanh),('gauss',gauss),('log',log)]\\nfor name,xx in variants.items():\\n print(name,'metrics: fit overall, worst lab curve, worst lab rate, worst horizon, fit complete rows, shape parameter');\\n for form,f in forms:\\n  print(form,run(xx,form,f))\\nprint('joint2 refinements with fitted residual memory and drift offset')\\nfor form,f in forms[1:]:\\n for addmem,offset in [(True,False),(False,True),(True,True)]:print(form,addmem,offset,run(variants['joint2_map'],form,f,addmem,offset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_clock.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: transferable benchtop memory -> H2: near-reset chamber memory plus a time-dependent drift response; baseline worst-horizon strain RMSE 0.714 and pooled rate RMSE 1.603.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit three independent chamber amplitudes from coupon features\",\n      \"rejected_reason\": \"The fitted amplitudes co-vary with nominal drift, so first test whether one shared time response explains both strain and initial rate.\"\n    }\n  ],\n  \"rationale\": \"After subtracting the hold-only response, test whether the remaining signal is drift-shaped or still depends on load history. Compare curve and rate errors on held-out labs, and distinguish constitutive errors from diagnostic reference-panel or imputation differences.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "50c10c9c98ac5d168c8c6f6dd6e997c3bd3ef49dc26ac35424e1e58d418fea8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 55487.32,
+      "usage_known": true,
+      "prompt_tokens": 28072,
+      "cached_tokens": 9600,
+      "completion_tokens": 1858
+    }
+  ]
+}

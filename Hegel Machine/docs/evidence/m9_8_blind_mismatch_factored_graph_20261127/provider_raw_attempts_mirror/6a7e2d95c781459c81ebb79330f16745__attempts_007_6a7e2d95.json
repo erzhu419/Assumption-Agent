@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a7e2d95c781459c81ebb79330f16745",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:10.979018+00:00",
+  "ended_at_utc": "2026-11-27T14:47:47.414020+00:00",
+  "request_sha256": "acb0a5a73e4586a4b4e50d99cfc9ee5054711294b26c888cb821ff7d2215f187",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53020,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29465,
+    "cached_tokens": 9600,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/kernel_probe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n import chamber_probe as p\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm,d,tr,te,g,t,tau,theta,Y,R=p.m,p.d,p.tr,p.te,p.g,p.t,p.tau,p.theta,p.Y,p.R\\nlabs=g['lab_id']; x=m._features(g,g)[0]; past,h,F=m._specimen(g,x,p.bridge); q=F@theta[2:]; E=Y-(h[:,None]*theta[:2])@R.T\\nr=E[:,-1]; print('loss floor from full horizon regressions:')\\nfor name,columns in [('rate',[r]),('rate+constant',[r,np.ones_like(r)]),('rate+hold+constant',[r,h,np.ones_like(r)]),('rate+rate^2+hold+constant',[r,r*r,h,np.ones_like(r)])]:\\n A=np.column_stack(columns); co=np.linalg.lstsq(A,E,rcond=None)[0];print(name,np.round(np.sqrt(np.mean((A@co-E)**2,axis=0)),4));print('kernels',np.round(co[:,[0,2,5,8,11,12]],4))\\nprint('rate per lab:')\\nfor l in np.unique(labs):\\n j=labs==l;print(l,np.round(np.column_stack([q,r,h])[j],4),np.linalg.lstsq(np.column_stack([q[j],np.ones(sum(j))]),r[j],rcond=None)[0])\\nprint('telemetry mean rows:');import json\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print(e['completed_batch_index'],np.round(np.mean(e['facility_telemetry_trace'],axis=0),2))\\nT=np.r_[t,1.];S=np.r_[-np.expm1(-t),1.]; z=np.r_[t+np.expm1(-t),0.]; Q=np.r_[t*t,0.]\\nfor desc,A in [('q+intercept',np.column_stack([q,q*0+1])),('q+hold+intercept',np.column_stack([q,h,q*0+1])),('q+q2+hold+intercept',np.column_stack([q,q*q,h,q*0+1])),('features+hold',np.column_stack([F,h]))]:\\n for bn,B in [('T,S',[T,S]),('T,S,z', [T,S,z]),('T,S,Q',[T,S,Q]),('T,S,R',[T,S,*R.T]),('T,S,Q,z',[T,S,Q,z])]:\\n  B=np.asarray(B); B=B[np.linalg.svd(B,full_matrices=False)[1].shape[0]*0:] # preserve basis ordering\\n  u,s,v=np.linalg.svd(B,full_matrices=False); B=v[s>1e-10]\\n  M=np.einsum('ni,bk->nkib',A,B).reshape(len(A),len(T),-1); pred=np.zeros_like(E)\\n  for l in np.unique(labs):\\n   j=labs==l; a=M[~j].reshape(-1,M.shape[-1]); y=E[~j].ravel(); co=np.linalg.lstsq(a,y,rcond=None)[0];pred[j]=M[j]@co\\n  e=pred-E;print(desc,bn,'pooled',np.round([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))],4),'worst',np.round(np.max([[np.sqrt(np.mean(e[labs==l,:-1]**2)),np.sqrt(np.mean(e[labs==l,-1]**2))] for l in np.unique(labs)],axis=0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset with scalar linear drift → H2 chamber reset with a separate late-time drift term; the best tested nonlinear drift model has leave-one-lab-out strain/rate RMSE 0.074/0.065.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the best nonlinear drift fit immediately\",\n      \"rejected_reason\": \"Its coefficients may be compensating for reference-panel differences or conflating initial rate with a separate late-time response.\"\n    }\n  ],\n  \"rationale\": \"Use observed initial rates only to diagnose the residual time structure, then compare deployable predictors on held-out labs. If the rate explains early strain but not late strain, fit a separate term whose derivative at zero is zero.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c32b36b62358c1d03e588741faa9dc6092cfe309dde139946b72612ecb6f82cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36879.68,
+      "usage_known": true,
+      "prompt_tokens": 29465,
+      "cached_tokens": 9600,
+      "completion_tokens": 1298
+    }
+  ]
+}

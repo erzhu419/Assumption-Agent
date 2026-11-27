@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1650d07316b6450a8c8282c4a6181e63",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:58:02.236184+00:00",
+  "ended_at_utc": "2026-11-27T14:58:37.751773+00:00",
+  "request_sha256": "9d39c9abe289436b71b08679c9aad8e2a27df02a4d679357c2e4a5754a51449b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27766,
+    "cached_tokens": 11136,
+    "completion_tokens": 1089
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; sw = s['sensor_calibration_sweeps']; x, y = sw['ref_rosette'], sw['raw_rosette']; good = np.max(np.abs(y), axis=1) < 8\\n    d, _ = m._forward(s); pulses = item['campaign_diagnostics']; ns = len(s['mu_shifts'])\\n    px = [(d @ p['w_pulse']).reshape(-1, 4) for p in pulses]; py = [p['y_pulse_raw'].reshape(-1, 4) for p in pulses]\\n    def basis(a, kind):\\n        base = m._rosette_basis(a)\\n        if kind == 'cubic': return base\\n        n, p, o = [np.roll(a, i, axis=1) for i in (-1, 1, 2)]\\n        if kind == 'cross': extra = (o, a*p, n*p, a*n*p, (a-n)**2, (a+p)**2)\\n        else: extra = (a/(1+.25*(a-n)**2), n/(1+.25*(a+p)**2), a/(1+.25*a*a))\\n        return np.concatenate((base, np.stack(extra, axis=-1)), axis=-1)\\n    folds = np.arange(len(x)) % 5\\n    for kind in ('cubic', 'cross', 'rational'):\\n        f = basis(x, kind); pf = [basis(a, kind) for a in px]; sweep, tracer = [], []\\n        for k in range(5):\\n            train = good & (folds != k); test = good & (folds == k)\\n            c = np.stack([np.linalg.lstsq(f[train,j], y[train,j], rcond=None)[0] for j in range(4)])\\n            sweep.append(np.sqrt(np.mean(((f[test]*c).sum(-1)-y[test])**2, axis=0)).max())\\n            tracer.extend(np.sqrt(np.mean(((b*c).sum(-1)-obs).reshape(ns,-1,4)**2, axis=1)).max() for b,obs in zip(pf,py))\\n        print(kind, 'worst held-out sweep x bank RMSE', max(sweep), 'worst held-out fit x pulse x shift x bank RMSE', max(tracer))\\n    coef = m._fit_rosette(sw); raw = s['y_obs_raw'].reshape(-1,4); clean = m._calibrate(s).reshape(-1,4)\\n    inv = np.max(np.abs((m._rosette_basis(clean)*coef).sum(-1) - raw)); print('study rosette inverse closure, max abs', inv); assert inv < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin walls) → H2 (sealed walls with sweep-fitted cubic calibration): worst tracer RMSE across held-out calibration fits, pulses, shifts, and banks is 2.99×10⁻⁶.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat relay-mode or classification-cohort checks\",\n      \"rejected_reason\": \"The study has neither relay states nor classification labels. Ridge nuisance projection has already been checked on its continuous observations.\"\n    }\n  ],\n  \"rationale\": \"The earlier packed-array error invalidated the tracer comparison for the richer calibration bases; only the incumbent was retested correctly. Compare all bases on the same per-pulse layout and verify inversion on the actual observations. Revisit calibration only if a challenger improves transfer meaningfully or the inverse fails to reproduce the raw readings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2b89766d26ee6303b24a11855ee62c1f9430f5d5e90834798beced5c208416fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35477.28,
+      "usage_known": true,
+      "prompt_tokens": 27766,
+      "cached_tokens": 11136,
+      "completion_tokens": 1089
+    }
+  ]
+}

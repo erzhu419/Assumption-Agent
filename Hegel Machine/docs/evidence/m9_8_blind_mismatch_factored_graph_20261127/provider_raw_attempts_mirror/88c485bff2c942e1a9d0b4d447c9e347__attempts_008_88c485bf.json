@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88c485bff2c942e1a9d0b4d447c9e347",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:44.064753+00:00",
+  "ended_at_utc": "2026-11-27T14:29:12.727041+00:00",
+  "request_sha256": "2d91657a77b28155c6279dded7ee4e55b747ba0db997cd61c460da0407ee9508",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52219,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31039,
+    "cached_tokens": 9600,
+    "completion_tokens": 1103
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = solver.solve_batch(d)\\ntest = d['test']\\nt = np.asarray(d['eval_times'])\\nn = len(test['strain_0'])\\nshapes = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (n, len(t)), 'initial_rate_pred': (n,)}\\nassert out.keys() == shapes.keys()\\nfor k, shape in shapes.items():\\n    assert out[k].shape == shape and np.isfinite(out[k]).all(), k\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25\\nbridge = solver._axial_load_map(d['calibration_load_cells'])\\n_, x = solver._features(d['train'], test)\\n_, hold, X = solver._specimen(test, x, bridge)\\neps = 1e-5\\ncurve, rate = solver._chamber_increment(hold, X, np.r_[t, -eps, eps], tau, theta)\\nnp.testing.assert_allclose(out['predicted_strain'], test['strain_0'][:,None] + curve[:,:len(t)], atol=1e-10, rtol=0)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rate, atol=1e-10, rtol=0)\\nfd_err = np.max(np.abs((curve[:,-1] - curve[:,-2])/(2*eps) - rate))\\nassert fd_err < 1e-8\\n\\nc = item['campaign_diagnostics']\\n_, xc = solver._features(c,c)\\n_, h, Xc = solver._specimen(c, xc, bridge)\\nY = np.column_stack((c['strain_curves_obs']-c['strain_0'][:,None], c['instant_rate_obs']))\\nB = np.vstack((-np.expm1(-t[:,None]/tau), 1/tau))\\nbase = (h[:,None]*theta[:2]) @ B.T\\nA = (Xc@theta[2:])[:,None,None] * B\\nerrors = []\\nfor lab in np.unique(c['lab_id']):\\n    fit = c['lab_id'] != lab\\n    q = np.linalg.lstsq(A[fit].reshape(-1,2), (Y-base)[fit].ravel(), rcond=None)[0]\\n    strain, rate = solver._chamber_increment(h[~fit], Xc[~fit], t, tau, theta, q)\\n    residual = np.column_stack((strain,rate)) - Y[~fit]\\n    errors.append([np.sqrt(np.mean(residual[:,:-1]**2)), np.sqrt(np.mean(residual[:,-1]**2))])\\nworst = np.max(errors,axis=0)\\nprint('Observed shapes:', {k: a.shape for k,a in out.items()})\\nprint('Deployment finite-difference max rate error:', fd_err)\\nprint('Worst held-out diagnostic lab strain/rate RMSE:', worst)\\nassert np.all(worst < [0.008, 0.005])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: benchtop data identify the intrinsic spectrum -> H2: chamber drift enters the two relaxation amplitudes; worst held-out lab RMSE is 0.00724 strain and 0.00395 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact artifact in an isolated interpreter. A derivative mismatch would require correcting the rate calculation; a held-out lab regression would require checking whether the encoded chamber law differs from the validated model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b40661000ca7734bfebdf81025228ca1154b3bd497bb942dfd56823af6db1a1c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28618.23,
+      "usage_known": true,
+      "prompt_tokens": 31039,
+      "cached_tokens": 9600,
+      "completion_tokens": 1103
+    }
+  ]
+}

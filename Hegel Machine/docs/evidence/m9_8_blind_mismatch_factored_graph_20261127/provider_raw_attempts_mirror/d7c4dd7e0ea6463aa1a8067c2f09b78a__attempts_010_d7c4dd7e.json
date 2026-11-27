@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d7c4dd7e0ea6463aa1a8067c2f09b78a",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:28.842821+00:00",
+  "ended_at_utc": "2026-11-27T14:30:00.696441+00:00",
+  "request_sha256": "7a916388d708fcd15814e17e9aaa3697cb0783c8ed69f7b06aaff8a12e15a8d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51803,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28234,
+    "cached_tokens": 9600,
+    "completion_tokens": 1171
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: i=pickle.load(f)[0]\\nd=i['dataset']; c=i['campaign_diagnostics']; o=m.solve_batch(d); assert all(np.isfinite(v).all() for v in o.values()); tau,th=o['estimated_taus'],o['hereditary_weights']; t=np.asarray(d['eval_times']); dt=d['past_dt']; labs=c['lab_id']; groups=np.unique(labs)\\n_,x=m._features(c,c); p,h,X=m._specimen(c,x,m._axial_load_map(d['calibration_load_cells'])); r=X@th[2:]; B=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); Y=np.column_stack((c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs'])); base=(h[:,None]*th[:2])@B.T\\n_,rates=m._branches((p,h,X),dt,t,tau); z=h[:,None]-rates*tau\\n# Two branch coefficients per scalar term; branch-specific memory uses one per branch.\\ndef design(f): return (f[:,None,None]*B[None,:,:])\\nD=design(r)\\nfamilies={'linear':[D], 'hold-drift interaction':[np.concatenate((D,design(r*h)),axis=-1)], 'memory':[np.concatenate((D,z[:,None,:]*B),axis=-1)], 'rational drift':[design(r/(1+a*r*r)) for a in (.01,.03,.1,.3,1.)], 'rational load':[design(r/(1+a*h*h)) for a in (.001,.003,.01,.03,.1)], 'rational load-drift contrast':[design(r/(1+a*(h-b*r)**2)) for a in (.001,.003,.01,.03) for b in (-1.,1.)]}\\nR=Y-base\\n\\ndef loss(A,tr,te):\\n q=np.linalg.lstsq(A[tr].reshape(-1,A.shape[-1]),R[tr].ravel(),rcond=None)[0]; e=A[te]@q-R[te]; return np.array([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\nfor name,options in families.items():\\n scores=[]; picks=[]\\n for lab in groups:\\n  train=labs!=lab; test=~train\\n  pick=0 if len(options)==1 else min(range(len(options)),key=lambda j: max(np.max(loss(options[j],train&(labs!=g),labs==g)/[.008,.005]) for g in groups if g!=lab))\\n  scores.append(loss(options[pick], train,test)); picks.append(pick)\\n print(name,'lab strain/rate RMSE',np.round(scores,6).tolist(),'worst',np.round(np.max(scores,axis=0),6).tolist(),'choices',picks)\\ncurve,rate=m._chamber_increment(h,X,t,tau,th); e=np.column_stack((curve,rate))-Y\\nprint('saved model diagnostic residual means by lab (strain, rate):',[(int(g),round(float(e[labs==g,:-1].mean()),6),round(float(e[labs==g,-1].mean()),6)) for g in groups]); print('saved model max absolute diagnostic residual (strain, rate):',np.max(np.abs(e[:,:-1])),np.max(np.abs(e[:,-1])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: benchtop data identify the intrinsic spectrum -> H2: drift loads both chamber branches linearly; current worst held-out lab RMSE is 0.00724 for strain and 0.00395 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or Fokker–Planck checks.\",\n      \"rejected_reason\": \"The supplied data contain continuous coupon responses under a deterministic relaxation law, with no class labels, relay states, or stochastic drift operator. Lab-wise residuals test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"Test whether saturation, load–drift interactions, or retained memory materially improve transfer to an unseen diagnostic lab. Select nonlinear parameters inside the outer lab folds and report strain and rate separately, so a pooled gain cannot hide a lab-specific failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "410720865327763d4ab4dcac7441f6cf5ff209f1539ffbcf250ca05c42772627",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31809.91,
+      "usage_known": true,
+      "prompt_tokens": 28234,
+      "cached_tokens": 9600,
+      "completion_tokens": 1171
+    }
+  ]
+}

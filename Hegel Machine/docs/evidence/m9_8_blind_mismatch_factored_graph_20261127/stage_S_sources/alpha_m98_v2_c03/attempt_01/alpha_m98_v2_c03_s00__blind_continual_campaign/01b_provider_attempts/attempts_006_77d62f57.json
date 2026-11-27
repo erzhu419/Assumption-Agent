@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77d62f5718ba4adbb8240ed03e36ddca",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__alpha_m98_v2_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:23:01.713958+00:00",
+  "ended_at_utc": "2026-11-27T14:23:35.376622+00:00",
+  "request_sha256": "679b87fe1dbc8d2bbdab9fc4d075029d024e90212a226dee29868fc8a026832a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42231,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26031,
+    "cached_tokens": 11136,
+    "completion_tokens": 1371
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; target=c['true_channel_loads'].sum(axis=1)\\nlinear=np.c_[np.ones(len(raw)),raw]\\npairs=list(itertools.combinations(range(raw.shape[1]),2))\\n# Symmetric quadratic terms plus the affine basis span all squared channel sums and differences.\\nquad=np.c_[linear,raw**2,*[raw[:,i]*raw[:,j] for i,j in pairs]]\\nforms=[('inverse affine',linear),('inverse quadratic',quad)]\\nq=(raw.sum(axis=1)-np.median(raw.sum(axis=1)))/np.std(raw.sum(axis=1))\\nfor a in (0.01,0.1,1.): forms.append((f'inverse rational {a:g}', np.c_[np.ones(len(raw)),raw/(1+a*q[:,None]**2)]))\\nix=np.arange(len(raw)); forward=[]\\nfor i in ix:\\n    keep=ix!=i\\n    off,w=m._calibration({k:c[k][keep] for k in ('true_channel_loads','bridge_raw')})\\n    forward.append((raw[i]-off)@w-target[i])\\ndef cal_score(label,e):\\n    print(label,'total LOO RMSE/max',np.sqrt(np.mean(e**2)),np.max(abs(e)))\\ncal_score('solver forward affine inverted',np.array(forward))\\nfor label,a in forms:\\n    pinv=np.linalg.pinv(a); e=(a@(pinv@target)-target)/(1-np.einsum('ij,ji->i',a,pinv)); cal_score(label,e)\\ntr=d['train']; cp,te=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\ne=np.empty_like(y)\\nfor lab in np.unique(tr['lab_id']):\\n    mask=tr['lab_id']==lab\\n    tau,theta=m._fit(tuple(v[~mask] for v in cp),dt,t,y[~mask]); e[mask]=m._design(tuple(v[mask] for v in cp),dt,t,tau)@theta-y[mask]\\n    print('lab',lab,'n',mask.sum(),'signed median early/late/rate',np.median(e[mask][:,[0,-2,-1]],axis=0))\\nmissing=np.isnan(tr['coupon_features_raw']).any(axis=1); gap=cp[1]-cp[0][:,-1]; high=gap>=np.quantile(gap,.75)\\nfor label,mask in [('complete features',~missing),('missing features',missing),('top quartile hold minus last load',high),('other hold minus last load',~high)]:\\n    r=abs(e[mask]); print(label,'n',mask.sum(),'median early/late/rate',np.median(r[:,[0,-2,-1]],axis=0),'q90 early/late/rate',np.quantile(r[:,[0,-2,-1]],.9,axis=0))\\nout=m.solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25.; assert all(np.isfinite(v).all() for v in out.values())\\n# Independently test the initial-rate convention against the predicted strain at the hold onset.\\nh=1e-6; near=m._design(te,dt,np.array([h]),tau)[:,0]@theta/h\\nerr=max(abs(near-out['initial_rate_pred'])); print('deployment onset derivative agreement (max)',err); np.testing.assert_allclose(near,out['initial_rate_pred'],rtol=2e-6,atol=2e-6)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge calibration and robust two-branch fit → H2 benchtop deployment fallback; worst held-out lab median absolute errors were 0.00929 for strain and 0.01275 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay states, Fokker–Planck drift, or classification balance\",\n      \"rejected_reason\": \"The dataset has continuous strain and rate outcomes, with no relay state or classification label; signed residuals by held-out lab are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Compare bridge models on held-out errors in total axial load, the quantity that drives prediction. Then test whether missing features or large load changes expose errors that lab medians hide, and verify that the returned initial rate matches the strain derivative at hold onset.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c913c56bd8b12d50bad8143b9fbc30c625e790b02b26578446ee06c12d9d2a5a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33623.58,
+      "usage_known": true,
+      "prompt_tokens": 26031,
+      "cached_tokens": 11136,
+      "completion_tokens": 1371
+    }
+  ]
+}

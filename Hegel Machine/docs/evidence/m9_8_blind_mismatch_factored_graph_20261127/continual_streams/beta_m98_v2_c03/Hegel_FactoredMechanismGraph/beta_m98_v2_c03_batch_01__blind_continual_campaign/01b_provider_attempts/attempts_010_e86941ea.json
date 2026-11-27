@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e86941eaf54f46649d5df500c40a2318",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Hegel_FactoredMechanismGraph__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:25.685147+00:00",
+  "ended_at_utc": "2026-11-27T14:29:56.375809+00:00",
+  "request_sha256": "3d950933d209cb33a6d6fe3573c8e7c953df991d3defb8752122906f0367043e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46398,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25664,
+    "cached_tokens": 9600,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_rosette_m98.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; c = s['sensor_calibration_sweeps']\\n    x = np.asarray(c['ref_rosette']); y = np.asarray(c['raw_rosette'])\\n    S, _ = solver._forward(s)\\n    pulses = [(np.asarray(S@p['w_pulse']).reshape(-1, 4), np.asarray(p['y_pulse_raw']).reshape(-1, 4)) for p in item.get('campaign_diagnostics') or []]\\n    banks = c['single_bank_sweeps']\\n    print('single-bank layouts', {str(k): ({str(a): np.shape(b) for a,b in v.items()} if isinstance(v,dict) else np.shape(v)) for k,v in banks.items()} if isinstance(banks,dict) else type(banks).__name__)\\n    for rational in (False, True):\\n        sweeps, tracers = [], []\\n        for fold in range(5):\\n            test = np.arange(len(x)) % 5 == fold\\n            def design(z): return np.c_[np.ones(len(z)),z]\\n            coef = np.linalg.lstsq(design(x[~test]),y[~test],rcond=None)[0]\\n            def predict(z, p):\\n                numerator = design(z)@p[:20].reshape(5,4)\\n                return numerator if not rational else numerator/(1+z*z*p[20:])\\n            p = coef.ravel()\\n            if rational:\\n                p = least_squares(lambda q: (predict(x[~test],q)-y[~test]).ravel(), np.r_[p,np.zeros(4)], bounds=(np.r_[np.full(20,-np.inf),np.zeros(4)],np.full(24,np.inf)), gtol=1e-12).x\\n            sweeps.append(np.sqrt(np.mean((predict(x[test],p)-y[test])**2,axis=0)).max())\\n            for ref, raw in pulses:\\n                err = (predict(ref,p)-raw).reshape(len(s['mu_shifts']),-1,4)\\n                tracers.append(np.sqrt(np.mean(err**2,axis=1)).max())\\n        print('saturating rational' if rational else 'affine','worst held-sweep and held-tracer slice RMS',max(sweeps),max(tracers,default=float('nan')))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_m98.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 reflecting walls with dynamic affine calibration; worst public pulse-by-shift RMS is 1.47e-6 and independent relative terminal-field error is 1.62e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat polynomial calibration and nuisance checks\",\n      \"rejected_reason\": \"Those checks already excluded a transferable polynomial gain and material loss of source contrast; they did not directly test saturating gain.\"\n    }\n  ],\n  \"rationale\": \"Check specifically whether a rational saturation term was missed by the polynomial audit. Reopen calibration only if it materially improves both held-out sweeps and independent tracer predictions. Relay modes and classification metrics do not apply to this steady inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0daca1efa85f4c9d8bb7c93e0c7d43ea8939a3db6871dde38afa2f9caaed6117",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30644.34,
+      "usage_known": true,
+      "prompt_tokens": 25664,
+      "cached_tokens": 9600,
+      "completion_tokens": 1062
+    }
+  ]
+}

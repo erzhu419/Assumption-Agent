@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f45c28c4de854253b4b8798b14093e7f",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:06.753796+00:00",
+  "ended_at_utc": "2026-11-27T14:52:38.981777+00:00",
+  "request_sha256": "f17e464c2af4dff68f489f29cf0b9243dce286bf14fdadb82aeba3d273aeca87",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43338,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25670,
+    "cached_tokens": 11136,
+    "completion_tokens": 1242
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; bridge=m._bridge(d['calibration_load_cells']); past,hold=m._loads(tr,bridge); pt,ht=m._loads(te,bridge); n=len(hold); x=m._features(tr,te)[:n]; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d)\\nfor key,v in out.items(): assert np.isfinite(v).all(), key\\nfull=out['estimated_taus']; print('training material fit',full)\\n# Hold out history/hold mismatch extremes because those amplify uncertainty in the relaxation branches.\\ndef gap(p,h):\\n    z=np.zeros((len(h),2))\\n    for s,ds in enumerate(dt):\\n        a=np.exp(-ds/full); z=a*z+(1-a)*p[:,s,None]\\n    return h[:,None]-z\\n# Rank using fixed, predeclared reference taus to avoid target-dependent slice selection.\\nref=np.array([.3,3.]); a=np.exp(-np.asarray(dt)[:,None]/ref); w=(1-a)*np.cumprod(np.vstack([a[:0:-1],np.ones((1,2))]),axis=0)  if False else None\\ndef history_score(p,h):\\n    z=np.zeros((len(h),2))\\n    for s,ds in enumerate(dt):\\n        a=np.exp(-ds/ref); z=a*z+(1-a)*p[:,s,None]\\n    return np.max(np.abs(h[:,None]-z),axis=1)\\nfor key,vals in [('absolute hold stress',np.abs(hold)),('history mismatch',history_score(past,hold))]:\\n    for side,j in [('high',vals>=np.quantile(vals,.8)),('low',vals<=np.quantile(vals,.2))]:\\n        k=~j; tau,w=m._fit(x[k],past[k],hold[k],dt,t,y[k],r[k]); A,B=m._design(x[j],past[j],hold[j],dt,t,tau)\\n        e=(A@w).reshape(j.sum(),len(t))-y[j]; er=B@w-r[j]\\n        print(key,side,'n',j.sum(),'tau shift',np.max(abs(tau/full-1)),'curve/rate p90',np.quantile(abs(e),.9),np.quantile(abs(er),.9))\\nfor key,a,b in [('absolute hold stress',abs(hold),abs(ht)),('history mismatch',history_score(past,hold),history_score(pt,ht))]: print(key,'train and deployment range',a.min(),a.max(),b.min(),b.max(),'deployment beyond train max',np.sum(b>a.max()))\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: log=json.load(f)\\nu=np.array([e['facility_telemetry_trace'] for e in log]); print('apparatus leave-one-channel-out distances (columns=historical entries)')\\nfor omit in range(u.shape[-1]):\\n    a=np.delete(u,omit,axis=-1); print(omit,np.sqrt(np.mean((a[:-1]-a[-1])**2,axis=(1,2))).round(3).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration and nearest-lineage fallback → H2: retain that model unless boundary holdouts or telemetry-channel ablation expose instability; worst held-out strain and rate errors at the 90th percentile are 0.0240 and 0.0142.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear bridge and nuisance audits\",\n      \"rejected_reason\": \"Blocked calibration and within-lab residual checks are already complete; they did not support changing the solver.\"\n    }\n  ],\n  \"rationale\": \"The remaining relevant risks are that deployment histories fall outside the measured benchtop range or that one telemetry channel drives the lineage match. Boundary holdouts test material fit stability where it matters most; channel ablation tests whether to qualify the lineage inference. Neither can validate chamber accuracy without chamber labels.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3b682a7a144b74fc30c6a7ade138a0ec256ed75780c6168de145a16746397894",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32187.11,
+      "usage_known": true,
+      "prompt_tokens": 25670,
+      "cached_tokens": 11136,
+      "completion_tokens": 1242
+    }
+  ]
+}

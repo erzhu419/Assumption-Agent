@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "74c8f20a3b524c6d855d74b7718a4fd8",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:21.836313+00:00",
+  "ended_at_utc": "2026-11-27T14:41:57.487511+00:00",
+  "request_sha256": "ab896bb34626c8423fec3c548f8709d9e8f2855eb4ab75a8d70d87c6d4b27236",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 31370,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21847,
+    "cached_tokens": 9600,
+    "completion_tokens": 1198
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/bridge_probe.py <<'PY'\\nimport itertools as it,pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']\\n\\ndef gram(deg):\\n return [p for k in range(deg+1) for p in it.combinations_with_replacement(range(4),k)]\\ndef design(t,p):\\n return np.column_stack([np.prod(t[:,i],axis=1) for i in p])\\ndef fit(a,b):\\n w=np.ones(len(b))\\n for k in range(16):\\n  s=np.sqrt(w[:,None]); C=np.linalg.lstsq(a*s,b*s,rcond=None)[0]; r=np.linalg.norm(b-a@C,axis=1); q=max(np.median(r)*2.5,0.00035); w=1/(1+(r/q)**2)\\n good=r<max(np.median(r)*5,0.001)\\n if good.sum()>=a.shape[1] and np.linalg.matrix_rank(a[good])==a.shape[1]: C=np.linalg.lstsq(a[good],b[good],rcond=None)[0]\\n return C\\n\\nif __name__=='__main__':\\n base=gram(1); quad=gram(2); cubic=gram(3); quart=gram(4)\\n cases={'linear':base,'quadratic':quad,'quad+diagonal cubic':quad+[(i,)*3 for i in range(4)],'cubic':cubic,'cubic+diagonal quartic/quintic':cubic+[(i,)*k for k in [4,5] for i in range(4)],'quartic':quart}\\n clear=np.linalg.norm(y,axis=1)<12\\n print('gross rows:',np.flatnonzero(~clear)); print('sweep fields',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]); print('operational ranges')\\n for key in ('train','test'):\\n  for field in ('past_channel_raw','hold_channel_raw'):\\n   a=d[key][field].reshape(-1,4); print(key,field,a.min(0),a.max(0))\\n splits=[(f'mixed{i}',np.arange(16+i,80,4)) for i in range(4)]+[(f'axis{i}',np.arange(4*i,4*i+4)) for i in range(4)]\\n strength=np.max(np.abs(x),axis=1); splits.append(('outer mixed',np.flatnonzero((strength>1.45)&(np.arange(80)>=16))))\\n for name,p in cases.items():\\n  A=design(x,p); C=fit(A[clear],y[clear]); r=np.linalg.norm(y-A@C,axis=1)\\n  print(name,'p',len(p),'inliers q50,90,max',np.quantile(r[clear],[.5,.9,1]),'held-out med/max by slice')\\n  for label,idx in splits:\\n   test=np.intersect1d(idx,np.flatnonzero(clear)); train=clear.copy(); train[idx]=False\\n   if len(test)==0 or sum(train)<len(p): continue\\n   err=np.linalg.norm(y[test]-A[test]@fit(A[train],y[train]),axis=1)\\n   print(label, np.round([np.median(err),np.max(err)],6),end='; ')\\n  print()\\n  if name in ('quad+diagonal cubic','cubic','cubic+diagonal quartic/quintic'):\\n   for power,co in zip(p,C):\\n    if np.max(abs(co))>0.001: print(power,co)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge → sparse coupled polynomial with a separate gross-offset regime; the affine fit’s median raw residual is 1.035, and grouped holdout error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use an unrestricted high-degree inverse\",\"rejected_reason\":\"The axis sweeps visibly constrain the forward model, and the small calibration panel cannot support an unrestricted high-degree fit on grouped holdouts.\"}],\"rationale\":\"Compare nested forward bases on held-out axes, mixed loads, and outer mixed loads. If higher-order terms only improve in-sample fit or destabilize held-out predictions, retain the smaller basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4925cfebc2a283255102189c50fa70e803a118ba006a6533f784ff9470b3ed49",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36089.75,
+      "usage_known": true,
+      "prompt_tokens": 21847,
+      "cached_tokens": 9600,
+      "completion_tokens": 1198
+    }
+  ]
+}

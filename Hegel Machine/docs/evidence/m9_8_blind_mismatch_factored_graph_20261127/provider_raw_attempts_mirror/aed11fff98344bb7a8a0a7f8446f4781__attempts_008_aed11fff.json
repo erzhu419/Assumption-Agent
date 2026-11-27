@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aed11fff98344bb7a8a0a7f8446f4781",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:24.138672+00:00",
+  "ended_at_utc": "2026-11-27T14:43:06.415154+00:00",
+  "request_sha256": "3a9a5fe0fedd95489cf3c3d11484dcd8d041d7a3bef7cbb8bb709cb0192be12a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40864,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24429,
+    "cached_tokens": 5504,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/audit_rosette.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _design, _fit, _invert\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    studies = [item['study'] for item in pickle.load(f)]\\nprint('study count', len(studies))\\nfor st in studies:\\n    sweeps = st['sensor_calibration_sweeps']\\n    x, y = (np.asarray(sweeps[k]) for k in ('ref_rosette', 'raw_rosette'))\\n    print('study keys', sorted(st))\\n    a = _design(x)\\n    poly = np.empty_like(y)\\n    rival = np.empty_like(y)\\n    selected = np.zeros(y.shape, dtype=bool)\\n    for i in range(len(x)):\\n        train = np.arange(len(x)) != i\\n        b = _fit(x[train], y[train])\\n        poly[i] = a[i] @ b\\n        r = np.linalg.norm(y[train] - a[train] @ b, axis=1)\\n        usable = np.flatnonzero(train)[r <= max(12 * np.median(r), 1e-7)]\\n        for j in range(4):\\n            keep = b[:, j] != 0\\n            base = a[:, keep]\\n            z = y[usable, j]\\n            best_score = np.inf\\n            q_options = [x[:, j], x[:, j] + x[:, (j+1)%4], x[:, j] - x[:, (j+1)%4]]\\n            for q in q_options:\\n                for alpha in (0., 1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1, 1.):\\n                    den = 1 + alpha * q*q\\n                    features = base / den[:, None]\\n                    fit = features[usable]\\n                    coef = np.linalg.lstsq(fit, z, rcond=None)[0]\\n                    leverage = np.sum(np.linalg.qr(fit, mode='reduced')[0]**2, axis=1)\\n                    press = np.mean(((fit @ coef - z) / (1 - leverage))**2)\\n                    if press < best_score:\\n                        best_score = press\\n                        rival[i, j] = features[i] @ coef\\n                        selected[i, j] = alpha > 0\\n    ep = np.linalg.norm(poly-y, axis=1)\\n    er = np.linalg.norm(rival-y, axis=1)\\n    clean = ep < 12*np.median(ep)\\n    high = np.max(abs(x), axis=1) > 1.4\\n    for label, use in [('nominal', clean), ('tail', clean & high)]:\\n        print(label, 'rows', use.sum(), 'polynomial/rational max', ep[use].max(), er[use].max(), 'RMS', np.sqrt(np.mean(ep[use]**2)), np.sqrt(np.mean(er[use]**2)), 'nonzero denominator selections', selected[use].sum())\\n    print('flagged sweep rows', np.flatnonzero(~clean).tolist())\\n    banks = sweeps['single_bank_sweeps']\\n    j = np.asarray(banks['bank_id'], dtype=int).reshape(-1)\\n    bx = np.eye(4)[j] * np.asarray(banks['ref_signal']).reshape(-1, 1)\\n    # Use only mixed-channel sweeps for this independent single-bank check.\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    b = _fit(x[mixed], y[mixed])\\n    discrepancy = ((_design(bx) @ b)[np.arange(len(j)), j] - np.asarray(banks['raw_readout']).reshape(-1))\\n    for bank in range(4):\\n        dr = discrepancy[j == bank]\\n        nominal = np.abs(dr) < 12 * np.median(np.abs(discrepancy))\\n        print('bank', bank, 'nominal max', np.max(np.abs(dr[nominal])), 'EMI count', (~nominal).sum())\\n        assert np.max(np.abs(dr[nominal])) < 2e-4\\n    assert ep[clean].max() < 2e-4\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic response → H2 sparse pairwise coupling plus channel cubics; the verified worst held-out inverse error is 3.49×10⁻⁵, and the new audit tests whether rational saturation improves it.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or within-batch classification accuracy\",\n      \"rejected_reason\": \"The supplied calibration is a continuous four-channel regression, with no relay state or classification target. The relevant stratified check is prediction error by sensor bank.\"\n    }\n  ],\n  \"rationale\": \"Compare rational denominators built from single channels and channel sums or differences, selecting them inside each training fold. A consistent held-out gain would justify testing a new inverse. Independently predict single-bank readings from mixed-channel sweeps; systematic bank error would indicate an omitted coupling or gain term.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ad835840a4a09a5de5e7d29536a33dd246b28c3cc2c775b2ab26286b643d8c71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43074.68,
+      "usage_known": true,
+      "prompt_tokens": 24429,
+      "cached_tokens": 5504,
+      "completion_tokens": 1565
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f379fef4d87f4ea5b16cfff0e2d4180f",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Hegel_FactoredMechanismGraph__alpha_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:09.546436+00:00",
+  "ended_at_utc": "2026-11-27T14:37:40.538282+00:00",
+  "request_sha256": "28c30bdd0ebcf7660d954cffa698d17c4d53ec440e4e83779bf90dc564e9a390",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57245,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30138,
+    "cached_tokens": 9600,
+    "completion_tokens": 1181
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '55,125p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=a['dataset'];tr,te,g=d['train'],d['test'],a['campaign_diagnostics'];t,dt=d['eval_times'],d['past_dt']; bridge=m._axial_load_map(d['calibration_load_cells']); x,_=m._features(tr,te); spec=m._specimen(tr,x,bridge)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None];r=tr['instant_rate_obs']; out=m.solve_batch(d);tau,w=out['estimated_taus'],out['hereditary_weights']; print('full spectrum',tau)\\nfor lab in np.unique(tr['lab_id']):\\n h=tr['lab_id']==lab;tf,wf=m._fit(tuple(z[~h] for z in spec),dt,t,y[~h],r[~h]); c,q=m._branches(tuple(z[h] for z in spec),dt,t,tf); dr=spec[2][h]@wf[2:]; ec=c@wf[:2]+dr[:,None]*t-y[h];er=q@wf[:2]+dr-r[h];print('benchtop held lab',lab,'max relative spectrum movement',np.max(abs(tf/tau-1)),'curve/rate median absolute error',np.median(abs(ec)),np.median(abs(er)))\\n_,xg=m._features(g,g);sp=m._specimen(g,xg,bridge); c,q=m._branches(sp,dt,t,tau); dy=g['strain_curves_obs']-g['strain_0'][:,None]-c@w[:2]; observed=g['instant_rate_obs']-q@w[:2]; predicted=sp[2]@w[2:];\\nprint('drift amplitude pooled/within-lab absolute errors',np.mean(abs(predicted-observed)),[(int(lab),float(np.mean(abs((predicted-observed)[g['lab_id']==lab])))) for lab in np.unique(g['lab_id'])])\\nfor name, fn, p0, bounds in [('unit exponential',lambda p:-np.expm1(-t),[],None),('rational square',lambda p:t/(1+p[0]*t*t),[1.],([0.],[20.])),('rational linear+quadratic',lambda p:t/(1+p[0]*t+p[1]*t*t),[.5,.1],([0.,0.],[20.,20.])),('two-exponential contrast',lambda p:(1+p[0])*(-np.expm1(-t))-p[0]*(-np.expm1(-p[1]*t))/p[1],[0.,2.],([-3.,.05],[3.,10.]))]:\\n scores=[]\\n for lab in np.unique(g['lab_id']):\\n  h=g['lab_id']==lab\\n  p=least_squares(lambda p:(observed[~h,None]*fn(p)-dy[~h]).ravel(),p0,bounds=bounds,loss='soft_l1',f_scale=.004).x if p0 else []\\n  scores.append(float(np.sqrt(np.mean((observed[h,None]*fn(p)-dy[h])**2))))\\n print(name,'held-lab shape RMSE',np.round(scores,6),'worst',max(scores))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated hereditary preload → H2 exponential chamber drift saturation; worst held-lab kernel RMSE is 0.00489, and host-verified strain and rate MAE are 0.000986 and 0.000931.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay states, classification accuracy, or Fokker–Planck terms.\",\"rejected_reason\":\"The published rheology model has no relay state, class label, or stochastic transport operator. Lab-held-out strain, rate, and spectrum errors test the relevant nuisance and constitutive failures.\"}],\"rationale\":\"Leave out each lab to detect whether one lab dominates the inferred spectrum, and compare rational and contrast kernels on the same held-out chamber labs. Material instability would motivate a fit change; a consistent improvement in chamber shape would motivate a kernel change.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cd56af905fe2be8ea4d1a24f7cdd33ca9f281b38489438ab530393a40ea26bc0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31390.42,
+      "usage_known": true,
+      "prompt_tokens": 30138,
+      "cached_tokens": 9600,
+      "completion_tokens": 1181
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6bdca6ab43a4d6195ff17f8de076483",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:40.799952+00:00",
+  "ended_at_utc": "2026-11-27T14:58:20.817899+00:00",
+  "request_sha256": "9280f91c1c9194c348844227a04be1d640a61bfcd274443f75e4e4ea6337b04e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32614,
+    "cached_tokens": 11136,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/batch_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.linalg import lstsq\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nS, _ = m._forward(s)\\n\\ndef features(v, j, family):\\n    a, b, d, e = v[:, [(j+i)%4 for i in (0,-1,1,2)]].T\\n    B = np.column_stack((np.ones(len(a)), a, b, d, a*d, a**3))\\n    if family == 'pair':\\n        return np.column_stack((B, e, (a-d)**2, (a+b)**2, a*b*d))\\n    if family.startswith('rational'):\\n        q = a if family == 'rational_self' else a-d\\n        return np.column_stack((B, a/(1+q*q), (a-d)/(1+q*q)))\\n    return B\\n\\ndef fit(A, z):\\n    w = np.ones(len(A))\\n    for _ in range(40):\\n        q = lstsq(A*w[:,None], z*w, lapack_driver='gelsy')[0]\\n        w = 1 / np.hypot(1, (z-A@q)/3e-5)\\n    return q\\n\\nfor family in ('six_term', 'pair', 'rational_self', 'rational_difference'):\\n    sweeps, tracers = [], []\\n    for j in range(4):\\n        A = features(x,j,family)\\n        err = np.zeros(len(x))\\n        pulse_err = []\\n        for fold in range(5):\\n            test = np.arange(len(x))%5 == fold\\n            q = fit(A[~test],y[~test,j])\\n            err[test] = abs(A[test]@q-y[test,j])\\n            for pulse in item.get('campaign_diagnostics') or []:\\n                v = (S@pulse['w_pulse']).reshape(-1,4)\\n                raw = pulse['y_pulse_raw'].reshape(-1,4)[:,j]\\n                r = (features(v,j,family)@q-raw).reshape(len(s['mu_shifts']),-1)\\n                pulse_err.append(np.sqrt(np.mean(r*r,axis=1)).max())\\n        sweeps.append(np.quantile(err,.9))\\n        tracers.extend(pulse_err)\\n    print(f'{family}: worst-bank out-of-fold sweep p90={max(sweeps):.6g}; worst fold/bank/pulse/shift raw RMSE={max(tracers):.6g}')\\n\\nZ = s['Z_nuisance']\\nyc = m._calibrate(s)\\ncap, total, ridge = (s[k] for k in ('u_box','total_budget','source_ridge'))\\nw = m.solve_batch(s)['weights']\\nfor j in np.unique(s['row_bank_id']):\\n    train = s['row_bank_id'] != j\\n    z = Z[train]\\n    P = np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\n    A = S[train]-z@(P@S[train])\\n    target = yc[train]-z@(P@yc[train])\\n    wj, _ = m._box_budget_qp(A.T@A+ridge*np.eye(len(w)), A.T@target, cap, total)\\n    gamma = P@(yc[train]-S[train]@wj)\\n    held = ~train\\n    err = yc[held]-S[held]@wj\\n    print(f'held-out bank {j}: RMSE without/with train-only nuisance={np.sqrt(np.mean(err**2)):.6g}/{np.sqrt(np.mean((err-Z[held]@gamma)**2)):.6g}; relative weight shift={np.linalg.norm(wj-w)/np.linalg.norm(w):.6g}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/batch_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls with sweep-fitted nonlinear calibration; worst tracer RMSE is 1.75e-6 and worst-bank held-out calibration p90 is 2.25e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The public study is a continuous steady-state inverse problem with one campaign, no cohort labels, and no relay state or stochastic evolution. Held-out sensor-bank prediction is the relevant nuisance diagnostic.\"\n    }\n  ],\n  \"rationale\": \"Test whether rational or pairwise extensions improve held-out sweeps and independent tracer predictions before changing the calibration basis. Fit nuisance coefficients without each held-out bank to see whether correction transfers across banks or hides a bank-specific mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6999910b3cf29f5a8f54c972cb2b6aab95274aca4d348170adeec13d27636492",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39974.43,
+      "usage_known": true,
+      "prompt_tokens": 32614,
+      "cached_tokens": 11136,
+      "completion_tokens": 1411
+    }
+  ]
+}

@@ -153,8 +153,12 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
             f"| `{r['world_id']}` | `{r['event']}` | `{r['public_batch_pkl_sha256'][:16]}...` | `{r['masked_selected_downstream']}` | `{r['masked_private_strict_pass']}` |"
         )
 
-    n11_arms = n11_j["arm_summaries"]
-    m97_ft_pass = int(m97_ft_j["private_strict_passes_zero_llm"])
+    n11_arms = n11_j["ladder"]
+    m97_ft_pass = int(
+        m97_ft_j["scope_and_formation_cost_separation"]["marginal_execution_comparison"][
+            "Flat_ConditionalTable_Executed_Probes1"
+        ]["zero_llm_private_strict_pass"]
+    )
 
     en = f"""# Hegel Machine M9.7.1 Audit Closure & M9.8 Blind Mismatch Discovery + Factored Mechanism Graph Report
 
@@ -162,7 +166,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 - **M9.8 Run ID**: `{m98_j['run_id']}`
 - **Frozen Pre-Confirmation Code Commit**: `{m98_j['code_commit_at_start']}` (`working_tree_dirty_at_start = {m98_j['working_tree_dirty_at_start']}`, `source_tree_sha256 = {m98_j['source_tree_sha256']}`)
 - **Sandbox Image Digest**: `{m98_j['sandbox_image_digest']}`
-- **Model & Concurrency**: `{m98_j['model']}` (`reasoning_effort = {m98_j['reasoning_effort']}`, `max_codex_concurrency = {m98_j['configured_max_codex_concurrency']}`)
+- **Model & Concurrency**: `{m98_j['model']}` (`reasoning_effort = {m98_j['reasoning_effort']}`, `max_codex_concurrency = {m98_j['configured_max_codex_concurrency']}`, `peak_active = {m98_j.get('peak_active_codex_concurrency')}`)
 - **Evidence Provenance**: `executed` (`usage_completeness = {m98_j['usage_completeness']}`, `unknown_usage_attempts = {unk_att}`)
 - **Shared Verification Kernel & Cost Policy**: `{m98_j['shared_kernel_version']}` / `{m98_j['cost_policy_version']}`
 
@@ -172,7 +176,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 
 1. **Phase 1 (`M9.7.1`, `0` Paid LLM Calls — Sealed in `docs/evidence/m9_7_1_audit_closure_and_paid_pool_attribution_20261127/`)**:
    - **Real Containerized Paid-Pool Replays (`A02`, `A15`, `N11`)**:
-     - `01_n11_executed_m95_paid_pool_replay.json`: Executed all `48` `M9.5` reuse episodes across all 6 strategies in air-gapped `hegel-clean-scipy:m7v1` JSON-RPC container (`1_SingleLatest_Unvalidated = {n11_arms['1_SingleLatest_Unvalidated']['private_strict_passes']}/48`, `2_LatestFirst_ValidatedWingOLS = {n11_arms['2_LatestFirst_ValidatedWingOLS']['private_strict_passes']}/48`, **`3_OldestFirst_Probes1 = {n11_arms['3_OldestFirst_Probes1']['private_strict_passes']}/48`**, `4_Multiversion_Probes2 = {n11_arms['4_Multiversion_Probes2']['private_strict_passes']}/48`, **`5_Flat_SharedConditionalTable_Probes1 = {n11_arms['5_Flat_SharedConditionalTable_Probes1']['private_strict_passes']}/48`**, `6_Hegel_MechanismGraph_Probes1 = {n11_arms['6_Hegel_MechanismGraph_Probes1']['private_strict_passes']}/48`, `evidence_provenance = executed`).
+     - `01_n11_executed_m95_paid_pool_replay.json`: Executed all `48` `M9.5` reuse episodes across all 6 strategies in air-gapped `hegel-clean-scipy:m7v1` JSON-RPC container (`1_Flat_SingleLatest_Unvalidated = {n11_arms['1_Flat_SingleLatest_Unvalidated_Probes1']['private_strict_pass']}/48`, `2_Flat_SingleLatest_ValidatedWingOLS = {n11_arms['2_Flat_SingleLatest_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`, **`3_Flat_OldestFirst_Probes1 = {n11_arms['3_Flat_Multiversion_OldestFirst_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`**, `4_Flat_Multiversion_Probes2 = {n11_arms['4_Flat_Multiversion_ValidatedWingOLS_Probes2']['private_strict_pass']}/48`, **`5_Flat_SharedConditionalTable_Probes1 = {n11_arms['5_Flat_SharedConditionalTable_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`**, `6_Hegel_MechanismGraph_Probes1 = {n11_arms['6_Hegel_MechanismGraph_Guard_Probes1']['private_strict_pass']}/48`, `evidence_provenance = executed`).
      - `02_m97_executed_flat_conditional_table_attribution.json`: Executed prefix-locked `Flat_ConditionalTable` (`0` `PersistentMechanismGraph`) across all `42` `M9.7` continual episodes (`42/42` route match, `30/42` public gate accepted, `{m97_ft_pass}/42` zero-LLM private `strict_pass`), proving that on uniform-parent 1-stage `M9.7` streams, conditional multi-version retention + Kleene guards explained `100%` of the gain over `Flat_LatestFirst`, motivating `M9.8`'s 2-stage factored dependency architecture.
    - **Contract, Hydration, Verifier & Errata Closure (`A01, A05–A12, A16, A17`)**:
      - Enforced fail-closed `PARENT_VERSION_SET_MISMATCH` (`A07`), unidirectional `(eval_bid, owner_bid)` coverage (`A08`), `INFRA_FAILURE -> SCHEMA_FAILURE -> DOMAIN_REJECTION -> SCIENTIFIC_FAILURE` probe classification (`A09`), automatic checkpoint persistence + hydration of `witness_ledger` and `EmpiricalCoverageReceipt`s (`A10`), unified `estimate_validated_channel_affine_calibration` across `Flat` and `Graph` (`A11`), split Alpha error codes (`NON_FINITE / PARAMETER_ORDER / STRAIN_ERROR / RATE_ERROR` `A06`), updated `historical_capabilities.json` (`A16`), and sealed full `M9.7` cost/timing/`R1` errata (`docs/53b_M9_7_1_Audit_Errata_Contract_Closure_and_Paid_Pool_Attribution.md`).
@@ -187,7 +191,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
      - **`Hegel_FactoredMechanismGraph` vs `Flat_LatestFirst` (`v2`)**: Mean cluster delta **`{_fmt_int(vs_fl['mean_diff'])}`** (`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - fl_tot['proxy_v2_u_010c_4o'], fl_tot['proxy_v2_u_010c_4o'])}`), 95% bootstrap CI **`{vs_fl['bootstrap_95ci']}`**, exact two-sided sign-flip **`p = {vs_fl['two_sided_sign_flip_p']}`**.
    - **Strict Byte-Identical `(R0, U_iso)` Counterfactual History + Executed `HistoryMasked_CurrentOnly` Control (`A03` & `A13`)**:
      - Across all `8` clusters, `SHA256(/holdout_task/public_batch.pkl on R0) == SHA256(/holdout_task/public_batch.pkl on U_iso)` (`0` `gt` key inside container) and `R0.instruction_text == U_iso.instruction_text` (`0` prompt formula leakage across all 8 episodes).
-     - Executed `HistoryMasked_CurrentOnly` Docker control (`m9_8_history_masked_ablation.json`) passes only **`{m98_mask_j['history_masked_strict_passes']}/{m98_mask_j['total_twin_episodes']}` (`50.0%`)** when `archive_apparatus_log.json` is masked, whereas history-aware `Flat_ConditionalTable_Online` and `Hegel_FactoredMechanismGraph` pass **`16/16` (`100.0%`) at `0` LLM turns**.
+     - Executed `HistoryMasked_CurrentOnly` Docker control (`m9_8_history_masked_ablation.json`) passes **`{m98_mask_j['history_masked_strict_passes']}/{m98_mask_j['total_twin_episodes']}` (`{100.0 * m98_mask_j['history_masked_strict_passes'] / m98_mask_j['total_twin_episodes']:.1f}%`, selecting `dn_b02 = D2` under `UNKNOWN` fallback; theoretical ceiling for any current-only deterministic policy is `<= 8/16 = 50.0%`)**, whereas history-aware `Hegel_FactoredMechanismGraph` passes **`16/16` (`100.0%`) at `0` LLM turns** (`Flat_ConditionalTable_Online` `15/16` at `0` LLM turns).
 
 ---
 
@@ -196,7 +200,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 > **Shared `Stage S` Initialization Cost (Identical Across All 3 Arms)**: `{s_led['call_count']}` calls, `v1 = {_fmt_int(s_led['proxy_v1_u_025c_1o'])}`, `v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`, LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`.
 > **Full `M9.8` Grand Campaign Cost Ledger (`A05` Zero-Hidden-Run Accounting)**:
 > - `m9_8_aborted_run1_stage_s_contract_underspec_20261127` (aborted in `Stage S` on retired seed block `911000..924000`, `0` continual episodes): `{run1_led['call_count']}` calls, `v2 = {_fmt_int(run1_led['proxy_v2_u_010c_4o'])}` (`usage_completeness = {run1_j['usage_completeness']}`).
-> - `m9_8_dev_live_calibration_20261127` (`DEV_M98_WORLD_SPECS` `810100, 820100` pre-freeze calibration): `{dev_calls_total}` calls, `v2 = {_fmt_int(dev_v2_total)}` (`usage_completeness = {dev_j['usage_completeness']}`).
+> - `m9_8_dev_live_calibration_pass1_20261127` + `m9_8_dev_live_calibration_20261127` (`DEV_M98_WORLD_SPECS` `810100, 820100` pre-freeze calibration: `{dev1_led['call_count']}` + `{dev_calls_total - int(dev1_led['call_count'])}` calls): `{dev_calls_total}` calls, `v2 = {_fmt_int(dev_v2_total)}` (`usage_completeness = {dev_j['usage_completeness']}`).
 > - `m9_8_blind_mismatch_factored_graph_20261127` (frozen confirmation run on fresh unexposed seed block `931000..944000`): `{conf_calls_total}` calls, `v2 = {_fmt_int(conf_v2_total)}` (`usage_completeness = {m98_j['usage_completeness']}`).
 > - **Grand Total Across All `M9.8` Runs**: **`{grand_calls_total}` calls, `v2 = {_fmt_int(grand_v2_total)}`** (`100%` mirrored with `SHA256SUMS.txt`).
 
@@ -275,7 +279,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 
 1. **第一阶段（`M9.7.1`，`0` 次付费 LLM 调用 — 封存于 `docs/evidence/m9_7_1_audit_closure_and_paid_pool_attribution_20261127/`）**：
    - **真实容器化付费池重放（`A02`, `A15`, `N11`）**：
-     - `01_n11_executed_m95_paid_pool_replay.json`：在断网容器 `hegel-clean-scipy:m7v1` 内对 `M9.5` 全部 `48` 个复用 episode 执行 6 臂真实代码重放（`3_OldestFirst_Probes1 = {n11_arms['3_OldestFirst_Probes1']['private_strict_passes']}/48`，`5_Flat_SharedConditionalTable_Probes1 = {n11_arms['5_Flat_SharedConditionalTable_Probes1']['private_strict_passes']}/48`，`6_Hegel_MechanismGraph_Probes1 = {n11_arms['6_Hegel_MechanismGraph_Probes1']['private_strict_passes']}/48`，`evidence_provenance = executed`）。
+     - `01_n11_executed_m95_paid_pool_replay.json`：在断网容器 `hegel-clean-scipy:m7v1` 内对 `M9.5` 全部 `48` 个复用 episode 执行 6 臂真实代码重放（`1_Unvalidated = {n11_arms['1_Flat_SingleLatest_Unvalidated_Probes1']['private_strict_pass']}/48`，`2_ValidatedWingOLS = {n11_arms['2_Flat_SingleLatest_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`，`3_OldestFirst_Probes1 = {n11_arms['3_Flat_Multiversion_OldestFirst_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`，`4_Multiversion_Probes2 = {n11_arms['4_Flat_Multiversion_ValidatedWingOLS_Probes2']['private_strict_pass']}/48`，`5_Flat_SharedConditionalTable_Probes1 = {n11_arms['5_Flat_SharedConditionalTable_ValidatedWingOLS_Probes1']['private_strict_pass']}/48`，`6_Hegel_MechanismGraph_Probes1 = {n11_arms['6_Hegel_MechanismGraph_Guard_Probes1']['private_strict_pass']}/48`，`evidence_provenance = executed`）。
      - `02_m97_executed_flat_conditional_table_attribution.json`：对 `M9.7` 全部 `42` 个持续学习 episode 执行无图在线前缀锁定 `Flat_ConditionalTable`（`42/42` 路由一致、`{m97_ft_pass}/42` 零 LLM 私有验证通过），实证确认在单层同父节点 `M9.7` 流上，多版本条件表已解释全部相对 `Flat_LatestFirst` 的收益，从而确立 `M9.8` 双层因果分解机制图的正交验证边界。
    - **契约、冷启动恢复、验证器与勘误闭环（`A01, A05–A12, A16, A17`）**：
      - 完成 `PARENT_VERSION_SET_MISMATCH` 全父集版本校验（`A07`）、单向覆盖 `(eval_bid, owner_bid)` 与内容寻址回执摘要（`A08`）、超时与科学反例严格分层（`A09`）、`witness_ledger` 与 `EmpiricalCoverageReceipt` 检查点持久化恢复（`A10`）、`Flat/Graph` 统一校准估计器（`A11`）、Alpha 错误码拆分（`A06`）、能力索引更新（`A16`）及 `M9.7` 完整成本/耗时/`R1` 取证勘误（`docs/53b_M9_7_1_Audit_Errata_Contract_Closure_and_Paid_Pool_Attribution_ZH.md`）。
@@ -290,7 +294,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
      - **`Hegel_FactoredMechanismGraph` 对比 `Flat_LatestFirst` (`v2`)**：簇均值差 **`{_fmt_int(vs_fl['mean_diff'])}`**（**`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - fl_tot['proxy_v2_u_010c_4o'], fl_tot['proxy_v2_u_010c_4o'])}`**），95% Bootstrap CI **`{vs_fl['bootstrap_95ci']}`**，精确双侧符号翻转检验 **`p = {vs_fl['two_sided_sign_flip_p']}`**。
    - **严格字节级全等 `(R0, U_iso)` 反事实双生对 + 真实容器化 `HistoryMasked_CurrentOnly` 消融对照（`A03` & `A13`）**：
      - 全部 `8` 个簇上 `SHA256(/holdout_task/public_batch.pkl)` 在 `R0` 与 `U_iso` 间 **`100%` 字节级相同**（容器内无任何 `gt` 字段），且全部 8 个 episode 的盲提示词 `100%` 相同（`0` 公式或机制标签泄漏）。
-     - 遮蔽前缀仪器日志的 `HistoryMasked_CurrentOnly` 容器对照仅通过 **`{m98_mask_j['history_masked_strict_passes']}/{m98_mask_j['total_twin_episodes']}` (`50.0%`)**，而历史感知双臂达到 **`16/16` (`100.0%`) 零轮通过**。
+     - 遮蔽前缀仪器日志的 `HistoryMasked_CurrentOnly` 容器对照通过 **`{m98_mask_j['history_masked_strict_passes']}/{m98_mask_j['total_twin_episodes']}` (`{100.0 * m98_mask_j['history_masked_strict_passes'] / m98_mask_j['total_twin_episodes']:.1f}%`，因 `UNKNOWN` 回退统一落入优先级最高的 `dn_b02 = D2`；任何仅依赖当前输入的确定性策略理论上界亦不超过 `8/16 = 50.0%`)**，而历史感知 `Hegel_FactoredMechanismGraph` 达到 **`16/16` (`100.0%`) 零轮通过**（`Flat_ConditionalTable_Online` 为 `15/16` 零轮通过）。
 
 ---
 
@@ -299,7 +303,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 > **共享源任务 `Stage S` 初始化开销（三臂完全共享）**：`{s_led['call_count']}` 次调用，`v1 = {_fmt_int(s_led['proxy_v1_u_025c_1o'])}`，`v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`，LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`。
 > **`M9.8` 全周期透明总账（`A05` 零隐藏运行核算）**：
 > - `m9_8_aborted_run1_stage_s_contract_underspec_20261127`（旧种子段 `911000..924000` 在 `Stage S` 因基线符号约定未写明中止，`0` 个持续流 episode，旧种子段已永久退役）：`{run1_led['call_count']}` 次调用，`v2 = {_fmt_int(run1_led['proxy_v2_u_010c_4o'])}`（`usage_completeness = {run1_j['usage_completeness']}`）。
-> - `m9_8_dev_live_calibration_20261127`（冻结前仅在 `DEV_M98_WORLD_SPECS` `810100, 820100` 上的在线校准验证）：`{dev_calls_total}` 次调用，`v2 = {_fmt_int(dev_v2_total)}`（`usage_completeness = {dev_j['usage_completeness']}`）。
+> - `m9_8_dev_live_calibration_pass1_20261127` + `m9_8_dev_live_calibration_20261127`（冻结前仅在 `DEV_M98_WORLD_SPECS` `810100, 820100` 上的两轮在线校准验证：`{dev1_led['call_count']}` + `{dev_calls_total - int(dev1_led['call_count'])}` 次调用）：`{dev_calls_total}` 次调用，`v2 = {_fmt_int(dev_v2_total)}`（`usage_completeness = {dev_j['usage_completeness']}`）。
 > - `m9_8_blind_mismatch_factored_graph_20261127`（全新未曝光种子段 `931000..944000` 单次冻结确认集实验）：`{conf_calls_total}` 次调用，`v2 = {_fmt_int(conf_v2_total)}`（`usage_completeness = {m98_j['usage_completeness']}`）。
 > - **`M9.8` 全部运行累计总计**：**`{grand_calls_total}` 次调用，`v2 = {_fmt_int(grand_v2_total)}`**（`100%` 原始回执镜像与 `SHA256SUMS.txt` 封存）。
 

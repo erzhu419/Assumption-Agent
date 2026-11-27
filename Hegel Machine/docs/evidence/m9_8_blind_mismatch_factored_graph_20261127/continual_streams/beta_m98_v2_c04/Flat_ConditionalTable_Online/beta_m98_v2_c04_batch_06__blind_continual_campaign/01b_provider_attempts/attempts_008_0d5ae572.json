@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d5ae57266134a2193ec9694bff7055f",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:03.855998+00:00",
+  "ended_at_utc": "2026-11-27T14:47:43.553392+00:00",
+  "request_sha256": "cf72388d7fcf459c14104b54dbb3bf06cdbb0d64208356a9f57dc8eeaaaac924",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41331,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24186,
+    "cached_tokens": 9600,
+    "completion_tokens": 1426
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('audit_solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('/holdout_task/batch_solver.py')\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nx, y = (np.asarray(s['sensor_calibration_sweeps'][k]) for k in ('ref_rosette', 'raw_rosette'))\\nbase = m._rosette_basis(x)\\ncols = [x[:, i] - sign*x[:, j] for i in range(4) for j in range(i+1,4) for sign in (-1,1)]\\nextra = np.column_stack([q**p for q in cols for p in (2,3)] + [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i+1,4) for k in range(j+1,4)] + [x[:,i]/(1+a*q*q) for i in range(4) for q in [x[:,i],x[:,(i+1)%4],cols[2*i]] for a in (.25,1.)])\\nmetrics = {k: [] for k in ('base', 'augmented')}\\nfor fold in range(5):\\n    te = np.arange(len(x)) % 5 == fold\\n    tr = ~te\\n    coef = m._fit_rosette(x[tr], y[tr])\\n    pred = np.einsum('njk,jk->nj', base, coef)\\n    challenge = np.empty_like(y[te])\\n    for ch in range(4):\\n        e = np.abs(pred[tr,ch]-y[tr,ch]); keep = tr.copy(); keep[tr] = e <= max(8*np.median(e),1e-4)\\n        A = np.column_stack((base[:,ch,:],extra))\\n        b = np.linalg.lstsq(A[keep], y[keep,ch], rcond=1e-10)[0]\\n        challenge[:,ch] = A[te] @ b\\n    for key, est in [('base',pred[te]),('augmented',challenge)]:\\n        metrics[key].append(np.median(np.abs(est-y[te]),axis=0))\\nprint('Worst fold/channel median absolute calibration errors:', {key:float(np.max(val)) for key,val in metrics.items()})\\narchive = Path('/tmp/hegel_continual_archive')\\npulses = item['campaign_diagnostics']\\ncal = [m._calibrate({**s,'y_obs_raw':d['y_pulse_raw']}) for d in pulses]\\nerrors = {}\\nfor name in ('02','03','05'):\\n    fwd = load(archive/f'beta_m98_v2_c04_batch_{name}_solver.py')._forward(s)[0]\\n    errors[name] = [float(np.sqrt(np.mean((fwd @ d['w_pulse']-yy)**2))) for d,yy in zip(pulses,cal)]\\nprint('Pulse RMSEs for archived wall models:',errors)\\nfor i in range(len(pulses)):\\n    assert min(errors,key=lambda k:errors[k][i]) == '05'\\nS,_ = m._forward(s)\\nz = s['Z_nuisance']\\nyc = m._calibrate(s)\\nw = m.solve_batch(s)['weights']\\nr = S@w-yc\\nA = z.T@z + s['nuisance_ridge']*np.eye(z.shape[1])\\ngamma = np.linalg.solve(A,z.T@r)\\nr_profiled = r-z@gamma\\nprint('Observed residual RMSE by shift, before and after prescribed projection:', [np.sqrt(np.mean(q.reshape(len(s['mu_shifts']),-1)**2,axis=1)).tolist() for q in (r,r_profiled)])\\nprint('Nuisance ridge normal-equation residual:',float(np.linalg.norm(z.T@r_profiled-s['nuisance_ridge']*gamma,np.inf)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls with affine calibration -> H2 sealed walls with sweep-fitted nonlinear calibration; verified worst pulse-by-shift RMSE is 2.45e-6 and independent field relative L2 error is 5.09e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch-classification, relay, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The study is a steady transport inverse problem with continuous observations and a specified nuisance design, not a classification, relay, or stochastic-control task.\"\n    }\n  ],\n  \"rationale\": \"Test whether added rational and interaction terms improve held-out calibration, whether each pulse independently selects the sealed walls, and whether the prescribed nuisance projection works across shifts. A material calibration improvement would warrant a pulse-level comparison before editing the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3aaa29bf2b5199868056e2ddfcf3635e1e616553169087db440009009850f276",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40152.64,
+      "usage_known": true,
+      "prompt_tokens": 24186,
+      "cached_tokens": 9600,
+      "completion_tokens": 1426
+    }
+  ]
+}

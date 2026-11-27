@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0cf271a8284f4e958d546924c2318d29",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_ConditionalTable_Online__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:38.435683+00:00",
+  "ended_at_utc": "2026-11-27T14:46:06.848848+00:00",
+  "request_sha256": "a0dabf4bccdc898cb3c21d85ca577411e2102b5dfc0a36cb2b05e4613abc8af5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52023,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28514,
+    "cached_tokens": 9600,
+    "completion_tokens": 972
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nref, raw = c['ref_rosette'], c['raw_rosette']\\npulse_worst = 0.0\\nS, _ = m._forward(s)\\nfor fold in range(5):\\n    take = np.arange(len(ref)) % 5 != fold\\n    sweeps = dict(c, ref_rosette=ref[take], raw_rosette=raw[take])\\n    for pulse in item['campaign_diagnostics']:\\n        y = m._calibrate(dict(s, sensor_calibration_sweeps=sweeps, y_obs_raw=pulse['y_pulse_raw']))\\n        e = (S @ pulse['w_pulse'] - y).reshape(len(s['mu_shifts']), -1)\\n        pulse_worst = max(pulse_worst, float(np.sqrt(np.mean(e**2, axis=1)).max()))\\nassert pulse_worst < 1e-4, pulse_worst\\nrng = np.random.default_rng(47)\\nZ = s['Z_nuisance']\\nA = S - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T @ S)\\nH = A.T @ A + s['source_ridge'] * np.eye(A.shape[1])\\ncap = s['u_box']\\nworst = 0.0\\nfor b in rng.normal(size=(100, A.shape[1])) * np.sqrt(np.diag(H)):\\n    for total in (0., cap / 20, cap, 4 * cap, s['total_budget'], len(b) * cap - cap / 20, len(b) * cap):\\n        w, nu = m._box_budget_qp(H, b, cap, total)\\n        g = H @ w - b - nu\\n        error = max(abs(w.sum() - total), np.maximum(-w, 0).max(), np.maximum(w - cap, 0).max(), np.max(np.maximum(g, 0) * abs(w)), np.max(np.maximum(-g, 0) * abs(cap - w)))\\n        worst = max(worst, float(error))\\nassert worst < 1e-9, worst\\nprint('Worst pulse-by-shift RMS across calibration folds:', pulse_worst)\\nprint('Worst QP feasibility or complementarity residual across 700 cases:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin or periodic walls -> H2 reflecting walls with sweep-fitted nonlinear calibration; worst public pulse-by-shift RMS is 3.56e-6, and the independent host probe reports zero relative field and weight errors.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the single public optimization case\",\n      \"rejected_reason\": \"That case does not exercise all-active solutions or show whether the pulse fit depends on a particular subset of calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"Test the exact solver in an isolated Python process. If the pulse fit degrades when calibration rows are withheld, revisit outlier selection; if feasibility or complementarity fails at budget endpoints or vertices, repair the active-set solver. Leave the artifact unchanged if both checks pass.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "16290a2c0126da309a0e7d8814c8ee91f2276ef6124d7271442715745dfa837b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29052.39,
+      "usage_known": true,
+      "prompt_tokens": 28514,
+      "cached_tokens": 9600,
+      "completion_tokens": 972
+    }
+  ]
+}

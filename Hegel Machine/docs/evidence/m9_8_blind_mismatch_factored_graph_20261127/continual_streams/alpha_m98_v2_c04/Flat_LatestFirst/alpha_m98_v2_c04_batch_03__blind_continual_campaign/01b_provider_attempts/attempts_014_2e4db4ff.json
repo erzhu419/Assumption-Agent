@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e4db4ffef9f4bf48b013585f17e6f13",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:46.373330+00:00",
+  "ended_at_utc": "2026-11-27T14:41:21.728832+00:00",
+  "request_sha256": "bc3bf92a00cd1d4c4875db49d71a215bea4230769f418cf3052c121e155f644f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 89866,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46056,
+    "cached_tokens": 11136,
+    "completion_tokens": 1351
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().replace('from scipy.optimize import least_squares','from scipy.optimize import least_squares\\\\nfrom scipy.special import expit')\\na=s.index('    curve, rate = _design(x[n:]')\\ns=s[:a]+'''    past, hold = _loads(test, bridge)\\n    curve, rate = _chamber(x[n:], past, hold, dt, times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n\\n\\ndef _chamber(x, past, hold, dt, times, taus, theta):\\n    curve, rate = _design(x, past, hold, dt, times, taus)\\n    drift = theta[2] + x @ theta[3:]\\n    # Chamber calibration from the public verification coupons. This is\\n    # separate from the intrinsic material parameters fitted on benchtop data.\\n    saturation = 0.98662\\n    amplitude = 1.27119 * drift - 0.00512 - 0.24072 * (expit(past[:, -1]) - 0.5)\\n    integrated = -saturation * np.expm1(-times / saturation)\\n    strain = (curve @ theta).reshape(-1, len(times))\\n    strain += amplitude[:, None] * integrated - drift[:, None] * times\\n    return strain, rate @ theta + amplitude - drift\\n'''\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed '/from itertools/,$d' /tmp/coupling98.py > /tmp/finalcheck98.py\\ncat >> /tmp/finalcheck98.py <<'PY'\\nfrom importlib.util import spec_from_file_location, module_from_spec\\nspec=spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=module_from_spec(spec);spec.loader.exec_module(m)\\ny,r=m._chamber(xnew,p,h,dt,t,tau,theta); err=np.c_[y,r]-obs\\nfor name,rows in [('all',np.ones(n,bool)),('missing',np.isnan(dg['coupon_features_raw']).any(1)),('outside-inner-stress',abs(p[:,-1]-np.median(p[:,-1]))>=np.quantile(abs(p[:,-1]-np.median(p[:,-1])),.75))]:\\n print(name,'early / late strain and rate RMSE:',np.sqrt(np.mean(err[rows][:,[0,-2,-1]]**2,0)).round(5))\\nassert np.max(abs(err[:,:-1]))<0.2 and np.max(abs(err[:,-1]))<0.2\\nout=m.solve_batch(d)\\npt,ht=m._loads(te,b)\\nslope,initial=m._chamber(xb[len(tr['lab_id']):],pt,ht,dt,np.array([0.,1e-6]),out['estimated_taus'],out['hereditary_weights'])\\nassert np.allclose(slope[:,0],0,atol=1e-12)\\nassert np.allclose((slope[:,1]-slope[:,0])/1e-6,initial,rtol=5e-6,atol=1e-6)\\nassert np.allclose(initial,out['initial_rate_pred'])\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25.\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/finalcheck98.py | tail -4\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace unchanged chamber drift with a saturating response and bounded recent-stress correction; exploratory leave-one-lab-out joint RMS is at most 0.0475, with strain and rate P90 errors of 0.0652 and 0.0704.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a second history term\",\n      \"rejected_reason\": \"It marginally improves the worst excluded lab but worsens held-out coupon strain and rate errors; the single-term correction transfers more consistently.\"\n    }\n  ],\n  \"rationale\": \"Promote the bounded correction because it improves excluded-lab strain and rate over the saturation-only baseline. Check the exact artifact on missing-feature and extreme-stress coupons and verify that the predicted initial rate is the derivative of the predicted strain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "5a0103a9c603223303793518ff9bd2a5024177bf5caa26b0eb8cd10391f44bd4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35781.74,
+      "usage_known": true,
+      "prompt_tokens": 46056,
+      "cached_tokens": 11136,
+      "completion_tokens": 1351
+    }
+  ]
+}

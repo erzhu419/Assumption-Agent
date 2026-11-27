@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bcb91260ca75419d9e265f7ccfe931df",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:48.986350+00:00",
+  "ended_at_utc": "2026-11-27T14:48:18.110761+00:00",
+  "request_sha256": "b6a53c8d014132d6e97efaa57d1a766a20ea7d68943b0fc37bd992d93a7f7923",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55775,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30406,
+    "cached_tokens": 0,
+    "completion_tokens": 1013
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $(basename \\\"$f\\\"); awk '/^def _chamber/{p=1} /^def solve_batch/{p=0} p' \\\"$f\\\"; done; cat > /tmp/exact_probe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n import chamber_probe as p\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm,g,t,Y,R,theta=p.m,p.g,p.t,p.Y,p.R,p.theta\\nx=m._features(g,g)[0]; _,h,F=m._specimen(g,x,p.bridge); E=Y-(h[:,None]*theta[:2])@R.T\\n# Fit only physically differentiable time kernels, preserving the observed rate constraint.\\nfor name, fn in {\\n'exp':lambda z:-np.expm1(-t*z)/z,\\n'log':lambda z:np.log1p(t*z)/z,\\n'rat':lambda z:t/(1+t*z),\\n'rat2':lambda z:t/(1+(t*z)**2),\\n'pow':lambda z:t*(1+t*z)**(-.5),\\n}.items():\\n def pred(z): return z[:,0,None]*fn(z[:,1,None])\\n z=least_squares(lambda v:np.r_[(pred(v.reshape(-1,2))-E[:,:-1]).ravel(),(v[::2]-E[:,-1])],np.column_stack((E[:,-1],np.full(len(h),.3))).ravel(),bounds=(np.tile([-3,.00001],len(h)),np.tile([3,10],len(h)))).x.reshape(-1,2)\\n print(name,'rmse',np.sqrt(np.mean((pred(z)-E[:,:-1])**2)),np.sqrt(np.mean((z[:,0]-E[:,-1])**2)))\\n if name in ('exp','log','rat'): print(np.round(np.column_stack((F@theta[2:],h,z)),3).tolist())\\n# A low-rank temporal basis reveals which observed inputs drive its amplitudes.\\nfor Aname,A in [('raw',g['coupon_features_raw']),('diag',x),('joint',m._features(p.joined([p.tr,p.te]),g)[1])]:\\n a=np.column_stack((np.ones(len(h)),A,h)); ok=np.isfinite(a).all(1); co=np.linalg.lstsq(a[ok],E[ok],rcond=None)[0]; print(Aname,'OLS residual',np.round(np.sqrt(np.mean((a[ok]@co-E[ok])**2,axis=0))[[0,5,11,12]],4),'coefs',np.round(co[:,[0,5,11,12]],3).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/exact_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset with scalar drift → H2 chamber reset with distinct late-time response; the best held-out-lab strain/rate RMSE maxima are approximately 0.052/0.075.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the quadratic drift model unchanged\",\n      \"rejected_reason\": \"It is the current validation baseline, but its late-time term may be absorbing a simpler physical kernel that extrapolates better across coupon loads.\"\n    }\n  ],\n  \"rationale\": \"Compare the archived equations and use per-coupon fits to diagnose the time kernel, not as validation scores. If a kernel fits both strain and its initial derivative near the noise floor, test whether its parameters can be predicted from inputs on held-out labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a7e755e0136e413c553a53eaba2e1bf54df27e3dd15a7c4eea7904d650f5796c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29608.15,
+      "usage_known": true,
+      "prompt_tokens": 30406,
+      "cached_tokens": 0,
+      "completion_tokens": 1013
+    }
+  ]
+}

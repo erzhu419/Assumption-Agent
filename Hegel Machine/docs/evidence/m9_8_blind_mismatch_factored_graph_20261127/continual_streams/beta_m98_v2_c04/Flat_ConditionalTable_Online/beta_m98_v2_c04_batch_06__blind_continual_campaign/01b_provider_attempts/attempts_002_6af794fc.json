@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6af794fc67d847aea69ed8a086a7d213",
+  "call_seq": 2,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:39.001899+00:00",
+  "ended_at_utc": "2026-11-27T14:44:57.115243+00:00",
+  "request_sha256": "a2cfb6291d397c15d24449c2aa072aa6f777064a901ed3af124a3121b535537b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 15365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16634,
+    "cached_tokens": 9600,
+    "completion_tokens": 550
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,json,numpy as np\\nitems=pickle.load(open('public_batch.pkl','rb'))\\nprint('items',len(items))\\nfor a in items[:4]:\\n s=a['study']; d=a.get('campaign_diagnostics'); print('diagnostics',None if d is None else len(d),'keys',list(s)); print('cal',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in s['sensor_calibration_sweeps'].items()])\\nl=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); traces=np.array([a['facility_telemetry_trace'] for a in l]); print('means',traces.mean(1).round(3)); print('latest trace RMSE',np.sqrt(((traces-traces[-1])**2).mean((1,2))).round(4))\\nPY\\ncd /tmp/hegel_continual_archive && cat archive_manifest.json && cat beta_m98_v2_c04_batch_03_solver.py && for p in beta_m98_v2_c04_s00_solver.py beta_m98_v2_c04_batch_01_solver.py beta_m98_v2_c04_batch_04_solver.py; do echo \\\"$p\\\"; diff -u beta_m98_v2_c04_batch_03_solver.py \\\"$p\\\" | head -145; done\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin -> H2 diagnostic-selected boundary and live rosette calibration; pulse error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the apparatus trace alone\",\"rejected_reason\":\"If the two pulses in the asset index are present in the pickle, they directly test the boundary operator.\"}],\"rationale\":\"Read the actual pulse and calibration schemas and extract the archived constitutive differences. These checks determine whether to select the boundary from tracer measurements or fall back to the apparatus log.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "d5bab06204ccd37f62a647ceb2f92e3ef224edee2dbeee0262453af8ed637abe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18550.72,
+      "usage_known": true,
+      "prompt_tokens": 16634,
+      "cached_tokens": 9600,
+      "completion_tokens": 550
+    }
+  ]
+}

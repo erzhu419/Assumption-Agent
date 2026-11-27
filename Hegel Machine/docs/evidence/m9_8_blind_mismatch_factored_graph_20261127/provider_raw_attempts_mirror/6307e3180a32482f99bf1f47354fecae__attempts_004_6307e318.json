@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6307e3180a32482f99bf1f47354fecae",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Hegel_FactoredMechanismGraph__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:26:54.520819+00:00",
+  "ended_at_utc": "2026-11-27T14:27:28.007337+00:00",
+  "request_sha256": "cf9127adabfe49d26b7db303700cf72896886b0a2dea874a10136d51be6c21f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32313,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21960,
+    "cached_tokens": 9600,
+    "completion_tokens": 1299
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('base','/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=p['dataset']; tr=d['train'];te=d['test'];g=p['campaign_diagnostics'];dt=d['past_dt']; t=d['eval_times']; bm=m._axial_load_map(d['calibration_load_cells']);xt,xe=m._features(tr,te); s=m._specimen(tr,xt,bm); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs'];tau,th=m._fit(s,dt,t,y,r)\\nnp.set_printoptions(precision=5,suppress=True,linewidth=180)\\ndef report(e,f):\\n print('curve/rate RMSE',np.sqrt((e**2).mean()),np.sqrt((f**2).mean()),'MAD scales',*[1.4826*np.median(abs(a-np.median(a))) for a in (e,f)],'max specimen',np.max(np.sqrt((e**2).mean(1))),np.max(abs(f)))\\ndef predict(s):\\n c,b=m._branches(s,dt,t,tau); drift=s[2]@th[2:]; return c@th[:2]+drift[:,None]*t,b@th[:2]+drift\\nprint('tau theta',tau,th,'bridge',bm);cal=d['calibration_load_cells'];print('bridge axial rmse',np.sqrt(np.mean(((cal['bridge_raw']-bm[0])@bm[1]-cal['true_channel_loads'].sum(1))**2)))\\na,b=predict(s);print('bench');report(a-y,b-r)\\nbase={k:np.concatenate([tr[k],te[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\n_,x=m._features(base,g); Z=m._specimen(g,x,bm);past,hold,F=Z; Y=g['strain_curves_obs']-g['strain_0'][:,None];R=g['instant_rate_obs'];a,b=predict(Z);print('baseline diagnostic');report(a-Y,b-R)\\nprint('bench outliers',np.quantile(abs(a-Y),[.5,.9,.99]),np.quantile(abs(b-R),[.5,.9,.99]))\\n# Keep observed onset rates as a separate measurement in the temporal basis.\\nobs=np.c_[Y,R]; w=np.r_[np.ones(len(t)),.35]\\ndef basis(tau): return np.c_[np.r_[-np.expm1(-t/tau[0]),1/tau[0]],np.r_[-np.expm1(-t/tau[1]),1/tau[1]],np.r_[t,1.]]\\ndef prof(logtau):\\n B=basis(np.exp(logtau)); A=np.linalg.lstsq(B*w[:,None],(obs*w).T,rcond=None)[0].T;return A,A@B.T-obs\\nfor initial in [tau,tau*[.7,1.4],tau*[1.4,.7]]:\\n fit=least_squares(lambda q:(prof(q)[1]*w).ravel(),np.log(initial),bounds=(np.log(.05),np.log(25))); print('free chamber temporal',np.exp(fit.x),fit.cost);e=prof(fit.x)[1];report(e[:,:-1],e[:,-1])\\nA,e=prof(np.log(tau));print('same temporal basis');report(e[:,:-1],e[:,-1]);c,rr=m._branches(Z,dt,t,tau);expected=np.c_[rr*tau*th[:2],F@th[2:]]; print('amplitude measured vs baseline and deltas');print(np.c_[A,expected,A-expected]);\\ninputs=np.c_[hold,past,F];print('coefs full additive input basis [hold, past chronological, intercept, features]');print(np.linalg.lstsq(inputs,A,rcond=None)[0].T);print('archive summary',[(j['completed_short_name'],{k:v for k,v in j.items() if k!='facility_telemetry_trace'}) for j in __import__('json').load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived benchtop transfer -> H2 separate chamber time basis from stress-history amplitudes and drift; no residual metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a joint train–chamber relaxation spectrum\",\"rejected_reason\":\"The intrinsic spectrum must be estimated on benchtop data; the diagnostic spectrum is only a test of the chamber time basis.\"}],\"rationale\":\"Measure the bridge and benchtop residual floors, then check whether the chamber mismatch survives after relaxing only the temporal basis or only the specimen amplitudes. That determines whether to search the time kernel, history recursion, or drift law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "278883261b4343a88d227170825a82292e43701d7b7fe067129774165d1a378c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33438.74,
+      "usage_known": true,
+      "prompt_tokens": 21960,
+      "cached_tokens": 9600,
+      "completion_tokens": 1299
+    }
+  ]
+}

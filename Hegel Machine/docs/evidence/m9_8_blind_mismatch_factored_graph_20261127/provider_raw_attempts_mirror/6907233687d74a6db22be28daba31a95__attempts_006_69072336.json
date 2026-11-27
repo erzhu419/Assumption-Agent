@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6907233687d74a6db22be28daba31a95",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:00.611111+00:00",
+  "ended_at_utc": "2026-11-27T14:28:24.803276+00:00",
+  "request_sha256": "40e74d652c690cb287f2e774ac2f0b09697cbd09a187417e0aef452b445013ad",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26451,
+    "cached_tokens": 9600,
+    "completion_tokens": 821
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport json, pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nitems = pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nprint('Public items:', len(items), 'with pulses:', sum(bool(i.get('campaign_diagnostics')) for i in items))\\nfor i in items:\\n    s = i['study']; S, U = m['_forward'](s); out = m['solve_batch'](s)\\n    w = out['weights']; k = out['kkt_certificate']; cap = s['u_box']; B = s['total_budget']\\n    P = s['Z_nuisance']; R = np.eye(len(P)) - P @ np.linalg.solve(P.T@P + s['nuisance_ridge']*np.eye(P.shape[1]), P.T)\\n    e = R@(S@w-m['_calibrate'](s)); g = (R@S).T@e+s['source_ridge']*w\\n    field = out['terminal_field']; direct = U@w\\n    stationarity = np.max(np.abs(g-k['nu_sum']-k['lam_lower']+k['lam_upper']))\\n    comp = max(np.max(np.abs(w*k['lam_lower'])), np.max(np.abs((cap-w)*k['lam_upper'])))\\n    gap = k['primal_objective']-k['dual_lower_bound']\\n    assert np.allclose(field.ravel(order='F'), direct, rtol=0, atol=1e-12)\\n    assert abs(w.sum()-B)<1e-10 and min(w)>=-1e-10 and max(w)<=cap+1e-10\\n    assert max(stationarity,comp,abs(gap))<1e-10\\n    print('KKT stationarity, complementarity, gap:', stationarity, comp, gap)\\n    for p in i.get('campaign_diagnostics') or []:\\n        y = m['_calibrate'](dict(s, y_obs_raw=p['y_pulse_raw']))\\n        rms = np.sqrt(np.mean(((S@p['w_pulse']-y).reshape(len(s['mu_shifts']),-1))**2, axis=1))\\n        print('Pulse RMSE by shift:', rms.tolist()); assert max(rms)<1e-5\\nprint('Apparatus log:', json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin → H2 reflecting endpoints on both axes; worst public pulse-by-shift RMSE is 1.47e-6 and host-verified relative field error is 1.62e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Verify the exact artifact in isolated Python. Check whether either pulse fails at any shift, and recompute stationarity and complementarity to detect certificate errors the schema gate does not cover. The public item summary and apparatus log establish whether any blind input requires separate regime handling.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3e1f88be074da02e3a929539afa1593a08345123dc98a00bb95349762c6b8a5d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24556.21,
+      "usage_known": true,
+      "prompt_tokens": 26451,
+      "cached_tokens": 9600,
+      "completion_tokens": 821
+    }
+  ]
+}

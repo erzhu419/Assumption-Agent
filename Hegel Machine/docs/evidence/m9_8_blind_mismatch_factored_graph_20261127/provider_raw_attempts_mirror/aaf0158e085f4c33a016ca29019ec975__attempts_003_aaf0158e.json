@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aaf0158e085f4c33a016ca29019ec975",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:26:26.609839+00:00",
+  "ended_at_utc": "2026-11-27T14:27:11.685522+00:00",
+  "request_sha256": "926ebd8e3e829ff20815d45338d0f1355ab4b58b233a458891688afa7e736b7a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24262,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18792,
+    "cached_tokens": 9600,
+    "completion_tokens": 869
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,runpy\\nnp.set_printoptions(precision=5,suppress=True)\\nj=pickle.load(open('public_batch.pkl','rb'))[0];d=j['dataset']; m=runpy.run_path('/tmp/hegel_continual_archive/alpha_m98_v2_c02_s00_solver.py'); out=m['solve_batch'](d); u=out['estimated_taus'];b=out['hereditary_weights']; print('fit',u,b);dt=d['past_dt'];t=d['eval_times'];print('times',dt,t)\\nc=d['calibration_load_cells'];r=c['bridge_raw'];z=c['true_channel_loads'];print('sweeps',[(k,[(q,np.shape(w)) for q,w in v.items()] if isinstance(v,dict) else np.shape(v)) for k,v in c['single_channel_sweeps'].items()]);\\nfor x,y in [(r,z),(z,r)]:\\n A=np.c_[np.ones(len(x)),x]; E=y-A@np.linalg.lstsq(A,y,rcond=None)[0];print('affine residual rms max',np.sqrt(np.mean(E**2,axis=0)),abs(E).max(0))\\ns=m['_stress_calibration'](c)\\nfor site in ['train','diag']:\\n a=d['train'] if site=='train' else j['campaign_diagnostics'];x=m['_standardize'](d['train'],d['test'])[0] if site=='train' else m['_standardize'](d['train'],a)[1];S,R=m['_design'](a,x,s,dt,t)(u); No=a['strain_curves_obs']-a['strain_0'][:,None];Ro=a['instant_rate_obs'];E=No-S@b;F=Ro-R@b;print(site,'curve err rms by time',np.sqrt((E**2).mean(0)),'rate rmse',np.sqrt((F**2).mean())); print('median curve error',np.median(E,axis=0)); print('hold, past, rate_err, curve_err first/last');print(np.c_[s(a['hold_channel_raw']),s(a['past_channel_raw']),F,E[:,0],E[:,-1]][:18]);\\n if site=='diag':\\n  H=np.c_[-np.expm1(-t[:,None]/u),t];beta=np.linalg.lstsq(np.vstack([H,0.35*np.r_[1/u,1]]),np.vstack([E.T,0.35*F]),rcond=None)[0].T;print('branch and drift corrections',beta); print('unexplained curve/rate max',abs(E-beta@H.T).max(),abs(F-beta@np.r_[1/u,1]).max()); print('aux ranges train/test',[(k,np.min(d[k]['aux_chamber_telemetry'],axis=0),np.max(d[k]['aux_chamber_telemetry'],axis=0)) for k in ['train','test']]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived benchtop fit and affine calibration) -> H2 (measured chamber residuals identify the changed constitutive terms); no held-out metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test whether the bridge needs nonlinear inversion and whether chamber residuals fit the existing exponential basis. If they do, isolate changes in branch amplitudes and drift; if not, test chamber-specific time constants or a separate transient.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "9aaa8aa4777662c791304c9c7ec22e25d3fde3b8626b023ccb9826f512cf7d9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45024.9,
+      "usage_known": true,
+      "prompt_tokens": 18792,
+      "cached_tokens": 9600,
+      "completion_tokens": 869
+    }
+  ]
+}

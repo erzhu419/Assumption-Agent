@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4547aa9204ab45a4a5d15c4f0a5ff5cf",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:02.850773+00:00",
+  "ended_at_utc": "2026-11-27T14:44:28.958971+00:00",
+  "request_sha256": "b4f48405bb999baab3060fb8de1c127bb7637edb1f4c3d7e4c4ce75c17af9dfe",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55278,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28289,
+    "cached_tokens": 5504,
+    "completion_tokens": 903
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_cross_channel_ablation.py <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _invert, _design, _POWERS\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    cal = item['dataset']['calibration_load_cells']\\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\\n    _, clean = _fit(x, y)\\n    design = _design(x, _POWERS)\\n    interaction = np.count_nonzero(_POWERS, axis=1) > 1\\n    load = np.linalg.norm(x, axis=1)\\n    high = load >= np.quantile(load[clean], .75)\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    for name, hold in [('upper-load mixed', high & mixed), ('lower-load mixed', ~high & mixed)]:\\n        train = ~hold\\n        test = hold & clean\\n        beta, good = _fit(x[train], y[train])\\n        a, target = design[train][good], y[train][good]\\n        ablated = np.zeros_like(beta)\\n        for k in range(y.shape[1]):\\n            cols = (beta[:, k] != 0) & ~interaction\\n            ablated[cols, k] = np.linalg.lstsq(a[:, cols], target[:, k], rcond=None)[0]\\n        rmse = lambda b: np.sqrt(np.mean((design[test] @ b - y[test])**2))\\n        inverse_error = np.max(abs(_invert(y[test], beta) - x[test]))\\n        print(f'Cross-channel ablation, {name}, n={test.sum()}: held-out forward RMSE retained={rmse(beta):.6g}, omitted={rmse(ablated):.6g}; retained inverse max abs={inverse_error:.6g}')\\n        assert inverse_error < .002 and rmse(beta) < rmse(ablated)\\n\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\npython3 -I /tmp/audit_cross_channel_ablation.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent channel curvature → H2 sparse cross-coupled cubic; worst leave-one-out inverse error is 3.14e-4 load units, and upper-load block error is 1.88e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-model comparison or apply relay and classification tests\",\n      \"rejected_reason\": \"The rational challenger already lost on held-out measurements. The static bridge calibration has neither relay states nor class labels.\"\n    }\n  ],\n  \"rationale\": \"Refit with and without the cross-channel terms on identical accepted training rows to isolate their contribution. If the terms fail to improve held-out error, revisit the sparse basis; if the lower-load holdout fails the inverse margin, inspect calibration coverage before changing the model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d10d2d9a59e81f43f5a8d984ebca50a998f8ff6091aeab244fd436bcccd9ac07",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26533.51,
+      "usage_known": true,
+      "prompt_tokens": 28289,
+      "cached_tokens": 5504,
+      "completion_tokens": 903
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+import numpy as np,pickle,itertools
+s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; keep=np.max(abs(y),axis=1)<8; x,y=x[keep],y[keep]; print('sweep ranges',x.min(0),x.max(0),'rejected',np.where(~keep)[0]); print('pure axis raw'); print(np.c_[x,y][np.count_nonzero(x,axis=1)==1].round(5))
+terms=list(itertools.combinations_with_replacement(range(4),2))+list(itertools.combinations_with_replacement(range(4),3)); T=np.column_stack([np.prod(x[:,q],axis=1) for q in terms]); X=np.c_[np.ones(len(x)),x]; print('term order',terms)
+for j in range(4):
+ base=np.c_[X,x[:,j]**3]; e=y[:,j]-base@np.linalg.lstsq(base,y[:,j],rcond=None)[0]; print('\nbank',j,'base residual worst indices',np.where(keep)[0][np.argsort(abs(e))[-9:]]); print('base residual correlations',sorted(zip(abs(np.corrcoef(np.c_[T,e].T)[-1,:-1]),terms),reverse=True)[:8]);
+ for name,A,tt in [('pure cubes + pair products',np.c_[X,x**3,T[:,:10]],[(i,i,i) for i in range(4)]+terms[:10]),('complete degree 3',np.c_[X,T],terms)]:
+  coef=np.linalg.lstsq(A,y[:,j],rcond=None)[0]; r=y[:,j]-A@coef; loo=r/(1-(np.linalg.qr(A,mode='reduced')[0]**2).sum(1)); print(name,'LOO rms/max',np.sqrt(np.mean(loo**2)),abs(loo).max(),'fit rms',np.sqrt(np.mean(r**2))); print('linear',coef[:5].round(4),'nonlin',[(t,round(v,4)) for t,v in zip(tt,coef[5:]) if abs(v)>.01]);

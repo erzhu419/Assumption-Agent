@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "264be51fc2514b338b52516cc545346f",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:12.979273+00:00",
+  "ended_at_utc": "2026-11-27T14:37:42.758740+00:00",
+  "request_sha256": "840666e2db4466a8a02bd225269328999022ffc8fc648a70cd2949c19028f4de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60520,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30521,
+    "cached_tokens": 9600,
+    "completion_tokens": 1014
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit98_train.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nx, _ = m._standardize(tr, te)\\nstress = m._stress_calibration(d['calibration_load_cells'])\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nfull = m.solve_batch(d)\\nref_tau = full['estimated_taus']\\n\\ndef slice_site(mask):\\n    return {k: tr[k][mask] for k in ('past_channel_raw', 'hold_channel_raw')}\\n\\nscores = []\\nfor lab in np.unique(tr['lab_id']):\\n    q = tr['lab_id'] == lab\\n    tau, th = m._fit(m._design(slice_site(~q), x[~q], stress, dt, t), y[~q], r[~q])\\n    design, rate = m._design(slice_site(q), x[q], stress, dt, t)(tau)\\n    v = [np.max(abs(tau/ref_tau - 1)), np.median(abs(y[q] - design @ th)), np.median(abs(r[q] - rate @ th))]\\n    scores.append(v)\\n    print('held-out train lab', lab, 'n', q.sum(), '[max relative tau shift, median strain error, median onset error]', np.round(v, 7))\\nprint('worst held-out train lab:', np.round(np.max(scores, axis=0), 7))\\n\\n# Independently evaluate the chronological recurrence on every measured history.\\nfor site in (tr, te):\\n    past = stress(site['past_channel_raw'])\\n    z = np.zeros((len(past), 2))\\n    for j, step in enumerate(dt):\\n        a = np.exp(-step/ref_tau)\\n        z = a*z + (1-a)*past[:, j, None]\\n    gap = stress(site['hold_channel_raw'])[:, None] - z\\n    _, onset = m._design(site, np.zeros((len(past), 4)), stress, dt, t)(ref_tau)\\n    np.testing.assert_allclose(onset[:, :2], gap/ref_tau, rtol=1e-12, atol=1e-12)\\nprint('chronological recurrence matches deployed design on all train/test histories')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit98_train.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled benchtop fit -> H2 a shared spectrum that remains stable when one lab is held out; the worst diagnostic strain and onset-rate MAEs are 0.01566 and 0.01848.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber grammar and bridge-calibration audit\",\n      \"rejected_reason\": \"Those challengers were already evaluated. The remaining question is whether a single benchtop lab drives the estimated material spectrum.\"\n    }\n  ],\n  \"rationale\": \"Refit the material model without each lab's responses while keeping the prescribed label-free reference alignment. Large shifts or held-out residuals would prompt investigation of lab-specific calibration or fit sensitivity. A mismatch against the independent chronological recurrence would require correcting the stress-history design.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "536bb7271647b7abdfc795f60b577c3ff0b0d950c1a5a03f020fb48725c3dc1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30228.42,
+      "usage_known": true,
+      "prompt_tokens": 30521,
+      "cached_tokens": 9600,
+      "completion_tokens": 1014
+    }
+  ]
+}

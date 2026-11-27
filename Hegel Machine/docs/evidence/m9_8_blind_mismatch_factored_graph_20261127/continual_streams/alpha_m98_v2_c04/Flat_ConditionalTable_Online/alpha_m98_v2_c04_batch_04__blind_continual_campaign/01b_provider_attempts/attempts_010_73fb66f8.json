@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "73fb66f80d324f4fa1e07337489cc7f2",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:18.585596+00:00",
+  "ended_at_utc": "2026-11-27T14:46:51.244569+00:00",
+  "request_sha256": "23ea24be375704762c86282b5d486d1889c7afb696a6e5a57214b37ba0823284",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63014,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34069,
+    "cached_tokens": 9600,
+    "completion_tokens": 1145
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; k,clean=m._fit_bridge(x,y)\\nworst=0.\\nfor groups in (np.arange(len(x))%5, np.digitize(np.linalg.norm(x,axis=1),np.quantile(np.linalg.norm(x,axis=1),[.2,.4,.6,.8]))):\\n for g in np.unique(groups):\\n  j=groups!=g; kf,_=m._fit_bridge(x[j],y[j]); i=~j & clean; z,_=m._invert_bridge(y[i],kf); worst=max(worst,np.max(abs((z-x[i]).sum(1))))\\nprint('worst held-out clean calibration stress error',worst,'excluded',np.flatnonzero(~clean)); assert worst<.001\\nX=m._features(tr,te); n=len(tr['lab_id']); xp,xt=X[:n],X[n:]; p,h=m._loads(tr,k); _,ht=m._loads(te,k); dt,t=d['past_dt'],d['eval_times']; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; out=m.solve_batch(d); wc=wr=0.\\nfor lab in np.unique(tr['lab_id']):\\n i=tr['lab_id']==lab; j=~i; tau,th=m._fit(xp[j],p[j],h[j],dt,t,yc[j],yr[j]); A,B=m._design(xp[i],p[i],h[i],dt,t,tau); ec=np.quantile(abs(A@th-yc[i].ravel()),.9); er=np.quantile(abs(B@th-yr[i]),.9); wc=max(wc,ec); wr=max(wr,er)\\n comp=np.c_[ht,th[2]+xt@th[3:]]@m._CHAMBER_COEFFICIENTS.T; strain=te['strain_0'][:,None]+comp[:,:2]@(-np.expm1(-t[:,None]/m._CHAMBER_TIMES)).T+comp[:,2,None]*t; rate=comp[:,:2]@(1/m._CHAMBER_TIMES)+comp[:,2]; print('held-out lab',lab,'p90 strain/rate',ec,er,'max deployment changes',np.max(abs(strain-out['predicted_strain'])),np.max(abs(rate-out['initial_rate_pred'])))\\nassert wc<.03 and wr<.025\\n# Exercise the actual entrypoint at t=0 without changing the benchtop fit grid.\\nfit=m._fit\\nm._fit=lambda xp,p,h,dt,unused,y,r: fit(xp,p,h,dt,t,y,r)\\neps=1e-6; b=m.solve_batch({**d,'eval_times':np.array([0.,eps])}); np.testing.assert_allclose(b['predicted_strain'][:,0],te['strain_0'],rtol=0,atol=1e-12); np.testing.assert_allclose((b['predicted_strain'][:,1]-b['predicted_strain'][:,0])/eps,b['initial_rate_pred'],rtol=2e-6,atol=1e-8); print('chamber boundary and initial derivative agree')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine bridge → cyclic cubic bridge with the archive-matched chamber law; trial worst held-out lab p90 errors were 0.0231 strain and 0.0158 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The exact artifact has passed schema validation. Run the scientific holdouts against that artifact to catch integration regressions, and check that deployment strain and initial rate agree at the chamber boundary. A holdout failure would reopen calibration or material fitting; a boundary failure would require correcting the chamber output equation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9d690d15071c77a6c922f23f5a53d9db455093fffcacb075cbbee99de7015fe3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33115.26,
+      "usage_known": true,
+      "prompt_tokens": 34069,
+      "cached_tokens": 9600,
+      "completion_tokens": 1145
+    }
+  ]
+}

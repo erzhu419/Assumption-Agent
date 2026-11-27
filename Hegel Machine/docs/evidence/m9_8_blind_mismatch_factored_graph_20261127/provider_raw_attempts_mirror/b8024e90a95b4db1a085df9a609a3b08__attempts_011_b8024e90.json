@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8024e90a95b4db1a085df9a609a3b08",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:41.449841+00:00",
+  "ended_at_utc": "2026-11-27T14:31:12.739193+00:00",
+  "request_sha256": "809182d8bb3f72ca0a74e73377c780b43527876347244485559e3e4339efd271",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62596,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32926,
+    "cached_tokens": 9600,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '60,115p' /holdout_task/batch_solver.py; cat >/tmp/rheo_stress.py <<'PY'\\nexec(open('/tmp/rheo_probe.py').read().split(\\\"print('train RMSE'\\\")[0])\\nP,H,_=c; n=len(H); lab=dg['lab_id']; X=m._features(dg,dg)[-n:]; R=w[2]+X@w[3:]; complete=np.isfinite(dg['coupon_features_raw']).all(1)\\nB=np.vstack([-np.expm1(-t[:,None]/tau),1/tau]); F=(H[:,None]*w[:2])@B.T; Y=yd-F\\n\\ndef design(z): return np.einsum('ij,kb->ikjb',z,B).reshape(n,len(t)+1,-1)\\ndef rmse(e): return np.array([np.mean(e[:,:-1]**2)**.5,np.mean(e[:,-1]**2)**.5])\\ndef report(name,e):\\n print(name,'worst lab',np.max([rmse(e[lab==g]) for g in np.unique(lab)],axis=0).round(5),'complete',rmse(e[complete]).round(5),'missing',rmse(e[~complete]).round(5),'worst horizon',np.mean(e[:,:-1]**2,axis=0).max()**.5)\\nG=design(R[:,None]); report('shipped',F+G@np.array([.19694,2.09244])-yd)\\nforms={'linear':R[:,None],'difference':np.c_[R,H-P[:,-1]],'interaction':np.c_[R,R*(H-P[:,-1])],'quadratic':np.c_[R,R**2],'quotient .25':(R/(1+.25*R**2))[:,None],'quotient 1':(R/(1+R**2))[:,None]}\\nfor k,z in forms.items():\\n G=design(z); e=np.empty_like(yd)\\n for g in np.unique(lab):\\n  test=lab==g; fit=~test&complete; coef=np.linalg.lstsq(G[fit].reshape(-1,G.shape[-1]),Y[fit].ravel(),rcond=None)[0]; e[test]=F[test]+G[test]@coef-yd[test]\\n report(k,e)\\n if k=='linear':\\n  print('complete residual lab means (strain/rate)',[(int(g), np.round([e[(lab==g)&complete,:-1].mean(),e[(lab==g)&complete,-1].mean()],5).tolist()) for g in np.unique(lab)])\\n  print('linear horizon RMSE',np.sqrt(np.mean(e**2,axis=0)).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_stress.py; OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated hold response plus linear drift coupling → H2 an added stress difference or nonlinear saturation only if supported; current worst leave-one-lab-out RMSE is 0.01801 for strain and 0.01540 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or stochastic-control checks\",\n      \"rejected_reason\": \"The task has continuous strain and rate targets, prescribed loading, and no relay or stochastic-control state. Labwise signed residuals directly test the relevant nuisance.\"\n    }\n  ],\n  \"rationale\": \"Fit chamber challengers without the held-out lab’s responses and score complete and missing-feature coupons separately. Promote an added term only if it reduces held-out errors rather than compensating for missing features; persistent signed errors on complete rows would instead motivate a reference-panel audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7dc99b42937ebf960de891505872fbd60d46ff1e3cc9799a39b2f2822ac853c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31235.63,
+      "usage_known": true,
+      "prompt_tokens": 32926,
+      "cached_tokens": 9600,
+      "completion_tokens": 1072
+    }
+  ]
+}

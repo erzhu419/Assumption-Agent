@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63e7b6e68cd54148958b33dbec4680a6",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:02.600407+00:00",
+  "ended_at_utc": "2026-11-27T14:39:39.203265+00:00",
+  "request_sha256": "ccb105f45bac15448ecb8d4ac01b0305498a6b4ae578809e8bcbfb231c60bcc0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46296,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28290,
+    "cached_tokens": 11136,
+    "completion_tokens": 1437
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/audit_periodic_margin.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nsw = s['sensor_calibration_sweeps']\\nref, raw = sw['ref_rosette'], sw['raw_rosette']\\n\\ndef design(x, model):\\n    terms = [np.ones(len(x)), *x.T]\\n    if model == 'quadratic':\\n        terms.extend(x[:, i] * x[:, j] for i in range(4) for j in range(i, 4))\\n    if model == 'rational':\\n        terms.extend(x[:, i] / (1 + a * (x[:, i] - x[:, j])**2)\\n                     for i in range(4) for j in range(4) if i != j for a in (0.25, 1.0))\\n    return np.column_stack(terms)\\n\\n# Fit candidate inverse maps on each training fold; score every held-out channel.\\nfolds = np.arange(len(ref)) % 5\\nscores = {}\\nfor model in ('diagonal', 'affine', 'quadratic', 'rational'):\\n    parts = []\\n    for fold in range(5):\\n        train = folds != fold\\n        if model == 'diagonal':\\n            pred = np.column_stack([design(raw[~train, i:i+1], 'affine') @ np.linalg.lstsq(\\n                design(raw[train, i:i+1], 'affine'), ref[train, i], rcond=None)[0] for i in range(4)])\\n        else:\\n            X = design(raw, model)\\n            pred = X[~train] @ np.linalg.lstsq(X[train], ref[train], rcond=None)[0]\\n        parts.append(np.sqrt(np.mean((pred - ref[~train])**2, axis=0)))\\n    scores[model] = float(np.max(parts))\\nprint('worst held-out fold/channel calibration RMSE', scores)\\nassert scores['affine'] < 3e-5\\n\\nS, _ = m._forward(s)\\nij = np.asarray(s['sensor_ij'])\\nwall = np.any((ij == 0) | (ij == np.array([s['nx']-1, s['ny']-1])), axis=1)\\nbanks = np.asarray(s['row_bank_id'])\\nZ = np.asarray(s['Z_nuisance'])\\nR = Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1])\\nworst = 0.\\nfor i, pulse in enumerate(item['campaign_diagnostics']):\\n    delta = m._calibrate(dict(s, y_obs_raw=pulse['y_pulse_raw'])) - S @ pulse['w_pulse']\\n    gamma = np.linalg.solve(R, Z.T @ delta)\\n    projected = delta - Z @ gamma\\n    rmse = lambda x: float(np.sqrt(np.mean(x*x)))\\n    by_bank = {int(b): rmse(delta[banks == b]) for b in np.unique(banks)}\\n    by_position = {}\\n    for j, block in enumerate(delta.reshape(len(s['mu_shifts']), -1)):\\n        for name, mask in [('wall', wall), ('interior', ~wall)]:\\n            if np.any(mask):\\n                by_position[f'{j}/{name}'] = rmse(block[mask])\\n    worst = max(worst, *by_bank.values(), *by_position.values())\\n    print('pulse', i, 'unprojected/projected RMSE', rmse(delta), rmse(projected), 'bank RMSE', by_bank, 'shift/wall RMSE', by_position)\\nassert worst < 5e-6, worst\\nfor a in ('x', 'y'):\\n    k, v = s['kappa_'+a], s['vel_'+a]\\n    A = m._axis(k, v, s['L'+a]/(len(k)-1)).toarray()\\n    assert np.max(np.abs(A.sum(axis=1))) < 1e-12\\nprint('worst absolute pulse slice RMSE', worst)\\nPY\\npython3 -I /tmp/audit_periodic_margin.py\\npython3 -I /tmp/verify_periodic_batch.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 periodic upwind transport with affine calibration -> H2 retain it unless a calibration upgrade improves held-out channels and pulse slices; current worst pulse-by-shift RMSE is 9.02e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification and relay-mode diagnostics\",\n      \"rejected_reason\": \"This is a continuous inverse problem with no class labels or relay states. Bank-level pulse residuals test whether the pooled fit hides a sensor-specific failure.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration grammars on held-out sweeps and split known-source pulse errors by bank, shift, and wall position before and after nuisance projection. Investigate any failing slice or calibration improvement supported by both sweeps and pulses; otherwise retain the solver and confirm its schema and KKT margins in isolated Python.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "12792a381bfd5a84522fc50ea79e71749b2c49da908fe0ae99e352415e131635",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37036.06,
+      "usage_known": true,
+      "prompt_tokens": 28290,
+      "cached_tokens": 11136,
+      "completion_tokens": 1437
+    }
+  ]
+}

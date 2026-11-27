@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4b0057526f874d19a2615d9906b41015",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:32:08.485502+00:00",
+  "ended_at_utc": "2026-11-27T14:32:50.808119+00:00",
+  "request_sha256": "fd1ccddae3a44e5d67bc60a4b0116d86c9eb38e0ed800285657b4f68834aa6d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73810,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40746,
+    "cached_tokens": 11136,
+    "completion_tokens": 1671
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m98_v2_c03_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _chamber(coupon, dt, times, taus, theta):\\n    _, hold, drift = coupon\\n    kernel = np.vstack((-np.expm1(-times[:, None] / taus), 1.0 / taus))\\n    x = drift[:, 1:]\\n    amp = (0.2982 + x @ np.array([0.18509, -0.26309, 0.17816, -0.23787])\\n           + 0.01086 * (x[:, 0] + 0.5*x[:, 1])**3 + 0.06127*x[:, 1]**2*x[:, 3])\\n    return (hold[:, None] * theta[:2] + amp[:, None] * taus * [0.41118, 0.58882]) @ kernel.T\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = _prepare(dataset)\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    tr = dataset['train']\\n    y = np.column_stack((tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']))\\n    taus, theta = _fit(train, dt, times, y)\\n    pred = _chamber(test, dt, times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': dataset['test']['strain_0'][:, None] + pred[:, :-1],\\n            'initial_rate_pred': pred[:, -1]}\\nPY\\ncat >/tmp/m98_product.py <<'PY'\\nexec(open('/tmp/m98_factor.py').read().split('for tag,x in')[0])\\nfrom itertools import combinations\\nfor tag,X in [('joint',x),('frozen',xx)]:\\n y=target-b[2]; r=X@b[3:]; N=len(r); lab=ch['lab_id']; L=[lab==g for g in np.unique(lab)]; E=np.eye(N,dtype=bool); Z=np.c_[X,r]; Q={f'x{i}':X[:,i] for i in range(4)}\\n for i,j in combinations(range(4),2):\\n  for s in [-2,-1,-.5,.5,1,2]: Q[f'x{i}{s:+g}x{j}']=X[:,i]+s*X[:,j]\\n Q['norm']=np.linalg.norm(X,axis=1); Q['lin']=r\\n def score(A, fixed=False):\\n  Y=y-r if fixed else y; c=np.linalg.lstsq(A,Y,rcond=1e-8)[0]; resid=A@c-Y\\n  loo=np.array([A[i]@np.linalg.lstsq(A[~e],Y[~e],rcond=1e-8)[0]-Y[i] for i,e in enumerate(E)])\\n  laberr=np.concatenate([A[e]@np.linalg.lstsq(A[~e],Y[~e],rcond=1e-8)[0]-Y[e] for e in L]); return (np.linalg.norm(laberr)/N**.5,np.linalg.norm(loo)/N**.5,np.linalg.norm(resid)/N**.5,np.max(abs(loo)),c)\\n out=[]\\n for n,q in Q.items():\\n  for f,fn in [(q,'linear'),(q*q,'square'),(abs(q),'abs'),(np.tanh(q),'tanh'),(q**3,'cube'),(q*q/(1+.5*q*q),'sat square')]:\\n   for label,A,fixed in [('fixed',np.c_[r*f],True),('gain',np.c_[r,r*f],False),('offset gain',np.c_[np.ones(N),r,r*f],False),('affine base',np.c_[np.ones(N),X,r*f],False),('unshared',np.c_[np.ones(N),X,X*f[:,None]],False)]:\\n    out.append((*score(A,fixed),label,n,fn))\\n print('FACTORED',tag)\\n for v in sorted(out,key=lambda v:v[:4])[:12]: print(v[5:],np.round(v[:4],5),np.round(v[4],5))\\n for name,A in [('quadratic gate',np.c_[r,r[:,None]*np.array([X[:,i]*X[:,j] for i,j in combinations_with_replacement(range(4),2)]).T]),('diagonal gate',np.c_[r,r[:,None]*X**2]),('abs gate',np.c_[r,r[:,None]*abs(X)]),('linear gate',np.c_[r,r[:,None]*X])]:\\n  v=score(A); print(name,np.round(v[:4],5),np.round(v[4],5))\\n print('ratios vs features:',np.round(np.c_[Z,y/r],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_product.py | grep -E 'FACTORED|fixed|gain|affine base|unshared| gate' | tail -34\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: additive feature corrections → H2: a nonlinear factor modulates drift relative to its intercept; the existing frozen-panel additive fit gives coupon-LOO RMSE 0.03394 and lab-held-out RMSE 0.04646 in chamber amplitude.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use lab-specific gains\",\"rejected_reason\":\"Lab fits still leave residuals above measurement noise and offer no prediction rule for a held-out lab.\"}],\"rationale\":\"Save a working candidate now. The inferred chamber amplitude nearly equals the benchtop drift near its intercept, but deviates in both directions away from it. Test whether a feature-dependent gain on the centered drift explains that pattern and lowers held-out error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9afb154cb2b82a688d649c7c26535f18cf9128d3f2eeba0e805dcfc9fb0ebaa9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42274.54,
+      "usage_known": true,
+      "prompt_tokens": 40746,
+      "cached_tokens": 11136,
+      "completion_tokens": 1671
+    }
+  ]
+}

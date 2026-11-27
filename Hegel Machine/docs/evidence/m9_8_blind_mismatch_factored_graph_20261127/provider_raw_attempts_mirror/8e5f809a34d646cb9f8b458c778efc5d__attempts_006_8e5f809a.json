@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e5f809a34d646cb9f8b458c778efc5d",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:27:56.676963+00:00",
+  "ended_at_utc": "2026-11-27T14:28:37.235389+00:00",
+  "request_sha256": "2c6048736d69c2e48c1acc197f718ba23490beffa77e2db618b0838b2fc478a9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39082,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26556,
+    "cached_tokens": 11136,
+    "completion_tokens": 1658
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nitem = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nnx, ny = s['nx'], s['ny']\\nL = np.diag(s['V_reaction_2d'].flatten(order='F'))\\nfor j in range(ny):\\n    for i in range(nx):\\n        row = i + nx*j\\n        for axis, a, n, stride in [('x', i, nx, 1), ('y', j, ny, nx)]:\\n            h = s['L'+axis]/(n-1)\\n            k, v = s['kappa_'+axis], s['vel_'+axis]\\n            for d in (-1, 1):\\n                if not 0 <= a+d < n:\\n                    continue\\n                rate = (k[a]/h**2 if a in (0,n-1) else (k[a]+k[a+d])/(2*h**2)+max(-d*v[a],0)/h)\\n                L[row,row+stride*d] -= rate\\n                L[row,row] += rate\\nsrc = np.stack([m.flatten(order='F') for m in s['source_modes']], axis=1)\\nix, iy = s['sensor_ij'].T\\nfields = [np.linalg.solve(L+mu*np.eye(nx*ny),src) for mu in s['mu_shifts']]\\nS = np.concatenate([f[ix+nx*iy] for f in fields])\\nSc, Fc = mod._forward(s)\\nforward_err = max(np.max(abs(Sc-S)),np.max(abs(Fc-fields[-1])))\\nassert forward_err < 1e-11, forward_err\\n\\npulses = item['campaign_diagnostics']\\nerrors = np.stack([(S@p['w_pulse']-mod._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))).reshape(len(fields),-1,4) for p in pulses])\\nworst = np.sqrt(np.mean(errors**2,axis=2)).max()\\nassert worst < 5e-6, worst\\n\\n# Reconstruct the projected objective and check weights, field and every certificate entry.\\nZ = s['Z_nuisance']\\nPz = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nSp = S-Z@(Pz@S)\\ny = mod._calibrate(s)\\nyp = y-Z@(Pz@y)\\nridge = s['source_ridge']\\ncap = s['u_box']\\nn = S.shape[1]\\nJ = lambda w: .5*(np.linalg.norm(Sp@w-yp)**2+ridge*(w@w))\\ngrad = lambda w: Sp.T@(Sp@w-yp)+ridge*w\\nmaxgap = maxfield = maxstationarity = maxcomplementarity = maxref = 0.\\nfor budget in (0., .001*cap, cap, 2*cap, s['total_budget'], (n-.001)*cap, n*cap):\\n    out = mod.solve_batch(dict(s,total_budget=budget))\\n    w = out['weights']\\n    cert = out['kkt_certificate']\\n    ll, lu = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper'])\\n    nu = cert['nu_sum']\\n    g = grad(w)\\n    Jw = J(w)\\n    dual = Jw-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n    assert min(w) >= -1e-12 and max(w) <= cap+1e-12 and abs(sum(w)-budget) < 1e-12\\n    assert np.max(abs(np.asarray(cert['weights'])-w)) < 1e-13\\n    assert min(ll) >= 0 and min(lu) >= 0\\n    assert abs(Jw-cert['primal_objective']) < 1e-12 and abs(dual-cert['dual_lower_bound']) < 1e-12\\n    maxgap = max(maxgap,abs(Jw-dual))\\n    maxfield = max(maxfield,np.max(abs(out['terminal_field']-(fields[-1]@w).reshape(nx,ny,order='F'))))\\n    maxstationarity = max(maxstationarity,np.max(abs(g-nu-ll+lu)))\\n    maxcomplementarity = max(maxcomplementarity,np.max(abs(w*ll)),np.max(abs((cap-w)*lu)))\\n    if 0 < budget < n*cap:\\n        ref = minimize(J,np.full(n,budget/n),jac=grad,bounds=[(0,cap)]*n,constraints=[{'type':'eq','fun':lambda x:x.sum()-budget,'jac':lambda x:np.ones(n)}],method='SLSQP',options={'ftol':1e-14,'maxiter':200})\\n        assert ref.success, ref.message\\n        maxref = max(maxref,abs(Jw-ref.fun))\\nassert max(maxgap,maxfield,maxstationarity,maxcomplementarity,maxref) < 1e-10\\nprint(f'worst pulse/shift/channel RMSE={worst:.3g}; dense forward max error={forward_err:.3g}; over 7 budgets: gap={maxgap:.3g}, field={maxfield:.3g}, stationarity={maxstationarity:.3g}, complementarity={maxcomplementarity:.3g}, reference objective difference={maxref:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open-wall Robin) → H2 (reflecting walls on both axes); worst public pulse RMSE is 1.33e-6 and the isolated public schema check passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema pass alone\",\n      \"rejected_reason\": \"The schema test does not check field ordering, stationarity, or complementarity against an independent operator.\"\n    }\n  ],\n  \"rationale\": \"Check the saved solver against an independently assembled dense stencil and reference optimizer. A forward mismatch would isolate an indexing or boundary error; a certificate mismatch across ordinary and limiting budgets would isolate the constrained solve or its reporting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "df4fb1ed97d70cfd4a2dc8d3cd417e13fc4cdb285879fc97862ef1193bd6d7f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40915.3,
+      "usage_known": true,
+      "prompt_tokens": 26556,
+      "cached_tokens": 11136,
+      "completion_tokens": 1658
+    }
+  ]
+}

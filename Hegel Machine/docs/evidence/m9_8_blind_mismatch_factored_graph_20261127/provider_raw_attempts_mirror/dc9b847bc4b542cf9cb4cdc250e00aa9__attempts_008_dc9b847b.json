@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc9b847bc4b542cf9cb4cdc250e00aa9",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:09.374862+00:00",
+  "ended_at_utc": "2026-11-27T14:42:40.279584+00:00",
+  "request_sha256": "13d0ae4c4b3044b73cc25b3d1f2e76fc88114fe22f90668107f928c138333f1a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54363,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31696,
+    "cached_tokens": 11136,
+    "completion_tokens": 942
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.loads(Path('public_batch.pkl').read_bytes())[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nmag = np.linalg.norm(y - np.median(y, axis=0), axis=1)\\nclean = mag < 4*np.median(mag)\\nerr = np.full(len(x), np.nan); fwd = np.full((len(x),4), np.nan)\\nfor i in np.flatnonzero(clean):\\n    train = np.arange(len(x)) != i\\n    p = m._axial_load_map({'true_channel_loads': x[train], 'bridge_raw': y[train]})\\n    err[i] = m._decode_axial(y[i:i+1],p)[0] - x[i].sum()\\n    z=x[i]; q=np.roll(z,-1); r=np.roll(z,1)\\n    fwd[i] = (p*np.column_stack((np.ones(4),z,q,r,z*q,z**3))).sum(1)-y[i]\\nfor n,g in [('axis',np.count_nonzero(x,axis=1)==1),('mixed',np.count_nonzero(x,axis=1)>1),('large',np.max(np.abs(x),axis=1)>1.4)]:\\n    ix=clean&g\\n    print(n,'n',ix.sum(),'load RMSE / max',np.sqrt(np.mean(err[ix]**2)),np.max(np.abs(err[ix])),'worst forward channel RMSE',np.max(np.sqrt(np.mean(fwd[ix]**2,axis=0))))\\nprint('gross rows',np.flatnonzero(~clean).tolist())\\nfor k,v in m.solve_batch(d).items():\\n    print(k,v.shape,'finite',np.isfinite(v).all(),v if v.ndim==1 and len(v)<10 else (float(np.min(v)),float(np.max(v))))\\nlog=json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text())\\nprint('prefix labels and trace means:')\\nfor e in log:\\n    print({k:v for k,v in e.items() if k!='facility_telemetry_trace'},np.asarray(e['facility_telemetry_trace']).mean(0).round(3).tolist())\\nPY\\nsed -n '/^def _features/,$p' batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived affine bridge → H2 sparse cyclic cubic bridge with prefix-matched chamber drift; dense forward cubic achieved a worst-channel leave-one-out RMSE of 0.00015 bridge units, and the sparse solver has passed the schema check.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation\",\n      \"rejected_reason\": \"The schema check cannot detect calibration inversion errors or confirm the sparse model's accuracy on held-out loads.\"\n    }\n  ],\n  \"rationale\": \"Measure forward and axial inversion errors on held-out single-axis, mixed, and high-load sweeps. If the compact model loses accuracy in any slice, revisit the calibration basis or inversion; otherwise use the inspected fit routines to test benchtop predictions by lab and time horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7b6b5b8d809b1a14d7139e325b7190b3fc17366709a040092766d8d5d07b937d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31362.62,
+      "usage_known": true,
+      "prompt_tokens": 31696,
+      "cached_tokens": 11136,
+      "completion_tokens": 942
+    }
+  ]
+}

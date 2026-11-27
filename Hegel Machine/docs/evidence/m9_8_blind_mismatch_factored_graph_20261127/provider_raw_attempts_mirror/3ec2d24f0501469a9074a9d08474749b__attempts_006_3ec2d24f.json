@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ec2d24f0501469a9074a9d08474749b",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:03.840418+00:00",
+  "ended_at_utc": "2026-11-27T14:41:28.983159+00:00",
+  "request_sha256": "fd129f6808dd033841521ac832e26e7886303d8ae7f7e3febdf4d28995ec993e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49159,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29454,
+    "cached_tokens": 11136,
+    "completion_tokens": 730
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/archive_manifest.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; ok=np.linalg.norm(y,axis=1)<10\\nprint('excluded gross rows',np.flatnonzero(~ok))\\nfor inp,out,label in [(x,y,'forward'),(y,x,'inverse')]:\\n for deg in [1,2,3]:\\n  terms=[t for k in range(1,deg+1) for t in combinations_with_replacement(range(4),k)]\\n  f=np.column_stack([np.ones(len(inp))]+[np.prod(inp[:,t],axis=1) for t in terms]); a=f[ok]; b=out[ok]; p=np.linalg.lstsq(a,b,rcond=None)[0]; err=a@p-b; lev=np.sum(np.linalg.qr(a)[0]**2,axis=1); loo=err/(1-lev[:,None]); print(label,deg,'rms',np.sqrt(np.mean(err**2,0)).round(5),'LOO rms',np.sqrt(np.mean(loo**2,0)).round(5));\\n  if label=='forward' and deg==3:\\n   for t,q in zip([()]+terms,p):\\n    if np.max(np.abs(q))>.009: print(t,q.round(5))\\nprint('single axis raw measurements:',np.c_[x[:16], y[:16]].round(5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 contaminated affine bridge → H2 contaminated nonlinear bridge; robust affine still has a median row residual of 0.406 bridge units, with three gross residuals above 27.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use robust affine calibration\",\n      \"rejected_reason\": \"After downweighting the three gross outliers, substantial residuals remain across ordinary loads, and quadratic interaction terms reduce them.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out calibration residuals for forward and inverse polynomial bases, then use the coefficient pattern to decide whether a compact physical calibration can replace the dense fit. The single-axis sweeps help distinguish per-channel nonlinearities from cross-channel coupling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ddfff28d3fcda03d4aaf6550bc2dd1747b1b769ab4fbf8b11988ce00f887fcab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25576.1,
+      "usage_known": true,
+      "prompt_tokens": 29454,
+      "cached_tokens": 11136,
+      "completion_tokens": 730
+    }
+  ]
+}

@@ -1,0 +1,9 @@
+import sys, pickle, importlib.util
+import numpy as np
+s=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr=d['train']; te=d['test']; c=i['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; ca=d['calibration_load_cells']; x,y=m._features(tr,te); bm=m._axial_load_map(ca); st=m._specimen(tr,x,bm); tau,th=m._fit(st,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']);print('tau theta',tau,th)
+for label,g,xx in [('train',tr,x),('diag',c,m._features(tr,c)[1])]:
+ sp=m._specimen(g,xx,bm); p,h,xx=sp; Cu,Ra=m._branches(sp,dt,t,tau); drift=xx@th[2:]; yy=g['strain_curves_obs']-g['strain_0'][:,None]; rate=g['instant_rate_obs']; base=Cu@th[:2]+drift[:,None]*t; rat=Ra@th[:2]+drift; print(label,'residual curve quantiles',np.quantile(abs(yy-base),[.25,.5,.9,.98,1]),'rate',np.quantile(abs(rate-rat),[.25,.5,.9,1])); A=np.column_stack([-np.expm1(-t[:,None]/tau),t]); A=np.vstack([A,np.r_[1/tau,1]]); E=np.column_stack([yy,rate]); coef=np.linalg.lstsq(A,E.T,rcond=None)[0].T; expected=np.column_stack([Ra*tau*th[:2],drift]); print('basis residual',np.quantile(abs(E-coef@A.T),[.5,.9,.98,1]));
+ if label=='diag':
+  print('lab stratum hold amp0_pred amp1_pred drift_pred amp0_fit amp1_fit drift_fit');print(np.round(np.column_stack([g['lab_id'],g['stratum'],h,expected,coef]),3)); print('pasts',np.round(p,2))
+L=ca['true_channel_loads']; R=ca['bridge_raw']; A=np.column_stack([L,np.ones(len(L))]); err=R-A@np.linalg.lstsq(A,R,rcond=None)[0]; print('bridge affine RMSE/max',np.sqrt(np.mean(err**2,axis=0)),np.max(abs(err),axis=0)); print('sweeps first',[(k,v[:8]) for k,v in ca['single_channel_sweeps'].items()]); print('cal range',L.min(0),L.max(0))

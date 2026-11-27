@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b5f54e79de724cd19f168e7a92c997b3",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:51:47.329662+00:00",
+  "ended_at_utc": "2026-11-27T14:52:23.224093+00:00",
+  "request_sha256": "e4ec4607dda76ac8bb436c6fb99ecec07ad8657fdf5522acecff1f9648b2db37",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38967,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23464,
+    "cached_tokens": 9600,
+    "completion_tokens": 1404
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; sweeps = s['sensor_calibration_sweeps']\\nx, y = (sweeps[k] for k in ('ref_rosette', 'raw_rosette'))\\nclean = np.max(np.abs(y), axis=1) < 7\\nprint(f'Calibration rows: {clean.sum()} retained, {(~clean).sum()} excluded; single-bank sweep type: {type(sweeps[\\\"single_bank_sweeps\\\"]).__name__}')\\nfamilies = ('affine', 'cubic', 'quadratic+cubic', 'rational+cubic')\\ndef design(x, i, family, a=0.):\\n    z = x[..., i]\\n    base = m['_features'](x, i)\\n    if family == 'affine':\\n        return base[..., :5]\\n    if family == 'quadratic+cubic':\\n        extra = [x[..., j]*x[..., k] for j in range(4) for k in range(j,4)\\n                 if {j,k} != {i,(i+1)%4}]\\n        return np.concatenate((base, np.stack(extra,axis=-1)),axis=-1)\\n    if family == 'rational+cubic':\\n        return np.concatenate((base, (z**3/(1+a*z*z))[...,None]),axis=-1)\\n    return base\\n\\ndef fit(train,family,a):\\n    return [np.linalg.lstsq(design(x[train],i,family,a),y[train,i],rcond=None)[0] for i in range(4)]\\ndef pred(x,coef,family,a):\\n    return np.stack([design(x,i,family,a) @ coef[i] for i in range(4)],axis=-1)\\ndef choose(train,family):\\n    if family != 'rational+cubic':\\n        return 0.\\n    parts = np.array_split(train, 4)\\n    def loss(a):\\n        return max(np.sqrt(np.mean((pred(x[v],fit(np.setdiff1d(train,v),family,a),family,a)-y[v])**2)) for v in parts)\\n    return min((0.03, 0.1, 0.3, 1., 3.), key=loss)\\n\\nids = np.flatnonzero(clean)\\nfolds = np.array_split(np.random.default_rng(42).permutation(ids), 5)\\nS, _ = m['_forward'](s)\\nZ = s['Z_nuisance']; proj = np.eye(len(Z))-Z @ np.linalg.solve(Z.T @ Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nfor family in families:\\n    oof = np.zeros_like(y)\\n    for test in folds:\\n        train = np.setdiff1d(ids,test); a = choose(train,family)\\n        oof[test] = pred(x[test],fit(train,family,a),family,a)-y[test]\\n    a = choose(ids,family); coef = fit(ids,family,a)\\n    worst = [0.,0.]\\n    for pulse in item['campaign_diagnostics']:\\n        raw = pulse['y_pulse_raw'].reshape(-1,4)\\n        start = np.linalg.solve(np.array(coef)[:,1:5],(raw-np.array(coef)[:,0]).T).T\\n        inv = np.array([least_squares(lambda q:pred(q,coef,family,a)-r,q0,gtol=1e-13).x for q0,r in zip(start,raw)])\\n        r = inv.ravel()-S @ pulse['w_pulse']\\n        for j, e in enumerate((r,proj @ r)):\\n            worst[j] = max(worst[j],np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1)).max())\\n    print(f'{family}: worst held-out sweep fold/channel RMSE={max(np.sqrt(np.mean(oof[v]**2,axis=0)).max() for v in folds):.3g}; worst pulse/shift RMSE raw={worst[0]:.3g}, nuisance-profiled={worst[1]:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: periodic walls with cubic rosettes → H2 only if an expanded sensor basis improves held-out calibration and tracer accuracy; current worst pulse/shift RMSE is 1.31e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch-centering or test relay modes\",\n      \"rejected_reason\": \"This is a single-campaign continuous inversion with no class labels or relay state. The applicable nuisance check compares tracer residuals before and after the specified projection.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps test whether pairwise quadratic terms or a rational correction capture missing sensor response; independent pulses test whether that improvement transfers to the inversion rather than being absorbed by nuisance projection. Change the solver only if both support the upgrade.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "78f4a29c897980251f02838d0f2762d8c81d96962f55280442ee511917ec25fa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35854.48,
+      "usage_known": true,
+      "prompt_tokens": 23464,
+      "cached_tokens": 9600,
+      "completion_tokens": 1404
+    }
+  ]
+}

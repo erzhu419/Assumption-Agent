@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d42c0790a9d544ea81559b7f4313fe26",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:59:54.789902+00:00",
+  "ended_at_utc": "2026-11-27T15:00:33.169481+00:00",
+  "request_sha256": "3f17f11e242889042590e07eb7ff0567441c9b984cdd148bf4aef53cf267f585",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27604,
+    "cached_tokens": 11136,
+    "completion_tokens": 1536
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed '/^def _chamber(/,$d' /tmp/hegel_continual_archive/alpha_m98_v2_c01_batch_06_solver.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    invert, _ = fit_bridge(dataset['calibration_load_cells'])\\n    xtr, xte = _features(train, test)\\n    taus, weights = _fit(_specimen(train, xtr, invert), dt, times,\\n                         train['strain_curves_obs'] - train['strain_0'][:, None],\\n                         train['instant_rate_obs'])\\n    specimen = _specimen(test, xte, invert)\\n    curves, rates = _branches(specimen, dt, times, taus)\\n    drift = specimen[2] @ weights[2:]\\n    # The chamber preserves the loading history, but its drift rate decays as exp(-t).\\n    return {'estimated_taus': taus, 'hereditary_weights': weights,\\n            'predicted_strain': (test['strain_0'][:, None] + curves @ weights[:2]\\n                                 + drift[:, None] * (-np.expm1(-times))),\\n            'initial_rate_pred': rates @ weights[:2] + drift}\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open(p+'public_batch.pkl','rb'))[0]; d,g=i['dataset'],i['campaign_diagnostics']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']\\no=m.solve_batch(d); tau,w=o['estimated_taus'],o['hereditary_weights']; assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in o.values()); print('full fit',tau,w)\\ninv,keep=m.fit_bridge(d['calibration_load_cells']); xtr,xte=m._features(tr,te); _,xg=m._features(g,g); sp=m._specimen(tr,xtr,inv); sg=m._specimen(g,xg,inv)\\ndef pred(spec,tau,w,chamber):\\n c,r=m._branches(spec,dt,t,tau); drift=spec[2]@w[2:]; return c@w[:2]+drift[:,None]*(-np.expm1(-t) if chamber else t),r@w[:2]+drift\\nfor group,spec,chamber in ((g,sg,True),):\\n c,r=pred(spec,tau,w,chamber); ec=abs(c+group['strain_0'][:,None]-group['strain_curves_obs']); er=abs(r-group['instant_rate_obs']); print('chamber aggregate MAE/p90',ec.mean(),np.quantile(ec,.9),er.mean(),np.quantile(er,.9)); print('chamber lab p90',[(int(lab),round(np.quantile(ec[group['lab_id']==lab],.9),5),round(np.quantile(er[group['lab_id']==lab],.9),5)) for lab in np.unique(group['lab_id'])]); print('chamber horizon p90',np.round(np.quantile(ec,.9,axis=0),5))\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; lab=tr['lab_id']\\nfor key in np.unique(lab):\\n a=lab!=key; b=~a; tf,wf=m._fit(tuple(v[a] for v in sp),dt,t,y[a],r[a]); pc,pr=pred(tuple(v[b] for v in sp),tf,wf,False); print('LOLO',key,'tau',np.round(tf,5),'curve/rate p90',np.quantile(abs(pc-y[b]),.9),np.quantile(abs(pr-r[b]),.9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop material fit -> H2 retained chronological memory plus exponentially decaying chamber drift; public chamber aggregate p90 errors are 0.01584 strain and 0.01532 initial rate, with worst-lab validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The latest archived chamber law, which resets loading history and integrates drift as log(1+t), applies to the current campaign.\",\n    \"empirical_witness\": \"With the same diagnostic features and intrinsic parameters, reset-memory initial-rate errors reach about 2.4, whereas chronological memory gives 0.01532 p90; keeping chronological memory and replacing logarithmic drift with exponential decay reduces strain p90 from 0.28171 to 0.01584.\",\n    \"causal_blanket_diagnosis\": \"Loading history determines the initial branch-rate response; the integrated drift law determines later curvature. Pooling the separate diagnostic reference panel with the deployment panels confounds both comparisons.\",\n    \"sublated_pivot\": \"Keep campaign-fitted bridge calibration and train-fitted material parameters; compose chronological history with 1-exp(-t) drift in the chamber and retain the specified joint train/test standardization in the solver.\",\n    \"risk_kind\": \"constitutive regime mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained chamber correction to the 18 diagnostic coupons\",\n      \"rejected_reason\": \"The fixed exponential-drift law already matches both observables closely without fitting any chamber coefficient, and deployment inputs require the specified joint standardization.\"\n    }\n  ],\n  \"rationale\": \"Build the standalone solver using the calibrated bridge and the measured chamber law. Run the schema gate and an isolated-process check; lab and horizon residuals will show whether the aggregate fit hides a failing slice, and leave-one-lab-out fitting will show whether the intrinsic estimates depend on a single lab.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6d0870fc16fd192fde19a4841e80ab44afbd4d91448974ef133caaff0ae2ace6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38338.29,
+      "usage_known": true,
+      "prompt_tokens": 27604,
+      "cached_tokens": 11136,
+      "completion_tokens": 1536
+    }
+  ]
+}

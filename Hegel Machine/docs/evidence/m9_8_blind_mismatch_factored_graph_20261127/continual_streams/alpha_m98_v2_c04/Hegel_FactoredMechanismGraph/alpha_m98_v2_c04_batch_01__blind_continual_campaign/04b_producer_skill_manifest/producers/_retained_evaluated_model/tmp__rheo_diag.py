@@ -1,0 +1,10 @@
+import importlib.util,pickle,numpy as np
+p='/tmp/hegel_continual_archive/alpha_m98_v2_c04_s00_solver.py'
+s=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
+i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; q=i['campaign_diagnostics']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; t=d['eval_times'];dt=d['past_dt'];b=m._bridge(c);n=len(tr['lab_id']); x=m._features(tr,te); xq=m._features({k:np.concatenate([u[k] for u in (tr,te)]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')},q)[n+len(te['lab_id']):];
+tau,th=m._fit(x[:n],*m._loads(tr,b),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('tau theta',tau,th)
+for k,z,xx in [('train',tr,x[:n]),('diag',q,xq)]:
+ a,r=m._design(xx,*m._loads(z,b),dt,t,tau); y=z['strain_curves_obs']-z['strain_0'][:,None]; yp=(a@th).reshape(y.shape); e=y-yp; er=z['instant_rate_obs']-r@th; print(k,'curve rmse by time',np.sqrt((e**2).mean(0)).round(5),'rate rmse',np.sqrt((er**2).mean()),'MAD',m._mad(e),m._mad(er));
+ if k=='diag':
+  mat=np.r_[np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1][None,:]]; scale=np.r_[np.ones(len(t)),max(1,m._mad(er)/max(m._mad(e),1e-8))]; amp=np.linalg.lstsq(mat/scale[:,None],np.c_[y,z['instant_rate_obs']].T/scale[:,None],rcond=None)[0].T; print('amplitude fit residual per row',np.sqrt(np.mean((amp@mat.T-np.c_[y,z['instant_rate_obs']])**2,axis=1)).round(5)); past,hold=m._loads(z,b); print('lab stratum hold lastpast nominal_amp0 nominal_amp1 nominal_drift fitted_amp0 fitted_amp1 fitted_drift rate_error'); print(np.c_[z['lab_id'],z['stratum'],hold,past[:,-1],r[:,:2]*tau*th[:2],r[:,2:]@th[2:],amp,er].round(5)); print('xq rounded',xx.round(3))
+raw=c['bridge_raw']; loads=c['true_channel_loads']; rr=loads-np.c_[np.ones(len(raw)),raw]@b; print('bridge coefficients and affine residual RMS',b.round(5),np.sqrt((rr**2).mean(0)),np.sqrt(np.mean(rr.sum(1)**2)));print('sweeps first rows',np.c_[tuple(c['single_channel_sweeps'].values())][:8]);

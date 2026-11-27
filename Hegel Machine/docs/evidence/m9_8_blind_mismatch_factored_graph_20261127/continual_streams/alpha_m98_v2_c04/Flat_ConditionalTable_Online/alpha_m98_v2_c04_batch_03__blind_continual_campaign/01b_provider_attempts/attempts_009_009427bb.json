@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "009427bbafda4dbea4cc71224aef9db4",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:57.642326+00:00",
+  "ended_at_utc": "2026-11-27T14:37:43.493562+00:00",
+  "request_sha256": "9622607576eeac025f08a388599214957139585987306904f385dc681a11cedf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60266,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33084,
+    "cached_tokens": 9600,
+    "completion_tokens": 1768
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^for name,X in xd.items():/,$d' /tmp/m98_joint.py > /tmp/m98_separate.py\\ncat >> /tmp/m98_separate.py <<'PY'\\nfor k in ['ref_coupons','past_channel_raw','hold_channel_raw','coupon_features_raw']:\\n a=cd[k].reshape(len(h),-1); b=np.concatenate((tr[k],te[k])).reshape(len(xt),-1); print('exact matches',k,np.sum(np.any(np.all(a[:,None]==b[None],axis=-1),axis=1)))\\nprint('diagnostic load quantiles', np.quantile(h,[0,.5,1]), 'train/test',*[np.quantile(m._loads(bk,b)[1],[0,.5,1]) for bk in []]); print('missing mask',np.isnan(cd['coupon_features_raw']).astype(int).T)\\nfor name,X in xd.items():\\n dr=th[2]+X@th[3:]; g=h[:,None]-memory(tau); A=np.c_[g,h,dr,np.ones(len(h))]; C=np.linalg.lstsq(A,Y,rcond=None)[0]; V=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1])); R=Y-A@C\\n print(name,'coefficient traces',C.round(3),'unexplained RMSE',stats(R),'lab mean resid',[(lab,R[cd['lab_id']==lab].mean(axis=0)[[3,-2,-1]].round(3)) for lab in range(4)])\\nX=xd['all']; dr=th[2]+X@th[3:]; g=h[:,None]-memory(tau)\\nfor mode in ('fixed_load','fixed_load_plus_hold','free_load_drift','full_regularized','separate_drift','separate_hold_drift','free_labs'):\\n def mat(q):\\n  u=np.exp(q); T=np.vstack((np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1.])); base=np.zeros_like(Y)\\n  if mode.startswith('fixed_load'):\\n   base=(g*th[:2])@np.vstack((-np.expm1(-t[:,None]/tau),1/tau)).T; B=[dr[:,None],dr[:,None]]; B=B[:len(u)]+[np.c_[dr,h] if mode.endswith('hold') else dr[:,None]]\\n  elif mode=='free_load_drift': B=[g[:,0,None], g[:,1,None],dr[:,None],np.c_[dr,h]]\\n  elif mode=='full_regularized': B=[np.c_[g[:,0],h,p,dr],np.c_[g[:,1],h,p,dr],np.c_[dr,h,p]]\\n  elif mode=='separate_drift': B=[np.c_[g[:,0],h],np.c_[g[:,1],h],dr[:,None],np.c_[dr,h]]\\n  elif mode=='separate_hold_drift': B=[np.c_[g[:,0],h],np.c_[g[:,1],h],np.c_[dr,h],np.c_[dr,h]]\\n  else: B=[np.c_[g[:,0],h],np.c_[g[:,1],h],np.c_[dr,np.eye(4)[cd['lab_id']]],np.c_[dr,h]]\\n  return np.concatenate([Bj[:,None,:]*T[None,:,j,None] for j,Bj in enumerate(B)],axis=2),base\\n def fit_model(mask):\\n  def obj(q,ret=False):\\n   M,base=mat(q); a=M[mask].reshape(mask.sum()*Y.shape[1],-1); y=(Y-base)[mask].ravel(); c=np.linalg.lstsq(a,y,rcond=1e-9)[0];\\n   if mode=='full_regularized':\\n    pen=np.full(len(c),.20); pen[[0,9]]=0.005; pen[[8,17,18]]=0.01; a=np.vstack([a,np.diag(pen)]); y=np.r_[y,np.zeros(len(c))]; c=np.linalg.lstsq(a,y,rcond=1e-9)[0]\\n   return (M@c+base,c) if ret else a@c-y\\n  guesses=([.9],[2.]) if mode.startswith('fixed_load') else ([.48,1.5],[.48,4.5]) if mode=='full_regularized' else ([.48,4.5,1.4],[.48,2.,.65],[.48,7,2.])\\n  opt=min((least_squares(obj,np.log(guess),bounds=(np.log(.08),np.log(15)),max_nfev=100) for guess in guesses),key=lambda o:o.cost); return np.exp(opt.x),*obj(opt.x,True)\\n q,Z,c=fit_model(np.ones(len(h),bool)); oof=np.zeros_like(Y); worst=np.zeros(2)\\n for j in range(4):\\n  keep=cd['lab_id']!=j; _,Zf,_=fit_model(keep); oof[~keep]=Zf[~keep]-Y[~keep]; worst=np.maximum(worst,stats(oof[~keep]))\\n print(mode,'q',q.round(3),'fit',stats(Z-Y),'oof',stats(oof),'worst',worst,'c',c.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_separate.py | tail -28\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 two shared chamber modes for load and drift → H2 intrinsic load modes plus a distinct chamber drift transient; current best worst-lab strain/rate RMSE is 0.0501/0.0616.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply the archived hold-only chamber law\",\n      \"rejected_reason\": \"Public chamber coupons show a substantial chronological history effect, and the archived law omits it.\"\n    }\n  ],\n  \"rationale\": \"The fast branch of the unrestricted fit resembles the intrinsic memory kernel. Test whether the large residual comes from assigning the load and drift responses the same time modes. If separate modes do not improve held-out labs, retain the simpler predictor rather than adding poorly identified modes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2d3a66bc17927b636bc9ac9a17d8ec21e8e91fac7445342cba8ac74f82ca4b22",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46302.36,
+      "usage_known": true,
+      "prompt_tokens": 33084,
+      "cached_tokens": 9600,
+      "completion_tokens": 1768
+    }
+  ]
+}

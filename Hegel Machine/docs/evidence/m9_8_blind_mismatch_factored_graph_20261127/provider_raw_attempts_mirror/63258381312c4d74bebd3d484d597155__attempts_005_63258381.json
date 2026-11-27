@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63258381312c4d74bebd3d484d597155",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:39.200845+00:00",
+  "ended_at_utc": "2026-11-27T14:37:04.339201+00:00",
+  "request_sha256": "c9786741895b2129952da604b23dca516bf92c1be75d226d6b380599cde8814a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25586,
+    "cached_tokens": 9600,
+    "completion_tokens": 851
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_residuals.py <<'PY'\\nimport contextlib,io,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): g=runpy.run_path('/tmp/refine_chamber.py')\\nglobals().update({k:v for k,v in g.items() if not k.startswith('__')})\\nmem=(hold[:,None]-z)*theta[:2]; y0=y-mem@decay.T; r0=r-(mem/taus).sum(1); f=-np.expm1(-t)\\nfor name,x0 in [('train-test',xdiag),('train-diag',xdi)]:\\n dr=theta[2]+x0@theta[3:]; e=y0-dr[:,None]*f; er=r0-dr\\n print(name,'cols lab,missing,features,predicted drift,inferred drift,rate residual,early/mid/late residual,off-shape median absolute deviation')\\n print(np.round(np.c_[di['lab_id'],np.isnan(di['coupon_features_raw']).sum(1),x0,dr,np.median(y0/f,axis=1),er,e[:,0],e[:,5],e[:,-1],np.median(abs(y0-np.median(y0/f,axis=1)[:,None]*f),axis=1)],4))\\n print('curve residual / rate residual correlation by time',np.round(np.corrcoef(e.T,er)[-1,:-1],3))\\nfor key,site in [('tr',tr),('te',te)]:\\n a=site['aux_chamber_telemetry']; print(key,'aux percentiles',np.round(np.percentile(a,[0,25,50,75,100],axis=0),3)); print(key,'feature missing rates',np.isnan(site['coupon_features_raw']).mean(0))\\nprint('rate rounding extremes',np.sort(r)[-5:]); print('diagnostic time',t)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_residuals.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (one global drift time constant explains the mismatch) -> H2 (a coupon-level effect remains); the best unit-slope fits so far have worst-lab curve/rate MAE of 0.10392/0.13606.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the lowest-error saturation family now\",\n      \"rejected_reason\": \"Small differences among time functions do not explain the concentrated rate residuals; those residuals could distinguish drift amplitude errors from observation artifacts.\"\n    }\n  ],\n  \"rationale\": \"Compare each coupon's curve-implied drift with its measured initial rate. If the residuals share the saturation shape, investigate feature-dependent drift; if they occur only in the rate or at isolated times, avoid fitting a chamber law to observation artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6e6c76a05444e72856fda44417bb78712b6d412e76afa6e2bccfca8cdc52b069",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25568.03,
+      "usage_known": true,
+      "prompt_tokens": 25586,
+      "cached_tokens": 9600,
+      "completion_tokens": 851
+    }
+  ]
+}

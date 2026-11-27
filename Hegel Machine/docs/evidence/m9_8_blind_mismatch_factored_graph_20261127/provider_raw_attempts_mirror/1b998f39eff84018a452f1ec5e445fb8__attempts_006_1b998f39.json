@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1b998f39eff84018a452f1ec5e445fb8",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:51:59.057528+00:00",
+  "ended_at_utc": "2026-11-27T14:52:25.753273+00:00",
+  "request_sha256": "736af8d24ca2dddedb11cf4b498127012c3cef3c80196e7e9a799ea95f365ef7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44674,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29383,
+    "cached_tokens": 11136,
+    "completion_tokens": 840
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/forward_probe.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('a=cal')[0])\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=6,suppress=True,linewidth=150)\\na=cal['true_channel_loads']; b=cal['bridge_raw']; good=np.max(abs(b),axis=1)<8\\nprint('excluded rows',np.flatnonzero(~good),'n',len(a))\\nfor mode in ('full','sparse'):\\n terms=[()]+[(j,) for j in range(4)]+list(combinations_with_replacement(range(4),2))+[(j,j,j) for j in range(4)]\\n if mode=='full': terms+= [s for s in combinations_with_replacement(range(4),3) if len(set(s))>1]\\n A=np.column_stack([np.prod(a[:,s],axis=1) for s in terms]); Q=np.linalg.pinv(A[good]); coef=Q@b[good]; err=A@coef-b; loo=err[good]/(1-np.sum(A[good]*Q.T,axis=1))[:,None]\\n print(mode,'rank',np.linalg.matrix_rank(A[good]),'loo rmse',np.sqrt(np.mean(loo**2,axis=0)),'axial',np.sqrt(np.mean(loo.sum(1)**2))); print('excluded residuals',err[~good]);\\n for term,c in zip(terms,coef):\\n  if np.linalg.norm(c)>0.002:print(term,c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/forward_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge -> H2 nonlinear forward bridge with sparse channel corruption; cubic axial leave-one-out RMSE is 0.000303 versus 0.423 for affine, but channelwise validation remains open.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine calibration captures the load bridge mapping.\",\n    \"empirical_witness\": \"Adding cubic forward terms reduced axial calibration leave-one-out RMSE from 0.423 to 0.000303, while three extreme channel vectors had ordinary-sized sums.\",\n    \"causal_blanket_diagnosis\": \"Bridge nonlinearities and opposing channel corruptions can both bias an affine inverse and confound chamber residuals.\",\n    \"sublated_pivot\": \"Identify a sparse forward basis on uncontaminated sweeps, then invert it before fitting the chamber law.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep only the accurate forward axial-sum polynomial\",\n      \"rejected_reason\": \"The sum depends on channel composition, so a forward sum alone does not identify the total physical load from raw measurements.\"\n    }\n  ],\n  \"rationale\": \"Compare sparse and full cubic bases using channelwise leave-one-out errors. If the sparse model reaches the noise floor after excluding the grossly corrupted rows, it is the better candidate for inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "908c10bfd1e41084d84b98ce22415e5cbfd849753cbddaecb2186cdab415b454",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26657.9,
+      "usage_known": true,
+      "prompt_tokens": 29383,
+      "cached_tokens": 11136,
+      "completion_tokens": 840
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc7795fde41746d0ad1e0c632df17506",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:54:28.067280+00:00",
+  "ended_at_utc": "2026-11-27T14:55:07.475759+00:00",
+  "request_sha256": "5930ec7d8d00909cda92dfbeeb81858d8217b42f5b9fb2b618a8b0bde6a82b2e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66512,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37076,
+    "cached_tokens": 11136,
+    "completion_tokens": 1426
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/alpha_m98_v2_c01_batch_03_solver.py').read_text()\\nbridge=Path('/tmp/nonlinear_bridge.py').read_text().split('def fit_bridge',1)[1]\\nhelpers=p[p.index('def _features'):p.index('def solve_batch')]\\na=helpers.index('def _specimen'); b=helpers.index('def _branches')\\nhelpers=helpers[:a]+'''def _specimen(group, x, invert):\\n    return (invert(group['past_channel_raw']).sum(axis=-1),\\n            invert(group['hold_channel_raw']).sum(axis=-1),\\n            np.column_stack((np.ones(len(x)), x)))\\n\\n\\n'''+helpers[b:]\\nPath('/holdout_task/batch_solver.py').write_text('''\\\"\\\"\\\"Fit the load bridge and intrinsic relaxation; predict chamber strain and initial rate.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef fit_bridge'''+bridge+'\\\\n\\\\n'+helpers+'''def _chamber(hold, drift, times, taus, weights):\\n    amplitudes = hold[:, None] * weights[:2]\\n    strain = amplitudes @ (-np.expm1(-times[:, None] / taus)).T\\n    return strain + drift[:, None] * np.log1p(times), amplitudes @ (1. / taus) + drift\\n\\n\\ndef solve_batch(dataset):\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    invert, _ = fit_bridge(dataset['calibration_load_cells'])\\n    xtr, xte = _features(train, test)\\n    taus, weights = _fit(_specimen(train, xtr, invert), dt, times,\\n                         train['strain_curves_obs'] - train['strain_0'][:, None],\\n                         train['instant_rate_obs'])\\n    hold = invert(test['hold_channel_raw']).sum(axis=-1)\\n    drift = weights[2] + xte @ weights[3:]\\n    strain, rate = _chamber(hold, drift, times, taus, weights)\\n    return {'estimated_taus': taus, 'hereditary_weights': weights,\\n            'predicted_strain': test['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}\\n''')\\nPY\\ncat >/tmp/chamber_residual.py <<'PY'\\nexec(open('/tmp/corrected_probe.py').read().split(\\\"print('diagnostic reference\\\")[0])\\nnp.set_printoptions(precision=5,suppress=True)\\n_,xs=m._features(g,g); L=np.log1p(t); E=-np.expm1(-t[:,None]/tau)\\nG=y-(h[:,None]*th[:2])@E.T; dr_obs=(G@L)/(L@L); dr_rate=r-h@(np.ones((1,2))) if False else r-h*np.sum(th[:2]/tau)\\nraw=g['coupon_features_raw']; print('diag columns: lab stratum missing-mask drift_curve drift_rate drift_diag drift_joint curve_residual_max'); print(np.c_[g['lab_id'],g['stratum'],~np.isfinite(raw),dr_obs,dr_rate,th[2]+xs@th[3:],dr,np.max(abs(G-dr_obs[:,None]*L),axis=1)])\\nprint('lab/strata missing counts train,test,diagnostics',[(len(z['lab_id']),np.isnan(z['coupon_features_raw']).sum(0)) for z in (tr,te,g)])\\nfor label,xt_ in [('joint',xt),('train only',m._features(tr,tr)[0])]:\\n st=spec(tr,xt_); ta,we=m._fit(st,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); cc,rrr=m._branches(st,dt,t,ta); drt=st[2]@we[2:]; ec=cc@we[:2]+drt[:,None]*t+tr['strain_0'][:,None]-tr['strain_curves_obs']; er=rrr@we[:2]+drt-tr['instant_rate_obs']; print(label,'tau, weights',ta,we,'curve/rate abs median',np.median(abs(ec)),np.median(abs(er)),'p90',np.quantile(abs(ec),.9),np.quantile(abs(er),.9))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_residual.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 chronological split memory → H2 chamber starts with zero inherited state and logarithmic drift; diagnostic leave-one-coupon-out RMSE is 0.0161 for strain and 0.0146 for rate using hold load and diagnostic-local alignment.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\",\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Fit separate coefficients for every history pulse\",\"rejected_reason\":\"Held-out diagnostic strain/rate RMSE worsened from 0.0161/0.0146 to 0.0238/0.0220.\"}],\"rationale\":\"Build the solver with the compact hold-only chamber law and the specified joint deployment preprocessing. Compare drift inferred independently from curves and rates to locate the remaining diagnostic residuals; compare joint and train-only alignment on benchtop data to check for a preprocessing mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d1be345a1904358fedf45fa94cb68dfeceee29c52172fbb36d601f41863473ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39797.4,
+      "usage_known": true,
+      "prompt_tokens": 37076,
+      "cached_tokens": 11136,
+      "completion_tokens": 1426
+    }
+  ]
+}

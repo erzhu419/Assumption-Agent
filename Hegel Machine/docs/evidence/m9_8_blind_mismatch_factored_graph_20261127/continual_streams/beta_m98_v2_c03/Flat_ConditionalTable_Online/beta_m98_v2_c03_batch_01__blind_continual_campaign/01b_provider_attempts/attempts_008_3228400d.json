@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3228400dc74e49c68e8ca8642140c049",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:40.630685+00:00",
+  "ended_at_utc": "2026-11-27T14:29:12.739992+00:00",
+  "request_sha256": "1078048f5f1fb6a0458b4be67d9170ca4cd1b33cfed5bc7347c1ec6b83928974",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45117,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26911,
+    "cached_tokens": 9600,
+    "completion_tokens": 1190
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/m98_margin_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    s = item['study']; c = s['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']; n = len(x)\\n    designs = {'diagonal': [np.c_[np.ones(n), x[:, j]] for j in range(4)],\\n               'affine': [np.c_[np.ones(n), x]] * 4,\\n               'quadratic': [np.c_[np.ones(n), x, *[x[:, i]*x[:, j] for i in range(4) for j in range(i,4)]]] * 4}\\n    for name, ds in designs.items():\\n        rms = []\\n        for test in np.array_split(np.arange(n), 5):\\n            tr = np.ones(n, dtype=bool); tr[test] = False\\n            rms.append(max(np.sqrt(np.mean((D[test]@np.linalg.lstsq(D[tr],y[tr,j],rcond=None)[0]-y[test,j])**2)) for j,D in enumerate(ds)))\\n        print(name, 'worst held-out sweep block/channel RMSE', max(rms))\\n    S,_ = m['_forward'](s)\\n    nx,ny = s['nx'],s['ny']; ix,iy = s['sensor_ij'].T\\n    wall = (ix==0)|(ix==nx-1)|(iy==0)|(iy==ny-1)\\n    Z = s['Z_nuisance']; Q = np.linalg.qr(Z)[0]; worst=0\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        obs=m['_calibrate'](dict(s,y_obs_raw=pulse['y_pulse_raw']))\\n        e = S@pulse['w_pulse']-obs\\n        projected=e-Q@(Q.T@e)\\n        slice_rmse=[float(np.sqrt(np.mean(r[mask]**2))) for rr in (e,projected) for r in rr.reshape(len(s['mu_shifts']),-1) for mask in (wall,~wall) if mask.any()]\\n        worst=max(worst,max(slice_rmse)); print('pulse wall/interior RMSE, raw residual then projected', slice_rmse)\\n    assert worst < 1e-5, worst\\n    out=m['solve_batch'](s); w=out['weights']; u=out['terminal_field']; mu=s['mu_shifts'][-1]\\n    def axis(a):\\n        k=s['kappa_'+a]; v=s['vel_'+a]; N=len(k); h=s['L'+a]/(N-1)\\n        A=np.zeros((N,N))\\n        for i in range(N):\\n            for j in (i-1,i+1):\\n                if 0<=j<N:\\n                    A[i,j]=-k[i]/h**2 if i in (0,N-1) else -(k[i]+k[j])/(2*h*h)-max((i-j)*v[i],0)/h\\n            A[i,i]=-sum(A[i])\\n        return A\\n    rhs=np.tensordot(w,s['source_modes'],axes=1)\\n    r=axis('x')@u+u@axis('y').T+(s['V_reaction_2d']+mu)*u-rhs\\n    relative=np.linalg.norm(r)/np.linalg.norm(rhs)\\n    print('independent terminal PDE relative residual',relative)\\n    assert relative<1e-11\\nPY\\npython3 -I /tmp/m98_margin_audit.py\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin → H2 reflecting endpoints on both axes; worst pulse-by-shift RMSE is 1.47e-6, with wall/interior slices and blocked calibration validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, HJB drift, or within-batch classifier accuracy\",\"rejected_reason\":\"This study has no relay, HJB operator, or classification labels. The relevant checks are the chamber wall stencil, sensor calibration, and sensitivity to measured nuisance directions.\"}],\"rationale\":\"Wall-only and interior-only pulse errors can expose a mismatch averaged away in the per-shift metric. Blocked sweep validation tests simpler and richer calibration models, while an independent terminal PDE residual detects axis or ordering errors. Change the solver only if these checks show a meaningful failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c368d8e98e8903f316407ff0840fe6ae7318fb5164bf978f69f1c001939ab076",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32069.35,
+      "usage_known": true,
+      "prompt_tokens": 26911,
+      "cached_tokens": 9600,
+      "completion_tokens": 1190
+    }
+  ]
+}

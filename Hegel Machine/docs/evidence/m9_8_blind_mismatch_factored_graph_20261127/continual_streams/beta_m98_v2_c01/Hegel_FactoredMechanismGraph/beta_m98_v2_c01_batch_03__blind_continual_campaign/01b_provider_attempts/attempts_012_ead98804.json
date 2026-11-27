@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ead988045ff34126bfc73e38c0facab3",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:37.187898+00:00",
+  "ended_at_utc": "2026-11-27T14:37:07.590628+00:00",
+  "request_sha256": "7ab699251fbdfeac5fc6ee4e958235aa0de909ef3e306f22837c6f056466b946",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57628,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30395,
+    "cached_tokens": 9600,
+    "completion_tokens": 1108
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bank98.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nst = item['study']\\nsw = st['sensor_calibration_sweeps']\\nx, y = sw['ref_rosette'], sw['raw_rosette']\\nbeta = np.linalg.lstsq(np.c_[np.ones(len(x)), x], y, rcond=None)[0]\\nsingle = sw['single_bank_sweeps']\\nbank = single['bank_id'].astype(int)\\nsignal, readout = single['ref_signal'], single['raw_readout']\\nprint('row bank IDs match rosette positions:', np.array_equal(st['row_bank_id'], np.tile(np.arange(4), len(st['y_obs_raw'])//4)))\\nS, _ = m._forward(st)\\nfor j in np.unique(bank):\\n    mask = bank == j\\n    A = np.c_[np.ones(mask.sum()), signal[mask]]\\n    prior = beta[[0,j+1],j]\\n    fitted = np.linalg.lstsq(A, readout[mask], rcond=None)[0]\\n    loo = np.array([A[i]@np.linalg.lstsq(np.delete(A,i,axis=0), np.delete(readout[mask],i), rcond=None)[0]-readout[mask][i] for i in range(len(A))])\\n    print('bank', j, 'full-sweep bias/gain', prior, 'single-bank bias/gain', fitted, 'single-bank transfer/LOO RMS', np.sqrt(np.mean((A@prior-readout[mask])**2)), np.sqrt(np.mean(loo**2)))\\n\\ndef tracer_metric(b):\\n    errors = []\\n    for p in item['campaign_diagnostics']:\\n        ycal = np.linalg.solve(b[1:].T, (p['y_pulse_raw'].reshape(-1,4)-b[0]).T).T.ravel()\\n        errors.append((ycal-S@p['w_pulse']).reshape(len(st['mu_shifts']),-1,4))\\n    return np.sqrt(np.mean(np.asarray(errors)**2,axis=2))\\n\\nB = np.zeros((len(bank),5,4))\\nB[np.arange(len(bank)),0,bank] = 1\\nB[np.arange(len(bank)),bank+1,bank] = signal\\npooled = beta.copy()\\nfor j in range(4):\\n    mask = bank == j\\n    pooled[:,j] = np.linalg.lstsq(np.vstack([np.c_[np.ones(len(x)),x],B[mask,:,j]]),np.r_[y[:,j],readout[mask]],rcond=None)[0]\\nfor name, b in [('rosette-only', beta), ('pooled sweeps', pooled)]:\\n    rms = tracer_metric(b)\\n    print(name, 'worst shift-by-bank RMS per pulse', rms.max(axis=(1,2)), 'bank 1 by pulse and shift', rms[:,:,1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bank98.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Rosette-only affine calibration → test whether the independent single-bank sweeps reduce the repeatable bank 1 offset; current worst pulse-by-bank RMSE is 1.98e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a bank correction directly from the tracer residuals\",\n      \"rejected_reason\": \"That would mix calibration and transport effects and depend on tracer data the solver does not receive.\"\n    }\n  ],\n  \"rationale\": \"Bank 1 shows a same-sign residual on both tracer pulses. Compare the two calibration sweep types, then test whether pooling them improves agreement on both independent pulses. Keep the current calibration if the single-bank sweeps do not transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4f5e95ca701b698d4cbdb42598bccb467df8cc7ec426a79c3995430f971cdc1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30833.85,
+      "usage_known": true,
+      "prompt_tokens": 30395,
+      "cached_tokens": 9600,
+      "completion_tokens": 1108
+    }
+  ]
+}

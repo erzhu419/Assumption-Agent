@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e97803dc0874413b4f04c6f3c648456",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_ConditionalTable_Online__beta_m98_v2_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:23.022714+00:00",
+  "ended_at_utc": "2026-11-27T14:35:49.125716+00:00",
+  "request_sha256": "586decfffc04dc5aab3f51879394f949377d8d9af676a33052636970c5d19f7f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55876,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29660,
+    "cached_tokens": 9600,
+    "completion_tokens": 966
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; c = s['sensor_calibration_sweeps']; x = c['ref_rosette']; y = c['raw_rosette']; Z = s['Z_nuisance']\\n    S, _ = m._forward(s)\\n    q = np.linalg.qr(Z, mode='reduced')[0]\\n    X = np.c_[np.ones(len(x)), x]\\n    for label in ('affine', 'diagonal'):\\n        pred = np.empty_like(y)\\n        if label == 'affine':\\n            B = np.linalg.lstsq(X, y, rcond=None)[0]\\n            for i in range(len(x)):\\n                keep = np.arange(len(x)) != i\\n                pred[i] = X[i] @ np.linalg.lstsq(X[keep], y[keep], rcond=None)[0]\\n        else:\\n            B = np.zeros((5, 4))\\n            for j in range(4):\\n                A = X[:, [0, j+1]]\\n                B[[0, j+1], j] = np.linalg.lstsq(A, y[:, j], rcond=None)[0]\\n                for i in range(len(x)):\\n                    keep = np.arange(len(x)) != i\\n                    pred[i,j] = A[i] @ np.linalg.lstsq(A[keep], y[keep,j], rcond=None)[0]\\n        print(label, 'calibration holdout RMS per channel:', np.sqrt(np.mean((pred-y)**2, axis=0)))\\n        worst = np.zeros(2)\\n        for p in item.get('campaign_diagnostics') or []:\\n            raw = p['y_pulse_raw'].reshape(-1, 4)\\n            r = np.linalg.solve(B[1:].T, (raw-B[0]).T).T.ravel() - S @ p['w_pulse']\\n            for j, z in enumerate((r, r-q@(q.T@r))):\\n                rms = np.sqrt(np.mean(z.reshape(len(s['mu_shifts']), -1, 4)**2, axis=1))\\n                worst[j] = max(worst[j], rms.max())\\n        print(label, 'worst pulse/shift/channel RMS before and after nuisance removal:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independently fitted endpoint coefficients → H2 periodic arithmetic-face upwinding; worst public pulse-by-shift RMSE is 1.20e-6 and the public KKT residual is 4.44e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, HJB, or classification checks\",\n      \"rejected_reason\": \"The supported inputs describe a steady linear transport inverse problem; there are no relay states, control dynamics, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Test whether the full affine calibration fits spurious cross-channel terms and whether nuisance removal hides a bad pulse, shift, or channel. Change calibration only if the challenger materially improves held-out sweeps and the worst tracer slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "72e09ec4fdd5f2cb5b1da2ddab3295d62bf4bb4ab44fe057a4fc907f628269ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26552.15,
+      "usage_known": true,
+      "prompt_tokens": 29660,
+      "cached_tokens": 9600,
+      "completion_tokens": 966
+    }
+  ]
+}

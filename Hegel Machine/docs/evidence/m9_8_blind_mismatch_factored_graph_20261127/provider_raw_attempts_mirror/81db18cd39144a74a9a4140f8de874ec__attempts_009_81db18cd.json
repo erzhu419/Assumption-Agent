@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "81db18cd39144a74a9a4140f8de874ec",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:22.207997+00:00",
+  "ended_at_utc": "2026-11-27T14:36:06.714398+00:00",
+  "request_sha256": "2b5fefecdf9a1acac3b3240ba6708128f008867819ddb29963022da9be851a94",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49444,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26825,
+    "cached_tokens": 9600,
+    "completion_tokens": 1853
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_m98_gate.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nds = item['dataset']; g = item['campaign_diagnostics']; train, test = ds['train'], ds['test']\\nt, dt = ds['eval_times'], ds['past_dt']\\ncal = ds['calibration_load_cells']; bridge = s._axial_load_map(cal)\\nloads, raw = cal['true_channel_loads'], cal['bridge_raw']\\ncal_errors = []\\nfor fold in range(4):\\n    val = np.arange(len(loads)) % 4 == fold\\n    offset, axial = s._axial_load_map({'true_channel_loads': loads[~val], 'bridge_raw': raw[~val]})\\n    cal_errors.append(np.sqrt(np.mean(((raw[val]-offset)@axial-loads[val].sum(1))**2)))\\nprint('Worst held-out calibration axial RMSE:', max(cal_errors))\\n\\nout = s.solve_batch(ds); tau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nx = s._features(g,g)[0]; specimen = s._specimen(g,x,bridge)\\nc, r = s._branches(specimen,dt,t,tau); drift = specimen[2]@theta[2:]\\ny = g['strain_curves_obs']-g['strain_0'][:,None]; v = g['instant_rate_obs']\\nbase_curve, base_rate = s._chamber_predict(specimen,dt,t,tau,theta)\\nstep = 1e-5\\np0, _ = s._chamber_predict(specimen,dt,np.array([0.]),tau,theta)\\np1, _ = s._chamber_predict(specimen,dt,np.array([step]),tau,theta)\\nassert np.max(abs(p0)) < 1e-10 and np.max(abs((p1-p0).ravel()/step-base_rate)) < 5e-5\\nkernel = -np.expm1(-t)\\n# Isolate time-law error using the measured initial slope, not as a deployed input.\\nres = y-c@theta[:2]; anchored = v-r@theta[:2]\\n# Unit-slope bounded rational time law, compared out of lab against fixed exponential.\\nrat = np.empty_like(res); delta = np.empty_like(v)\\nfor lab in np.unique(g['lab_id']):\\n    val = g['lab_id']==lab; fit=~val\\n    def rational(p):\\n        return t*(1+p[0]*t)/(1+p[1]*t+p[2]*t*t)\\n    p = least_squares(lambda p: (res[fit]-anchored[fit,None]*rational(p)).ravel(), [.5,1,.5],bounds=(0,np.inf),loss='soft_l1',f_scale=.004).x\\n    rat[val] = res[val]-anchored[val,None]*rational(p)\\n    # An added pairwise/history term must improve rate on a lab not used to fit it.\\n    pair = np.column_stack([x[:,i]-x[:,j] for i in range(x.shape[1]) for j in range(i+1,x.shape[1])] + [x[:,i]+x[:,j] for i in range(x.shape[1]) for j in range(i+1,x.shape[1])] + [r[:,0]-r[:,1]])\\n    mu=pair[fit].mean(0); scale=np.maximum(pair[fit].std(0),1e-10); a=(pair-mu)/scale\\n    b=np.linalg.solve(a[fit].T@a[fit]+np.eye(a.shape[1])*len(v[fit]), a[fit].T@(v-base_rate)[fit]); delta[val]=a[val]@b\\n\\ndef metric(e):\\n    return tuple(round(float(z),7) for z in (np.sqrt(np.mean(e**2)), max(np.sqrt(np.mean(e[g['lab_id']==k]**2)) for k in np.unique(g['lab_id']))))\\nprint('Diagnostic pooled/worst lab RMSE:')\\nprint('time law, rate anchored exponential / rational:', metric(res-anchored[:,None]*kernel), metric(rat))\\nprint('deployed strain fixed / pairwise challenger:', metric(y-base_curve), metric(y-base_curve-delta[:,None]*kernel))\\nprint('deployed rate fixed / pairwise challenger:', metric(v-base_rate), metric(v-base_rate-delta))\\nfor lab in np.unique(g['lab_id']):\\n    val=g['lab_id']==lab\\n    print('lab',lab,'n',val.sum(),'mean signed strain/rate errors',np.mean((base_curve-y)[val]),np.mean((base_rate-v)[val]))\\nprint('Train leave-one-lab-out, taus and worst strain/rate median absolute errors:')\\nxtr,_=s._features(train,test); bench=s._specimen(train,xtr,bridge)\\nbench_y=train['strain_curves_obs']-train['strain_0'][:,None]; bench_v=train['instant_rate_obs']; errors=[]\\nfor lab in np.unique(train['lab_id']):\\n    val=train['lab_id']==lab\\n    tau_i,theta_i=s._fit(tuple(z[~val] for z in bench),dt,t,bench_y[~val],bench_v[~val]); hold=tuple(z[val] for z in bench)\\n    bc,br=s._branches(hold,dt,t,tau_i); d=hold[2]@theta_i[2:]\\n    errors.append((np.median(abs(bc@theta_i[:2]+d[:,None]*t-bench_y[val])),np.median(abs(br@theta_i[:2]+d-bench_v[val]))))\\n    print(lab,tau_i,errors[-1])\\nprint('Worst train held-out lab strain/rate median absolute error:',np.max(errors,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m98_gate.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear chamber drift → H2 unit-slope exponential saturation; worst diagnostic coupon strain RMSE was 0.00506 and worst absolute initial-rate error was 0.0102.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, classification, or Fokker–Planck tests\",\n      \"rejected_reason\": \"The measured task is continuous rheology regression; it has no relay modes, class labels, or stochastic transport operator. Held-out lab errors are the applicable nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Check held-out bridge calibration, lab-specific material fit, and the strain-to-rate derivative. Compare rational time laws and pairwise corrections on held-out chamber labs; change the candidate only if a challenger improves the failing strain or rate slice without breaking their shared constitutive law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "07cf9b816f0779625f7ab76bc663ab68ecec0114780b9fdba1cd21ba876c4121",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44956.7,
+      "usage_known": true,
+      "prompt_tokens": 26825,
+      "cached_tokens": 9600,
+      "completion_tokens": 1853
+    }
+  ]
+}

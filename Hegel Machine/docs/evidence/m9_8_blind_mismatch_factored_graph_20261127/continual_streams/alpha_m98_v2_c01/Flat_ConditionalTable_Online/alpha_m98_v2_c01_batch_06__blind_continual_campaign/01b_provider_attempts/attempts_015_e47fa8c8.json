@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e47fa8c81e34413a8ec6d93030da8721",
+  "call_seq": 15,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:30.029280+00:00",
+  "ended_at_utc": "2026-11-27T14:53:13.831107+00:00",
+  "request_sha256": "64c6ce0dbf57a9f2b22e451643e726028f738348bbd4da75463ec20bbe864d9b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 103473,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 49262,
+    "cached_tokens": 9600,
+    "completion_tokens": 1704
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); a=s.index('def _chamber_increment'); b=s.index('def solve_batch',a)\\ns=s[:a]+'''def _chamber_increment(hold, features, times, tau, theta):\\n    \\\"\\\"\\\"The chamber resets branch memory and replaces linear creep with log creep.\\\"\\\"\\\"\\n    drift = features @ theta[2:]\\n    amplitude = hold[:, None] * theta[:2]\\n    strain = amplitude @ (-np.expm1(-times[:, None] / tau)).T\\n    strain += drift[:, None] * np.log1p(times)\\n    rate = amplitude @ (1.0 / tau) + drift\\n    return strain, rate\\n\\n\\n'''+s[b:];s=s.split('\\\\n_CHAMBER_COEFFICIENTS =',1)[0].rstrip()+'\\\\n'; p.write_text(s)\\nPY\\ncat > /tmp/verify_rheology.py <<'PY'\\nimport importlib.util, pickle, time\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,g=d['train'],d['test'],i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; labs=tr['lab_id']; glabs=g['lab_id']\\nstart=time.monotonic(); pred=m.solve_batch(d); tau,w,C,B=(pred[k] for k in ('estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred')); print('seconds',round(time.monotonic()-start,3),'tau',tau,'theta',w)\\nassert [v.shape for v in (tau,w,C,B)]==[(2,),(7,),(len(te['strain_0']),len(t)),(len(te['strain_0']),)]\\nassert all(np.isfinite(v).all() for v in (tau,w,C,B)) and .05<tau[0]<tau[1]<25\\nx,u=m._features(tr,te); gx=m._features(g,g)[0]; bridge=m._axial_load_map(d['calibration_load_cells']); src=m._specimen(tr,x,bridge); _,th,tf=m._specimen(te,u,bridge); _,gh,gf=m._specimen(g,gx,bridge)\\nzero,rate=m._chamber_increment(th,tf,np.array([0.,1e-7]),tau,w); assert np.array_equal(zero[:,0],np.zeros(len(th))) and np.allclose(zero[:,1]/1e-7,B,atol=1e-6,rtol=1e-6) and np.allclose(rate,B)\\nobs=tr['strain_curves_obs']-tr['strain_0'][:,None]; robs=tr['instant_rate_obs']; go=g['strain_curves_obs']-g['strain_0'][:,None]; gr=g['instant_rate_obs']; missing=np.isnan(g['coupon_features_raw']).any(1)\\ndef rmse(curve,rate): return np.sqrt([np.mean(curve**2),np.mean(rate**2)])\\ncs,rs=m._chamber_increment(gh,gf,t,tau,w); e,f=cs-go,rs-gr\\nprint('chamber fixed law pooled/complete/missing',rmse(e,f),rmse(e[~missing],f[~missing]),rmse(e[missing],f[missing])); print('chamber first/last horizon RMSE',np.sqrt(np.mean(e[:,[0,-1]]**2,axis=0)))\\ntrain_scores=[]; chamber_scores=[]\\nfor lab in np.unique(labs):\\n a=labs!=lab; sp=tuple(v[a] for v in src); tv,wv=m._fit(sp,dt,t,obs[a],robs[a]); v=tuple(x[~a] for x in src); cb,rb=m._branches(v,dt,t,tv); q=v[2]@wv[2:]; b0=cb@wv[:2]+q[:,None]*t; b1=rb@wv[:2]+q\\n j=glabs==lab; cg,rg=m._chamber_increment(gh[j],gf[j],t,tv,wv); train_scores.append(np.median(abs(b0-obs[~a]))); chamber_scores.append(rmse(cg-go[j],rg-gr[j])); print('held-out lab',lab,'tau',tv,'train median abs strain/rate',train_scores[-1],np.median(abs(b1-robs[~a])),'chamber RMSE',chamber_scores[-1])\\nprint('worst held-out chamber lab',np.max(chamber_scores,axis=0))\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; loads=cal['true_channel_loads']; good=np.max(abs(raw-np.median(raw,axis=0)),axis=1)<8; err=[]\\nfor fold in range(7):\\n held=np.arange(len(raw))%7==fold; fit=m._axial_load_map(dict(bridge_raw=raw[~held],true_channel_loads=loads[~held])); held &= good; err.extend((m._channel_loads(raw[held],fit)-loads[held]).sum(axis=-1))\\nprint('held-out bridge axial RMSE/max',np.sqrt(np.mean(np.square(err))),max(np.abs(err)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rheology.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear bridge plus fitted creep → H2 sparse calibrated bridge plus chamber reset and logarithmic creep; held-out axial RMSE is 0.000205, and fixed-law diagnostic strain/rate RMSE is 0.0164/0.0143 pooled before the final lab stress test.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t13\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the empirical quadratic creep coefficients\",\n      \"rejected_reason\": \"Once stress is calibrated correctly, reset plus unscaled logarithmic creep matches complete diagnostic coupons near the noise floor without fitting chamber coefficients.\"\n    }\n  ],\n  \"rationale\": \"Replace the creep surrogate that compensated for biased loads. Refit material after withholding each training lab to expose sensitivity in the relaxation spectrum, score chamber predictions by lab and missing-feature status, and verify that the reported initial rate is the derivative of the deployed strain law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "a1928c54a5a9e0e108d7eb1d01d48fb2cd005e63dad42ae31f6ab7738d66df02",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44222.9,
+      "usage_known": true,
+      "prompt_tokens": 49262,
+      "cached_tokens": 9600,
+      "completion_tokens": 1704
+    }
+  ]
+}

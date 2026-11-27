@@ -1,0 +1,8 @@
+exec(open('/tmp/explore_chamber.py').read().split('for tt in [taus]:')[0])
+R=q['ref_coupons']; raw=q['coupon_features_raw']; lab=q['lab_id']; st=q['stratum']; h=cq[1]; B=basis(taus)[:,:2]; D=y-(h[:,None]*th[:2])@B.T; _,inv,ct=np.unique(np.c_[lab,st],axis=0,return_inverse=True,return_counts=True); w=(1/ct[inv])[:,None]; X=raw.copy()
+for k in np.unique(lab):
+ i=lab==k; X[i]=(X[i]-np.median(R[i].mean(0)))/np.median(R[i].std(0))
+miss=~np.isfinite(X); complete=~miss.any(1); fills={'balanced diagnostic':np.nansum(X*w,axis=0)/np.sum(w*~miss,axis=0),'unweighted diagnostic':np.nanmean(X,0),'unweighted joint':x.mean(0),'zero':np.zeros(4)}
+_,ji,jc=np.unique(np.c_[labs,np.r_[tr['stratum'],d['test']['stratum']]],axis=0,return_inverse=True,return_counts=True); fills['balanced joint']=np.average(x,axis=0,weights=1/jc[ji]); T=B*taus
+for name,f in fills.items():
+ dr=th[2]+np.where(miss,f,X)@th[3:]; V=dr[:,None,None]*T[None,:,:]; fit=lambda keep: np.linalg.lstsq(V[keep].reshape(-1,2),D[keep].ravel(),rcond=None)[0]; fit_cons=lambda keep: np.sum((V[keep,:,0]-V[keep,:,1])*(D[keep]-V[keep,:,1]))/np.sum((V[keep,:,0]-V[keep,:,1])**2); k=fit(complete); a=fit_cons(complete); cons=np.array([a,1-a]); print(name,'fill',np.round(f,5),'free fractions',k,'sum',sum(k),'conserved fractions',cons); pred=np.array([V[i]@np.array([aa,1-aa]) for i in range(len(y)) for aa in [fit_cons(complete & (np.arange(len(y))!=i))]]); e=pred-D; print('LOO',stat(e),'complete',stat(e[complete]),'missing',np.round(e[~complete,-1],5),'worst',np.max(np.sqrt(np.mean(e[:,:-1]**2,axis=1))),np.max(abs(e[:,-1]))); print('measured initial rate minus hold and drift',np.round(D[:,-1]-dr,5))

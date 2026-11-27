@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e464045e571e478ea53f68798b41760d",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:18.041549+00:00",
+  "ended_at_utc": "2026-11-27T14:43:44.967002+00:00",
+  "request_sha256": "7d3636091be0193f0271c9d42cfd6711bbb75857b164507e95c89a02bb4aa101",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47427,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30113,
+    "cached_tokens": 11136,
+    "completion_tokens": 948
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; b=sw['single_bank_sweeps']; bx=np.eye(4)[b['bank_id']]*b['ref_signal'][:,None]\\n\\ndef fit(a,y):\\n c=np.linalg.lstsq(a,y,rcond=None)[0]\\n for t in [1,.25,.06,.015,.004,.001,.00025,.00006]:\\n  for _ in range(10):\\n   w=1/(1+(np.linalg.norm(y-a@c,axis=1)/t)**2); u=np.sqrt(w[:,None]); c=np.linalg.lstsq(a*u,y*u,rcond=None)[0]\\n return c\\n\\nterms=[z for d in [2,3] for z in combinations_with_replacement(range(4),d)]\\nfeatures={'aff':lambda q:np.c_[np.ones(len(q)),q], 'odd':lambda q:np.c_[np.ones(len(q)),q,q**3], 'diag':lambda q:np.c_[np.ones(len(q)),q,q**2,q**3], 'full':lambda q:np.c_[np.ones(len(q)),q,*[q[:,z].prod(1) for z in terms]]}\\nfor key,f in features.items():\\n a=f(x); e=np.zeros_like(y)\\n for te in np.array_split(np.random.default_rng(13).permutation(len(x)),10):\\n  tr=np.setdiff1d(np.arange(len(x)),te); e[te]=a[te]@fit(a[tr],y[tr])-y[te]\\n c=fit(a,y); ck=(abs(y).max(1)<8); pb=(f(bx)@c)[np.arange(len(bx)),b['bank_id']]; eb=pb-b['raw_readout']; print(key,'held out quartiles',np.quantile(abs(e[ck]),[.5,.9,.99,1]),'bank errors clean',np.round(eb,7));\\n if key in ['odd','diag']: print('coefficients',np.round(c,7)); print('largest clean errors',np.round(np.sort(np.linalg.norm(e[ck],axis=1))[-12:],7))\\nprint('study keys',list(s)); print('pulse diag?',pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0].get('campaign_diagnostics') is not None)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS calibration'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Unweighted affine fit -> contamination-resistant structured calibration; affine worst-channel held-out RMSE is 2.65 raw units, with three rosette residual norms above 24.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A single unweighted affine fit describes the campaign’s reference sweeps.\",\"empirical_witness\":\"Three paired rows have residual norms above 24, while bank 3’s single-bank sweep is visibly curved even without those rows.\",\"causal_blanket_diagnosis\":\"Calibration contamination and intrinsic channel curvature both enter the inferred observations before the wall comparison.\",\"sublated_pivot\":\"Fit robust affine and structured cubic alternatives, comparing predictions on held-out paired rows and independent single-bank sweeps.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an ordinary full cubic\",\"rejected_reason\":\"Its held-out errors increased when the contaminated rows were left untreated.\"}],\"rationale\":\"The single-bank sweeps distinguish channel curvature from mixing. Compare their prediction errors with held-out paired errors before reranking the wall models.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e90498b4196c04945c8ceba07195562dd2b7360dda5c84a1d1917c61e1b79304",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27361.86,
+      "usage_known": true,
+      "prompt_tokens": 30113,
+      "cached_tokens": 11136,
+      "completion_tokens": 948
+    }
+  ]
+}

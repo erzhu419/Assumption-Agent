@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0ca3aa736274893b1f1e4a30935a572",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:52.583446+00:00",
+  "ended_at_utc": "2026-11-27T14:40:21.040196+00:00",
+  "request_sha256": "1e44e95af5d25e82e0a0bc3cfefd582e92027728e852a9719544a736f804e8f2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22464,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18453,
+    "cached_tokens": 9600,
+    "completion_tokens": 1085
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nif isinstance(p,dict):\\n print('log keys',list(p)); p=next((v for v in p.values() if isinstance(v,list)),[])\\nfor x in p:\\n print(str(x)[:750])\\nPY\\ncat >/tmp/bridge_probe.py <<'PY'\\nimport itertools,pickle,numpy as np\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']\\nprint('calibration nonzero counts',np.unique(np.count_nonzero(X,axis=1),return_counts=True)); print('zero rows',Y[np.all(X==0,axis=1)])\\ndef design(x,name):\\n cols=[np.ones(len(x)),*x.T]\\n for degree in range(2,5):\\n  if str(degree) in name: cols.extend(x[:,j]**degree for j in range(4))\\n  if f'c{degree}' in name: cols.extend(np.prod(x[:,js],axis=1) for js in itertools.combinations_with_replacement(range(4),degree) if len(set(js))>1)\\n return np.stack(cols,axis=1)\\ndef fit(a,y):\\n b=np.linalg.lstsq(a,y,rcond=None)[0]\\n for k in range(32):\\n  r=np.linalg.norm(y-a@b,axis=1); sw=1/np.hypot(1,r/max(.0001,2*np.median(r)))\\n  b=np.linalg.lstsq(a*sw[:,None],y*sw[:,None],rcond=None)[0]\\n return b\\nnames=['linear','2','3','23','2c2','2c23','2c23c3','2c234']\\nperm=np.random.default_rng(21).permutation(len(X)); folds=np.array_split(perm,8)\\nbase=np.zeros_like(Y); a=design(X,'2c23');\\nfor te in folds:\\n tr=np.setdiff1d(perm,te); base[te]=Y[te]-a[te]@fit(a[tr],Y[tr])\\nspike=np.linalg.norm(base,axis=1)>1\\nprint('spike rows',np.flatnonzero(spike).tolist(), 'remaining', (~spike).sum())\\nfor name in names:\\n a=design(X,name); oof=np.zeros_like(Y)\\n for te in folds:\\n  tr=np.setdiff1d(perm,te); oof[te]=Y[te]-a[te]@fit(a[tr],Y[tr])\\n print(name,a.shape[1], 'clean rmse',np.round(np.sqrt(np.mean(oof[~spike]**2,axis=0)),6),'norm p50 p90 max',np.round(np.quantile(np.linalg.norm(oof[~spike],axis=1),[.5,.9,1]),6), 'axis/mixed rmse',[round(float(np.sqrt(np.mean(oof[m&~spike]**2))),6) for m in (np.count_nonzero(X,axis=1)<2,np.count_nonzero(X,axis=1)>1)])\\n if name in ('2c23','2c23c3'): print('coefficients\\\\n',np.round(fit(a,Y),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust affine coupling -> sparse nonlinear forward bridge; held-out errors are pending for single-axis and mixed-load calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit loads directly from raw readings\",\n      \"rejected_reason\": \"Gross spikes would contaminate the predictors and create high leverage; fitting the forward map keeps those spikes in the response.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out errors for affine, diagonal nonlinear, and coupled nonlinear bases. Improvement on mixed loads but not axis sweeps would justify interaction terms; substantial residual structure after the polynomial comparison would motivate a bounded nonlinear basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "53b17640da7eaafedb96c5a27cdabf80a38f07fd3c1c618fbe98c5348bc81196",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28911.01,
+      "usage_known": true,
+      "prompt_tokens": 18453,
+      "cached_tokens": 9600,
+      "completion_tokens": 1085
+    }
+  ]
+}

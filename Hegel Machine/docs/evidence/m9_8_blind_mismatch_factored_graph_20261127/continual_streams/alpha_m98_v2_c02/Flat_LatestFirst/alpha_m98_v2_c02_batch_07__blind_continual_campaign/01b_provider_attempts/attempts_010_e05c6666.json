@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e05c6666c6bd48069da1f1203a5d2b3b",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:06:29.612402+00:00",
+  "ended_at_utc": "2026-11-27T15:07:14.305088+00:00",
+  "request_sha256": "452bb86f66e5597cd59ae0a769d53e9208245b8b37c8893a6af8fe86d7791e16",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63221,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33947,
+    "cached_tokens": 11136,
+    "completion_tokens": 1763
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit_batch07.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd = item['dataset']\\ncal = d['calibration_load_cells']\\nx, y = (cal[k] for k in ('true_channel_loads','bridge_raw'))\\na = m.basis(x)\\n\\ndef clean(ii):\\n    ai, yi = a[ii,:5], y[ii]\\n    r = np.max(abs(yi-ai@np.linalg.lstsq(ai, yi, rcond=None)[0]), axis=1)\\n    return ii[r < 6*np.median(r)]\\n\\ndef forward_models(fit, test):\\n    use = clean(fit)\\n    b = np.linalg.lstsq(a[use], y[use], rcond=None)[0]\\n    p = np.empty((2,len(test),4))\\n    for j in range(4):\\n        cols = np.flatnonzero(abs(b[:,j]) > .004*np.max(abs(b[:,j])))\\n        # The full quadratic basis already contains squared pairwise sums and differences.\\n        # Probe saturation specifically on the recovered self-cubic bridge term.\\n        cubic = np.flatnonzero(m.terms[cols,j] == 3)\\n        assert cubic.size == 1\\n        def eval_model(alpha, rows):\\n            A = a[rows][:,cols].copy()\\n            A[:,cubic] /= 1 + alpha*x[rows,j,None]**2\\n            return A\\n        def fit_at(alpha):\\n            A = eval_model(alpha,use)\\n            c = np.linalg.lstsq(A,y[use,j],rcond=None)[0]\\n            return c,np.sum((A@c-y[use,j])**2)\\n        opt = minimize_scalar(lambda alpha: fit_at(alpha)[1],bounds=(0.,1.),method='bounded',options={'xatol':1e-10})\\n        for i,alpha in enumerate((0.,opt.x)):\\n            p[i,:,j] = eval_model(alpha,test)@fit_at(alpha)[0]\\n    return p\\n\\nids = np.arange(len(x)); clean_ids = clean(ids)\\noof = np.empty((2,len(x),4)); total = np.empty(len(x)); labels = np.empty(len(x),int)\\nfor f,idx in enumerate(np.array_split(np.random.default_rng(17).permutation(ids),5)):\\n    fit = np.setdiff1d(ids,idx)\\n    oof[:,idx] = forward_models(fit,idx)\\n    stress = m._stress_calibration(dict(bridge_raw=y[fit],true_channel_loads=x[fit]))\\n    good = idx[np.isin(idx,clean_ids)]\\n    total[good] = stress(y[good])-x[good].sum(axis=1)\\n    labels[idx] = f\\nfor i,name in enumerate(('sparse cubic','saturating cubic challenger')):\\n    r = oof[i,clean_ids]-y[clean_ids]\\n    worst = max(np.sqrt(np.mean(r[labels[clean_ids]==f]**2,axis=0)).max() for f in range(5))\\n    print(name,'worst held-out channel/fold RMSE',worst)\\nprint('calibration clean rows',len(clean_ids),'worst held-out total-stress RMSE',max(np.sqrt(np.mean(total[clean_ids[labels[clean_ids]==f]]**2)) for f in range(5)))\\n\\ntr,te = d['train'],d['test']; dt,t = d['past_dt'],d['eval_times']; X,_ = m._standardize(tr,te)\\nS = m._stress_calibration(cal); M = m._design(tr,X,S,dt,t)\\nY = tr['strain_curves_obs'] - tr['strain_0'][:,None]; V = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    test = tr['lab_id']==lab\\n    def sliced(taus):\\n        A,B=M(taus); return A[~test],B[~test]\\n    taus, theta = m._fit(sliced,Y[~test],V[~test])\\n    A,B=M(taus); print('benchtop held-out lab',lab,'taus',taus,'p90 early strain / late strain / rate absolute error',*[round(np.quantile(abs(r),.9),6) for r in ((A[test]@theta-Y[test])[:,:4],(A[test]@theta-Y[test])[:,-4:],B[test]@theta-V[test])])\\n\\nout=m.solve_batch(d)\\nshifted=dict(d)\\nfor key in ('train','test'):\\n    s=dict(d[key]); lab=s['lab_id'][:,None]; scale=.7+.32*lab; bias=-3.+1.4*lab\\n    for field in ('coupon_features_raw','ref_coupons'):\\n        s[field]=s[field]*scale+bias\\n    shifted[key]=s\\naltered=m.solve_batch(shifted)\\nerr={k:float(np.max(abs(out[k]-altered[k]))) for k in out}\\nprint('lab-specific affine feature/panel gauge max differences',err)\\nassert max(err.values()) < 1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch07.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: sparse cubic bridge and panel-aligned exponential chamber gate -> H2: retain them if held-out bridge saturation and lab transfer checks reveal no material failure; verified worst-lab RMSE is 0.00534 for strain slices and 0.00658 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, Fokker–Planck/HJB operators, and classification recall\",\"rejected_reason\":\"The measured system is continuous rheology with no relay, diffusion-control equation, or classification labels. Held-out labs and lab-specific panel shifts test the applicable nuisance mechanism.\"}],\"rationale\":\"A held-out saturation gain would justify revisiting the bridge only if it improves physical stress calibration. A lab-specific material error or panel-gauge failure would instead point to the shared fit or standardization. The audit tests those failure modes without changing the verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7fcf00f806e80238ad3444aa1e9c7ac9531822530bb9f42d30854fa7fda1342e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44651.74,
+      "usage_known": true,
+      "prompt_tokens": 33947,
+      "cached_tokens": 11136,
+      "completion_tokens": 1763
+    }
+  ]
+}

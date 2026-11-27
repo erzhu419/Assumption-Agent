@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c04f6aa1395f4294a85e1cf05aa928f3",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:04.077110+00:00",
+  "ended_at_utc": "2026-11-27T14:47:41.121143+00:00",
+  "request_sha256": "7d807c09a0dfa7c1ca3352fce24fd2d64fa68c0cc5607545f17dffbb86a71658",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78298,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37549,
+    "cached_tokens": 9600,
+    "completion_tokens": 1356
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: log=json.load(f)\\na=np.array([e['facility_telemetry_trace'] for e in log]); delta=a[:-1]-a[-1]\\nprint('prior-trace distances: steady channels 1,4,5,7 / all channels:')\\nfor e, z in zip(log[:-1],delta): print(e['completed_short_name'],np.sqrt(np.mean(z[:,[1,4,5,7]]**2)),np.sqrt(np.mean(z**2)))\\nout=m.solve_batch(d); taus,theta=out['estimated_taus'],out['hereditary_weights']; assert 0.05<taus[0]<taus[1]<25 and all(np.isfinite(v).all() for v in out.values())\\nprint('taus',taus,'weights',theta)\\ntr,te=d['train'],d['test']; _,x=m._standardize(tr,te); stress=m._stress_calibration(d['calibration_load_cells']); h=stress(te['hold_channel_raw']); drift=theta[2]+x@theta[3:]; t=d['eval_times']; expected=te['strain_0'][:,None]+(h[:,None,None]*theta[:2]*(1-np.exp(-t[None,:,None]/taus))).sum(2)+drift[:,None]*np.log1p(t); np.testing.assert_allclose(out['predicted_strain'],expected,atol=1e-12,rtol=0)\\neps=1e-6; q,_=m._predict_chamber(te,x,stress,np.array([0.,eps]),taus,theta); np.testing.assert_allclose(q[:,0],te['strain_0'],atol=1e-12,rtol=0); err=abs((q[:,1]-q[:,0])/eps-out['initial_rate_pred']); print('max zero-time rate consistency error',err.max()); assert err.max()<1e-5\\nfor site in (tr,te):\\n for k in ('hold_channel_raw','past_channel_raw'):\\n  y=stress(site[k]); print('stress percentiles',len(y),k,np.quantile(y,[0,.1,.5,.9,1])); assert np.isfinite(y).all()\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: dynamically calibrated cyclic bridge and shared material spectrum → H2: transfer batch 01’s reset and logarithmic creep as the nearest earlier regime; worst held-lab q90 errors are 0.02414 strain and 0.01325 rate, and clean held-out total-load error is at most 0.000592.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use batch 03’s saturating creep\",\"rejected_reason\":\"Batch 03 supplies the reference trace in the instructed comparison; its match to itself is not evidence for transferring its chamber law.\"}],\"rationale\":\"Confirm the earlier regime match and verify the exact deliverable in isolated Python. An independent curve calculation and a zero-time derivative check can detect different mistakes in the two deployment outputs; neither is a substitute for unavailable chamber labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "bc46fb84392d60739d4a95272033723c37b8d941e057bcc9b5760c696b31c19b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37486.95,
+      "usage_known": true,
+      "prompt_tokens": 37549,
+      "cached_tokens": 9600,
+      "completion_tokens": 1356
+    }
+  ]
+}

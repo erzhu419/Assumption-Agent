@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1db778d768c542b7a90b856eb89b644c",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:56:58.417017+00:00",
+  "ended_at_utc": "2026-11-27T14:57:39.269243+00:00",
+  "request_sha256": "2ca14f7d5dc64d964c232a0ee32e30d9857e2aa499d667a0530db839473ace40",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41460,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24548,
+    "cached_tokens": 9600,
+    "completion_tokens": 1032
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '110,170p' /tmp/hegel_continual_archive/alpha_m98_v2_c03_batch_06_solver.py; cat > /tmp/compare07.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/alpha_m98_v2_c03_'\\na=runpy.run_path(p+'batch_06_solver.py'); b=runpy.run_path(p+'s00_solver.py')\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; v=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; model=a['_calibration'](d['calibration_load_cells']); print('bridge cross/cubic',model[2:]);\\ndef obs(z): return np.column_stack((z['strain_curves_obs']-z['strain_0'][:,None],z['instant_rate_obs']))\\ndef score(e): return np.round([np.median(abs(e[:,:-1])),np.median(abs(e[:,-1])),np.quantile(abs(e[:,:-1]),.9),np.quantile(abs(e[:,-1]),.9)],6)\\nfor m in (a,b):\\n c,_=m['_prepare'](d); u,w=m['_fit'](c,dt,t,obs(tr)); r=m['_design'](c,dt,t,u)@w-obs(tr); print('train',m['__file__'],u,w,score(r))\\nu,w=a['_fit'](a['_prepare'](d)[0],dt,t,obs(tr)); y=obs(v)\\nfor ref in ('train','test','self'):\\n if ref=='self': z=a['_features'](v,v)[:len(y)]\\n else: z=a['_features'](d[ref],v)[-len(y):]\\n c=a['_coupon'](v,z,model); h=c[1]; f=c[2]@w[2:]; elastic=a['_design']((c[0],h,np.zeros_like(c[2])),dt,t,u)@w; r=np.vstack((-np.expm1(-t[:,None]/u),1/u)); reset=(h[:,None]*w[:2])@r.T; lin=np.r_[t,1.]; exp1=np.r_[-np.expm1(-t),1.];\\n cand={'baseline':elastic+f[:,None]*lin,'drift_exp1':elastic+f[:,None]*exp1,'reset_linear':reset+f[:,None]*lin,'reset_01':reset+f[:,None]*(r@np.array([.19694,2.09244])),'elastic_only':elastic,'reset_only':reset};\\n c06,rr=a['_chamber_predict'](c,t,u,w); cand['batch06']=np.column_stack((c06,rr))\\n print(ref,[(k,score(x-y)) for k,x in cand.items()]);\\n basis=np.stack([elastic,reset,f[:,None]*lin,f[:,None]*exp1,f[:,None]*r[:,0],f[:,None]*r[:,1]],axis=-1)\\n for cols in ([0,1,2,3],[0,1,4,5],[0,1,2,4,5]):\\n  A=basis[:,:,cols]; fit=least_squares(lambda q:(A@q-y).ravel(),np.zeros(len(cols)),loss='soft_l1',f_scale=.01); print('flex',cols,fit.x.round(5),score(A@fit.x-y))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived chamber transfer -> H2 resolve memory and drift independently on the 18 public chamber coupons; deployment residuals not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare strain and initial-rate errors separately for the archived laws and their component combinations. Compare affine and nonlinear bridge fits on benchtop data so a bridge mismatch is not mistaken for a chamber effect.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0f0357f149cd6da02dc7438a519729782c6ef9b1cb3fc267e048acff65e2e93f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40810.46,
+      "usage_known": true,
+      "prompt_tokens": 24548,
+      "cached_tokens": 9600,
+      "completion_tokens": 1032
+    }
+  ]
+}

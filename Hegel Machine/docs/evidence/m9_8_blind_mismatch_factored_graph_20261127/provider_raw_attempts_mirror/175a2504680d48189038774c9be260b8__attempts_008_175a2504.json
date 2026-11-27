@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "175a2504680d48189038774c9be260b8",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Hegel_FactoredMechanismGraph__beta_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:35.526785+00:00",
+  "ended_at_utc": "2026-11-27T14:41:10.247719+00:00",
+  "request_sha256": "eebd896bbc5dfe116544cb79f433cb0593c7c9993e3e5fbcf5044f24469ae583",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44750,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25182,
+    "cached_tokens": 0,
+    "completion_tokens": 1361
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/rosette_margin_audit.py <<'PY'\\nimport pickle\\nimport runpy\\nimport sys\\nimport numpy as np\\n\\nroot = '/holdout_task'\\nsys.path.insert(0, root)\\nfrom upstream_transducer import _fit, _forward, _inverse, calibrate_upstream\\n\\nitems = pickle.load(open(root + '/public_batch.pkl', 'rb'))\\nprint('Public studies:', len(items))\\nfor item in items:\\n    st = item['study']\\n    c = st['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']\\n    # Flag gross spikes independently of every candidate; keep them in training.\\n    clean = np.linalg.norm(y - x, axis=1) < 8\\n    print('Sweep rows:', len(x), 'gross spike rows:', np.flatnonzero(~clean).tolist())\\n    print('Observed cohort/relay metadata:', [k for k in st if any(t in k.lower() for t in ('batch_id', 'cohort', 'relay', 'meter'))])\\n    n = len(x)\\n    cols = np.arange(4)\\n    neighbor = (cols + 1) % 4\\n    adjacent = x * x[:, neighbor]\\n    cubes = x**3\\n    base = [np.column_stack((np.ones(n), x, adjacent[:, j], cubes[:, j])) for j in cols]\\n    # Pairwise sums/differences cubed add mixed cubic terms absent from the compact grammar.\\n    mixed = [np.column_stack((base[j], (x[:,j] + x[:,neighbor[j]])**3, (x[:,j] - x[:,neighbor[j]])**3)) for j in cols]\\n    # Rational corrections test remaining smooth saturation along local and differential coordinates.\\n    rational = [np.column_stack((base[j], x[:,j]/(1 + .5*x[:,j]**2), x[:,j]/(1 + .5*(x[:,j] - x[:,neighbor[j]])**2))) for j in cols]\\n    partitions = [('radius', np.linalg.norm(x, axis=1)), ('row-order', np.arange(n))] + [(f'channel-{j}', x[:,j]) for j in cols]\\n    worst = np.zeros(4)\\n    witness = ['']*4\\n    for name, coordinate in partitions:\\n        for k, h in enumerate(np.array_split(np.argsort(coordinate), 5)):\\n            t = np.ones(n, bool); t[h] = False\\n            h = h[clean[h]]\\n            if not len(h):\\n                continue\\n            coef = _fit(x[t], y[t])\\n            compact_pred = _forward(x[h], coef)\\n            # Select inliers from training residuals, never from the held-out fit.\\n            train_res = np.linalg.norm(_forward(x[t], coef) - y[t], axis=1)\\n            keep = np.flatnonzero(t)[train_res <= max(1e-6, 8*np.median(train_res))]\\n            preds = [compact_pred]\\n            for basis in (mixed, rational):\\n                preds.append(np.column_stack([a[h] @ np.linalg.lstsq(a[keep], y[keep,j], rcond=None)[0] for j,a in enumerate(basis)]))\\n            errs = [np.sqrt(np.mean((p-y[h])**2, axis=0)).max() for p in preds]\\n            errs.append(np.sqrt(np.mean((_inverse(y[h], coef)-x[h])**2, axis=0)).max())\\n            for j, err in enumerate(errs):\\n                if err > worst[j]:\\n                    worst[j], witness[j] = err, f'{name}/{k}'\\n    print('Blocked worst channel RMSE (compact, mixed cubic, rational, compact inverse):', dict(zip(('compact','mixed','rational','inverse'),zip(worst.tolist(),witness))))\\n    assert worst[3] < 1e-4\\n    warm = calibrate_upstream(st)\\n    coeff = _fit(x,y)\\n    raw = st['y_obs_raw']; obs = warm['y_obs_raw'].reshape(-1,4)\\n    forward_error = np.max(np.abs(_forward(obs,coeff).reshape(raw.shape)-raw))\\n    print('Live observation closure:', forward_error)\\n    assert forward_error < 1e-9\\nsys.argv = [root + '/validate_public_schema.py', root + '/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\npython3 -I /tmp/rosette_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling -> H2 cyclic adjacent-channel products and own-channel cubics; worst repeated held-out inverse RMSE was 1.47e-5, pending validation on blocked sweep slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Hold out contiguous ranges in each sweep channel, radius, and acquisition order to detect failures that random splits could hide. Compare mixed cubic and rational corrections on those same real rows; revisit the compact model only if a challenger improves a material error or if blocked inversion fails. Cohort classification and relay modes do not apply to this calibration interface.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a190ad0ad1ec4f315a97243ed510c0f1edf308aae24963930598e1390c42f26e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35143.03,
+      "usage_known": true,
+      "prompt_tokens": 25182,
+      "cached_tokens": 0,
+      "completion_tokens": 1361
+    }
+  ]
+}

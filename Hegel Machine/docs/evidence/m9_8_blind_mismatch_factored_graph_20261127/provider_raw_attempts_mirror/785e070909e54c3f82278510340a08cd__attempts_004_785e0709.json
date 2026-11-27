@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "785e070909e54c3f82278510340a08cd",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:24.519498+00:00",
+  "ended_at_utc": "2026-11-27T14:37:48.219403+00:00",
+  "request_sha256": "de7286ec2e4448c9c1aa74943a0abb158eb9dcb82b42c15577beecc1b97aeec9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32523,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22395,
+    "cached_tokens": 9600,
+    "completion_tokens": 706
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive && for f in *_solver.py; do echo \\\"=== $f\\\"; sed -n '8,28p' \\\"$f\\\"; done\\npython3 - <<'PY'\\nimport json,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nx=s['aux_manifold_telemetry'];print('current auxiliary mean/std',x.mean(0),x.std(0)); print('current auxiliary first/last',x[0],x[-1]); print('current auxiliary corr',np.corrcoef(x.T).round(3))\\nsw=s['sensor_calibration_sweeps'];r=sw['ref_rosette'];y=sw['raw_rosette'];D=np.c_[r,np.ones(len(r))];p=np.linalg.lstsq(D,y,rcond=None)[0];print('affine rosette',p.round(6),'RMSE train/test',np.sqrt(np.mean((D@p-y)**2)),np.sqrt(np.mean((D[::4]@np.linalg.lstsq(np.delete(D,np.arange(0,len(r),4),axis=0),np.delete(y,np.arange(0,len(r),4),axis=0),rcond=None)[0]-y[::4])**2))); print('single bank shapes',{k:v.shape for k,v in sw['single_bank_sweeps'].items()})\\ne=json.load(open('archive_apparatus_log.json')); X=np.array([i['facility_telemetry_trace'] for i in e]);print('trace ranges',np.stack((X.min(1),X.max(1)),axis=1).round(3)); print('latest first half means',X[-1,:8].mean(0).round(4),'latest second half means',X[-1,8:].mean(0).round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use the latest trace’s closest archived match to nominate the wall law; batch 01 is closest at RMS 0.570, versus 1.362 for the next match, but no held-out transport metric is available yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the nearest whole-trace match as conclusive\",\n      \"rejected_reason\": \"Some channels vary much more than others, and the result does not establish whether the distinct wall behavior in batch 03 carries forward.\"\n    }\n  ],\n  \"rationale\": \"Recover the exact wall rows that were truncated and test whether an affine calibration predicts unseen sweeps. Calibration error would require revisiting the sensor model before attributing differences in held-out transport residuals to the walls.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "542e3fd54f4b88b5062f50af57dbbefcc0cbc1b6a122292fc155e497bf77b183",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24144.88,
+      "usage_known": true,
+      "prompt_tokens": 22395,
+      "cached_tokens": 9600,
+      "completion_tokens": 706
+    }
+  ]
+}

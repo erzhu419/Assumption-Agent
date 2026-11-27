@@ -1,0 +1,79 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m98_v2_c03_s00_42772b83fc1b",
+    "source_hash": "42772b83fc1b03fc1858cf03446892b427476dfd04bf24498871e4aeb967c193",
+    "parent_ids": [],
+    "source_episode_id": "beta_m98_v2_c03_s00__blind_continual_campaign",
+    "task_id": "beta_m98_v2_c03_s00__blind_continual_campaign",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb'));print('batch length',len(b)); i=b[0]; print(i.keys());\nfor k,v in i['study'].items():\n print(k,type(v).__name__,getattr(v,'shape',''), list(v) if isinstance(v,dict) else (repr(v)[:220] if not isinstance(v,np.ndarray) or v.size<12 else (float(v.min()),float(v.max()))))\nd=i.get('campaign_diagnostics');print('diagnostics',None if d is None else [(k,getattr(v,'shape',None)) for k,v in d[0].items()]);\nfor k,v in i['study']['sensor_calib",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb')); print('batch',len(b))\nfor it in b:\n s=it['study']; c=s['sensor_calibration_sweeps']; X=c['ref_rosette']; Y=c['raw_rosette']; D=np.c_[np.ones(len(X)),X]; B=np.linalg.lstsq(D,Y,rcond=None)[0]; print('dimensions',[(k,getattr(v,'shape',v)) for k,v in s.items() if k not in ('sensor_calibration_sweeps',)]); print('calibration affine coefficients',B.round(6),'rms',np.sqrt(np.mean((Y-D@B)**2))); print('row banks',s['row_bank_id'][:36]); print('telemetry first ro",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated transport inversion with a box-and-budget KKT certificate.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, h, robin):\n    face = 0.5 * (kappa[1:] + kappa[:-1]) / h**2\n    lower = np.r_[-face[:-1] - np.maximum(velocity[1:-1], 0) / h,\n                  -kappa[-1] / h**2]\n    upper = np.r_[-kappa[0] / h**2,\n                  -face[1:] - np.maximum(-velocity[1:-1], 0) / h]\n    main = np.r_[kappa[0] / h**2 + robin / h,\n                 face[:-1] + face[1:] + np",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; nx,ny=s['nx'],s['ny']; n=nx*ny\n# Independent dense row assembly checks placement, upwind signs and wall rows.\ndef axis(k,n):\n    h=s['L'+k]/(n-1); a=s['kappa_'+k]; v=s['vel_'+k]; A=np.zeros((n,n))\n    for i in range(n):\n        if i in (0,n-1):\n            A[i,1 if i==0 else n-2]=",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=map(np.asarray,(c['ref_rosette'],c['raw_rosette']))\nprint('calibration sweep count',len(x),'single-bank representation',type(c.get('single_bank_sweeps')).__name__)\norder=np.random.default_rng(731).permutation(len(x)); folds=np.array_split(ord",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; cal=s['sensor_calibration_sweeps']; ref,raw=cal['ref_rosette'],cal['raw_rosette']; B=np.linalg.lstsq(np.c_[np.ones(len(ref)),ref],raw,rcond=None)[0]\nfor bank,v in cal['single_bank_sweeps'].items():\n    if isinstance(v,dict) and {'ref_rosette','raw_rosette'}<=v.keys():\n        x,y=",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    c = pickle.load(f)[0]['study']['sensor_calibration_sweeps']\nx, y = c['ref_rosette'], c['raw_rosette']\nb = np.linalg.lstsq(np.c_[np.ones(len(x)), x], y, rcond=None)[0]\ns = c['single_bank_sweeps']\nbank, signal, raw = (np.asarray(s[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\nfor j in np.unique(bank):\n    mask = bank == j\n    pred = b[0,j] + b[j+1,j]*signal[mask]\n    error = raw[mask]-pred\n    slope, intercept = np.linalg.lstsq(np.c_[signal[mask], np.on"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5047,
+        "sha256": "cea1df9acfe3afb97ca6d6fcbe71cdff11dc1cb02e0c33a53afb17117248f341",
+        "content_addressed_ref": "content_addressed_blobs/cea1df9acfe3afb97ca6d6fcbe71cdff11dc1cb02e0c33a53afb17117248f341.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "42772b83fc1b03fc1858cf03446892b427476dfd04bf24498871e4aeb967c193",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loa",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "42772b83fc1b03fc1858cf03446892b427476dfd04bf24498871e4aeb967c193",
+        "expected_candidate_sha256": "42772b83fc1b03fc1858cf03446892b427476dfd04bf24498871e4aeb967c193",
+        "computed_candidate_sha256": "42772b83fc1b03fc1858cf03446892b427476dfd04bf24498871e4aeb967c193",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5047
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_42772b83"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

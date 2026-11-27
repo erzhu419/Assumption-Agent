@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69c0d6e157ab427abdbe51d0045e54e9",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:46.739312+00:00",
+  "ended_at_utc": "2026-11-27T14:43:16.122843+00:00",
+  "request_sha256": "9dc7c7c6858517a685f0b7c8bb743b1b1856845d1c949930fd4cd488db3dc81c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28010,
+    "cached_tokens": 11136,
+    "completion_tokens": 970
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np, pickle, json\\nfrom itertools import combinations_with_replacement\\nfrom scipy.stats import median_abs_deviation\\nnp.set_printoptions(precision=3,suppress=True,linewidth=130)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; obs=s['y_obs_raw'].reshape(-1,4)\\nA=np.c_[np.ones(len(x)),x]; res=y-A@np.linalg.lstsq(A,y,rcond=None)[0]; order=np.argsort(np.linalg.norm(res,axis=1)); print('raw calibration quantiles (0,.05,.25,.5,.75,.95,1)\\\\n',np.quantile(y,[0,.05,.25,.5,.75,.95,1],axis=0)); print('residual norm order',np.round(np.linalg.norm(res,axis=1),2)); print('observations quantiles\\\\n',np.quantile(obs,[0,.25,.5,.75,1],axis=0)); print('sample pairs (idx ref -> raw):');\\nfor i in list(range(8))+list(order[-8:]): print(i,x[i],y[i]);\\nb=sw['single_bank_sweeps']; print('bank sweeps [ref,raw]:')\\nfor j in range(4):\\n m=b['bank_id']==j; print(j,np.c_[b['ref_signal'][m],b['raw_readout'][m]].tolist())\\nfor degree in (1,2,3):\\n terms=[t for d in range(1,degree+1) for t in combinations_with_replacement(range(4),d)]; d=np.column_stack([np.ones(len(x))]+[x[:,t].prod(axis=1) for t in terms]); yh=np.empty_like(y)\\n for fold in np.array_split(np.random.default_rng(42).permutation(len(x)),8):\\n  tr=np.setdiff1d(np.arange(len(x)),fold); yh[fold]=d[fold]@np.linalg.lstsq(d[tr],y[tr],rcond=None)[0]\\n r=yh-y; c=np.linalg.lstsq(d,y,rcond=None)[0]; print('degree',degree,'OOF RMSE',np.sqrt(np.mean(r*r,axis=0)),'OOF MAE',np.mean(abs(r),axis=0),'train MAE',np.mean(abs(d@c-y),axis=0));\\n for j in range(4):\\n  ix=np.argsort(-np.abs(c[1:,j])*d[:,1:].std(0))[:5]; print(' ch',j,[(terms[i],round(c[i+1,j],3)) for i in ix])\\nPY\\nsed -n '1,19p' /tmp/hegel_continual_archive/beta_m98_v2_c03_batch_03_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived affine calibration -> identify the active rosette response before comparing wall laws; the worst affine calibration channel has RMSE 2.55 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select Robin walls from the current leave-one-rosette-out ranking\",\n      \"rejected_reason\": \"That ranking uses an affine calibration with large errors on the reference sweeps. It cannot yet distinguish wall mismatch from sensor mismatch.\"\n    }\n  ],\n  \"rationale\": \"Compare paired and single-bank sweeps to distinguish nonlinear mixing from contaminated measurements. Held-out calibration errors will determine whether additional terms improve prediction or merely fit extreme readings.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ee3b31a6ce8cd83c511136034f4f2171320f1b9914096afc2ba15e964d3a3501",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29805.59,
+      "usage_known": true,
+      "prompt_tokens": 28010,
+      "cached_tokens": 11136,
+      "completion_tokens": 970
+    }
+  ]
+}

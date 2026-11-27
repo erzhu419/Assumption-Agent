@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe5ac39238a24f18ad8da08bf50d9e7a",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:52.936071+00:00",
+  "ended_at_utc": "2026-11-27T14:36:29.237769+00:00",
+  "request_sha256": "3a500e5a39a1273291f4bc67a3eaa2c3dfb80af623a2b72bd5f4f27dca92c8da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47578,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28917,
+    "cached_tokens": 9600,
+    "completion_tokens": 1431
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,39p' /tmp/hegel_continual_archive/alpha_m98_v2_c03_batch_02_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/alpha_m98_v2_c03_batch_02_solver.py')\\ns=p.read_text().split('\\\\ndef solve_batch(')[0]\\ns += '''\\ndef _deployment_design(coupon, dt, times, taus):\\n    \\\"\\\"\\\"Retain stress memory and integrate exponentially decaying chamber drift.\\\"\\\"\\\"\\n    design = _design(coupon, dt, times, taus)\\n    drift_time = 1.0\\n    design[:, :-1, 2:] = (coupon[2][:, None, :]\\n                           * (-np.expm1(-times / drift_time))[None, :, None])\\n    design[:, -1, 2:] = coupon[2] / drift_time\\n    return design\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Fit intrinsic parameters on train; use the verified chamber law on test.\\\"\\\"\\\"\\n    tr, te = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    train, test = _prepare(dataset)\\n    y = np.column_stack((tr['strain_curves_obs'] - tr['strain_0'][:, None],\\n                         tr['instant_rate_obs']))\\n    taus, theta = _fit(train, dt, times, y)\\n    # Deployment drift is standardized within its own coupon panel. Repeating\\n    # that panel leaves the reference statistics and cell-balanced means unchanged.\\n    x = _features(te, te)[:len(te['lab_id'])]\\n    test = (test[0], test[1], np.column_stack((np.ones(len(x)), x)))\\n    pred = _deployment_design(test, dt, times, taus) @ theta\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': te['strain_0'][:, None] + pred[:, :-1],\\n            'initial_rate_pred': pred[:, -1]}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=i['campaign_diagnostics']; out=m.solve_batch(d)\\nx=m._features(c,c)[:len(c['lab_id'])]; o,b=m._calibration(d['calibration_load_cells']); coupon=((c['past_channel_raw']-o)@b,(c['hold_channel_raw']-o)@b,np.c_[np.ones(len(x)),x]); t=d['eval_times']; dt=d['past_dt']; taus,theta=out['estimated_taus'],out['hereditary_weights']; e=m._deployment_design(coupon,dt,t,taus)@theta-np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]\\ndef score(mask):\\n r=e[mask]; return np.round([np.sqrt(np.mean(r[:,:-1]**2)),np.sqrt(np.mean(r[:,-1]**2))],6)\\nprint('diagnostic RMSE (curve, rate):',score(np.ones(len(x),bool)))\\nfor j in np.unique(c['lab_id']): print('lab',j,score(c['lab_id']==j))\\nmissing=np.isnan(c['coupon_features_raw']).any(1)\\nfor j in [False,True]: print('missing',j,score(missing==j))\\nprint('worst horizon RMSE',np.sqrt(np.mean(e[:,:-1]**2,axis=0)).max())\\na=m._deployment_design(coupon,dt,np.array([0.,1e-6]),taus)@theta\\nnp.testing.assert_allclose((a[:,1]-a[:,0])/1e-6,a[:,-1],rtol=3e-6,atol=1e-8)\\nassert all(np.isfinite(v).all() for v in out.values()) and .05<taus[0]<taus[1]<25\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled alignment with saturating drift -> H2 chamber-local alignment with the same stress memory and unit-time saturation; chamber-local alignment reduces the diagnostic drift-amplitude RMSE from 0.1305 to 0.00328 under the gain/intercept probe.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the chamber stress-memory weights\",\n      \"rejected_reason\": \"With the benchtop stress-memory response held fixed, a shared unit-time drift kernel explains the diagnostic time dependence to about 0.004 RMSE.\"\n    }\n  ],\n  \"rationale\": \"Implement the chamber law without fitting diagnostic outcomes at runtime. Score the exact no-gain law by lab, missingness, and horizon: a persistent slice bias would call for revisiting alignment, while failure of the derivative check would expose an inconsistent onset-rate implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "36d8d79e39b489c2ba4fd5e6ac4a0422b7c9774606c8664c306bed1771e2f1b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36767.99,
+      "usage_known": true,
+      "prompt_tokens": 28917,
+      "cached_tokens": 9600,
+      "completion_tokens": 1431
+    }
+  ]
+}

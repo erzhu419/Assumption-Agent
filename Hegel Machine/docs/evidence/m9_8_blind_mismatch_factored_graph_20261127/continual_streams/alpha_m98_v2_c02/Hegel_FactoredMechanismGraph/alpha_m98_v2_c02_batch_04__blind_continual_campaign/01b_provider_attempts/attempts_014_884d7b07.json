@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "884d7b076b70469884466cdc1fe2cfdb",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:42.710611+00:00",
+  "ended_at_utc": "2026-11-27T14:46:15.712996+00:00",
+  "request_sha256": "a87a789bd648c216039e023c357f3dba26695d5beb00f307bf18ffc2552a0ada",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 72381,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33257,
+    "cached_tokens": 9600,
+    "completion_tokens": 1212
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/bridge_challenger.py /holdout_task/upstream_transducer.py\\npython3 -I /tmp/audit_cross_channel_ablation.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _invert, _design, _POWERS, calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    ds = item['dataset']\\n    cal = ds['calibration_load_cells']\\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\\n    beta, clean = _fit(x, y)\\n    errors = np.full(len(x), np.nan)\\n    rejected = np.zeros(len(x), dtype=int)\\n    for i in range(len(x)):\\n        rows = np.arange(len(x)) != i\\n        b, good = _fit(x[rows], y[rows])\\n        rejected[rows] += ~good\\n        if clean[i]:\\n            errors[i] = np.max(np.abs(_invert(y[i], b) - x[i]))\\n    assert np.array_equal(np.flatnonzero(~clean), [13, 14, 15])\\n    assert np.all(rejected[~clean] == len(x) - 1) and not rejected[clean].any()\\n    assert np.isfinite(errors[clean]).all() and np.max(errors[clean]) < .002\\n    mixed = np.count_nonzero(x, axis=1) > 1\\n    for label, rows in [('single-channel', clean & ~mixed), ('mixed-channel', clean & mixed)]:\\n        print(label, 'LOO max abs', np.max(errors[rows]))\\n    out = calibrate_upstream(ds)\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        if ds.get(name) is None:\\n            assert out.get(name) is None\\n            continue\\n        for k in ('past_channel_raw', 'hold_channel_raw'):\\n            if k in ds[name]:\\n                raw, loads = ds[name][k], out[name][k]\\n                assert loads.shape == raw.shape and np.isfinite(loads).all()\\n                error = np.max(np.abs(_design(loads.reshape(-1, 4), _POWERS) @ beta - raw.reshape(-1, 4)))\\n                assert error < 1e-9\\n                print(name, k, 'round-trip max abs', error)\\n    c = out['calibration_load_cells']\\n    s = c['single_channel_sweeps']\\n    assert np.array_equal(c['bridge_raw'], x) and not np.shares_memory(c['bridge_raw'], x)\\n    assert np.array_equal(s['cmd_stress'], s['true_stress']) and not np.shares_memory(s['cmd_stress'], s['true_stress'])\\n    if ds.get('chamber_verification_trials') is None:\\n        raw, loads = y[clean][:12], x[clean][:12]\\n        chamber = dict(past_channel_raw=raw.reshape(2, 6, 4), hold_channel_raw=raw[::6], trial_id=np.arange(2))\\n        v = calibrate_upstream(dict(ds, chamber_verification_trials=chamber))['chamber_verification_trials']\\n        assert np.max(np.abs(v['past_channel_raw'] - loads.reshape(2, 6, 4))) < .002\\n        assert np.max(np.abs(v['hold_channel_raw'] - loads[::6])) < .002\\n        assert np.array_equal(v['trial_id'], chamber['trial_id'])\\n    print('Spike rejection, identity copies, and optional chamber routing passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine-prefiltered full cubic → H2 robust subset fit with quadratic interactions and pure cubics; the challenger restored the failed lower-load block to 3.43e-4 maximum absolute inverse error and preserved the upper-load result at 1.88e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t13\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the original full cubic fit\",\n      \"rejected_reason\": \"It failed to invert the lower-load holdout, while the challenger recovered that slice without degrading upper-load accuracy.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger and test the actual deliverable in isolation. The block audit verifies the repaired failure; leave-one-out spike checks, trial round-trips, and chamber routing will catch regressions from replacing the fit. If any fail, inspect the corresponding fit or routing before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "c6204e069542c7e4745429f590920fda1b8ab0cc4feffd207b285914147a5882",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33641.71,
+      "usage_known": true,
+      "prompt_tokens": 33257,
+      "cached_tokens": 9600,
+      "completion_tokens": 1212
+    }
+  ]
+}

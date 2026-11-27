@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "220b6aae3c87436db513a504add2a57c",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:03.685313+00:00",
+  "ended_at_utc": "2026-11-27T14:44:31.802513+00:00",
+  "request_sha256": "6356a1f2de7d6a3cfcb242d409e02f0024813ce4a368ccbdebee8418fedf6e6f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26773,
+    "cached_tokens": 11136,
+    "completion_tokens": 947
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; a=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(a,y,rcond=None)[0]; e=y-a@b\\nprint('forward affine matrix',b); print('residual svd',np.linalg.svd(e,full_matrices=False)[1:]); print('truth unique values and counts by channel',[(len(np.unique(v)),len(v)) for v in x.T]); print('first 20 paired rows [truth | raw | totals]'); print(np.c_[x,y,x.sum(1),y.sum(1)][:20]); i=np.argsort(np.linalg.norm(e,axis=1)); print('largest paired rows [index | truth | raw | totals]'); print(np.c_[i,x[i],y[i],x[i].sum(1),y[i].sum(1)][-14:]);\\nfor q in (.35,.55,.75,1):\\n j=i[:int(q*len(x))]; B=np.linalg.lstsq(a[j],y[j],rcond=None)[0]; E=y-a@B; print('fraction',q,'matrix',B,'median vector error',np.median(np.linalg.norm(E,axis=1)),'median sum error',np.median(abs(E.sum(1))))\\nfor k in ('train','test'):\\n s=d[k]; z=np.vstack((s['hold_channel_raw'],s['past_channel_raw'].reshape(-1,4))); print(k,'raw quantiles',np.quantile(z,[0,.05,.5,.95,1],axis=0),'sum quantiles',np.quantile(z.sum(1),[0,.05,.5,.95,1]));print(k,'raw covariance singular values',np.linalg.svd(z-z.mean(0),compute_uv=False));\\nPY\\nfind /pretrain_task -maxdepth 2 -type f -printf '%f %s\\\\n' | head -25\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge -> H2 nonlinear channel response or a shared distortion that partly cancels in total stress; affine held-out total-stress RMSE is 0.3464 on the high-load slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine inverse recovers the four physical loads to calibration precision.\",\n    \"empirical_witness\": \"Held-out channel RMSE is 0.305–0.608 for the affine inverse versus 0.110–0.201 for the quadratic inverse, but total-stress RMSE worsens from 0.311 to 0.348.\",\n    \"causal_blanket_diagnosis\": \"Channel residuals may share a distortion that largely cancels in the axial sum. Separate channel fits can improve individual channels while spoiling that cancellation.\",\n    \"sublated_pivot\": \"Inspect paired sweeps and the residual subspace to identify a compact bridge law, then validate the axial sum directly.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the full quadratic inverse\",\n      \"rejected_reason\": \"It improves channel estimates but worsens the measured total-stress error, especially at high loads.\"\n    }\n  ],\n  \"rationale\": \"Paired observations and residual singular vectors distinguish a shared bridge distortion from independent channel nonlinearities. Coupon raw ranges show whether the large sweep deviations also occur in the inference inputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "72cdb74533a9fdb1af3e670ff11eabafc9097d8616d4308e05087327b2a15ab7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28545.17,
+      "usage_known": true,
+      "prompt_tokens": 26773,
+      "cached_tokens": 11136,
+      "completion_tokens": 947
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b17c7ab45da46cfbce2dbfc1c9c1d57",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:21.898218+00:00",
+  "ended_at_utc": "2026-11-27T14:52:46.137127+00:00",
+  "request_sha256": "6c03ce9cbd6de5bcad22ef7b82d33dc67c9143a3b21d80d6ea32e64553426259",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53274,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27862,
+    "cached_tokens": 9600,
+    "completion_tokens": 701
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /tmp/hegel_continual_archive\\nfor f in *solver.py; do echo \\\"=== $f\\\"; grep '^def ' \\\"$f\\\"; sed -n '/^def solve_batch/,$p' \\\"$f\\\"; done\\npython3 -I - <<'PY'\\nimport json, numpy as np\\nrows = json.load(open('archive_apparatus_log.json'))\\na = np.asarray([r['facility_telemetry_trace'] for r in rows])\\nfor start, stop in [(0,4),(4,8),(8,12),(12,16)]:\\n    means = a[:,start:stop].mean(axis=1)\\n    # Channels with stable offsets distinguish settings; oscillatory channels and chronological drift do not enter this comparison.\\n    d = abs(means[:-1][:,[1,4,5,7]] - means[-1,[1,4,5,7]])\\n    print(f'window {start}:{stop}, absolute setting-channel deltas by archived row:', d.round(3).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full-trace nearest neighbor → H2 compare persistent apparatus offsets and the archived deployment entry points; worst held-out benchtop imputed-coupon strain p90 was 0.0269 and rate RMSE was 0.0112.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The archive comparison printed the design helpers but not how each solver actually invokes them for deployment. Read those entry points and check whether the stable telemetry offsets agree throughout equilibration. A split match would reopen the deployment-law choice; a consistent baseline match supports retaining the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4f7c55b00acde15e662903a29f09afa0f61f79656453ec980ccc2fc995283dd3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24194.97,
+      "usage_known": true,
+      "prompt_tokens": 27862,
+      "cached_tokens": 9600,
+      "completion_tokens": 701
+    }
+  ]
+}

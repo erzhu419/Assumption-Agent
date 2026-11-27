@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd43463c4371413380b51326b1712956",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:46.406246+00:00",
+  "ended_at_utc": "2026-11-27T14:46:11.748024+00:00",
+  "request_sha256": "658d5f0e4faadc519a6b7e1a3cf809df65b8b42f3f2ed40d0537e80e20d5f003",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55134,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31739,
+    "cached_tokens": 9600,
+    "completion_tokens": 826
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); trial=Path('/tmp/bridge_trial.py').read_text()\\na=trial.index('full='); b=trial.index(\\\"if __name__\\\")\\nbridge=trial[a:b].replace('def basis(', 'def _bridge_basis(').replace('basis(', '_bridge_basis(').replace('def _bridge__bridge_basis(', 'def _bridge_basis(')\\nbridge=bridge.replace('def fit(xx,yy):','def _fit_bridge(xx, yy):').replace('def invert(raw,k):','def _invert_bridge(raw, k):')\\nbridge += \\\"def _bridge(cal):\\\\n    return _fit_bridge(cal['true_channel_loads'], cal['bridge_raw'])[0]\\\\n\\\\n\\\\ndef _loads(part, bridge):\\\\n    past = _invert_bridge(part['past_channel_raw'], bridge)[0].sum(axis=-1)\\\\n    hold = _invert_bridge(part['hold_channel_raw'], bridge)[0].sum(axis=-1)\\\\n    return past, hold\\\\n\\\\n\\\\n\\\"\\nstart=s.index('def _bridge('); end=s.index('\\\\ndef ',s.index('def _loads(',start)+1)\\ns=s[:start]+bridge+s[end+1:]; s=s.replace('import numpy as np','from itertools import combinations_with_replacement\\\\n\\\\nimport numpy as np',1); p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ntail -47 /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; out=m.solve_batch(d)\\nfor k,v in out.items():\\n assert np.isfinite(v).all(); print(k,v.shape, np.min(v),np.max(v))\\nprint(out['estimated_taus'],out['hereditary_weights'])\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine bridge → cyclic cubic bridge fitted on clean sweeps; worst held-out lab p90 errors drop from 0.212 to 0.0231 for strain and from 0.598 to 0.0158 for rate, with worst clean calibration stress error below 0.00058.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Retain affine calibration\",\"rejected_reason\":\"It loses on both clean calibration holdouts and both held-out benchtop outputs.\"}],\"rationale\":\"Promote the independently validated bridge and test the exact integrated artifact. The clean-process check detects integration or output failures; inspect the retained chamber equation to confirm that only the bridge changed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "35925b083338698ebfc063769527184b6cbfdeeb476076a93f9730c0861109d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25981.54,
+      "usage_known": true,
+      "prompt_tokens": 31739,
+      "cached_tokens": 9600,
+      "completion_tokens": 826
+    }
+  ]
+}

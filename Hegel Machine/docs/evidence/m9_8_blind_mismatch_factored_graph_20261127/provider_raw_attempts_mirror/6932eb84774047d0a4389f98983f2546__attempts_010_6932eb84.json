@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6932eb84774047d0a4389f98983f2546",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:22.428789+00:00",
+  "ended_at_utc": "2026-11-27T14:47:51.148271+00:00",
+  "request_sha256": "fb71d8e6710d4510cba212be9ecae1137dbe6a47512093479b7e3427708f44a6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53603,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27766,
+    "cached_tokens": 9600,
+    "completion_tokens": 1068
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_sweep_transfer.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom unittest.mock import patch\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor item in pickle.load(open(root + 'public_batch.pkl', 'rb')):\\n    s = item['study']\\n    cal = s['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    clean = np.max(abs(y), axis=1) < 7\\n    amp = np.max(abs(x), axis=1)\\n    high = clean & (amp >= np.quantile(amp[clean], .8))\\n    sb = cal['single_bank_sweeps']\\n    banks, refs, readings = (np.asarray(sb[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    solo = np.zeros((len(refs), 4)); solo[np.arange(len(refs)), banks.astype(int)] = refs\\n    def fits(train, augmented):\\n        coefficients = []\\n        for b in range(4):\\n            A = m._features(x[train], b); t = y[train, b]\\n            if augmented:\\n                keep = (banks == b) & (abs(readings) < 7)\\n                A = np.vstack((A, m._features(solo[keep], b))); t = np.r_[t, readings[keep]]\\n            coefficients.append(np.linalg.lstsq(A, t, rcond=None)[0])\\n        return np.asarray(coefficients)\\n    S, _ = m._forward(s)\\n    baseline = m.solve_batch(s)['weights']\\n    for augmented in (False, True):\\n        outer = fits(clean & ~high, augmented)\\n        held = np.column_stack([m._features(x[high], b) @ outer[b] for b in range(4)]) - y[high]\\n        coef = fits(clean, augmented)\\n        pulse_errors = []\\n        with patch.object(m, '_rosette_coefficients', return_value=coef):\\n            for pulse in item.get('campaign_diagnostics') or []:\\n                e = m._calibrate(dict(s, y_obs_raw=pulse['y_pulse_raw'])) - S @ pulse['w_pulse']\\n                pulse_errors.append(float(np.sqrt(np.mean(e.reshape(len(s['mu_shifts']), -1, 4)**2, axis=1)).max()))\\n            w = m.solve_batch(s)['weights']\\n        print('augmented', augmented, 'high-amplitude held-out worst-channel RMSE', float(np.sqrt(np.mean(held**2, axis=0)).max()), 'unprojected worst shift-bank RMSE per pulse', pulse_errors, 'max weight change', float(np.max(abs(w-baseline))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_sweep_transfer.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 mixed-rosette sweeps underconstrain calibration at higher amplitudes → H2 single-bank sweeps improve transfer only if the gain holds on independent tracer pulses; current worst unprojected pulse RMSE is 2.79e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebraic basis and nuisance audits\",\n      \"rejected_reason\": \"The previous audit already tested pairwise, three-way, and rational terms and confirmed pulse agreement without nuisance projection. This continuous inverse problem has no class labels or relay modes.\"\n    }\n  ],\n  \"rationale\": \"A random held-out sweep can miss a shared high-amplitude bias. Hold out the highest-amplitude mixed sweeps and test whether adding single-bank data improves transfer to that slice and both independent pulses. Change the solver only if the observed gain is material.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "34d3cbaba3ba67fab36716ce183d41af8dea27426e0ff561586ed319ffbae483",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29163.12,
+      "usage_known": true,
+      "prompt_tokens": 27766,
+      "cached_tokens": 9600,
+      "completion_tokens": 1068
+    }
+  ]
+}

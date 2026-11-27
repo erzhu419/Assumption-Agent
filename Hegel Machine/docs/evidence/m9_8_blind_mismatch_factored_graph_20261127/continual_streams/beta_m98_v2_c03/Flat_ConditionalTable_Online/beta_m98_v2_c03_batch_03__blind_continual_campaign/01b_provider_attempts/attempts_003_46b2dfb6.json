@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46b2dfb689d4464a995922ea83be2f7e",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:32:01.831717+00:00",
+  "ended_at_utc": "2026-11-27T14:32:40.038938+00:00",
+  "request_sha256": "d4d719d478283f1082f3b5cbbe782b150e2a3c4eaec1873fd4d2e7dafaadb561",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19404,
+    "cached_tokens": 9600,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/pulse_probe.py <<'PY'\\nimport importlib.util,json,pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom pathlib import Path\\nroot=Path('/tmp/hegel_continual_archive')\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; sw=s['sensor_calibration_sweeps']\\ndef load(x):\\n    sp=importlib.util.spec_from_file_location('m', root/x); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m); return m\\nm=load('beta_m98_v2_c03_batch_02_solver.py')\\nref,raw=sw['ref_rosette'],sw['raw_rosette']; X=np.c_[np.ones(len(ref)),ref]; coef=np.linalg.lstsq(X,raw,rcond=None)[0]; print('affine coefficients',coef.round(7)); print('affine fit RMS by channel',np.sqrt(np.mean((raw-X@coef)**2,axis=0)))\\nerr=[]\\nfor idx in np.array_split(np.arange(len(ref)),5):\\n    train=np.setdiff1d(np.arange(len(ref)),idx); fit=np.linalg.lstsq(X[train],raw[train],rcond=None)[0]; err.append(np.sqrt(np.mean((raw[idx]-X[idx]@fit)**2,axis=0)))\\nprint('worst held calibration RMS',np.max(err,axis=0)); print('bank sweep examples', {k: v[:8] for k,v in sw['single_bank_sweeps'].items()})\\nW=np.array([p['w_pulse'] for p in item['campaign_diagnostics']]); Y=np.array([m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) for p in item['campaign_diagnostics']]); print('pulse ranges',[(float(y.min()),float(y.max())) for y in Y]); print('pulse weights',W)\\nfor name in ('beta_m98_v2_c03_batch_01_solver.py','beta_m98_v2_c03_batch_02_solver.py'):\\n    S,_=load(name)._forward(s); E=W@S.T-Y; print(name,'pulse RMS by shift',np.sqrt(np.mean(E.reshape(len(W),len(s['mu_shifts']),-1)**2,axis=2)), 'max',abs(E).max())\\ndef res(p,ids):\\n    S,_=m._forward(dict(s,robin_x=p[0],robin_y=p[1])); return (W[ids]@S.T-Y[ids]).ravel()\\nfor ids in ([0],[1],[0,1]):\\n    fit=least_squares(res,[s['robin_x'],s['robin_y']],args=(ids,),bounds=(-0.1,50)); print('fit axes',ids,fit.x,'RMS each',np.sqrt(np.mean(res(fit.x,[0,1]).reshape(2,-1)**2,axis=1)))\\nlog=json.load(open(root/'archive_apparatus_log.json')); print('log layout',[(list(a),{k:np.shape(v) for k,v in a.items()}) for a in log] if isinstance(log,list) else list(log))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pulse_probe.py; sed -n '47,180p' /tmp/hegel_continual_archive/beta_m98_v2_c03_batch_02_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 reflecting or open-Robin archive models -> H2 pulse-validated boundary rows with sweep-fitted calibration; worst held-pulse RMSE pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the reflecting-wall solver unchanged\",\"rejected_reason\":\"The prior reflecting model has not yet been tested against this campaign's tracer responses.\"}],\"rationale\":\"Held-out sweep residuals test whether affine calibration is adequate. Comparing pulse errors by shift tests whether either archived boundary model transfers; fitting one pulse and predicting the other checks whether an apparent improvement generalizes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "23e119f236d52db5b341f306692acebd63624f73b8fa12eb6203034c00e8ec34",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38161.38,
+      "usage_known": true,
+      "prompt_tokens": 19404,
+      "cached_tokens": 9600,
+      "completion_tokens": 993
+    }
+  ]
+}

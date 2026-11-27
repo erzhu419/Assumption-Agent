@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f3e662f6df1b48a5b57311b1bed4d2e7",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:55.796597+00:00",
+  "ended_at_utc": "2026-11-27T14:35:25.028560+00:00",
+  "request_sha256": "8b993e97b89e8ba7d90f10e0c02036f245fc525d3effd854364f51aa55f69582",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46871,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26196,
+    "cached_tokens": 9600,
+    "completion_tokens": 1016
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/tmp/nuisance_audit.py <<'PY'\\nimport runpy\\np=runpy.run_path('/tmp/calibration_audit.py'); globals().update({k:p[k] for k in ('np','m','i','s','sw','X','Y','S','U')})\\nB=sw['single_bank_sweeps']; gains=[]; offsets=[]\\nfor j in range(4):\\n    mask=B['bank_id']==j\\n    r=np.r_[X[:,j], B['ref_signal'][mask]]; y=np.r_[Y[:,j],B['raw_readout'][mask]]\\n    c=np.linalg.lstsq(np.c_[np.ones(len(r)),r],y,rcond=None)[0]; offsets.append(c[0]); gains.append(c[1])\\ndef diagonal(study):\\n    return ((study['y_obs_raw'].reshape(-1,4)-offsets)/gains).ravel()\\nfor label,f in [('affine',m._calibrate),('pooled diagonal',diagonal)]:\\n    E=np.array([S@q['w_pulse']-f(dict(s,y_obs_raw=q['y_pulse_raw'])) for q in i['campaign_diagnostics']])\\n    print(label,'worst calibrated pulse/shift RMSE',np.sqrt(np.mean(E.reshape(len(E),len(s['mu_shifts']),-1)**2,axis=2)).max())\\nZ=s['Z_nuisance']; y=m._calibrate(s); zridge=s['nuisance_ridge']; ridge=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']; w=m.solve_batch(s)['weights']\\nfor use_z in (False,True):\\n    err=[]; drift=[]\\n    for bank in range(4):\\n        v=np.arange(len(y))%4==bank; t=~v\\n        # Fit and profile on three banks, then predict the held-out bank in calibrated units.\\n        A=np.c_[Z[t],np.sqrt(zridge)*np.eye(Z.shape[1]) .repeat(0,axis=0)] if False else Z[t]\\n        P=np.linalg.solve(A.T@A+zridge*np.eye(Z.shape[1]),A.T)\\n        D=S[t]-A@(P@S[t]) if use_z else S[t]; b=y[t]-A@(P@y[t]) if use_z else y[t]\\n        wt,_=m._box_budget(D.T@D+ridge*np.eye(S.shape[1]),-D.T@b,cap,budget)\\n        gamma=P@(y[t]-S[t]@wt) if use_z else np.zeros(Z.shape[1]); e=S[v]@wt+Z[v]@gamma-y[v]\\n        err.append(np.sqrt(np.mean(e**2))); drift.append(np.linalg.norm(wt-w)/np.linalg.norm(w))\\n    print('profiled nuisance',use_z,'held-bank RMSE',err,'relative weight drift',drift)\\nPY\\nsed -i 's/A=np.c_\\\\[Z\\\\[t\\\\].*else Z\\\\[t\\\\]/A=Z[t]/' /tmp/nuisance_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/nuisance_audit.py | tail -7\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 periodic closure with affine calibration -> H2 test independent bank-sweep pooling and nuisance transfer; verified worst pulse-by-shift RMSE is 9.02e-7.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the previous sweep-fold audit\",\"rejected_reason\":\"It already tested calibration complexity; pooling the independent single-bank sweeps and holding sensors out of nuisance estimation test different failure modes.\"}],\"rationale\":\"Test whether the unused single-bank sweeps materially improve independent tracer predictions, and whether nuisance profiling improves prediction on each held-out sensor bank. Retain the verified stencil unless an applicable test exposes a meaningful failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "68b8d4f2601e1e9808979456c1dbf76592c2ef62b446e51928eb25880f7c740f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29594.63,
+      "usage_known": true,
+      "prompt_tokens": 26196,
+      "cached_tokens": 9600,
+      "completion_tokens": 1016
+    }
+  ]
+}

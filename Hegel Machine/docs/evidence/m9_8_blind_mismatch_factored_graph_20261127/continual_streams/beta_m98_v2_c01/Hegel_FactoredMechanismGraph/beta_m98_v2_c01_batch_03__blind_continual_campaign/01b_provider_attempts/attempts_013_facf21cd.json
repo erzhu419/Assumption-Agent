@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "facf21cda2c94d949920f129aa3854cb",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:10.014871+00:00",
+  "ended_at_utc": "2026-11-27T14:37:50.691434+00:00",
+  "request_sha256": "197e74e95316a9c2cee7a3e4b694dfb15193bc5c2e68631b5725448b07c69824",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32189,
+    "cached_tokens": 9600,
+    "completion_tokens": 1625
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nimport re\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('def _calibrate(')\\nend = start + re.search(r'\\\\n(?=def )', s[start:]).start()\\ns = s[:start] + '''def _calibrate(study):\\n    \\\"\\\"\\\"Fit an affine rosette, adding each isolated sweep to its own bank.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    raw = np.asarray(sweeps['raw_rosette'], dtype=float)\\n    design = np.column_stack((np.ones(len(ref)), ref))\\n    single = sweeps['single_bank_sweeps']\\n    banks = np.asarray(single['bank_id'])\\n    signal = np.asarray(single['ref_signal'], dtype=float)\\n    readout = np.asarray(single['raw_readout'], dtype=float)\\n    coef = np.empty((5, 4))\\n    for j in range(4):\\n        rows = banks == j\\n        isolated = np.zeros((np.count_nonzero(rows), 5))\\n        isolated[:, 0] = 1\\n        isolated[:, j + 1] = signal[rows]\\n        coef[:, j] = np.linalg.lstsq(\\n            np.vstack((design, isolated)), np.r_[raw[:, j], readout[rows]], rcond=None\\n        )[0]\\n    obs = np.asarray(study['y_obs_raw'], dtype=float).reshape(-1, 4)\\n    return np.linalg.solve(coef[1:].T, (obs - coef[0]).T).T.ravel()\\n\\n''' + s[end:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nst = item['study']\\nS, U = m._forward(st)\\nworst = []\\nfor pulse in item['campaign_diagnostics']:\\n    residual = m._calibrate(dict(st,y_obs_raw=pulse['y_pulse_raw'])) - S @ pulse['w_pulse']\\n    rms = np.sqrt(np.mean(residual.reshape(len(st['mu_shifts']),-1,4)**2, axis=1))\\n    worst.append(float(rms.max()))\\nassert max(worst)<1.1e-6, worst\\nprint('Worst shift-by-bank RMSE per tracer:', worst)\\nZ=st['Z_nuisance']\\nP=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+st['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nA=P@S\\nrng=np.random.default_rng(98)\\nx=rng.normal(size=(80,4))\\nbank=np.repeat(np.arange(4),6)\\nsignal=rng.uniform(-1,1,len(bank))\\nycal=m._calibrate(st)\\nu=st['u_box']\\nworst_gap=0.\\nfor _ in range(3):\\n    mix=np.eye(4)+rng.normal(0,.17,(4,4))\\n    b=rng.normal(0,.1,4)\\n    sw=dict(ref_rosette=x,raw_rosette=x@mix+b,single_bank_sweeps=dict(bank_id=bank,ref_signal=signal,raw_readout=b[bank]+mix[bank,bank]*signal))\\n    obs=(ycal.reshape(-1,4)@mix+b).ravel()\\n    synth=dict(st,sensor_calibration_sweeps=sw,y_obs_raw=obs)\\n    np.testing.assert_allclose(m._calibrate(synth), ycal, rtol=0, atol=1e-12)\\n    for budget in (0., u, st['total_budget'], S.shape[1]*u):\\n        out=m.solve_batch(dict(synth,total_budget=budget))\\n        w, c=out['weights'],out['kkt_certificate']\\n        r=A@w-P@ycal\\n        g=A.T@r+st['source_ridge']*w\\n        J=.5*(r@r+st['source_ridge']*(w@w))\\n        nu=c['nu_sum']\\n        dlo=J-g@w+nu*budget+u*np.minimum(g-nu,0).sum()\\n        lo,hi=np.asarray(c['lam_lower']),np.asarray(c['lam_upper'])\\n        assert np.min(w)>=-1e-12 and np.max(w)<=u+1e-12 and abs(w.sum()-budget)<1e-11\\n        np.testing.assert_allclose([c['primal_objective'],c['dual_lower_bound']],[J,dlo],rtol=0,atol=1e-11)\\n        assert max(np.max(abs(g-nu-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(u-w))))<1e-9\\n        np.testing.assert_allclose(out['terminal_field'], np.tensordot(w,U,axes=(0,0)),rtol=0,atol=1e-12)\\n        worst_gap=max(worst_gap,abs(J-dlo))\\nassert worst_gap<1e-9\\nprint('Three changed rosettes by four budgets: worst independent duality gap',worst_gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Rosette-only affine calibration → jointly fit rosette and isolated-bank sweeps; worst tracer-by-shift-by-bank RMSE fell from 2.22e-6 to 1.01e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Correct only bank 1\",\n      \"rejected_reason\": \"That would select a bank from this campaign’s tracer residuals. Pooling both sweep types applies the same calibration rule to every bank and improves both tracers.\"\n    }\n  ],\n  \"rationale\": \"The pooled fit improves both tracer pulses without fitting to them or changing transport. Verify the implementation on the public pulses and in isolation with changed sensor gains, offsets, and cross-talk at interior and saturated budgets.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "99e9935955420d8982125bcc13aac371b1f041ddb935108a2d5debb6666027e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41480.98,
+      "usage_known": true,
+      "prompt_tokens": 32189,
+      "cached_tokens": 9600,
+      "completion_tokens": 1625
+    }
+  ]
+}

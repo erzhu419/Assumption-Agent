@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8ea36571709497e835066cbbe9635cc",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:56:57.867735+00:00",
+  "ended_at_utc": "2026-11-27T14:57:46.857151+00:00",
+  "request_sha256": "2073bca78399d5d69c9341bf23b86635d81ddca613b32a45f5a93268823086b7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50757,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28605,
+    "cached_tokens": 5504,
+    "completion_tokens": 1679
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\ns=Path('/tmp/m98_core.py').read_text()\\ns=s.replace('def _design(site, x, stress, dt, t, *, chamber=False):','def _design(site, x, stress, dt, t):').replace('    # Saturating chamber creep has the same initial slope as benchtop creep.\\\\n    drift_time = -np.expm1(-t) if chamber else t\\\\n    drift = features[:, None, :] * drift_time[None, :, None]','    drift = features[:, None, :] * t[None, :, None]')\\ns=s.replace(\\\"    strain, rate = _design(test, x_te, stress, dt, t, chamber=True)(taus)\\\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\\\n            'predicted_strain': test['strain_0'][:, None] + strain @ theta,\\\\n            'initial_rate_pred': rate @ theta}\\\",\\\"    # Chamber entry resets both memory branches; logarithmic creep has unit initial slope.\\\\n    hold = stress(test['hold_channel_raw'])\\\\n    drift = theta[2] + x_te @ theta[3:]\\\\n    relaxation = -np.expm1(-t[:, None] / taus) @ theta[:2]\\\\n    strain = test['strain_0'][:, None] + hold[:, None] * relaxation + drift[:, None] * np.log1p(t)\\\\n    rate = hold * np.sum(theta[:2] / taus) + drift\\\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\\")\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/m98_validate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; a,b=d['train'],d['test']; c=d['calibration_load_cells']; dt,t=d['past_dt'],d['eval_times']; out=m.solve_batch(d)\\nassert set(out)=={'estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'}\\nfor k,shape in zip(('estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'),((2,),(7,),(len(b['lab_id']),len(t)),(len(b['lab_id']),))):\\n assert out[k].shape==shape and np.isfinite(out[k]).all()\\nz=out['estimated_taus']; assert .05<z[0]<z[1]<25\\nraw,true=c['bridge_raw'],c['true_channel_loads']; good=np.max(abs(raw),axis=1)<5; fold=np.arange(len(raw))%5; errs=[]\\nfor f in range(5):\\n tr=fold!=f; te=~tr&good; stress=m._stress_calibration({'bridge_raw':raw[tr],'true_channel_loads':true[tr]}); e=stress(raw[te])-true[te].sum(1); errs.append(np.sqrt(np.mean(e**2)))\\nprint('Calibration inverse total-load OOF RMSE:',np.round(errs,7))\\nstress=m._stress_calibration(c); x,_=m._standardize(a,b); target=a['strain_curves_obs']-a['strain_0'][:,None]; rates=a['instant_rate_obs']; design=m._design(a,x,stress,dt,t)\\nprint('LOLO benchtop: lab taus strain medianAE strain late medianAE rate RMSE')\\nfor lab in np.unique(a['lab_id']):\\n tr=a['lab_id']!=lab; te=~tr\\n def subset(q): return tuple(v[tr] for v in design(q))\\n taus,theta=m._fit(subset,target[tr],rates[tr]); ss,rr=design(taus); e=ss[te]@theta-target[te]; r=rr[te]@theta-rates[te]\\n print(lab,taus,np.median(abs(e)),np.median(abs(e[:,-3:])),np.sqrt(np.mean(r*r)))\\n# Confirm the initial rate is the derivative of the deployed constitutive curve.\\neps=1e-6; short=m.solve_batch(dict(d,eval_times=t))\\n_,xt=m._standardize(a,b); th=out['hereditary_weights']; hold=stress(b['hold_channel_raw']); fd=(hold*(-np.expm1(-eps/z)@th[:2])+(th[2]+xt@th[3:])*np.log1p(eps))/eps\\nprint('Rate derivative max discrepancy:',np.max(abs(fd-short['initial_rate_pred'])))\\nassert np.max(abs(fd-short['initial_rate_pred']))<1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_validate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Benchtop memory → chamber memory reset with logarithmic creep; on diagnostic coupons, strain and rate RMSE were 0.0147 and 0.0129 under diagnostic-panel normalization.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The chamber preserves benchtop memory or follows the latest archived saturating-creep law.\",\n    \"empirical_witness\": \"After nonlinear calibration, normal-memory chamber rate RMSE remained 1.40. Resetting memory and choosing logarithmic rather than saturating creep lowered diagnostic strain RMSE from 0.181 to 0.0147 under the same diagnostic-panel normalization.\",\n    \"causal_blanket_diagnosis\": \"The initial rate distinguishes memory retention from reset; the later strain curve distinguishes creep laws that share the same initial slope.\",\n    \"sublated_pivot\": \"Fit the shared material parameters only on benchtop data, then apply a chamber memory reset and logarithmic creep.\",\n    \"risk_kind\": \"chamber mechanism mismatch\",\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the latest archived chamber equation\",\n      \"rejected_reason\": \"Its retained memory fails the diagnostic initial-rate check, even after calibrating the bridge.\"\n    }\n  ],\n  \"rationale\": \"Build the solver and verify the exact file. Held-out bridge inversion detects calibration instability, leave-one-lab-out fitting detects dependence on any one benchtop lab, and the derivative check verifies the initial-rate output independently of the strain schema.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2f6ce26a42eab4be94d1f66fa01d02e34f2402f89895682c074a38dc64d5ae2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48948.83,
+      "usage_known": true,
+      "prompt_tokens": 28605,
+      "cached_tokens": 5504,
+      "completion_tokens": 1679
+    }
+  ]
+}

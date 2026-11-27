@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f042de31cfb74e2da90cbe2c943b0cc9",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Hegel_FactoredMechanismGraph__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:49.022305+00:00",
+  "ended_at_utc": "2026-11-27T14:31:29.276244+00:00",
+  "request_sha256": "b914d38e20865ed06ef149f7b64bb30a64a40db5b24f3e7f80b5c3d994c5999d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66229,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33157,
+    "cached_tokens": 9600,
+    "completion_tokens": 1618
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; g=p['campaign_diagnostics']; result=m.solve_batch(d)\\nt=d['eval_times']; tau=result['estimated_taus']; theta=result['hereditary_weights']; cal=d['calibration_load_cells']; bridge=m._axial_load_map(cal)\\ncp=cal['true_channel_loads'].sum(1); raw=cal['bridge_raw']; err=np.empty_like(cp)\\n# Hold out calibration load levels rather than measuring fit error on the same rows.\\nfor block in np.array_split(np.argsort(cp),5):\\n    keep=~np.isin(np.arange(len(cp)),block)\\n    a,b=m._axial_load_map({'bridge_raw':raw[keep],'true_channel_loads':cal['true_channel_loads'][keep]}); err[block]=(raw[block]-a)@b-cp[block]\\n    print('bridge held-out load interval', np.round([cp[block].min(),cp[block].max()],4), 'RMSE',np.sqrt(np.mean(err[block]**2)))\\nlab=g['lab_id']; groups=np.unique(lab); x=np.empty_like(g['coupon_features_raw'])\\nfor l in groups:\\n    k=lab==l; ref=g['ref_coupons'][k]; x[k]=(g['coupon_features_raw'][k]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n# The diagnostics use their own observed reference panel. This does not change production preprocessing.\\nmissing=np.isnan(x).any(1); past,hold,_=m._specimen(g,x,bridge)\\n_, r=m._branches((past,hold,None),d['past_dt'],t,tau); mem=hold[:,None]-r*tau\\nB=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]-hold[:,None]*(B@theta[:2]); w=np.r_[np.ones(len(t)),.65]\\noptions=[('reset',0),('past pair difference',1),('slow memory',2),('hold–drift interaction',3),('rational drift gate',4,.5),('rational drift gate',4,2.),('secular drift',5)]\\ndef design(mask, opt):\\n    X=np.where(np.isnan(x),np.nanmean(x[mask],axis=0),x); D=theta[2]+X@theta[3:]; mode=opt[1]\\n    cols=D[:,None,None]*B[None,:,:]\\n    if mode==0:return cols\\n    if mode==5:return np.concatenate([cols,D[:,None,None]*np.r_[t,1][None,:,None]],axis=2)\\n    H=hold-np.mean(hold[mask]); q=[None,past[:,-1]-past[:,-2],mem[:,1],H*D][mode] if mode<4 else D/(1+opt[2]*H**2)-D\\n    return np.concatenate([cols,q[:,None,None]*B[None,:,:]],axis=2)\\ndef fit(train,val,opt):\\n    A=design(train,opt); z=(A[train]*w[None,:,None]).reshape(-1,A.shape[-1]); b=np.linalg.lstsq(z,(y[train]*w).ravel(),rcond=None)[0]; return A[val]@b-y[val]\\ndef scores(e):\\n    rm=lambda z: np.sqrt(np.mean(z*z)); return np.round([rm(e[:,:-1]),rm(e[:,-1]),max(rm(e[lab==l,:-1]) for l in groups),max(rm(e[lab==l,-1]) for l in groups),rm(e[missing]),rm(e[~missing])],6)\\nbase=np.empty_like(y); challenge=np.empty_like(y); shipped=np.empty_like(y)\\nfor l in groups:\\n    val=lab==l; train=~val\\n    def inner(opt):\\n        return max(np.sqrt(np.mean(fit(train&(lab!=j),lab==j,opt)**2)) for j in groups if j!=l)\\n    opt=min(options,key=inner)\\n    base[val]=fit(train,val,options[0]); challenge[val]=fit(train,val,opt)\\n    shipped[val]=design(train,options[0])[val]@np.array([.34308,2.13589])-y[val]\\n    print('held-out lab',l,'inner winner',opt,'reset mean curve/rate residual',np.mean(base[val,:-1]),np.mean(base[val,-1]))\\nprint('columns: curve RMSE, rate RMSE, worst-lab curve RMSE, worst-lab rate RMSE, missing-row joint RMSE, complete-row joint RMSE')\\nprint('reset OOF',scores(base)); print('nested structural selection OOF',scores(challenge)); print('fixed shipped gains diagnostic replay (not OOF)',scores(shipped))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct benchtop transfer → H2 chamber reset with transient drift; previous worst held-out diagnostic lab joint RMSE was 0.00427.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"The dataset contains continuous strain and rate outcomes, with no relay state or class labels. Held-out lab residuals test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"Hold out calibration load ranges to detect nonlinearity in the bridge. On real chamber coupons, select added history, interaction, or rational terms inside each lab fold and compare worst-lab curve and rate errors separately. Change the solver only if either audit identifies a material improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f78a3aa4bc515ed21c733fcacc899f764dada6b9cb999689d21aecd3e1061641",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39978.59,
+      "usage_known": true,
+      "prompt_tokens": 33157,
+      "cached_tokens": 9600,
+      "completion_tokens": 1618
+    }
+  ]
+}

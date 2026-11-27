@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d3b72e02d844c5ca706a456f3b3ab84",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:33.206817+00:00",
+  "ended_at_utc": "2026-11-27T14:47:15.946057+00:00",
+  "request_sha256": "e82b0490be637fd4e5cdf15dcb20b458f52de34721d873be942f38ade7995298",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60764,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32791,
+    "cached_tokens": 11136,
+    "completion_tokens": 1662
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/rheology_margin_audit.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\nx, raw = c['true_channel_loads'], c['bridge_raw']\\nb = m._fit_bridge(c)\\nordinary = np.linalg.norm(m._bridge_basis(x) @ b - raw, axis=1) < .01\\n# Evaluate only ordinary sweeps, while giving every training fold its gross errors.\\n# Both additions are specified before any held-out observations are scored.\\ndef extras(a, family):\\n    qs = [a[:,i] + sign*a[:,j] for i,j in itertools.combinations(range(4),2) for sign in (-1,1)]\\n    if family == 'signed_pair':\\n        return np.column_stack([q*abs(q) for q in qs])\\n    return np.column_stack([q**3/(1+q*q) for q in [*a.T,*qs]])\\n\\nnorm = np.linalg.norm(x[ordinary], axis=1)\\nhigh = norm >= np.quantile(norm, .8)\\nerrors = {key: [] for key in ('cubic_pair','signed_pair','rational')}\\nfor j in np.flatnonzero(ordinary):\\n    v = np.arange(len(x)) != j\\n    bh = m._fit_bridge({'true_channel_loads':x[v], 'bridge_raw':raw[v]})\\n    keep = v & (np.linalg.norm(m._bridge_basis(x) @ bh - raw, axis=1) < .01)\\n    est = m._decode_bridge(raw[j:j+1], bh)[0]\\n    errors['cubic_pair'].append((est-x[j]).sum())\\n    # A correction this small can be evaluated via the local inverse Jacobian.\\n    h = 1e-5\\n    A = m._bridge_basis(x[keep])\\n    for family in ('signed_pair','rational'):\\n        def basis(a):\\n            return np.column_stack((m._bridge_basis(a),extras(a,family)))\\n        C = np.linalg.lstsq(basis(x[keep]),raw[keep],rcond=None)[0]\\n        J = (basis(est+np.eye(4)*h)-basis(est-np.eye(4)*h))@C/(2*h)\\n        dx = np.linalg.solve(J.T, raw[j]-basis(est[None,:])[0]@C)\\n        errors[family].append((est+dx-x[j]).sum())\\nfor name, error in errors.items():\\n    e = np.array(error)\\n    print(name, 'axial RMSE overall/high load, max absolute', *(f'{v:.7g}' for v in (np.sqrt(np.mean(e**2)),np.sqrt(np.mean(e[high]**2)),max(abs(e)))))\\n\\ntr,te = d['train'],d['test']\\nlab = tr['lab_id']; strata = tr['stratum']; n = len(lab)\\nfeatures = m._features(tr,te)[:n]\\npast,hold = m._loads(tr,b)\\nyc = tr['strain_curves_obs'] - tr['strain_0'][:,None]\\nyr = tr['instant_rate_obs']\\nt = d['eval_times']; dt = d['past_dt']\\naux = np.asarray(tr['aux_chamber_telemetry'])\\nerrc, errr = np.empty_like(yc), np.empty_like(yr)\\nfor l in np.unique(lab):\\n    keep = lab != l\\n    tau,theta = m._fit(features[keep],past[keep],hold[keep],dt,t,yc[keep],yr[keep])\\n    D,R = m._design(features[~keep],past[~keep],hold[~keep],dt,t,tau)\\n    errc[~keep] = (D@theta).reshape(-1,len(t)) - yc[~keep]\\n    errr[~keep] = R@theta - yr[~keep]\\n# Sample-level robust residual summaries avoid letting a single curve outlier determine group bias.\\nsummary = np.column_stack((np.median(errc,axis=1),errr))\\nprint('worst lab/horizon MAE',max(np.mean(abs(errc[lab==l]),axis=0).max() for l in np.unique(lab)))\\nfor l,s in np.unique(np.c_[lab,strata],axis=0):\\n    keep=(lab==l)&(strata==s)\\n    print('lab/stratum/n',l,s,keep.sum(),'median curve/rate bias',np.round(np.median(summary[keep],axis=0),5))\\na = np.c_[aux,np.clip(summary,-.03,.03)]\\nz = a.copy()\\nfor l in np.unique(lab):\\n    v=lab==l\\n    z[v]-=z[v].mean(0)\\nprint('max absolute auxiliary correlation per output, pooled',np.max(np.abs(np.corrcoef(a.T)[:-2,-2:]),axis=0),'within-lab centered',np.max(np.abs(np.corrcoef(z.T)[:-2,-2:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 robust cubic-plus-pairwise bridge with the benchtop constitutive law; high-load axial leave-one-out RMSE is 0.000145, and the isolated host measured strain MAE of 0.000754 and rate MAE of 0.000477.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, Fokker–Planck drift, or balanced classification accuracy\",\"rejected_reason\":\"The solver predicts continuous strain and strain rates from deterministic viscoelastic histories; it has no relay states, diffusion operator, or class labels.\"}],\"rationale\":\"Test whether signed pairwise or rational terms materially reduce held-out axial error. Compare pooled and within-lab residual associations to detect whether auxiliary telemetry is a lab shortcut or a candidate for further validation. Leave the verified artifact unchanged unless the audit reveals a measured failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0d3f8b14b08952a7f97b8012ee73f494802cb939c72086afae18befe6318e22a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43192.34,
+      "usage_known": true,
+      "prompt_tokens": 32791,
+      "cached_tokens": 11136,
+      "completion_tokens": 1662
+    }
+  ]
+}

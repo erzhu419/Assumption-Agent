@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a622fe5bf23b498a917fe68193be1921",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__beta_m98_v2_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:21:56.754947+00:00",
+  "ended_at_utc": "2026-11-27T14:22:37.335326+00:00",
+  "request_sha256": "4681c3133ee7f706f09eed3d67b6729466c93c6b20c2ef878e6b683645d3589a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31460,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23508,
+    "cached_tokens": 11136,
+    "completion_tokens": 1544
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\n\\ndef axis(k,v,h,r):\\n    n=len(k); a=np.zeros((n,n))\\n    for i in range(n):\\n        if i in (0,n-1):\\n            a[i,i]=k[i]/h**2+r/h; a[i,1 if i==0 else n-2]=-k[i]/h**2\\n        else:\\n            kp=(k[i]+k[i+1])/2; km=(k[i]+k[i-1])/2\\n            a[i,i-1]=-km/h**2-max(v[i],0)/h\\n            a[i,i+1]=-kp/h**2-max(-v[i],0)/h\\n            a[i,i]=(kp+km)/h**2+abs(v[i])/h\\n    return a\\n\\nworst=np.zeros(7)\\nfor item in items:\\n    s=item['study']; nx,ny=s['nx'],s['ny']\\n    ax=axis(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1),s['robin_x'])\\n    ay=axis(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1),s['robin_y'])\\n    L=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    U=[np.array([np.linalg.solve(L+mu*np.eye(nx*ny),src.ravel(order='F')).reshape((nx,ny),order='F') for src in s['source_modes']]) for mu in s['mu_shifts']]\\n    i,j=s['sensor_ij'].T; S=np.concatenate([u[:,i,j].T for u in U]); S_actual,U_actual=m._forward(s)\\n    o=m.solve_batch(s); w=o['weights']; c=o['kkt_certificate']; lo,hi=c['lam_lower'],c['lam_upper']; cap=s['u_box']\\n    Z=s['Z_nuisance']; R=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\n    A=R@S; e=A@w-R@m._calibrate(s); g=A.T@e+s['source_ridge']*w\\n    J=(e@e+s['source_ridge']*(w@w))/2\\n    sweep=s['sensor_calibration_sweeps']; ref=sweep['ref_rosette']; raw=sweep['raw_rosette']; X=np.c_[np.ones(len(ref)),ref]; err=[]\\n    for fold in range(5):\\n        test=np.arange(len(ref))%5==fold\\n        err.append(np.sqrt(np.mean((raw[test]-X[test]@np.linalg.lstsq(X[~test],raw[~test],rcond=None)[0])**2,axis=0)).max())\\n    worst=np.maximum(worst,[max(abs(S-S_actual).max(),abs(U[-1]-U_actual).max()),abs(o['terminal_field']-w@U[-1].reshape(len(w),-1).reshape(len(w),nx*ny)).max() if False else abs(o['terminal_field']-np.einsum('k,kij->ij',w,U[-1])).max(),abs(g-c['nu_sum']-lo+hi).max(),max(abs(w*lo).max(),abs((cap-w)*hi).max()),abs(J-c['primal_objective']),abs(J-c['dual_lower_bound']),max(err)])\\nassert np.all(worst[:6]<1e-9),worst\\nassert worst[6]<5e-5,worst\\nprint(dict(zip(('forward_max','terminal_max','stationarity_max','complementarity_max','objective_error_max','duality_gap_max','calibration_fold_rmse_max'),worst)))\\nrng=np.random.default_rng(42); max_gap=0.\\nfor n in (2,8,20):\\n    for fraction in (0.,0.001,0.25,0.5,0.999,1.):\\n        for k in range(25):\\n            D=rng.normal(size=(n,n)); H=D.T@D+0.04*np.eye(n); b=10*rng.normal(size=n); cap=0.42; total=n*cap*fraction\\n            w,nu=m._box_budget_qp(H,b,cap,total); g=H@w-b; d=g-nu\\n            gap=d@w-cap*np.minimum(d,0).sum()\\n            assert w.min()>=-1e-10 and w.max()<=cap+1e-10 and abs(w.sum()-total)<1e-10 and abs(gap)<1e-9,(n,fraction,k,gap)\\n            max_gap=max(max_gap,abs(gap))\\nprint('450 QP stress cases: worst linearized duality gap',max_gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall baseline -> H2 sparse open-wall solver with fitted affine rosette calibration; public schema passed, and worst in-sample channel calibration RMSE is 1.10e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema result alone\",\n      \"rejected_reason\": \"The schema test would not detect a transposed field, a stencil error, or a certificate inconsistent with the specified objective.\"\n    }\n  ],\n  \"rationale\": \"Compare the exact artifact against an independently assembled dense operator to catch stencil and indexing errors. Check held-out sweep residuals for calibration lack of fit, and stress active bounds and extreme budgets to catch optimizer failures before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "8af3a25ee543fd5ddd9f00284e3ec602bb90513ec4cea39edabb7ed257859216",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40544.26,
+      "usage_known": true,
+      "prompt_tokens": 23508,
+      "cached_tokens": 11136,
+      "completion_tokens": 1544
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7d290319dffc4e94aed3c27ba8d0dab3",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:41.215589+00:00",
+  "ended_at_utc": "2026-11-27T14:30:15.117632+00:00",
+  "request_sha256": "dbb7fc657de8ab5f33e99a2970f75365f20f6531a70440a180de354a05ff20ac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67253,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36255,
+    "cached_tokens": 9600,
+    "completion_tokens": 1129
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np = '/holdout_task/'\\nm = runpy.run_path(p + 'batch_solver.py')\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = m['solve_batch'](d)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25\\npanel = item['campaign_diagnostics']\\nif panel is not None:\\n    x = m['_standardize'](panel, panel)[0] if min(np.unique(panel['lab_id'], return_counts=True)[1]) > 1 else None\\n    if x is None:\\n        # The diagnostic panel contains a singleton lab, so its reference scale is undefined.\\n        lab, counts = np.unique(panel['lab_id'], return_counts=True)\\n        keep = np.isin(panel['lab_id'], lab[counts > 1])\\n        panel = {k: v[keep] for k, v in panel.items()}\\n        x = m['_standardize'](panel, panel)[0]\\n    hold = m['_stress_calibration'](d['calibration_load_cells'])(panel['hold_channel_raw'])\\n    drift = theta[2] + x @ theta[3:]\\n    times = d['eval_times']\\n    modes = np.column_stack((-np.expm1(-times[None, :] / tau[:, None]), 1 / tau))\\n    base = (hold[:, None] * theta[:2]) @ modes\\n    obs = np.column_stack((panel['strain_curves_obs'] - panel['strain_0'][:, None], panel['instant_rate_obs']))\\n    complete = np.isfinite(panel['coupon_features_raw']).all(axis=1)\\n    groups = panel['lab_id']\\n    def rmse(e):\\n        return np.round([np.sqrt(np.mean(e[:, :-1]**2)), np.sqrt(np.mean(e[:, -1]**2))], 6)\\n    errors = []\\n    for lab in np.unique(groups):\\n        fit = (groups != lab) & complete\\n        test = groups == lab\\n        design = drift[:, None, None] * modes.T[None, :, :]\\n        gain = np.linalg.lstsq(design[fit].reshape(-1, 2), (obs - base)[fit].ravel(), rcond=None)[0]\\n        err = base[test] + design[test] @ gain - obs[test]\\n        errors.append(rmse(err))\\n        print('lab', lab, 'held-out strain/rate RMSE', errors[-1], 'gains', np.round(gain, 5))\\n    worst = np.max(errors, axis=0)\\n    print('worst held-out lab strain/rate RMSE', worst)\\n    assert np.all(worst < 0.04), worst\\n    fixed = base + (drift[:, None] * m['_CHAMBER_GAINS']) @ modes - obs\\n    print('shipped gains, diagnostic strain/rate RMSE: complete', rmse(fixed[complete]), 'missing', rmse(fixed[~complete]))\\nprint('train-fitted taus', tau)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unchanged benchtop transfer → H2: calibrated hold load and coupon drift feed two saturating modes; the host verified strain MAE 0.000646, initial-rate MAE 0.002058, and relaxation-time relative error 3.935%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Run the exact artifact in an isolated Python process to catch import or contract failures. Hold out each chamber lab when fitting the gains to check for a lab-dependent transfer error that pooled metrics could conceal; report missing-feature errors separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "dbe0ee6a952d14149ee5769bcf6fb1ad22d8cabfda85af770a3eb1bee334f893",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33860.06,
+      "usage_known": true,
+      "prompt_tokens": 36255,
+      "cached_tokens": 9600,
+      "completion_tokens": 1129
+    }
+  ]
+}

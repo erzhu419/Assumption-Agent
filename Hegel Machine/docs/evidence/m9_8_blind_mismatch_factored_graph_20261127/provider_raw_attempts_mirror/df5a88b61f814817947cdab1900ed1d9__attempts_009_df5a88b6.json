@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df5a88b61f814817947cdab1900ed1d9",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:18.351714+00:00",
+  "ended_at_utc": "2026-11-27T14:30:00.873644+00:00",
+  "request_sha256": "5e7fe5829840038b18f07655f9377006eb9c8162c65fa5b54f72697d0bc53294",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45451,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25986,
+    "cached_tokens": 9600,
+    "completion_tokens": 1689
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_margin_audit.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ni = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns = i['study']\\ncal = s['sensor_calibration_sweeps']\\nx, y = cal['ref_rosette'], cal['raw_rosette']\\nbase = np.c_[np.ones(len(x)), x]\\npairs = np.column_stack([f for j in range(4) for k in range(j+1,4) for f in (x[:,j]*x[:,k], (x[:,j]-x[:,k])**2)])\\nfor label, design in [('affine',base), ('pairwise',np.c_[base,pairs]), ('rational',np.c_[base,np.column_stack([x/(1+a*x*x) for a in (.1,1.)])])]:\\n    errs = []\\n    for fold in range(5):\\n        tr = np.arange(len(x)) % 5 != fold\\n        coef = np.linalg.lstsq(design[tr], y[tr], rcond=None)[0]\\n        errs.append(np.mean((design[~tr]@coef-y[~tr])**2,axis=0)**.5)\\n    print(label, 'worst held-out bank/fold RMSE',np.max(errs), 'pooled RMSE',np.mean(np.asarray(errs)**2)**.5)\\n\\nfor d in 'xy':\\n    k = s['kappa_'+d]; h = s['L'+d]/(s['n'+d]-1)\\n    A = m['_axis'](k,s['vel_'+d],h)\\n    assert np.linalg.norm(A@np.ones(len(k)),np.inf) < 1e-12\\n    assert np.allclose(A.diagonal()[[0,-1]], k[[0,-1]]/h**2,rtol=1e-14,atol=0)\\nprint('Reflecting row balance and endpoint-kappa wall coefficients verified')\\n\\nS,U = m['_forward'](s)\\nZ = s['Z_nuisance']; P = np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nD = P@S; ridge = s['source_ridge']; n = D.shape[1]; cap = s['u_box']\\ncases = [('production', s['y_obs_raw'])] + [(f'tracer_{j}',p['y_pulse_raw']) for j,p in enumerate(i['campaign_diagnostics'] or [])]\\nmax_gap=max_err=max_field=0.; patterns=set()\\nfor label,obs in cases:\\n    for budget in (0., .01*cap, cap, s['total_budget'], (n-1)*cap, (n-.01)*cap, n*cap):\\n        t = dict(s,y_obs_raw=obs,total_budget=budget)\\n        b = P@m['_calibrate'](t)\\n        def J(w):\\n            r = D@w-b\\n            return .5*(r@r+ridge*(w@w))\\n        def grad(w): return D.T@(D@w-b)+ridge*w\\n        out = m['solve_batch'](t); w=out['weights']; c=out['kkt_certificate']; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); g=grad(w)\\n        assert abs(w.sum()-budget) < 1e-11 and w.min() >= -1e-12 and w.max() <= cap+1e-12\\n        assert np.max(np.abs(g-nu-lo+hi)) < 1e-11\\n        assert max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w)))) < 1e-11\\n        dual=J(w)-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n        assert max(abs(c['primal_objective']-J(w)),abs(c['dual_lower_bound']-dual)) < 1e-11\\n        gap=abs(J(w)-dual); assert gap < 1e-11\\n        max_gap=max(max_gap,gap)\\n        patterns.add((int(sum(w<1e-10)),int(sum(w>cap-1e-10))))\\n        field=np.einsum('i,ijk->jk',w,U); max_field=max(max_field,np.max(np.abs(field-out['terminal_field'])))\\n        if 0<budget<n*cap:\\n            ref=minimize(J,np.full(n,budget/n),jac=grad,bounds=[(0,cap)]*n,constraints=[{'type':'eq','fun':lambda w:w.sum()-budget,'jac':lambda w:np.ones(n)}],method='SLSQP',options={'ftol':1e-14,'maxiter':200})\\n            err=np.max(np.abs(ref.x-w)); assert ref.success and err < 1e-6,(label,budget,ref.message,err)\\n            max_err=max(max_err,err)\\nassert max_field < 1e-12\\nprint(f'{7*len(cases)} real-observation budget cases, {len(patterns)} active-bound patterns; worst weight error {max_err:.3g}, dual gap {max_gap:.3g}, field assembly error {max_field:.3g}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 leaky Robin walls → H2 reflecting endpoint-kappa walls with affine calibration; worst public pulse/shift/bank RMSE remains 1.07e-6 before nuisance projection.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch classification, relay-state, or Fokker–Planck/HJB tests\",\n      \"rejected_reason\": \"This study provides continuous measurements from steady transport, with no class labels, relay state, or time-dependent data. The earlier sensor-bank audit already tested whether nuisance projection concealed a weak bank.\"\n    }\n  ],\n  \"rationale\": \"Test whether pairwise or rational calibration terms improve held-out sweeps, and whether the inverse solver or certificate fails when real observations are paired with budgets that force different active bounds. A material calibration gain would warrant tracer validation; a feasibility or certificate failure would warrant an optimizer fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bf3c982a858c8c0f1ee983b3f7edcfaa1de2831cb228a077993e6e6449762d37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42478.84,
+      "usage_known": true,
+      "prompt_tokens": 25986,
+      "cached_tokens": 9600,
+      "completion_tokens": 1689
+    }
+  ]
+}

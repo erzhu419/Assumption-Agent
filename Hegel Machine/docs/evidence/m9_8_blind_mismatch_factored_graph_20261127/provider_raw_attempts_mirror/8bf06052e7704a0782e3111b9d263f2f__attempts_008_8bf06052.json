@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bf06052e7704a0782e3111b9d263f2f",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:02.603451+00:00",
+  "ended_at_utc": "2026-11-27T14:57:37.369893+00:00",
+  "request_sha256": "be8315905380000dfee7fc86807de2e7279c37a5e184ed7e5b5067540483ded9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46640,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27778,
+    "cached_tokens": 11136,
+    "completion_tokens": 942
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; sw = s['sensor_calibration_sweeps']; x, y = sw['ref_rosette'], sw['raw_rosette']\\n    keep = np.max(np.abs(y), axis=1) < 8\\n    d, _ = m._forward(s); pulses = item['campaign_diagnostics']; nmu = len(s['mu_shifts'])\\n    if not pulses: continue\\n    px = np.stack([(d @ p['w_pulse']).reshape(-1, 4) for p in pulses])\\n    py = np.stack([p['y_pulse_raw'].reshape(-1, 4) for p in pulses])\\n    f = m._rosette_basis(x)\\n    pfeat = np.stack([m._rosette_basis(a) for a in px])\\n    try:\\n        packed = m._rosette_basis(px)\\n        print('packed basis matches per-pulse basis:', packed.shape == pfeat.shape and np.allclose(packed, pfeat))\\n    except (IndexError, ValueError) as e:\\n        print('basis does not accept a packed pulse axis:', type(e).__name__)\\n    def loss(coef):\\n        e = ((pfeat * coef).sum(-1) - py).reshape(len(pulses), nmu, -1, 4)\\n        return float(np.sqrt(np.mean(e**2, axis=2)).max())\\n    fits = []\\n    for k in range(5):\\n        train = keep & (np.arange(len(x)) % 5 != k)\\n        coef = np.stack([np.linalg.lstsq(f[train,j], y[train,j], rcond=None)[0] for j in range(4)])\\n        fits.append(loss(coef))\\n    full = loss(m._fit_rosette(sw))\\n    print('worst pulse x shift x bank RMSE: full fit', full, 'held-out sweep folds', fits)\\n    assert full < 1e-5 and max(fits) < 3e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin walls) → H2 (sealed walls with cyclic cubic calibration): full-fit worst tracer RMSE was 1.67×10⁻⁶, but the packed cross-validation calculation reported 0.09613.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the calibration model based on the 0.09613 error\",\n      \"rejected_reason\": \"The full fit and independent host probe show errors of only a few parts per million; first check whether packing multiple pulses changes the feature calculation.\"\n    }\n  ],\n  \"rationale\": \"Run the held-out calibration fits with each pulse passed in the same two-dimensional layout used by the solver. If the large error persists, investigate calibration sensitivity; if it disappears, leave the verified artifact unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "41b5cccc44f42258908e76d2199e06ae156d6d5233f7ee92d08c1e933ddecd92",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34728.08,
+      "usage_known": true,
+      "prompt_tokens": 27778,
+      "cached_tokens": 11136,
+      "completion_tokens": 942
+    }
+  ]
+}

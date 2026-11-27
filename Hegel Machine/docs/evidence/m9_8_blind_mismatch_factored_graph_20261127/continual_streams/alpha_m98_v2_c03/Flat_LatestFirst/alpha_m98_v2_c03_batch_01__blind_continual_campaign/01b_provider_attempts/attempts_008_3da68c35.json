@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3da68c35a68a420c9f7a3a37015eb087",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:16.954291+00:00",
+  "ended_at_utc": "2026-11-27T14:30:11.674921+00:00",
+  "request_sha256": "16e9a912eded3f6e99480543cd1acad1eb5f5538bd83d833200d4c51b13cac99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33960,
+    "cached_tokens": 11136,
+    "completion_tokens": 2348
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_grammar.py <<'PY'\\nexec(open('/tmp/m98_amplitude.py').read().split(\\\"print('rank-one\\\")[0])\\nfrom scipy.optimize import least_squares\\nlab=ch['lab_id']; raw=ch['coupon_features_raw']; r=drift@b[2:]; lin=r-b[2]; w=b[3:]; N=len(r)\\nprint('refs ranges and missing',[(int(j),np.round(ch['ref_coupons'][lab==j].mean(),4),np.round(ch['ref_coupons'][lab==j].std(),4)) for j in np.unique(lab)],np.isnan(raw).sum(0)); print('joint-standalone',np.round(x-old._features(ch,ch)[:N],3)); print('fit y =',np.round(target,4))\\ndef evaluate(A,y=target):\\n c=np.linalg.lstsq(A,y,rcond=1e-9)[0]; e=A@c-y; es=np.empty(N); labs=np.empty(N)\\n for i in range(N):\\n  k=np.arange(N)!=i; es[i]=A[i]@np.linalg.lstsq(A[k],y[k],rcond=1e-9)[0]-y[i]\\n for g in np.unique(lab):\\n  k=lab!=g; labs[~k]=A[~k]@np.linalg.lstsq(A[k],y[k],rcond=1e-9)[0]-y[~k]\\n return np.sqrt(np.mean(e*e)),np.sqrt(np.mean(es*es)),np.max(abs(es)),np.sqrt(np.mean(labs*labs)),c\\n\\ndef pr(name,A,y=target):\\n a,l,m,ll,c=evaluate(A,y); print(name,np.round([a,l,m,ll],5),np.round(c,5))\\nfor tag,xx in [('joint',x),('diag',old._features(ch,ch)[:N]),('train+diag',old._features(tr,ch)[-N:])]:\\n rr=b[2]+xx@w; dd=np.c_[np.ones(N),xx]; print('\\\\n',tag)\\n for name,phi in [('linear',xx),('cubic',xx**3),('signed2',xx*abs(xx)),('tanh',np.tanh(xx)),('sinh',np.sinh(xx)),('symmetric cubic',xx**3+3*xx),('signed saturation',xx/(1+.25*abs(xx))),('x0 cubic',xx[:,0,None]**3)]:\\n  pr('1,r, transform weighted '+name,np.c_[np.ones(N),rr,phi@w] if phi.shape[1]==4 and name!='linear' else np.c_[np.ones(N),rr,phi] if name=='x0 cubic' else np.c_[np.ones(N),rr]);\\n  if name!='linear': pr('free linear + '+name,np.c_[dd,phi]);\\n for name,phi in [('sum-cubes',np.sum(xx**3,1)),('prod-all',np.prod(xx,1)),('r cubed',rr**3),('lin cubed',(rr-b[2])**3),('lin norm squared',(rr-b[2])*np.sum(xx*xx,1)),('r norm squared',rr*np.sum(xx*xx,1))]: pr(name,np.c_[np.ones(N),rr,phi])\\n# Search one additive term at a time, including cube of sums/differences and powers of individual coordinates.\\nlib=[]\\ndef add(name,z):\\n if np.std(z)>1e-9: lib.append((name,z))\\nfor i in range(4):\\n for j in range(i+1,4):\\n  for s in (-2,-1,-.5,.5,1,2):\\n   z=x[:,i]+s*x[:,j]; nm=f'(x{i}{s:+}x{j})'\\n   for p in (2,3): add(f'{nm}^{p}',z**p)\\n   add(f'{nm}abs',z*abs(z)); add(f'{nm}rational',z/(1+z*z)); add(f'{nm}tanh',np.tanh(z))\\nfor ids in combinations_with_replacement(range(4),3): add(str(ids),np.prod(x[:,ids],1))\\nfor j in range(4):\\n for power in [2,3,4,5]: add(f'x{j}^{power}',x[:,j]**power)\\n for f,n in [(np.tanh,'tanh'),(np.sinh,'sinh'),(np.sin,'sin'),(np.abs,'abs')]: add(f'{n}x{j}',f(x[:,j]))\\nfor base in [np.c_[np.ones(N),r],drift]:\\n vals=[]\\n for n,z in lib:\\n  a,l,m,ll,c=evaluate(np.c_[base,z]); vals.append((l,ll,a,m,n,c))\\n for v in sorted(vals,key=lambda v:v[0])[:10]: print('single term',np.round(v[:4],5),v[4],np.round(v[5],5))\\n# Smooth shared coordinate transform with fitted mixing of linear and nonlinear terms.\\nfor tag in ['sinh','rational','asinh','signed_power','cubic rational','weighted cube shifted']:\\n def trans(xx,a):\\n  if tag=='sinh': return np.sinh(a*xx)/a\\n  if tag=='rational': return xx/(1+a*xx**2)\\n  if tag=='asinh': return np.arcsinh(a*xx)/a\\n  if tag=='signed_power': return np.sign(xx)*abs(xx)**(1+a)\\n  if tag=='cubic rational': return xx**3/(1+a*xx**2)\\n  return (xx+a)**3\\n def f(p,xx): return p[0]+p[1]*(xx@w)+p[2]*(trans(xx,p[3])@w)\\n lo=-3 if tag=='weighted cube shifted' else .001; hi=3\\n def fit(ok): return least_squares(lambda p:f(p,x[ok])-target[ok],[.27,1,.1,.4],bounds=([-np.inf]*3+[lo],[np.inf]*3+[hi]),max_nfev=500).x\\n es=np.array([f(fit(np.arange(N)!=i),x[i:i+1])[0]-target[i] for i in range(N)]); p=fit(np.ones(N,bool)); print('nonlinear',tag,np.round(p,5),np.sqrt(np.mean((f(p,x)-target)**2)),np.sqrt(np.mean(es**2)),max(abs(es)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_grammar.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: linear coupon drift amplitude -> H2: an algebraic feature transform feeds a shared two-branch kernel; linear amplitude has coupon-LOO RMSE 0.10936 and worst error 0.37057.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the lowest-error subset from the first feature search\",\n      \"rejected_reason\": \"The selected terms have not been validated across labs, and several unrelated load and feature terms gave similar coupon-LOO scores.\"\n    }\n  ],\n  \"rationale\": \"Compare shared feature transforms, pairwise combinations, and alternate reference pools. If a compact law lowers both coupon- and lab-held-out errors, prefer it over an unconstrained amplitude fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8da21660eeea2c83cdb87c18389cf9a035f5a53c6d35c3dac9a5b4ddbff32de6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 54677.91,
+      "usage_known": true,
+      "prompt_tokens": 33960,
+      "cached_tokens": 11136,
+      "completion_tokens": 2348
+    }
+  ]
+}

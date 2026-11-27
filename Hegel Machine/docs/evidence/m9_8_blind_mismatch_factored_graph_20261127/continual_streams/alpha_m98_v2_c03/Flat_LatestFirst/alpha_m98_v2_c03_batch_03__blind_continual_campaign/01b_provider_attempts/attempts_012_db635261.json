@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db635261fd0944b5a0d2da19bdf3885f",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:27.926776+00:00",
+  "ended_at_utc": "2026-11-27T14:44:02.906346+00:00",
+  "request_sha256": "3d36319f8e48bf164411b7619d12df6cde4bcf3cbc18714b9267bb53cacba6c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70614,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37460,
+    "cached_tokens": 11136,
+    "completion_tokens": 1343
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m98_stress.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/batch_solver.py'; q=importlib.util.spec_from_file_location('solver',p); s=importlib.util.module_from_spec(q);q.loader.exec_module(s)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr=d['train']; g=i['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; train,test=s._prepare(d); o,c=s._calibration(d['calibration_load_cells'])\\ndef observe(a): return np.c_[a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']]\\ndef select(coupon,m): return tuple(z[m] for z in coupon)\\ndef scores(e):return np.sqrt([np.mean(e[:,:-1]**2),np.mean(e[:,-2]**2),np.mean(e[:,-1]**2)])\\ny=observe(tr); lab=tr['lab_id']; T,w=s._fit(train,dt,t,y)\\nfor kind in ('cauchy','linear'):\\n rows=[]\\n for l in np.unique(lab):\\n  m=lab==l; tt,ww=s._fit(select(train,~m),dt,t,y[~m],loss=kind); e=s._design(select(train,m),dt,t,tt)@ww-y[m]; rows.append(np.r_[scores(e),np.median(abs(e[:,:-1])),np.max(abs(tt/T-1)),np.max(abs(ww-w))]);\\n print('train holdout per lab',kind,np.round(rows,5))\\nx=g['coupon_features_raw'].copy(); lab=g['lab_id']; st=g['stratum']; yg=observe(g); raw=x.copy()\\nfor l in np.unique(lab):\\n m=lab==l; a=g['ref_coupons'][m]; x[m]=(x[m]-np.median(a.mean(0)))/np.median(a.std(0))\\np=(g['past_channel_raw']-o)@c; h=(g['hold_channel_raw']-o)@c\\nfor kind in ('unit','affine_rational','pair_interaction'):\\n rows=[]; params=[]\\n for l in np.unique(lab):\\n  m=lab==l; j=~m; _,iv,n=np.unique(np.c_[lab[j],st[j]],axis=0,return_inverse=True,return_counts=True); v=1/n[iv].reshape(-1,1); mu=np.nansum(v*x[j],0)/np.sum(v*~np.isnan(x[j]),0); xx=np.where(np.isnan(x),mu,x); X=np.c_[np.ones(len(x)),xx]; a=s._design((p,h,X),dt,t,T); b=a[:,:,:2]@w[:2]; r=X@w[2:]; f=np.r_[-np.expm1(-t),1.]\\n  if kind=='unit': pred=b+r[:,None]*f; z=[]\\n  else:\\n   def model(z):\\n    if kind=='affine_rational': u=(r+z[0])/(1+z[1]*r*r)\\n    else: u=r+z[0]*(p[:,-1]-p[:,-2])+z[1]*(r*h*p[:,-1])\\n    return b+u[:,None]*f\\n   z=least_squares(lambda q:(model(q)[j]-yg[j]).ravel(),[0,0],bounds=([-np.inf,0] if kind=='affine_rational' else [-np.inf,-np.inf],[np.inf,np.inf])).x; pred=model(z)\\n  rows.append(scores(pred[m]-yg[m])); params.append(z)\\n  if kind=='unit':\\n   for missing in (False,True):\\n    k=m & (np.isnan(raw).any(1)==missing)\\n    if k.any(): print('diagnostic slice lab/missing/count',l,missing,k.sum(),np.round(scores(pred[k]-yg[k]),5))\\n print('diagnostic worst lab',kind,np.round(np.max(rows,0),5),'fold parameters',np.round(params,4))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_stress.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop law → H2 unchanged memory with saturating chamber drift; worst held-out-lab RMSE is 0.01117 at the final horizon and 0.00874 for initial rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode and classification balance tests\",\n      \"rejected_reason\": \"The supplied data describe continuous creep and rate, with no relay states or classification labels. Held-out lab errors and missing-feature slices test the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Test whether a training lab disproportionately determines the intrinsic spectrum and whether rational drift or recent-pulse interactions improve chamber predictions on omitted labs. Promote a correction only if it improves the affected worst slice without materially worsening the other outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d95d7c6fb8e319f4ffac9d4742e4b242ad417198abab9718cbf1a71b840f76be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35421.01,
+      "usage_known": true,
+      "prompt_tokens": 37460,
+      "cached_tokens": 11136,
+      "completion_tokens": 1343
+    }
+  ]
+}

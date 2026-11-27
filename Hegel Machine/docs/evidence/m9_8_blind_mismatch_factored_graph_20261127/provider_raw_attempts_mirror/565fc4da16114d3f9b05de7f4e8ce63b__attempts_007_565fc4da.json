@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "565fc4da16114d3f9b05de7f4e8ce63b",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:53:36.818676+00:00",
+  "ended_at_utc": "2026-11-27T14:54:15.313823+00:00",
+  "request_sha256": "0b0c3b8c45ac877eb098dbe643be5b37b8125af359b33575234491b874f19f8d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44104,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27167,
+    "cached_tokens": 11136,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom itertools import combinations\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; one=np.ones(len(x)); a=np.c_[one,x]\\n# Expose extrapolation failure by withholding the outer load magnitudes on each channel.\\nq=np.max(abs(x),axis=1); splits=[np.arange(len(x))%5==i for i in range(5)]+[q>=np.quantile(q,.8)]\\npair=np.column_stack([x[:,i]*x[:,j] for i,j in combinations(range(4),2)])\\nrat=[x**2/(1+x**2),x**3/(1+x**2)]\\nfor name,b in [('affine',a),('pair and quadratic',np.c_[a,x*x,pair]),('saturating',np.c_[a,*rat])]:\\n    scores=[]\\n    for z in splits:\\n        e=b[z]@np.linalg.lstsq(b[~z],y[~z],rcond=None)[0]-y[z]; scores.append(np.max(np.sqrt(np.mean(e**2,axis=0))))\\n    print('bridge',name,'worst channel fold / outer range',np.round([max(scores[:-1]),scores[-1]],7))\\nr=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus fields',list(r[-1])); x=np.array([v['facility_telemetry_trace'] for v in r]); channels=[0,1,4,7]; x=x[:,:,channels]; sd=np.sqrt(x.var(1).mean(0));\\nfor segment in np.array_split(x,3,axis=1):\\n    b=segment.mean(1); print('prefix segment per archived row, max physical channel distance in pooled SD',np.round(np.max(abs((b[:-1]-b[-1])/sd),axis=1),2))\\ntr=d['train']; train,test=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; obs=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; out=m.solve_batch(d); tau,w=out['estimated_taus'],out['hereditary_weights'];\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(v).all() for v in out.values())\\nh=1.e-6; delta=m._design(test,dt,np.array([h]),tau)[:,0]@w; err=np.max(abs(delta/h-out['initial_rate_pred'])); print('maximum initial rate finite-difference discrepancy',err); assert err<1.e-5\\npred=np.empty_like(obs)\\nfor lab in np.unique(tr['lab_id']):\\n    z=tr['lab_id']==lab; t1,w1=m._fit(tuple(v[~z] for v in train),dt,t,obs[~z]); pred[z]=m._design(tuple(v[z] for v in train),dt,t,t1)@w1\\nfor label,col in [('short strain',0),('long strain',-2),('initial rate',-1)]:\\n    e=pred[:,col]-obs[:,col]; cells=np.unique(np.c_[tr['lab_id'],tr['stratum']],axis=0); biases=[np.median(e[(tr['lab_id']==j)&(tr['stratum']==k)]) for j,k in cells]; print(label,'pooled median absolute error',round(np.median(abs(e)),6),'worst absolute lab-stratum median bias',round(max(abs(np.array(biases))),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dynamically calibrated affine bridge and shared two-branch spectrum → H2 baseline chamber law; worst-lab 90th-percentile absolute errors are 0.0223 for strain and 0.0172 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, classification, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The measured outputs are continuous creep and initial rate, with no relay states, class labels, or diffusion generator in the task.\"\n    }\n  ],\n  \"rationale\": \"Hold out high-load calibration sweeps to test whether nonlinear terms fix extrapolation; compare prefix segments to detect a misleading whole-trace average; and check lab-stratum bias for cancellation hidden by pooled errors. Independently verify that the predicted initial rate matches the deployment curve derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7eeba3707648e5c025d36d00b19ab7560e7941d36a06c59f8f3512a00d4e1f9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38447.02,
+      "usage_known": true,
+      "prompt_tokens": 27167,
+      "cached_tokens": 11136,
+      "completion_tokens": 1341
+    }
+  ]
+}

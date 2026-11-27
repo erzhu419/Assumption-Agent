@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acdb748d35674697bb643a13506d8a0a",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:52.497803+00:00",
+  "ended_at_utc": "2026-11-27T14:45:21.896533+00:00",
+  "request_sha256": "23c03c083a42d17a40a37afdbbb13e75e311354147e18b0404d80a4f050b1739",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52297,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31841,
+    "cached_tokens": 11136,
+    "completion_tokens": 1045
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/archive_manifest.json; diff -u /tmp/hegel_continual_archive/alpha_m98_v2_c02_{s00,batch_02}_solver.py || true; cat > /tmp/m98_sparse.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; L=C['true_channel_loads']; R=C['bridge_raw']; N=len(L)\\nnp.set_printoptions(precision=6,suppress=True)\\ndef features(x): return np.c_[np.ones(len(x)),x,x**3,x*np.roll(x,-1,axis=1)]\\nX=features(L)\\nA=np.linalg.lstsq(X,R,rcond=None)[0]; E=R-X@A; e=np.linalg.norm(E,axis=1); keep=np.ones(N,dtype=bool); keep[np.argsort(e)[-3:]]=False\\nprint('largest residual before trim',[(int(i),float(e[i]),L[i].tolist()) for i in np.argsort(e)[-12:]])\\nfor mode in ('shared','sparse'):\\n pred=np.zeros_like(R); mats=[]\\n for j in range(4):\\n  ix=np.arange(13) if mode=='shared' else np.r_[np.arange(5),5+j,9+j]; U=X[:,ix]; b=np.linalg.lstsq(U[keep],R[keep,j],rcond=None)[0]; pred[:,j]=U@b; h=(np.linalg.qr(U[keep])[0]**2).sum(1); mats.append(h)\\n E=R-pred; print(mode,'largest clean row errors',np.sort(np.linalg.norm(E[keep],axis=1))[-8:],'clean residual singular values',np.linalg.svd(E[keep],compute_uv=False)); print('sweep outlier residuals',E[~keep]); print('clean LOO max per channel',np.max(abs(E[keep]/(1-np.array(mats).T)),axis=0)); print('coefficients',np.linalg.lstsq(X[keep],R[keep],rcond=None)[0]);\\nprint('row IDs of single-channel sweeps',np.flatnonzero((L!=0).sum(1)==1)); print('test/train raw max norm',[(k,max(np.linalg.norm(D[k]['past_channel_raw'],axis=-1).max(),np.linalg.norm(D[k]['hold_channel_raw'],axis=-1).max())) for k in ('train','test')]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_sparse.py; python3 - <<'PY'\\nimport json,numpy as np\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); z=np.asarray([r['facility_telemetry_trace'] for r in rows]);\\nfor i,a in enumerate(z): print(i,a.mean(0).round(3),a.std(0).round(3));\\nfor cols in [[1],[2],[4,7],[5],[1,4,5,7]]: print(cols,np.sqrt(np.mean((z[:-1][:,:,cols]-z[-1][:,cols])**2,axis=(1,2))).round(4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: the rank-one bridge residual is a constitutive term -> H2: it may be contamination of three calibration sweeps; clean-sweep leave-one-out error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a nonlinear fourth bridge equation to the rank-one residual\",\"rejected_reason\":\"The three extreme responses occur on one axis sweep; fit the sparse bridge without those rows first to see whether any structured residual remains.\"}],\"rationale\":\"If removing the three extreme sweep readings restores noise-scale residuals on every channel, robust calibration is enough and no fourth nonlinear term is needed. Compare the archive metadata and telemetry coordinates separately to distinguish chamber lineage from unrelated apparatus changes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5c4821470949fc95eee403fc9d1562e36182cf0ba2d14bc86aa887f463b91855",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29863.42,
+      "usage_known": true,
+      "prompt_tokens": 31841,
+      "cached_tokens": 11136,
+      "completion_tokens": 1045
+    }
+  ]
+}

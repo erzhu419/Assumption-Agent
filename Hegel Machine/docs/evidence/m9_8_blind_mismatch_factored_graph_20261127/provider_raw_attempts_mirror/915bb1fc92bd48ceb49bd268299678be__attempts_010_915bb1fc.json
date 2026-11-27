@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "915bb1fc92bd48ceb49bd268299678be",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:30.001639+00:00",
+  "ended_at_utc": "2026-11-27T14:46:10.862184+00:00",
+  "request_sha256": "042e009abcdf58dc54e81cb4d61387f5ca7bcad0d7087ceb99fbbf9f99465666",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57344,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31612,
+    "cached_tokens": 11136,
+    "completion_tokens": 1645
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util as iu\\nimport itertools\\nimport pickle\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\n\\ndef load(path):\\n    spec = iu.spec_from_file_location(path.stem, path)\\n    mod = iu.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\n\\nroot = Path('/holdout_task')\\nm = load(root / 'batch_solver.py')\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\ncoef, keep = m._fit_rosette(s)\\nterms = list(itertools.combinations_with_replacement(range(4), 2)) + list(itertools.combinations_with_replacement(range(4), 3))\\npoly = np.column_stack([np.prod(x[:, t], axis=1) for t in terms])\\nerrs = {name: [] for name in ('compact', 'full_cubic', 'compact_plus_rational')}\\nfor i in np.flatnonzero(keep):\\n    train = np.arange(len(x)) != i\\n    sub = dict(s, sensor_calibration_sweeps={'ref_rosette': x[train], 'raw_rosette': raw[train]})\\n    _, fold_keep = m._fit_rosette(sub)\\n    rows = np.flatnonzero(train)[fold_keep]\\n    ee = {name: [] for name in errs}\\n    for j in range(4):\\n        A = m._rosette_design(x, j)\\n        own, prev, nxt = x[:, j], x[:, (j-1)%4], x[:, (j+1)%4]\\n        R = [p / (1 + a * q*q) for p in (own, own*nxt) for q in (own-nxt, own+nxt, own-prev, own+prev) for a in (.25, 1.)]\\n        for name, design in [('compact', A), ('full_cubic', np.c_[np.ones(len(x)), x, poly]), ('compact_plus_rational', np.column_stack([A, *R]))]:\\n            b = np.linalg.lstsq(design[rows], raw[rows, j], rcond=None)[0]\\n            ee[name].append(design[i] @ b - raw[i,j])\\n    for name in errs:\\n        errs[name].append(ee[name])\\nfor name, e in errs.items():\\n    print('calibration', name, 'worst-bank LOO RMS', np.max(np.sqrt(np.mean(np.square(e), axis=0))), 'worst absolute', np.max(np.abs(e)))\\n\\narchive = Path('/tmp/hegel_continual_archive')\\nsealed = load(next(archive.glob('*01_solver.py')))._axis\\nperiodic = load(next(archive.glob('*03_solver.py')))._axis\\nrobin = m._axis\\naxes = {'R': robin, 'S': lambda k,v,l,r: sealed(k,v,l), 'P': lambda k,v,l,r: periodic(k,v,l)}\\ny = m._calibrate(s)\\nZ = s['Z_nuisance']\\nn = len(s['sensor_ij'])\\nidx = np.arange(len(y))\\nrr = s['nuisance_ridge']\\nsr = s['source_ridge']\\nprior = np.eye(Z.shape[1])*rr\\nmetrics = []\\nfor xx, yy in itertools.product(axes, repeat=2):\\n    calls = iter((axes[xx], axes[yy]))\\n    m._axis = lambda *args: next(calls)(*args)\\n    S, _ = m._forward(s)\\n    errors = np.empty_like(y)\\n    for i in range(n):\\n        test = idx % n == i\\n        tr = ~test\\n        z, A, b = Z[tr], S[tr], y[tr]\\n        P = np.linalg.solve(z.T @ z + prior, z.T)\\n        At, bt = A-z@(P@A), b-z@(P@b)\\n        w, _ = m._box_budget(At.T@At+sr*np.eye(S.shape[1]), -At.T@bt, s['u_box'], s['total_budget'])\\n        errors[test] = y[test]-S[test]@w-Z[test]@(P@(b-A@w))\\n    e = errors.reshape(-1,n)\\n    rms = np.sqrt(np.mean(e**2))\\n    worst = np.sqrt(np.mean(e**2,axis=0)).max()\\n    banks = np.asarray(s['row_bank_id']).ravel()\\n    bank_rms = [np.sqrt(np.mean(errors[banks==i]**2)) for i in np.unique(banks)]\\n    metrics.append((rms, xx+yy))\\n    print('walls', xx+yy, 'pooled', rms, 'worst sensor', worst, 'bank RMS', np.round(bank_rms, 5))\\nm._axis = robin\\nprint('wall ranking', sorted(metrics))\\nassert np.isfinite(m.solve_batch(s)['terminal_field']).all()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: compact nonlinear calibration with Robin walls on both axes -> H2: retain it only if richer calibration and mixed-wall challengers do not improve the relevant holdouts; current worst-sensor RMS is 0.01246.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode and balanced-accuracy checks\",\n      \"rejected_reason\": \"This continuous tomography study has neither relay states nor class labels. Held-out sensor errors stratified by rosette bank can reveal whether pooled error hides a bank-specific failure.\"\n    }\n  ],\n  \"rationale\": \"Test two failure modes that could change the solver: a missing nonlinear calibration term and different wall regimes on the two axes. Use held-out sweeps for the first and held-out sensors with fold-local nuisance fitting for the second. Leave the verified artifact unchanged during the audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "472136336b2139ba917ef7a4c7abbae63c21473f47cdd09ab3cae0ecce765abf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41499.0,
+      "usage_known": true,
+      "prompt_tokens": 31612,
+      "cached_tokens": 11136,
+      "completion_tokens": 1645
+    }
+  ]
+}

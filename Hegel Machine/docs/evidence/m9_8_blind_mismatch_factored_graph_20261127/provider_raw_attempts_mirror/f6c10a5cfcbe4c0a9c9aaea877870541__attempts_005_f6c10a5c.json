@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6c10a5cfcbe4c0a9c9aaea877870541",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:19.312334+00:00",
+  "ended_at_utc": "2026-11-27T14:46:47.100863+00:00",
+  "request_sha256": "e526a6bb03c396f01f4203c21458bdf985e098d4500ad2ef164c5ae8ecd3a925",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26088,
+    "cached_tokens": 11136,
+    "completion_tokens": 970
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom sklearn.preprocessing import PolynomialFeatures\\nfrom sklearn.model_selection import KFold\\nnp.set_printoptions(precision=3,suppress=True)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']; print('x quantiles',np.quantile(x,[0,.25,.5,.75,1],axis=0)); print('y quantiles',np.quantile(y,[0,.25,.5,.75,1],axis=0)); print('sweeps',[(k,np.shape(v),np.asarray(v)[:12]) for k,v in s.items()]); print('first load/raw pairs',np.c_[x,y][:12]);\\nfor direction in ('forward','inverse'):\\n a,b=(x,y) if direction=='forward' else (y,x)\\n a=(a-a.mean(0))/a.std(0)\\n for degree in (1,2,3):\\n  p=PolynomialFeatures(degree).fit_transform(a)\\n  for fit in ('ols','robust'):\\n   r=np.empty_like(b)\\n   for tr,te in KFold(5,shuffle=True,random_state=314).split(a):\\n    q=np.linalg.lstsq(p[tr],b[tr],rcond=None)[0]\\n    if fit=='robust':\\n     for j in range(4): q[:,j]=least_squares(lambda z:p[tr]@z-b[tr,j],q[:,j],loss='soft_l1',f_scale=.05).x\\n    r[te]=p[te]@q-b[te]\\n   print(direction,degree,fit,'abs quantiles',np.quantile(abs(r),[.5,.9,.99]),'abs total quantiles',np.quantile(abs(r.sum(1)),[.5,.9,.99]))\\nq=np.linalg.lstsq(np.c_[np.ones(len(x)),x],y,rcond=None)[0]; r=y-np.c_[np.ones(len(x)),x]@q; idx=np.argsort(np.linalg.norm(r,axis=1))[-12:]; print('largest affine residuals, load then residual',np.c_[x,r][idx]); print('deployment raw quantiles',np.quantile(np.concatenate([d['test']['past_channel_raw'].reshape(-1,4),d['test']['hold_channel_raw']]),[0,.5,1],axis=0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -45\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: Test whether the large affine bridge residuals come from outliers or structured nonlinearity; the closest prior telemetry match is batch_01 at worst-slice distance 1.22.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Carry over the archived affine calibration unchanged.\",\"rejected_reason\":\"In-sample raw-channel RMSE is 2.41–2.73; held-out sweep residuals will distinguish bad leverage points from a missing response term.\"}],\"rationale\":\"Compare calibration models on held-out sweeps, including summed stress in the inverse direction. If higher-order models do not generalize, retain the affine model or use its robust variant if the residuals are sparse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "17d154a3171b59969a0d2fe5010db1558550ba7f51351549d96f33b160e611a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28246.53,
+      "usage_known": true,
+      "prompt_tokens": 26088,
+      "cached_tokens": 11136,
+      "completion_tokens": 970
+    }
+  ]
+}

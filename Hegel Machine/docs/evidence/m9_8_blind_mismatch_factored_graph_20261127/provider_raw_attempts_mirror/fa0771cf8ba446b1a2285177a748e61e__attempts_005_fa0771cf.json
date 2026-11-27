@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fa0771cf8ba446b1a2285177a748e61e",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Hegel_FactoredMechanismGraph__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:44.839517+00:00",
+  "ended_at_utc": "2026-11-27T14:41:19.564127+00:00",
+  "request_sha256": "4a026c621350acbad60e4fcde92260b5de38fa2aa0ca99fbb10f3ce3b457b473",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40280,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25186,
+    "cached_tokens": 9600,
+    "completion_tokens": 1316
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, runpy\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nimport batch_solver as b\\nimport _verified_downstream as dn\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nlo, hi = x.min(0), x.max(0)\\na = np.count_nonzero(x, axis=1) == 1\\nerr = np.empty(len(x)); bridge_err = np.empty(len(x))\\nfor i in range(len(x)):\\n    keep = np.arange(len(x)) != i\\n    cf = u._fit(x[keep], y[keep]); bridge_err[i] = np.linalg.norm(u._design(x[i:i+1]) @ cf - y[i:i+1]);\\n    err[i] = np.max(np.abs(u._inverse(y[i:i+1], cf, lo, hi) - x[i])) if bridge_err[i] < 0.01 else np.nan\\nprint('held-out gross rows:', np.flatnonzero(~np.isfinite(err)).tolist())\\nassert np.isfinite(err).sum() >= 75\\nfor name, mask in [('single-channel', a), ('mixed', ~a)]:\\n    vals = err[mask & np.isfinite(err)]\\n    print(name, 'clean LOO n/p90/max absolute load error', len(vals), np.quantile(vals, .9), vals.max()); assert vals.max() < .002\\ncf = u._fit(x, y)\\ncanonical = u.calibrate_upstream(ds)\\ncc = canonical['calibration_load_cells']; sw = cc['single_channel_sweeps']\\nassert np.array_equal(cc['bridge_raw'], cc['true_channel_loads']) and not np.shares_memory(cc['bridge_raw'], cc['true_channel_loads'])\\nassert np.array_equal(sw['cmd_stress'], sw['true_stress']) and not np.shares_memory(sw['cmd_stress'], sw['true_stress'])\\nfor group in ('train', 'test'):\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        raw = ds[group][field]\\n        recovered = canonical[group][field]\\n        err_rt = np.max(np.abs((u._design(recovered.reshape(-1, 4)) @ cf).reshape(raw.shape) - raw))\\n        print(group, field, 'worst(actual bridge roundtrip)', err_rt)\\n        assert recovered.shape == raw.shape and err_rt < 1e-9\\nrecovered_all = np.concatenate([canonical[g][k].reshape(-1, 4) for g in ('train', 'test') for k in ('past_channel_raw','hold_channel_raw')]); runtime_lo, runtime_hi = recovered_all.min(0), recovered_all.max(0)\\ngrid = np.stack(np.meshgrid(*(np.linspace(l, h, 7) for l, h in zip(np.minimum(lo,runtime_lo), np.maximum(hi,runtime_hi))), indexing='ij'), axis=-1).reshape(-1,4)\\ngrid_err = np.max(np.abs(u._inverse(u._design(grid) @ cf, cf, lo, hi) - grid)); print('boundary/interior stress-grid maximum load roundtrip error:', grid_err); assert grid_err < 1e-8\\nwith_chamber = dict(ds, chamber_verification_trials=ds['test']); chamber = u.calibrate_upstream(with_chamber)['chamber_verification_trials']\\nfor field in ('past_channel_raw', 'hold_channel_raw'):\\n    assert np.array_equal(chamber[field], canonical['test'][field]); assert not np.shares_memory(chamber[field], ds['test'][field])\\nassert u.calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nexpected, actual = dn.solve_batch(canonical), b.solve_batch(ds)\\nfor k in ('estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'):\\n    assert np.all(np.isfinite(actual[k])); np.testing.assert_array_equal(actual[k], expected[k])\\nsys.argv = ['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 linear coupling plus channel cubes and pair products; mixed-load out-of-fold bridge p90 is 0.000343, and inverse-load error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema already passes. Held-out physical load errors will show whether either calibration slice needs a different fit; actual traces and the boundary grid will reveal convergence or wrong-root failures that would require changing the inverse. Verify identity normalization, both chamber paths, and the unchanged downstream composition in the same isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d58af7c34d24ae0ddca1255baa9c6b5a835b3fa7ee2f298dc5f9bc3fa508665f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35150.32,
+      "usage_known": true,
+      "prompt_tokens": 25186,
+      "cached_tokens": 9600,
+      "completion_tokens": 1316
+    }
+  ]
+}

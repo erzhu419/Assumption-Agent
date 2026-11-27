@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "909424999b564f199cf54ae102aa12dc",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:30.021272+00:00",
+  "ended_at_utc": "2026-11-27T14:46:10.924495+00:00",
+  "request_sha256": "5e2fb81459e82b91faeb9bb9c6bc87c72a8c867d2a8ba692e0574858a4126e74",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48741,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28289,
+    "cached_tokens": 9600,
+    "completion_tokens": 1593
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems=pickle.load(open(p+'public_batch.pkl','rb'))\\nworst_pulse=worst_sweep=worst_gap=worst_field=worst_stationarity=worst_complementarity=worst_qp=0.\\nfor item in items:\\n s=item['study']; nx,ny=s['nx'],s['ny']\\n def axis(k,v,h):\\n  A=np.zeros((len(k),len(k)))\\n  for j in range(len(k)):\\n   if j in (0,len(k)-1):\\n    A[j,1 if j==0 else j-1]=-k[j]/h**2\\n   else:\\n    A[j,j-1]=-(k[j]+k[j-1])/(2*h**2)-max(v[j],0)/h\\n    A[j,j+1]=-(k[j]+k[j+1])/(2*h**2)-max(-v[j],0)/h\\n   A[j,j]=-A[j].sum()\\n  return A\\n Ax,Ay=[axis(s['kappa_'+d],s['vel_'+d],s['L'+d]/(n-1)) for d,n in [('x',nx),('y',ny)]]\\n L=np.kron(np.eye(ny),Ax)+np.kron(Ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\n Q=np.stack([q.ravel(order='F') for q in s['source_modes']],axis=1)\\n U=[np.linalg.solve(L+mu*np.eye(nx*ny),Q) for mu in s['mu_shifts']]\\n ix,iy=np.asarray(s['sensor_ij']).T; S=np.concatenate([u[ix+nx*iy] for u in U]); Z=s['Z_nuisance']\\n c=s['sensor_calibration_sweeps']; ref=c['ref_rosette']; raw=c['raw_rosette']; clean=np.max(abs(raw),axis=1)<7\\n for j in np.flatnonzero(clean):\\n  train=np.arange(len(ref))!=j; co=m._rosette_coefficients(ref[train],raw[train]); pred=np.array([m._features(ref[j],b)@co[b] for b in range(4)]); worst_sweep=max(worst_sweep,np.max(abs(pred-raw[j])))\\n for pulse in item.get('campaign_diagnostics') or []:\\n  e=m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))-S@pulse['w_pulse']; shape=(len(U),-1,4)\\n  worst_pulse=max(worst_pulse,np.max(np.sqrt(np.mean(e.reshape(shape)**2,axis=1))))\\n P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\n D=P@S; y=P@m._calibrate(s); ridge=s['source_ridge']; cap=s['u_box']; n=S.shape[1]\\n for budget in sorted({0.,cap,n*cap/2,s['total_budget'],(n-1)*cap,n*cap}):\\n  out=m.solve_batch(dict(s,total_budget=budget)); w=out['weights']; cert=out['kkt_certificate']; lo=np.array(cert['lam_lower']); hi=np.array(cert['lam_upper']); nu=cert['nu_sum']; e=D@w-y; g=D.T@e+ridge*w\\n  obj=.5*(e@e+ridge*(w@w)); dual=obj-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n  assert abs(w.sum()-budget)<1e-10 and np.min(w)>=-1e-10 and np.max(w)<=cap+1e-10\\n  assert np.allclose(cert['weights'],w,rtol=0,atol=1e-12) and min(lo.min(),hi.min())>=0\\n  assert abs(cert['primal_objective']-obj)<1e-11 and abs(cert['dual_lower_bound']-dual)<1e-11\\n  worst_gap=max(worst_gap,abs(obj-dual)); worst_stationarity=max(worst_stationarity,np.max(abs(g-nu-lo+hi))); worst_complementarity=max(worst_complementarity,np.max(abs(lo*w)),np.max(abs(hi*(cap-w))))\\n  expected=(U[-1]@w).reshape(nx,ny,order='F'); worst_field=max(worst_field,np.linalg.norm(out['terminal_field']-expected)/max(1e-15,np.linalg.norm(expected)))\\n  if 0<budget<n*cap:\\n   def loss(q):\\n    r=D@q-y; return .5*(r@r+ridge*(q@q)),D.T@r+ridge*q\\n   q=minimize(loss,np.full(n,budget/n),jac=True,method='SLSQP',bounds=[(0,cap)]*n,constraints=[{'type':'eq','fun':lambda x:x.sum()-budget,'jac':lambda x:np.ones(n)}],options={'ftol':1e-13}); assert q.success\\n   worst_qp=max(worst_qp,abs(q.fun-obj))\\nprint(dict(pulse_shift_bank_rmse=worst_pulse,loo_clean_calibration_max_abs=worst_sweep,kkt_gap=worst_gap,stationarity=worst_stationarity,complementarity=worst_complementarity,terminal_field_rel_l2=worst_field,independent_qp_objective_delta=worst_qp))\\nassert worst_pulse<2e-5 and worst_sweep<1e-4\\nassert max(worst_gap,worst_stationarity,worst_complementarity,worst_field,worst_qp)<1e-9\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 leaky or periodic walls → H2 reflecting walls with sweep-fitted nonlinear rosettes; worst profiled tracer-shift RMSE is about 2e-6, and the public schema passes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Test the exact artifact in an isolated interpreter. An independently assembled dense operator detects boundary or field-ordering errors; held-out sweeps and pulse shift-by-bank slices detect calibration errors; endpoint and interior budgets check separate KKT active-set cases.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0ea1d853f8949e7a1204bc3d6ee5418ab9f80a1cefcf00de1a49cee08df512de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41543.8,
+      "usage_known": true,
+      "prompt_tokens": 28289,
+      "cached_tokens": 9600,
+      "completion_tokens": 1593
+    }
+  ]
+}

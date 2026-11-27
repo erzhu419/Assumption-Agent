@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61af7bff555840f99e2936512ef4045b",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:19.000341+00:00",
+  "ended_at_utc": "2026-11-27T14:39:52.638463+00:00",
+  "request_sha256": "3fb8fae30d74ab2cf4cff67cd3b18dc3a5bd96a14988f70157e5e32718f9f785",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72946,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37122,
+    "cached_tokens": 9600,
+    "completion_tokens": 1344
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^for key in E:/,$d' /tmp/m98_compare.py > /tmp/m98_law.py\\ncat >> /tmp/m98_law.py <<'PY'\\nfrom itertools import product\\n# Single-mode extensions preserve identifiability and avoid giving every added term three coefficients.\\nZ=drift-th[2]; z=h[:,None]-g\\nF={'none':None,'drift2':drift**2,'drift3':Z**3,'drift_sat':np.tanh(2*Z)-2*Z,'hold_drift':(h-3.6)*Z,'fastgap_drift':g[:,0]*Z,'slowgap_drift':g[:,1]*Z,'hold2':(h-3.6)**2,'fastgap2':g[:,0]**2,'slowgap2':g[:,1]**2,'mem0_sq':z[:,0]**2,'mem1_sq':z[:,1]**2,'signed_past0':np.maximum(-p[:,0],0.),'mem_abs':np.abs(p)@(-np.expm1(-dt/tau[1])*np.exp(-later/tau[1])),'mem_sq':(p*p)@(-np.expm1(-dt/tau[1])*np.exp(-later/tau[1]))}\\norder=np.argsort(h); folds=[labs!=k for k in np.unique(labs)]+[~np.isin(np.arange(len(h)),order[:4]),~np.isin(np.arange(len(h)),order[-4:])]; allrows=np.ones(len(h),bool)\\ndef fit1(mask,key,mode,regscale):\\n BB=B.copy(); pp=[a.copy() for a in pen]; v=F[key]; pp=[x*regscale for x in pp]\\n if v is not None:\\n  v=(v-v[mask].mean())/max(v[mask].std(),.001); BB[mode]=np.c_[BB[mode],v]; pp[mode]=np.r_[pp[mode],.3]\\n reg=np.diag(np.concatenate(pp)); y=Y[mask].ravel()\\n def calc(q, ret=False):\\n  u=np.exp(q); T=np.vstack((np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1.])); D=np.concatenate([a[:,None,:]*T[None,:,j,None] for j,a in enumerate(BB)],2); A=D[mask].reshape(len(y),-1); c=np.linalg.lstsq(np.vstack([A,reg]),np.r_[y,np.zeros(len(reg))],rcond=None)[0]; return (D@c,c) if ret else np.r_[A@c-y,reg@c]\\n q=least_squares(calc,np.log([.466,1.488]),bounds=(np.log([.15,.7]),np.log([.7,12.])),max_nfev=60).x\\n return calc(q,True)\\ndef score(cand,fs):\\n a=np.array([stats(fit1(mask,*cand)[0][~mask]-Y[~mask]) for mask in fs]); return a[:4].max(0),a[4:].max(0)\\ncands=[('none',0,s) for s in [.5,1.,2.,4.,8.]]+[(k,j,1.) for k in F if k!='none' for j in (0,1,2)]\\nres=[]\\nfor cand in cands:\\n a,b=score(cand,folds); res.append((np.mean(a+b),cand,a,b))\\nfor _,c,a,b in sorted(res,key=lambda x:x[0])[:9]: print(c,'worst lab',a,'worst load tail',b)\\nprint('saved baseline',score(('none',0,1.),folds))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_law.py | tail -10\\npython3 - <<'PY'\\nimport json,numpy as np\\nx=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor row in x if isinstance(x,list) else x.values():\\n if isinstance(row,dict):\\n  print({k:v for k,v in row.items() if not isinstance(v,list)})\\n  for k,v in row.items():\\n   if isinstance(v,list):\\n    a=np.asarray(v); print(k,a.shape,a.mean(0).round(3) if a.dtype.kind in 'fiu' else '')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 broad nonlinear corrections → H2 retain the regularized two-mode law unless a single physical term improves lab and load-tail transfer; current worst-lab strain/rate RMSE is 0.0367/0.0476.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the larger nonlinear feature basis\",\"rejected_reason\":\"It lowers training error but worsens held-out lab error on both outputs.\"}],\"rationale\":\"Deployment reaches lower hold loads than the public chamber sweep. Withhold both load tails to detect extrapolation failures, and compare sparse corrections before changing the verified candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e14ace985e4bcc696284f7cd86cad80dd374c1b1ab2c1f327865cecf12735be2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34073.88,
+      "usage_known": true,
+      "prompt_tokens": 37122,
+      "cached_tokens": 9600,
+      "completion_tokens": 1344
+    }
+  ]
+}

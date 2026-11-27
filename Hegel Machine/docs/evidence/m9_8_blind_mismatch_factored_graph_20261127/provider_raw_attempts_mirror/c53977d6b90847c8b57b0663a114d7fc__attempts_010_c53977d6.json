@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c53977d6b90847c8b57b0663a114d7fc",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:49.504708+00:00",
+  "ended_at_utc": "2026-11-27T14:37:25.427073+00:00",
+  "request_sha256": "7f989434737d9a4220c86709e5fd1adee9b2f638ebd00cdce7f5ac7fa1b9d632",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56850,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31324,
+    "cached_tokens": 9600,
+    "completion_tokens": 1438
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_chamber.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; out=m.solve_batch(d); tau,theta=out['estimated_taus'],out['hereditary_weights']; o,b=m._calibration(d['calibration_load_cells']); past=(c['past_channel_raw']-o)@b; hold=(c['hold_channel_raw']-o)@b; x=m._features(c,c)[:len(hold)]; feat=np.c_[np.ones(len(x)),x]; coupon=(past,hold,feat); drift=feat@theta[2:]; obs=np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]; base=m._deployment_design(coupon,dt,t,tau)@theta; bench=m._design(coupon,dt,t,tau)@theta; kernel=np.r_[-np.expm1(-t),1.]; e=obs-base\\n# Keep the deployed law fixed. Use leave-one-lab-out to test whether stress or feature contrasts, interactions, or rational saturation improve transfer.\\nz=hold[:,None]-m._design(coupon,dt,np.array([1.]),tau)[:,-1,:2]*tau\\nj=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); pairs=[x[:,a]*x[:,b] for a in range(x.shape[1]) for b in range(a+1,x.shape[1])]; contrast=x[:,0]-x[:,1]; rat=np.c_[drift/(1+drift**2)-drift,drift/(1+contrast**2)-drift]; families={'linear amplitude correction':feat[:,None,:]*kernel[None,:,None],'pair interactions':np.array(pairs).T[:,None,:]*kernel[None,:,None],'rational drift correction':rat[:,None,:]*kernel[None,:,None],'memory correction':z[:,None,:]*j[None,:,:]}\\ndef rms(r): return np.array([np.sqrt(np.mean(r[:,:-1]**2)),np.sqrt(np.mean(r[:,-1]**2))])\\nlab=c['lab_id']; labs=np.unique(lab); print('schema description:',json.load(open('/holdout_task/public_asset_index.json'))['schema']); print('deployed vs benchtop chamber RMSE',rms(e),rms(obs-bench))\\nfor name,a in families.items():\\n r=e.copy()\\n for l in labs:\\n  mask=lab!=l; design=a[mask].reshape(-1,a.shape[-1]); target=e[mask].ravel(); p=np.linalg.lstsq(design,target,rcond=None)[0]; r[~mask]-=a[~mask]@p\\n print(name,'OOF RMSE',rms(r),'worst lab RMSE',np.max([rms(r[lab==l]) for l in labs],axis=0))\\nfor l in labs: print('lab',l,'fixed RMSE',rms(e[lab==l]),'mean error',e[lab==l].mean(0)[[0,len(t)-1,len(t)]])\\nmissing=np.isnan(c['coupon_features_raw']).any(1); print('missing slice RMSE',rms(e[missing])); print('worst horizon',np.sqrt(np.mean(e[:,:-1]**2,0)).max())\\n# Leave calibration rows out to distinguish constitutive error from a bridge fit that does not transfer.\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; y=cal['true_channel_loads']; ids=np.arange(len(raw)); err=np.empty(len(raw))\\nfor f in range(5):\\n val=ids%5==f; x0,x1=m._calibration({'bridge_raw':raw[~val],'true_channel_loads':y[~val]}); err[val]=(raw[val]-x0)@x1-y[val].sum(1)\\nprint('bridge worst fold stress RMSE',max(np.sqrt(np.mean(err[ids%5==f]**2)) for f in range(5)))\\nprint('train and test local-vs-joint feature change'); pool=m._features(tr,te); n=len(tr['lab_id']); local=m._features(te,te)[:len(te['lab_id'])]; print(np.sqrt(np.mean(((pool[n:]-local)@theta[3:])**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed chamber law → H2 add a constitutive correction only if it transfers across labs; current worst missing-feature slice RMSE is 0.00847 for strain and 0.00914 for onset rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use classifier or relay-mode stress tests\",\n      \"rejected_reason\": \"This continuous constitutive model has neither class labels nor relay states; lab-stratified residuals directly test the relevant nuisance structure.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted drift interactions, rational saturation, or stress-memory corrections improve predictions in an unseen lab. Check held-out bridge sweeps separately so a calibration discrepancy is not mistaken for a constitutive mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "68173edf8f1c42bb7ea984003398de3d30d0188382dc3267c6ff8acdd6613dd9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36365.58,
+      "usage_known": true,
+      "prompt_tokens": 31324,
+      "cached_tokens": 9600,
+      "completion_tokens": 1438
+    }
+  ]
+}

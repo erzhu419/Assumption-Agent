@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4be8fe12cb4743db830293a3f6eba0c4",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__alpha_m98_v2_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:23:33.392544+00:00",
+  "ended_at_utc": "2026-11-27T14:24:00.821688+00:00",
+  "request_sha256": "27fa6650688ada7a75a4e2e645e8fb03e8f7fd8fcf882184dd60144bc4f795da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37917,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24032,
+    "cached_tokens": 11136,
+    "completion_tokens": 995
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport numpy as np\\nwith open('public_batch.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; y=c['true_channel_loads'].sum(axis=1)\\nmu=raw.mean(0); sd=raw.std(0); z=(raw-mu)/sd\\nfor name in ('train','test'):\\n    g=d[name]; traces=np.vstack((g['past_channel_raw'].reshape(-1,4),g['hold_channel_raw']))\\n    zz=(traces-mu)/sd\\n    print(name,'max standardized bridge radius',round(float(np.linalg.norm(zz,axis=1).max()),3),'outside calibration component ranges',int(np.any((traces<raw.min(0))|(traces>raw.max(0)),axis=1).sum()),'of',len(traces))\\nprint('calibration max standardized bridge radius',round(float(np.linalg.norm(z,axis=1).max()),3))\\n# Hold out contiguous stress tails rather than individual sweeps, to test extrapolation.\\norder=np.argsort(y); n=max(8,len(y)//5); tails=(order[:n],order[-n:])\\nfor family in ('affine','quadratic','pairwise','rational'):\\n    metrics=[]\\n    for tail in tails:\\n        keep=np.ones(len(y),dtype=bool); keep[tail]=False\\n        q=(raw-raw[keep].mean(0))/raw[keep].std(0)\\n        pieces=[np.ones(len(y)),*q.T]\\n        if family=='quadratic': pieces.extend(q[:,a]*q[:,b] for a in range(4) for b in range(a,4))\\n        if family=='pairwise': pieces.extend((q[:,a]+s*q[:,b])**3 for a in range(4) for b in range(a+1,4) for s in (-1,1))\\n        if family=='rational': pieces.extend((q**3/(1+0.25*q*q)).T)\\n        a=np.column_stack(pieces); e=y[tail]-a[tail]@np.linalg.lstsq(a[keep],y[keep],rcond=None)[0]\\n        metrics.append((float(np.sqrt(np.mean(e**2))),float(np.max(abs(e)))))\\n    print(family,'lower/upper summed-load tail (RMSE, max)',np.asarray(metrics).round(7).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine calibration within the sweep range → test whether nonlinear calibration improves stress-tail extrapolation; the previous worst held-out benchtop p90 errors were 0.0252 for strain and 0.0161 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat single-sweep holdouts or schema validation\",\n      \"rejected_reason\": \"Both already passed on the current verified artifact; neither tests the effect of extrapolating beyond the calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"Check whether deployment bridge readings extend beyond calibration coverage. Holding out entire calibration stress tails tests whether the nonlinear candidates offer a material benefit where single-sweep validation could miss one.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "016454cc5a9de682d86958fe36796d7388d55c58c8d29775583efd3e352f877b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27394.59,
+      "usage_known": true,
+      "prompt_tokens": 24032,
+      "cached_tokens": 11136,
+      "completion_tokens": 995
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d63e81dc1b747f99a2161d999806df5",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:55:38.633085+00:00",
+  "ended_at_utc": "2026-11-27T14:56:35.512976+00:00",
+  "request_sha256": "aa303b9b1256aa41db5119adeec12dd0147837ce1302d75a8504461d0264b9f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45639,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29127,
+    "cached_tokens": 11136,
+    "completion_tokens": 1889
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/profile_chamber.py <<'PY'\\nimport sys,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport alpha_m98_v2_c04_batch_04_solver as m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr=d['train']; te=d['test']; q=p['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; n=len(tr['lab_id']); b=m._fit_bridge(d['calibration_load_cells']); x=m._features(tr,te); tau,th=m._fit(x[:n],*m._loads(tr,b),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); past,hold=m._loads(q,b); Y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; labs=q['lab_id']\\nX=m._features(tr,q)[n:]; Xs=m._features(q,q)[:len(Y)]; j={k:np.concatenate([tr[k],te[k],q[k]]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; Xj=m._features(j,j)[n+len(te['lab_id']):len(j['lab_id'])]; drifts=[th[2]+z@th[3:] for z in [X,Xs,Xj]]\\nlater=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; mem=lambda u:past@(-np.expm1(-dt[:,None]/u)*np.exp(-later[:,None]/u)); M=mem(tau); H=hold[:,None]; ones=np.ones(len(Y));\\ndef tempor(u):return np.vstack([np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1.]])\\nA=tempor(np.array([.472,2.386])); row=[]\\nfor y in Y: row.append(least_squares(lambda w:A@w-y,np.linalg.lstsq(A,y,rcond=None)[0],loss='soft_l1',f_scale=.01).x)\\nW=np.array(row); print('lab | hold | intrinsic memories | drifts (train+diag, diag only, all) | fitted fast minus theta0*hold | fitted slow | fitted drift');print(np.round(np.c_[labs,hold,M,*drifts,W[:,0]-th[0]*hold,W[:,1:]],3));print('missing rows',np.flatnonzero(np.isnan(q['coupon_features_raw']).any(axis=1)))\\n# Conditional linear model for amplitudes and drift; compare the entire law with and without memory and nonlinear drift terms.\\ndef solve(select,fn,fast=False):\\n def des(z):\\n  u=np.r_[tau[0],np.exp(z)] if fast else np.exp(z); a=tempor(u); cols,off=fn(u); return np.concatenate([a[None,:,i,None]*k[:,None,:] for i,k in enumerate(cols) if k.shape[1]],axis=2),off@a.T\\n def fit(z,ret=False):\\n  D,off=des(z); a=D[select].reshape(-1,D.shape[-1]); y=(Y-off)[select].ravel(); w=np.linalg.lstsq(a,y,rcond=None)[0];\\n  for _ in range(7):\\n   v=(1+((a@w-y)/.014)**2)**(-.25); w=np.linalg.lstsq(a*v[:,None],y*v,rcond=None)[0]\\n  return (D@w+off,w) if ret else a@w-y\\n z=np.log([2.4] if fast else [.472,2.4]); fitz=least_squares(fit,z,loss='soft_l1',f_scale=.014,max_nfev=70).x\\n return *fit(fitz,True),np.exp(fitz)\\ndef features(u,drift_type,struct):\\n empty=np.empty((len(Y),0)); Z=drifts[drift_type]; dbase=np.c_[ones,Z]; MM=mem(u); off=np.zeros((len(Y),3));\\n if struct=='full': return [np.c_[ones,H,past,dbase[:,1:]],np.c_[ones,H,past,dbase[:,1:]],dbase],off\\n if struct=='relaxed': return [np.c_[ones,H,MM[:,0]],np.c_[ones,H,MM[:,1],Z],dbase],off\\n if struct=='reset_nl': return [np.c_[ones,H],np.c_[ones,H,Z,np.minimum(Z,0),Z**2],np.c_[dbase,np.minimum(Z,0),Z**2]],off\\n if struct=='reset': return [np.c_[ones,H],np.c_[ones,H,Z],dbase],off\\n if struct=='memory_nl': return [np.c_[ones,H,MM[:,0]],np.c_[ones,H,MM[:,1],Z,np.minimum(Z,0),Z**2],np.c_[dbase,np.minimum(Z,0),Z**2]],off\\n if struct=='memoryX': return [np.c_[ones,H,MM[:,0]],np.c_[ones,H,MM[:,1],(X,Xs,Xj)[drift_type]],np.c_[ones,(X,Xs,Xj)[drift_type]]],off\\nfor k in ('relaxed','reset','reset_nl','memory_nl','memoryX','full'):\\n for j in range(3) if k!='full' else [0]:\\n  fn=lambda u:features(u,j,k); yp,w,u=solve(np.ones(len(Y),bool),fn,fast=True); e=yp-Y; cv=np.stack([(solve(labs!=l,fn,fast=True)[0]-Y)[labs==l].std(axis=0) for l in np.unique(labs)]); cv2=np.array([np.sqrt(np.mean((solve(labs!=l,fn,fast=True)[0]-Y)[labs==l]**2,axis=0)) for l in np.unique(labs)]); print(k,j,'slow',np.round(u,4),'in rms',np.round(np.sqrt(np.mean(e**2,0))[[0,5,11,12]],4),'CV worst',np.round(cv2.max(0)[[0,5,11,12]],4),'coef',np.round(w,3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/profile_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unchanged benchtop time constants and memory) -> H2 (retained fast mode with altered slow chamber mode and amplitudes); the two-mode diagnostic fit reaches median absolute curve/rate errors of 0.0026/0.0007 with per-coupon amplitudes, not yet out of fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the per-coupon fitted amplitudes as chamber predictions\",\n      \"rejected_reason\": \"Those amplitudes require observed chamber curves and rates, which deployment coupons do not provide.\"\n    }\n  ],\n  \"rationale\": \"Test whether a common slow timescale, reset or retained load memory, and standardized drift explain the chamber curves and initial rates together. Leave each lab out while fitting to expose models that fit the 18 verification coupons but do not transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d69306e8c76e7dacb4322b53a2d226457cdac91e574d9ef0ad55f79c6627280d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 56840.28,
+      "usage_known": true,
+      "prompt_tokens": 29127,
+      "cached_tokens": 11136,
+      "completion_tokens": 1889
+    }
+  ]
+}

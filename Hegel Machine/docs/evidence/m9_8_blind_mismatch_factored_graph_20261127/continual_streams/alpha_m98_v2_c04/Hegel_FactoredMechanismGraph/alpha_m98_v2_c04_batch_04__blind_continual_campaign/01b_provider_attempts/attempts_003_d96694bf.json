@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d96694bf30fe4de09873b940d9aa0b86",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:00.682972+00:00",
+  "ended_at_utc": "2026-11-27T14:41:20.128809+00:00",
+  "request_sha256": "5f48a149a4ded61ddac8438ae557c8d4108565f57616e22eea4775b8993e3511",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 17951,
+    "cached_tokens": 9600,
+    "completion_tokens": 552
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('support counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('first 45 calibration pairs (index, true, raw)'); print(np.c_[np.arange(len(x)),x,y][:45]); print('remaining representative pairs'); print(np.c_[np.arange(len(x)),x,y][45::4]); print('raw operational quantiles');\\nfor key in ('train','test'):\\n for field in ('past_channel_raw','hold_channel_raw'):\\n  a=d[key][field].reshape(-1,4); print(key,field,np.quantile(a,[0,.5,1],axis=0))\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print('log structure',type(a).__name__); print(str(a)[-5000:]);\\nPY\\ncat public_asset_index.json | head -65\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Ordinary affine bridge -> robust nonlinear coupled bridge; the in-sample affine fit has median raw residual norm 1.035 and 99th-percentile residual 25.831, with held-out error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted high-degree inverse immediately\",\"rejected_reason\":\"The affine residual does not distinguish sparse spikes from structural curvature, and 80 rows may not identify high-order interactions.\"}],\"rationale\":\"Inspect the calibration design and apparatus history to distinguish axis sweeps, mixed loads, and spike rows. The design determines which interactions can be estimated and how to hold out load regions; the operational ranges show where inverse extrapolation must be tested.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "56b2bccb3969bf392519d86c4477a1f9886e9601c4bf028f43579f4ed0d3c87c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19403.76,
+      "usage_known": true,
+      "prompt_tokens": 17951,
+      "cached_tokens": 9600,
+      "completion_tokens": 552
+    }
+  ]
+}

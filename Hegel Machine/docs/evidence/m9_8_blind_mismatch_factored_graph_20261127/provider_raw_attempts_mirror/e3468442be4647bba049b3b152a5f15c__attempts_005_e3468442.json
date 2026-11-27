@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3468442be4647bba049b3b152a5f15c",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:27:09.247080+00:00",
+  "ended_at_utc": "2026-11-27T14:27:40.228361+00:00",
+  "request_sha256": "f26231e099233b24e27f0f762dcf3e126d9d93fb3a86e65306e2aa759954e025",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39659,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25465,
+    "cached_tokens": 9600,
+    "completion_tokens": 1151
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/amplitudes.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe import *\\nfrom scipy.optimize import least_squares\\nsp=m._specimen(c,m._features(tr,c)[1],bm); p,h,_=sp\\nY=np.column_stack([c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]); B=np.vstack([np.column_stack([-np.expm1(-t[:,None]/tau),t]),np.r_[1/tau,1]])\\namp=np.linalg.lstsq(B[:,:2],Y.T,rcond=None)[0].T; print('no-drift basis RMSE per output',np.sqrt(np.mean((Y-amp@B[:,:2].T)**2,axis=0)))\\nprint('missing diag',np.where(~np.isfinite(c['coupon_features_raw']))); print('lab sweeps');\\nfor l in np.unique(c['lab_id']):\\n s=ca['single_channel_sweeps']; j=s['lab_id']==l; print(l,np.polyfit(s['cmd_stress'][j],s['true_stress'][j],1))\\nallg={k:np.concatenate([tr[k],te[k]]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}\\nfor name,a,b in [('diag-only',c,c),('train+diag',tr,c),('test+diag',te,c),('all+diag',allg,c)]:\\n xx=m._features(a,b)[1]; drift=th[2]+xx@th[3:]; print('\\\\n',name); print(np.round(np.column_stack([h,drift,amp,amp[:,0]-th[0]*h,amp[:,1]-th[1]*h]),4));\\n for label,F in [('h',h[:,None]),('h+d',np.c_[h,drift]),('h+d+hd',np.c_[h,drift,h*drift]),('h+d+state',np.c_[h,drift,h[:,None]-m._branches(sp,dt,t,tau)[1]*tau]),('h+x',np.c_[h,xx]),('h+hx',np.c_[h,h[:,None]*xx]),('h+x+lab',np.c_[h,xx,np.eye(4)[c['lab_id']][:,1:]])]:\\n  A=np.c_[np.ones(len(h)),F]; w=np.linalg.lstsq(A,amp,rcond=None)[0]; err=amp-A@w; loo=err/(1-np.sum(A*np.linalg.pinv(A).T,axis=1))[:,None]; print(label,'coef',np.round(w.T,4),'loo rmse',np.round(np.sqrt(np.mean(loo**2,axis=0)),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/amplitudes.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the intrinsic two-branch spectrum fits the chamber curves -> H2: the chamber modifies branch amplitudes and may suppress linear drift; the baseline misses by up to 1.455 strain and 2.018 initial rate on the diagnostic coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The benchtop history-to-gap and linear creep law applies unchanged to chamber deployment.\",\n    \"empirical_witness\": \"Median absolute strain and rate errors rise from 0.0079 and 0.0060 on benchtop to 0.316 and 0.642 in the chamber, yet a per-coupon fit with the same relaxation times has median absolute residual 0.00231 in the chamber.\",\n    \"causal_blanket_diagnosis\": \"The transfer fails in the map from calibrated load and coupon state to chamber response amplitudes, not in the observed relaxation time basis.\",\n    \"sublated_pivot\": \"Freeze the intrinsic material fit from train; test sparse chamber amplitude laws and whether the linear drift term is needed.\",\n    \"risk_kind\": \"constitutive transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit intrinsic relaxation times to chamber observations.\",\n      \"rejected_reason\": \"The same time basis already fits the chamber data near the measurement noise level.\"\n    }\n  ],\n  \"rationale\": \"Measure how much error remains after removing linear drift, then test whether calibrated hold stress, hereditary memory, or standardized coupon drift explains the two amplitudes. Leave-one-coupon-out errors separate sparse transfer laws from interpolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4db9699b2b44c5b9a7e789099994c933521265fedad462e48a88f9155e4c9aa7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30942.83,
+      "usage_known": true,
+      "prompt_tokens": 25465,
+      "cached_tokens": 9600,
+      "completion_tokens": 1151
+    }
+  ]
+}

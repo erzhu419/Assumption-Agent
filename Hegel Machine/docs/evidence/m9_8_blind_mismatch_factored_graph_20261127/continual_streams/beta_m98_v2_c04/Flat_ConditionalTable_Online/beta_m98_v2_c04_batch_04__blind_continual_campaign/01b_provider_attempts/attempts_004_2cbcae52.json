@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2cbcae52d25746df9ac48a57605bafde",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:54.439839+00:00",
+  "ended_at_utc": "2026-11-27T14:38:19.486442+00:00",
+  "request_sha256": "d4a9b459f799712ab439eee745048a4ded1609c90ff61b278ce82bb74945f75d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33190,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23072,
+    "cached_tokens": 9600,
+    "completion_tokens": 786
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp /tmp/hegel_continual_archive/beta_m98_v2_c04_batch_01_solver.py batch_solver.py\\nsed -i 's/The tracer pulses identify zero wall leakage on both axes./The apparatus log matches batch 01: zero wall leakage on both axes./' batch_solver.py\\nsed -n '42,155p' batch_solver.py\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pathlib, pickle\\nimport numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\na=s['sensor_calibration_sweeps']; x,y=a['ref_rosette'],a['raw_rosette']\\nfor k,v in a.items():\\n print('sweep',k,type(v).__name__,getattr(v,'shape',None),list(v) if isinstance(v,dict) else '')\\n if k=='single_bank_sweeps':\\n  for z in (list(v.values()) if isinstance(v,dict) else list(v))[:4]: print(' bank', {k:(type(e).__name__,getattr(e,'shape',None)) for k,e in z.items()} if isinstance(z,dict) else np.shape(z))\\nprint('banks',np.unique(s['row_bank_id'],return_counts=True),'sources',s['source_modes'].shape)\\nfor inds in np.array_split(np.arange(len(x)),4):\\n train=np.ones(len(x),bool); train[inds]=False\\n d=np.c_[np.ones(len(x)),x]; coeff=np.linalg.lstsq(d[train],y[train],rcond=None)[0]; e=(d@coeff-y)[inds]; print('held calibration MAE',np.mean(abs(e),axis=0).round(8),'mix condition',round(np.linalg.cond(coeff[1:]),4))\\nfor p in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n o=m.solve_batch(s); k=o['kkt_certificate']; print(p.name,'objective',k['primal_objective'],'gap',k['primal_objective']-k['dual_lower_bound'],'weights',np.round(o['weights'],5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin → H2 sealed walls from batch 01; the apparatus trace is 0.566 from batch 01 versus at least 4.393 from the other archived regimes, pending held-out checks.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the sparse L0 ridge primitive\",\"rejected_reason\":\"It does not impose the required fixed-sum constraint, and the objective has no L0 penalty.\"}],\"rationale\":\"Save the matched sealed-wall solver. The schema check detects output or certificate failures, held-out sweeps can expose an inadequate affine calibration, and the archived objective comparison can flag a boundary match that warrants further testing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b47c98fe4c2b1c39eeb66e383022d1d9034ba04c904b9541e9327581ae2f3caf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25486.11,
+      "usage_known": true,
+      "prompt_tokens": 23072,
+      "cached_tokens": 9600,
+      "completion_tokens": 786
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77d6ffa757dd45d3b10f9697c36452b6",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:35:26.656515+00:00",
+  "ended_at_utc": "2026-11-27T14:36:03.474531+00:00",
+  "request_sha256": "0c56311b6c890a489323cb39e13cb95233521fa767c3b39e242397a6180d60a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27172,
+    "cached_tokens": 9600,
+    "completion_tokens": 1391
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rheo_factor.py <<'PY'\\nfrom rheo_probe import *\\nfrom scipy.optimize import least_squares\\nL=g['lab_id']; D=th[2]+xg@th[3:]; E=-np.expm1(-t[:,None]/tau); M=pg@(-np.expm1(-dt[:,None]/tau)*np.exp(-np.r_[np.cumsum(dt[:0:-1])[::-1],0][:,None]/tau)); G=(hg[:,None]-M)*th[:2]; Y=np.c_[yc,yr]; H=np.vstack((E,1/tau)); B=Y-G@H.T\\nprint('t',t,'dt',dt); print('B singular values',np.linalg.svd(B,compute_uv=False)); print('curve-only singular values',np.linalg.svd(B[:,:-1],compute_uv=False)); print('OLS coefficient time profiles for intercept,d,X separately:'); print(np.round(np.linalg.lstsq(np.c_[np.ones(len(D)),D],B,rcond=None)[0],4)); print(np.round(np.linalg.lstsq(np.c_[np.ones(len(D)),xg],B,rcond=None)[0],4)); print('missing by row',np.isnan(g['coupon_features_raw']).sum(1)); print('diagnostic ref vs train/test by lab');\\nfor l in np.unique(L):\\n q=ref[lab==l]; z=g['ref_coupons'][L==l]; print(l,len(z),np.round([np.median(q.mean(0)),np.median(q.std(0)),np.median(z.mean(0)),np.median(z.std(0))],4))\\nprint('separable temporal families, additional saturating offset, held-lab diagnostics')\\nfor kind in ['sat','rat','rat2','atan','stretch','log','tanh','expquad']:\\n def temporal(k):\\n  u=k*t\\n  v={'sat':-np.expm1(-u)/k,'rat':t/(1+u),'rat2':t/(1+u*u),'atan':np.arctan(u)/k,'stretch':t*np.exp(-u),'log':np.log1p(u)/k,'tanh':np.tanh(u)/k,'expquad':t*np.exp(-u*u)}[kind]; return np.r_[v,1.]\\n for mode in ['affine','offset','hold_offset','vary_memory']:\\n  def pred(p):\\n   f=temporal(np.exp(p[0])); C=(p[1]*D+p[2])[:,None]*f\\n   if mode in ('offset','hold_offset'): C+=((p[3]+(p[5]*(hg-hg.mean()) if mode=='hold_offset' else 0)))*np.r_[-np.expm1(-t*np.exp(p[4])),np.exp(p[4])] if mode=='offset' else (p[3]+p[5]*(hg-hg.mean()))[:,None]*np.r_[-np.expm1(-t*np.exp(p[4])),np.exp(p[4])]\\n   if mode=='vary_memory': C+= (M*p[3:5])@H.T\\n   return C\\n  init=[-1,1,0]+{'affine':[],'offset':[-.05,0],'hold_offset':[-.05,0,0],'vary_memory':[0,0]}[mode]; scores=[]\\n  for l in [None,*np.unique(L)]:\\n   m=np.ones(len(L),bool) if l is None else L!=l\\n   pp=least_squares(lambda p:((pred(p)-B)[m]*np.r_[np.ones(len(t)),.65]).ravel(),init,loss='soft_l1',f_scale=.007,max_nfev=150,bounds=([-5,-5,-5]+[-5]*(len(init)-3),[5,5,5]+[5]*(len(init)-3))).x; r=(pred(pp)-B)[m if l is None else ~m]; sc=[np.sqrt(np.mean(r[:,:-1]**2)),np.sqrt(np.mean(r[:,-1]**2))]\\n   if l is None: full=sc; par=pp\\n   else: scores.append(sc)\\n  print(kind,mode,np.round(par,3),np.round(full,4),np.round(np.max(scores,0),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_factor.py | tail -56\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (one-term nonlinear drift) -> H2 (separable drift plus an early-time correction); best tested worst-lab strain RMSE is 0.0939, while unchanged onset has 0.1407 worst-lab RMSE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate regression for onset rate\",\"rejected_reason\":\"First test whether one chamber law can explain both the measured curves and their initial derivative.\"}],\"rationale\":\"The drift-dependent residual and the saturating residual intercept have different time profiles. Check whether they arise from reference-panel differences, a second temporal term, or altered memory. Compare each mechanism on held-out labs for both outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "263a47c8449baa7da395c0e1e68af612bcce6c4282db7b0da3ee423a3f9d5733",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37265.76,
+      "usage_known": true,
+      "prompt_tokens": 27172,
+      "cached_tokens": 9600,
+      "completion_tokens": 1391
+    }
+  ]
+}

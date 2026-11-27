@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb23be7efd6745d9ab3a38cefc1762cd",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:08.038564+00:00",
+  "ended_at_utc": "2026-11-27T14:40:49.726323+00:00",
+  "request_sha256": "cd01a132bba025e0e32dffbfff5894789a7395b8c6f397a8e7ffab91ce3d614e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60059,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32591,
+    "cached_tokens": 9600,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f:\\n    s=pickle.load(f)[0]['study']\\nsw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; clean=np.max(abs(y),axis=1)<7\\ncal=[]\\nfor fold in range(5):\\n    train=np.arange(len(x))%5!=fold; test=~train & clean\\n    c=m._rosette_coefficients(x[train],y[train]); pred=np.column_stack([m._features(x[test],i)@c[i] for i in range(4)])\\n    cal.append(np.max(np.sqrt(np.mean((pred-y[test])**2,axis=0))))\\nassert max(cal)<5e-5, cal\\nnx,ny=s['nx'],s['ny']; n=nx*ny\\nL=np.diag(s['V_reaction_2d'].ravel(order='F'))\\nfor axis,size,stride in [('x',nx,1),('y',ny,nx)]:\\n    h=s['L'+axis]/(size-1); k=s['kappa_'+axis]; v=s['vel_'+axis]; rob=s['robin_'+axis]\\n    for j in range(n):\\n        i=j//stride%size\\n        if i in (0,size-1):\\n            L[j,j]+=k[i]/h**2+rob/h; L[j,j+(stride if i==0 else -stride)]-=k[i]/h**2\\n        else:\\n            left=(k[i-1]+k[i])/(2*h*h); right=(k[i+1]+k[i])/(2*h*h)\\n            L[j,j]+=(left+right)+abs(v[i])/h; L[j,j-stride]-=left+max(v[i],0)/h; L[j,j+stride]-=right+max(-v[i],0)/h\\nrhs=np.column_stack([z.ravel(order='F') for z in s['source_modes']]); ii,jj=s['sensor_ij'].T; sensors=ii+nx*jj\\nblocks=[np.linalg.solve(L+mu*np.eye(n),rhs) for mu in s['mu_shifts']]; S=np.vstack([U[sensors] for U in blocks]); yc=m._calibrate(s); Z=s['Z_nuisance']; r=s['source_ridge']; u=s['u_box']; b=s['total_budget']; zridge=s['nuisance_ridge']\\ndef profile(S,y,Z):\\n    P=np.linalg.solve(Z.T@Z+zridge*np.eye(Z.shape[1]),Z.T)\\n    return S-Z@(P@S),y-Z@(P@y),P\\nout=m.solve_batch(s); w=out['weights']; cert=out['kkt_certificate']; D,t,_=profile(S,yc,Z); resid=D@w-t; g=D.T@resid+r*w; J=(resid@resid+r*(w@w))/2; gap=J-cert['dual_lower_bound']; lo,hi=cert['lam_lower'],cert['lam_upper']\\nfield=np.max(abs(out['terminal_field']-(blocks[-1]@w).reshape((nx,ny),order='F')))\\nassert field<1e-10 and np.max(abs(np.asarray(cert['weights'])-w))<1e-12\\nassert abs(w.sum()-b)<1e-10 and min(w)>=0 and max(w)<=u\\nassert abs(J-cert['primal_objective'])<1e-10 and abs(gap)<1e-10 and min(lo)>=0 and min(hi)>=0\\nassert max(np.max(abs(g-cert['nu_sum']-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(u-w))))<1e-10\\nshifts=np.repeat(np.arange(len(blocks)),len(sensors)); shift_rmse=[]\\nfor i in range(len(blocks)):\\n    tr=shifts!=i; D,t,P=profile(S[tr],yc[tr],Z[tr]); wf,_=m._box_budget(D.T@D+r*np.eye(len(w)),-D.T@t,u,b)\\n    gamma=P@(yc[tr]-S[tr]@wf); shift_rmse.append(np.sqrt(np.mean((S[~tr]@wf+Z[~tr]@gamma-yc[~tr])**2)))\\nassert max(shift_rmse)<0.0107, shift_rmse\\nrng=np.random.default_rng(2026); worst=0.\\nfor i in range(100):\\n    A=rng.normal(size=(8,8)); H=A.T@A+.04*np.eye(8); c=rng.normal(size=8)*3; B=[0,u,2*u,7*u,8*u,1e-8,8*u-1e-8,b][i%8]\\n    q,nu=m._box_budget(H,c,u,B); d=H@q+c-nu\\n    error=max(abs(q.sum()-B),-min(q),max(q)-u,abs(np.maximum(d,0)@q+np.maximum(-d,0)@(u-q)))\\n    worst=max(worst,error)\\nassert worst<1e-10,worst\\nprint('worst sweep-channel CV RMSE',max(cal),'shift RMSE',shift_rmse,'dense field max error',field,'independent certificate gap',gap,'stress KKT max error',worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: retain supplied Robin walls and fitted cyclic cubic calibration; the independent host probe measured relative field and weight errors of 2.96e-6 and 9.74e-6, with worst held-out shift RMSE 0.01063.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test the exact archived candidate on held-out sweeps and shifts, compare its field and certificate against an independently assembled operator, and stress the optimizer at budget boundaries. Any failure identifies whether to revise calibration, indexing, or active-set handling.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1635c5efd93f9f0331935a6fb6e5bb2edc953eca3c5683fad1569e53017c7e38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42120.64,
+      "usage_known": true,
+      "prompt_tokens": 32591,
+      "cached_tokens": 9600,
+      "completion_tokens": 1543
+    }
+  ]
+}

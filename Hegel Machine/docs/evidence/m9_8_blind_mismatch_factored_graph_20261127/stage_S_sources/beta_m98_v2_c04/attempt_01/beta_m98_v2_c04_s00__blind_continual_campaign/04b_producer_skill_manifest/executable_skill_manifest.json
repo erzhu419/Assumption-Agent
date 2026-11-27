@@ -1,0 +1,99 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m98_v2_c04_s00_8d7a725cc787",
+    "source_hash": "8d7a725cc78725232a7e9c0787704e0ccf1049fd56df8e6c270db241e5f17331",
+    "parent_ids": [],
+    "source_episode_id": "beta_m98_v2_c04_s00__blind_continual_campaign",
+    "task_id": "beta_m98_v2_c04_s00__blind_continual_campaign",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_m98_banks.py",
+        "archived_relpath": "producers/tmp__audit_m98_banks.py",
+        "bytes": 1638,
+        "sha256": "fbbbc598823a152a12d16db8a26b0d4f3a3c6e8706777d91fce459f0ae5ccd93"
+      },
+      {
+        "container_path": "/tmp/audit_m98_rosette.py",
+        "archived_relpath": "producers/tmp__audit_m98_rosette.py",
+        "bytes": 2224,
+        "sha256": "463d7011a6c3e64b2c23d1f0bea77002b08fc4c2cf238b89234f456064e73c8a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && printf '\\n--- archive ---\\n' && if [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 4 -type f -printf '%p %s bytes\\n' | head -80; fi; printf '\\n--- public batch structure ---\\n'; cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_batch.pkl','rb') as f: a=pickle.load(f)\nprint(type(a).__name__,len(a))\ndef describe(x, p='', depth=0):\n if isinstance(x,dict) and depth < 4:\n  for k,v in x.items(): describe(v,p+'/'+str(k),depth+1)\n elif isinstance(x,np.ndarr",
+      "cd /holdout_task && cat validate_public_schema.py; printf '\\n--- archive ---\\n'; if [ -d /tmp/hegel_continual_archive ]; then du -ah /tmp/hegel_continual_archive | sort -h | tail -40; else echo absent; fi; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nb=pickle.load(open('public_batch.pkl','rb')); print('studies',len(b)); s=b[0]['study']; print('keys',list(s)); print('modes',np.shape(s['source_modes'])); print('sensors',s['sensor_ij']); print('banks',s['row_bank_id'].reshape(-1,4)); c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; print('ref range',X.min",
+      "cd /holdout_task && cat > batch_solver.py <<'PY'\n\"\"\"Steady advection–diffusion–reaction tomography on a tensor grid.\"\"\"\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, length, robin):\n    n = len(kappa)\n    h = length / (n - 1)\n    faces = (kappa[:-1] + kappa[1:]) / (2 * h**2)\n    lower = -faces - np.maximum(velocity[1:], 0) / h\n    upper = -faces - np.maximum(-velocity[:-1], 0) / h\n    upper[0], lower[-1] = -kappa[0] / h**2, -kappa[-1] / h**2\n    main = np.r_[-upper[0] + robin / h,\n                 -lower[:-1] - u",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, numpy as np\nfrom scipy.linalg import solve\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nnx,ny=s['nx'],s['ny']; modes=s['source_modes']; n=len(modes)\ndef axis(k,v,h,r):\n    a=np.zeros((len(k),len(k)))\n    for i in range(len(k)):\n        if i in (0,len(k)-1):\n            a[i,i]=k[i]/h**2+r/h\n            a[i,1 if i==0 else i-1]=-k[i]/h**2\n        else:\n            km=(k[i-1]+k[i])/2; kp=(k[i]+k[i+1])/2\n            a[i,i-1]=-km/h**2-max(v[i],0)/h\n           ",
+      "cat > /tmp/audit_m98_rosette.py <<'PY'\nimport pickle\nimport runpy\nimport numpy as np\n\nm = runpy.run_path('/holdout_task/batch_solver.py')\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\nc = s['sensor_calibration_sweeps']\nx, y = c['ref_rosette'], c['raw_rosette']\naff = np.c_[np.ones(len(x)), x]\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\nquad = np.column_stack([aff, x*x] + [x[:,i]*x[:,j] for i,j in pairs])\ncubic = np.column_stack([quad, x*x*x])\nrational = np.column_stack([aff, x/(1+x*x)] + [(x[:,i]+sign*x[:,j])/(1+(x[:,i]-sign*x[:,j])**2) for i,j in pairs f",
+      "cat > /tmp/audit_m98_banks.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nm = runpy.run_path('/holdout_task/batch_solver.py')\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\ns = item['study']; c = s['sensor_calibration_sweeps']; x,y = c['ref_rosette'],c['raw_rosette']\nD = np.c_[np.ones(len(x)),x]; C = np.linalg.lstsq(D,y,rcond=None)[0]\nprint('affine intercept', C[0], 'mixing perturbation from diagonal', C[1:]-np.diag(np.diag(C[1:])))\nfor k,v in c['single_bank_sweeps'].items():\n    a = np.asarray(v); print('single-bank',k,'shape',a.shape,'first rows',a[:2])\nobs = m['_calib"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_m98_rosette.py",
+      "primary_producer_container_path": "/tmp/audit_m98_rosette.py",
+      "selected_channels": [
+        "fam_elliptic_transport_and_factored_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5174,
+        "sha256": "486dc9dd838145e366a07e2e11653b1969f038f26dc25c9b0e56c269d4a9dcde",
+        "content_addressed_ref": "content_addressed_blobs/486dc9dd838145e366a07e2e11653b1969f038f26dc25c9b0e56c269d4a9dcde.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8d7a725cc78725232a7e9c0787704e0ccf1049fd56df8e6c270db241e5f17331",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat > /tmp/audit_m98_banks.py <<'PY'\nimport pickle, runpy\nimport numpy as np\nm = runpy.run_path('/holdout_task/batch_solver.py')\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\ns = item['study']; c = s['sensor_calibration",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8d7a725cc78725232a7e9c0787704e0ccf1049fd56df8e6c270db241e5f17331",
+        "expected_candidate_sha256": "8d7a725cc78725232a7e9c0787704e0ccf1049fd56df8e6c270db241e5f17331",
+        "computed_candidate_sha256": "8d7a725cc78725232a7e9c0787704e0ccf1049fd56df8e6c270db241e5f17331",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5174
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8d7a725c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": []
+  }
+}

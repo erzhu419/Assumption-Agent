@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "74afe396d5c84665a2889fe375efef52",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:50:13.799625+00:00",
+  "ended_at_utc": "2026-11-27T14:50:35.103785+00:00",
+  "request_sha256": "89d3e8d4f59ad8fd2c7bb040b92d6cb82ff43714866ed8ab71ca22177fb183fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31962,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21903,
+    "cached_tokens": 9600,
+    "completion_tokens": 620
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; sed -n '1,58p' beta_m98_v2_c03_batch_06_solver.py; sed -n '1,20p' beta_m98_v2_c03_batch_03_solver.py; python3 - <<'PY'\\nimport glob,runpy,pickle,numpy as np\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; st=item['study']; sweeps=st['sensor_calibration_sweeps']; ref=sweeps['ref_rosette']; raw=sweeps['raw_rosette']; X=np.c_[np.ones(len(ref)),ref]; print('sweeps',ref.shape,'affine residual quantiles',np.quantile(np.linalg.norm(X@np.linalg.lstsq(X,raw,rcond=None)[0]-raw,axis=1),[0,.5,.9,1])); print('pulses',len(item['campaign_diagnostics'])); mods={f.split('_')[-2]:runpy.run_path(f) for f in sorted(glob.glob('*solver.py'))}; Z=st['Z_nuisance']; project=lambda r:r-Z@np.linalg.lstsq(Z,r,rcond=None)[0];\\nfor a in ['s00','01','03']:\\n S,_=mods[a]['_forward'](st)\\n for b in ['s00','04','06']:\\n  errors=[]\\n  for p in item['campaign_diagnostics']:\\n   t=dict(st,y_obs_raw=p['y_pulse_raw']); y=mods[b]['_calibrate'](t); r=y-S@p['w_pulse']; errors.append(tuple(round(float(x),8) for x in [np.sqrt(np.mean(r*r)),np.sqrt(np.mean(project(r)**2)),np.sqrt(np.mean(y*y))]))\\n  print(a,b,errors)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: open-wall affine baseline -> H2: crossed boundary and calibration comparison on each public pulse; no pulse RMSE measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the operator from the rejected table row\",\"rejected_reason\":\"The gate does not identify whether the boundary, calibration, or optimizer caused the failure.\"}],\"rationale\":\"Calibrate independently from sweeps, then compare per-pulse errors with and without nuisance projection. If no archived pair fits both pulses, inspect the boundary rows and calibration residuals separately before selecting a model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4d06b05b47279fb611260a3d853b3df640f67366687ee4875ea97c26ed6bd6de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21266.12,
+      "usage_known": true,
+      "prompt_tokens": 21903,
+      "cached_tokens": 9600,
+      "completion_tokens": 620
+    }
+  ]
+}

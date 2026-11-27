@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b90c3d606bc34b7d84d8f8f88da2c852",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:56:18.661510+00:00",
+  "ended_at_utc": "2026-11-27T14:57:05.276160+00:00",
+  "request_sha256": "bf4dcdae64e7f6b9dedc88db0b96a3a581198e5419e7830ac93ba57c33a7f5dd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47143,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30138,
+    "cached_tokens": 11136,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; n=len(x)\\nbad=np.max(abs(y),axis=1)>8\\nprint('gross rows',np.flatnonzero(bad),'median shift',np.round(np.median(y[bad],0),3))\\ndef poly(u,degree,diag=False):\\n return np.column_stack([np.ones(len(u)),u]+[np.prod(u[:,i],axis=1) for k in range(2,degree+1) for i in combinations_with_replacement(range(4),k) if not diag or len(set(i))==1])\\nfor mode in ('mix_then_sinh','mix_then_cubic','mix_then_sinh_shift','own_sinh','own_cubic','own_sinh_shift','forward_poly2','forward_poly3','inverse_poly2','inverse_poly3'):\\n def fit(u,v):\\n  if 'poly' in mode:\\n   f=lambda q:poly(q,int(mode[-1])); b=np.linalg.lstsq(f(u),v,rcond=None)[0];return lambda q:f(q)@b\\n  affine=np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]\\n  if mode.startswith('mix'):\\n   def pred(p,q):\\n    w=q@p[4:20].reshape(4,4); o=p[:4]; s=p[20:24];\\n    if mode.endswith('cubic'): return o+w+s*w**3\\n    if mode.endswith('shift'):\\n     h=p[24:28]; return o+(np.sinh(w*s+h)-np.sinh(h))/s\\n    return o+np.sinh(w*s)/s\\n  else:\\n   def pred(p,q):\\n    w=q@p[4:20].reshape(4,4); o=p[:4]; s=p[20:24];\\n    if mode.endswith('cubic'): return o+w+s*q**3\\n    if mode.endswith('shift'):\\n     h=p[24:28]; return o+w+p[28:32]*(np.sinh(q*s+h)-np.sinh(h)-q*s*np.cosh(h))\\n    return o+w+p[24:28]*(np.sinh(q*s)-q*s)\\n  p=np.r_[affine.ravel(),[.5]*4];\\n  if mode.endswith('shift'):p=np.r_[p,[0.]*4]\\n  if mode.startswith('own') and not mode.endswith('cubic'):p=np.r_[p,[1.]*4]\\n  opt=least_squares(lambda p:(pred(p,u)-v).ravel(),p,max_nfev=350); return lambda q:pred(opt.x,q)\\n u,v=(y,x) if mode.startswith('inverse') else (x,y); keep=np.flatnonzero(~bad); f=fit(u[keep],v[keep]); e=f(u)-v\\n cv=[]\\n for ids in np.array_split(np.random.default_rng(6).permutation(keep),5):\\n  tr=np.setdiff1d(keep,ids); cv.append(fit(u[tr],v[tr])(u[ids])-v[ids]);\\n print(mode,'clean RMS',np.round(np.sqrt(np.mean(e[keep]**2,0)),6),'worst CV rms',round(max(np.sqrt(np.mean(z*z)) for z in cv),6),'gross offsets',np.round(e[bad],3).tolist() if mode in ('mix_then_sinh','own_cubic') else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic hereditary exponential relaxation variable projection' | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent raw-channel saturation -> H2 coupled nonlinear bridge with three grossly shifted calibration rows; separable inverse worst-fold total-load RMSE is at least 0.448.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the three extreme rows as ordinary saturation\",\n      \"rejected_reason\": \"Three successive points on the same sweep shift all four channels together by roughly 13–15 units, while their differences remain small. That pattern warrants testing a shared offset separately from the bridge law.\"\n    }\n  ],\n  \"rationale\": \"Test whether the extreme rows share an additive shift and compare forward bridge equations on held-out ordinary calibration points. The winning equation will determine how to invert the bridge before fitting chamber memory and drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ab0390210e2451025ec88b9019c46abc1442cfa059e34760f6a534a329486e62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46572.83,
+      "usage_known": true,
+      "prompt_tokens": 30138,
+      "cached_tokens": 11136,
+      "completion_tokens": 1392
+    }
+  ]
+}

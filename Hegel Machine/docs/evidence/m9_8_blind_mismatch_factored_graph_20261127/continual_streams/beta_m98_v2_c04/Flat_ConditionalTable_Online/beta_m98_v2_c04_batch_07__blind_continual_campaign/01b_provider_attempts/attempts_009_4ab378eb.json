@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ab378ebec2744cc8231e4381afdc8d8",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:53:15.102589+00:00",
+  "ended_at_utc": "2026-11-27T14:53:55.207017+00:00",
+  "request_sha256": "fec4f0d4a0c1ce2b6c6b5664dc1bcfa8b7b68f7798d1519722641e144ac283a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44941,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25180,
+    "cached_tokens": 9600,
+    "completion_tokens": 1239
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_calibration_cv.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\nb = m._rosette_basis(x)\\n# Independent extra terms test omitted pairwise contrasts and the leading\\n# perturbation from dividing a response by 1 + a * contrast**2.\\ncontrast = np.stack([x[:, j] - x[:, k] for j in range(4) for k in range(j+1,4)], axis=1)\\npair = np.stack([x[:, j] * x[:, k] for j in range(4) for k in range(j+1,4)], axis=1)\\nstratum = np.count_nonzero(x, axis=1)\\nfold = np.zeros(len(x), dtype=int)\\nfor a in np.unique(stratum):\\n    ii = np.flatnonzero(stratum == a); fold[ii] = np.arange(len(ii)) % 5\\nerrors = {name:np.empty_like(y) for name in ('saved','shared','pairwise','rational')}\\nfor f in range(5):\\n    t = fold != f; v = ~t\\n    w = m._fit_rosette(x[t], y[t]); p = np.einsum('njk,jk->nj',b,w)\\n    errors['saved'][v] = p[v]-y[v]\\n    r = p-y\\n    keep = t[:,None] & (abs(r) < 1e-4)\\n    def coeff(q):\\n        return np.column_stack((q[:4], q[4:8], q[4:8,None]*q[8:]))\\n    q0 = np.r_[w[:,0],w[:,1],np.mean(w[:,2:]/w[:,1,None],axis=0)]\\n    q = least_squares(lambda q:(np.einsum('njk,jk->nj',b,coeff(q))-y)[keep],q0).x\\n    errors['shared'][v] = (np.einsum('njk,jk->nj',b,coeff(q))-y)[v]\\n    for j in range(4):\\n        for name, extra in [('pairwise',pair), ('rational', -p[:,j,None]*contrast**2)]:\\n            design = np.column_stack([b[:,j],extra]); k = keep[:,j]\\n            coef = np.linalg.lstsq(design[k],y[k,j],rcond=None)[0]\\n            errors[name][v,j] = design[v]@coef-y[v,j]\\nfor a in np.unique(stratum):\\n    group = stratum == a\\n    print('active channels',a,'n',group.sum())\\n    for name,e in errors.items():\\n        # Common cap keeps bad sweep readings visible without letting them dominate.\\n        rmse = np.sqrt(np.mean(np.minimum(abs(e[group]),1e-4)**2,axis=0))\\n        print(name,'worst bank capped OOF RMSE',float(rmse.max()),'median abs',float(np.median(abs(e[group]))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_calibration_cv.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent nonlinear rosette fits → H2 shared or augmented calibration only if it improves held-out sweep errors; the saved solver's worst public pulse-by-shift error is 1.98e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay or classification tests\",\n      \"rejected_reason\": \"The study has neither relay states nor classes. The prior audit already showed that nuisance projection leaves over 99% of each pulse's residual norm, so it is not hiding a large calibration error.\"\n    }\n  ],\n  \"rationale\": \"The prior sweep audit used fitted residuals, not held-out predictions. Compare calibration models on held-out real sweeps by bank and excitation type. Pursue an alternative only if it reduces the worst held-out error and then improves the independent tracer pulses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0bb8e6c969b1ad8a375f4e83877ec716fca56ee8d3dad6e5bd0dc1a9a068c5a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40059.88,
+      "usage_known": true,
+      "prompt_tokens": 25180,
+      "cached_tokens": 9600,
+      "completion_tokens": 1239
+    }
+  ]
+}

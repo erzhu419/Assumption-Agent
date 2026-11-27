@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1144eafdb0324fa2a9dccde15415b585",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:07:33.862471+00:00",
+  "ended_at_utc": "2026-11-27T15:08:06.955502+00:00",
+  "request_sha256": "b70c39d377c414931dfd65a21d163f2436793a367afa15ac5bd758b7a0cfbe04",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70119,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35183,
+    "cached_tokens": 11136,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_material07.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ni = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd = i['dataset']; tr, te, c = d['train'], d['test'], i['campaign_diagnostics']\\nS = m._stress_calibration(d['calibration_load_cells']); dt,t=d['past_dt'],d['eval_times']\\nX,_ = m._standardize(tr,te)\\n_,C = m._standardize({k:v[:0] for k,v in c.items()},c)\\nD = m._design(tr,X,S,dt,t)\\nY = tr['strain_curves_obs']-tr['strain_0'][:,None]; V=tr['instant_rate_obs']; labs=tr['lab_id']\\n\\ndef fit(j, mode):\\n    def sub(T):\\n        a,b=D(T); return a[j],b[j]\\n    T,H=m._fit(sub,Y[j],V[j])\\n    if mode=='current': return T,H\\n    def pair(p):\\n        ts=np.exp(p[:2]); a,b=sub(ts); h=p[2:]; return a@h-Y[j],b@h-V[j]\\n    p=np.r_[np.log(T),H]\\n    e,f=pair(p)\\n    def mad(z,axis=None):\\n        return 1.4826*np.median(np.abs(z-np.median(z,axis=axis,keepdims=True)),axis=axis)\\n    scale=mad(e) if mode!='per_time' else np.maximum(mad(e,axis=0),.5*mad(e))\\n    rate=mad(f)\\n    def fun(p):\\n        e,f=pair(p); return np.r_[(e/scale).ravel(),f/rate]\\n    ans=least_squares(fun,p,loss='cauchy' if mode=='tighter' else 'soft_l1',f_scale=1.1 if mode=='tighter' else 1.5,x_scale='jac',max_nfev=150)\\n    return np.exp(ans.x[:2]),ans.x[2:]\\n\\nfor mode in ('current','tighter','per_time'):\\n    errors=[]; params=[]\\n    for l in np.unique(labs):\\n        j=labs==l; T,H=fit(~j,mode); params.append(T)\\n        a,b=D(T); e=a[j]@H-Y[j]; f=b[j]@H-V[j]\\n        errors.append([np.quantile(abs(z),.9) for z in (e[:,:4],e[:,-4:],f)])\\n    T,H=fit(np.ones(len(labs),bool),mode)\\n    y,v=m._chamber(c,C,S,dt,t,T,H)\\n    e=y+c['strain_0'][:,None]-c['strain_curves_obs']; f=v-c['instant_rate_obs']\\n    ce=[]\\n    for l in np.unique(c['lab_id']):\\n        j=c['lab_id']==l\\n        ce.append([np.sqrt(np.mean(z*z)) for z in (e[j,:4],e[j,-4:],f[j])])\\n    print(mode,'taus',T,'held-out tau span',np.ptp(params,axis=0),'worst held-out benchtop p90',np.max(errors,axis=0),'worst verification lab RMSE',np.max(ce,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_material07.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: a robust benchtop fit supports the exponential chamber gate -> H2: test whether tighter or time-dependent residual weighting stabilizes the slow relaxation time; worst verification-lab RMSE is 0.00534 for strain and 0.00658 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the bridge saturation and panel-shift audits\",\n      \"rejected_reason\": \"Those checks are already bound to the current artifact. The remaining observed sensitivity is the slow relaxation time, which ranged from 3.58 to 3.78 across held-out labs.\"\n    }\n  ],\n  \"rationale\": \"Compare residual weighting with scales fitted inside each benchtop fold. Change the estimator only if a challenger stabilizes the slow branch without a meaningful loss on held-out benchtop or chamber predictions. No target artifact is edited by this audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5f5760fbb9a7cd04036aed25cc082f0d0c82651b10bb091d132317c4e2e07b5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33474.7,
+      "usage_known": true,
+      "prompt_tokens": 35183,
+      "cached_tokens": 11136,
+      "completion_tokens": 1252
+    }
+  ]
+}

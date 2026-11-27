@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28b8ef49e53c43ca84b5be3320acccf7",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:49:39.169210+00:00",
+  "ended_at_utc": "2026-11-27T14:50:07.995616+00:00",
+  "request_sha256": "2a5d944074cd0bd55cbce9942812ef6829691b938da5d861e36b8235fcd9baa2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40104,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26279,
+    "cached_tokens": 11136,
+    "completion_tokens": 1056
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/beta_m98_v2_c01_s00_solver.py').read_text()\\na = src.index('def _calibrate(')\\nb = src.index('def _box_simplex_qp(', a)\\ncal = '''def _calibrate(study):\\n    \\\"\\\"\\\"Fit independent affine responses using both empirical sweep series.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    reference = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    single = sweeps['single_bank_sweeps']\\n    observed = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    calibrated = np.empty_like(observed, dtype=float)\\n    for bank in range(4):\\n        rows = np.asarray(single['bank_id']) == bank\\n        x = np.r_[reference[:, bank], np.asarray(single['ref_signal'])[rows]]\\n        y = np.r_[raw[:, bank], np.asarray(single['raw_readout'])[rows]]\\n        offset, gain = np.linalg.lstsq(\\n            np.column_stack((np.ones(len(x)), x)), y, rcond=None\\n        )[0]\\n        calibrated[:, bank] = (observed[:, bank] - offset) / gain\\n    return calibrated.ravel()\\n\\n\\n'''\\nsrc = src[:a] + cal + src[b:]\\nsrc = '\\\"\\\"\\\"Robin-wall transport tomography with current-campaign bank calibration.\\\"\\\"\\\"\\\\n' + src.split('\\\\n', 1)[1]\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\nsp=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n s=item['study']; out=m.solve_batch(s); k=out['kkt_certificate']; print('weights',out['weights'],'objective',k['primal_objective'],'gap',k['primal_objective']-k['dual_lower_bound'],'terminal range',np.min(out['terminal_field']),np.max(out['terminal_field']))\\n c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps'];\\n for j in range(4):\\n  ix=b['bank_id']==j; xx=b['ref_signal'][ix]; yy=b['raw_readout'][ix]; fit=lambda a,d: np.polynomial.polynomial.polyfit(a,d,1); pred=lambda X,C: np.polynomial.polynomial.polyval(X,C)\\n  print('bank',j,'joint-to-single RMSE',np.sqrt(np.mean((pred(xx,fit(x[:,j],y[:,j]))-yy)**2)),'single-to-joint RMSE',np.sqrt(np.mean((pred(x[:,j],fit(xx,yy))-y[:,j])**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 general rosette fit -> H2 Robin walls with independent affine bank calibration; worst held-out bank RMSE was 1.02e-5 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain full affine or nonlinear cross-bank terms\",\n      \"rejected_reason\": \"The full affine fit does not materially improve held-out error, and inferred off-diagonal gains are only a few parts per million.\"\n    }\n  ],\n  \"rationale\": \"Keep the log-matched Robin operator and fit all gains and offsets from the current campaign. Cross-predict between the two sweep series to detect incompatible calibration protocols before relying on the pooled fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3d30a73842cc0c2ed4a69e7941ee8722a9a1e61ae45d502c0b6906a6cc2acaad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29447.41,
+      "usage_known": true,
+      "prompt_tokens": 26279,
+      "cached_tokens": 11136,
+      "completion_tokens": 1056
+    }
+  ]
+}

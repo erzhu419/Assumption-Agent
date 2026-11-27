@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_v2_c01_s00_c5aa0f7be400",
+    "source_hash": "c5aa0f7be4000ac5d17450ef248dfe1f4b328ab4f29255abdb86b1729a20d849",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_v2_c01_s00__blind_continual_campaign",
+    "task_id": "alpha_m98_v2_c01_s00__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; cat validate_public_schema.py; cat public_asset_index.json; ls -la /tmp/hegel_continual_archive/ 2>/dev/null; find /tmp/hegel_continual_archive/ -maxdepth 2 -type f -printf '%p %s\\n' 2>/dev/null | head -60; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation Cauchy robust IRLS reference-panel alignment imputation' 2>&1; python3 - <<'PY'\nimport pickle\nimport numpy as np\nitems=pickle.load(open('public_batch.pkl','rb'))\nprint('items:',len(items))\ndef inspect(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print('  '*depth,k,end=': ')",
+      "cd /holdout_task; ls -la /tmp/hegel_continual_archive 2>/dev/null || echo 'NO ARCHIVE'; find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s\\n' 2>/dev/null | head -30; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit 2>&1 | head -35; python3 - <<'PY'\nimport numpy as n,pickle,scipy\nx=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; print('scipy',scipy.__version__)\nc=x['calibration_load_cells']; u,v=c['bridge_raw'],c['true_channel_loads']; print('calibration affine vs identity rms',n.std(n.c_[u,n.one",
+      "cd /holdout_task && cat > batch_solver.py <<'PY'\n\"\"\"Calibrate the load bridge and fit a shared two-branch relaxation spectrum.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _axial_load_map(calibration):\n    # The calibration experiments prescribe channel loads and measure bridge output.\n    loads = np.asarray(calibration['true_channel_loads'], dtype=float)\n    bridge = np.asarray(calibration['bridge_raw'], dtype=float)\n    coeff = np.linalg.lstsq(np.column_stack((loads, np.ones(len(loads)))), bridge, rcond=None)[0]\n    return coeff[-1], np.linalg.solve(coeff[:4], np.ones",
+      "set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I /holdout_task/validate_public_schema.py; python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; a=m.solve_batch(d)\n# Reexpress the same measured stresses in a bridge with cross-talk and offsets.\nM=np.array([[1.2,.12,0,-.06],[.1,.85,.15,0],[0,-.16,1.08,.13],[.16,0,.1,.95]])\nb=np.array([.11,-.08,.13,.06]); ",
+      "set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\nc=d['calibration_load_cells']; u,v=c['bridge_raw'],c['true_channel_loads']; pair=np.triu_indices(4)\ndef basis(x,degree):\n    a=np.c_[np.ones(len(x)),x]\n    return np.c_[a,x[:,pair[0]]*x[:,pair[1]]] if degree==2 else a\nfold=np.empty(len(u),int); fold[np.",
+      "set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom itertools import combinations\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\nc=d['calibration_load_cells']; u=np.asarray(c['bridge_raw']); v=np.asarray(c['true_channel_loads']); y=v.sum(1)\n# Contiguous slices by load norm probe transfer beyond the interior, unlike random folds.\nfolds=np.array_s"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5969,
+        "sha256": "6965a69254287febfd575e382e851669c677b7ee279fd98636604be4586da05f",
+        "content_addressed_ref": "content_addressed_blobs/6965a69254287febfd575e382e851669c677b7ee279fd98636604be4586da05f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c5aa0f7be4000ac5d17450ef248dfe1f4b328ab4f29255abdb86b1729a20d849",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "set -e; cd /holdout_task; export OPENBLAS_NUM_THREADS=1; python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom itertools import combinations\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solve",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c5aa0f7be4000ac5d17450ef248dfe1f4b328ab4f29255abdb86b1729a20d849",
+        "expected_candidate_sha256": "c5aa0f7be4000ac5d17450ef248dfe1f4b328ab4f29255abdb86b1729a20d849",
+        "computed_candidate_sha256": "c5aa0f7be4000ac5d17450ef248dfe1f4b328ab4f29255abdb86b1729a20d849",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5969
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c5aa0f7b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

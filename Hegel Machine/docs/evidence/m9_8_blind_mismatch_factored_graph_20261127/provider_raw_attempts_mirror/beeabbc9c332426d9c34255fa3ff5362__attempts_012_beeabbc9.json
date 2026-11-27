@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "beeabbc9c332426d9c34255fa3ff5362",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c02__Flat_LatestFirst__beta_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:58:43.374841+00:00",
+  "ended_at_utc": "2026-11-27T14:59:11.182879+00:00",
+  "request_sha256": "44d530460f85bc091007ffc6749ab97e32c0f1dcde43883532dfc13ca5c1fe99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65201,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33512,
+    "cached_tokens": 11136,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; S,U=m._forward(s); base=m.solve_batch(s); yc=m._calibrate(s); Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); A=S-Z@(P@S); r=yc-Z@(P@yc); cap=s['u_box']; total=s['total_budget']; ridge=s['source_ridge']\\nworst=np.zeros(6); gaps=[]\\nfor k in range(5):\\n    mask=np.arange(len(x))%5!=k\\n    altered={**s,'sensor_calibration_sweeps':{**c,'ref_rosette':x[mask],'raw_rosette':y[mask]}}\\n    out=m.solve_batch(altered); w=out['weights']; cal=m._calibrate(altered); g=A.T@(A@w-r)+ridge*w; nu=out['kkt_certificate']['nu_sum']\\n    pulse=max(np.sqrt(np.mean((m._calibrate({**altered,'y_obs_raw':a['y_pulse_raw']})-S@a['w_pulse']).reshape(len(s['mu_shifts']),-1)**2,axis=1)).max() for a in item['campaign_diagnostics'])\\n    vals=[np.max(abs(cal-yc)),np.linalg.norm(w-base['weights'])/np.linalg.norm(base['weights']),np.linalg.norm(out['terminal_field']-base['terminal_field'])/np.linalg.norm(base['terminal_field']),g@w-nu*total-cap*np.minimum(0,g-nu).sum(),pulse,np.max(abs(out['terminal_field']-np.tensordot(w,U,axes=(0,0))))]\\n    worst=np.maximum(worst,vals)\\n    assert abs(w.sum()-total)<1e-10 and np.min(w)>=-1e-10 and np.max(w)<=cap+1e-10\\n    print('fold',k,'calibration max shift, weights relative shift, field relative shift, full-calibration certificate gap, pulse RMSE, field consistency:',*[f'{v:.6g}' for v in vals])\\nprint('worst:',*[f'{v:.6g}' for v in worst])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls with six-term calibration; worst out-of-fold sweep p90 is 2.24e-5, and nuisance correction lowers worst held-out bank RMSE from 0.243 to 0.107.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis and held-out nuisance comparisons\",\n      \"rejected_reason\": \"Those checks already distinguished the relevant models. They did not measure how calibration uncertainty propagates into the returned weights, field, and certificate.\"\n    }\n  ],\n  \"rationale\": \"Refit calibration after withholding each fifth of the real sweeps and propagate that change through the full solver. A material shift in weights, terminal field, or certificate gap would warrant investigating calibration leverage before editing; stable outputs would support retaining the verified candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "93a3780152569657cc5ff15df825aea42a89ac9d6fb64cda80dedead37b7bca8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27709.86,
+      "usage_known": true,
+      "prompt_tokens": 33512,
+      "cached_tokens": 11136,
+      "completion_tokens": 1009
+    }
+  ]
+}

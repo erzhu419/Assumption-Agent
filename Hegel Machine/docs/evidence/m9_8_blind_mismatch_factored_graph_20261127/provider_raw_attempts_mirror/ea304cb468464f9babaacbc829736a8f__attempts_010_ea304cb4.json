@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea304cb468464f9babaacbc829736a8f",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:48:57.280431+00:00",
+  "ended_at_utc": "2026-11-27T14:49:45.528515+00:00",
+  "request_sha256": "c5aa3808a9f8475ff2a9b4293021a86f4101e22e2393f41987f88abd60627a60",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63210,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34935,
+    "cached_tokens": 9600,
+    "completion_tokens": 1902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nP=/tmp/hegel_continual_archive/alpha_m98_v2_c01_batch_05_solver.py\\nsed '/^def _chamber_increment/,$d' \\\"$P\\\" > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _chamber_increment(hold, features, times, tau, theta):\\n    \\\"\\\"\\\"Reset the load history and apply the chamber's separate creep response.\\\"\\\"\\\"\\n    drift = features @ theta[2:]\\n    design = np.column_stack((drift, drift**2, hold, np.ones(len(hold))))\\n    creep = design @ _CHAMBER_COEFFICIENTS\\n    strain = (hold[:, None] * theta[:2]) @ (-np.expm1(-times[:, None] / tau)).T\\n    strain += creep[:, :1] * times + creep[:, 1:] * (-np.expm1(-times))\\n    rate = hold * (theta[:2] @ (1 / tau)) + creep.sum(axis=1)\\n    return strain, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    bridge = _axial_load_map(dataset['calibration_load_cells'])\\n    x_train, x_test = _features(train, test)\\n    source = _specimen(train, x_train, bridge)\\n    tau, theta = _fit(source, dt, times,\\n                      train['strain_curves_obs'] - train['strain_0'][:, None],\\n                      train['instant_rate_obs'])\\n    _, hold, features = _specimen(test, x_test, bridge)\\n    increment, rate = _chamber_increment(hold, features, times, tau, theta)\\n    return dict(estimated_taus=tau, hereditary_weights=theta,\\n                predicted_strain=test['strain_0'][:, None] + increment, initial_rate_pred=rate)\\nPY\\ncat >/tmp/causal_probe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n import chamber_probe as p\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm,g,t,Y,R,theta=p.m,p.g,p.t,p.Y,p.R,p.theta\\nx=m._features(g,g)[0]; past,h,F=m._specimen(g,x,p.bridge); q=F@theta[2:]; E=Y-(h[:,None]*theta[:2])@R.T\\nT=np.r_[t,1.]; S=np.r_[-np.expm1(-t),1.]; labs=g['lab_id']\\nA=np.column_stack((q,q*q,h,np.ones(len(h)))); B=np.array([T,S]); M=np.einsum('ni,bk->nkib',A,B).reshape(len(A),len(T),-1)\\nco=np.linalg.lstsq(M.reshape(-1,8),E.ravel(),rcond=None)[0].reshape(4,2)\\nwith open('/holdout_task/batch_solver.py','a') as f: f.write('\\\\n\\\\n_CHAMBER_COEFFICIENTS = np.array('+repr(co.tolist())+')\\\\n')\\nprint('material',p.tau,theta,'baseline creep',co)\\nbenchC,benchR=m._branches(p.sp,p.dt,t,p.tau)\\nprint('train strain/rate MAD',np.median(abs(benchC@theta[:2]+(p.sp[2]@theta[2:])[:,None]*t-p.observed(p.tr)[:,:-1])),np.median(abs(benchR@theta[:2]+p.sp[2]@theta[2:]-p.observed(p.tr)[:,-1])))\\n# Spatial inputs orthogonal to a free specimen-level creep amplitude identify the other mode.\\ndef ker(kind,z):\\n if kind=='exp':return np.r_[-np.expm1(-t*z)/z,1.]\\n if kind=='log':return np.r_[np.log1p(t*z)/z,1.]\\n if kind=='rat':return np.r_[t/(1+t*z),1.]\\n if kind=='pow':return np.r_[t/np.sqrt(1+t*z),1.]\\n if kind=='sqrt':return np.r_[2*t/(np.sqrt(1+t*z)+1),1.]\\n if kind=='t':return T\\nC=np.c_[h,h*0+1]\\nfor ka,kb in [('t','log'),('t','rat'),('sqrt','rat'),('t','pow'),('exp','rat'),('log','rat')]:\\n def solve(z):\\n  a,b=ker(ka,z[0]),ker(kb,z[1]); ap=a-(a@b)/(b@b)*b; ep=E-(E@b)[:,None]/(b@b)*b\\n  coef=np.linalg.lstsq(C,ep@ap/(ap@ap),rcond=None)[0]; aamp=C@coef; bamp=(E-aamp[:,None]*a)@b/(b@b)\\n  return aamp[:,None]*a+bamp[:,None]*b-E,coef,bamp\\n fit=least_squares(lambda z:solve(z)[0].ravel(),[.12,.8],bounds=(.0001,8)); e,coef,amp=solve(fit.x)\\n print(ka,kb, np.round(fit.x,4),np.round(coef,4),'free amplitude RMSE',round(np.sqrt(np.mean(e**2)),5))\\n if ka=='sqrt':\\n  print('lab q amplitude, hold and missing',np.round(np.c_[labs,q,amp,h,np.isnan(g['coupon_features_raw']).any(1)],4)); print('corr of free mode',np.round(np.corrcoef(np.c_[amp,q,q*q,x,h,past].T)[0],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/causal_probe.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset with a single drift kernel -> H2 reset with two shared temporal modes; the current deployable baseline has worst held-out-lab strain/rate RMSE 0.052/0.077.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy a two-mode fit with free amplitudes per coupon\",\n      \"rejected_reason\": \"The amplitudes depend on measured chamber responses and are unavailable at deployment; the fit is useful only for identifying a transferable law.\"\n    }\n  ],\n  \"rationale\": \"Write and schema-test the best simple held-out-lab baseline first. Then test whether hold stress explains one temporal mode while an unconstrained creep amplitude absorbs the other. A near-noise-floor result would justify replacing the quadratic surrogate only if the remaining amplitude can also be predicted on held-out labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bf4d34ee09260c6c6e305de0d30199869e834e0b34ed83675c204f57664d54b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48736.4,
+      "usage_known": true,
+      "prompt_tokens": 34935,
+      "cached_tokens": 9600,
+      "completion_tokens": 1902
+    }
+  ]
+}

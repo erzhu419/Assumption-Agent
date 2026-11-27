@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a6d49fdf41d347c09e50d2b131149b80",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:02:34.871578+00:00",
+  "ended_at_utc": "2026-11-27T15:03:10.191919+00:00",
+  "request_sha256": "b7e18bd98d5c064a143ea58f15da97755881505fd4057d6fb151739c6b304a34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73348,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37152,
+    "cached_tokens": 9600,
+    "completion_tokens": 1350
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m98_transfer_cv.py <<'PY'\\nimport numpy as np, pickle\\nfrom scipy.optimize import least_squares\\nz=dict(np.load('/tmp/m98_arrays.npz')); globals().update(z)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; strata=it['campaign_diagnostics']['stratum']; v=th[2]+x@th[3:]; later=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; H=past@(-np.expm1(-dt[:,None]/tau)*np.exp(-later[:,None]/tau)); G=(hold[:,None]-H)*th[:2]; target=np.c_[yc,yr]; scale=np.r_[np.full(len(t),.02),.05]\\nxs=x/np.std(x,axis=0); specs={'base':(None,0),'x0':(xs[:,[0]],.5),'x2':(xs[:,[2]],.5),'feature_shrink':(xs,1.5),'x02_shrink':(xs[:,[0,2]],1.5),'reset_fast':(None,0),'reset_slow':(None,0),'reset_both':(None,0),'amp_slow':(None,0),'linear_feature':(xs,1.5)}\\ndef pred(p,name):\\n T=tau*np.exp(p[:2]); s=np.exp(p[3]); K=-s*np.expm1(-t/s); b=np.c_[-np.expm1(-t[None,:]/T[:,None]),1/T]; A=G.copy(); F,pen=specs[name]; drift=np.exp(p[2])*v; out=0.\\n if name.startswith('reset_'):\\n  j={'reset_fast':[0],'reset_slow':[1],'reset_both':[0,1]}[name]; A[:,j]+=H[:,j]*th[j]*p[4:]\\n if name=='amp_slow': A[:,1]*=1+p[4]\\n if F is not None:\\n  if name=='linear_feature': out=(F@p[4:])[:,None]*np.r_[t,1.]\\n  else: drift+=F@p[4:]\\n return A@b+drift[:,None]*np.r_[K,1.]+out\\n\\ndef fit(name,m):\\n F,pen=specs[name]; n=F.shape[1] if F is not None else (2 if name=='reset_both' else int(name!='base')); p0=np.r_[[.004,.15,.21,.06],np.zeros(n)];\\n def err(p): return np.r_[((pred(p,name)[m]-target[m])/scale).ravel(),pen*p[4:]/.02]\\n return least_squares(err,p0,loss='soft_l1',f_scale=1.5,bounds=(-4,4)).x\\n\\ndef cv(name,eligible,groups):\\n e=np.full_like(target,np.nan)\\n for g in np.unique(groups[eligible]):\\n  m=eligible&(groups==g); e[m]=pred(fit(name,eligible&~m),name)[m]-target[m]\\n return e\\n\\ndef metrics(e):\\n a=abs(e); result=[]\\n for g in (labs,strata):\\n  result.extend(np.max([[np.median(a[g==l,:-1]),np.median(a[g==l,-1])] for l in np.unique(g)],axis=0))\\n return np.round([*result,max(np.median(a[:,:-1],axis=0)),np.quantile(a[:,-2],.90)],5)\\nallrows=np.ones(len(labs),bool)\\nfor name in specs:\\n p=fit(name,allrows); print(name,'LOLO',metrics(cv(name,allrows,labs)),'LOSO',metrics(cv(name,allrows,strata)),'p',p.round(5))\\nfor outer in (labs,strata):\\n e=np.empty_like(target)\\n for g in np.unique(outer):\\n  m=outer==g; scores={}\\n  for name in specs:\\n   a=abs(cv(name,~m,outer)[~m]); scores[name]=np.mean(np.log1p((a/scale)**2))\\n  name=min(scores,key=scores.get); e[m]=pred(fit(name,~m),name)[m]-target[m]; print('nested selection',g,name)\\n print('nested',metrics(e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_transfer_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Shared saturating drift → test feature-specific drift and partial chamber memory reset; current worst-lab held-out medians are 0.02645 strain and 0.03043 rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the best single-feature correction from the initial scan\",\"rejected_reason\":\"Several features were screened against the same labs, so the apparent gain may reflect selection rather than transfer.\"}],\"rationale\":\"Test whether a feature correction generalizes across labs and strata, and whether a change to the pre-hold memory explains the same residuals. Select within outer folds to check whether the gain survives model selection before changing the artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4412f4444088ccef80af4c7ae6d6c61b5517f30e92bf85d56721f23373e8e03c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35277.65,
+      "usage_known": true,
+      "prompt_tokens": 37152,
+      "cached_tokens": 9600,
+      "completion_tokens": 1350
+    }
+  ]
+}

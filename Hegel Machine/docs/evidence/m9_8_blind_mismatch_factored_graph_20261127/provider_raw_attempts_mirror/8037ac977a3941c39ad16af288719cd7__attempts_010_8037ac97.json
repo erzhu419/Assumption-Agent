@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8037ac977a3941c39ad16af288719cd7",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:30:25.629113+00:00",
+  "ended_at_utc": "2026-11-27T14:31:02.415667+00:00",
+  "request_sha256": "7b2721023804f2a401e4c891ed04689255ec64f05a022a6976d0fdf84eae32a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68038,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35827,
+    "cached_tokens": 11136,
+    "completion_tokens": 1395
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f: item = pickle.load(f)[0]\\nd = item['dataset']; tr, te, g = d['train'], d['test'], item['campaign_diagnostics']\\ndt, t = d['past_dt'], d['eval_times']; stress = m._stress_calibration(d['calibration_load_cells'])\\no = m.solve_batch(d); z, w = o['estimated_taus'], o['hereditary_weights']\\nassert all(np.isfinite(a).all() for a in o.values()) and .05 < z[0] < z[1] < 25\\nfor lab in np.unique(te['lab_id']):\\n    panel = te['ref_coupons'][te['lab_id'] == lab]\\n    assert len(panel) > 1 and np.median(np.std(panel, axis=0)) > 0\\n\\ndef errors(y, r):\\n    return np.sqrt(np.mean(y*y)), np.max(np.sqrt(np.mean(y*y, axis=0))), np.sqrt(np.mean(r*r))\\n# Unsupervised reference alignment is fixed on the prescribed joint panel;\\n# each fold refits all material parameters without the held-out lab's labels.\\nx = m._standardize(tr, te); mat = m._design(tr, x, stress, dt, t); y = tr['strain_curves_obs'] - tr['strain_0'][:,None]; r = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    q = tr['lab_id'] == lab\\n    def training(taus): return tuple(a[~q] for a in mat(taus))\\n    zz, ww = m._fit(training, y[~q], r[~q]); a, b = mat(zz)\\n    print('material held-out lab', lab, 'taus', zz, 'theta max shift', np.max(np.abs(ww-w)), 'curve/worst horizon/rate', errors(a[q]@ww-y[q], b[q]@ww-r[q]))\\n\\nsite = {k:np.concatenate((tr[k],te[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\nxg = m._reference_standardize({k:np.concatenate((site[k],g[k])) for k in site})[-len(g['lab_id']):]\\nxg = np.where(np.isfinite(xg), xg, np.nanmean(x, axis=0))\\na,b = m._design(g,xg,stress,dt,t)(z)\\ny = g['strain_curves_obs'] - g['strain_0'][:,None]; r = g['instant_rate_obs']; yp,rp = m._chamber_predict(g,stress,t,z,w); yp -= g['strain_0'][:,None]\\nlab = g['lab_id']; _, inv, counts = np.unique(lab,return_inverse=True,return_counts=True); single = counts[inv] == 1; missing = np.isnan(g['coupon_features_raw']).any(axis=1)\\nfor label,q in [('all',np.ones(len(lab),dtype=bool)),('complete panel',~(single|missing)),('missing features',missing),('singleton reference',single)]:\\n    base = errors(a[q]@w-y[q],b[q]@w-r[q]); proposed = errors(yp[q]-y[q],rp[q]-r[q]); print('chamber',label,'baseline',base,'candidate',proposed)\\n    if label != 'singleton reference': assert max(proposed) < max(base)\\nassert max(errors(yp[~single]-y[~single],rp[~single]-r[~single])) < .015\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop law → H2 chamber-local two-mode drift routing; held-out complete labs reached worst-horizon strain RMSE 0.00704, while the diagnostic singleton reached 0.384 and no deployment lab has a singleton panel.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a singleton-specific calibration\",\n      \"rejected_reason\": \"The single labeled coupon cannot identify a transferable reference correction, and all deployment labs have at least five reference rows.\"\n    }\n  ],\n  \"rationale\": \"Compare the exact solver against the unchanged benchtop law on the same diagnostic slices, and refit material parameters with each train lab held out. These checks distinguish a deployment-law improvement from an unstable material fit or a pooled result that hides a failing slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e18f07183ba7be23c85666fcb56cb7c44c56d92662f10502a93aecee3b15e877",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36745.05,
+      "usage_known": true,
+      "prompt_tokens": 35827,
+      "cached_tokens": 11136,
+      "completion_tokens": 1395
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2bfd9861338c4aa1a89e0dba99448c90",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:58:32.593212+00:00",
+  "ended_at_utc": "2026-11-27T14:59:00.651537+00:00",
+  "request_sha256": "ba959f912ad03259a21f3e9dca7685f0810c8ce7c96fc027b94f2c4860d11485",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71201,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39543,
+    "cached_tokens": 14208,
+    "completion_tokens": 1017
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: p=pickle.load(f)[0]\\nd=p['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m._features(tr,te); t=d['eval_times']; dt=d['past_dt']; c=d['calibration_load_cells']; b=m._fit_bridge(c); past,hold=m._loads(tr,b); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; out=m.solve_batch(d)\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nfor lab in np.unique(tr['lab_id']):\\n    mask=tr['lab_id']!=lab\\n    tau,theta=m._fit(x[:n][mask],past[mask],hold[mask],dt,t,yc[mask],yr[mask]); a,r=m._design(x[:n][~mask],past[~mask],hold[~mask],dt,t,tau)\\n    e=(a@theta).reshape(-1,len(t))-yc[~mask]; er=r@theta-yr[~mask]\\n    print('benchtop held-out lab',lab,'max horizon median abs error',np.median(abs(e),axis=0).max(),'rate median abs error',np.median(abs(er)),'tau',tau)\\n    assert np.median(abs(e),axis=0).max()<.05 and np.median(abs(er))<.04\\nh=m._decode_bridge(te['hold_channel_raw'],b).sum(axis=-1); step=1e-6\\nfor name,z,raw in [('train past',past,tr['past_channel_raw']),('train hold',hold,tr['hold_channel_raw']),('test hold',h,te['hold_channel_raw'])]:\\n    decoded=m._decode_bridge(raw,b).reshape(-1,4); err=np.max(abs(m._bridge_basis(decoded)@b-raw.reshape(-1,4))); print('bridge inversion',name,err); assert err<1e-8\\npred,rate=m._chamber(x[n:],h,np.array([0.,step]),out['estimated_taus'],out['hereditary_weights']); er=np.max(abs(pred[:,1]/step-rate)); print('worst deployment initial-rate derivative discrepancy',er)\\nassert np.all(pred[:,0]==0) and er<2e-5 and np.allclose(rate,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (drift omitted from the fast chamber mode) -> H2 (hold load and drift drive both reset modes); worst held-out-lab chamber curve/rate RMSE is 0.00842/0.00507, and the host measured strain/rate MAE of 0.001519/0.001208.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t08\"]},\"considered_alternatives\":[{\"option\":\"Expand the chamber model further\",\"rejected_reason\":\"The tested memory and interaction terms did not improve both outputs on held-out labs, and the host probe confirms low errors on the saved solver.\"}],\"rationale\":\"Verify the saved solver in isolated Python. A failed lab slice would warrant revisiting the intrinsic fit; a failed bridge round trip or initial derivative would identify an inversion or chamber handoff bug before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "75c364248684ae7c106a901d1e76f4687b4b70ee263fa589d9b8f30edd01c631",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28016.9,
+      "usage_known": true,
+      "prompt_tokens": 39543,
+      "cached_tokens": 14208,
+      "completion_tokens": 1017
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6a0988b1d914dd7970bb0f576d76e8d",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:43.265530+00:00",
+  "ended_at_utc": "2026-11-27T14:58:29.069875+00:00",
+  "request_sha256": "b81d11e13bcf3089f4ff6519fa62a4f9d14edc384381c2dc16a573377ce8724a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51574,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29082,
+    "cached_tokens": 11136,
+    "completion_tokens": 1599
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ns = s.replace('from scipy.sparse import', 'from scipy.optimize import least_squares\\\\nfrom scipy.sparse import', 1)\\na = s.index('def _fit_rosette(study):')\\nb = s.index('\\\\ndef ', a + 1)\\ns = s[:a] + '''def _fit_rosette(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref, raw = (np.asarray(sweeps[k]) for k in ('ref_rosette', 'raw_rosette'))\\n    peak = np.max(np.abs(raw), axis=1)\\n    center = np.median(peak)\\n    keep = peak <= center + 10 * np.median(np.abs(peak - center))\\n    design = np.stack([_rosette_design(ref[keep], j) for j in range(4)], axis=1)\\n    observed = raw[keep]\\n    initial = np.array([np.linalg.lstsq(design[:, j], observed[:, j], rcond=None)[0]\\n                        for j in range(4)])\\n    shared = [1, 3, 4, 5]\\n\\n    # Banks have separate offsets and gains but share a gain-normalized response.\\n    def coefficients(p):\\n        c = np.empty((4, 6))\\n        c[:, 0], c[:, 2] = p[:4], p[4:8]\\n        c[:, shared] = p[4:8, None] * p[8:]\\n        return c\\n\\n    def residual(p):\\n        return (np.einsum('njk,jk->nj', design, coefficients(p)) - observed).ravel()\\n\\n    p0 = np.r_[initial[:, 0], initial[:, 2],\\n               np.mean(initial[:, shared] / initial[:, 2, None], axis=0)]\\n    p = least_squares(residual, p0, gtol=1e-13, ftol=1e-13, xtol=1e-13).x\\n    return coefficients(p), keep\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; S, fields = m['_forward'](s); c, _ = m['_fit_rosette'](s)\\ndef predict(v):\\n    return np.column_stack([m['_rosette_design'](v.reshape(-1, 4), j) @ c[j] for j in range(4)]).ravel()\\nworst = 0.\\nfor pulse in item['campaign_diagnostics']:\\n    y = pulse['y_pulse_raw'].reshape(len(s['mu_shifts']), -1, 4)\\n    e = predict(S @ pulse['w_pulse']).reshape(y.shape) - y\\n    worst = max(worst, np.max(np.linalg.norm(e, axis=1) / np.linalg.norm(y, axis=1)))\\ncal = m['_calibrate'](s)\\nroundtrip = np.max(abs(predict(cal) - s['y_obs_raw']))\\no = m['solve_batch'](s); w = o['weights']; cert = o['kkt_certificate']; nu = cert['nu_sum']; cap = s['u_box']\\nZ = s['Z_nuisance']; P = np.linalg.solve(np.eye(len(cal)) + Z @ Z.T / s['nuisance_ridge'], np.eye(len(cal)))\\nr = P @ (S @ w - cal); g = (P @ S).T @ r + s['source_ridge'] * w\\nJ = .5 * (r @ r + s['source_ridge'] * (w @ w)); dual = J - g @ w + nu * s['total_budget'] + cap * np.minimum(0, g - nu).sum()\\nll = np.asarray(cert['lam_lower']); lu = np.asarray(cert['lam_upper'])\\nassert worst < 5e-5 and roundtrip < 1e-10\\nassert min(w) >= -1e-12 and max(w) <= cap + 1e-12 and abs(w.sum() - s['total_budget']) < 1e-10\\nassert min(ll) >= 0 and min(lu) >= 0\\nassert max(abs(g - nu - ll + lu)) < 1e-10 and max(abs(w * ll)) < 1e-10 and max(abs((cap - w) * lu)) < 1e-10\\nassert max(abs(J - cert['primal_objective']), abs(dual - cert['dual_lower_bound']), abs(J - dual)) < 1e-10\\nassert np.allclose(o['terminal_field'], np.tensordot(w, fields, axes=(0, 0)), rtol=0, atol=1e-12)\\nprint('worst pulse x shift x bank relative error:', worst, 'inverse roundtrip:', roundtrip, 'independent KKT gap:', J - dual)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: independent six-term rosettes → H2: a shared response with bank-specific gains and offsets; worst pulse-by-shift-and-bank error fell from 6.07e-5 to 4.57e-5 in the challenger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep independent bank fits\",\n      \"rejected_reason\": \"The shared fit reduced held-out worst-bank RMS and worst tracer-pulse slice error without adding terms or changing transport.\"\n    }\n  ],\n  \"rationale\": \"Promote the sweep-only shared fit, then verify the exact artifact in an isolated Python process. The pulse and inverse checks detect calibration integration errors; the independent objective, certificate, and field consistency checks detect changes to the required outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fb670242cc82876c42eed44d04f473b8f7a6846b6f350cda5f591d28019cd4bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45766.22,
+      "usage_known": true,
+      "prompt_tokens": 29082,
+      "cached_tokens": 11136,
+      "completion_tokens": 1599
+    }
+  ]
+}

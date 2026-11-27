@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3eae48c9d69c455e92f1693e5c4f2a6a",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:00:08.919041+00:00",
+  "ended_at_utc": "2026-11-27T15:00:53.060067+00:00",
+  "request_sha256": "1456c95410de895ab6f6bab5347d471f91b7a23365e930e0ac26833c5f643e47",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77052,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40400,
+    "cached_tokens": 11136,
+    "completion_tokens": 1678
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py')\\ns=p.read_text(); probe=Path('/tmp/campaign_probe.py').read_text()\\nbridge=probe[probe.index('terms=['):probe.index('def score')]; start=bridge.index('def calibrate'); end=bridge.index('def invert'); bridge=bridge[:start]+bridge[end:bridge.index('def stress')]; bridge=bridge.replace('def invert(raw, b=b):','def invert(raw, b):')\\nbridge+='''def _stress_calibration(cal):\\n    x = cal['true_channel_loads']\\n    y = cal['bridge_raw']\\n    # Reject displaced sweep rows using forward residuals in bridge coordinates.\\n    a = basis(x)\\n    simple = a[:, :5]\\n    e = y - simple @ np.linalg.lstsq(simple, y, rcond=None)[0]\\n    magnitude = np.max(np.abs(e), axis=1)\\n    keep = magnitude < 6 * np.median(magnitude)\\n    full = np.linalg.lstsq(a[keep], y[keep], rcond=None)[0]\\n    # Select a sparse per-channel basis, then refit without coefficient shrinkage.\\n    b = np.zeros_like(full)\\n    for j in range(4):\\n        terms_j = np.abs(full[:, j]) > 0.004 * np.max(np.abs(full[:, j]))\\n        b[terms_j, j] = np.linalg.lstsq(a[keep][:, terms_j], y[keep, j], rcond=None)[0]\\n    return lambda raw: invert(raw, b).sum(axis=-1)\\n\\n\\n'''\\ns=s.replace('import numpy as np','from itertools import combinations_with_replacement\\\\n\\\\nimport numpy as np'); s=s[:s.index('def _stress_calibration')]+bridge+s[s.index('def _design'):]; a=s.index('def _chamber'); z=s.index('def solve_batch',a)\\ns=s[:a]+'''def _chamber(site, x, stress, dt, times, taus, theta):\\n    past = stress(site['past_channel_raw'])\\n    hold = stress(site['hold_channel_raw'])\\n    tail = np.cumsum(dt[::-1])[::-1] - dt\\n    # Preload states relax during the chamber equilibration wait.\\n    weights = -np.expm1(-dt[:, None] / taus) * np.exp(-(tail[:, None] + 7.2) / taus)\\n    amplitude = (hold[:, None] - past @ weights) * theta[:2]\\n    drift = theta[2] + x @ theta[3:]\\n    kernel = -np.expm1(-times[:, None] / taus)\\n    # Integrate a persistent drift component and an exponentially gated component.\\n    drift_integral = 0.22 * times - 0.79 * np.expm1(-times)\\n    return amplitude @ kernel.T + drift[:, None] * drift_integral, amplitude @ (1 / taus) + 1.01 * drift\\n\\n\\n'''+s[z:]\\ns=s.replace('_chamber(_design(test, x_test, stress, dt, times), taus, theta, times)','_chamber(test, x_test, stress, dt, times, taus, theta)')\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat >/tmp/align_probe.py <<'PY'\\nexec(open('/tmp/cv_chamber.py').read().split('for label,DD')[0])\\nfrom itertools import combinations\\nnp.set_printoptions(precision=4,suppress=True)\\nfor count in (1,2,3):\\n for sources in combinations(['train','test','diag'],count):\\n  label='+'.join(sources)\\n  ref={k:np.concatenate([dict(train=tr,test=te,diag=g)[s][k] for s in sources]) for k in keys}\\n  x=g['coupon_features_raw'].copy(); xt,trx=archive._standardize(tr,te)\\n  for l in np.unique(lab):\\n   c=ref['ref_coupons'][ref['lab_id']==l]; m=np.nanmedian(np.nanmean(c,0)); s=np.nanmedian(np.nanstd(c,0));\\n   if s==0: s=np.nanmedian(np.nanstd(joined['ref_coupons'][joined['lab_id']==l],0))\\n   x[lab==l]=(x[lab==l]-m)/s\\n  x=np.where(np.isfinite(x),x,Xall); DD=np.c_[np.ones(n),x]@th[2:]\\n  fix=np.r_[0.,0.,np.log(7.2),.22,.79,0.,0.]\\n  e=chamber(fix,DD,'unity')-target\\n  print(label, 'strain/rate RMSE',np.round([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))],5),'median final/rate',np.median(abs(e),0)[-2:],'per-coupon final error',e[:,-2])\\nprint('diagnostic extreme lab refs/features')\\nfor i in [1,9,10,15]: print(i,g['coupon_features_raw'][i],g['ref_coupons'][i])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/align_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 free chamber gains and time scales → H2 unchanged intrinsic kernels with preload equilibration and gated drift; leave-one-lab-out pooled RMSE is 0.045 for strain and 0.041 for rate under the unity-gain fit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use separate fitted chamber time constants and gains\",\n      \"rejected_reason\": \"The leave-one-lab-out errors are comparable, while the fitted unity-gain time constants are within 0.5% of the benchtop values.\"\n    }\n  ],\n  \"rationale\": \"Build a standalone candidate using dynamic bridge calibration and the simpler chamber law. Compare public diagnostic reference pools to see whether the worst-lab residuals are attributable to feature alignment rather than missing chamber dynamics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "185050ac09975624590f018c9dc0191b23f53df4a439f1dd2cbb4c50c22681d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44617.7,
+      "usage_known": true,
+      "prompt_tokens": 40400,
+      "cached_tokens": 11136,
+      "completion_tokens": 1678
+    }
+  ]
+}

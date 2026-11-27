@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "50f04654e8824da893c7e778bff8a2d5",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:14.872604+00:00",
+  "ended_at_utc": "2026-11-27T14:45:43.546881+00:00",
+  "request_sha256": "f5234d826f3d631f9693df3c78b6da1238fa37d84938aed5ccb144602bbdbe0e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33035,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22484,
+    "cached_tokens": 9600,
+    "completion_tokens": 817
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util, pathlib, pickle, numpy as np\\nroot=pathlib.Path('/tmp/hegel_continual_archive'); item=pickle.load(open('public_batch.pkl','rb'))[0]; s=item['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; mods={}\\nfor name in ('02','03','04','05'):\\n p=root/f'beta_m98_v2_c04_batch_{name}_solver.py'; spec=importlib.util.spec_from_file_location('m'+name,p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); mods[name]=m\\nm=mods['04']; B=m._rosette_basis(x); A=np.c_[np.ones(len(x)),x]; preds={}\\nfor model in ('linear','nonlinear'):\\n e=[]\\n for tr,te in [(np.arange(len(x))%5!=i,np.arange(len(x))%5==i) for i in range(5)]:\\n  if model=='linear': residual=A[te]@np.linalg.lstsq(A[tr],y[tr],rcond=None)[0]-y[te]\\n  else: residual=np.einsum('njk,jk->nj',B[te],m._fit_rosette(x[tr],y[tr]))-y[te]\\n  e.append((float(np.sqrt(np.mean(residual**2))),float(np.median(np.abs(residual)))))\\n print(model,'OOF (RMSE, median absolute)',np.array(e))\\n for d in item['campaign_diagnostics']:\\n  ss={**s,'y_obs_raw':d['y_pulse_raw']}; cal=(mods['02'] if model=='linear' else m)._calibrate(ss); preds.setdefault(model,[]).append(cal)\\nfor name in ('02','03','05'):\\n S,U=mods[name]._forward(s)\\n for model, vals in preds.items():\\n  print('operator',name,model,'pulse RMSE',[np.sqrt(np.mean((S@d['w_pulse']-cal)**2)) for d,cal in zip(item['campaign_diagnostics'],vals)])\\nprint('linear coefficients',np.linalg.lstsq(A,y,rcond=None)[0]); print('nonlinear coefficients',m._fit_rosette(x,y)); print('bank sweep schema',[(k,np.shape(v)) for k,v in sw['single_bank_sweeps'].items()])\\nPY\\nsed -n '/^def _box_budget/,$p' /tmp/hegel_continual_archive/beta_m98_v2_c04_batch_03_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin with affine calibration -> H2 independently selected wall stencil and rosette model; worst-pulse and held-out calibration errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose the archived periodic stencil from the pre-LLM table reference\",\"rejected_reason\":\"The table row failed its gate; the two measured pulses can test the stencil directly.\"}],\"rationale\":\"Compare archived wall stencils on both pulses and calibration models on held-out sweeps. This separates boundary mismatch from sensor error and determines which components of the archived solvers to retain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "09a037eab8e1c3bf0c24483ba0652d3d04b6cdb4aafc41849d7f00b4f3bcadb4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28638.5,
+      "usage_known": true,
+      "prompt_tokens": 22484,
+      "cached_tokens": 9600,
+      "completion_tokens": 817
+    }
+  ]
+}

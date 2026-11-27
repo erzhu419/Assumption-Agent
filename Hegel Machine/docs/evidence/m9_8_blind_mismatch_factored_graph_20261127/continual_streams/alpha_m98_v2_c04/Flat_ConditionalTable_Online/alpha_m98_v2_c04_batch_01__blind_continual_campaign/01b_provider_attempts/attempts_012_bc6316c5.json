@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc6316c5f3c14576aad53d53d5c6f2cc",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_ConditionalTable_Online__alpha_m98_v2_c04_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:31:21.774762+00:00",
+  "ended_at_utc": "2026-11-27T14:31:57.685730+00:00",
+  "request_sha256": "ef6ab42a8ecf8827167dcff29591d80e2e797310735d201235bc5c632a76c246",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71329,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37092,
+    "cached_tokens": 9600,
+    "completion_tokens": 1370
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, q = item['dataset'], item['campaign_diagnostics']\\nt = d['eval_times']\\nbridge = m._bridge(d['calibration_load_cells'])\\npast, hold = m._loads(q, bridge)\\ntheta = m.solve_batch(d)['hereditary_weights']\\nlab = q['lab_id']\\nx = q['coupon_features_raw'].copy()\\nmissing = np.isnan(x).any(axis=1)\\nfor l in np.unique(lab):\\n    rows = lab == l\\n    refs = q['ref_coupons'][rows]\\n    x[rows] = (x[rows] - np.median(refs.mean(0))) / np.median(refs.std(0))\\nx = np.where(np.isnan(x), np.nanmean(x, axis=0), x)\\nr = theta[2] + x @ theta[3:]\\ny = np.column_stack((q['strain_curves_obs'] - q['strain_0'][:, None], q['instant_rate_obs']))\\nbase = np.column_stack((hold, r))\\ndt = d['past_dt']\\nlater = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.]\\nmem = past @ (-np.expm1(-dt[:, None] / m._CHAMBER_TIMES) * np.exp(-later[:, None] / m._CHAMBER_TIMES))\\nscale = np.sqrt(np.mean(r*r))\\ndef predict(params, kind, keep, full=False):\\n    u = np.exp(params[:2])\\n    X = base\\n    if kind == 'memory difference':\\n        X = np.column_stack((base, hold[:,None] - mem))\\n    elif kind == 'load-drift product':\\n        X = np.column_stack((base, hold*r))\\n    elif kind == 'rational drift':\\n        X = np.column_stack((hold, r/(1+params[2]*(r/scale)**2)))\\n    B = np.vstack((np.column_stack((-np.expm1(-t[:,None]/u), t)), np.r_[1/u, 1.]))\\n    A = (B[None,:,:,None]*X[:,None,None,:]).reshape(len(y), len(t)+1, -1)\\n    coeff = np.linalg.lstsq(A[keep].reshape(-1,A.shape[-1]), y[keep].ravel(), rcond=None)[0]\\n    pred = A @ coeff\\n    return pred if full else (pred[keep]-y[keep]).ravel()\\nrms = lambda a: np.sqrt(np.mean(a*a))\\nfor kind in ('linear', 'memory difference', 'load-drift product', 'rational drift'):\\n    e = np.empty_like(y)\\n    for l in np.unique(lab):\\n        keep = lab != l\\n        start = np.log([.47, 2.5]); lo = np.log([.25, 1.]); hi = np.log([.75, 10.])\\n        if kind == 'rational drift':\\n            start, lo, hi = np.r_[start,.01], np.r_[lo,0.], np.r_[hi,2.]\\n        opt = least_squares(predict, start, args=(kind,keep), bounds=(lo,hi), max_nfev=100)\\n        e[~keep] = (predict(opt.x,kind,keep,True)-y)[~keep]\\n    print(kind, 'worst lab strain/rate', [round(max(rms(e[lab==l,j]) for l in np.unique(lab)),6) for j in (slice(None,-1),-1)], 'missing strain/rate', [round(rms(e[missing,j]),6) for j in (slice(None,-1),-1)], 'worst horizon', round(max(rms(a) for a in e[:,:-1].T),6))\\nprint('Audited real strain and initial-rate regression by held-out lab; no classification labels or relay modes in the measurement contract.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear chamber response -> H2 test memory differences, load–drift products, and rational saturation; current worst held-out chamber lab RMSE is 0.00468 strain and 0.00318 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or classification recall\",\n      \"rejected_reason\": \"The contract contains continuous strain and rate measurements, not relay states or class labels. Held-out lab errors directly test whether the model relies on lab-specific patterns.\"\n    }\n  ],\n  \"rationale\": \"Fit each chamber alternative without the held-out lab and compare worst-lab, missing-feature, and time-horizon errors. A material improvement would justify revising the chamber law; otherwise keep the verified linear model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "6cdfb8c791f9b850a71df18af337c90bab9ae00532112d1c9a28ed031353fddf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35865.12,
+      "usage_known": true,
+      "prompt_tokens": 37092,
+      "cached_tokens": 9600,
+      "completion_tokens": 1370
+    }
+  ]
+}

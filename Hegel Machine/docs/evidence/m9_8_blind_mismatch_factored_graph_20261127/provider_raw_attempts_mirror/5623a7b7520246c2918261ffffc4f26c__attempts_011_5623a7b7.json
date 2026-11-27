@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5623a7b7520246c2918261ffffc4f26c",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:11.791990+00:00",
+  "ended_at_utc": "2026-11-27T14:42:48.418193+00:00",
+  "request_sha256": "c7b576a8e5c27bf8de00d56c2d0900d82bf09450985c2c90cf299240994bd600",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73788,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35796,
+    "cached_tokens": 9600,
+    "completion_tokens": 1443
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/m98_calibration_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\na = s['sensor_calibration_sweeps']\\nx, y = a['ref_rosette'], a['raw_rosette']\\nbasis = m._rosette_basis(x)\\n# Test the observed common gain-normalized cyclic law, and whether a rational\\n# interaction in the difference coordinate explains any residual structure.\\ndef predict(p, d, rational):\\n    v = d[..., 1] + np.einsum('njk,k->nj', d[..., 2:], p[8:12])\\n    if rational:\\n        v /= 1 + p[12] * (d[..., 1] - d[..., 2])**2\\n    return p[:4] + v*p[4:8]\\n\\ndef fit(train, rational):\\n    c = m._fit_rosette(x[train], y[train])\\n    r = np.linalg.norm(y[train] - np.einsum('njk,jk->nj', basis[train], c), axis=1)\\n    clean = r <= max(8*np.median(r), 1e-10)\\n    p0 = np.r_[c[:,0], c[:,1], np.mean(c[:,2:]/c[:,1,None], axis=0)]\\n    if rational:\\n        p0 = np.r_[p0, 0.]\\n    p = least_squares(lambda p: (predict(p, basis[train][clean], rational)-y[train][clean]).ravel(), p0, xtol=1e-13, ftol=1e-13, gtol=1e-13).x\\n    return c, p, clean\\n\\nfolds = np.array_split(np.arange(len(x)),4) + [np.flatnonzero(np.count_nonzero(x,axis=1)==1)]\\nerrors = [[], [], []]\\nratios = []\\nfor test in folds:\\n    train = ~np.isin(np.arange(len(x)), test)\\n    c, p, _ = fit(train, False)\\n    _, q, _ = fit(train, True)\\n    forecasts = [np.einsum('njk,jk->nj', basis[test], c), predict(p,basis[test],False), predict(q,basis[test],True)]\\n    for group, forecast in zip(errors, forecasts):\\n        e = np.max(abs(y[test]-forecast), axis=1)\\n        group.append((float(e[e<1].max()), int(np.sum(e>=1))))\\n    ratios.append(q[-1])\\nfor name, result in zip(('cyclic', 'shared gain-normalized', 'shared rational difference'), errors):\\n    print(name, 'blocked (max clean, gross count)', result, 'worst clean', max(v[0] for v in result))\\nprint('rational denominator coefficients by fold', ratios)\\nb = a['single_bank_sweeps']; j, u = b['bank_id'], b['ref_signal']\\nfor rational in (False, True):\\n    c, p, _ = fit(np.ones(len(x), dtype=bool), rational)\\n    refs = np.zeros((len(u),4)); refs[np.arange(len(u)),j] = u\\n    e = abs(predict(p,m._rosette_basis(refs),rational)[np.arange(len(u)),j]-b['raw_readout'])\\n    print('independent bank, rational=',rational,'worst clean',e[e<1].max(),'gross count',np.sum(e>=1))\\n\\nS, _ = m._forward(s)\\nycal = m._calibrate(s); Z = s['Z_nuisance']; w = m.solve_batch(s)['weights']\\ngamma = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@(ycal-S@w))\\nres = (ycal-S@w-Z@gamma).reshape(len(s['mu_shifts']),-1,4)\\nprint('calibrated signed residual means by shift x bank',res.mean(axis=1).round(6).tolist())\\nprint('calibrated residual RMSE by shift x bank',np.sqrt((res**2).mean(axis=1)).round(6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_calibration_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent cyclic calibration → H2 shared gain-normalized or rational cyclic calibration only if it improves transfer; the verified solver’s worst held-out sensor RMSE is 0.01246 and worst clean calibration error is 3.05e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, HJB drift, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This study has a steady continuous inverse problem, not relay states, a time-dependent control law, or class labels. The relevant nuisance check is calibrated residual bias by bank and shift.\"\n    }\n  ],\n  \"rationale\": \"Compare the current calibration against two physically plausible challengers fitted inside each blocked fold and tested on independent bank sweeps. Promote a challenger only if the measurements show a meaningful improvement. Residuals grouped by bank and shift can flag systematic structure hidden by pooled error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "8d5dd59a5a91234a1e712f4ffdd0a6a334c81573d626e37b295db32c56c4e2f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37084.62,
+      "usage_known": true,
+      "prompt_tokens": 35796,
+      "cached_tokens": 9600,
+      "completion_tokens": 1443
+    }
+  ]
+}

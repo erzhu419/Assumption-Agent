@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7164f35d9e9b4cd5a7f99c9ad84b27e6",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:18.039123+00:00",
+  "ended_at_utc": "2026-11-27T14:44:56.138775+00:00",
+  "request_sha256": "eff1dd21b5a7152b4d26ea992b5747b2c4e7f49ea68f775606895887ce9d0109",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60883,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33032,
+    "cached_tokens": 9600,
+    "completion_tokens": 1430
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/challenger_bridge04.py <<'PY'\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n_PAIRS = np.array(list(combinations(range(4), 2)))\\n_LEFT, _RIGHT = _PAIRS.T\\n\\ndef _bridge_basis(load):\\n    return np.column_stack((np.ones(len(load)), load, load[:, _LEFT] * load[:, _RIGHT], load**3))\\n\\ndef _fit_bridge(cal):\\n    load = np.asarray(cal['true_channel_loads'], float)\\n    raw = np.asarray(cal['bridge_raw'], float)\\n    design = _bridge_basis(load)\\n    start = np.linalg.lstsq(design, raw, rcond=None)[0]\\n    robust = least_squares(lambda b: (design @ b.reshape(start.shape) - raw).ravel(),\\n                           start.ravel(), jac=lambda b: np.kron(design, np.eye(4)),\\n                           loss='soft_l1', f_scale=0.003).x.reshape(start.shape)\\n    residual = np.linalg.norm(design @ robust - raw, axis=1)\\n    inlier = residual < max(0.003, 8 * np.median(residual))\\n    return np.linalg.lstsq(design[inlier], raw[inlier], rcond=None)[0]\\n\\ndef _decode_bridge(raw, coef):\\n    raw = np.asarray(raw, float)\\n    shape = raw.shape\\n    target = raw.reshape(-1, 4)\\n    load = (target - coef[0]) @ np.linalg.inv(coef[1:5])\\n    for _ in range(20):\\n        residual = _bridge_basis(load) @ coef - target\\n        if np.max(np.abs(residual), initial=0.0) < 1e-11:\\n            break\\n        jac = coef[1:5] + 3 * load[:, :, None]**2 * coef[11:15]\\n        for k, (i, j) in enumerate(_PAIRS):\\n            jac[:, i] += load[:, j, None] * coef[5+k]\\n            jac[:, j] += load[:, i, None] * coef[5+k]\\n        load -= np.linalg.solve(jac.transpose(0, 2, 1), residual[:, :, None])[:, :, 0]\\n    return load.reshape(shape)\\nPY\\nsed -n '1,69p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/tmp/challenger_bridge04.py'); fit=m['_fit_bridge']; dec=m['_decode_bridge']; basis=m['_bridge_basis']; d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; z=c['true_channel_loads']; x=c['bridge_raw']; a=fit(c); keep=np.linalg.norm(basis(z)@a-x,axis=1)<.003\\nidx=np.arange(len(z)); fold=np.empty(len(z),int); fold[np.random.default_rng(816).permutation(len(z))]=idx%5\\nerr=np.full(len(z),np.nan)\\nfor k in range(5):\\n tr=fold!=k; te=(~tr)&keep; b=fit({'true_channel_loads':z[tr],'bridge_raw':x[tr]}); p=dec(x[te],b); err[te]=(p-z[te]).sum(1)\\ns=np.flatnonzero(keep)[np.argsort(z[keep].sum(1))]; print('rejected',idx[~keep],'total load CV RMS/max/worst decile RMS',np.sqrt(np.nanmean(err**2)),np.nanmax(abs(err)),max(np.sqrt(np.mean(err[q]**2)) for q in np.array_split(s,10)))\\nfor split in ('train','test'):\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  y=d[split][key]; p=dec(y,a); e=np.max(abs(basis(p.reshape(-1,4))@a-y.reshape(-1,4))); print('inverse closure',split,key,e); assert e<1e-8\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: separable cubic calibration → H2: pairwise interactions plus self-cubics, reducing worst-band held-out forward bridge RMSE from 0.251 to 0.000133.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use all cubic monomials\",\n      \"rejected_reason\": \"The smaller pairwise-plus-self-cubic basis predicts held-out sweeps more accurately.\"\n    }\n  ],\n  \"rationale\": \"Test the nonlinear inverse before wiring it into material fitting. If it fits forward sweeps but fails to recover total load on withheld rows or fails to reconstruct coupon readings, revise the inverse rather than promoting the bridge.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a8b49f39d352f0b7b59a27e98f5fecd4887fa7a4a47c057cd4e3b0cf2c9e50a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38527.32,
+      "usage_known": true,
+      "prompt_tokens": 33032,
+      "cached_tokens": 9600,
+      "completion_tokens": 1430
+    }
+  ]
+}

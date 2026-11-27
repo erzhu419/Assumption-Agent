@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1dfe7bb68584530a70752405e18f94d",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Hegel_FactoredMechanismGraph__alpha_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:34.933690+00:00",
+  "ended_at_utc": "2026-11-27T14:43:07.048706+00:00",
+  "request_sha256": "d2d500aa8d941aba5b64a60994a60808d9199b4acac953fcd58c8f220d49896b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43869,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24572,
+    "cached_tokens": 9600,
+    "completion_tokens": 968
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) == 1\\nchannel = np.argmax(np.abs(x), axis=1)\\nrng = np.random.default_rng(923)\\nmixed = rng.permutation(np.flatnonzero(~axis))\\na = u._design(x)\\nreports = []\\nfor k in range(4):\\n    val = (axis & (channel == k)) | np.isin(np.arange(len(x)), mixed[k::4])\\n    tr = ~val\\n    cf = u._fit(x[tr], y[tr])\\n    r = np.linalg.norm(a[val] @ cf - y[val], axis=1)\\n    clean = r < .01\\n    loads = u._inverse(y[val][clean], cf, x[tr].min(0), x[tr].max(0))\\n    inverse_max = float(np.max(np.abs(loads - x[val][clean])))\\n    ablation = []\\n    for cols in (np.arange(5), np.arange(9), np.r_[0:5,9:a.shape[1]]):\\n        b = np.linalg.lstsq(a[tr][:, cols], y[tr], rcond=None)[0]\\n        for _ in range(40):\\n            rr = np.linalg.norm(a[tr][:, cols] @ b - y[tr], axis=1)\\n            w = 1/np.hypot(1, rr / max(np.median(rr), 1e-9))\\n            b = np.linalg.lstsq(a[tr][:, cols] * w[:, None], y[tr] * w[:, None], rcond=None)[0]\\n        ablation.append(float(np.quantile(np.linalg.norm(a[val][clean][:, cols] @ b - y[val][clean], axis=1), .9)))\\n    p90 = float(np.quantile(r[clean], .9))\\n    reports.append(inverse_max)\\n    print('ng_t04 held-out axis', k, 'spike rows', np.flatnonzero(val)[~clean].tolist(), 'inverse max', inverse_max, 'bridge p90 full', p90, 'ablations affine/no_pairs/no_cubes', ablation)\\n    assert clean.sum() >= 17 and inverse_max < .002 and p90 < min(ablation)\\nprint('ng_t04 grouped worst absolute load error:', max(reports))\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 channel cubes plus pair products; worst clean leave-one-out absolute load error is 0.000362 on mixed loads.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The earlier audit found no saturation or batch-centering gain. Hold out each channel’s entire solo sweep with a mixed-load slice to test a different failure: whether the installed bridge fit depends on seeing every channel in isolation. If grouped recovery fails, revisit fit identifiability; if removing cubes or pair products does not hurt, simplify the basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4a4b1a7c4eb683cf2b5576b2d1c1b3c3f8b11ffafe47405949ccc69e367dbf7e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32537.83,
+      "usage_known": true,
+      "prompt_tokens": 24572,
+      "cached_tokens": 9600,
+      "completion_tokens": 968
+    }
+  ]
+}

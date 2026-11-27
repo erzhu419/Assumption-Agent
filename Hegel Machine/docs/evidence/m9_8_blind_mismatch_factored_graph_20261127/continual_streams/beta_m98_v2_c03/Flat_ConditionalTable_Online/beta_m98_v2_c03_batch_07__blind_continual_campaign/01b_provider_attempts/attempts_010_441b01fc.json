@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "441b01fc6afd4b8fb1cc0ebdd43c17ca",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:44.317244+00:00",
+  "ended_at_utc": "2026-11-27T14:53:12.236719+00:00",
+  "request_sha256": "b2cf75660718ec656080e5a8cf9b5367b916e2b7c3e60645140bc8ebbdfb0143",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45043,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25203,
+    "cached_tokens": 9600,
+    "completion_tokens": 893
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nx, raw = (s['sensor_calibration_sweeps'][k] for k in ('ref_rosette', 'raw_rosette'))\\npeak = np.max(np.abs(raw), axis=1)\\nkeep = peak < 7\\nprint('Largest retained and smallest excluded sweep peaks:', peak[keep].max(), peak[~keep].min())\\n# Hold out the strongest reference excitations for each channel as a block.\\n# A coherent residual in their paired-difference direction would motivate a new term.\\nworst_base = worst_extra = 0.\\nfor i in range(4):\\n    d = x[:, i] - x[:, (i+1) % 4]\\n    X = m['_features'](x, i)\\n    A = np.column_stack((X, d**3))\\n    eligible = np.flatnonzero(keep)\\n    test = eligible[np.argsort(np.abs(d[eligible]))[-max(1, len(eligible)//5):]]\\n    train = np.setdiff1d(eligible, test)\\n    scores = []\\n    for design in (X, A):\\n        coef = np.linalg.lstsq(design[train], raw[train, i], rcond=None)[0]\\n        scores.append(np.sqrt(np.mean((design[test] @ coef - raw[test, i])**2)))\\n    worst_base = max(worst_base, scores[0]); worst_extra = max(worst_extra, scores[1])\\n    print(f'Channel {i} high-contrast holdout RMSE: cubic={scores[0]:.3g}, paired-difference cubic={scores[1]:.3g}')\\nprint(f'Worst high-contrast RMSE: baseline={worst_base:.3g}, expanded={worst_extra:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: open-wall affine model -> H2: periodic walls with sweep-fitted cubic calibration; worst tracer pulse/shift RMSE is 1.31e-6 and verified relative weight error is 8.41e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis, nuisance, and KKT checks\",\n      \"rejected_reason\": \"Those checks already ran on the unchanged artifact. The remaining distinct calibration question is whether the cubic basis holds up at high paired-channel contrast.\"\n    }\n  ],\n  \"rationale\": \"The earlier random folds did not isolate the strongest paired-channel contrasts. A blocked holdout tests for a missing cross-cubic term, while the sweep peak separation shows whether small changes to the clipping cutoff would alter the fit. Investigate a change only if this reveals a material error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8ed96a6da74626c580bde10c6856aea8aa893a564c31027dd7e4c189a5f4981b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28329.54,
+      "usage_known": true,
+      "prompt_tokens": 25203,
+      "cached_tokens": 9600,
+      "completion_tokens": 893
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eea5d1baa3b44e559a4a747ea8211002",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Hegel_FactoredMechanismGraph__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:44:17.734523+00:00",
+  "ended_at_utc": "2026-11-27T14:44:45.436336+00:00",
+  "request_sha256": "8d19c4136e8d1212150694f3840ee1a9147d038090464d6d21cc8045d30d4232",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55647,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28338,
+    "cached_tokens": 0,
+    "completion_tokens": 898
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_direction_probe.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _inverse\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; A=_basis(X)\\nmixed=np.count_nonzero(X,axis=1)>1\\nte=mixed & (X[:,3]>.7); tr=~te\\n\\ndef seed(a,y):\\n    rng=np.random.default_rng(21); p=a.shape[1]\\n    def score(c): return np.median(np.linalg.norm(y-a@c,axis=1))\\n    best=np.linalg.lstsq(a,y,rcond=None)[0]; loss=score(best)\\n    for _ in range(96):\\n        ids=rng.choice(len(a),min(len(a),p+5),replace=False)\\n        c, _, rank, _=np.linalg.lstsq(a[ids],y[ids],rcond=None)\\n        if rank!=p: continue\\n        s=score(c)\\n        if s<loss: best,loss=c,s\\n    return best\\n\\nfor label,b in [('current',_fit_bridge(X[tr],Y[tr])),('clean reference',_fit_bridge(X[tr & ~np.isin(np.arange(len(X)),[13,14,15])],Y[tr])),('subset initialization',seed(A[tr],Y[tr]))]:\\n    r=np.linalg.norm(Y-A@b,axis=1)\\n    print(label,'training residual median/max',np.median(r[tr]),max(r[tr]),'held-out median/max',np.median(r[te]),max(r[te]),'training largest',sorted(zip(r[tr],np.flatnonzero(tr)),reverse=True)[:7])\\n    if label=='subset initialization':\\n        keep=tr & (r<=6*np.median(r[tr])); b=_fit_bridge(X[keep],Y[keep]); print('subset-refit rejected training rows',np.flatnonzero(tr & ~keep).tolist())\\n    print(label,'inverse max error',np.max(np.abs(_inverse(Y[te],b)-X[te])))\\nprint('design condition number (entire / directional training / directional training minus known spikes):',np.linalg.cond(A),np.linalg.cond(A[tr]),np.linalg.cond(A[tr & ~np.isin(np.arange(len(X)),[13,14,15])]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_direction_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled polynomial bridge → test whether spike leverage in the initial fit explains the 11.70 maximum absolute load error when positive mixed loads on channel 4 are withheld.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Compare the failing fit with a diagnostic fit that excludes the identified spikes and a robust initialization that does not know their row IDs. If both recover the withheld direction, fix the initializer; if even the spike-free fit fails, inspect conditioning and forward-model bias before modifying the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c7fc47107bf6f6a7e64a19d60439660902133532fa63d5d5bd01d49d31a8606d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28140.98,
+      "usage_known": true,
+      "prompt_tokens": 28338,
+      "cached_tokens": 0,
+      "completion_tokens": 898
+    }
+  ]
+}

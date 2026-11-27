@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1523a5732d145d39e9a3dabc4e072cf",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:33.470554+00:00",
+  "ended_at_utc": "2026-11-27T14:44:02.229074+00:00",
+  "request_sha256": "2b8f8475183a8483ec7d70eca1c305b03363303c79599586db33c4205225b8b9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33899,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23178,
+    "cached_tokens": 11136,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=4,suppress=True,linewidth=120)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; print('times',d['eval_times'],'dt',d['past_dt'])\\nraw,y=c['bridge_raw'],c['true_channel_loads']; print('bridge ranges',np.array([raw.min(0),raw.max(0),y.min(0),y.max(0)])); print('sweep',c['single_channel_sweeps']);\\nfor name,a,b in [('inverse',raw,y),('forward',y,raw)]:\\n models={'affine':np.c_[np.ones(len(a)),a], 'diagonal-quadratic':np.c_[np.ones(len(a)),a,a*a], 'quadratic':np.c_[np.ones(len(a)),a,np.column_stack([a[:,i]*a[:,j] for i,j in combinations_with_replacement(range(4),2)])], 'odd-cubic':np.c_[np.ones(len(a)),a,a**3]}\\n folds=np.argsort(np.linalg.norm(a,axis=1))%5\\n for m,X in models.items():\\n  e=np.empty_like(b)\\n  for f in range(5):\\n   t=folds!=f;e[~t]=X[~t]@np.linalg.lstsq(X[t],b[t],rcond=None)[0]-b[~t]\\n  end=np.linalg.norm(a,axis=1)>=np.quantile(np.linalg.norm(a,axis=1),.8)\\n  print(name,m,'OOF per-channel, summed, high-load-summed RMSE',np.round(np.r_[np.sqrt((e**2).mean(0)),np.sqrt(np.mean(e.sum(1)**2)),np.sqrt(np.mean(e[end].sum(1)**2))],6))\\nfor k in ['train','test']:\\n b=d[k]; a=b['aux_chamber_telemetry']; p=b['past_channel_raw']; h=b['hold_channel_raw']; print(k,'aux mean/std',a.mean(0),a.std(0),'aux correlations to hold total and past totals',np.corrcoef(np.column_stack([a,h.sum(1),p.sum(2)]).T)[:4,4:]); print('groups',np.unique(np.c_[b['lab_id'],b['stratum']],axis=0,return_counts=True))\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(row['facility_telemetry_trace']); print('trace',row['completed_batch_index'],'first/last',a[[0,-1]],'range',np.ptp(a,axis=0),'adjacent r',np.array([np.corrcoef(v[:-1],v[1:])[0,1] for v in a.T]))\\nPY\\nls -A /pretrain_task\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and latest whole-solver reuse -> H2 validate bridge terms separately and transfer only chamber laws supported by the archive; the closest archived trace is campaign 01 by channel means, but no deployment error is measurable.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a chamber correction based on the nearest trace alone\",\n      \"rejected_reason\": \"Campaign 01 has no mounted solver, so proximity does not supply its constitutive equation.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out calibration errors, including at high loads, to distinguish actual bridge curvature from extra terms that only improve in-sample fit. Summarize the telemetry without dumping raw arrays; if it cannot identify a transferable correction, keep the archived baseline law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6d83cc9274128045668da7afa7d7c1d09509329bed452dabd63f4326f6319119",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29204.31,
+      "usage_known": true,
+      "prompt_tokens": 23178,
+      "cached_tokens": 11136,
+      "completion_tokens": 1074
+    }
+  ]
+}

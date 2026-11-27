@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c144b79a016046a4a170409280b95127",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Hegel_FactoredMechanismGraph__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:57.569984+00:00",
+  "ended_at_utc": "2026-11-27T14:42:42.994734+00:00",
+  "request_sha256": "c70a5f19ea1432cf1eb0e41b122a714d89b5527818390e595a89e9e7e7f70d35",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43302,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25979,
+    "cached_tokens": 9600,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport sys, runpy\\nsys.path.insert(0, '/holdout_task')\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\npython3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _invert, _design, _POWERS\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    d = item['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    b, clean = _fit(x, y)\\n    oof = np.full_like(x, np.nan)\\n    rejected = np.zeros(len(x), dtype=int)\\n    for i in range(len(x)):\\n        tr = np.arange(len(x)) != i\\n        bi, gi = _fit(x[tr], y[tr])\\n        rejected[tr] += ~gi\\n        if clean[i]:\\n            oof[i] = abs(_invert(y[i], bi) - x[i])\\n    print('Spike flags across leave-one-out refits:', {int(i): int(rejected[i]) for i in np.flatnonzero(rejected)})\\n    axis = np.count_nonzero(x, axis=1) <= 1\\n    load = np.linalg.norm(x, axis=1)\\n    threshold = np.quantile(load[clean], .75)\\n    for name, rows in [('single-channel', clean & axis), ('mixed-channel', clean & ~axis), ('highest load quartile', clean & (load >= threshold))]:\\n        if rows.any():\\n            print(name, 'n', rows.sum(), 'LOO max abs', float(np.max(oof[rows])), 'channel RMSE', np.sqrt(np.mean(oof[rows]**2, axis=0)).tolist())\\n    assert np.isfinite(oof[clean]).all() and np.max(oof[clean]) < .002\\n    assert np.all(rejected[~clean] == len(x) - 1) and not np.any(rejected[clean])\\n    out = calibrate_upstream(d)\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        section = d.get(name)\\n        if section is None:\\n            continue\\n        for key in ('past_channel_raw', 'hold_channel_raw'):\\n            if key not in section:\\n                continue\\n            raw, loads = section[key], out[name][key]\\n            assert loads.shape == raw.shape and np.isfinite(loads).all()\\n            mismatch = np.max(abs(_design(loads.reshape(-1, 4), _POWERS) @ b - raw.reshape(-1, 4)))\\n            print(name, key, 'max forward round-trip', float(mismatch))\\n            assert mismatch < 1e-9\\n    oc = out['calibration_load_cells']\\n    assert np.array_equal(oc['bridge_raw'], x) and not np.shares_memory(oc['bridge_raw'], x)\\n    s = oc['single_channel_sweeps']\\n    assert np.array_equal(s['cmd_stress'], s['true_stress']) and not np.shares_memory(s['cmd_stress'], c['single_channel_sweeps']['true_stress'])\\n    if d.get('chamber_verification_trials') is None:\\n        assert out.get('chamber_verification_trials') is None\\n        raw, expected = y[clean][:12], x[clean][:12]\\n        branch = calibrate_upstream(dict(d, chamber_verification_trials={'past_channel_raw': raw.reshape(2,6,4), 'hold_channel_raw': raw[::6], 'trial_id': np.arange(2)}))['chamber_verification_trials']\\n        assert np.max(abs(branch['past_channel_raw'] - expected.reshape(2,6,4))) < .002\\n        assert np.max(abs(branch['hold_channel_raw'] - expected[::6])) < .002\\n        assert np.array_equal(branch['trial_id'], np.arange(2))\\n        print('Non-null chamber branch passed using measured calibration pairs.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic → H2 sparse cubic with pairwise cross-terms; the worst clean in-sample inverse error is 3.03e-4 load units, with leave-one-out validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the composition module to accommodate direct isolated script execution\",\n      \"rejected_reason\": \"The documented validator invocation already passed; only the isolated test harness needs to register the artifact directory for sibling imports.\"\n    }\n  ],\n  \"rationale\": \"Run the validator in an isolated process with the artifact directory explicitly on the import path, then execute the previously blocked checks. If a held-out load slice or spike classification is unstable, revise the fit; if routing or round-trip checks fail, fix that part of the transducer before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "535b4bb96a48b58dfea1c655014c255fd7625ddc0d457771d60f12f5a23ca63d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46354.76,
+      "usage_known": true,
+      "prompt_tokens": 25979,
+      "cached_tokens": 9600,
+      "completion_tokens": 1296
+    }
+  ]
+}

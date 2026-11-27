@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56393bc58b794213bd39ade9848ceb5b",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:49:52.678378+00:00",
+  "ended_at_utc": "2026-11-27T14:50:34.419962+00:00",
+  "request_sha256": "9ab9c8309e5622ada7e15f6f3c6ce1b2b1c13e21a172023d7ef7c4a7918288ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61885,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31822,
+    "cached_tokens": 11136,
+    "completion_tokens": 1691
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheology_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import root\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\n# Report the previously identified gross redistribution rows separately.\\ngross = np.isin(np.arange(len(x)), [13, 14, 15])\\norder = np.argsort(x.sum(axis=1))\\n\\ndef basis(v, mode):\\n    p = m._bridge_basis(v)\\n    if mode == 'full-quadratic':\\n        p = np.concatenate([p, v**2, (v[..., 0]*v[..., 2])[..., None], (v[..., 1]*v[..., 3])[..., None]], axis=-1)\\n    return p\\n\\nfor mode in ('cyclic-cubic', 'full-quadratic', 'rational'):\\n    errors, channel, denominators, gross_error = [], [], [], []\\n    for test in np.array_split(order, 4):\\n        tr = np.ones(len(x), dtype=bool)\\n        tr[test] = False\\n        q0 = m._calibration({'true_channel_loads': x[tr], 'bridge_raw': y[tr]})\\n        tr &= np.max(abs(m._bridge_basis(x) @ q0 - y), axis=1) < .002\\n        p = basis(x[tr], mode)\\n        if mode == 'rational':\\n            # y_j = P_j(x)/(1 + a_j*x_j**2), with a_j fit on this fold only.\\n            fits = [np.linalg.lstsq(np.c_[p, -y[tr, j]*x[tr, j]**2], y[tr, j], rcond=None)[0] for j in range(4)]\\n            q, a = np.array(fits).T[:-1], np.array(fits).T[-1]\\n        else:\\n            q, a = np.linalg.lstsq(p, y[tr], rcond=None)[0], np.zeros(4)\\n        def forward(v):\\n            return (basis(v, mode) @ q)/(1 + a*v**2)\\n        clean = test[~gross[test]]\\n        err = forward(x[test])-y[test]\\n        channel.append(np.max(abs(err[~gross[test]])))\\n        gross_error.extend(abs(err[gross[test]].sum(1)))\\n        denominators.append(np.min(1 + a*x[test]**2))\\n        sums = []\\n        for i in clean:\\n            guess = (y[i]-q0[0]) @ np.linalg.inv(q0[1:5])\\n            r = root(lambda v: forward(v)-y[i], guess, tol=1e-10)\\n            if np.max(abs(forward(r.x)-y[i])) > 1e-8:\\n                sums.append(np.inf)\\n            else:\\n                sums.append(abs(r.x.sum()-x[i].sum()))\\n        errors.append(np.max(sums))\\n    print(mode, 'worst inverse absolute stress by load quartile', np.round(errors, 7), 'worst channel by quartile', np.round(channel, 7), 'minimum denominator', min(denominators), 'gross-row max summed forward error', max(gross_error))\\n\\ntr, _ = m._prepare(d)\\nobs = d['train']\\ny = np.column_stack((obs['strain_curves_obs'] - obs['strain_0'][:, None], obs['instant_rate_obs']))\\nfor lab in np.unique(obs['lab_id']):\\n    keep = obs['lab_id'] != lab\\n    taus, theta = m._fit(tuple(v[keep] for v in tr), d['past_dt'], d['eval_times'], y[keep])\\n    residual = m._design(tuple(v[~keep] for v in tr), d['past_dt'], d['eval_times'], taus) @ theta - y[~keep]\\n    for st in np.unique(obs['stratum'][~keep]):\\n        r = residual[obs['stratum'][~keep] == st]\\n        print('lab/stratum', lab, st, 'n', len(r), 'worst horizon abs p90', np.max(np.quantile(abs(r[:, :-1]), .9, axis=0)), 'rate abs p90', np.quantile(abs(r[:, -1]), .9), 'signed curve/rate medians', np.median(r[:, :-1]), np.median(r[:, -1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Challenge the cyclic cubic bridge on held-out load ranges and the rheology fit on lab-by-stratum slices; prior held-out-lab p90 absolute errors were 0.02824 at the worst strain horizon and 0.01128 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or Fokker–Planck checks.\",\n      \"rejected_reason\": \"The inputs contain continuous creep measurements and no class labels, relay state, or stochastic state dynamics. Held-out lab and stratum residuals are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire stress quartiles to test calibration extrapolation. The full quadratic basis includes squared pairwise sums and differences, and the rational challenger is fit separately within each fold. Promote a challenger only if it improves physical stress recovery on the worst slice; use signed lab-by-stratum residuals to identify systematic offsets that pooled error could hide.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "278ddd41c839509550d2c30944c56ae190fc6855d813c127d5ad050553902c88",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42362.51,
+      "usage_known": true,
+      "prompt_tokens": 31822,
+      "cached_tokens": 11136,
+      "completion_tokens": 1691
+    }
+  ]
+}

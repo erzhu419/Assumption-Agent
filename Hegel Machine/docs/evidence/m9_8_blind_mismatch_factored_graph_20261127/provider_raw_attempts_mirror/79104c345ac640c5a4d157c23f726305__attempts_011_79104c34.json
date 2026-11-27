@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79104c345ac640c5a4d157c23f726305",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:37:45.703875+00:00",
+  "ended_at_utc": "2026-11-27T14:38:26.407049+00:00",
+  "request_sha256": "fd11e4f5da6f746bad022e16901df3434cedfacf070410670fe1f61c4292e052",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31999,
+    "cached_tokens": 11136,
+    "completion_tokens": 1485
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, q = item['dataset'], item['campaign_diagnostics']; tr, te = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\nout = m.solve_batch(d); tau, theta = out['estimated_taus'], out['hereditary_weights']\\nbridge = m._axial_load_map(d['calibration_load_cells']); xt, xe = m._features(tr, te); xq, _ = m._features(q, q)\\na, b, c = [m._specimen(g, x, bridge) for g, x in ((tr, xt), (te, xe), (q, xq))]\\nY = tr['strain_curves_obs'] - tr['strain_0'][:, None]; R = tr['instant_rate_obs']; labs = tr['lab_id']\\nprint('Train leave-one-lab-out: lab, median strain abs error, median rate abs error, max relative tau shift')\\nfor lab in np.unique(labs):\\n    i = labs == lab\\n    p, w = m._fit(tuple(z[~i] for z in a), dt, t, Y[~i], R[~i]); A, B = m._branches(tuple(z[i] for z in a), dt, t, p); drift = a[2][i] @ w[2:]\\n    print(int(lab), *(round(float(v), 6) for v in (np.median(abs(A @ w[:2] + drift[:, None]*t - Y[i])), np.median(abs(B @ w[:2] + drift - R[i])), max(abs(p/tau-1)))))\\nprint('Calibrated deployment stress outside diagnostic ranges: past by step and hold', np.sum((b[0]<c[0].min(0))|(b[0]>c[0].max(0)),0).tolist(), int(np.sum((b[1]<c[1].min())|(b[1]>c[1].max()))))\\nC, D = m._branches(c, dt, t, tau); drift = c[2] @ theta[2:]; y = q['strain_curves_obs'] - q['strain_0'][:,None] - C @ theta[:2]; full = ~np.isnan(q['coupon_features_raw']).any(1); labs = q['lab_id']; gap = D*tau\\nbase = drift[:,None] * (-np.expm1(-t)); corrections = {'none': None, 'pairwise branch gap': (gap[:,0]-gap[:,1],False), 'pairwise hold-last stress': (c[1]-c[0][:,-1],False), 'rational hold-last stress': (c[1]-c[0][:,-1],True), 'rational pairwise branch gap': (gap[:,0]-gap[:,1],True)}\\n# Extra terms share the chamber residual shape and have zero initial slope.\\nshape = t + np.expm1(-t)\\nfor name, term in corrections.items():\\n    scores=[]\\n    for lab in np.unique(labs):\\n        j=full&(labs==lab); i=full&~j\\n        if term is None: pred=base[j]\\n        else:\\n            z,rat=term\\n            def predict(p,mask):\\n                amp=p[0]*z[mask]\\n                if rat: amp=amp/(1+p[1]*z[mask]**2)\\n                return base[mask]+amp[:,None]*shape\\n            seed=[0.,.1] if rat else [0.]\\n            p=least_squares(lambda p:(predict(p,i)-y[i]).ravel(),seed,bounds=([-np.inf,0],[np.inf,np.inf]) if rat else (-np.inf,np.inf),loss='soft_l1',f_scale=.005).x\\n            pred=predict(p,j)\\n        scores.append(float(np.mean(abs(pred-y[j]))))\\n    print('Complete diagnostic held-lab MAE',name,np.round(scores,6).tolist(),'worst',round(max(scores),6))\\nrate=abs(D @ theta[:2]+drift-q['instant_rate_obs']); e=abs(base-y)\\nprint('Diagnostic worst horizon strain MAE:',round(e.mean(0).max(),6),'missing-feature strain/rate MAE:',round(e[~full].mean(),6),round(rate[~full].mean(),6))\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(v).all() for v in out.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 exponential chamber drift alone → H2 add a stress-history correction only if it improves held-out labs; current worst complete-coupon held-out-lab strain MAE is 0.00399.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or relay-mode checks\",\n      \"rejected_reason\": \"The dataset has continuous strain and rate outcomes and no relay states. Leaving out each lab tests whether the material fit relies on any one lab.\"\n    }\n  ],\n  \"rationale\": \"Test reachable failure modes: a lab-dependent material fit, a missing stress-history term, or deployment stresses outside the diagnostic range. Fit each proposed correction without the scored lab and retain it only if it improves the worst held-out slice without changing the measured initial slope.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cf3e5ad3c7538d6956dd102873e7d4946ef7ba320e29a13af9ed8329361112ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41135.13,
+      "usage_known": true,
+      "prompt_tokens": 31999,
+      "cached_tokens": 11136,
+      "completion_tokens": 1485
+    }
+  ]
+}

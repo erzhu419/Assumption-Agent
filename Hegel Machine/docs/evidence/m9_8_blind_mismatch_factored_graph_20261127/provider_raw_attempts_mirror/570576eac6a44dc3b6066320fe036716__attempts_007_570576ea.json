@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "570576eac6a44dc3b6066320fe036716",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:14.854142+00:00",
+  "ended_at_utc": "2026-11-27T14:39:56.830602+00:00",
+  "request_sha256": "812ab40d9b4b33c02fce02e61635c3c59a8c6521a14e32e8c03085f20e90500e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47663,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28153,
+    "cached_tokens": 9600,
+    "completion_tokens": 1615
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text().replace('import numpy as np', 'from itertools import combinations_with_replacement\\\\n\\\\nimport numpy as np', 1)\\na, b = s.index('def _calibrate('), s.index('def _box_budget(')\\ns = s[:a] + '''_TERMS = [()] + [(j,) for j in range(4)] + [\\n    ids for degree in (2, 3)\\n    for ids in combinations_with_replacement(range(4), degree)\\n]\\n\\n\\ndef _rosette_basis(x):\\n    return np.column_stack([np.prod(x[:, ids], axis=1) for ids in _TERMS])\\n\\n\\ndef _fit_rosette(ref, raw):\\n    basis = _rosette_basis(ref)\\n    keep = np.ones(len(ref), dtype=bool)\\n    for _ in range(10):\\n        coef = np.linalg.lstsq(basis[keep], raw[keep], rcond=None)[0]\\n        err = np.linalg.norm(raw - basis @ coef, axis=1)\\n        updated = err <= max(8 * np.median(err), 1e-10)\\n        if np.array_equal(keep, updated) or updated.sum() < basis.shape[1]:\\n            return coef\\n        keep = updated\\n    return np.linalg.lstsq(basis[keep], raw[keep], rcond=None)[0]\\n\\n\\ndef _invert_rosette(raw, coef):\\n    x = np.linalg.solve(coef[1:5].T, (raw - coef[0]).T).T\\n    for _ in range(20):\\n        residual = _rosette_basis(x) @ coef - raw\\n        if np.max(np.abs(residual)) < 1e-12:\\n            return x\\n        jac = np.broadcast_to(coef[1:5].T, (len(x), 4, 4)).copy()\\n        for ids, c in zip(_TERMS[5:], coef[5:]):\\n            for k, j in enumerate(ids):\\n                factor = np.prod(x[:, ids[:k] + ids[k+1:]], axis=1)\\n                jac[:, :, j] += factor[:, None] * c\\n        x -= np.linalg.solve(jac, residual[..., None])[..., 0]\\n    raise RuntimeError('Rosette calibration inversion did not converge')\\n\\n\\ndef _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    coef = _fit_rosette(np.asarray(sweeps['ref_rosette']),\\n                        np.asarray(sweeps['raw_rosette']))\\n    return _invert_rosette(np.asarray(study['y_obs_raw']).reshape(-1, 4), coef).ravel()\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pathlib, pickle\\nimport numpy as np\\n\\ndef load(p):\\n spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load('batch_solver.py'); s=pickle.load(open('public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; x,y=a['ref_rosette'],a['raw_rosette']; c=m._fit_rosette(x,y)\\nfor ids,co in zip(m._TERMS,c):\\n if np.max(abs(co))>0.001: print('term',ids,co.round(6))\\ne=y-m._rosette_basis(x)@c; print('row errors >0.01',[(int(i),round(np.linalg.norm(e[i]),4)) for i in np.flatnonzero(np.max(abs(e),axis=1)>.01)],'inlier max',np.max(abs(e[np.max(abs(e),axis=1)<.01])))\\nfor name, groups in [('contiguous',np.array_split(np.arange(len(x)),4)),('random',np.array_split(np.random.default_rng(42).permutation(len(x)),5)),('all isolated',[np.flatnonzero(np.count_nonzero(x,axis=1)==1)])]:\\n print(name)\\n for ix in groups:\\n  tr=np.ones(len(x),bool); tr[ix]=False; cf=m._fit_rosette(x[tr],y[tr]); r=y[ix]-m._rosette_basis(x[ix])@cf; print('held max inlier',np.max(abs(r[np.max(abs(e[ix]),axis=1)<.01])))\\nobs=s['y_obs_raw'].reshape(-1,4); cal=m._invert_rosette(obs,c); print('obs inversion max',np.max(abs(m._rosette_basis(cal)@c-obs)),'cal range',cal.min(),cal.max());\\nfor p in sorted(pathlib.Path('/tmp/hegel_continual_archive').glob('*solver.py')):\\n a=load(p); a._calibrate=lambda _: cal.ravel(); o=a.solve_batch(s); k=o['kkt_certificate']; print(p.name,'objective',k['primal_objective'],'gap',k['primal_objective']-k['dual_lower_bound'],'weights',o['weights'].round(6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette calibration → H2 robust multivariate cubic; the full cubic's worst channel 95th-percentile out-of-fold absolute error is 6.3e-5 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit only independent bank cubics\",\n      \"rejected_reason\": \"The diagonal and additive cubic fits leave held-out errors orders of magnitude larger than the full cubic.\"\n    }\n  ],\n  \"rationale\": \"Fit the supported cubic and reject grossly corrupted sweep rows. Blocked sweeps test whether the fitted map transfers across sweep designs; the inverse round trip tests the observed range. Compare archived boundary objectives again only after fixing calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9e6b52990892da401dc3f08e4ff552e9d10a3e95dfeddc10c04be35dbb809e3d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42902.63,
+      "usage_known": true,
+      "prompt_tokens": 28153,
+      "cached_tokens": 9600,
+      "completion_tokens": 1615
+    }
+  ]
+}

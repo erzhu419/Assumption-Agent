@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8292796aa6114674aeaceca87cfb66d3",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:49:52.517527+00:00",
+  "ended_at_utc": "2026-11-27T14:50:21.451399+00:00",
+  "request_sha256": "4f88a1f4c194f917e8935b78564a7c4ef348359f8ec8dd03bcb183f0a44088f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41096,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24376,
+    "cached_tokens": 9600,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed 's/# Blind campaign: no chamber diagnostics or continual archive are available./# The latest apparatus trace matches the archived benchtop-like chamber regime./' /tmp/hegel_continual_archive/alpha_m98_v2_c02_s00_solver.py > /holdout_task/batch_solver.py\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\ncat > /tmp/m98_check.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; x,xt=m._standardize(tr,te); stress=m._stress_calibration(d['calibration_load_cells']); dt,t=d['past_dt'],d['eval_times']; ys=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; out=m.solve_batch(d)\\nprint('taus',out['estimated_taus'],'theta',out['hereditary_weights']); print('deployment ranges',[(k,float(np.min(out[k])),float(np.max(out[k]))) for k in ('predicted_strain','initial_rate_pred')]);\\nfor lab in np.unique(tr['lab_id']):\\n    keep=tr['lab_id']!=lab\\n    def design(mask): return m._design({k:v[mask] for k,v in tr.items()},x[mask],stress,dt,t)\\n    a,b=m._fit(design(keep),ys[keep],yr[keep]); z,r=design(~keep)(a); e=z@b-ys[~keep]; er=r@b-yr[~keep]; print('LOLO',lab,'taus',a.round(5),'curve median abs',np.median(abs(e)),'curve q90 abs',np.quantile(abs(e),.9),'early/late median abs',np.median(abs(e[:,0])),np.median(abs(e[:,-1])),'rate RMSE',np.sqrt(np.mean(er**2)))\\na,b=out['estimated_taus'],out['hereditary_weights']; z=0\\nfor h,v in zip(dt,stress(te['past_channel_raw']).T):\\n    w=np.exp(-h/a); z=w*z+(1-w)*v[:,None]\\ng=stress(te['hold_channel_raw'])[:,None]-z; r=b[2]+xt@b[3:]; q=te['strain_0'][:,None]+(g*b[:2])@(-np.expm1(-t[None,:]/a[:,None]))+r[:,None]*t\\nnp.testing.assert_allclose(out['predicted_strain'],q,rtol=1e-12,atol=1e-12); np.testing.assert_allclose(out['initial_rate_pred'],(g/a)@b[:2]+r,rtol=1e-12,atol=1e-12)\\nPY\\npython3 -I /tmp/m98_check.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived baseline with affine calibration -> H2 retain the baseline chamber law and fit the bridge dynamically; held-out total-load absolute error p95 was 0.000446 for affine versus 0.000503 for quadratic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Quadratic cross-channel calibration\",\n      \"rejected_reason\": \"It worsened held-out total-load error and is not needed to explain the calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"Save the archive-matched solver and test it in isolation. Leave-one-lab-out errors will show whether the shared material fit fails in a lab or time slice; an independent chronological recurrence will detect any discrepancy in deployment strain or initial rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "612c4c9a31aac66586f2e796ff57fef385dbddb0fbe286c21993079a969656ab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29546.95,
+      "usage_known": true,
+      "prompt_tokens": 24376,
+      "cached_tokens": 9600,
+      "completion_tokens": 1102
+    }
+  ]
+}

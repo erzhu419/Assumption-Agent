@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea0e973b18d448d5839deec613cf2298",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:51:33.481899+00:00",
+  "ended_at_utc": "2026-11-27T14:51:57.638181+00:00",
+  "request_sha256": "55a9a888785239163d6f3322910ccda1f73e9c4bca238e4e5bd04390238ebd95",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40573,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26654,
+    "cached_tokens": 11136,
+    "completion_tokens": 813
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('a=cal')[0])\\nnp.set_printoptions(precision=4,suppress=True,linewidth=148)\\na=cal['true_channel_loads']; b=cal['bridge_raw'];\\nprint('cal rows load | raw | sums',np.c_[a,b,a.sum(1),b.sum(1)][:25]); print('sweeps:',np.column_stack(list(cal['single_channel_sweeps'].values()))); print('range cal train diag',[(z.min(0),z.max(0)) for z in [b,tr['past_channel_raw'].reshape(-1,4),g['past_channel_raw'].reshape(-1,4)]]);\\nprint('reference groups by lab: mean/std across all panel columns, feature mean:')\\nfor name,z in [('tr',tr),('te',te),('g',g)]:\\n for k in range(4):\\n  rows=z['lab_id']==k; p=z['ref_coupons'][rows];print(name,k,np.median(p.mean(0)),np.median(p.std(0)),np.nanmean(z['coupon_features_raw'][rows],0))\\nfor label,x,y in [('forward',a,b),('inverse',b,a)]:\\n def basis(x,degree):\\n  from itertools import combinations_with_replacement\\n  cols=[np.ones(len(x))]; names=[()]\\n  for k in range(1,degree+1):\\n   for c in combinations_with_replacement(range(4),k):cols.append(np.prod(x[:,c],axis=1)); names.append(c)\\n  return np.array(cols).T,names\\n for degree in (1,2,3):\\n  A,names=basis(x,degree); Q=np.linalg.pinv(A); w=Q@y; e=(A@w-y)/(1-np.sum(A*Q.T,axis=1))[:,None]; print(label,degree,'LOO channel RMSE',np.sqrt(np.mean(e**2,axis=0)), 'sum RMSE',np.sqrt(np.mean(e.sum(1)**2)),'largest axial coeffs',[(names[j],round(w[j].sum(),4)) for j in np.argsort(abs(w.sum(1)))[-8:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine bridge plus drift-only transfer -> H2 test the bridge algebra before attributing chamber mismatch; current diagnostic rate RMSE is 0.909 and calibration axial RMSE is 0.556.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit free chamber branch amplitudes immediately\",\"rejected_reason\":\"A wrong stress map distorts both branch gaps and inferred intrinsic lifetimes; free amplitudes would absorb that error without fixing it.\"}],\"rationale\":\"Compare forward and inverse bridge bases by leave-one-sweep-row-out error and inspect reference-panel shifts. This determines whether to replace the affine stress map and how to standardize the verification coupons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fc9777e9ea557faa5a17a06f71235db668954f8855a4137c42bdea78c0177795",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24518.24,
+      "usage_known": true,
+      "prompt_tokens": 26654,
+      "cached_tokens": 11136,
+      "completion_tokens": 813
+    }
+  ]
+}

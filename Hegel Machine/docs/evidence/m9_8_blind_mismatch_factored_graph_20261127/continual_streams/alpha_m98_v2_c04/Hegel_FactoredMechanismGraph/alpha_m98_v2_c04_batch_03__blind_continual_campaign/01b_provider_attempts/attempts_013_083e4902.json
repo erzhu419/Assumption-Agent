@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "083e490251ea4c998fbb2f14fe2fa2ea",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:38:37.857136+00:00",
+  "ended_at_utc": "2026-11-27T14:39:09.885460+00:00",
+  "request_sha256": "dcdca68aa1a1f198894ea64403ab6153d1f5997d93c39d69a7d7fd5848ecd63c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71274,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36112,
+    "cached_tokens": 9600,
+    "completion_tokens": 1236
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_batch.pkl','rb') as f: it=pickle.load(f)[0]\\nd=it['dataset']; g=it['campaign_diagnostics']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; cal=d['calibration_load_cells']; out=m.solve_batch(d); tau,th=out['estimated_taus'],out['hereditary_weights']; bridge=m._bridge(cal)\\nraw=cal['bridge_raw']; loads=cal['true_channel_loads']; Z=np.c_[np.ones(len(raw)),raw]; q=np.max(abs(loads),axis=1); bands=np.array_split(np.argsort(q),3)\\nfor j,b in enumerate(bands):\\n keep=np.ones(len(raw),bool); keep[b]=False; u=np.linalg.lstsq(Z[keep],loads[keep],rcond=None)[0]; e=Z[b]@u-loads[b]; print('held load-magnitude band',j,'axial RMSE',np.sqrt(np.mean(e.sum(1)**2)),'channel RMSE',np.sqrt(np.mean(e**2,axis=0)))\\np,h=m._loads(g,bridge); th0=th.copy(); th0[2:]=0; a,r=m._chamber(np.zeros((len(h),4)),p,h,dt,t,tau,th0); Y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None]-a,g['instant_rate_obs']-r]; L=g['lab_id']\\nforms={'unit_exp':lambda k:-np.expm1(-t),'fit_exp':lambda k:-np.expm1(-k*t)/k,'rational':lambda k:t/(1+k*t),'rational_sq':lambda k:t/(1+k*t*t),'atan':lambda k:np.arctan(k*t)/k}\\nfor name,f in forms.items():\\n score=[]\\n for l in np.unique(L):\\n  j=L==l\\n  def err(k,ix): return Y[ix,:-1]-Y[ix,-1,None]*f(k)\\n  k=1. if name=='unit_exp' else np.exp(minimize_scalar(lambda z:np.mean(err(np.exp(z),~j)**2),bounds=(-6,4),method='bounded').x)\\n  score.append(np.sqrt(np.mean(err(k,j)**2)))\\n print('temporal form',name,'worst held-lab curve RMSE (observed onset as amplitude)',max(score))\\nx=m._features(tr,te)[:len(tr['lab_id'])]; p,h=m._loads(tr,bridge); A,R=m._design(x,p,h,dt,t,tau); e=(A@th).reshape(-1,len(t))-(tr['strain_curves_obs']-tr['strain_0'][:,None]); z=R@th-tr['instant_rate_obs']; L=tr['lab_id']; S=tr['stratum']; miss=np.isnan(tr['coupon_features_raw']).any(1)\\nfor label,v in [('lab',L),('stratum',S),('missing',miss)]:\\n print('signed median residual by',label,[(str(k),round(float(np.median(e[v==k])),5),round(float(np.median(z[v==k])),5)) for k in np.unique(v)])\\nassert all(np.isfinite(v).all() for v in out.values()) and 0.05<tau[0]<tau[1]<25\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (chronological memory plus unit-rate exponential saturation) -> H2 (change the law only if an alternative improves held-out chamber predictions); current worst-lab temporal-shape RMSE is 0.00817.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or Fokker–Planck checks\",\n      \"rejected_reason\": \"This task has continuous strain and rate measurements, with no class labels, relay states, or stochastic drift operator.\"\n    }\n  ],\n  \"rationale\": \"Withholding calibration load bands tests whether the affine bridge breaks at deployment-relevant loads; large errors would justify testing nonlinear calibration. Held-out chamber labs test whether a rational drift law improves on exponential saturation, and signed residuals by lab, stratum, and missingness screen for a nuisance offset that pooled errors could hide.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "3c4f07fb63fb297ff2d64d122d3853210c2b4c3b85f07f5ae52f06485ae3ffb8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32468.59,
+      "usage_known": true,
+      "prompt_tokens": 36112,
+      "cached_tokens": 9600,
+      "completion_tokens": 1236
+    }
+  ]
+}

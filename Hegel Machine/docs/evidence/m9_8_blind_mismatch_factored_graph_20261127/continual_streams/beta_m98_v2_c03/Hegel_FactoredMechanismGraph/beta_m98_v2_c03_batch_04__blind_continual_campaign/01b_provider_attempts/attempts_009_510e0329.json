@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "510e03297c5e43d6a74d6e95863d5750",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Hegel_FactoredMechanismGraph__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:27.756716+00:00",
+  "ended_at_utc": "2026-11-27T14:41:57.623034+00:00",
+  "request_sha256": "09b38ba9aee3d715a2824e62f75646798937d2a2e148a463069b167f219a0d83",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24567,
+    "cached_tokens": 5504,
+    "completion_tokens": 938
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rosette_mixed_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nst = item['study']\\ns = st['sensor_calibration_sweeps']\\nx, y = s['ref_rosette'], s['raw_rosette']\\nnorms = np.linalg.norm(y, axis=1)\\na = np.sort(norms)\\nj = np.argmax(np.diff(a))\\nclean = norms < (a[j] + a[j+1]) / 2\\nmixed = np.count_nonzero(x, axis=1) > 1\\npairs = list(zip(*m._PAIRS))\\nworst = 0.\\nfor i in range(4):\\n    k = (i + 1) % 4\\n    p = x[:, i] * x[:, k]\\n    for sign in (-1, 1):\\n        hold = mixed & (sign*p >= 0.5)\\n        if not np.any(hold & clean):\\n            continue\\n        train, test = ~hold, hold & clean\\n        c = m._fit(x[train], y[train])\\n        e = float(np.max(abs(m._invert(y[test], c) - x[test])))\\n        worst = max(worst, e)\\n        print('interaction slice', (i,k,sign), 'n', int(test.sum()), 'inverse max', e)\\n\\n# On the actual observations, isolate any calibration bias caused by retained EMI.\\nc_all = m._fit(x, y)\\nc_clean = np.linalg.lstsq(m._design(x[clean]), y[clean], rcond=None)[0]\\nraw = st['y_obs_raw']\\na = m._invert(raw, c_all)\\nb = m._invert(raw, c_clean)\\nshift = float(np.max(abs(a-b)))\\nprint('worst signed-interaction inverse error', worst, 'observation shift vs clean-only fit', shift)\\nprint('calibration scope: public studies=1; study label/batch fields:', [k for k in st if 'label' in k or 'batch' in k]); print('campaign diagnostics present:', item.get('campaign_diagnostics') is not None)\\nassert 0 < worst < 1e-4\\nassert shift < 1e-5\\nPY\\npython3 -I /tmp/rosette_mixed_audit.py && python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or diagonal cubic → H2 coupled quadratic plus per-channel cubic; worst grouped inverse error is 4.23e-5, with signed-interaction holdouts pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and pair-cubic comparisons\",\n      \"rejected_reason\": \"The previous grouped audit already found both alternatives worse at the upper-amplitude boundary. Signed-interaction holdouts test a distinct failure mode.\"\n    }\n  ],\n  \"rationale\": \"Withhold strongly excited channel products by sign to test whether the fitted coupling generalizes across mixed sweeps. A failed slice would motivate revisiting the basis; a material observation shift relative to the clean-only fit would instead implicate EMI rejection. The public study has no labeled batch cohorts or relay modes on which to run those checks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "759749f3365d7d99205fe542a67a4e90020a85255050470eb6692a76b16b66b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30300.04,
+      "usage_known": true,
+      "prompt_tokens": 24567,
+      "cached_tokens": 5504,
+      "completion_tokens": 938
+    }
+  ]
+}

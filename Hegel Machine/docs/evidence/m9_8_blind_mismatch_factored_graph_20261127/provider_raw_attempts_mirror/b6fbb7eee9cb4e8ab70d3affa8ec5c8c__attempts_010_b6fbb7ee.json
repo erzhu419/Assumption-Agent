@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6fbb7eee9cb4e8ab70d3affa8ec5c8c",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:55:20.936921+00:00",
+  "ended_at_utc": "2026-11-27T14:55:50.177719+00:00",
+  "request_sha256": "b303298ff31e4caec8ef011118fddf534b2ce61f3a3055cdc90fd6d07a7324be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26492,
+    "cached_tokens": 11136,
+    "completion_tokens": 711
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /tmp/hegel_continual_archive\\nfor f in alpha_m98_v2_c03*_solver.py; do echo \\\"--- $f\\\"; sed -n '/^def solve_batch/,$p' \\\"$f\\\"; done\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, numpy as np\\nr=json.load(open('archive_apparatus_log.json'))\\nx=np.array([v['facility_telemetry_trace'] for v in r]); m=x.mean(1); sd=np.sqrt(x.var(1).mean(0)); i=np.array([v['completed_batch_index'] for v in r]); A=np.c_[np.ones(len(i)),i]; b=np.linalg.lstsq(A[:-1],m[:-1],rcond=None)[0]; print('prefix indices',i); print('channel 2/5 means by index',m[:,[2,5]].round(5)); print('channel 2/5 latest deviation from earlier linear trend, in pooled within-trace SD',((m[-1]-A[-1]@b)/sd)[[2,5]].round(2)); print('channel 2/5 earlier trend residuals in pooled SD',((m[:-1]-A[:-1]@b)/sd)[:,[2,5]].round(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dynamically calibrated affine bridge and shared two-branch spectrum → H2 baseline chamber law; worst-lab 90th-percentile errors are 0.0223 for strain and 0.0172 for initial rate, and the worst held-out axial-stress RMSE is 0.000258.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reopen the bridge calibration\",\n      \"rejected_reason\": \"Held-out tension and compression confirm small axial-stress errors, and all deployment channel readings lie inside the calibration ranges.\"\n    }\n  ],\n  \"rationale\": \"Channels 2 and 5 differ from the baseline by roughly 7–8 pooled standard deviations, despite a strong match on the regime-separating channels. Check whether those two differences follow the existing campaign trend and compare only the archived deployment equations. A break from that trend would warrant reconsidering the chamber law; a continued trend would not.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2b26c2f7d3f443660df7efd6b37115d684607377f6b03c87bd59c5d7242d5806",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29196.68,
+      "usage_known": true,
+      "prompt_tokens": 26492,
+      "cached_tokens": 11136,
+      "completion_tokens": 711
+    }
+  ]
+}

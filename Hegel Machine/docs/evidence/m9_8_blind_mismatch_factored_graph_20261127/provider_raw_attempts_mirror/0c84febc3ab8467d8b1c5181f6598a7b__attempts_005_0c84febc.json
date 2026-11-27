@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c84febc3ab8467d8b1c5181f6598a7b",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:27:32.835629+00:00",
+  "ended_at_utc": "2026-11-27T14:28:05.929833+00:00",
+  "request_sha256": "1c953fbaede997db7047b0b3cee72ae5f3d8819ad8191b61af6e9860b57db5ec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27032,
+    "cached_tokens": 9600,
+    "completion_tokens": 1258
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rheo_kernel.py <<'PY'\\nexec(open('/tmp/rheo_probe.py').read().split(\\\"print('train RMSE'\\\")[0])\\nfrom itertools import combinations\\nP,H,D=c; n=len(H); q=len(t)+1\\nB=np.vstack([np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]])\\nA=np.linalg.lstsq(B,yd.T,rcond=None)[0].T\\nZ=np.c_[np.ones(n),H,P]; C=np.linalg.lstsq(Z,A,rcond=None)[0]; print('linear amplitude coefficients by 1,hold,past0..5\\\\n',C.round(4))\\nprint('linear amp residual rms',np.std(A-Z@C,0)); print('shared-tau noise level',np.std(yd-A@B.T,axis=0).round(4)); print('baseline normalized memory impulse',np.array([(-np.expm1(-dt[i]/tau))*np.exp(-sum(dt[i+1:])/tau) for i in range(len(dt))]).round(4));\\nprint('aggregate coefficients',C.sum(0));print('branch ratios',C[:,:2]/w[:2]); print('sweep fit',[(int(g),np.polyfit(d['calibration_load_cells']['single_channel_sweeps']['true_stress'][ss],d['calibration_load_cells']['single_channel_sweeps']['cmd_stress'][ss],1).round(4)) for g in np.unique(d['calibration_load_cells']['single_channel_sweeps']['lab_id']) for ss in [d['calibration_load_cells']['single_channel_sweeps']['lab_id']==g]])\\nfor name,Z0 in [('affine_stress',Z),('affine+features',np.c_[Z,D[:,1:]]),('affine+hold2',np.c_[Z,H**2]),('affine+last2',np.c_[Z,P[:,-1]**2]),('affine+labs',np.c_[Z,np.eye(4)[dg['lab_id']][:,1:]])]:\\n for nb in [2,3]:\\n  b0=B[:,:nb]; az=np.einsum('ij,kl->ikjl',Z0,b0).reshape(n*q,-1); yh=yd.ravel(); pred=np.empty_like(yd)\\n  for g in np.unique(dg['lab_id']):\\n   mask=dg['lab_id']==g; ix=np.repeat(~mask,q); p0=np.linalg.lstsq(az[ix],yh[ix],rcond=None)[0]; pred[mask]=(az[~ix]@p0).reshape(-1,q)\\n  print(name,nb,'LOLO rms',[(round(np.sqrt(np.mean((pred[ss,:-1]-yd[ss,:-1])**2)),4),round(np.sqrt(np.mean((pred[ss,-1]-yd[ss,-1])**2)),4)) for g in np.unique(dg['lab_id']) for ss in [dg['lab_id']==g]])\\nprint('error correlations with steps, hold, max, min, mean, last jump, features, lab'); E=A[:,:2]-(Z@C)[:,:2]; extras=np.c_[P,H,P.max(1),P.min(1),P.mean(1),H-P[:,-1],D[:,1:],dg['lab_id']]; print(np.corrcoef(np.c_[E,extras].T)[:2,2:].round(2));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_kernel.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared benchtop law → H2 shared relaxation spectrum with different chamber history and drift; baseline chamber RMSE peaks at 0.5964 for strain and is 1.4812 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"Deployment uses the benchtop history-to-gap mapping and coupon-feature drift unchanged.\",\"empirical_witness\":\"Baseline initial-rate RMSE is 1.4812 on chamber coupons; allowing coupon-specific amplitudes on the same two relaxation times cuts it to 0.00189 and worst-horizon strain RMSE to 0.00446.\",\"causal_blanket_diagnosis\":\"The shared time basis explains the chamber trajectories, but the benchtop mapping from loading history and coupon features to trajectory coefficients does not.\",\"sublated_pivot\":\"Keep material parameters fitted on benchtop coupons and identify the chamber mapping from calibrated histories to branch amplitudes.\",\"risk_kind\":\"deployment_regime_shift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit the intrinsic relaxation spectrum on chamber coupons\",\"rejected_reason\":\"Free chamber times barely improve the already noise-scale residual of the shared time basis, and the material parameters must remain train-estimated.\"}],\"rationale\":\"An affine amplitude fit will reveal whether the chamber memory is a different linear history kernel. Leave-one-lab-out errors will distinguish a transferable kernel from an apparent fit that instead requires a nonlinear stress term or a lab correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f91a70db7038c11be6a5b7eca0b1e3e4075f86a1eb4eab6a59fd14a66246a55f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33046.35,
+      "usage_known": true,
+      "prompt_tokens": 27032,
+      "cached_tokens": 9600,
+      "completion_tokens": 1258
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20535fa2ef654a7f83d8ecb7d8e34e19",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:59:32.903400+00:00",
+  "ended_at_utc": "2026-11-27T15:00:11.009347+00:00",
+  "request_sha256": "76f517daa9d27a8b85d0631ed58d626fdf07728ebbad531486b0da02ef7f7df3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62977,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32151,
+    "cached_tokens": 9600,
+    "completion_tokens": 1446
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m98_stress.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; cal=d['calibration_load_cells']; x=cal['true_channel_loads']; y=cal['bridge_raw']; clean=np.max(np.abs(y-np.median(y,axis=0)),axis=1)<8; x,y=x[clean],y[clean]; order=np.argsort(np.max(abs(x),axis=1)); high=order[int(.8*len(x)):]; split=[(f'fold{k}', h) for k,h in enumerate(np.array_split(np.random.default_rng(72).permutation(len(x)),5))]+[('high load',high)]\\ndef design(x,j,kind,a=0.0):\\n u,v=x[:,j],x[:,(j+1)%4]; cols=[np.ones(len(x)),*x.T,u*v,u**3]; q=u-v\\n if kind=='pairwise': cols += [u*u,v*v,q**3,u*u*v,u*v*v]\\n if kind=='rational': cols[5]=cols[5]/(1+a*q*q); cols[6]=cols[6]/(1+a*q*q)\\n return np.column_stack(cols)\\nfor name,h in split:\\n keep=np.ones(len(x),bool); keep[h]=False; sub={'bridge_raw':y[keep],'true_channel_loads':x[keep]}; coeff=m._axial_load_map(sub); spec=m._specimen({'past_channel_raw':y[h,None,:],'hold_channel_raw':y[h]},np.zeros((len(h),4)),coeff)\\n print(name,'production axial RMSE',np.sqrt(np.mean((spec[1]-x[h].sum(axis=1))**2)))\\n for kind in ('base','pairwise','rational'):\\n  errors=[]\\n  for j in range(4):\\n   def fit(a): return np.linalg.lstsq(design(x[keep],j,kind,a),y[keep,j],rcond=None)[0]\\n   a=least_squares(lambda z:design(x[keep],j,kind,z[0])@fit(z[0])-y[keep,j],[.01],bounds=(0,5)).x[0] if kind=='rational' else 0.\\n   errors.append(design(x[h],j,kind,a)@fit(a)-y[h,j])\\n  print(' ',kind,'forward RMSE',np.sqrt(np.mean(np.square(errors))))\\ntr,te,diag=d['train'],d['test'],i['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; xt,_=m._features(tr,te); empty={k:diag[k][:0] for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; xd,_=m._features(diag,empty); bridge=m._axial_load_map(cal); src=m._specimen(tr,xt,bridge); dst=m._specimen(diag,xd,bridge); ytrain=tr['strain_curves_obs']-tr['strain_0'][:,None]; yc=diag['strain_curves_obs']-diag['strain_0'][:,None]; yr=diag['instant_rate_obs']; ec=np.empty_like(yc); er=np.empty_like(yr)\\nfor lab in np.unique(diag['lab_id']):\\n keep=tr['lab_id']!=lab; h=diag['lab_id']==lab; tau,theta=m._fit(tuple(a[keep] for a in src),dt,t,ytrain[keep],tr['instant_rate_obs'][keep]); pc,pr=m._chamber_predict(dst,dt,t,tau,theta); ec[h]=pc[h]-yc[h]; er[h]=pr[h]-yr[h]\\nfor name,labels in [('feature missingness',np.isnan(diag['coupon_features_raw']).any(axis=1)),('stratum',diag['stratum'])]:\\n for v in np.unique(labels):\\n  h=labels==v; print(name,v,'count',h.sum(),'curve RMSE and bias by horizon',[(round(np.sqrt(np.mean(z*z)),6),round(np.mean(z),6)) for z in np.array_split(ec[h],3,axis=1)],'rate RMSE and bias',np.sqrt(np.mean(er[h]**2)),np.mean(er[h]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_stress.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted bridge terms or a confounded chamber fit -> H2 cyclic polynomial calibration and carried memory with unit saturation; the current worst held-out-lab RMSE is 0.0140 for strain and 0.0192 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift operators, and classification accuracy\",\n      \"rejected_reason\": \"The documented system is a deterministic relaxation regression with no relay state or class labels. Lab, stratum, missingness, and horizon are measurable nuisance slices.\"\n    }\n  ],\n  \"rationale\": \"Held-out calibration sweeps, especially the highest-load sweeps, can reveal a missing pairwise or rational bridge term; revisit the bridge only if a challenger closes a meaningful error margin. Stratify out-of-fold chamber residuals by missingness, stratum, and horizon to detect biases hidden by pooled RMSE, then confirm isolated execution.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "030fe54f095019261c38d9f5335f231c736a67d7cd0b1b4f8236adb5f4b5bb2f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38488.43,
+      "usage_known": true,
+      "prompt_tokens": 32151,
+      "cached_tokens": 9600,
+      "completion_tokens": 1446
+    }
+  ]
+}

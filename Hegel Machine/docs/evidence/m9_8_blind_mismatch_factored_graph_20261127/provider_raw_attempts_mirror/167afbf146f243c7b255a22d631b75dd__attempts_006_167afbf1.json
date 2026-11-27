@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "167afbf146f243c7b255a22d631b75dd",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:38:44.397264+00:00",
+  "ended_at_utc": "2026-11-27T14:39:13.385786+00:00",
+  "request_sha256": "321372a2c541232b98669fcdb6e971e71d78ad24ebefbd85f93f8e0a345345eb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42721,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25988,
+    "cached_tokens": 9600,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/rosette_cv.py <<'PY'\\nimport pickle,numpy as np,itertools\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['sensor_calibration_sweeps']; x,y=a['ref_rosette'],a['raw_rosette']; np.set_printoptions(precision=6,suppress=True,linewidth=160)\\nprint('single-axis count',np.unique(np.count_nonzero(x,axis=1),return_counts=True))\\ndef features(x,j,k):\\n cols=[np.ones(len(x)),*x.T]\\n if k=='diag3': cols.append(x[:,j]**3)\\n if k=='all3': cols.extend((x**3).T)\\n if k=='full3': cols.extend(np.prod(x[:,ids],axis=1) for d in (2,3) for ids in itertools.combinations_with_replacement(range(4),d))\\n return np.column_stack(cols)\\ndef fit(d,y,k,n):\\n mask=np.ones(len(y),bool)\\n for _ in range(9):\\n  c=np.linalg.lstsq(d[mask],y[mask],rcond=None)[0]; r=abs(y-d@c); sel=np.argsort(r)[:max(d.shape[1]+2,len(y)-n)]; m=np.zeros(len(y),bool); m[sel]=True\\n  if np.array_equal(m,mask): break\\n  mask=m\\n return c\\nfor k in ('affine','diag3','all3','full3'):\\n print('model',k)\\n for j in range(4):\\n  d=features(x,j,k); errors=np.zeros(len(y));\\n  for test in np.array_split(np.random.default_rng(42).permutation(len(y)),5):\\n   train=np.setdiff1d(np.arange(len(y)),test); c=fit(d[train],y[train,j],k,7); errors[test]=y[test,j]-d[test]@c\\n  c=fit(d,y[:,j],k,8); r=y[:,j]-d@c; out=np.argsort(abs(r))[-8:]; print(j,'OOF abs quantiles',np.quantile(abs(errors),[.5,.8,.9,.95,1]),'coef',c if k!='full3' else '', 'largest residuals',list(zip(out,r[out].round(5))))\\nb=a['single_bank_sweeps']; print('bank-only robust cubic fits');\\nfor j in range(4):\\n v=b['bank_id']==j; u=b['ref_signal'][v]; q=b['raw_readout'][v]; d=np.c_[np.ones(len(u)),u,u**3]; c=fit(d,q,'',1); print(j,c,q-d@c)\\nPY\\npython3 -I /tmp/rosette_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 global affine calibration → H2 smooth nonlinear calibration with isolated gross sweep errors; the affine model's worst held-out channel MAE is 2.081 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A global affine rosette map explains the calibration sweeps.\",\n    \"empirical_witness\": \"Channel 0's isolated-input sweep has slopes of 1.127, 0.851, and 1.202 over consecutive intervals; a separate bank-only readout jumps to 15.993 at reference 1.4.\",\n    \"causal_blanket_diagnosis\": \"Systematic curvature and gross sweep errors are both being absorbed into the estimated affine mixing matrix.\",\n    \"sublated_pivot\": \"Compare robust affine, diagonal cubic, and cross-channel polynomial fits on held-out sweeps.\",\n    \"risk_kind\": \"sensor_calibration_model_mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Discard the single-axis sweeps as a separate regime\",\n      \"rejected_reason\": \"The single-axis sweeps isolate curvature and cross-talk, helping distinguish missing terms from bad readings.\"\n    }\n  ],\n  \"rationale\": \"Held-out residuals and independent bank-only fits test whether robust fitting alone suffices or whether nonlinear and cross-channel terms are needed before comparing wall operators.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c1d00bbade9291ef27bc36037b5c6d9e9bf2acce5b44070158e7302c8d3bd014",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29425.32,
+      "usage_known": true,
+      "prompt_tokens": 25988,
+      "cached_tokens": 9600,
+      "completion_tokens": 1072
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db0cfd7ac1b941969aec65d4028d9072",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_LatestFirst__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:45:46.810178+00:00",
+  "ended_at_utc": "2026-11-27T14:46:28.167501+00:00",
+  "request_sha256": "811722767f34f7982a378beb53ffe54313463ced745406e9ff00ad6fe372d344",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61950,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33602,
+    "cached_tokens": 11136,
+    "completion_tokens": 1565
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/audit_batch04.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n s=item['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; A=m._features(x)\\n names=('full','compact','rational_005','rational_020'); errors={k:np.zeros_like(y) for k in names}; keep=np.zeros(len(x),dtype=bool); supports=[]\\n def rational(q,a):\\n  F=m._features(q)\\n  for j in range(4): F[:,5+m._TERMS.index((j,j,j))] /= 1+a*q[:,j]**2\\n  return F\\n for te in np.array_split(np.random.default_rng(13).permutation(len(x)),10):\\n  tr=np.setdiff1d(np.arange(len(x)),te); c=m._fit_calibration(x[tr],y[tr]); fiterr=np.linalg.norm(y[tr]-A[tr]@c,axis=1); clean=tr[fiterr<.002]; keep[te]=np.linalg.norm(y[te]-A[te]@c,axis=1)<.002; masks=abs(c)>.001; supports.append(int(masks.sum())); errors['full'][te]=A[te]@c-y[te]\\n  for name,F in [('compact',A),('rational_005',rational(x,.05)),('rational_020',rational(x,.20))]:\\n   for j,mask in enumerate(masks.T):\\n    coef=np.linalg.lstsq(F[clean][:,mask],y[clean,j],rcond=None)[0]; errors[name][te,j]=F[te][:,mask]@coef-y[te,j]\\n print('paired calibration:',int((~keep).sum()),'OOF gross outliers; compact support sizes',sorted(set(supports)))\\n for name,e in errors.items(): print(name,'clean OOF RMSE per channel',np.sqrt(np.mean(e[keep]**2,axis=0)),'worst absolute',np.max(abs(e[keep])))\\n b=sw['single_bank_sweeps']; banks=b['bank_id']; bx=np.eye(4)[banks]*b['ref_signal'][:,None]; bankerr=(m._features(bx)@m._fit_calibration(x,y))[np.arange(len(bx)),banks]-b['raw_readout']; print('independent single-bank max after excluding gross outliers',np.max(abs(bankerr[abs(bankerr)<.002])))\\n yy=m._calibrate(s); c=m._fit_calibration(x,y); print('observed rosette inverse max raw error',np.max(abs(m._features(yy.reshape(-1,4))@c-s['y_obs_raw'].reshape(-1,4))))\\n S,_=m._forward(s); Z=s['Z_nuisance']; sr=s['source_ridge']; rr=s['nuisance_ridge']; cap=s['u_box']; B=s['total_budget']; ids=np.arange(len(yy)); byshift=ids.reshape(len(s['mu_shifts']),len(s['sensor_ij'])); bank=s['row_bank_id'].ravel();\\n for label,groups in [('shift',byshift),('sensor',byshift.T),('bank',[ids[bank==k] for k in np.unique(bank)])]:\\n  for profile in (False,True):\\n   rm=[]\\n   for te in groups:\\n    tr=np.setdiff1d(ids,te); D=S[tr]; t=yy[tr]; z=Z[tr]; P=np.linalg.solve(z.T@z+rr*np.eye(z.shape[1]),z.T) if profile else np.zeros((z.shape[1],len(tr))); d=D-z@(P@D); r=t-z@(P@t); w,_=m._box_budget(d.T@d+sr*np.eye(d.shape[1]),-d.T@r,cap,B); res=yy[te]-S[te]@w-Z[te]@(P@(t-D@w)); rm.append(float(np.sqrt(np.mean(res**2))))\\n   print(label,'profiled' if profile else 'unprofiled','worst RMSE',max(rm))\\n out=m.solve_batch(s); kc=out['kkt_certificate']; print('isolated solve: budget residual',abs(out['weights'].sum()-B),'KKT gap',abs(kc['primal_objective']-kc['dual_lower_bound']))\\nPY\\npython3 -I /tmp/audit_batch04.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Reflecting walls -> Robin leakage with robust mixed cubic calibration: worst held-out transport RMSE fell from 0.20712 to 0.02529; the host measured relative field and weight errors of 1.237e-5 and 4.817e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t08\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay states, stochastic drifts, or within-cohort classification accuracy\",\n      \"rejected_reason\": \"This study is a steady inverse problem with continuous measurements and no relay states, stochastic drift model, or class labels. Shift, sensor, and bank splits test the nuisance risk on the data actually supplied.\"\n    }\n  ],\n  \"rationale\": \"Use fold-local support selection to test whether the full cubic leaves avoidable calibration error and whether a rational saturation term generalizes better. Compare profiled and unprofiled nuisance fits on held-out groups to detect a pooled fit masking a poorly predicted slice. Keep the verified artifact unchanged unless an alternative materially improves a deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fd2256e32f78b0ed7b1f48f28c39d060733594e415c8056e390c6ca4b3cf0eda",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41997.18,
+      "usage_known": true,
+      "prompt_tokens": 33602,
+      "cached_tokens": 11136,
+      "completion_tokens": 1565
+    }
+  ]
+}

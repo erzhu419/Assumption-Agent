@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b73d6471e6f4f5faa45dba5296c391a",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:54:49.987129+00:00",
+  "ended_at_utc": "2026-11-27T14:55:18.865578+00:00",
+  "request_sha256": "e4be1daf0576eea874b372ee627500109062d08ad2947b80d1f507c4d2f10582",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43215,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26060,
+    "cached_tokens": 11136,
+    "completion_tokens": 741
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '1,51p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; c=d['calibration_load_cells']; raw=c['bridge_raw']; load=c['true_channel_loads']; target=load.sum(1); amp=np.max(abs(load),axis=1)\\nprint('observed chamber verification',item.get('campaign_diagnostics') is not None)\\nfor label,z in [('high load',amp>=np.quantile(amp,.8)),('high tension',target>=np.quantile(target,.8)),('high compression',target<=np.quantile(target,.2))]:\\n o,t=m._calibration({'bridge_raw':raw[~z],'true_channel_loads':load[~z]}); e=(raw[z]-o)@t-target[z]; print(label,'axial stress RMSE / max',np.sqrt(np.mean(e**2)),max(abs(e)))\\nprint('calibration raw component min/max',raw.min(0),raw.max(0)); test=d['test']; p=np.vstack([test['hold_channel_raw'],test['past_channel_raw'].reshape(-1,4)]); print('deployment raw component min/max',p.min(0),p.max(0))\\nr=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); x=np.array([v['facility_telemetry_trace'] for v in r]); sd=np.sqrt(x.var(1).mean(0)); print('prefix distances by physical channel, signed pooled SD');\\nfor v,a in zip(r,(x.mean(1)-x[-1].mean(0))/sd): print(v['completed_short_name'],a.round(2))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 dynamically calibrated affine bridge and shared two-branch spectrum → H2 baseline chamber law; worst-lab 90th-percentile errors remain 0.0223 for strain and 0.0172 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the channel-level polynomial audit\",\"rejected_reason\":\"That comparison already favored the affine model; the remaining question is whether errors reinforce in the summed axial stress used by the creep law.\"}],\"rationale\":\"Check the actual stress input under held-out tension and compression extremes. A material axial-stress error would justify revisiting calibration despite good per-channel scores. Examine all telemetry channels for a conflicting lineage signal that could change the blind chamber law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ef4bebe862467b17776ac22357a06841611ea70a4d7309315af829b0458b174c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29267.62,
+      "usage_known": true,
+      "prompt_tokens": 26060,
+      "cached_tokens": 11136,
+      "completion_tokens": 741
+    }
+  ]
+}

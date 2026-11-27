@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "157c586160cc42f4a295fe42825eb1c4",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:39.156318+00:00",
+  "ended_at_utc": "2026-11-27T14:53:07.636852+00:00",
+  "request_sha256": "a189f0b28c99e2a859950c8795da2c171179b652ef71042b1228d549f180440c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41613,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26558,
+    "cached_tokens": 11136,
+    "completion_tokens": 973
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/hegel_continual_archive/alpha_m98_v2_c03_s00_solver.py /holdout_task/batch_solver.py\\npython3 -I /holdout_task/validate_public_schema.py\\nsed -n '40,110p' /holdout_task/batch_solver.py\\ncat >/tmp/m98_validate.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr=d['train']; te=d['test']; coupon,test=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\nprint('column signal std',np.round(y.std(0),7))\\nfor loss in ('linear','soft_l1','cauchy'):\\n    p=np.empty_like(y); taus=[]\\n    for lab in np.unique(tr['lab_id']):\\n        hold=tr['lab_id']==lab\\n        tau,w=m._fit(tuple(a[~hold] for a in coupon),dt,t,y[~hold],loss=loss)\\n        p[hold]=m._design(tuple(a[hold] for a in coupon),dt,t,tau)@w\\n        taus.append(tau)\\n    e=abs(p-y)\\n    for lab in np.unique(tr['lab_id']):\\n        r=e[tr['lab_id']==lab]; print(loss,'lab',lab,'curve/rate med',np.round([np.median(r[:,:-1]),np.median(r[:,-1])],8),'p90',np.round([np.quantile(r[:,:-1],.9),np.quantile(r[:,-1],.9)],8),'tau',np.round(taus[lab],5))\\n    print(loss,'by horizon median',np.round(np.median(e,axis=0),8))\\nout=m.solve_batch(d); print('full material',out['estimated_taus'],out['hereditary_weights']); print('test drift range',np.ptp(test[2]@out['hereditary_weights'][2:]),'predicted rate range',np.ptp(out['initial_rate_pred']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_validate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and shared benchtop spectrum → H2 baseline chamber law; five-fold bridge RMSE is 0.0001073 pooled, with worst-channel RMSE 0.0001111.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the batch 04 nonlinear bridge\",\n      \"rejected_reason\": \"The current sweeps favor the affine fit: adding the archived cubic and interaction terms increases pooled held-out RMSE from 0.0001073 to 0.0001124.\"\n    },\n    {\n      \"option\": \"Transfer batch 03 saturated chamber drift\",\n      \"rejected_reason\": \"The latest prefix trace matches the baseline lineage on the channels that separate it from batch 03.\"\n    }\n  ],\n  \"rationale\": \"Install the archived baseline response with dynamically fitted calibration. Compare material fits with each lab held out, scoring strain and initial rate separately; these checks can detect a nontransferable benchtop fit but cannot directly validate the blind chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "da9d42f9626e33f8c65dbe2acf8206bedae139d51123311ebc84cf721512e49d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28871.37,
+      "usage_known": true,
+      "prompt_tokens": 26558,
+      "cached_tokens": 11136,
+      "completion_tokens": 973
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e7b509f25e442c28445a1b744c645bd",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Hegel_FactoredMechanismGraph__alpha_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:50.827351+00:00",
+  "ended_at_utc": "2026-11-27T14:43:19.228553+00:00",
+  "request_sha256": "45af67069a78dffcf92da81c0c7a703ee369b7c337a2e133f9c4e894e9ac038d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44668,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26914,
+    "cached_tokens": 9600,
+    "completion_tokens": 1026
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport runpy\\nimport sys\\nimport numpy as np\\n\\nroot = '/holdout_task'\\nsys.path.insert(0, root)\\nimport upstream_transducer as up\\nwith open(root + '/public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nsweeps = cal['single_channel_sweeps']\\nbridge_before = cal['bridge_raw'].copy()\\ncmd_before = sweeps['cmd_stress'].copy()\\nraw_before = {(key, field): ds[key][field].copy() for key in ('train', 'test') for field in up._LOADS}\\nout = up.calibrate_upstream(ds)\\nassert out['chamber_verification_trials'] is None\\nnew_cal = out['calibration_load_cells']\\nassert np.array_equal(new_cal['bridge_raw'], cal['true_channel_loads'])\\nassert not np.shares_memory(new_cal['bridge_raw'], cal['true_channel_loads'])\\nnew_cmd = new_cal['single_channel_sweeps']['cmd_stress']\\nassert np.array_equal(new_cmd, sweeps['true_stress'])\\nassert not np.shares_memory(new_cmd, sweeps['true_stress'])\\nassert np.array_equal(cal['bridge_raw'], bridge_before)\\nassert np.array_equal(sweeps['cmd_stress'], cmd_before)\\nfor (key, field), before in raw_before.items():\\n    assert np.array_equal(ds[key][field], before)\\n    assert out[key][field].shape == before.shape\\n    assert np.isfinite(out[key][field]).all()\\n\\n# Exercise the optional chamber path using known mixed loads from the calibration panel.\\ntruth = cal['true_channel_loads'][16:34].reshape(3, 6, 4)\\nhold = truth[:, -1].copy()\\ncoef = up._fit_bridge(cal['true_channel_loads'], bridge_before)\\nraw_past = (up._basis(truth.reshape(-1, 4)) @ coef).reshape(truth.shape)\\nraw_hold = up._basis(hold) @ coef\\nchamber = {'past_channel_raw': raw_past, 'hold_channel_raw': raw_hold, 'lab_id': np.arange(3)}\\nresult = up.calibrate_upstream(dict(ds, chamber_verification_trials=chamber))['chamber_verification_trials']\\nassert np.array_equal(result['lab_id'], chamber['lab_id'])\\nerr = max(np.max(np.abs(result['past_channel_raw'] - truth)), np.max(np.abs(result['hold_channel_raw'] - hold)))\\nassert err < 1e-9, err\\nprint(f'Canonical copies and input preservation verified; optional chamber inverse max error: {err:.3g}')\\nsys.argv = [root + '/validate_public_schema.py', root + '/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Quadratic bridge → robust coupled bridge with per-channel cubic terms: worst grouped held-out error is 2.99e-4 per channel and 4.91e-4 for total load; worst public operational round-trip residual is 3.69e-14.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Held-out calibration and the public schema already pass. The isolated-process test checks the remaining contract: identity copies, input preservation, and the populated chamber path, which the public batch does not exercise. A failure there would require fixing the corresponding conversion or composition path, not refitting the bridge.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "89f61b2be1b355e4eea76e494b271ba84b4f4073b8f57f5d30226a35120d4ae0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28821.31,
+      "usage_known": true,
+      "prompt_tokens": 26914,
+      "cached_tokens": 9600,
+      "completion_tokens": 1026
+    }
+  ]
+}

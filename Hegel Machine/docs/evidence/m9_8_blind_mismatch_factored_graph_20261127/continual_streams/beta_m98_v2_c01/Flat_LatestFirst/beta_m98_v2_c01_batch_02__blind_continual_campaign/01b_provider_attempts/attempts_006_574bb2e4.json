@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "574bb2e436f749edb724de3e463e77f7",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:33:04.218288+00:00",
+  "ended_at_utc": "2026-11-27T14:33:48.948893+00:00",
+  "request_sha256": "feecde3169b0decc614aca282aeee9eccbdd13a6b689c112b121b77c88e6afcc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38920,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25499,
+    "cached_tokens": 11136,
+    "completion_tokens": 1724
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; nx,ny=s['nx'],s['ny']; shifts=s['mu_shifts']; ij=s['sensor_ij']; ns=len(ij); Z=s['Z_nuisance']; y=m._calibrate(s)\\ncap,budget,ridge=(s[k] for k in ('u_box','total_budget','source_ridge')); nr=s['nuisance_ridge']; rows=ij[:,0]+nx*ij[:,1]; I=eye(nx*ny,format='csc'); rhs=s['source_modes'].reshape(len(s['source_modes']),-1,order='F').T\\n\\ndef axis(q,n,flags):\\n h=s['L'+q]/(n-1); r=s['robin_'+q]; diag=np.zeros(n); diag[[0,-1]]=r/h*np.asarray(flags)\\n return m._axis(s['kappa_'+q],s['vel_'+q],h,0)+diags(diag,format='csc')\\n\\ndef fit(d,train):\\n z=Z[train]; data=np.column_stack((d[train],y[train])); G=z.T@z+nr*np.eye(z.shape[1]); a=data-z@np.linalg.solve(G,z.T@data); A,b=a[:,:-1],a[:,-1]\\n w,_=m._box_simplex_qp(A.T@A+ridge*np.eye(A.shape[1]),-A.T@b,cap,budget)\\n return w,np.linalg.solve(G,z.T@(data[:,-1]-data[:,:-1]@w))\\n\\ndef errors(d,groups):\\n out=[]\\n for test in groups:\\n  train=np.ones(len(y),bool); train[test]=False; w,g=fit(d,train); e=d[test]@w+Z[test]@g-y[test]; out.append(np.sqrt(np.mean(e*e)))\\n return np.asarray(out)\\nshift_groups=np.split(np.arange(len(y)),len(shifts)); sensor_groups=[np.arange(i,len(y),ns) for i in range(ns)]; bank_groups=[np.flatnonzero(s['row_bank_id']==i) for i in np.unique(s['row_bank_id'])]; scores=[]\\nfor flags in itertools.product((0,1),repeat=4):\\n L=kron(eye(ny),axis('x',nx,flags[:2]),format='csc')+kron(axis('y',ny,flags[2:]),eye(nx),format='csc')+diags(s['V_reaction_2d'].ravel(order='F'),format='csc')\\n d=np.vstack([splu(L+mu*I).solve(rhs)[rows] for mu in shifts]); e=errors(d,shift_groups); scores.append((np.linalg.norm(e),flags,e,d))\\nfor _,flags,e,d in sorted(scores,key=lambda x:x[0])[:4]:\\n se=errors(d,sensor_groups); be=errors(d,bank_groups); print('walls x-/x+/y-/y+',flags,'held-shift RMSE',e.round(7),'worst sensor/bank RMSE',se.max(),be.max())\\n_,flags,_,d=next(a for a in scores if a[1]==(1,1,1,1)); np.testing.assert_allclose(d,m._forward(s)[0],rtol=1e-12,atol=1e-12)\\n# Recover affine, pairwise-interaction, and rational calibration candidates on the same real sweeps.\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']; base=np.column_stack((np.ones(len(x)),x)); pq=list(itertools.combinations(range(4),2)); poly=np.column_stack([base,x*x]+[x[:,i]*x[:,j] for i,j in pq]); directions=np.column_stack([x]+[x[:,i]+sign*x[:,j] for i,j in pq for sign in (-1,1)]); rational=[base/(1+a*directions[:,j:j+1]**2) for a in (0.001,0.01,0.1) for j in range(directions.shape[1])]\\nfoldid=np.arange(len(x))%5\\n\\ndef predict(X,tr,te): return X[te]@np.linalg.lstsq(X[tr],raw[tr],rcond=None)[0]\\nfor label,models in [('affine',[base]),('quadratic with pairwise terms',[poly]),('rational challengers',[base]+rational)]:\\n res=[]; selections=[]\\n for k in range(5):\\n  train=foldid!=k; test=~train\\n  if len(models)>1:\\n   def inner(X):\\n    return sum(np.sum((predict(X,train&(foldid!=j),foldid==j)-raw[foldid==j])**2) for j in range(5) if j!=k)\\n   selected=min(range(len(models)),key=lambda j:inner(models[j]))\\n  else: selected=0\\n  selections.append(selected); res.append(predict(models[selected],train,test)-raw[test])\\n print(label,'worst-channel held-out RMSE',np.sqrt(np.mean(np.vstack(res)**2,axis=0)).max(),'selected model indices',selections)\\nout=m.solve_batch(s); k=out['kkt_certificate']; print('objective',k['primal_objective'],'duality gap',k['primal_objective']-k['dual_lower_bound']); assert abs(k['primal_objective']-k['dual_lower_bound'])<1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Reflecting-wall reuse → sweep-calibrated Robin; worst held-out shift RMSE is 0.00977 versus 0.13747, pending comparison with mixed walls.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, drift, or classification stress tests\",\n      \"rejected_reason\": \"The study has no relay state, stochastic drift equation, or classification target; held-out shifts, sensor locations, and banks are the relevant slices.\"\n    }\n  ],\n  \"rationale\": \"Test whether a mix of reflecting and Robin walls predicts better or whether pairwise or rational terms improve held-out calibration. Either result could change the solver; the isolated schema run checks that the saved artifact still meets the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b37e0537d1c2e0c02643ff192ae7040fbb8666ab74e665e00de6667ae5f3c9d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44688.55,
+      "usage_known": true,
+      "prompt_tokens": 25499,
+      "cached_tokens": 11136,
+      "completion_tokens": 1724
+    }
+  ]
+}

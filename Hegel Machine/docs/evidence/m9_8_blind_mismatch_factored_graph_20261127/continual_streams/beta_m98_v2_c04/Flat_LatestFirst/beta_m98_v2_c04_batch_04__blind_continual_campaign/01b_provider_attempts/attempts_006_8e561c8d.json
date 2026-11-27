@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e561c8d5138435a81766609dab5c8db",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_LatestFirst__beta_m98_v2_c04_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:42:57.635976+00:00",
+  "ended_at_utc": "2026-11-27T14:43:32.150062+00:00",
+  "request_sha256": "c903580f2fc89e9ecadf3b866e82117434fedfabb31b6c3b8477b4eaaa639e86",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48210,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30710,
+    "cached_tokens": 11136,
+    "completion_tokens": 1346
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/beta_m98_v2_c04_batch_01_solver.py').read_text()\\na=p.index('def _calibrate('); b=p.index('def _box_budget(',a)\\np=p[:a]+'''def _rosette_design(ref, j):\\n    own = ref[:, j]\\n    return np.column_stack((np.ones(len(ref)), ref[:, (j-1) % 4], own,\\n                            ref[:, (j+1) % 4], own**3,\\n                            own * ref[:, (j+1) % 4]))\\n\\n\\ndef _fit_rosette(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref, raw = (np.asarray(sweeps[k]) for k in ('ref_rosette', 'raw_rosette'))\\n    # Gross row corruption is much larger than the response to any clean sweep.\\n    peak = np.max(np.abs(raw), axis=1)\\n    center = np.median(peak)\\n    keep = peak <= center + 10 * np.median(np.abs(peak - center))\\n    return np.array([np.linalg.lstsq(_rosette_design(ref[keep], j), raw[keep, j],\\n                                     rcond=None)[0] for j in range(4)]), keep\\n\\n\\ndef _calibrate(study):\\n    coef, _ = _fit_rosette(study)\\n    offset, prev, gain, nxt, cube, pair = coef.T\\n    j = np.arange(4)\\n    jm, jp = (j-1) % 4, (j+1) % 4\\n    obs = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    A = np.diag(gain)\\n    A[j, jm], A[j, jp] = prev, nxt\\n    ref = np.linalg.solve(A, (obs - offset).T).T\\n    for _ in range(20):\\n        residual = offset + prev * ref[:, jm] + gain * ref + nxt * ref[:, jp]\\n        residual += cube * ref**3 + pair * ref * ref[:, jp] - obs\\n        if np.max(np.abs(residual)) < 1e-12:\\n            return ref.ravel()\\n        J = np.broadcast_to(A, (len(ref), 4, 4)).copy()\\n        J[:, j, j] += 3 * cube * ref**2 + pair * ref[:, jp]\\n        J[:, j, jp] += pair * ref\\n        ref -= np.linalg.solve(J, residual[..., None])[..., 0]\\n    raise RuntimeError('Rosette calibration inversion did not converge')\\n\\n\\n'''+p[b:]\\nPath('/holdout_task/batch_solver.py').write_text(p)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('m','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps'];coef,keep=m._fit_rosette(s); print('rejected sweeps',np.flatnonzero(~keep)); x,y=c['ref_rosette'],c['raw_rosette']; rms=[]\\nfor j in range(4):\\n errs=[]\\n for i in np.flatnonzero(keep):\\n  train=np.arange(len(x))!=i; sub=dict(s,sensor_calibration_sweeps={'ref_rosette':x[train],'raw_rosette':y[train]}); b,mask=m._fit_rosette(sub); errs.append(float((m._rosette_design(x[i:i+1],j)@b[j])[0]-y[i,j]));\\n rms.append(np.sqrt(np.mean(np.square(errs))))\\nprint('nested clean LOOCV RMS by bank',rms); out=m.solve_batch(s); k=out['kkt_certificate']; print('KKT gap', k['primal_objective']-k['dual_lower_bound']);print('weights',out['weights'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: additive cross-talk -> H2: cyclic cross-talk with own-channel cubic and adjacent-pair interaction on sealed walls; the larger polynomial basis reached 1.34e-5 worst-bank clean leave-one-out RMS.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use the full cubic polynomial\",\"rejected_reason\":\"The sweeps identify one cubic and one pair interaction per bank; the full cubic basis had worse held-out error.\"}],\"rationale\":\"Fit the compact rosette model from the current sweeps and reuse the sealed-wall forward operator supported by the apparatus trace. Refit outlier screening within each calibration fold and run the public schema in an isolated Python process.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "496ae9a538751e1f9446836f58c7561b4dc1bc10141dcb5a13b0ac388e7c8137",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34946.64,
+      "usage_known": true,
+      "prompt_tokens": 30710,
+      "cached_tokens": 11136,
+      "completion_tokens": 1346
+    }
+  ]
+}

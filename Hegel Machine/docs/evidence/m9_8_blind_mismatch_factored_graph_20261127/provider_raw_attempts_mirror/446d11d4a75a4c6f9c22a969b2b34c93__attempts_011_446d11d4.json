@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "446d11d4a75a4c6f9c22a969b2b34c93",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Hegel_FactoredMechanismGraph__beta_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:36:00.727100+00:00",
+  "ended_at_utc": "2026-11-27T14:36:41.975890+00:00",
+  "request_sha256": "3a05f7a911955687dfda45f1aaa4748b7811bb9171b1a59cad6e8137cc7f4f63",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57885,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30318,
+    "cached_tokens": 9600,
+    "completion_tokens": 1682
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit_periodic_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.sparse import eye, diags, kron\\nfrom scipy.sparse.linalg import splu\\n\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\n\\nm = load('candidate', '/holdout_task/batch_solver.py')\\narchive = load('archive', '/tmp/hegel_continual_archive/beta_m98_v2_c03_batch_02_solver.py')\\nrmse = lambda e: np.sqrt(np.mean(np.square(e)))\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    r = s['sensor_calibration_sweeps']['ref_rosette']\\n    raw = s['sensor_calibration_sweeps']['raw_rosette']\\n    X = np.c_[np.ones(len(r)), r]\\n    for kind in ('diagonal', 'full', 'pairwise', 'quadratic'):\\n        errs = []\\n        for j in range(4):\\n            D = X[:, [0,j+1]] if kind == 'diagonal' else X\\n            if kind in ('pairwise', 'quadratic'):\\n                D = np.c_[D, *[r[:,p]*r[:,q] for p in range(4) for q in range(p+1,4)]]\\n            if kind == 'quadratic':\\n                D = np.c_[D, r*r]\\n            pinv = np.linalg.pinv(D)\\n            err = (raw[:,j]-D@(pinv@raw[:,j]))/(1-np.sum(D*pinv.T,axis=1))\\n            errs.append(rmse(err))\\n        print('calibration LOO', kind, 'worst channel RMSE', max(errs))\\n    nx, ny = s['nx'], s['ny']\\n    pulses = item['campaign_diagnostics']\\n    W = np.column_stack([p['w_pulse'] for p in pulses])\\n    Y = np.column_stack([m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) for p in pulses])\\n    F = np.column_stack([a.ravel(order='F') for a in np.tensordot(W.T,s['source_modes'],axes=1)])\\n    ix, iy = s['sensor_ij'].T\\n    sr = ix+nx*iy\\n    I = eye(nx*ny,format='csc')\\n    V = diags(s['V_reaction_2d'].ravel(order='F'),format='csc')\\n    choices = []\\n    for d,n in [('x',nx),('y',ny)]:\\n        k,v = s['kappa_'+d],s['vel_'+d]\\n        h = s['L'+d]/(n-1)\\n        periodic = m._axis(k,v,h)\\n        assert np.max(np.abs(periodic @ np.ones(n))) < 1e-11\\n        reflect = archive._axis(k,v,h,0)\\n        wrap = reflect.tolil()\\n        q = (k[0]+k[-1])/(2*h*h)\\n        wrap[0,-1] = wrap[-1,0] = -q\\n        wrap[0,0] += q\\n        wrap[-1,-1] += q\\n        choices.append({'periodic':periodic,'reflecting':reflect,'diffusive-wrap':wrap.tocsc(),'open':archive._axis(k,v,h,s['robin_'+d])})\\n    E = {}\\n    for x,ax in choices[0].items():\\n        for y,ay in choices[1].items():\\n            L = kron(eye(ny),ax,format='csc')+kron(ay,eye(nx),format='csc')+V\\n            E[x,y] = np.vstack([splu(L+t*I).solve(F)[sr] for t in s['mu_shifts']])-Y\\n    bank = np.asarray(s['row_bank_id']).ravel()\\n    if len(bank) == len(sr):\\n        bank = np.tile(bank, len(s['mu_shifts']))\\n    assert len(bank) == len(Y)\\n    shift = np.repeat(np.arange(len(s['mu_shifts'])),len(sr))\\n    for train in range(len(pulses)):\\n        scores = sorted((rmse(e[:,train]), k) for k,e in E.items())\\n        best = scores[0][1]\\n        assert best == ('periodic','periodic')\\n        held = E[best][:,1-train]\\n        worst = max(rmse(held[(bank==b)&(shift==t)]) for b in np.unique(bank) for t in np.unique(shift) if np.any((bank==b)&(shift==t)))\\n        print(f'train pulse {train}: {best}, train RMSE {scores[0][0]:.6g}, runner-up {scores[1][0]:.6g}; held pulse RMSE {rmse(held):.6g}; worst held bank-by-shift RMSE {worst:.6g}')\\n        assert worst < 1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_periodic_batch.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: local wall rows → H2: conservative periodic upwind transport; worst pulse-by-shift RMSE is 9.02e-7, pending a held-out pulse and bank-by-shift audit.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay-mode and classification-cohort tests\",\"rejected_reason\":\"This is a steady continuous inverse problem with no relay state or class labels. Sensor banks and shifts are the relevant measurement strata.\"}],\"rationale\":\"Select the wall law on one measured pulse and evaluate it on the other, stratified by sensor bank and shift, to detect a pooled fit hiding a weak slice. Compare affine and nonlinear calibrations on held-out sweeps; revisit calibration or transport only if those checks expose a material error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b91dabb9f327d129525c345ca0ce902baa3a0ebe48968df6f05ce5bf5af9c963",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42193.98,
+      "usage_known": true,
+      "prompt_tokens": 30318,
+      "cached_tokens": 9600,
+      "completion_tokens": 1682
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8d4bc048f2c548d6a967adbf9fd2ab55",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:39:28.840350+00:00",
+  "ended_at_utc": "2026-11-27T14:40:10.569101+00:00",
+  "request_sha256": "fa2ce1eb09d1e8d1a344dd88f8e9f19c3444219420741a90e0eadd6c15886324",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37928,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25889,
+    "cached_tokens": 14208,
+    "completion_tokens": 1601
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m98_structure.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m98_explore import *\\nfrom scipy.optimize import least_squares\\nY=y(dg); past,hold,X=diag; z=hold[:,None]-a[:,-1,:2]*taus\\nS=np.c_[hold,past]; U=np.c_[np.ones(len(X)),S,X[:,1:]]; T=np.r_[t,0.]; Z=np.linalg.lstsq(U,Y,rcond=None)[0]; print('singular values',np.linalg.svd(Y,compute_uv=False).round(4)); print('stress and feature OLS profiles (columns first/middle/end/rate)'); print(Z[:,[0,4,8,11,12]].round(4)); print('feature rank singular values',np.linalg.svd(Z[-4:],compute_uv=False).round(4)); print('implied drift profile if same direction',((th[3:]@Z[-4:])/(th[3:]@th[3:])).round(4)); print('feature profiles divided by train weights');print((Z[-4:]/th[3:,None]).round(4)); print('stress profiles expressed in baseline modes'); print(np.linalg.lstsq(F[:,:2],Z[1:8].T,rcond=None)[0].T.round(4)); print('sweep keys',[(k,np.shape(v)) for k,v in cal['single_channel_sweeps'].items()]);\\n# Allow simple chamber rescaling of history and drift, and compare alternative time laws.\\nr=X@th[2:]; E=F[:,:2]; w=np.r_[np.ones(len(t)),1.4]\\ndef drift_curve(kind,p):\\n if kind=='linear':return np.r_[t,1.]\\n if kind=='quad':return np.r_[t+p*t*t,1.]\\n if kind=='saturating':return np.r_[-np.expm1(-p*t)/p,1.]\\n if kind=='rational':return np.r_[t/(1+p*t),1.]\\n if kind=='delayed':return np.r_[t+np.expm1(-p*t)/p,0.]\\n if kind=='hybrid':return np.r_[t+p[0]*(-np.expm1(-p[1]*t))/p[1],1+p[0]]\\ndef design(ix,kind,p,drive,offset):\\n terms=[hold[:,None]*E[:,0]*th[0],hold[:,None]*E[:,1]*th[1],z[:,0,None]*E[:,0]*th[0],z[:,1,None]*E[:,1]*th[1]]\\n if offset:terms += [np.broadcast_to(q,Y.shape) for q in E.T]\\n terms += [u[:,None]*drift_curve(kind,p) for u in drive.T];return np.stack(terms,-1)[ix]\\nfor name in ['linear','quad','saturating','rational','delayed','hybrid']:\\n for label,drive in [('intrinsic',r[:,None]),('affine',np.c_[np.ones(len(r)),r]),('separate',X)]:\\n  for offset in (False,True):\\n   def fit(ix):\\n    def linear(p):\\n     q=design(ix,name,p,drive,offset)*w[None,:,None];return np.linalg.lstsq(q.reshape(-1,q.shape[-1]),(Y[ix]*w).ravel(),rcond=None)[0]\\n    def obj(p):return ((design(ix,name,p,drive,offset)@linear(p)-Y[ix])*w).ravel()\\n    p=[] if name=='linear' else least_squares(obj,[0.25] if name!='hybrid' else [-0.3,0.5],bounds=([-0.1],[5]) if name in ['quad'] else (([-10,0.003],[10,15]) if name=='hybrid' else ([0.003],[15]))).x\\n    return p,linear(p)\\n   idx=np.arange(len(r)); p,c=fit(idx); res=design(idx,name,p,drive,offset)@c-Y; cv=[]\\n   for lab in np.unique(dg['lab_id']):\\n    ix=idx[dg['lab_id']!=lab]; j=idx[dg['lab_id']==lab]; pp,cc=fit(ix); u=design(j,name,pp,drive,offset)@cc-Y[j]; cv.append([np.sqrt(np.mean(u[:,:-1]**2)),np.sqrt(np.mean(u[:,-1]**2))]);\\n   print(name,label,offset,'fit',np.sqrt(np.mean(res[:,:-1]**2)).round(4),np.sqrt(np.mean(res[:,-1]**2)).round(4),'worst lab',np.max(cv,axis=0).round(4),'p',np.round(p,4),'coef',c.round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop law applied unchanged → H2 shared intrinsic spectrum with a separate chamber memory or drift map; nominal chamber p90 absolute error reaches 1.853 at the final horizon and 0.377 at the initial rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The calibrated benchtop history recurrence and linear drift can be applied unchanged to chamber coupons.\",\"empirical_witness\":\"Final-horizon chamber median absolute error is 0.764 versus 0.008 on train; an exploratory fit with free per-coupon amplitudes in the same time basis reduces chamber final-horizon median error to 0.008.\",\"causal_blanket_diagnosis\":\"Bridge calibration errors are below 0.00065 on the calibration sweep; chamber errors instead track a missing map from histories and coupon features to time-basis amplitudes.\",\"sublated_pivot\":\"Keep the train-only material estimate and test explicit chamber history and drift terms by held-out lab before considering a different deployment time basis.\",\"risk_kind\":\"deployment constitutive mismatch\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace both intrinsic relaxation times with chamber-only estimates\",\"rejected_reason\":\"The output must report train-only intrinsic parameters, and the shared time basis already fits chamber curves well when its amplitudes are freed.\"}],\"rationale\":\"The regression profiles test whether chamber residuals still align with the intrinsic feature direction and history modes. Held-out labs then distinguish a shared constitutive correction from an in-sample amplitude fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3458520d07fdaa958a9b8107d62f999fbe014b699b2f4535e62616b6c8179e2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42181.14,
+      "usage_known": true,
+      "prompt_tokens": 25889,
+      "cached_tokens": 14208,
+      "completion_tokens": 1601
+    }
+  ]
+}

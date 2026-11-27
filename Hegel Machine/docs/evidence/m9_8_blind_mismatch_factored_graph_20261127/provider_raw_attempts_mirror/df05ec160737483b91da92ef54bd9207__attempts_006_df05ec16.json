@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df05ec160737483b91da92ef54bd9207",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:30.157911+00:00",
+  "ended_at_utc": "2026-11-27T14:44:02.272091+00:00",
+  "request_sha256": "ce64b5459d37168964dd522a8b8ef7e887db05e7297a361b819ee0eb47308fac",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41066,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24602,
+    "cached_tokens": 9600,
+    "completion_tokens": 1114
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; print('diagnostics',type(i['campaign_diagnostics']),'dataset keys',list(d),'cal keys',list(c)); print('shapes',r.shape,y.shape); print('first & last cal rows',np.c_[r,y][np.r_[:8,-8:0]]); print('sweeps',c['single_channel_sweeps']); print('nonzero per row',np.unique(np.count_nonzero(y,axis=1),return_counts=True)); print('range',np.quantile(np.c_[r,y],[0,.1,.5,.9,1],axis=0));\\na=np.c_[np.ones(len(r)),r]; b=np.linalg.lstsq(a,y,rcond=None)[0]; e=a@b-y; print('inverse coef',b,'channel residual RMS',np.sqrt(np.mean(e**2,axis=0))); print('cal inverse residuals, consecutive groups');\\nfor idx in np.array_split(np.arange(len(y)),8):print(idx[0],np.mean(e[idx],0),np.sqrt(np.mean(e[idx]**2,0)),np.mean(y[idx],0));\\nfor name in ['train','test']:\\n s=d[name];print(name,'raw min max and median',np.quantile(np.concatenate([s['hold_channel_raw'],s['past_channel_raw'].reshape(-1,4)]),[0,.5,1],axis=0),'hold head',s['hold_channel_raw'][:3]);\\nprint('dt',d['past_dt']);\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'transducer nonlinear calibration sensor bridge robust' 2>&1 | head -5\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine bridge calibration -> H2: identify channel structure before refitting the spectrum; held-lab worst 90th-percentile absolute errors are 0.593 strain and 0.941 rate, and estimated taus hit both bounds across folds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived affine calibration and robust fit are sufficient for a stable two-branch estimate on this campaign.\",\n    \"empirical_witness\": \"Held-lab fits moved the fast tau to 0.050001 and the slow tau to 24.99998 in different folds; affine calibration had blocked out-of-fold maximum total-load error 10.85.\",\n    \"causal_blanket_diagnosis\": \"Check the measured raw-to-load mapping before attributing boundary estimates to material physics; a generic quadratic inverse made the blocked calibration error worse.\",\n    \"sublated_pivot\": \"Retain the hereditary law and inspect the calibration sweep structure to identify a better-constrained bridge model.\",\n    \"risk_kind\": \"Calibration error and weak relaxation-spectrum identification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the schema-valid archived solver unchanged\",\n      \"rejected_reason\": \"The relaxation estimates are unstable across held-out labs, which matters because both taus are required outputs.\"\n    }\n  ],\n  \"rationale\": \"Inspect sweep layout and residuals by channel and load range to distinguish nonlinear bridge response from blocked extrapolation. That determines whether to change the calibrator or investigate spectrum identifiability with the existing affine fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c9fd6a5ca84ee16b5558e8dec188347f37e015a070a064da5e5df60db77ea6ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32554.77,
+      "usage_known": true,
+      "prompt_tokens": 24602,
+      "cached_tokens": 9600,
+      "completion_tokens": 1114
+    }
+  ]
+}

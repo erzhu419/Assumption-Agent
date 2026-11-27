@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c94e3eb157f47eb907720e53f2b3eca",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_ConditionalTable_Online__beta_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:47:03.858871+00:00",
+  "ended_at_utc": "2026-11-27T14:47:34.924251+00:00",
+  "request_sha256": "b769468e83fa3f4312403b1f1076d58eaceba57c059008060fb2cb8b40fae761",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45218,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25465,
+    "cached_tokens": 9600,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/^def _calibration_features/,/^def _box_simplex_qp/p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; good=np.max(np.abs(y),axis=1)<9\\nX=x[good]; Y=y[good]; beta=m._fit_calibration(X,Y)\\nS,_=m._forward(s)\\nprint('sweep retained/excluded',good.sum(),(~good).sum(),'retained reference bounds by bank',X.min(0),X.max(0))\\nobservations=[('study',s['y_obs_raw'])]+[(f'pulse {i}',q['y_pulse_raw']) for i,q in enumerate(item['campaign_diagnostics'])]\\nworst=0.\\nfor name,raw in observations:\\n    r=raw.reshape(-1,4); d=m._calibrate(dict(s,y_obs_raw=raw)).reshape(-1,4)\\n    pred=np.column_stack([m._calibration_features(d,j)@beta[j] for j in range(4)])\\n    err=np.abs(pred-r); worst=max(worst,err.max())\\n    print(name,'max abs raw',np.abs(r).max(),'decoded outside sweep bounds by bank',((d<X.min(0))|(d>X.max(0))).sum(0),'worst bank round-trip abs error',err.max(0))\\nassert worst<1e-7,worst\\n# Complement ordinary five-fold CV with a high-amplitude holdout to detect range-edge drift.\\norder=np.argsort(np.max(np.abs(X),axis=1)); tr,te=order[:-12],order[-12:]\\nb=m._fit_calibration(X[tr],Y[tr])\\nyhat=np.column_stack([m._calibration_features(X[te],j)@b[j] for j in range(4)])\\nedge=np.sqrt(np.mean((yhat-Y[te])**2,axis=0))\\nprint('high-amplitude held-out forward RMSE by bank',edge)\\nassert np.isfinite(edge).all()\\nout=m.solve_batch(s); assert np.isfinite(out['terminal_field']).all()\\nPY\\npython3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin → H2 reflecting walls with sweep-fitted nonlinear calibration; worst measured calibrated pulse/shift/channel RMSE is 1.90e-6, with host-verified relative errors of 3.71e-6 for weights and 1.47e-6 for the terminal field.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis and nuisance comparisons\",\n      \"rejected_reason\": \"The previous audit already tested both. The remaining relevant question is whether the nonlinear inverse converges over the actual observation range or extrapolates beyond the fitted sweeps.\"\n    }\n  ],\n  \"rationale\": \"Check forward–inverse consistency on the actual observations and tracer pulses, and hold out the strongest calibration sweeps to test range-edge drift. Inversion failure would warrant revisiting the solver; edge drift would warrant a calibration change only if it affects the measured operating range. Relay and class-balance checks do not apply to this steady continuous inverse problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3d864302e4b56145ac497018075dd445aeb710c8f3a1a09bc0f71918220212c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31514.86,
+      "usage_known": true,
+      "prompt_tokens": 25465,
+      "cached_tokens": 9600,
+      "completion_tokens": 993
+    }
+  ]
+}

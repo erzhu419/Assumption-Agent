@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e309ba61f734d5a8753584bea2e4de6",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__stageS__beta_m98_v2_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:24:01.341343+00:00",
+  "ended_at_utc": "2026-11-27T14:24:35.384718+00:00",
+  "request_sha256": "c0662befc6f6b8dec59c2d20ed93f5bd71fa86240876b0453a955289ad053a9a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39589,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25460,
+    "cached_tokens": 11136,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: items=pickle.load(f)\\nfor item in items:\\n    s=item['study']; c=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette'])\\n    pairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\n    a=np.c_[np.ones(len(x)),x]; q=np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i,4)])\\n    t=np.column_stack([x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i,4) for k in range(j,4)])\\n    u=np.column_stack([x]+[x[:,i:i+1]+sign*x[:,j:j+1] for i,j in pairs for sign in (-1,1)])\\n    families={'affine':[a],'quadratic':[np.c_[a,q]],'cubic':[np.c_[a,q,t]],'rational':[np.c_[a,u/(1+alpha*u**2)-u] for alpha in (0.01,0.1,1.)]}\\n    def pred(X,train,test): return X[test]@np.linalg.lstsq(X[train],y[train],rcond=None)[0]\\n    fold=np.random.default_rng(314).permutation(len(x))%5; strata=np.count_nonzero(x,axis=1); strata=np.where(strata==0,0,np.where(strata==1,1,2))\\n    for name, designs in families.items():\\n        err=np.empty_like(y); fold_max=[]\\n        for k in range(5):\\n            train=fold!=k; test=~train\\n            if len(designs)>1:\\n                sub=np.flatnonzero(train); inner=np.arange(len(sub))%4\\n                def score(X): return np.mean([np.mean((pred(X,sub[inner!=j],sub[inner==j])-y[sub[inner==j]])**2) for j in range(4)])\\n                X=min(designs,key=score)\\n            else: X=designs[0]\\n            err[test]=pred(X,train,test)-y[test]; fold_max.append(np.sqrt(np.mean(err[test]**2,axis=0)).max())\\n        print(name,'worst fold-channel RMSE',max(fold_max),'slice RMSE',[(int(j),int(sum(strata==j)),float(np.sqrt(np.mean(err[strata==j]**2,axis=0)).max())) for j in np.unique(strata)])\\n    S,U=m._forward(s); o=m.solve_batch(s); w=o['weights']; Z=s['Z_nuisance']; yobs=m._calibrate(s)\\n    raw_res=yobs-S@w; prof_res=raw_res-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@raw_res)\\n    shape=(len(s['mu_shifts']),-1,4)\\n    print('shift-by-channel RMS (unprofiled, profiled):',*[np.sqrt(np.mean(r.reshape(shape)**2,axis=1)).round(8).tolist() for r in (raw_res,prof_res)])\\n    c=o['kkt_certificate']; print('certificate gap',c['primal_objective']-c['dual_lower_bound'],'study technical strata',[k for k in s if 'batch' in k or 'cohort' in k],'diagnostic pulses',item.get('campaign_diagnostics') is not None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette with open-wall fallback → H2 retain it unless nonlinear calibration improves held-out slices; prior worst calibration RMSE was 1.40e-5 and worst QP gap was 1.14e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay, or stochastic drift audits\",\n      \"rejected_reason\": \"The task is steady-state continuous tomography, with no class labels, relay state, or stochastic time evolution. The relevant nuisance audit compares residuals before and after profiling by shift and channel.\"\n    }\n  ],\n  \"rationale\": \"Test whether pairwise interactions, cubic terms, or rational saturation improve prediction on held-out real sweeps, selecting rational curvature only inside each training fold. Stratify by sweep type so mixed-channel errors cannot hide in the pooled score. Compare residuals by shift and channel to see where nuisance profiling helps, without changing the prescribed blind wall fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ccab48cf1dec187d855af703ae42005b736e27f9512b65a96b76296ec08c8e72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34002.91,
+      "usage_known": true,
+      "prompt_tokens": 25460,
+      "cached_tokens": 11136,
+      "completion_tokens": 1319
+    }
+  ]
+}

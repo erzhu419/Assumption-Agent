@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9f73e0d58ba441dbbdf60d8e7e90c8e",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:59:23.458019+00:00",
+  "ended_at_utc": "2026-11-27T14:59:58.502161+00:00",
+  "request_sha256": "862fe89b7be01e5951db91ef821133470b3f3831f8d42f22949d6127ea79215b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72640,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37886,
+    "cached_tokens": 11136,
+    "completion_tokens": 1394
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rheology.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; b=m._fit_bridge(c); A=m._bridge_basis(x)\\nprint('calibration support',x.shape,np.round(np.min(x,axis=0),4),np.round(np.max(x,axis=0),4)); print('forward residual percentiles',np.percentile(np.linalg.norm(A@b-y,axis=1),[50,80,90,95,99,100])); print('sweep fields',list(c['single_channel_sweeps']) if isinstance(c['single_channel_sweeps'],dict) else np.shape(c['single_channel_sweeps']))\\nD=np.column_stack([x[:,i]+s*x[:,j] for i,j in m._PAIRS for s in (1,-1)])\\nP=np.column_stack([x[:,i]*x[:,j]*x[:,k] for i,j,k in [(0,1,2),(0,1,3),(0,2,3),(1,2,3)]])\\nE=np.column_stack((x*x,D**3,P)); Q=np.column_stack((x,D)); Q=Q/np.maximum(np.std(Q,axis=0),1e-12)\\nblocks=np.arange(len(x))//max(1,len(x)//5); blocks=np.minimum(blocks,4)\\nfor fold in np.unique(blocks):\\n tr=blocks!=fold; va=~tr; base=m._fit_bridge({'true_channel_loads':x[tr],'bridge_raw':y[tr]}); et=np.linalg.norm(A[tr]@base-y[tr],axis=1); keep=tr & (np.linalg.norm(A@base-y,axis=1)<8*max(np.median(et),1e-8)); cutoff=8*max(np.median(et),1e-8); normal=va & (np.linalg.norm(A@base-y,axis=1)<cutoff)\\n mats=[('baseline',A),('expanded polynomial',np.c_[A,E])]; candidates=[]\\n for j in range(Q.shape[1]):\\n  for a in (.05,.2,1.):\\n   B=A/(1+a*Q[:,j,None]**2); C=np.c_[A,B[:,1:5]]; co=np.linalg.lstsq(C[keep],y[keep],rcond=None)[0]; candidates.append((np.median(np.linalg.norm(C[keep]@co-y[keep],axis=1)),j,a,C))\\n _,j,a,C=min(candidates,key=lambda z:z[0]); mats.append((f'profiled rational {j}/{a}',C))\\n print('sweep block',fold,'inliers',normal.sum(),'of',va.sum())\\n for label,C in mats:\\n  co=np.linalg.lstsq(C[keep],y[keep],rcond=None)[0]; e=np.linalg.norm(C@co-y,axis=1); print(label,'median all',np.median(e[va]),'p90 ordinary',np.percentile(e[normal],90) if normal.any() else np.nan)\\ntr,te=d['train'],d['test']; f=m._features(tr,te); n=len(tr['lab_id']); out=m.solve_batch(d); t=d['eval_times']; dt=d['past_dt']; tau=out['estimated_taus']; th=out['hereditary_weights']; a,r=m._design(f[:n],*m._loads(tr,b),dt,t,tau); ec=(a@th).reshape(n,-1)-(tr['strain_curves_obs']-tr['strain_0'][:,None]); er=r@th-tr['instant_rate_obs']; mask=np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor lab in np.unique(tr['lab_id']):\\n for miss in (False,True):\\n  ix=(tr['lab_id']==lab)&(mask==miss)\\n  if ix.any(): print('benchtop lab/missing/n',lab,miss,ix.sum(),'signed curve/rate median',np.round(np.median(ec[ix]),5),np.round(np.median(er[ix]),5),'rate median absolute',np.round(np.median(abs(er[ix])),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rheology.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (the calibrated bridge or pooled feature preprocessing hides a systematic residual) -> H2 (retain the measured chamber law unless blocked calibration or lab slices reveal a failure); worst held-out chamber lab curve/rate RMSE is 0.00842/0.00507.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic-control drift, or classification balance\",\n      \"rejected_reason\": \"The measured system has continuous strain and rate targets and no relay, stochastic-control equation, or class labels. Lab-stratified signed residuals are the applicable nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Check whether omitted pairwise, cubic, or rational bridge terms improve prediction on held-out sweep blocks, with rational-term selection confined to training rows. Inspect lab and missing-feature residuals for bias that cancels in pooled summaries. Revisit the solver only if either check exposes a reproducible failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5f9ce4fe259eb59c21b1c3242b24f678fcf8c8f7bf6bd29768540d0e1bfc1512",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35424.98,
+      "usage_known": true,
+      "prompt_tokens": 37886,
+      "cached_tokens": 11136,
+      "completion_tokens": 1394
+    }
+  ]
+}

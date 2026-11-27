@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "039188435a5f412ca26f74bf0a960a42",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:46.696995+00:00",
+  "ended_at_utc": "2026-11-27T14:35:24.120514+00:00",
+  "request_sha256": "26bb4965ecf7acf7671b0f042de79bab07bb90913a1461ffa77d448107d664b8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 87952,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45660,
+    "cached_tokens": 11136,
+    "completion_tokens": 1498
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/m98_gainprobe.py <<'PY'\\nexec(open('/tmp/m98_factor.py').read().split('for tag,x in')[0])\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfor tag,X in [('joint',x),('frozen',xx)]:\\n r=X@b[3:]; y=target-b[2]-r; N=len(y); lab=ch['lab_id']; folds=[lab==g for g in np.unique(lab)]+[abs(X[:,j])>=np.sort(abs(X[:,j]))[-2] for j in range(4)]; allk=np.ones(N,bool)\\n Q=np.c_[X, hold, past, ch['strain_0'],past.mean(1),past.std(1),past.max(1)-past.min(1)]; Q[:,4:]=(Q[:,4:]-Q[:,4:].mean(0))/Q[:,4:].std(0)\\n Qnames=['x0','x1','x2','x3','hold',*['p'+str(j) for j in range(6)],'strain0','past mean','past sd','past range']; print(tag,'ratio correlations', sorted(zip(Qnames, np.round(np.corrcoef(np.c_[Q,(y/r)].T)[-1,:-1],3)),key=lambda z:-abs(z[1]))[:8]);\\n for grp in ([0,1,2,3],list(range(4,12)),[12,13,14],list(range(15))):\\n  Z=Q[:,grp]\\n  for mode in ('linear','diagonal square','diagonal cube','quadratic'):\\n   W=Z if mode=='linear' else Z**2 if mode=='diagonal square' else abs(Z)**3 if mode=='diagonal cube' else np.array([Z[:,i]*Z[:,j] for i,j in combinations_with_replacement(range(Z.shape[1]),2)]).T\\n   A=r[:,None]*np.c_[np.ones(N),W]\\n   for p in (.003,.03):\\n    mu=np.linalg.norm(A,axis=0); B=A/np.maximum(mu,1e-8); P=p*np.eye(B.shape[1]); P[0,0]=0\\n    def fit(k): return np.linalg.solve(B[k].T@B[k]+P,B[k].T@y[k]);\\n    e=[B[v]@fit(~v)-y[v] for v in folds]; print('ridge',grp[0],grp[-1],mode,p,np.round([np.sqrt(np.mean((B@fit(allk)-y)**2)), np.sqrt(np.mean(np.concatenate(e[:4])**2)),np.sqrt(np.mean(np.concatenate(e[4:])**2)),max(np.sqrt(np.mean(a*a)) for a in e)],5))\\n rng=np.random.default_rng(13); starts=rng.normal(size=(12,5))*.25\\n for typ in ('square','cube','bounded','shifted'):\\n  def predict(p):\\n   a=X@p[:4]; c=p[4]; u=a*a if typ=='square' else abs(a)**3 if typ=='cube' else a*a/(1+a*a) if typ=='bounded' else (a+c)**2; return r*(u+(0 if typ=='shifted' else c))\\n  def fit(k):\\n   def fun(p): return np.r_[ (predict(p)-y)[k], .04*p ]\\n   z=[least_squares(fun,p,max_nfev=250) for p in starts]; return min(z,key=lambda w:w.cost).x\\n  p=fit(allk); e=[(predict(fit(~v))-y)[v] for v in folds]; print('projection',typ,np.round(p,4),np.round([np.sqrt(np.mean((predict(p)-y)**2)), np.sqrt(np.mean(np.concatenate(e[:4])**2)),np.sqrt(np.mean(np.concatenate(e[4:])**2)),max(np.sqrt(np.mean(a*a)) for a in e)],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_gainprobe.py | awk '/ratio correlations|projection|ridge 0 3|ridge 4 11/'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: sparse additive amplitude → H2: test a shared nonlinear gain on centered material drift; nested sparse selection reduces worst-slice amplitude RMSE from 0.1520 to 0.1024.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the lowest-error rational term from the full search\",\"rejected_reason\":\"Its apparent advantage is selection-sensitive, and its cubic numerator can extrapolate along directions the denominator does not constrain.\"}],\"rationale\":\"The amplitude correction generally has the sign of the centered intrinsic drift. Test low-rank and regularized gains using lab and feature-edge holdouts; if they do not improve transfer, use the evidence from nested sparse selection to regularize the existing candidate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "debaeff0617d27defcd658aa020e18c7db96958b776aadd1adb01175d4363639",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37793.89,
+      "usage_known": true,
+      "prompt_tokens": 45660,
+      "cached_tokens": 11136,
+      "completion_tokens": 1498
+    }
+  ]
+}

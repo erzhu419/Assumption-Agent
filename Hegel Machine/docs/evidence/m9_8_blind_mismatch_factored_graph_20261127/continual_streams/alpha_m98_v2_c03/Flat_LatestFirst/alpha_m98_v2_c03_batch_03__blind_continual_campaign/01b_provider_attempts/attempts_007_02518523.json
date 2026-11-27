@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02518523299741dc9c01b38553c05c9f",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_LatestFirst__alpha_m98_v2_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:40:54.087789+00:00",
+  "ended_at_utc": "2026-11-27T14:41:29.007028+00:00",
+  "request_sha256": "2f4133f30c18a96785199ae3697fd270dae0d24112208891bb3a34ea2677d828",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51301,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32299,
+    "cached_tokens": 11136,
+    "completion_tokens": 1338
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,54p' /tmp/m98_base.py; cat > /tmp/m98_lab.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m98_factor import *\\nU=np.eye(4)[labs]; sw=cal['single_channel_sweeps']; sweep=np.array([np.polyfit(sw['cmd_stress'][sw['lab_id']==j],sw['true_stress'][sw['lab_id']==j],1) for j in range(4)])[labs]; g,bias=sweep.T\\nD0=D.copy(); D1=D.copy(); D2=D.copy();\\nfor l in range(4):\\n m=labs==l; refs=dg['ref_coupons'][m]; rs=refs.std(0); rm=refs.mean(0); V=dg['coupon_features_raw'][m]; D1[m]=np.where(np.isnan(V),D[m],(V-np.median(rm))/np.median(rs)); D2[m]=np.where(np.isnan(V),D[m],(V-rm)/rs)\\n\\ndef run(D,mode,adjust):\\n r=th[2]+D@th[3:]; h=r-th[2]; rawnan=np.isnan(dg['coupon_features_raw']);\\n u={'affine':np.c_[r,np.ones(len(r))],'labs':np.c_[r,U],'sweep':np.c_[r,np.ones(len(r)),g,bias],'gain':np.c_[r,g*r,np.ones(len(r)),g], 'separate':np.c_[np.ones(len(r)),D], 'nonlinear':np.c_[np.ones(len(r)),r,r*r,r*r*r], 'featuretanh':np.c_[np.ones(len(r)),np.tanh(D)@th[3:]], 'labgain':np.c_[U,U*r[:,None]],'calibrated':np.c_[g,h,g*h,bias,np.ones(len(r))]}[mode];\\n def fit(ii):\\n  def obj(p,ret=False):\\n   M=zstate(P,dt,taus*np.exp(p[:2])); lam=np.exp(p[2]); dk=np.r_[-np.expm1(-t*lam),lam]; Q=np.stack([v[:,None]*dk for v in u.T],-1); base=Y0+M[:,0,None]*th[0]*E[:,0]+M[:,1,None]*th[1]*E[:,1];\\n   if adjust: Q=np.concatenate((Q,np.stack([v[:,None]*dk for v in rawnan.T],-1)),axis=2)\\n   A=(Q[ii]*W[None,:,None]).reshape(-1,Q.shape[2]); c=np.linalg.lstsq(A,(base[ii]*W).ravel(),rcond=None)[0]; e=Q@c-base; return (p,c,e) if ret else (e[ii]*W).ravel()\\n  p=least_squares(obj,[0,-0.8,0],bounds=(-3,3),max_nfev=70).x;return obj(p,True)\\n p,c,e=fit(ids); ee=np.empty_like(e);\\n for l in np.unique(labs):\\n  m=labs==l; ee[m]=fit(ids[~m])[2][m]\\n def met(q):return np.sqrt(np.mean(q**2,axis=0))[[0,7,11,12]].round(3)\\n return met(e),np.max([met(ee[labs==l]) for l in np.unique(labs)],axis=0),np.exp(p).round(3),c.round(3),e\\nfor k,Dx in enumerate([D0,D1,D2]):\\n for mode in ['affine','labs','sweep','gain','separate','nonlinear','featuretanh','labgain','calibrated']:\\n  q=run(Dx,mode,False); print(k,mode,*q[:4]);\\n  if mode in ('labs','sweep') and k<2: print('rows',q[-1][:,[11,12]].round(3).tolist())\\nprint('telemetry',te['aux_chamber_telemetry'][:10].round(3)); print('telemetry lab medians',[np.median(te['aux_chamber_telemetry'][te['lab_id']==l],axis=0).round(3).tolist() for l in range(4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_lab.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 common chamber drift with an altered history clock → H2 lab-dependent drift or reference alignment; previous worst held-out-lab curve and rate RMSE were 0.256 and 0.315.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a free offset for each lab and deploy it\",\"rejected_reason\":\"Free lab offsets are useful diagnostically, but only alignment rules or measured calibration covariates can predict an omitted lab.\"}],\"rationale\":\"Residuals are coherent across coupons in lab 2 even when no features are missing. Compare pooled, diagnostic-only, and coupon-local reference alignment; use held-out labs to test whether instrument sweep gains or nonlinear drift explain the remaining mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2c212747b209dac979e906df3bf9b333de794023ecaece2525cf481285b69bb3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35823.67,
+      "usage_known": true,
+      "prompt_tokens": 32299,
+      "cached_tokens": 11136,
+      "completion_tokens": 1338
+    }
+  ]
+}

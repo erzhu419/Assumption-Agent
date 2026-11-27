@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "085e0c7ebc2749dbad1f618d45804ab4",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:31:24.856601+00:00",
+  "ended_at_utc": "2026-11-27T14:32:05.244584+00:00",
+  "request_sha256": "d9600e0f5658e0aee9236fe7fcf9cebc76c439bc0fdd5cd1d1c28b9a804b9264",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65457,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33961,
+    "cached_tokens": 11136,
+    "completion_tokens": 1645
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_stress_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; g = item['campaign_diagnostics']; t = d['eval_times']; K = len(t)\\nbridge = m._axial_load_map(d['calibration_load_cells'])\\nout = m.solve_batch(d); tau = out['estimated_taus']; w = out['hereditary_weights']\\nx, _ = m._features(g, g); p, h, a = m._specimen(g, x, bridge); drift = a @ w[2:]\\nxj = m._features(d['train'], g)[1]; joint = w[2] + xj @ w[3:]\\ny = np.c_[g['strain_curves_obs'] - g['strain_0'][:,None], g['instant_rate_obs']]\\nR = np.r_[-np.expm1(-t[:,None] / tau), (1/tau)[None,:]]\\nbase = h[:,None] * (R @ w[:2]); log = np.r_[np.log1p(t), 1.]\\ncurves, rates = m._chamber(g, bridge, t, tau, w)\\nfixed = np.c_[curves-g['strain_0'][:,None], rates]\\nnp.testing.assert_allclose(fixed, base + drift[:,None]*log, atol=1e-12, rtol=0)\\nc, r = m._branches((p,h,a), d['past_dt'], t, tau)\\nbench = np.c_[c @ w[:2] + drift[:,None]*t, r @ w[:2] + drift]\\ncontrast = (r*tau - h[:,None]) * w[:2]\\nW = np.r_[np.full(K, 1/np.sqrt(K)), 1.]\\nlabels = g['lab_id']; missing = np.isnan(g['coupon_features_raw']).any(1)\\n\\ndef predict(kind, train, test):\\n    if kind == 'reset_log': return fixed[test]\\n    if kind == 'joint_log': return base[test]+joint[test,None]*log\\n    if kind == 'benchtop': return bench[test]\\n    if kind in ('rational_time', 'rational_drift'):\\n        def prediction(q):\\n            if kind == 'rational_time':\\n                return base + drift[:,None]*np.r_[t/(1+q*t*t),1.]\\n            return base + (drift/(1+q*drift**2))[:,None]*log\\n        f = lambda q: np.sum(((prediction(q)[train]-y[train])*W)**2)\\n        q = min((0.,minimize_scalar(f,bounds=(0,5),method='bounded').x),key=f)\\n        return prediction(q)[test]\\n    if kind == 'memory_pair':\\n        B = contrast[:,None,:]*R[None,:,:]\\n    else:\\n        B = np.stack(((h-p[:,-1])[:,None]*R[:,0], (h-p[:,0])[:,None]*R[:,1], (h-p[:,-1])[:,None]*drift[:,None]*log),axis=2)\\n    A = (B[train]*W[None,:,None]).reshape(-1,B.shape[-1]); b=((y-fixed)[train]*W).ravel()\\n    return fixed[test] + B[test] @ np.linalg.lstsq(A,b,rcond=None)[0]\\n\\ndef metric(e):\\n    return np.sqrt(np.mean(e[:,:K]**2)), np.sqrt(np.mean(e[:,K]**2))\\n\\nkinds = ['reset_log','joint_log','benchtop','rational_time','rational_drift','memory_pair','boundary_interaction']\\nfor kind in kinds:\\n    e = np.empty_like(y)\\n    for lab in np.unique(labels):\\n        test=labels==lab; e[test] = predict(kind,~test,test)-y[test]\\n    print(kind, 'strain/rate', np.round(metric(e),6), 'worst lab strain/rate', np.max([metric(e[labels==l]) for l in np.unique(labels)],axis=0).round(6), 'missing strain/rate',np.round(metric(e[missing]),6),'worst coupon strain', round(np.sqrt(np.mean(e[:,:K]**2,1)).max(),6))\\nselected = np.empty_like(y)\\nfor lab in np.unique(labels):\\n    test=labels==lab; pool=~test\\n    def inner_loss(k):\\n        return sum(np.sum(((predict(k,pool & (labels!=l),labels==l)-y[labels==l])*W)**2) for l in np.unique(labels[pool]))\\n    k=min(kinds,key=inner_loss); selected[test]=predict(k,pool,test)-y[test]; print('outer lab',lab,'inner choice',k)\\nprint('nested strain/rate',np.round(metric(selected),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_stress_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether rational saturation or stress-history contrasts improve on the chamber-local unit-log law; the current worst coupon strain RMSE is 0.01389 and missing-feature rate RMSE is 0.00506.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay, and Fokker–Planck checks\",\n      \"rejected_reason\": \"This task has continuous strain and rate outputs, with no class labels, relay state, or stochastic control operator. Held-out labs test the relevant nuisance sensitivity.\"\n    }\n  ],\n  \"rationale\": \"The audit tests whether pooled residuals conceal a lab-specific benefit from stress-history or nonlinear terms. Fit and select corrections without the outer lab’s response labels, and change the solver only if a correction improves the worst strain or rate slice without degrading the other output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "75d40268ee540a1b93fa802cf928f0bda7316e1e6270ec9bf025d93988faeace",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40345.22,
+      "usage_known": true,
+      "prompt_tokens": 33961,
+      "cached_tokens": 11136,
+      "completion_tokens": 1645
+    }
+  ]
+}

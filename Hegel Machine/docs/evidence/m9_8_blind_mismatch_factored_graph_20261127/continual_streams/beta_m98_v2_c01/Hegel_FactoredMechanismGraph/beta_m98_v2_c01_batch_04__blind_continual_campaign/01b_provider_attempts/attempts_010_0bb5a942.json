@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bb5a942d32b4090a79ee7aa80549c9b",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Hegel_FactoredMechanismGraph__beta_m98_v2_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:43:29.381110+00:00",
+  "ended_at_utc": "2026-11-27T14:43:53.711284+00:00",
+  "request_sha256": "b4a97bef99261ed591faa7b0365e475f356594f9bbb901235181101d7dfe1033",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 48270,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26289,
+    "cached_tokens": 9600,
+    "completion_tokens": 812
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport sys\\nimport time\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nsweeps = study['sensor_calibration_sweeps']\\nx = sweeps['ref_rosette']\\nstart = time.monotonic()\\nbase = solve_batch(study)\\nobs = calibrate_upstream(study)['y_obs_raw']\\nfor name, withheld in [('isolated', np.count_nonzero(x, axis=1) <= 1), ('high-amplitude', np.max(np.abs(x), axis=1) > 1.4)]:\\n    assert withheld.any()\\n    reduced = dict(study, sensor_calibration_sweeps=dict(sweeps, ref_rosette=x[~withheld], raw_rosette=sweeps['raw_rosette'][~withheld]))\\n    out = solve_batch(reduced)\\n    obs_delta = np.max(np.abs(calibrate_upstream(reduced)['y_obs_raw'] - obs))\\n    weight_delta = np.max(np.abs(out['weights'] - base['weights']))\\n    field_delta = np.max(np.abs(out['terminal_field'] - base['terminal_field']))\\n    cert = out['kkt_certificate']\\n    gap = cert['primal_objective'] - cert['dual_lower_bound']\\n    print(f'{name}: withheld={withheld.sum()} obs_delta={obs_delta:.3e} weight_delta={weight_delta:.3e} field_delta={field_delta:.3e} KKT_gap={gap:.3e}')\\n    assert obs_delta < 2e-4 and weight_delta < 2e-4 and field_delta < 2e-4\\n    assert abs(gap) < 1e-7\\nprint(f'clean composed audit elapsed: {time.monotonic()-start:.2f}s')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic response → H2 sparse pairwise coupling plus channel cubics; the worst held-out inverse error is 3.49×10⁻⁵ on the high-amplitude slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-response and sensor-bank comparisons\",\n      \"rejected_reason\": \"The prior audit already showed no held-out gain from the rational terms and agreement across all four banks; repeating it would not test downstream sensitivity.\"\n    }\n  ],\n  \"rationale\": \"Withhold isolated and high-amplitude calibration blocks while keeping the real tomography observations fixed. This tests whether small upstream changes are amplified into unstable source weights, terminal fields, or solver certificates. If they are, diagnose calibration extrapolation separately from downstream conditioning before editing either module.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7e94a6eea14377fda4ce87881a05f24f08f2cfa00aa9a9745f1713a62b49383d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24766.47,
+      "usage_known": true,
+      "prompt_tokens": 26289,
+      "cached_tokens": 9600,
+      "completion_tokens": 812
+    }
+  ]
+}

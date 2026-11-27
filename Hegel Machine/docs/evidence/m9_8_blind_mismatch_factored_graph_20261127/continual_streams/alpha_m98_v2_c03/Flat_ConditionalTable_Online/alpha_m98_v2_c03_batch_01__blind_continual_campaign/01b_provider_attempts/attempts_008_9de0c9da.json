@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9de0c9da4ec744638eef15cd577db82a",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c03__Flat_ConditionalTable_Online__alpha_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:29:14.117371+00:00",
+  "ended_at_utc": "2026-11-27T14:29:45.511592+00:00",
+  "request_sha256": "9edd03fee9fd025b432254c0e92a5434aef92f76d9dafdb3764fa7c449f8268f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54254,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32942,
+    "cached_tokens": 9600,
+    "completion_tokens": 1116
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rheo_validate_law.py <<'PY'\\nexec(open('/tmp/rheo_probe.py').read().split(\\\"print('train RMSE'\\\")[0])\\nfrom itertools import combinations\\nP,H,D=c\\nn=len(H)\\nX=m._features(dg,dg)[-n:]; R=np.c_[np.ones(n),X]@w[2:]\\nB=(-np.expm1(-t[:,None]/tau)); B=np.vstack([B,1/tau]); F=(H[:,None]*w[:2])@B.T\\nY=yd-F\\nlab=dg['lab_id']; grids={'direct':R[:,None], 'intercept':np.c_[R,np.ones(n)], 'interaction':np.c_[R,H*R], 'history':np.c_[R,P], 'free_gain':np.c_[R,H]}\\nfor name,Z in grids.items():\\n  G=np.einsum('ij,kb->ikjb',Z,B)\\n  def fit(which):\\n    return np.linalg.lstsq(G[which].reshape(-1,2*Z.shape[1]),Y[which].ravel(),rcond=None)[0]\\n  coef=fit(np.ones(n,dtype=bool)); pred=np.empty_like(yd)\\n  for g in np.unique(lab):\\n    v=lab==g; pred[v]=F[v]+G[v].reshape(sum(v),len(t)+1,-1)@fit(~v)\\n  e=pred-yd\\n  print(name,'coef',coef.round(5),'LOLO strain/rate',[(round(np.sqrt(np.mean(e[lab==g,:-1]**2)),5),round(np.sqrt(np.mean(e[lab==g,-1]**2)),5)) for g in np.unique(lab)],'worst horizon',np.sqrt(np.mean(e[:,:-1]**2,0)).max())\\nprint('archived deployment:',m.solve_batch.__code__.co_names)\\nfor name,z in [('joint train/test',b[2]@w[2:]),('test-only',np.c_[np.ones(len(b[1])),m._features(te,te)[len(b[1]):]]@w[2:]),('diagnostic-only',R)]:\\n print(name,'per-lab drift mean/std',[(g,round(z[bb['lab_id']==g].mean(),3),round(z[bb['lab_id']==g].std(),3)) for bb in [dg if name=='diagnostic-only' else te] for g in np.unique(bb['lab_id'])]);\\nprint('train counts',len(y),'strain noise MAD',np.median(abs((m._design(a,dt,t,tau)@w-y)[:,:-1])),'rate MAD',np.median(abs((m._design(a,dt,t,tau)@w-y)[:,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_validate_law.py; tail -18 /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport json\\nx=json.load(open('/holdout_task/public_asset_index.json')); print('index fields',list(x)); print({k:v for k,v in x.items() if isinstance(v,(int,str,bool,type(None)))})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent history kernels → H2 calibrated hold load plus an intrinsic-drift correction shared across branches; diagnostic-local standardization reduces slow-amplitude fit residual SD from 0.1691 to 0.0199, with held-out validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit separate nonlinear chamber models for each relaxation branch\",\"rejected_reason\":\"The hold-subtracted amplitudes are nearly rank one, so test the shared scalar correction before adding independent terms.\"}],\"rationale\":\"Use the diagnostic cohort’s own reference panel and fit chamber gains without the held-out lab’s responses. If history or interaction terms improve the worst held-out lab, retain them; otherwise use the simpler hold-plus-drift law with the specified joint train/test standardization at deployment.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1a93dd1c9e845c00b4d653a944e3ae29e6a05dc900acab564bb53696898511aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31255.84,
+      "usage_known": true,
+      "prompt_tokens": 32942,
+      "cached_tokens": 9600,
+      "completion_tokens": 1116
+    }
+  ]
+}

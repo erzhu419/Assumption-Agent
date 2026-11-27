@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "367d314ca1bf47038c7db79bbcbd7f1f",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:03:19.286304+00:00",
+  "ended_at_utc": "2026-11-27T15:03:49.046843+00:00",
+  "request_sha256": "9de0bf2365bd8c05e7d11e6abe4350f327161845278af66d960470251235115a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48914,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28008,
+    "cached_tokens": 11136,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\npath='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',path+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(path+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; ids=np.arange(len(x)); good=np.max(abs(y),axis=1)<8\\nA=m._rosette_basis(x); B=np.concatenate([A,(x*np.roll(x,-1,axis=1)*np.roll(x,1,axis=1))[...,None]],axis=-1)\\nworst=np.zeros(2); rejected=[]\\nfor k in range(4):\\n    tr=good&(ids%4!=k); te=good&(ids%4==k)\\n    for j,M in enumerate((A,B)):\\n        coef=np.stack([np.linalg.lstsq(M[tr,i],y[tr,i],rcond=None)[0] for i in range(4)])\\n        err=np.sum(M*coef,axis=-1)-y\\n        worst[j]=max(worst[j],np.sqrt(np.mean(err[te]**2,axis=0)).max())\\n        if j==0: rejected.extend(np.max(abs(err[(~good)&(ids%4==k)]),axis=1))\\nprint('worst outer-fold/channel RMSE, base vs three-channel product:',worst,'; smallest omitted-row max residual:',min(rejected))\\nassert worst[0]<3e-5 and min(rejected)>1\\nS,_=m._forward(s); sol=m.solve_batch(s); r=m._calibrate(s)-S@sol['weights']; Z=s['Z_nuisance']; e=r-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@r)\\nb=np.asarray(s['row_bank_id']).ravel(); print('bank labels/rows:',b.shape,r.shape)\\nif b.size==r.size:\\n    stats=[(str(k),int((b==k).sum()),np.sqrt(np.mean(r[b==k]**2)),np.sqrt(np.mean(e[b==k]**2))) for k in np.unique(b)]\\n    print('bank, n, raw calibrated residual RMSE, projected RMSE:',stats)\\nprint('overall calibrated RMSE before/after projection:',np.sqrt(np.mean(r*r)),np.sqrt(np.mean(e*e)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sealed-wall inheritance → periodic transport with nonlinear sweep calibration; worst pulse-by-shift-and-channel RMSE is 3.95e-6, and the independent host probe reports terminal-field relative L2 error of 1.81e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the pairwise, rational, and optimizer audits\",\n      \"rejected_reason\": \"Those checks already passed on this exact artifact. The remaining relevant checks are whether a three-channel product improves held-out calibration and whether pooled nuisance reduction hides a bank-level failure.\"\n    }\n  ],\n  \"rationale\": \"Test the excluded calibration rows against models fitted without them and compare a three-channel interaction on held-out sweeps. A material gain or a bank-level residual anomaly would warrant investigation; classification, relay, and stochastic-drift tests do not apply to these measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1df84c5c9c4f2fa7f47b44dc5d271dece619cd49099b7ecb6445dde772e39c2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29714.11,
+      "usage_known": true,
+      "prompt_tokens": 28008,
+      "cached_tokens": 11136,
+      "completion_tokens": 1062
+    }
+  ]
+}

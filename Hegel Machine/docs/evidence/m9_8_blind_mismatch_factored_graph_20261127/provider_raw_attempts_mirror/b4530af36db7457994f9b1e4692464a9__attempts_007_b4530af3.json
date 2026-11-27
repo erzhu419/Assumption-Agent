@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4530af36db7457994f9b1e4692464a9",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_LatestFirst__alpha_m98_v2_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:57:09.428104+00:00",
+  "ended_at_utc": "2026-11-27T14:57:55.082816+00:00",
+  "request_sha256": "504ec15ffce3bab3421c7a8f8bb8395fc653b0f9843eaeea43be46870c32a46e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48940,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30016,
+    "cached_tokens": 11136,
+    "completion_tokens": 1558
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,48p' /tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py; diff -u /tmp/hegel_continual_archive/alpha_m98_v2_c02_s00_solver.py /tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py | tail -55; cat > /tmp/campaign_probe.py <<'PY'\\nimport pickle, sys, importlib.util\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nspec=importlib.util.spec_from_file_location('archive','/tmp/hegel_continual_archive/alpha_m98_v2_c02_batch_03_solver.py'); archive=importlib.util.module_from_spec(spec); spec.loader.exec_module(archive)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; tr,te,g=d['train'],d['test'],it['campaign_diagnostics']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']; dt,t=d['past_dt'],d['eval_times']\\nterms=[(0,0,0,0)]\\nfor k in (1,2,3):\\n for ids in combinations_with_replacement(range(4),k): terms.append(tuple(ids.count(i) for i in range(4)))\\nterms=np.array(terms); deriv=np.maximum(terms[None,:,:]-np.eye(4,dtype=int)[:,None,:],0)\\ndef basis(u): return np.prod(u[:,None,:]**terms,axis=2)\\ndef calibrate(rows):\\n a=basis(x[rows]); b=np.linalg.lstsq(a,y[rows],rcond=None)[0]\\n return b\\nkeep=np.flatnonzero(np.max(abs(y),axis=1)<8); b=calibrate(keep)\\nif __name__=='__main__':\\n for j in range(4): print('channel',j,[(tuple(term),round(v,6)) for term,v in zip(terms,b[:,j]) if abs(v)>.0006])\\n\\ndef invert(raw, b=b):\\n z=raw.reshape(-1,4); u=np.linalg.solve(b[1:5].T,(z-b[0]).T).T\\n for _ in range(32):\\n  r=basis(u)@b-z\\n  if np.max(abs(r))<1e-10: break\\n  jac=np.einsum('nik,ik,kj->nji', np.prod(u[:,None,None,:]**deriv,axis=-1), terms.T,b)\\n  step=np.linalg.solve(jac,r[...,None])[...,0]; h=np.ones((len(u),1)); nxt=u-step\\n  for __ in range(16):\\n   wrong=np.sum((basis(nxt)@b-z)**2,axis=1)>np.sum(r*r,axis=1)\\n   if not wrong.any(): break\\n   h[wrong]*=.5; nxt=u-h*step\\n  u=nxt\\n return u.reshape(raw.shape)\\ndef stress(raw): return invert(raw).sum(-1)\\n\\ndef score(e): return np.round([np.sqrt(np.mean(e**2)), np.median(abs(e)), np.max(abs(e))],6)\\n\\nif __name__=='__main__':\\n for q in np.array_split(np.random.default_rng(6).permutation(keep),5):\\n  ep=invert(y[q],calibrate(np.setdiff1d(keep,q)))-x[q]; print('bridge inverse fold', score(ep.sum(1)))\\n for name,s in [('train',tr),('test',te),('diagnostic',g)]:\\n  for key in ('past_channel_raw','hold_channel_raw'):\\n   raw=s[key]; v=invert(raw); print('bridge closure/range',name,key,np.max(abs(basis(v.reshape(-1,4))@b-raw.reshape(-1,4))),np.round(np.quantile(v,[0,1]),3))\\n xtr,xte=archive._standardize(tr,te); _,xg=archive._standardize({k:np.concatenate((tr[k],te[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')},g)\\n trainmat=archive._design(tr,xtr,stress,dt,t); yt=tr['strain_curves_obs']-tr['strain_0'][:,None]; rt=tr['instant_rate_obs']; tau,th=archive._fit(trainmat,yt,rt); yp,rp=trainmat(tau); print('intrinsic',tau,th,'residual curve/rate',score(yp@th-yt),score(rp@th-rt))\\n gm=archive._design(g,xg,stress,dt,t); gy=g['strain_curves_obs']-g['strain_0'][:,None]; gr=g['instant_rate_obs']; a,r=gm(tau)\\n for name,A,R in [('benchtop',a@th,r@th),('gate1',*archive._chamber(gm,tau,th,t))]:\\n  print('chamber',name,score(A-gy),score(R-gr),'by time mean',np.round(np.mean(gy-A,axis=0),4)); print('first six rows late and rate meas-pred',np.round(np.c_[(gy-A)[:6,::3],(gr-R)[:6]],4))\\n print('chamber drift range',np.round(np.quantile(r[:,2:]@th[2:],[0,.5,1]),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/campaign_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable saturation → H2 a dynamically calibrated coupled cubic bridge; worst clean held-out forward RMSE is 0.000231 bridge units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a quadratic inverse directly\",\n      \"rejected_reason\": \"The coupled forward cubic fits held-out calibration rows far better; the remaining question is whether its inverse is accurate and converges on specimen inputs.\"\n    }\n  ],\n  \"rationale\": \"Validate the cubic in physical load units and check inversion on specimen inputs before attributing discrepancies to the chamber. Compare benchtop and archived drift-gate predictions separately for strain and initial rate to identify which parts of the chamber law need revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "964378bedb566fa9c2ebab13cc58df3d89caee204894aa8e8b266d536be5b1f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45617.38,
+      "usage_known": true,
+      "prompt_tokens": 30016,
+      "cached_tokens": 11136,
+      "completion_tokens": 1558
+    }
+  ]
+}

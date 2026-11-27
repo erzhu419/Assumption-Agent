@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78d884000b934d78b6ba959ff74d41d4",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:07.043291+00:00",
+  "ended_at_utc": "2026-11-27T14:34:36.734068+00:00",
+  "request_sha256": "3f6c836467719ebc642e9a9948a0841bc5911325291cb5797d5e025ab29cd826",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38735,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24746,
+    "cached_tokens": 11136,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '38,61p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.linalg import solve\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; d,_=m._forward(s); y=m._calibrate(s); z=s['Z_nuisance']; banks=np.asarray(s['row_bank_id']).ravel(); cap,budget,rr,nr=(s[k] for k in ('u_box','total_budget','source_ridge','nuisance_ridge'))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor record in log:\\n t=np.asarray(record['facility_telemetry_trace']); print('apparatus',record['completed_short_name'],'start/end means',t[:len(t)//2].mean(axis=0).round(4),t[len(t)//2:].mean(axis=0).round(4))\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']; bank_sweeps=c['single_bank_sweeps']; print('single-bank sweep shapes',[(k,np.shape(v)) for k,v in bank_sweeps.items()]); print('nuisance design',z.shape,'banks',np.unique(banks,return_counts=True))\\nns=len(s['sensor_ij']); nshift=len(s['mu_shifts']); rosette=np.arange(len(y))//4\\nsets={'shift':[np.arange(i*ns,(i+1)*ns) for i in range(nshift)],'bank':[np.flatnonzero(banks==i) for i in np.unique(banks)],'rosette':[np.flatnonzero(rosette==i) for i in np.unique(rosette)]}\\nfor family,groups in sets.items():\\n for profile in (False,True):\\n  rms=[]; bias=[]; gap=[]; active=0\\n  for test in groups:\\n   train=np.ones(len(y),bool); train[test]=False; zz=z[train]; dd=d[train]; yy=y[train]\\n   data=np.column_stack((dd,yy))\\n   if profile:\\n    gram=zz.T@zz+nr*np.eye(zz.shape[1]); data=data-zz@solve(gram,zz.T@data,assume_a='pos')\\n   A,b=data[:,:-1],data[:,-1]; w,nu=m._box_simplex_qp(A.T@A+rr*np.eye(d.shape[1]),-A.T@b,cap,budget); grad=A.T@(A@w-b)+rr*w\\n   gap.append(float(grad@w-nu*budget-cap*np.minimum(grad-nu,0).sum())); active+=int(np.any((w<1e-9)|(w>cap-1e-9)))\\n   gamma=solve(gram,zz.T@(yy-dd@w),assume_a='pos') if profile else np.zeros(z.shape[1]); e=d[test]@w+z[test]@gamma-y[test]; rms.append(np.sqrt(np.mean(e*e))); bias.append(abs(e.mean()))\\n  print(family,'profiled' if profile else 'unadjusted','max held-out RMSE',max(rms),'max absolute mean residual',max(bias),'max absolute dual gap',max(map(abs,gap)),'active-bound folds',active); assert max(map(abs,gap))<1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reflecting-wall reuse → four Robin walls with sweep-fitted affine calibration; worst held-out RMSE was 0.00977 across shifts, 0.01366 across sensors, and 0.00993 across banks.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Repeat the mixed-wall and nonlinear calibration searches\",\"rejected_reason\":\"The real-data audit already compared all 16 wall configurations and checked pairwise and rational calibration in held-out sweeps.\"},{\"option\":\"Evaluate within-batch balanced accuracy\",\"rejected_reason\":\"This is a continuous inverse problem with no class labels; held-out bank RMSE and mean residual measure the relevant nuisance effects.\"}],\"rationale\":\"Compare nuisance profiling against an unadjusted fit on held-out banks, shifts, and whole rosettes. If profiling worsens bank transfer, inspect the nuisance design; if constrained-fold dual gaps are nonzero, fix the QP solver before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e174c94a47b2bd228424c625e28854601c57a90fdfbb2215974618c8c63adb0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29653.22,
+      "usage_known": true,
+      "prompt_tokens": 24746,
+      "cached_tokens": 11136,
+      "completion_tokens": 1172
+    }
+  ]
+}

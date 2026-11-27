@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e674337d69d0470c9f0fb2484f250ae8",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:52:27.160068+00:00",
+  "ended_at_utc": "2026-11-27T14:53:08.978978+00:00",
+  "request_sha256": "c51c3dfb3535d5b51ea041ccee0c2e3ce26857b3e967c2c355df43270233658d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29453,
+    "cached_tokens": 11136,
+    "completion_tokens": 1493
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,66p' /tmp/hegel_continual_archive/alpha_m98_v2_c01_batch_03_solver.py; cat >/tmp/nonlinear_bridge.py <<'PY'\\nimport numpy as np\\n\\n\\ndef fit_bridge(cal):\\n    a = np.asarray(cal['true_channel_loads'], float)\\n    b = np.asarray(cal['bridge_raw'], float)\\n    nxt = [1, 2, 3, 0]\\n    prv = [3, 0, 1, 2]\\n    # Gross bridge errors are large even when their sum cancels.\\n    center = np.median(b, axis=0)\\n    spread = np.median(abs(b-center), axis=0)\\n    keep = np.max(abs(b-center)/np.maximum(spread, .1), axis=1) < 12\\n    co = np.array([np.linalg.lstsq(np.column_stack((np.ones(len(a)), a[:,j], a[:,nxt[j]], a[:,prv[j]], a[:,j]*a[:,nxt[j]], a[:,j]**3))[keep], b[keep,j], rcond=None)[0] for j in range(4)])\\n    off, lin, cross_next, cross_prev, pair, cubic = co.T\\n    linear = np.diag(lin)\\n    linear[np.arange(4),nxt] = cross_next\\n    linear[np.arange(4),prv] = cross_prev\\n\\n    def invert(raw):\\n        y = np.asarray(raw, float)-off\\n        q = np.linalg.solve(linear, y.reshape(-1,4).T).T\\n        y = y.reshape(-1,4)\\n        for _ in range(24):\\n            f = q@linear.T + pair*q*q[:,nxt] + cubic*q**3-y\\n            if np.max(abs(f)) < 1e-11:\\n                break\\n            jac = np.broadcast_to(linear,(len(q),4,4)).copy()\\n            j = np.arange(4)\\n            jac[:,j,j] += pair*q[:,nxt]+3*cubic*q*q\\n            jac[:,j,nxt] += pair*q\\n            step = np.linalg.solve(jac, f[...,None])[...,0]\\n            q -= step/np.maximum(1.,np.max(abs(step),axis=1,keepdims=True))\\n        return q.reshape(raw.shape)\\n    return invert, keep\\nPY\\ncat >/tmp/corrected_probe.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('a=cal')[0])\\nfrom nonlinear_bridge import fit_bridge\\niv, keep = fit_bridge(cal)\\na=cal['true_channel_loads']; b=cal['bridge_raw']; e=[]\\nfor j in np.flatnonzero(keep):\\n    sub=np.arange(len(a))!=j\\n    ii,_=fit_bridge(dict(true_channel_loads=a[sub],bridge_raw=b[sub])); e.append(ii(b[j:j+1])[0]-a[j])\\nprint('calibration rejected',np.flatnonzero(~keep),'LOO axial RMSE, worst:',np.sqrt(np.mean(np.sum(e,1)**2)),np.max(abs(np.sum(e,1))))\\ndef spec(z,x):\\n    return iv(z['past_channel_raw']).sum(-1),iv(z['hold_channel_raw']).sum(-1),np.c_[np.ones(len(x)),x]\\nxt,xe=m._features(tr,te); st=spec(tr,xt); tau,th=m._fit(st,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']);print('tau, theta:',tau,th)\\ny=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']\\nref={k:np.concatenate([tr[k],te[k]]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}; _,x=m._features(ref,g); p,h,X=spec(g,x)\\nc,rr=m._branches((p,h,X),dt,t,tau); dr=X@th[2:]; B=c@th[:2]; R=rr@th[:2];\\nprint('diagnostic reference-pool transfer:')\\nfor name,F in [('linear',t),('exp1',-np.expm1(-t)),('no drift',0*t)]:\\n ec=y-B-dr[:,None]*F; er=r-R-(dr if name!='no drift' else 0); print(name,'curve/rate RMSE',np.sqrt(np.mean(ec**2)),np.sqrt(np.mean(er**2)), 'by time mean',np.round(ec.mean(0),4))\\nnp.set_printoptions(precision=4,suppress=True,linewidth=150)\\nprint('diagnostic hold, first/last history, drift, observed rate, baseline rate, final residual');print(np.c_[h,p[:,0],p[:,-1],dr,r,R+dr,(y-B-dr[:,None]*t)[:,-1]])\\nprint('archive log keys and fields')\\nimport json\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print({k:v for k,v in row.items() if k!='facility_telemetry_trace'})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/corrected_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 cyclic cubic forward bridge with robust calibration; sparse forward axial leave-one-out RMSE is 0.000220, pending inverse and corrected chamber tests.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Invert an unrestricted cubic fit\",\"rejected_reason\":\"Its leave-one-out channel errors are higher, and the fitted coefficients identify a cyclic pair term plus one self-cubic term per channel.\"}],\"rationale\":\"Validate the inverse in physical load units, then refit the intrinsic spectrum and remeasure chamber errors. If the corrected bridge removes those errors, there is no basis to add another chamber mechanism.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "dad34c772ac485803be372db6054935e2b29ffa0d75d53fe5177c8f33da95887",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42210.07,
+      "usage_known": true,
+      "prompt_tokens": 29453,
+      "cached_tokens": 11136,
+      "completion_tokens": 1493
+    }
+  ]
+}

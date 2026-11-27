@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0047c0c3efd14e689b7d61dc019a522d",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_LatestFirst__alpha_m98_v2_c01_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:12.571240+00:00",
+  "ended_at_utc": "2026-11-27T14:46:35.149060+00:00",
+  "request_sha256": "b12fbcf2daa719845e66e47c97ac8b61db453bed95f0406a88b81ece25874c47",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32820,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23722,
+    "cached_tokens": 11136,
+    "completion_tokens": 750
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/hegel_continual_archive/alpha_m98_v2_c01_s00_solver.py /holdout_task/batch_solver.py\\nsed -i 's/This blind campaign supplies neither chamber responses nor a lineage archive./The prefix apparatus trace matches s00 on the chamber regime channels./' /holdout_task/batch_solver.py\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nsed -n '54,135p' batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,batch_solver as m\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; u,y=(c[k] for k in ('true_channel_loads','bridge_raw'))\\nf=np.column_stack((np.ones(len(u)),u)); g=np.column_stack((f,*[u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]));\\nfor name,A in [('affine',f),('quadratic',g)]:\\n p=np.empty_like(y)\\n for fold in range(5):\\n  test=np.arange(len(u))%5==fold\\n  p[test]=A[test]@np.linalg.lstsq(A[~test],y[~test],rcond=None)[0]\\n print(name,'bridge residual rms',np.sqrt(np.mean((p-y)**2,axis=0)))\\nprint('true load range',np.min(u,axis=0),np.max(u,axis=0),'bridge raw range',y.min(0),y.max(0))\\nfor name in ['train','test']:\\n a=D[name]; print(name,'missing features',np.isnan(a['coupon_features_raw']).sum(0),'past raw ranges',a['past_channel_raw'].min((0,1)),a['past_channel_raw'].max((0,1)))\\no=m.solve_batch(D); print('taus',o['estimated_taus'],'theta',o['hereditary_weights'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 latest exponential drift -> H2 s00-like linear chamber drift; the telemetry distance is 1.34 to s00 versus 4.98 to batch 03, with no labeled chamber error available.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse batch 03 unchanged\",\"rejected_reason\":\"The apparatus channels that distinguish its regime from s00 point to s00.\"}],\"rationale\":\"Install the s00 law as the candidate. If held-out bridge errors show curvature, revise calibration; if not, retain the affine model and validate the intrinsic fit across labs and horizons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "6ee046e782bd1390e185a73b43b6bbadaf8a12010cdbae2565e5e92d3a08b73e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23037.55,
+      "usage_known": true,
+      "prompt_tokens": 23722,
+      "cached_tokens": 11136,
+      "completion_tokens": 750
+    }
+  ]
+}

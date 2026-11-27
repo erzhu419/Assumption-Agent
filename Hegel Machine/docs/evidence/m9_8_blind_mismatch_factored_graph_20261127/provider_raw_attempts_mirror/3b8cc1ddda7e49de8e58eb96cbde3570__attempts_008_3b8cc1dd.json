@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b8cc1ddda7e49de8e58eb96cbde3570",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c01__Flat_LatestFirst__beta_m98_v2_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:02:23.214548+00:00",
+  "ended_at_utc": "2026-11-27T15:02:59.223752+00:00",
+  "request_sha256": "aa208b00b100872ae38f2b04306959b7f74c61027e9fae49beaa0748a02449b7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43488,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26992,
+    "cached_tokens": 0,
+    "completion_tokens": 1379
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',root+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\ns=item['study']; cal=s['sensor_calibration_sweeps']; x=cal['ref_rosette']; y=cal['raw_rosette']; ids=np.arange(len(x)); good=np.max(np.abs(y),axis=1)<8\\nphi=m._rosette_basis(x); nxt=np.roll(x,-1,axis=1); prev=np.roll(x,1,axis=1)\\npair=np.stack([(x-nxt)**2,(x+prev)**2],axis=-1)\\nrmse=lambda a: np.sqrt(np.mean(a*a,axis=0))\\ndef fit(A,B,tr,te):\\n    return np.column_stack([A[te,j]@np.linalg.lstsq(A[tr,j],B[tr,j],rcond=None)[0] for j in range(4)])\\ndef den(a): return 1+a*(x-nxt)**2\\nouter=[]; pred=np.full_like(y,np.nan)\\nfor fold in range(4):\\n    tr=good&(ids%4!=fold); te=good&~tr\\n    coef=m._fit_rosette({'ref_rosette':x[tr],'raw_rosette':y[tr]})\\n    base=np.sum(phi[te]*coef,axis=-1); pred[te]=base\\n    aug=fit(np.concatenate([phi,pair],axis=-1),y,tr,te)\\n    inner=tr&(ids%3==0); inner_tr=tr&~inner\\n    def rational(a,train,test):\\n        d=den(a); return fit(phi,y*d,train,test)/d[test]\\n    a=min([0.,1e-6,1e-5,1e-4,1e-3,1e-2],key=lambda a: np.mean((rational(a,inner_tr,inner)-y[inner])**2))\\n    rat=rational(a,tr,te)\\n    outer.append([rmse(v-y[te]).max() for v in (base,aug,rat)])\\nhi=np.max(np.abs(x),axis=1)>=np.quantile(np.max(np.abs(x[good]),axis=1),.8)\\nprint('worst outer fold/channel sweep RMSE (candidate, extra pairwise terms, tuned rational):',np.max(outer,axis=0))\\nprint('largest-reference quintile worst channel RMSE:',rmse((pred-y)[good&hi]).max())\\nassert np.max(np.asarray(outer)[:,0])<3e-5\\nS,U=m._forward(s); coef=m._fit_rosette(cal); worst=0.\\nfor pulse in item['campaign_diagnostics']:\\n    xhat=(S@pulse['w_pulse']).reshape(-1,4)\\n    r=(np.sum(m._rosette_basis(xhat)*coef,axis=-1).ravel()-pulse['y_pulse_raw']).reshape(len(s['mu_shifts']),-1,4)\\n    worst=max(worst,np.sqrt(np.mean(r*r,axis=1)).max())\\nprint('worst pulse/shift/channel RMSE:',worst); assert worst<1e-5\\nout=m.solve_batch(s); z=s['Z_nuisance']; raw_resid=S@out['weights']-m._calibrate(s)\\nridge=s['nuisance_ridge']; profiled=raw_resid-z@np.linalg.solve(z.T@z+ridge*np.eye(z.shape[1]),z.T@raw_resid)\\nprint('observation RMSE before/after prescribed nuisance projection:',np.linalg.norm(raw_resid)/np.sqrt(len(raw_resid)),np.linalg.norm(profiled)/np.sqrt(len(profiled)))\\nprint('study fields:',sorted(s))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sealed-wall inheritance → periodic transport with sweep-fitted nonlinear calibration; verified worst raw pulse-by-shift RMSE is 3.95e-6 before checking individual channels.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, drift-equation, and classification audits\",\n      \"rejected_reason\": \"This is a steady transport inverse problem with continuous observations; it has no relay state, stochastic drift model, or class labels. The relevant nuisance check uses the provided design matrix.\"\n    }\n  ],\n  \"rationale\": \"Check whether pairwise or rational terms fix a held-out calibration error and whether pulse averaging concealed a bad channel. Revisit calibration or transport only if those checks expose a material discrepancy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2c8c428d2151edb70e71e4086b4ded202ed3c73ab8d7502bf8ff6c2c497e461e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35968.93,
+      "usage_known": true,
+      "prompt_tokens": 26992,
+      "cached_tokens": 0,
+      "completion_tokens": 1379
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54e85d945e0941da9ac25e8eb7ca6e89",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c02__Flat_ConditionalTable_Online__alpha_m98_v2_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:46:31.534065+00:00",
+  "ended_at_utc": "2026-11-27T14:46:59.282040+00:00",
+  "request_sha256": "1b9a1f799df56a6d191a25e481523abcf84322c0a47bd5451b82b16992334cba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36013,
+    "cached_tokens": 9600,
+    "completion_tokens": 913
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /tmp/hegel_continual_archive\\nfor f in *solver.py; do echo \\\"=== $f\\\"; grep -A20 '^def _predict_chamber' \\\"$f\\\" || grep -A19 '^def solve_batch' \\\"$f\\\"; done\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; keep=np.max(abs(r),axis=1)<6\\nidx=np.flatnonzero(keep); folds=np.array_split(np.random.default_rng(23).permutation(idx),5); errors=[]\\nfor fold in folds:\\n tr=np.setdiff1d(idx,fold); stress=m._stress_calibration({'bridge_raw':r[tr],'true_channel_loads':y[tr]}); errors.extend(abs(stress(r[fold])-y[fold].sum(1)))\\nprint('held-out clean total-load q50/q90/max', np.quantile(errors,[.5,.9,1])); print('corrupted rows',np.flatnonzero(~keep))\\nlog=json.load(open('archive_apparatus_log.json')); a=np.array([e['facility_telemetry_trace'] for e in log]); print('DC estimates for telemetry channels 1,2,4,5,7',np.mean(a,axis=1)[:,[1,2,4,5,7]].round(3)); print('transient mean-absolute amplitude for channels 0,3,6',np.mean(abs(a),axis=1)[:,[0,3,6]].round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: cyclic bridge restores shared material estimates → H2: interpret the latest apparatus entry against the archived chamber laws; worst held-lab q90 errors are 0.02414 strain and 0.01325 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select batch 01 by excluding the latest archive entry from the regime candidates\",\n      \"rejected_reason\": \"That selects the closest older trace, but does not establish that batch 01's reset and logarithmic creep apply when batch 03's chamber law is also available.\"\n    }\n  ],\n  \"rationale\": \"Read only the archived chamber equations to avoid another truncated comparison. Validate total load after inversion on held-out clean sweeps: if the inverse amplifies the small forward residuals, revise inversion before finalizing the chamber predictor.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "be68f349599109a34ec357b84c56bd8a8586a0c4c8429854768bdd945e909fad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27702.57,
+      "usage_known": true,
+      "prompt_tokens": 36013,
+      "cached_tokens": 9600,
+      "completion_tokens": 913
+    }
+  ]
+}

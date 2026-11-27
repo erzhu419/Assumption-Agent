@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b8d99a434fb4e7dabe0895179bb051f",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Flat_ConditionalTable_Online__beta_m98_v2_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:41:07.448620+00:00",
+  "ended_at_utc": "2026-11-27T14:41:48.005070+00:00",
+  "request_sha256": "34d9abffc63a033ca7e6097b67407e12d4032027547d3f57afd8e7fa3a2a02b9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62887,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32264,
+    "cached_tokens": 0,
+    "completion_tokens": 1599
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_m98.py <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations, combinations_with_replacement\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nsw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; clean=np.max(abs(y),axis=1)<7\\nfold=np.arange(len(x))%5\\nterms=[j for d in range(4) for j in combinations_with_replacement(range(4),d)]\\nfull=np.stack([np.prod(x[:,j],axis=1) for j in terms],axis=1)\\nprint('clean rows',clean.sum(),'faulted rows',np.flatnonzero(~clean).tolist(), 'largest clean / smallest fault amplitude',np.max(abs(y[clean])),np.min(np.max(abs(y[~clean]),axis=1)))\\nfor family in ['sparse cubic','full cubic','pairwise difference cubes','rational']:\\n    errors=[]\\n    for f in range(5):\\n        train=clean&(fold!=f); test=clean&(fold==f); pred=[]\\n        for i in range(4):\\n            X=m._features(x,i); candidates=[(X,np.ones(len(x)))]\\n            if family=='full cubic': candidates=[(full,np.ones(len(x)))]\\n            if family=='pairwise difference cubes':\\n                diffs=np.column_stack([(x[:,j]+sign*x[:,k])**3 for j,k in combinations(range(4),2) for sign in (-1,1)])\\n                candidates=[(np.c_[X,diffs],np.ones(len(x)))]\\n            if family=='rational':\\n                Q=[x[:,j] for j in range(4)]+[x[:,j]+sign*x[:,k] for j,k in combinations(range(4),2) for sign in (-1,1)]\\n                candidates += [(X,1+a*q*q) for q in Q for a in (1e-4,1e-3,1e-2,0.1,1.)]\\n            if len(candidates)>1:\\n                def loss(cand):\\n                    A,den=cand; A=A/den[:,None]; vals=[]\\n                    for g in range(5):\\n                        if g==f: continue\\n                        a=train&(fold!=g); b=train&(fold==g); c=np.linalg.lstsq(A[a],y[a,i],rcond=None)[0]; vals.extend((A[b]@c-y[b,i])**2)\\n                    return np.mean(vals)\\n                chosen=min(candidates,key=loss)\\n            else: chosen=candidates[0]\\n            A,den=chosen; A=A/den[:,None]; c=np.linalg.lstsq(A[train],y[train,i],rcond=None)[0]; pred.append(A[test]@c)\\n        errors.append(np.sqrt(np.mean((np.column_stack(pred)-y[test])**2,axis=0)))\\n    print(family,'worst fold-channel RMSE',np.max(errors))\\nb=sw['single_bank_sweeps']; idx=b['bank_id'].astype(int); bx=np.eye(4)[idx]*b['ref_signal'][:,None]; c=m._rosette_coefficients(x,y); by=np.array([m._features(bx[j],i)@c[i] for j,i in enumerate(idx)]); ok=abs(b['raw_readout'])<7\\nprint('independent single-bank RMSE by channel', [float(np.sqrt(np.mean((by[ok&(idx==i)]-b['raw_readout'][ok&(idx==i)])**2))) for i in range(4)])\\nS,_=m._forward(s); ycal=m._calibrate(s); Z=s['Z_nuisance']; shifts=np.repeat(np.arange(len(s['mu_shifts'])),len(s['sensor_ij'])); I=np.eye(Z.shape[1]); R=s['source_ridge']*np.eye(S.shape[1]); cap=s['u_box']; budget=s['total_budget']\\nfor use_z in (False,True):\\n    rms=[]\\n    for k in np.unique(shifts):\\n        tr=shifts!=k; z=Z[tr]; P=np.linalg.solve(z.T@z+s['nuisance_ridge']*I,z.T) if use_z else np.zeros((I.shape[0],len(z))); D=S[tr]-z@(P@S[tr]); t=ycal[tr]-z@(P@ycal[tr]); w,_=m._box_budget(D.T@D+R,-D.T@t,cap,budget); e=S[~tr]@w+Z[~tr]@(P@(ycal[tr]-S[tr]@w))-ycal[~tr]; rms.append(np.sqrt(np.mean(e**2)))\\n    print('held shift RMSE by shift, nuisance profiling',use_z,rms)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m98.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: augmented rosette grammars -> retain the cyclic cubic unless an augmentation improves held-out calibration; current worst sweep-channel RMSE is 1.37e-5 and worst held-out shift RMSE is 0.01063.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, stochastic drift, or classification stress tests\",\n      \"rejected_reason\": \"The task is a steady deterministic inverse problem with continuous observations and no relay state or class labels. Held-out shift residuals directly test nuisance handling.\"\n    }\n  ],\n  \"rationale\": \"Compare cubic, pairwise-difference, and rational sensor models with rational selection inside each outer fold. Use the separate single-bank sweeps to detect unsupported extrapolation and compare nuisance profiling on held-out shifts to see whether its benefit extends beyond the pooled fit. Change the candidate only if the audit identifies a material calibration or reconstruction issue.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "25f1ef9636e32d26ad31cf348f5bc7d60f8b0076aba4c883a7a516fd9a60c93e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40994.77,
+      "usage_known": true,
+      "prompt_tokens": 32264,
+      "cached_tokens": 0,
+      "completion_tokens": 1599
+    }
+  ]
+}

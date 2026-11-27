@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1ead5e5afc784b5f9033bd1836beca6d",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c01__Flat_ConditionalTable_Online__alpha_m98_v2_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:01.090322+00:00",
+  "ended_at_utc": "2026-11-27T14:34:26.078970+00:00",
+  "request_sha256": "5b525f37453ba9f43428be10eda34537db70875711336cde89d1ec96cc23a9f4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24002,
+    "cached_tokens": 9600,
+    "completion_tokens": 907
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/validate_kernel_m98.py <<'PY'\\nimport runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nv=runpy.run_path('/tmp/probe_m98.py'); globals().update(v)\\ncomplete=np.isfinite(g['coupon_features_raw']).all(1)\\nprint('complete coupon count',complete.sum())\\nmodels={'unit exponential':(lambda z:-np.expm1(-t),[]),'fit exponential':(lambda z:-np.expm1(-z[0]*t)/z[0],[1]),'fit tanh':(lambda z:np.tanh(z[0]*t)/z[0],[1]),'fit rational':(lambda z:t/(1+z[0]*t),[1]),'linear':(lambda z:t,[])}\\nfor name,(kernel,init) in models.items():\\n for by in ('lab_id','stratum'):\\n  e=np.empty_like(dy); pars=[]\\n  for group in np.unique(g[by]):\\n   test=g[by]==group; fit=~test & complete\\n   z=least_squares(lambda z:(dy[fit]-drift[fit,None]*kernel(z)).ravel(),init,bounds=(.01,10),loss='soft_l1',f_scale=.012).x if init else []\\n   pars.append(np.asarray(z).round(4).tolist()); e[test]=dy[test]-drift[test,None]*kernel(z)\\n  print(name,by,'parameters',pars,'pooled median/MSE-root',np.median(abs(e)),np.sqrt(np.mean(e**2)),'worst group RMSE',max(np.sqrt(np.mean(e[g[by]==i]**2)) for i in np.unique(g[by])),'worst complete coupon RMSE',max(np.sqrt(np.mean(e[complete]**2,1))),'worst imputed coupon RMSE',max(np.sqrt(np.mean(e[~complete]**2,1))))\\nprint('Observed initial-rate residual, complete/imputed',[(np.sqrt(np.mean((dr[rows]-drift[rows])**2)),np.max(abs(dr[rows]-drift[rows]))) for rows in [complete,~complete]])\\n# Identify the dominant residual independent of the diagnostic feature normalization.\\ne=dy-dr[:,None]*(-np.expm1(-t)); print('Rate-anchored strain residual RMSE and worst coupon',np.sqrt(np.mean(e**2)),max(np.sqrt(np.mean(e**2,1))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/validate_kernel_m98.py | tail -17\\ncd /holdout_task && cat validate_public_schema.py && head -35 public_asset_index.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear chamber drift -> H2 unit-slope exponential saturation; fitted worst-coupon strain RMSE improved from 1.256 to 0.073, while worst initial-rate error remained 0.090.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a free initial-slope multiplier\",\"rejected_reason\":\"It worsened median initial-rate error without meaningfully improving the worst strain error.\"}],\"rationale\":\"Refit each candidate kernel inside lab and stratum holdouts to detect a pooled-only improvement. Separate complete and imputed coupons so missing-feature error does not drive the kernel choice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "4a2a6682f015512d1e140bfc59cce155859c2a597fd527539e7f119b39579337",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24947.44,
+      "usage_known": true,
+      "prompt_tokens": 24002,
+      "cached_tokens": 9600,
+      "completion_tokens": 907
+    }
+  ]
+}

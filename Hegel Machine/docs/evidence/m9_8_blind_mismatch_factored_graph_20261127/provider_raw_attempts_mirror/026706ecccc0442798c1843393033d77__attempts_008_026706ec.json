@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "026706ecccc0442798c1843393033d77",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c03__Hegel_FactoredMechanismGraph__beta_m98_v2_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:28:39.272440+00:00",
+  "ended_at_utc": "2026-11-27T14:29:08.198929+00:00",
+  "request_sha256": "dfacd40f05c37d53d833fa1b51db5be0476ce70053a3f3e2584d6677ad05f3fa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43438,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25571,
+    "cached_tokens": 9600,
+    "completion_tokens": 1037
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, inspect, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nprint(inspect.getsource(m._calibrate))\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    s=item['study']; c=s['sensor_calibration_sweeps']; a,b=c['ref_rosette'],c['raw_rosette']; S,_=m._forward(s)\\n    def design(x,k,j):\\n        z=np.c_[np.ones(len(x)),x[:,j]]\\n        if k=='diagonal': return z\\n        z=np.c_[np.ones(len(x)),x]\\n        if k=='affine': return z\\n        if k=='quadratic': return np.column_stack([z]+[x[:,i]*x[:,l] for i in range(4) for l in range(i,4)])\\n        return np.column_stack([z]+[x[:,i]**3 for i in range(4)])\\n    for k in ['diagonal','affine','quadratic','cubic']:\\n        sweeps=[]; pulses=[]\\n        for hold in range(5):\\n            test=np.arange(len(a))%5==hold\\n            coef=[np.linalg.lstsq(design(a[~test],k,j),b[~test,j],rcond=None)[0] for j in range(4)]\\n            def pred(x): return np.column_stack([design(x,k,j)@coef[j] for j in range(4)])\\n            sweeps.append(np.sqrt(np.mean((pred(a[test])-b[test])**2,axis=0)).max())\\n            for pulse in item.get('campaign_diagnostics') or []:\\n                ref=(S@pulse['w_pulse']).reshape(-1,4); raw=pulse['y_pulse_raw'].reshape(-1,4)\\n                e=(pred(ref)-raw).reshape(len(s['mu_shifts']),-1,4)\\n                pulses.append(np.sqrt(np.mean(e**2,axis=1)).max())\\n        print(k,'worst held sweep fold/channel RMS',max(sweeps),'worst tracer fold/shift/channel raw RMS',max(pulses,default=float('nan')))\\n    Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); D=S-Z@(P@S)\\n    Q=np.linalg.qr(np.ones((S.shape[1],1)),mode='complete')[0][:,1:]; sv=np.linalg.svd(D@Q,compute_uv=False)\\n    print('budget-tangent design singular range without/with projection',np.linalg.svd(S@Q,compute_uv=False)[-1],sv[-1],sv[0], 'minimum regularized curvature',sv[-1]**2+s['source_ridge'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls -> H2 reflecting walls with dynamic rosette calibration; worst public pulse-by-shift RMS is 1.47e-6 and host relative field error is 1.62e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification, relay, or drift metrics\",\n      \"rejected_reason\": \"This is a steady continuous inversion with no class labels or relay state; nuisance confounding is testable through the projected source design.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted calibration cross-terms or curvature reduce error on both held-out sweeps and independently measured tracer pulses. Also measure whether nuisance projection removes source contrast on the fixed-budget subspace. A transferable calibration gain would justify a challenger; a near-null direction would trigger a targeted check of ridge and active bounds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "442433d5ebed4eb2f69974850910c3828be3784e046de48e6e982470de642d86",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28880.26,
+      "usage_known": true,
+      "prompt_tokens": 25571,
+      "cached_tokens": 9600,
+      "completion_tokens": 1037
+    }
+  ]
+}

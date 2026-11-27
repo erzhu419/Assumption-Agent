@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28a3633574d94ee09d942d87366fe4ff",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T142012Z__alpha_m98_v2_c04__Flat_LatestFirst__alpha_m98_v2_c04_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_v2_c04_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T15:05:30.682816+00:00",
+  "ended_at_utc": "2026-11-27T15:05:53.449491+00:00",
+  "request_sha256": "375828ebc6f2a7d9e97967224b63809a79cc041610ccf23bd88512529e255918",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70134,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38403,
+    "cached_tokens": 11136,
+    "completion_tokens": 766
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('batch_solver', path)\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    data = pickle.load(f)[0]['dataset']\\nout = solver.solve_batch(data)\\nn = len(data['test']['strain_0'])\\nk = len(data['eval_times'])\\nexpected = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (n, k), 'initial_rate_pred': (n,)}\\nassert set(out) == set(expected)\\nfor name, shape in expected.items():\\n    assert out[name].shape == shape and np.isfinite(out[name]).all(), name\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25.0\\n# Test the public entry point at the hold boundary, including the observed\\n# deployment coupons with the largest decoded load and history magnitudes.\\neps = 1e-5\\nnear = solver.solve_batch(dict(data, eval_times=np.array([0., eps, 2*eps])))\\ny0, y1, y2 = near['predicted_strain'].T\\nassert np.array_equal(y0, data['test']['strain_0'])\\nboundary_err = np.max(np.abs((-3*y0 + 4*y1 - y2)/(2*eps) - near['initial_rate_pred']))\\nassert boundary_err < 1e-7, boundary_err\\nprint('Isolated import and deployment schema passed:', expected)\\nprint('Worst deployment-coupon boundary derivative error:', boundary_err)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled diagnostic alignment → H2 separate diagnostic alignment with shared chamber memory and response constants; worst held-out lab or stratum median strain/rate errors are 0.01619/0.01634.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and host scientific checks passed. Load the exact solver in an isolated interpreter to catch undeclared dependencies, then test that strain starts at the measured initial value and that its boundary derivative matches the returned rate on every deployment coupon. A failure would identify an import or chamber handoff defect to fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b591f965240a0641a1dd080b0ea1cffbb9b95c20498f48230814514dc376d4a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22721.79,
+      "usage_known": true,
+      "prompt_tokens": 38403,
+      "cached_tokens": 11136,
+      "completion_tokens": 766
+    }
+  ]
+}

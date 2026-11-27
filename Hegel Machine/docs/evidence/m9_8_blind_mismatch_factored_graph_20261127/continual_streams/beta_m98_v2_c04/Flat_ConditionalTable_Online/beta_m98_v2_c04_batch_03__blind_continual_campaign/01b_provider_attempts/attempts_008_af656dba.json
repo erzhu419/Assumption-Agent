@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af656dba1a0d4bb7bcca8d8a4f875928",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T142012Z__beta_m98_v2_c04__Flat_ConditionalTable_Online__beta_m98_v2_c04_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_v2_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:34:38.143890+00:00",
+  "ended_at_utc": "2026-11-27T14:35:04.908348+00:00",
+  "request_sha256": "2bc40d5cd989d08fa82a6f1ebecf96ad8905e936d4155b6809beef0d0a6da119",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48078,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27889,
+    "cached_tokens": 9600,
+    "completion_tokens": 912
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x,y=map(np.asarray,(c['ref_rosette'],c['raw_rosette'])); n=len(x); ids=np.arange(n); S,_=m._forward(s); Z=s['Z_nuisance']; bank=s['row_bank_id']; gram=Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]); A=np.c_[np.ones(n),x]\\nfor kind in ('diagonal','full'):\\n e=np.empty_like(y)\\n for fold in range(5):\\n  test=ids%5==fold; train=~test\\n  if kind=='full': e[test]=y[test]-A[test]@np.linalg.lstsq(A[train],y[train],rcond=None)[0]\\n  else:\\n   for b in range(4):\\n    a=A[:,[0,b+1]]; e[test,b]=y[test,b]-a[test]@np.linalg.lstsq(a[train],y[train,b],rcond=None)[0]\\n print(kind,'held-out sweep RMSE by channel',np.sqrt(np.mean(e**2,axis=0)))\\nworst=0\\nfor j,d in enumerate(item['campaign_diagnostics']):\\n p=S@d['w_pulse']; y=m._calibrate({**s,'y_obs_raw':d['y_pulse_raw']}); e=y-p; ep=e-Z@np.linalg.solve(gram,Z.T@e)\\n for k in np.unique(bank):\\n  q=bank==k; den=np.linalg.norm(y[q]); raw=np.linalg.norm(e[q])/den; prof=np.linalg.norm(ep[q])/den; bias=abs(np.mean(e[q])); worst=max(worst,raw,prof); print('pulse',j,'bank',k,'relative residual before/after nuisance',raw,prof,'absolute mean bias',bias)\\nassert worst<1e-4, worst\\nprint('worst pulse/bank relative residual:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall rows -> H2 periodic upwind coupling on both axes; worst tracer shift/location error was 1.06e-5 relative, and the host measured 4.51e-6 weight error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"This study is a continuous inverse problem with no relay state or class labels; sensor banks are the relevant strata.\"\n    }\n  ],\n  \"rationale\": \"The transport and certificate already passed independent verification. This audit tests the remaining plausible failure: pooled pulse agreement could hide a biased sensor bank, or a full calibration matrix could fit spurious cross-channel terms. Compare calibration on held-out sweeps and score each bank before and after nuisance projection; reconsider calibration only if either exposes a material error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "be31cd03d9684802c124290f2a4096947151eeaace3cb1586cb6d64ebda30372",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26716.23,
+      "usage_known": true,
+      "prompt_tokens": 27889,
+      "cached_tokens": 9600,
+      "completion_tokens": 912
+    }
+  ]
+}
