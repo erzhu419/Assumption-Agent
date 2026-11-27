@@ -2428,9 +2428,83 @@ def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str
     return {"tier": "SCIENTIFIC_FAILURE", "failure_kind": "scientific_or_numerical"}
 
 
+def compute_canonical_numeric_item_sha256(obj: Any) -> str:
+    """Pickle-protocol & NumPy-module-path independent canonical SHA-256 (`R12`: identical across NumPy 1.x and 2.x)."""
+    h = hashlib.sha256()
+
+    def _feed(v: Any) -> None:
+        if v is None:
+            h.update(b"N;")
+        elif isinstance(v, bool):
+            h.update(b"B1;" if v else b"B0;")
+        elif isinstance(v, (int, np.integer)):
+            h.update(f"I:{int(v)};".encode("utf-8"))
+        elif isinstance(v, (float, np.floating)):
+            fv = float(v)
+            if math.isnan(fv):
+                h.update(b"F:NaN;")
+            elif math.isinf(fv):
+                h.update(b"F:+Inf;" if fv > 0 else b"F:-Inf;")
+            else:
+                # Normalize -0.0 -> 0.0 and pack IEEE-754 float64 little-endian
+                fv = 0.0 if fv == 0.0 else fv
+                h.update(b"F:" + np.asarray([fv], dtype="<f8").tobytes() + b";")
+        elif isinstance(v, str):
+            eb = v.encode("utf-8")
+            h.update(f"S:{len(eb)}:".encode("utf-8") + eb + b";")
+        elif isinstance(v, bytes):
+            h.update(f"Y:{len(v)}:".encode("utf-8") + v + b";")
+        elif isinstance(v, np.ndarray):
+            h.update(f"A:{v.dtype.kind}:{v.shape}:".encode("utf-8"))
+            if v.dtype.kind == "f":
+                arr = np.asarray(v, dtype=np.float64)
+                nan_mask = np.isnan(arr)
+                clean = np.where(nan_mask, 0.0, arr)
+                clean = np.where(clean == 0.0, 0.0, clean).astype("<f8")
+                h.update(clean.tobytes("C"))
+                h.update(np.packbits(nan_mask.ravel()).tobytes())
+            elif v.dtype.kind in {"i", "u"}:
+                h.update(np.asarray(v, dtype="<i8").tobytes("C"))
+            elif v.dtype.kind == "b":
+                h.update(np.asarray(v, dtype=np.uint8).tobytes("C"))
+            else:
+                for elem in v.ravel().tolist():
+                    _feed(elem)
+            h.update(b";")
+        elif isinstance(v, dict):
+            h.update(f"D:{len(v)}:".encode("utf-8"))
+            for k in sorted(v.keys(), key=lambda x: str(x)):
+                _feed(str(k))
+                _feed(v[k])
+            h.update(b";")
+        elif isinstance(v, (list, tuple)):
+            tag = "L" if isinstance(v, list) else "T"
+            h.update(f"{tag}:{len(v)}:".encode("utf-8"))
+            for item in v:
+                _feed(item)
+            h.update(b";")
+        else:
+            eb = repr(v).encode("utf-8")
+            h.update(f"R:{len(eb)}:".encode("utf-8") + eb + b";")
+
+    _feed(obj)
+    return h.hexdigest()
+
+
+VALID_WITNESS_EXECUTION_STATUSES: frozenset[str] = frozenset(
+    {"completed", "timeout", "infrastructure_error", "not_executed"}
+)
+VALID_WITNESS_EVIDENCE_ORIGINS: frozenset[str] = frozenset(
+    {"direct_component_probe", "joint_task_probe", "compatibility_inference", "legacy_unspecified"}
+)
+CURRENT_LINEAGE_SCHEMAS: frozenset[str] = frozenset(
+    {"hegel_m9_7_1_lineage_state_v1", "hegel_m9_8_1_lineage_state_v2"}
+)
+
+
 @dataclass
 class SolverEvaluationWitness:
-    """Evidence-bound evaluation witness (`M9.6.1` `N07` + `M9.7.1` `A09/A10` — NEVER inferred from routing choices without execution!)."""
+    """Evidence-bound evaluation witness (`M9.6.1` `N07` + `M9.7.1` `A09/A10` + `M9.8.1` `R04/R05/R07/R12`)."""
 
     witness_id: str
     binding_id: str
@@ -2439,13 +2513,22 @@ class SolverEvaluationWitness:
     public_input_sha256: str
     verifier_version: str
     result: str  # 'passed' | 'failed' | 'not_tested'
-    failure_kind: str  # 'none' | 'scientific_or_numerical' | 'domain_precondition' | 'schema_or_interface' | 'timeout_or_infra'
+    failure_kind: str  # 'none' | 'scientific_or_numerical' | 'domain_precondition' | 'schema_or_interface' | 'timeout_or_infra' | 'not_executed' | 'unverified_legacy'
     public_structural_features: dict[str, float | None]
     probe_wall_ms: float = 0.0
     witness_content_sha256: str = ""
+    execution_status: str = "completed"
+    evidence_origin: str = "direct_component_probe"
+    metric_value: float | None = None
+    probe_id: str = ""
+    setup_source_sha256: str = ""
+    canonical_numeric_sha256: str = ""
+    dependency_bundle_sha256: str = ""
+    verification_trust_state: str = "verified"  # 'verified' | 'unverified_legacy'
+    witness_schema_version: int = 1
 
     def compute_expected_content_sha256(self) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "witness_id": self.witness_id,
             "binding_id": self.binding_id,
             "solver_code_sha256": self.solver_code_sha256,
@@ -2459,14 +2542,42 @@ class SolverEvaluationWitness:
                 for k, v in sorted(self.public_structural_features.items())
             },
         }
+        if int(self.witness_schema_version) >= 2:
+            payload.update(
+                {
+                    "witness_schema_version": int(self.witness_schema_version),
+                    "execution_status": self.execution_status,
+                    "evidence_origin": self.evidence_origin,
+                    "metric_value": (None if self.metric_value is None else round(float(self.metric_value), 10)),
+                    "probe_id": self.probe_id,
+                    "setup_source_sha256": self.setup_source_sha256,
+                    "canonical_numeric_sha256": self.canonical_numeric_sha256,
+                    "dependency_bundle_sha256": self.dependency_bundle_sha256,
+                    "verification_trust_state": self.verification_trust_state,
+                }
+            )
         return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
+    def is_verified_positive_witness(self) -> bool:
+        return (
+            self.verification_trust_state == "verified"
+            and self.execution_status == "completed"
+            and self.evidence_origin in {"direct_component_probe", "joint_task_probe", "legacy_unspecified"}
+            and self.result == "passed"
+        )
+
     def is_genuine_scientific_counterexample(self) -> bool:
-        return self.result == "failed" and self.failure_kind in {"scientific_or_numerical", "domain_precondition"}
+        return (
+            self.verification_trust_state == "verified"
+            and self.execution_status == "completed"
+            and self.evidence_origin in {"direct_component_probe", "joint_task_probe", "legacy_unspecified"}
+            and self.result == "failed"
+            and self.failure_kind in {"scientific_or_numerical", "domain_precondition"}
+        )
 
     def to_dict(self) -> dict[str, Any]:
         c_sha = self.witness_content_sha256 or self.compute_expected_content_sha256()
-        return {
+        out: dict[str, Any] = {
             "witness_id": self.witness_id,
             "binding_id": self.binding_id,
             "solver_code_sha256": self.solver_code_sha256,
@@ -2479,9 +2590,43 @@ class SolverEvaluationWitness:
             "probe_wall_ms": round(float(self.probe_wall_ms), 2),
             "witness_content_sha256": c_sha,
         }
+        if int(self.witness_schema_version) >= 2:
+            out.update(
+                {
+                    "witness_schema_version": int(self.witness_schema_version),
+                    "execution_status": self.execution_status,
+                    "evidence_origin": self.evidence_origin,
+                    "metric_value": (None if self.metric_value is None else round(float(self.metric_value), 10)),
+                    "probe_id": self.probe_id,
+                    "setup_source_sha256": self.setup_source_sha256,
+                    "canonical_numeric_sha256": self.canonical_numeric_sha256,
+                    "dependency_bundle_sha256": self.dependency_bundle_sha256,
+                    "verification_trust_state": self.verification_trust_state,
+                }
+            )
+        return out
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> SolverEvaluationWitness:
+    def from_dict(
+        cls,
+        d: dict[str, Any],
+        *,
+        require_content_sha256: bool = True,
+        allow_legacy_unverified_downgrade: bool = False,
+    ) -> SolverEvaluationWitness:
+        schema_v = int(d.get("witness_schema_version", 1) or 1)
+        stored_sha = str(d.get("witness_content_sha256") or "")
+        exec_st = str(d.get("execution_status") or ("completed" if d.get("result") in {"passed", "failed"} else "not_executed"))
+        ev_orig = str(d.get("evidence_origin") or ("legacy_unspecified" if schema_v == 1 else "direct_component_probe"))
+        if exec_st not in VALID_WITNESS_EXECUTION_STATUSES:
+            raise ValueError(f"Invalid execution_status `{exec_st}` on witness `{d.get('witness_id')}` (`R04/R05`)")
+        if ev_orig not in VALID_WITNESS_EVIDENCE_ORIGINS:
+            raise ValueError(f"Invalid evidence_origin `{ev_orig}` on witness `{d.get('witness_id')}` (`R04`)")
+        raw_mv = d.get("metric_value")
+        mv = None if raw_mv is None else float(raw_mv)
+        if mv is not None and not math.isfinite(mv):
+            raise ValueError(f"Non-finite metric_value `{raw_mv}` on witness `{d.get('witness_id')}` (`R05`)")
+
         obj = cls(
             witness_id=str(d["witness_id"]),
             binding_id=str(d["binding_id"]),
@@ -2496,18 +2641,40 @@ class SolverEvaluationWitness:
                 for k, v in (d.get("public_structural_features") or {}).items()
             },
             probe_wall_ms=float(d.get("probe_wall_ms", 0.0) or 0.0),
-            witness_content_sha256=str(d.get("witness_content_sha256") or ""),
+            witness_content_sha256=stored_sha,
+            execution_status=exec_st,
+            evidence_origin=ev_orig,
+            metric_value=mv,
+            probe_id=str(d.get("probe_id") or ""),
+            setup_source_sha256=str(d.get("setup_source_sha256") or ""),
+            canonical_numeric_sha256=str(d.get("canonical_numeric_sha256") or ""),
+            dependency_bundle_sha256=str(d.get("dependency_bundle_sha256") or ""),
+            verification_trust_state=str(d.get("verification_trust_state") or "verified"),
+            witness_schema_version=schema_v,
         )
-        if obj.witness_content_sha256 and obj.witness_content_sha256 != obj.compute_expected_content_sha256():
-            raise ValueError(f"Tampered SolverEvaluationWitness `{obj.witness_id}` (`A10`)")
-        if not obj.witness_content_sha256:
-            obj.witness_content_sha256 = obj.compute_expected_content_sha256()
+        if not stored_sha:
+            if allow_legacy_unverified_downgrade and not require_content_sha256:
+                obj.verification_trust_state = "unverified_legacy"
+                obj.result = "not_tested"
+                obj.failure_kind = "unverified_legacy"
+                obj.execution_status = "not_executed"
+                obj.witness_content_sha256 = obj.compute_expected_content_sha256()
+                return obj
+            raise ValueError(f"Missing witness_content_sha256 on SolverEvaluationWitness `{obj.witness_id}` (`R07/A10`)")
+        exp_sha = obj.compute_expected_content_sha256()
+        if stored_sha != exp_sha:
+            raise ValueError(f"Tampered SolverEvaluationWitness `{obj.witness_id}` (`R07/A10`)")
+        if allow_legacy_unverified_downgrade and not require_content_sha256:
+            obj.verification_trust_state = "unverified_legacy"
+            obj.result = "not_tested"
+            obj.failure_kind = "unverified_legacy"
+            obj.execution_status = "not_executed"
         return obj
 
 
 @dataclass
 class EmpiricalCoverageReceipt:
-    """Finite-witness content-addressed empirical coverage receipt (`M9.6.1` `§5` + `M9.7.1` `A08/A10`)."""
+    """Finite-witness content-addressed empirical coverage receipt (`M9.6.1` `§5` + `M9.7.1` `A08/A10` + `M9.8.1` `R06/R12`)."""
 
     receipt_id: str
     new_binding_id: str
@@ -2517,16 +2684,21 @@ class EmpiricalCoverageReceipt:
     witness_ids: list[str]
     parameter_versions_by_witness: list[dict[str, int]]
     verifier_version: str
-    status: str  # 'supported_on_witnesses' | 'refuted' | 'unknown'
+    status: str  # 'supported_on_witnesses' | 'refuted' | 'unknown' | 'unknown_requires_reverification'
     passed_witness_count: int
     evaluated_witness_count: int
     total_cpu_probe_wall_ms: float
     mean_probe_wall_ms_ratio: float
     witness_input_sha256s: list[str] = field(default_factory=list)
     parameter_payload_sha256s: list[str] = field(default_factory=list)
+    receipt_schema_version: int = 1
+    witness_setup_source_sha256s: list[str] = field(default_factory=list)
+    witness_canonical_numeric_sha256s: list[str] = field(default_factory=list)
+    dependency_bundle_sha256s: list[str] = field(default_factory=list)
+    probe_ids: list[str] = field(default_factory=list)
 
     def compute_expected_receipt_id(self) -> str:
-        payload = {
+        payload: dict[str, Any] = {
             "new_binding_id": self.new_binding_id,
             "new_solver_sha256": self.new_solver_sha256,
             "old_binding_id": self.old_binding_id,
@@ -2542,16 +2714,62 @@ class EmpiricalCoverageReceipt:
             "passed_witness_count": int(self.passed_witness_count),
             "evaluated_witness_count": int(self.evaluated_witness_count),
         }
+        if int(self.receipt_schema_version) >= 2:
+            payload.update(
+                {
+                    "receipt_schema_version": int(self.receipt_schema_version),
+                    "witness_setup_source_sha256s": list(self.witness_setup_source_sha256s),
+                    "witness_canonical_numeric_sha256s": list(self.witness_canonical_numeric_sha256s),
+                    "dependency_bundle_sha256s": list(self.dependency_bundle_sha256s),
+                    "probe_ids": list(self.probe_ids),
+                }
+            )
         return "ecov_" + hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:24]
 
-    def verify_integrity(self) -> None:
-        if self.receipt_id.startswith("ecov_") and len(self.receipt_id) == 29:
-            exp = self.compute_expected_receipt_id()
-            if self.receipt_id != exp:
-                raise ValueError(f"Tampered EmpiricalCoverageReceipt `{self.receipt_id}` != `{exp}` (`A08`)")
+    def verify_integrity(self, *, allow_legacy_unverified: bool = False) -> None:
+        valid_statuses = {"supported_on_witnesses", "refuted", "unknown"}
+        if allow_legacy_unverified:
+            valid_statuses = valid_statuses | {"unknown_requires_reverification"}
+        if self.status not in valid_statuses:
+            raise ValueError(f"Invalid EmpiricalCoverageReceipt status `{self.status}` (`R06/A08`)")
+        n_ev = int(self.evaluated_witness_count)
+        n_pa = int(self.passed_witness_count)
+        if n_ev < 0 or n_pa < 0 or n_pa > n_ev:
+            raise ValueError(f"Invalid witness counts passed={n_pa}, evaluated={n_ev} on `{self.receipt_id}` (`R06`)")
+        if len(self.witness_ids) != n_ev:
+            raise ValueError(f"witness_ids length {len(self.witness_ids)} != evaluated_witness_count {n_ev} (`R06`)")
+        if len(self.parameter_versions_by_witness) != n_ev:
+            raise ValueError(
+                f"parameter_versions_by_witness length {len(self.parameter_versions_by_witness)} != {n_ev} (`R06`)"
+            )
+        if (self.witness_input_sha256s or int(self.receipt_schema_version) >= 2) and len(self.witness_input_sha256s) != n_ev:
+            raise ValueError(f"witness_input_sha256s length {len(self.witness_input_sha256s)} != {n_ev} (`R06`)")
+        if (self.parameter_payload_sha256s or int(self.receipt_schema_version) >= 2) and len(self.parameter_payload_sha256s) != n_ev:
+            raise ValueError(f"parameter_payload_sha256s length {len(self.parameter_payload_sha256s)} != {n_ev} (`R06`)")
+        if int(self.receipt_schema_version) >= 2:
+            if self.witness_setup_source_sha256s and len(self.witness_setup_source_sha256s) != n_ev:
+                raise ValueError("witness_setup_source_sha256s length mismatch (`R12`)")
+            if self.witness_canonical_numeric_sha256s and len(self.witness_canonical_numeric_sha256s) != n_ev:
+                raise ValueError("witness_canonical_numeric_sha256s length mismatch (`R12`)")
+        if self.status == "supported_on_witnesses" and (n_ev < 1 or n_pa != n_ev):
+            raise ValueError(
+                f"EmpiricalCoverageReceipt `{self.receipt_id}` claims supported_on_witnesses with {n_pa}/{n_ev} (`R06`)"
+            )
+        if allow_legacy_unverified and self.status == "unknown_requires_reverification":
+            return
+        exp = self.compute_expected_receipt_id()
+        if (
+            not isinstance(self.receipt_id, str)
+            or not self.receipt_id.startswith("ecov_")
+            or len(self.receipt_id) != 29
+            or self.receipt_id != exp
+        ):
+            raise ValueError(
+                f"Tampered EmpiricalCoverageReceipt (or malformed receipt_id) `{self.receipt_id}` != `{exp}` (`R06/A08`)"
+            )
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        out: dict[str, Any] = {
             "receipt_id": self.receipt_id,
             "new_binding_id": self.new_binding_id,
             "new_solver_sha256": self.new_solver_sha256,
@@ -2569,11 +2787,23 @@ class EmpiricalCoverageReceipt:
             "mean_probe_wall_ms_ratio": round(float(self.mean_probe_wall_ms_ratio), 4),
             "zero_llm_calls_but_nonzero_cpu": True,
         }
+        if int(self.receipt_schema_version) >= 2:
+            out.update(
+                {
+                    "receipt_schema_version": int(self.receipt_schema_version),
+                    "witness_setup_source_sha256s": list(self.witness_setup_source_sha256s),
+                    "witness_canonical_numeric_sha256s": list(self.witness_canonical_numeric_sha256s),
+                    "dependency_bundle_sha256s": list(self.dependency_bundle_sha256s),
+                    "probe_ids": list(self.probe_ids),
+                }
+            )
+        return out
 
     @classmethod
-    def from_dict(cls, d: dict[str, Any]) -> EmpiricalCoverageReceipt:
+    def from_dict(cls, d: dict[str, Any], *, allow_legacy_downgrade: bool = False) -> EmpiricalCoverageReceipt:
+        schema_v = int(d.get("receipt_schema_version", 1) or 1)
         obj = cls(
-            receipt_id=str(d["receipt_id"]),
+            receipt_id=str(d.get("receipt_id") or ""),
             new_binding_id=str(d["new_binding_id"]),
             new_solver_sha256=str(d["new_solver_sha256"]),
             old_binding_id=str(d["old_binding_id"]),
@@ -2590,22 +2820,26 @@ class EmpiricalCoverageReceipt:
             mean_probe_wall_ms_ratio=float(d.get("mean_probe_wall_ms_ratio", 1.0) or 1.0),
             witness_input_sha256s=[str(x) for x in (d.get("witness_input_sha256s") or [])],
             parameter_payload_sha256s=[str(x) for x in (d.get("parameter_payload_sha256s") or [])],
+            receipt_schema_version=schema_v,
+            witness_setup_source_sha256s=[str(x) for x in (d.get("witness_setup_source_sha256s") or [])],
+            witness_canonical_numeric_sha256s=[str(x) for x in (d.get("witness_canonical_numeric_sha256s") or [])],
+            dependency_bundle_sha256s=[str(x) for x in (d.get("dependency_bundle_sha256s") or [])],
+            probe_ids=[str(x) for x in (d.get("probe_ids") or [])],
         )
+        if allow_legacy_downgrade:
+            try:
+                obj.verify_integrity()
+            except ValueError:
+                obj.status = "unknown_requires_reverification"
+                obj.passed_witness_count = 0
+                obj.verify_integrity(allow_legacy_unverified=True)
+                return obj
         obj.verify_integrity()
         return obj
 
 
 class ImmutableBranchLineageController:
-    """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05` + `M9.7.1` `A10` checkpoint persistence).
-
-    Key Guarantees:
-      1. NEVER overwrites `bind_{wid}_c1` on subsequent conflicts — mints immutable `bind_{wid}_b{k:02d}` + `mech_{wid}_b{k:02d}`.
-      2. NEVER marks an untested branch as refuted (`result = 'not_tested'`) when another branch is selected and passes.
-      3. Separates `applicability_guard` (where a solver satisfies contract, allowing overlap!) from `selection_priority`
-         (preferring lighter/cheaper valid branch or empirically covering branch while preserving all older branches intact!).
-      4. Persists `witness_ledger`, `coverage_receipts`, and `_branch_seq` directly inside `PersistentMechanismGraph.forest.questions`
-         so cold restart via `PersistentMechanismGraph.load_checkpoint(...)` restores full runtime lineage state (`A10`)!
-    """
+    """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05` + `M9.7.1` `A10` + `M9.8.1` `R04–R07`)."""
 
     def __init__(self, *, world_id: str, family: str, graph: PersistentMechanismGraph, registry: M94BindingRegistry) -> None:
         self.world_id = world_id
@@ -2620,30 +2854,90 @@ class ImmutableBranchLineageController:
     def _lineage_store_key(self) -> str:
         return f"{self.world_id}::{self.family}"
 
+    def _verify_witness_foreign_key(self, w: SolverEvaluationWitness) -> None:
+        b = self.registry.bindings.get(w.binding_id)
+        if b is None:
+            raise ValueError(
+                f"Lineage witness `{w.witness_id}` references unknown binding_id `{w.binding_id}` (`R07/A10`)"
+            )
+        auth_sha = b.authoritative_executed_code_sha256()
+        if auth_sha and w.solver_code_sha256 != auth_sha:
+            raise ValueError(
+                f"Lineage witness `{w.witness_id}` solver_code_sha256 `{w.solver_code_sha256[:16]}` != "
+                f"binding `{w.binding_id}` authoritative SHA `{auth_sha[:16]}` (`R07/A10`)"
+            )
+
     def _hydrate_from_graph(self) -> None:
         root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY)
         if not isinstance(root_blob, dict):
             return
+        blob_schema = str(root_blob.get("schema") or "")
         entry = (root_blob.get("streams") or {}).get(self._lineage_store_key())
         if not isinstance(entry, dict):
             return
         w_raw = list(entry.get("witness_ledger") or [])
         c_raw = list(entry.get("coverage_receipts") or [])
         b_seq = int(entry.get("branch_seq", self._branch_seq))
-        expected_sha = hashlib.sha256(
-            json.dumps({"branch_seq": b_seq, "witness_ledger": w_raw, "coverage_receipts": c_raw}, sort_keys=True, separators=(",", ":")).encode("utf-8")
-        ).hexdigest()
-        stored_sha = str(entry.get("state_sha256") or "")
-        if stored_sha and stored_sha != expected_sha:
-            raise ValueError(f"Tampered lineage checkpoint state on `{self._lineage_store_key()}` (`A10`)")
-        self.witness_ledger = [SolverEvaluationWitness.from_dict(x) for x in w_raw]
-        self.coverage_receipts = [EmpiricalCoverageReceipt.from_dict(x) for x in c_raw]
+
+        if (not blob_schema) or (blob_schema in CURRENT_LINEAGE_SCHEMAS):
+            stored_sha = str(entry.get("state_sha256") or "")
+            if not stored_sha:
+                raise ValueError(
+                    f"Missing state_sha256 on current-schema lineage checkpoint `{self._lineage_store_key()}` (`R07/A10`)"
+                )
+            expected_sha = hashlib.sha256(
+                json.dumps(
+                    {"branch_seq": b_seq, "witness_ledger": w_raw, "coverage_receipts": c_raw},
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ).encode("utf-8")
+            ).hexdigest()
+            if stored_sha != expected_sha:
+                raise ValueError(f"Tampered lineage checkpoint state on `{self._lineage_store_key()}` (`R07/A10`)")
+            loaded_w = [SolverEvaluationWitness.from_dict(x, require_content_sha256=True) for x in w_raw]
+            for w in loaded_w:
+                self._verify_witness_foreign_key(w)
+            loaded_c = [EmpiricalCoverageReceipt.from_dict(x, allow_legacy_downgrade=False) for x in c_raw]
+            for c in loaded_c:
+                if c.old_binding_id not in self.registry.bindings:
+                    raise ValueError(
+                        f"EmpiricalCoverageReceipt `{c.receipt_id}` references unknown old_binding_id `{c.old_binding_id}` (`R07`)"
+                    )
+            self.witness_ledger = loaded_w
+            self.coverage_receipts = loaded_c
+            self._branch_seq = max(self._branch_seq, b_seq)
+            return
+
+        # Explicit legacy pre-M9.7.1 schema migration: zero branch-minting or coverage authority (`unverified_legacy`)!
+        migrated_w: list[SolverEvaluationWitness] = []
+        for x in w_raw:
+            bid = str(x.get("binding_id") or "")
+            if bid not in self.registry.bindings:
+                continue
+            w_leg = SolverEvaluationWitness.from_dict(
+                x, require_content_sha256=False, allow_legacy_unverified_downgrade=True
+            )
+            w_leg.verification_trust_state = "unverified_legacy"
+            w_leg.result = "not_tested"
+            w_leg.failure_kind = "unverified_legacy"
+            w_leg.execution_status = "not_executed"
+            migrated_w.append(w_leg)
+        migrated_c: list[EmpiricalCoverageReceipt] = []
+        for x in c_raw:
+            if str(x.get("old_binding_id") or "") not in self.registry.bindings:
+                continue
+            c_leg = EmpiricalCoverageReceipt.from_dict(x, allow_legacy_downgrade=True)
+            c_leg.status = "unknown_requires_reverification"
+            c_leg.passed_witness_count = 0
+            migrated_c.append(c_leg)
+        self.witness_ledger = migrated_w
+        self.coverage_receipts = migrated_c
         self._branch_seq = max(self._branch_seq, b_seq)
 
     def sync_to_graph(self) -> None:
         root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY)
-        if not isinstance(root_blob, dict) or root_blob.get("schema") != "hegel_m9_7_1_lineage_state_v1":
-            root_blob = {"schema": "hegel_m9_7_1_lineage_state_v1", "streams": {}}
+        if not isinstance(root_blob, dict) or root_blob.get("schema") not in CURRENT_LINEAGE_SCHEMAS:
+            root_blob = {"schema": "hegel_m9_8_1_lineage_state_v2", "streams": {}}
         streams = dict(root_blob.get("streams") or {})
         w_ser = [w.to_dict() for w in self.witness_ledger]
         c_ser = [c.to_dict() for c in self.coverage_receipts]
@@ -2666,6 +2960,8 @@ class ImmutableBranchLineageController:
 
     def record_coverage_receipt(self, receipt: EmpiricalCoverageReceipt) -> EmpiricalCoverageReceipt:
         receipt.verify_integrity()
+        if receipt.old_binding_id not in self.registry.bindings:
+            raise ValueError(f"EmpiricalCoverageReceipt references unknown old_binding_id `{receipt.old_binding_id}` (`R07`)")
         self.coverage_receipts.append(receipt)
         self.sync_to_graph()
         return receipt
@@ -2680,8 +2976,34 @@ class ImmutableBranchLineageController:
         features: dict[str, float | None],
         probe_wall_ms: float = 0.0,
         verifier_version: str = "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+        execution_status: str = "completed",
+        evidence_origin: str = "joint_task_probe",
+        metric_value: float | None = None,
+        probe_id: str = "",
+        setup_source_sha256: str = "",
+        canonical_numeric_sha256: str = "",
+        dependency_bundle_sha256: str = "",
+        witness_schema_version: int = 2,
     ) -> SolverEvaluationWitness:
+        if execution_status not in VALID_WITNESS_EXECUTION_STATUSES:
+            raise ValueError(f"Invalid execution_status `{execution_status}` (`R04/R05`)")
+        if evidence_origin not in VALID_WITNESS_EVIDENCE_ORIGINS or evidence_origin == "legacy_unspecified":
+            raise ValueError(f"Invalid evidence_origin `{evidence_origin}` (`R04`)")
+        if evidence_origin == "compatibility_inference" or execution_status == "not_executed":
+            raise ValueError(
+                "Refusing to record unexecuted compatibility_inference inside tested witness_ledger (`R04`)!"
+            )
+        if execution_status in {"timeout", "infrastructure_error"} and (
+            passed or failure_kind in {"scientific_or_numerical", "domain_precondition"}
+        ):
+            raise ValueError(
+                f"Refusing to record `{execution_status}` as passed or scientific failure (`R05`)!"
+            )
+        if metric_value is not None and not math.isfinite(float(metric_value)):
+            raise ValueError(f"Non-finite metric_value `{metric_value}` rejected (`R05`)")
         wid = f"wit_{len(self.witness_ledger) + 1:04d}_{binding.binding_id}_{public_input_sha256[:8]}"
+        eff_res = "not_tested" if execution_status in {"timeout", "infrastructure_error"} else ("passed" if passed else "failed")
+        eff_fk = "timeout_or_infra" if execution_status in {"timeout", "infrastructure_error"} else ("none" if passed else failure_kind)
         w = SolverEvaluationWitness(
             witness_id=wid,
             binding_id=binding.binding_id,
@@ -2689,18 +3011,28 @@ class ImmutableBranchLineageController:
             parent_parameter_versions=dict(binding.parent_parameter_versions),
             public_input_sha256=public_input_sha256,
             verifier_version=verifier_version,
-            result=("passed" if passed else "failed"),
-            failure_kind=("none" if passed else failure_kind),
+            result=eff_res,
+            failure_kind=eff_fk,
             public_structural_features=deepcopy(features),
             probe_wall_ms=probe_wall_ms,
+            execution_status=execution_status,
+            evidence_origin=evidence_origin,
+            metric_value=metric_value,
+            probe_id=probe_id,
+            setup_source_sha256=setup_source_sha256,
+            canonical_numeric_sha256=canonical_numeric_sha256,
+            dependency_bundle_sha256=dependency_bundle_sha256,
+            verification_trust_state="verified",
+            witness_schema_version=witness_schema_version,
         )
         w.witness_content_sha256 = w.compute_expected_content_sha256()
+        self._verify_witness_foreign_key(w)
         self.witness_ledger.append(w)
         self.sync_to_graph()
         return w
 
     def positive_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
-        return [w for w in self.witness_ledger if w.binding_id == binding_id and w.result == "passed"]
+        return [w for w in self.witness_ledger if w.binding_id == binding_id and w.is_verified_positive_witness()]
 
     def scientific_negative_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
         return [w for w in self.witness_ledger if w.binding_id == binding_id and w.is_genuine_scientific_counterexample()]

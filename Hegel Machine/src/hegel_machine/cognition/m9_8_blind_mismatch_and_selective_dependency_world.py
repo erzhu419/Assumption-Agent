@@ -1678,39 +1678,58 @@ def diagnose_m98_factored_conflict_locus(
     chosen_up_code: str | None = None,
     chosen_up_entrypoint: str = "calibrate_upstream",
     diag_payload: dict[str, Any] | None = None,
+    force_direct_component_probe: bool = False,
 ) -> dict[str, Any]:
-    """Causal parent holdout residual localization (`0` private peek!):
-    1. Computes `up_stat_01_diagonal_ols_r2` on trimmed calibration sweeps (`r2_diag >= 0.96` on `U0` -> `u0` diagonal transducer
-       is empirically exact, so conflict locus is strictly `downstream_constitutive` with `0.0%` white-noise false positives!).
-    2. When `r2_diag < 0.96` AND `chosen_up_code` is provided, empirically tests `chosen_up_code` inside `hegel-clean-scipy:m7v1`
-       on a `56/24` split of the public calibration sweep table (`bridge_raw -> true_channel_loads` / `raw_rosette -> ref_rosette`)!
-       - If `chosen_up` already inverts the held-out calibration sweeps (`holdout_rmse <= 0.03`, e.g. `u1` is already selected!),
-         then `chosen_up` is NOT broken and the conflict locus is `downstream_constitutive`!
-       - Otherwise (`holdout_rmse > 0.03`), `chosen_up` failed transducer calibration and locus is `upstream_transducer`!
+    """Causal parent holdout residual localization (`0` private peek, `R04/R05/R11` fail-closed semantics):
+    1. When `r2_diag >= 0.96` AND `not force_direct_component_probe`: returns `locus = 'downstream_constitutive'` ONLY as a
+       `compatibility_inference` (`execution_status = 'not_executed'`, `chosen_up_holdout_rmse = None` — NEVER `0.0`!).
+    2. When `r2_diag < 0.96` (or `force_direct_component_probe = True`) AND `chosen_up_code` is provided: executes `chosen_up_code`
+       in air-gapped `hegel-clean-scipy:m7v1` on a `56/24` split of the public calibration sweep table, recording `probe_id` and
+       `probe_wall_ms` (`R11`).
+    3. Any `TimeoutExpired` or Docker infrastructure error (`rc=125`, daemon error, OOM, unparseable output without Python `up_mod`
+       traceback) fails closed to `locus = 'unknown_infra'`, `execution_status = 'timeout'|'infrastructure_error'`,
+       `chosen_up_holdout_rmse = None` (NEVER `999.0`!), blocking false scientific negative attribution (`R05`)!
     """
     import subprocess
+    import uuid
 
     up_obs = compute_m98_upstream_observables(family, public_item)
     r2_diag = float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0)
     off_corr = float(up_obs["up_stat_02_off_diagonal_corr_max"] or 0.0)
-    if r2_diag >= 0.96:
+    if r2_diag >= 0.96 and not force_direct_component_probe:
         return {
             "locus": "downstream_constitutive",
+            "component_probe_executed": False,
+            "execution_status": "not_executed",
+            "evidence_origin": "compatibility_inference",
+            "failure_tier": "NOT_EXECUTED",
+            "failure_kind": "not_executed",
             "diagonal_ols_r2": r2_diag,
             "off_diagonal_corr_max": off_corr,
-            "chosen_up_holdout_rmse": 0.0,
+            "chosen_up_holdout_rmse": None,
+            "probe_id": None,
+            "probe_wall_ms": 0.0,
             "upstream_observables": up_obs,
         }
     if not chosen_up_code:
         return {
             "locus": "upstream_transducer",
+            "component_probe_executed": False,
+            "execution_status": "not_executed",
+            "evidence_origin": "compatibility_inference",
+            "failure_tier": "NOT_EXECUTED",
+            "failure_kind": "not_executed",
             "diagonal_ols_r2": r2_diag,
             "off_diagonal_corr_max": off_corr,
             "chosen_up_holdout_rmse": None,
+            "probe_id": None,
+            "probe_wall_ms": 0.0,
             "upstream_observables": up_obs,
         }
 
-    # Empirical `56/24` calibration sweep holdout check of `chosen_up_code` inside `hegel-clean-scipy:m7v1` (`scipy` supported!)
+    probe_id = f"uprobe_{uuid.uuid4().hex[:16]}"
+    code_sha = hashlib.sha256(chosen_up_code.encode("utf-8")).hexdigest()
+    t0 = monotonic()
     with tempfile.TemporaryDirectory(prefix="m98_uploc_") as td:
         td_p = Path(td)
         (td_p / "up_mod.py").write_text(chosen_up_code, encoding="utf-8")
@@ -1737,29 +1756,201 @@ def diagnose_m98_factored_conflict_locus(
             "    st['y_obs_raw'] = raw[ho_i].ravel()\n"
             "    out = fn(st, pay) if len(inspect.signature(fn).parameters) >= 2 else fn(st)\n"
             "    pred = np.asarray(out['y_obs_raw'], float).reshape(-1, 4); ref = tru[ho_i]\n"
-            "rmse = float(np.sqrt(np.mean((pred - ref) ** 2))) if len(ref) else 0.0\n"
-            "print(json.dumps({'rmse': rmse}))\n"
+            "diff = pred - ref\n"
+            "all_fin = bool(np.all(np.isfinite(pred)))\n"
+            "rmse = float(np.sqrt(np.mean(diff ** 2))) if (all_fin and len(ref)) else None\n"
+            "print(json.dumps({'all_finite': all_fin, 'rmse': rmse}))\n"
         )
         (td_p / "run_chk.py").write_text(chk_py, encoding="utf-8")
-        proc = subprocess.run(
-            ["docker", "run", "--rm", "--network", "none", "-v", f"{td_p}:/work:ro", CLEAN_SCIPY_SANDBOX_IMAGE, "python3", "/work/run_chk.py"],
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
-        rmse_val = 999.0
-        if proc.returncode == 0 and proc.stdout.strip():
-            try:
-                rmse_val = float(json.loads(proc.stdout.strip().splitlines()[-1])["rmse"])
-            except Exception:
-                rmse_val = 999.0
+        try:
+            proc = subprocess.run(
+                [
+                    "docker",
+                    "run",
+                    "--rm",
+                    "--network",
+                    "none",
+                    "-v",
+                    f"{td_p}:/work:ro",
+                    CLEAN_SCIPY_SANDBOX_IMAGE,
+                    "python3",
+                    "/work/run_chk.py",
+                ],
+                capture_output=True,
+                text=True,
+                timeout=30,
+            )
+        except subprocess.TimeoutExpired:
+            el_ms = round((monotonic() - t0) * 1000.0, 2)
+            return {
+                "locus": "unknown_infra",
+                "component_probe_executed": True,
+                "execution_status": "timeout",
+                "evidence_origin": "direct_component_probe",
+                "failure_tier": "INFRA_FAILURE",
+                "failure_kind": "timeout_or_infra",
+                "diagonal_ols_r2": r2_diag,
+                "off_diagonal_corr_max": off_corr,
+                "chosen_up_holdout_rmse": None,
+                "candidate_code_sha256": code_sha,
+                "probe_id": probe_id,
+                "probe_wall_ms": el_ms,
+                "return_code": None,
+                "upstream_observables": up_obs,
+            }
 
-    is_upstream = bool(rmse_val > 0.03)
+    el_ms = round((monotonic() - t0) * 1000.0, 2)
+    rc = int(proc.returncode)
+    out_txt = (proc.stdout or "").strip()
+    err_txt = (proc.stderr or "").strip()
+    err_low = err_txt.lower()
+
+    is_infra_rc = rc in {124, 125, 126, 127, 137, 139, 143} or rc < 0
+    is_infra_err = any(
+        tok in err_low
+        for tok in (
+            "cannot connect to",
+            "docker daemon",
+            "docker:",
+            "[timeout:",
+            "timed out",
+            "memoryerror",
+            "no space left on device",
+            "brokenpipeerror",
+        )
+    )
+    if is_infra_rc or is_infra_err:
+        ex_st = "timeout" if (rc == 124 or "[timeout:" in err_low or "timed out" in err_low) else "infrastructure_error"
+        return {
+            "locus": "unknown_infra",
+            "component_probe_executed": True,
+            "execution_status": ex_st,
+            "evidence_origin": "direct_component_probe",
+            "failure_tier": "INFRA_FAILURE",
+            "failure_kind": "timeout_or_infra",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "candidate_code_sha256": code_sha,
+            "probe_id": probe_id,
+            "probe_wall_ms": el_ms,
+            "return_code": rc,
+            "stderr_excerpt": err_txt[:300],
+            "upstream_observables": up_obs,
+        }
+
+    if rc != 0:
+        # Distinguish genuine Python exception thrown by `up_mod` inside container vs unknown container failure
+        if "Traceback (most recent call last):" in err_txt:
+            return {
+                "locus": "upstream_transducer",
+                "component_probe_executed": True,
+                "execution_status": "completed",
+                "evidence_origin": "direct_component_probe",
+                "failure_tier": "SCHEMA_FAILURE",
+                "failure_kind": "schema_or_interface",
+                "diagonal_ols_r2": r2_diag,
+                "off_diagonal_corr_max": off_corr,
+                "chosen_up_holdout_rmse": None,
+                "candidate_code_sha256": code_sha,
+                "probe_id": probe_id,
+                "probe_wall_ms": el_ms,
+                "return_code": rc,
+                "stderr_excerpt": err_txt[-300:],
+                "upstream_observables": up_obs,
+            }
+        return {
+            "locus": "unknown_infra",
+            "component_probe_executed": True,
+            "execution_status": "infrastructure_error",
+            "evidence_origin": "direct_component_probe",
+            "failure_tier": "INFRA_FAILURE",
+            "failure_kind": "timeout_or_infra",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "candidate_code_sha256": code_sha,
+            "probe_id": probe_id,
+            "probe_wall_ms": el_ms,
+            "return_code": rc,
+            "stderr_excerpt": err_txt[:300],
+            "upstream_observables": up_obs,
+        }
+
+    if not out_txt:
+        return {
+            "locus": "unknown_infra",
+            "component_probe_executed": True,
+            "execution_status": "infrastructure_error",
+            "evidence_origin": "direct_component_probe",
+            "failure_tier": "INFRA_FAILURE",
+            "failure_kind": "timeout_or_infra",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "candidate_code_sha256": code_sha,
+            "probe_id": probe_id,
+            "probe_wall_ms": el_ms,
+            "return_code": rc,
+            "upstream_observables": up_obs,
+        }
+
+    try:
+        parsed_j = json.loads(out_txt.splitlines()[-1])
+        raw_rmse = parsed_j.get("rmse")
+        all_fin = bool(parsed_j.get("all_finite", raw_rmse is not None))
+        rmse_opt = None if raw_rmse is None else float(raw_rmse)
+    except Exception:
+        return {
+            "locus": "unknown_infra",
+            "component_probe_executed": True,
+            "execution_status": "infrastructure_error",
+            "evidence_origin": "direct_component_probe",
+            "failure_tier": "INFRA_FAILURE",
+            "failure_kind": "timeout_or_infra",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "candidate_code_sha256": code_sha,
+            "probe_id": probe_id,
+            "probe_wall_ms": el_ms,
+            "return_code": rc,
+            "upstream_observables": up_obs,
+        }
+
+    if (not all_fin) or (rmse_opt is None) or (not math.isfinite(rmse_opt)):
+        return {
+            "locus": "upstream_transducer",
+            "component_probe_executed": True,
+            "execution_status": "completed",
+            "evidence_origin": "direct_component_probe",
+            "failure_tier": "SCIENTIFIC_FAILURE",
+            "failure_kind": "scientific_or_numerical",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "candidate_code_sha256": code_sha,
+            "probe_id": probe_id,
+            "probe_wall_ms": el_ms,
+            "return_code": rc,
+            "upstream_observables": up_obs,
+        }
+
+    is_upstream = bool(rmse_opt > 0.03)
     return {
         "locus": ("upstream_transducer" if is_upstream else "downstream_constitutive"),
+        "component_probe_executed": True,
+        "execution_status": "completed",
+        "evidence_origin": "direct_component_probe",
+        "failure_tier": ("SCIENTIFIC_FAILURE" if is_upstream else "NONE"),
+        "failure_kind": ("scientific_or_numerical" if is_upstream else "none"),
         "diagonal_ols_r2": r2_diag,
         "off_diagonal_corr_max": off_corr,
-        "chosen_up_holdout_rmse": round(rmse_val, 6),
+        "chosen_up_holdout_rmse": round(rmse_opt, 8),
+        "candidate_code_sha256": code_sha,
+        "probe_id": probe_id,
+        "probe_wall_ms": el_ms,
+        "return_code": rc,
         "upstream_observables": up_obs,
     }
 
@@ -2147,45 +2338,139 @@ def run_m98_equal_capability_pre_llm_trial(
         task=task, candidate_code=cand_code, readonly_dependencies=readonly_dependencies, expected_dependency_sha256=expected_dependency_sha256
     )
     pr_ms = round((monotonic() - t0) * 1000.0, 2)
-    f_kind = classify_public_probe_failure(pr)["failure_kind"]
-    locus_diag = (
-        {"locus": "none", "diagonal_ols_r2": float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0), "chosen_up_holdout_rmse": 0.0}
-        if pr["accepted"]
-        else diagnose_m98_factored_conflict_locus(
+    main_cls = classify_public_probe_failure(pr)
+    f_kind = main_cls["failure_kind"]
+    setup_src_sha = hashlib.sha256(task.public_setup_py.encode("utf-8")).hexdigest()
+    dep_bundle_sha = hashlib.sha256(
+        json.dumps(expected_dependency_sha256 or {}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    ).hexdigest()
+
+    if pr["accepted"]:
+        locus_diag: dict[str, Any] = {
+            "locus": "none",
+            "component_probe_executed": False,
+            "execution_status": "completed",
+            "evidence_origin": "joint_task_probe",
+            "failure_tier": "NONE",
+            "failure_kind": "none",
+            "diagonal_ols_r2": float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0),
+            "chosen_up_holdout_rmse": None,
+            "probe_id": None,
+            "probe_wall_ms": 0.0,
+        }
+        up_wit = up_ctrl.record_tested_witness(
+            binding=chosen_up,
+            public_input_sha256=public_input_sha256,
+            passed=True,
+            failure_kind="none",
+            features=up_obs,
+            probe_wall_ms=pr_ms,
+            execution_status="completed",
+            evidence_origin="joint_task_probe",
+            setup_source_sha256=setup_src_sha,
+            dependency_bundle_sha256=dep_bundle_sha,
+        )
+        dn_wit = dn_ctrl.record_tested_witness(
+            binding=chosen_dn,
+            public_input_sha256=public_input_sha256,
+            passed=True,
+            failure_kind="none",
+            features=dn_obs,
+            probe_wall_ms=pr_ms,
+            execution_status="completed",
+            evidence_origin="joint_task_probe",
+            setup_source_sha256=setup_src_sha,
+            dependency_bundle_sha256=dep_bundle_sha,
+        )
+    elif main_cls["tier"] == "INFRA_FAILURE":
+        # `R04 + R05`: Main composed probe hit timeout/infra — NEVER run scientific localization or mark either component passed/refuted!
+        locus_diag = {
+            "locus": "unknown_infra",
+            "component_probe_executed": False,
+            "execution_status": "not_executed",
+            "evidence_origin": "compatibility_inference",
+            "failure_tier": "INFRA_FAILURE",
+            "failure_kind": "timeout_or_infra",
+            "diagonal_ols_r2": float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0),
+            "chosen_up_holdout_rmse": None,
+            "probe_id": None,
+            "probe_wall_ms": 0.0,
+            "upstream_observables": up_obs,
+        }
+        up_wit = None
+        dn_wit = None
+    else:
+        locus_diag = diagnose_m98_factored_conflict_locus(
             spec.family,
             public_item,
             chosen_up_code=(chosen_up.canonical_algorithm_code or chosen_up.parameterized_closure_code),
             chosen_up_entrypoint=(chosen_up.canonical_entrypoint or chosen_up.parameterized_entrypoint),
             diag_payload=diag_pay,
         )
-    )
+        if locus_diag["locus"] == "unknown_infra":
+            # `R05`: Localization container failed/timed out — NEVER attribute scientific failure to `chosen_up` or `chosen_dn`!
+            up_wit = None
+            dn_wit = None
+        elif locus_diag["locus"] == "upstream_transducer":
+            if locus_diag.get("execution_status") == "completed" and locus_diag.get("evidence_origin") == "direct_component_probe":
+                up_wit = up_ctrl.record_tested_witness(
+                    binding=chosen_up,
+                    public_input_sha256=public_input_sha256,
+                    passed=False,
+                    failure_kind=str(locus_diag.get("failure_kind") or "scientific_or_numerical"),
+                    features=up_obs,
+                    probe_wall_ms=float(locus_diag.get("probe_wall_ms") or 0.0),
+                    execution_status="completed",
+                    evidence_origin="direct_component_probe",
+                    metric_value=locus_diag.get("chosen_up_holdout_rmse"),
+                    probe_id=str(locus_diag.get("probe_id") or ""),
+                    setup_source_sha256=setup_src_sha,
+                    dependency_bundle_sha256=dep_bundle_sha,
+                )
+            else:
+                up_wit = None
+            dn_wit = None
+        else:
+            # `R04`: Record upstream `passed=True` ONLY when `chosen_up` was directly executed in the component probe!
+            if locus_diag.get("execution_status") == "completed" and locus_diag.get("evidence_origin") == "direct_component_probe":
+                up_wit = up_ctrl.record_tested_witness(
+                    binding=chosen_up,
+                    public_input_sha256=public_input_sha256,
+                    passed=True,
+                    failure_kind="none",
+                    features=up_obs,
+                    probe_wall_ms=float(locus_diag.get("probe_wall_ms") or 0.0),
+                    execution_status="completed",
+                    evidence_origin="direct_component_probe",
+                    metric_value=locus_diag.get("chosen_up_holdout_rmse"),
+                    probe_id=str(locus_diag.get("probe_id") or ""),
+                    setup_source_sha256=setup_src_sha,
+                    dependency_bundle_sha256=dep_bundle_sha,
+                )
+            else:
+                up_wit = None
+            dn_wit = dn_ctrl.record_tested_witness(
+                binding=chosen_dn,
+                public_input_sha256=public_input_sha256,
+                passed=False,
+                failure_kind=f_kind,
+                features=dn_obs,
+                probe_wall_ms=pr_ms,
+                execution_status="completed",
+                evidence_origin="joint_task_probe",
+                setup_source_sha256=setup_src_sha,
+                dependency_bundle_sha256=dep_bundle_sha,
+            )
 
-    if pr["accepted"]:
-        up_wit = up_ctrl.record_tested_witness(
-            binding=chosen_up, public_input_sha256=public_input_sha256, passed=True, failure_kind="none", features=up_obs, probe_wall_ms=pr_ms
-        )
-        dn_wit = dn_ctrl.record_tested_witness(
-            binding=chosen_dn, public_input_sha256=public_input_sha256, passed=True, failure_kind="none", features=dn_obs, probe_wall_ms=pr_ms
-        )
-    elif locus_diag["locus"] == "upstream_transducer":
-        # Causal ancestor attribution: ONLY `chosen_up` failed calibration residual; `chosen_dn` is NOT falsely marked refuted!
-        up_wit = up_ctrl.record_tested_witness(
-            binding=chosen_up, public_input_sha256=public_input_sha256, passed=False, failure_kind=f_kind, features=up_obs, probe_wall_ms=pr_ms
-        )
-        dn_wit = None
-    else:
-        up_wit = up_ctrl.record_tested_witness(
-            binding=chosen_up, public_input_sha256=public_input_sha256, passed=True, failure_kind="none", features=up_obs, probe_wall_ms=0.0
-        )
-        dn_wit = dn_ctrl.record_tested_witness(
-            binding=chosen_dn, public_input_sha256=public_input_sha256, passed=False, failure_kind=f_kind, features=dn_obs, probe_wall_ms=pr_ms
-        )
-
+    loc_wall_ms = round(float(locus_diag.get("probe_wall_ms") or 0.0), 2)
+    loc_used = 1 if locus_diag.get("component_probe_executed") else 0
     return {
         "arm": arm,
         "accepted_pre_llm": pr["accepted"],
         "pre_llm_probes_used": 1,
         "probe_wall_ms": pr_ms,
+        "localization_probes_used": loc_used,
+        "localization_probe_wall_ms": loc_wall_ms,
         "upstream_selection_mode": up_mode,
         "downstream_selection_mode": dn_mode,
         "selected_upstream_binding_id": chosen_up.binding_id,
@@ -2193,6 +2478,11 @@ def run_m98_equal_capability_pre_llm_trial(
         "selected_canonical_algorithm_code": (chosen_dn.canonical_algorithm_code or chosen_dn.parameterized_closure_code),
         "selected_canonical_entrypoint": (chosen_dn.canonical_entrypoint or chosen_dn.parameterized_entrypoint),
         "conflict_locus_diagnosis": locus_diag,
+        "inferred_upstream_compatibility": bool(
+            (not pr["accepted"])
+            and locus_diag.get("locus") == "downstream_constitutive"
+            and locus_diag.get("evidence_origin") == "compatibility_inference"
+        ),
         "upstream_tested_witness": (up_wit.to_dict() if up_wit else None),
         "downstream_tested_witness": (dn_wit.to_dict() if dn_wit else None),
         "upstream_observables": up_obs,

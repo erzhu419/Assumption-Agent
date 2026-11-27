@@ -1,61 +1,67 @@
-# Hegel Machine M9.7.1 审计闭环与 M9.8 盲残差失配发现 + 双层分解机制图实验报告
+# Hegel Machine M9.7.1 审计闭环与 M9.8 盲残差失配发现 + 模块化分解系统实验报告
 
-- **报告 Schema**: `hegel_m9_7_1_and_m9_8_sealed_report_v1`
+- **报告 Schema**: `hegel_m9_7_1_and_m9_8_sealed_report_v2_m981_reconciled`
 - **M9.8 运行 ID**: `m98_run_20261127T142012Z`
 - **确认集运行前冻结提交**: `2963e5d65f68d91510746e21c60c0985ec333358` (`working_tree_dirty_at_start = False`, `source_tree_sha256 = b1574bd7dac87b13a8f069d3bf361b4c1bcaeeaa3a43423004816d2913b66547`)
 - **容器镜像摘要**: `sha256:bb111245520085c97361fff57b2e141911dd86a0e63c5c49761bc1ab692d910a`
-- **模型与并发度**: `gpt-6.2-sol` (`reasoning_effort = medium`, `max_codex_concurrency = 32`)
+- **模型与并发度**: `gpt-6.2-sol` (`reasoning_effort = medium`, `configured_cap = 32`, `observed_peak_active = 24`)
 - **证据来源标记**: `executed` (`usage_completeness = complete`, `unknown_usage_attempts = 0`)
 - **统一验证核与成本口径**: `hegel_shared_math_handoff_kernel_v3_m961_three_layer` / `hegel_cost_policy_v2_m961_call_uuid_conserved`
+- **M9.8.1 契约加固与双普通表归因伴随报告**: 见 `docs/54b_M9_8_1_Audit_Errata_Evidence_Contract_and_TwoTable_Attribution_ZH.md`
 
 ---
 
-## 1. 核心结论摘要（`A01–A17` 全部闭环 + 未曝光 `n = 8` 簇分解机制图正面胜出）
+## 1. 核心结论与诚实归因边界（按 `Hegel_M9_8_Audit` `R01–R16` 全面对齐）
 
 1. **第一阶段（`M9.7.1`，`0` 次付费 LLM 调用 — 封存于 `docs/evidence/m9_7_1_audit_closure_and_paid_pool_attribution_20261127/`）**：
-   - **真实容器化付费池重放（`A02`, `A15`, `N11`）**：
-     - `01_n11_executed_m95_paid_pool_replay.json`：在断网容器 `hegel-clean-scipy:m7v1` 内对 `M9.5` 全部 `48` 个复用 episode 执行 6 臂真实代码重放（`1_Unvalidated = 28/48`，`2_ValidatedWingOLS = 40/48`，`3_OldestFirst_Probes1 = 32/48`，`4_Multiversion_Probes2 = 48/48`，`5_Flat_SharedConditionalTable_Probes1 = 48/48`，`6_Hegel_MechanismGraph_Probes1 = 48/48`，`evidence_provenance = executed`）。
-     - `02_m97_executed_flat_conditional_table_attribution.json`：对 `M9.7` 全部 `42` 个持续学习 episode 执行无图在线前缀锁定 `Flat_ConditionalTable`（`42/42` 路由一致、`29/42` 零 LLM 私有验证通过），实证确认在单层同父节点 `M9.7` 流上，多版本条件表已解释全部相对 `Flat_LatestFirst` 的收益，从而确立 `M9.8` 双层因果分解机制图的正交验证边界。
-   - **契约、冷启动恢复、验证器与勘误闭环（`A01, A05–A12, A16, A17`）**：
-     - 完成 `PARENT_VERSION_SET_MISMATCH` 全父集版本校验（`A07`）、单向覆盖 `(eval_bid, owner_bid)` 与内容寻址回执摘要（`A08`）、超时与科学反例严格分层（`A09`）、`witness_ledger` 与 `EmpiricalCoverageReceipt` 检查点持久化恢复（`A10`）、`Flat/Graph` 统一校准估计器（`A11`）、Alpha 错误码拆分（`A06`）、能力索引更新（`A16`）及 `M9.7` 完整成本/耗时/`R1` 取证勘误（`docs/53b_M9_7_1_Audit_Errata_Contract_Closure_and_Paid_Pool_Attribution_ZH.md`）。
+   - **真实容器化付费池重放（`A01`, `A02`）**：
+     - `01_n11_executed_m95_paid_pool_replay.json`：在断网容器 `hegel-clean-scipy:m7v1` 内完成 `M9.5` `48` 步 6 臂真实代码执行（`3_OldestFirst_Probes1 = 32/48`，`5_SharedConditionalTable_Probes1 = 48/48`）。
+     - `02_m97_executed_flat_conditional_table_attribution.json`：在 `M9.7` `42` 步上实跑无图 `Flat_ConditionalTable`（`42/42` 路由一致、`30/42` 公共门控通过、`29/42` 零 LLM 私判通过），证明单层同父流中普通条件表与图等价。
+   - **勘误修正与 `M9.8.1` 契约闭合（`docs/53b_*` + `docs/54b_*`）**：
+     - 修正 `docs/53b` 中旧 `M9.7` Beta 双侧符号翻转 `p = 1.0`（原模板误硬编码 `0.50`，`R13`），明确 `alpha_m97_c02 / R1` 候选为诊断与错误码拆分闭合后正式退役（`diagnosed_and_retired`，`R14`），将旧 `M9.4/M9.6` `L1` KKT 对偶辅助函数采用保留为 `retained_open_gap`（`R15`），并在 `M9.8.1` 闭合 `ecov_invalid` 格式校验（`R06`）、冷恢复缺摘要拒绝与外键校验（`R07`）、`r2 >= 0.96` 兼容推定与实测证据分离（`R04`）及定位容器异常隔离（`R05`）。
 
-2. **第二阶段（`M9.8`，预注册未曝光 `n = 8` 独立确认簇 — `176` 个真实容器化在线 episode）**：
-   - **正面击败不阉割的在线 `Flat_ConditionalTable_Online`（`A02`, `A04`, `A15`）**：
-     - **`Flat_LatestFirst`**：私有严格通过 `44/56`，零 LLM 闭环 `4/56`，Scope-1 `v2 = 13,078,368`（`618` 次调用：`618` 求解 + `0` 守卫归纳）。
-     - **`Flat_ConditionalTable_Online`（赋予实时 `gpt-6.2-sol` 12 维观测 Kleene 守卫归纳 + 经验覆盖回执的在线条件版本表）**：私有严格通过 `50/56`，**零 LLM 闭环 `15/56`**（在已见乘积格点 `R0` 与 `U_iso` 上 `16/16` 零轮通过，证明条件表未被阉割；但在未见跨因子组合格点 `M_comb1 (U1 x D1)` 与 `M_comb2 (U1 x D2)` 上因单体耦合全部触发重新合成），Scope-1 `v2 = 11,139,318`（`531` 次调用：`504` 求解 + `27` 守卫归纳）。
-     - **`Hegel_FactoredMechanismGraph`（双层因果分解机制图：`Upstream {u0, u1} -> Downstream {d0, d1, d2}`）**：私有严格通过 `56/56`，**零 LLM 闭环 `32/56`**（在 `C_up` 通过上游残差定位仅合成模块化 `u1`，随后在 `M_comb1` 与 `M_comb2` 上零样本跨因子组合 `u1 o d1` 与 `u1 o d2` 直接通过！），Scope-1 `v2 = 6,177,898`（`310` 次调用：`286` 求解 + `24` 守卫归纳）。
-   - **簇级配对统计推断（`n = 8` 独立确认簇：`4` Alpha + `4` Beta）**：
-     - **`Hegel_FactoredMechanismGraph` 对比 `Flat_ConditionalTable_Online` (`v2`)**：簇均值差 **`-620,178`**（**`-44.54%`**），95% Bootstrap CI **`[-775347.3, -480665.62]`**，精确双侧符号翻转检验 **`p = 0.0078125`**（Alpha `n=4`: `-48.74%, p = 0.125`；Beta `n=4`: `-38.32%, p = 0.125`，**Alpha 与 Beta 双家族一致净省算力**！）。
-     - **`Hegel_FactoredMechanismGraph` 对比 `Flat_LatestFirst` (`v2`)**：簇均值差 **`-862,559`**（**`-52.76%`**），95% Bootstrap CI **`[-926214.88, -801797.83]`**，精确双侧符号翻转检验 **`p = 0.0078125`**。
-   - **严格字节级全等 `(R0, U_iso)` 反事实双生对 + 真实容器化 `HistoryMasked_CurrentOnly` 消融对照（`A03` & `A13`）**：
-     - 全部 `8` 个簇上 `SHA256(/holdout_task/public_batch.pkl)` 在 `R0` 与 `U_iso` 间 **`100%` 字节级相同**（容器内无任何 `gt` 字段），且全部 8 个 episode 的盲提示词 `100%` 相同（`0` 公式或机制标签泄漏）。
-     - 遮蔽前缀仪器日志的 `HistoryMasked_CurrentOnly` 容器对照通过 **`0/16` (`0.0%`，因 `UNKNOWN` 回退统一落入优先级最高的 `dn_b02 = D2`；任何仅依赖当前输入的确定性策略理论上界亦不超过 `8/16 = 50.0%`)**，而历史感知 `Hegel_FactoredMechanismGraph` 达到 **`16/16` (`100.0%`) 零轮通过**（`Flat_ConditionalTable_Online` 为 `15/16` 零轮通过）。
+2. **第二阶段（`M9.8`，未曝光 `n = 8` 独立确认簇 — `176` 个真实容器化在线 episode）**：
+   - **归因范围精确界定（`R01–R03, R10`）**：
+     - `M9.8` 实证检验的是**宿主给定两阶段模块分解（`U -> D`）+ 公开标定残差局部修复接口 + 跨因子组合系统包**（`Hegel_FactoredMechanismGraph`）相对于**单体型在线条件版本表**（`Flat_ConditionalTable_Online`）与 `Flat_LatestFirst` 的整体收益（注：`M9.8` 中 `Hegel` 额外开启了 `allow_l1_primitives=True` 与 `C_up` 局部修复任务包装；`docs/54b` 的已付前缀双普通表控制已验证在共享该 `U/D` 分解与已学模块后双表可 `56/56` 复现相同候选代码与 `32/32` 零轮通过，故全等权限下的自主分解形成与非可分交互撤回交由 `M9.9` 独立检验）。
+   - **三臂在线主结果（每臂 `56` 个持续流 episode）**：
+     - **`Flat_LatestFirst`**：私判通过 `44/56`，零 LLM 闭环 `4/56`，Scope-1 `v2 = 13,078,368`（`618` 次调用）。
+     - **`Flat_ConditionalTable_Online`**：私判通过 `50/56`，**零 LLM 闭环 `15/56`**（在已见双生格点 `(R0, U_iso)` 上达成 **`15/16`** 零轮通过；在未见跨因子格点 `M_comb1 + M_comb2` 上零轮复用为 **`0/16`**，回退全量重合成后最终私判通过 **`16/16`**，消耗 `204` 次调用 / `4,260,223 v2`，解释了两臂净节省额的 `85.87%`！），Scope-1 `v2 = 11,139,318`（`531` 次调用：`504` 求解 + `27` 守卫归纳）。
+     - **`Hegel_FactoredMechanismGraph`**：私判通过 `56/56`，**零 LLM 闭环 `32/56`**（`R0 + U_iso` `16/16` 零轮通过，`M_comb1 + M_comb2` **`16/16` 零轮跨因子组合通过**！），Scope-1 `v2 = 6,177,898`（`310` 次调用：`286` 求解 + `24` 守卫归纳）。
+   - **簇级成本与质量分层推断（`n = 8` 簇，双侧符号翻转最小可达分辨率 `2 / 2^8 = 0.0078125`，`R09, R16`）**：
+     - **Scope-1 流内成本（`Hegel` 对比 `Flat_ConditionalTable_Online`）**：总和比 **`-44.54%`**（等权簇相对变化均值 `-43.36%`；若每套系统独立承担完整 `Stage S` 初始化，则 Scope-Total 为 `7,371,303` vs `12,332,723` = **`-40.23%`**），簇均值差 `-620,178`，95% Bootstrap CI `[-775347.3, -480665.62]`，精确双侧符号翻转 **`p = 0.0078125`**（Alpha `n=4`: `-48.74%, p = 0.125`；Beta `n=4`: `-38.32%, p = 0.125`）。
+     - **Scope-1 流内成本（`Hegel` 对比 `Flat_LatestFirst`）**：总和比 **`-52.76%`**（含 `Stage S` 的 Scope-Total 为 **`-48.35%`**），双侧 **`p = 0.0078125`**。
+     - **最终质量推断单列（`strict_pass`，严禁与费用 `p` 混用，`R09`）**：`Hegel - Flat_ConditionalTable_Online` 逐簇通过数差为 `[1, 2, 1, 2, 0, 0, 0, 0]`（`56/56` 对 `50/56`，提升 `+10.71` 个百分点，差异均在 Alpha 四簇而 Beta 为 `28/28` 平手），精确双侧符号翻转 **`p = 0.125`**（属有限簇观测优势，未达 `< 0.05`；对比 `Flat_LatestFirst` 簇差 `[2, 2, 2, 2, 1, 1, 1, 1]`，`p = 0.0078125`）。
+   - **字节级全等 `(R0, U_iso)` 双生任务与事后库敏感性 vs 在线前缀锁定消融（`A03, R08`）**：
+     - 8 个簇的 `(R0, U_iso)` 共享 `100%` 相同的 `public_batch.pkl` 字节与基础 `instruction_text`（基础说明含基线控制方程，而新增 `D1/D2` 相变公式与标签零预给；实际在线提示随前缀档案及 `Hegel` 的 `C_up` 局部修复包装变化）。
+     - 下文第 5 节的 `0/16` 精确定义为**事后冻结 `step_04` 知识库下 `D2` 回退策略的删日志敏感性检查**；严格在线前缀锁定消融（`step_01` / `step_04` 检查点）与固定 `D0` / `D1` 无历史策略实测（`8/16 = 50.0%`，精确触及不相交验收球上界）已完整封存于 `docs/54b`。
 
 ---
 
-## 2. Scope-1 持续流总账、调用角色拆分与非 LLM 容器耗时（`A05`, `A12`）
+## 2. Scope-1 / Scope-Total 成本总账、调用角色拆分与非 LLM 容器耗时（`A05, R09, R11`）
 
-> **共享源任务 `Stage S` 初始化开销（三臂完全共享）**：`73` 次调用，`v1 = 1,115,434`，`v2 = 1,193,405`，LLM `wall_ms = 1,946,861`。
-> **`M9.8` 全周期透明总账（`A05` 零隐藏运行核算）**：
-> - `m9_8_aborted_run1_stage_s_contract_underspec_20261127`（旧种子段 `911000..924000` 在 `Stage S` 因基线符号约定未写明中止，`0` 个持续流 episode，旧种子段已永久退役）：`201` 次调用，`v2 = 5,318,353`（`usage_completeness = complete`）。
-> - `m9_8_dev_live_calibration_pass1_20261127` + `m9_8_dev_live_calibration_20261127`（冻结前仅在 `DEV_M98_WORLD_SPECS` `810100, 820100` 上的两轮在线校准验证：`262` + `381` 次调用）：`643` 次调用，`v2 = 14,095,339`（`usage_completeness = complete`）。
-> - `m9_8_blind_mismatch_factored_graph_20261127`（全新未曝光种子段 `931000..944000` 单次冻结确认集实验）：`1532` 次调用，`v2 = 31,588,989`（`usage_completeness = complete`）。
-> - **`M9.8` 全部运行累计总计**：**`2376` 次调用，`v2 = 51,002,681`**（`100%` 原始回执镜像与 `SHA256SUMS.txt` 封存）。
+> **共享源任务 `Stage S` 初始化开销**：`73` 次调用，`v1 = 1,115,434`，`v2 = 1,193,405`，LLM `wall_ms = 1,946,861`。
+> **`M9.8` 四运行研发全周期总账（`100%` `call_uuid` 原始镜像核验）**：
+> - 首轮 `Stage S` 中止运行（旧种子 `911000..924000` 已退役）：`201` 次调用，`v2 = 5,318,353`。
+> - 开发校准 `pass1 + final`（仅 `DEV_M98_WORLD_SPECS` `810100, 820100`）：`643` 次调用，`v2 = 14,095,339`。
+> - 冻结确认集运行（未曝光种子 `931000..944000`）：`1532` 次调用，`v2 = 31,588,989`。
+> - **四运行全周期合计**：**`2376` 次调用，`v2 = 51,002,681`**。
 
 | 指标（每臂 `56` 个持续 episode，`n = 8` 簇） | `Flat_LatestFirst` | `Flat_ConditionalTable_Online` | `Hegel_FactoredMechanismGraph` | `Hegel` 对比 `Flat_Table` | `Hegel` 对比 `Flat_Latest` |
 |---|---:|---:|---:|---:|---:|
-| 私有验证严格通过率 (`strict_pass`) | `44/56` | `50/56` | `56/56` | — | — |
+| 私有验证严格通过率 (`strict_pass` 及簇 `p`) | `44/56` | `50/56` | `56/56` | `p = 0.125` | `p = 0.0078125` |
 | 零 LLM (`0`-turn) 严格闭环数 | `4/56` | `15/56` | `32/56` | `+`17 | `+`28 |
 | 求解 LLM 调用数 (`stream_solve`) | `618` | `504` | `286` | `-43.25%` | `-53.72%` |
 | 守卫归纳 LLM 调用数 (`autonomous_guard_induction`) | `0` | `27` | `24` | `-11.11%` | — |
 | **Scope-1 总 LLM 调用数 (`solve + guard`)** | **`618`** | **`531`** | **`310`** | **`-41.62%`** | **`-49.84%`** |
 | Scope-1 `proxy_v1_u_025c_1o` | `12,452,860` | `10,534,868` | `5,802,048` | `-44.93%` | `-53.41%` |
-| **Scope-1 `proxy_v2_u_010c_4o`（主口径）** | **`13,078,368`** | **`11,139,318`** | **`6,177,898`** | **`-44.54%`** | **`-52.76%`** |
-| — Alpha 家族（`n = 4` 簇）`proxy_v2` | `7,091,417` | `6,646,428` | `3,406,721` | `-48.74%` | `-51.96%` |
-| — Beta 家族（`n = 4` 簇）`proxy_v2` | `5,986,951` | `4,492,890` | `2,771,177` | `-38.32%` | `-53.71%` |
+| **Scope-1 `proxy_v2_u_010c_4o`（流内主口径）** | **`13,078,368`** | **`11,139,318`** | **`6,177,898`** | **`-44.54%`** | **`-52.76%`** |
+| **Scope-Total `proxy_v2`（独立部署含 `Stage S`）** | **`14,271,773`** | **`12,332,723`** | **`7,371,303`** | **`-40.23%`** | **`-48.35%`** |
+| — Alpha 家族（`n = 4` 簇）Scope-1 `proxy_v2` | `7,091,417` | `6,646,428` | `3,406,721` | `-48.74%` | `-51.96%` |
+| — Beta 家族（`n = 4` 簇）Scope-1 `proxy_v2` | `5,986,951` | `4,492,890` | `2,771,177` | `-38.32%` | `-53.71%` |
 | 模型调用 `wall_ms` (`solve + guard`) | `16,766,155` | `13,638,091` | `7,713,468` | `-43.44%` | `-53.99%` |
 | 非 LLM 预检容器探针 `wall_ms` (`56` 次) | `366,919` | `374,914` | `377,177` | — | — |
 | 非 LLM 经验覆盖探针 `wall_ms` | `0` | `365,519` | `147,523` | `-59.64%` | — |
+| 非 LLM `C_up` 上游定位容器探针（`R11`） | `0` | `0` | `8` 次（原汇总未单列，见 `docs/54b` 实测补账） | — | — |
 
 ---
 
@@ -73,7 +79,7 @@
 
 ---
 
-## 4. 全部 `n = 8` 独立确认簇逐簇结果（`A04`, `A15`）
+## 4. 全部 `n = 8` 独立确认簇逐簇结果
 
 | 确认簇 (`家族`) | `Flat_LatestFirst` | `Flat_ConditionalTable_Online` | `Hegel_FactoredMechanismGraph` | `Latest` `v2` | `Flat_Table` `v2` | `Hegel` `v2` | `Hegel` 对比 `Flat_Table` |
 |---|---|---|---|---:|---:|---:|---:|
@@ -88,9 +94,9 @@
 
 ---
 
-## 5. 字节级全等 `(R0, U_iso)` 上的 `HistoryMasked_CurrentOnly` 容器消融（`A03`）
+## 5. 事后 `step_04` 冻结库 `D2` 回退删日志敏感性检查（`m9_8_history_masked_ablation.json`；严格在线前缀锁定与 `D0/D1` `8/16` 对照见 `docs/54b`）
 
-| 确认簇 | 事件 | `SHA256(/holdout_task/public_batch.pkl)` | 遮蔽历史后选中分支 | 遮蔽历史私有验证通过 |
+| 确认簇 | 事件 | `SHA256(/holdout_task/public_batch.pkl)` | 事后库回退选中分支 | 遮蔽日志私有验证通过 |
 |---|---|---|---|---|
 | `alpha_m98_v2_c01` | `R0` | `ae4a31e07207547a...` | `bind_alpha_m98_v2_c01_dn_b02` | `False` |
 | `alpha_m98_v2_c01` | `U_iso` | `ae4a31e07207547a...` | `bind_alpha_m98_v2_c01_dn_b02` | `False` |
@@ -108,3 +114,18 @@
 | `beta_m98_v2_c03` | `U_iso` | `bf91a8bf8337c91a...` | `bind_beta_m98_v2_c03_dn_b02` | `False` |
 | `beta_m98_v2_c04` | `R0` | `6c2059b36a6e8b80...` | `bind_beta_m98_v2_c04_dn_b02` | `False` |
 | `beta_m98_v2_c04` | `U_iso` | `6c2059b36a6e8b80...` | `bind_beta_m98_v2_c04_dn_b02` | `False` |
+
+---
+
+## 6. `A01–A17` 五状态精细审计矩阵（按 `Hegel_M9_8_Audit` 证据分界）
+
+| 编号 | 当前分项状态 | 核验证据与适用边界 |
+|---|---|---|
+| `A01`, `A17` | `verified_closed` | `48` 步 `N11` 隔离 RPC 实跑（`01_n11_executed_m95_paid_pool_replay.json`）与 `docs/52b` `64/68` 标题更正。 |
+| `A02` | `scope_narrowed` | `M9.7` 普通条件表匹配 `30/42` 公共与 `29/42` 私判；`M9.8` 分解系统相对单体型在线表省费 `-44.54%`，同时 `M9.8.1` 双普通表已付前缀回放（`56/56`）将结论精确限定在模块化分解复用系统包而非图容器本身。 |
+| `A03`, `A13` | `scope_narrowed` | `(R0, U_iso)` 基础输入与基础说明全等（固定 current-only 上界 `<= 8/16`）；新增 `D1/D2` 相变公式不预给但基线控制方程在共享说明中给出；前缀日志为可观测前驱状态，完整前缀锁定与 `D0/D1` 对照见 `docs/54b`。 |
+| `A04`, `A05`, `A15` | `verified_closed` | `M9.7` 重分类为已曝光种子复制（Beta 双侧 `p = 1.0` 已更正）；`M9.8` `n = 8` 确认集自干净提交 `2963e5d65f` 单次运行，`0` 未知用量，费用 `p = 0.0078125`、质量 `p = 0.125` 单列，`8` 次定位探针于 `docs/54b` 补账。 |
+| `A06` | `diagnosed_and_retired` | `alpha_m97_c02 / R1` 完成错误码拆分与极点翻转复现，历史 `41/42` 保留，失稳候选正式退役（`docs/53b`）。 |
+| `A07`, `A11`, `A12`, `A16` | `verified_closed` | 全父版本键校验（`A07`）、共享分层校准估计器（`A11`）、`M9.7` 编译策略命名（`A12`）与能力目录更新（`A16`）。 |
+| `A08`, `A09`, `A10` | `superseded_in_m9_8_1` | `M9.8.1` 彻底闭合 `ecov_invalid` 格式校验（`R06`）、冷恢复缺摘要拒绝与外键校验（`R07`）、`r2 >= 0.96` 兼容推定与实测分离（`R04`）及定位容器异常隔离（`R05`）。 |
+| `A14` | `retained_open_gap` | 整程序求解器通过完整 KKT 主对偶校验；历史 `M9.4/M9.6` `L1` 原语编译器的完整对偶字典采用仍列为保留缺口。 |

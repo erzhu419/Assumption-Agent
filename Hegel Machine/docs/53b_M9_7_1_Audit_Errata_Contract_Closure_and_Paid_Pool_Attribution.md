@@ -13,15 +13,16 @@
    - Usage completeness: **`partial_unknown_usage`** (`1` timed-out attempt `1b028fe68e4745c692589f62c402f78b` on `alpha_m97_c01:C1`, `360,015.06 ms`). Exact Scope 1 relation: $C_{\text{Hegel}} - C_{\text{Flat}} = -3{,}741{,}297 + x$ ($x \ge 0$).
 3. **Family-Stratified Results & Beta Clarification (`A05, A15`)**:
    - **Alpha (`n = 3`)**: `20/21` vs `20/21` `strict_pass`, `14/21` vs `3/21` zero-LLM passed closures, known `Scope 1 proxy_v2` `1,957,198` vs `5,759,604` (**`-66.02%`**, `3/3` negative, exact sign-flip `p = 0.25`; Alpha accounts for `80.67%` of `Flat` `v2`).
-   - **Beta (`n = 3`)**: `21/21` vs `21/21` `strict_pass`, `15/21` vs `15/21` zero-LLM passed closures, `0` guard-induction calls, `0` in-stream L2 compile calls, known `Scope 1 proxy_v2` **`1,441,450` vs `1,380,341` (`+4.43%`, `+61,109`)** (`p = 0.50`; replaces imprecise "exact tie / zero tax" phrasing).
+   - **Beta (`n = 3`)**: `21/21` vs `21/21` `strict_pass`, `15/21` vs `15/21` zero-LLM passed closures, `0` guard-induction calls, `0` in-stream L2 compile calls, known `Scope 1 proxy_v2` **`1,441,450` vs `1,380,341` (`+4.43%`, `+61,109`)** (exact two-sided sign-flip `p = 1.0`; replaces imprecise "exact tie / zero tax" phrasing).
    - **Pooled (`n = 6` clusters)**: mean cluster `v2` diff `-623,549.50`, mean per-cluster relative change **`-28.90%`**, exact sign-flip `p = 0.15625`.
 4. **Complete Non-LLM Container Wall-Time Accounting (`A05`, `wall_ms` strictly separated from CPU-seconds)**:
    - `Flat_EqualInfo_Multiversion`: `42` pre-LLM container probes = **`311,517.44 ms`** (`0` coverage probes).
    - `Hegel_DemandGated_Graph`: `42` pre-LLM container probes (`319,824.16 ms`) + `18` `EmpiricalCoverageReceipt` container probes (`115,258.55 ms`) = **`435,082.71 ms`** (`+123,565.27 ms` extra container wall time, plus `24` parent-sensitivity container runs across `6` guard inductions).
-5. **Scope Narrowing on `R0` vs `U_iso` (`A03, A13`) & Consolidation Policy Naming (`A12`)**:
+5. **Scope Narrowing on `R0` vs `U_iso` (`A03, A13`), Consolidation Policy Naming (`A12`), & Legacy KKT `L1` Helper Status (`A14`)**:
    - In `M9.7`, `R0` and `U_iso` matched test covariates (`obs_02..08 == 0.0` diff), declared thresholds, calibration sweeps, and terminal snapshots, while `train` responses (`17.78` max diff), Beta `y_obs_raw` (`0.0325`), and prompt headers differed; `M9.7`'s consolidation gate acted effectively as `disable_eager_l2_when_canonical_binding_covers_contract`.
-6. **Exact Numerical Forensics on `alpha_m97_c02 / R1` (`A06`, Official Score `41/42` Unchanged)**:
-   - Host reproduction of SHA-pinned `2b098388239b...` confirms all 5 output arrays were `100%` finite (`all_outputs_finite = True`) on both private seeds; seed `991672` failed **`PARAMETER_ORDER`** (`estimated_taus = [1.630723, 0.280998]` vs true `[0.66, 4.35]`), **`STRAIN_ERROR`** (`0.081975 > 0.070`), and **`RATE_ERROR`** (`0.162279 > 0.055`). Verifier error codes are now split cleanly.
+   - **`A14` (`retained_open_gap`)**: While standalone task solvers satisfy full KKT primal-dual checks, legacy `M9.4/M9.6` `L1` compiled helper dual-certificate adoption remains `retained_open_gap` (not claimed as invoked or closed here).
+6. **Exact Numerical Forensics & Candidate Retirement on `alpha_m97_c02 / R1` (`A06`, Status = `diagnosis_and_error_code_closed_numerical_candidate_retired`)**:
+   - Host reproduction of SHA-pinned `2b098388239b...` confirms all 5 output arrays were `100%` finite (`all_outputs_finite = True`) on both private seeds; seed `991672` failed **`PARAMETER_ORDER`** (`estimated_taus = [1.630723, 0.280998]` vs true `[0.66, 4.35]`), **`STRAIN_ERROR`** (`0.081975 > 0.070`), and **`RATE_ERROR`** (`0.162279 > 0.055`). Verifier error codes are split cleanly, the historical `41/42` score is preserved unchanged, and the defective `2b098388239b...` solver candidate is formally retired rather than claiming post-hoc numerical solver repair.
 
 ## 2. Executed Paid-Pool Attribution (`A01` on `M9.5` + `A02` on `M9.7`, `evidence_provenance = executed`)
 

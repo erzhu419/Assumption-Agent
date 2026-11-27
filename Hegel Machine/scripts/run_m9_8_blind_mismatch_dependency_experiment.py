@@ -76,6 +76,7 @@ from hegel_machine.cognition.m9_5_equal_tool_continual_attribution_world import 
 from hegel_machine.cognition.m9_6_autonomous_structure_continual_world import (
     EmpiricalCoverageReceipt,
     ImmutableBranchLineageController,
+    compute_canonical_numeric_item_sha256,
 )
 from hegel_machine.cognition.m9_8_blind_mismatch_and_selective_dependency_world import (
     CONFIRMATION_M98_WORLD_SPECS,
@@ -201,16 +202,25 @@ def _evaluate_empirical_coverage_m98(
     old_parent_vers: dict[str, int],
     old_witness_specs: list[tuple[str, Any, dict[str, Any], dict[str, str], dict[str, str]]],
 ) -> EmpiricalCoverageReceipt:
-    """Execute `new_composed_builder(w_task, w_pay)` inside air-gapped Docker container on `old_id`'s positive witness (`0` LLM calls)."""
+    """Execute `new_composed_builder(w_task, w_pay)` inside air-gapped Docker container on `old_id`'s positive witness (`0` LLM calls, `R12` full SHA separation)."""
+    import uuid
+
     t0 = monotonic()
     passed = 0
-    w_ids, w_inp_shas, p_vers, p_pay_shas = [], [], [], []
+    w_ids, w_inp_shas, w_setup_shas, w_num_shas, dep_shas, p_ids, p_vers, p_pay_shas = [], [], [], [], [], [], [], []
     new_sha = ""
     for wit_id, w_task, w_pay, ro_deps, ro_shas in old_witness_specs:
         cand_c, raw_new_sha = new_composed_builder(w_task, w_pay)
         new_sha = raw_new_sha
+        w_item, w_pkl_sha = materialize_m98_public_item_and_sha(w_task)
         w_ids.append(wit_id)
-        w_inp_shas.append(hashlib.sha256(w_task.public_setup_py.encode("utf-8")).hexdigest())
+        w_inp_shas.append(w_pkl_sha)
+        w_setup_shas.append(hashlib.sha256(w_task.public_setup_py.encode("utf-8")).hexdigest())
+        w_num_shas.append(compute_canonical_numeric_item_sha256(w_item))
+        dep_shas.append(
+            hashlib.sha256(json.dumps(ro_shas or {}, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
+        )
+        p_ids.append(f"cprobe_{uuid.uuid4().hex[:16]}")
         p_vers.append(dict(old_parent_vers))
         p_pay_shas.append(hashlib.sha256(json.dumps(w_pay, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest())
         pr = execute_single_pre_llm_public_gate_probe_in_container(
@@ -237,6 +247,11 @@ def _evaluate_empirical_coverage_m98(
         mean_probe_wall_ms_ratio=1.0,
         witness_input_sha256s=w_inp_shas,
         parameter_payload_sha256s=p_pay_shas,
+        receipt_schema_version=2,
+        witness_setup_source_sha256s=w_setup_shas,
+        witness_canonical_numeric_sha256s=w_num_shas,
+        dependency_bundle_sha256s=dep_shas,
+        probe_ids=p_ids,
     )
     rec.receipt_id = rec.compute_expected_receipt_id()
     rec.verify_integrity()
