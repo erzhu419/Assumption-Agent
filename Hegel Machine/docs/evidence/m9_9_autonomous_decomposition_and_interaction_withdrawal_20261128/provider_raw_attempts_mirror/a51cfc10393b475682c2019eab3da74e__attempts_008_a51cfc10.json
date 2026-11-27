@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a51cfc10393b475682c2019eab3da74e",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:52.148090+00:00",
+  "ended_at_utc": "2026-11-27T19:51:24.253537+00:00",
+  "request_sha256": "595f19802d18418218d3ad998a26834b68ac951472b0ffabc5db067320cd3b1f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52173,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35983,
+    "cached_tokens": 14976,
+    "completion_tokens": 1333
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; R=C['bridge_raw']; L=C['true_channel_loads']\\nPAIRS=((0,1),(0,3),(1,2),(2,3))\\ndef basis(l):\\n return np.column_stack([np.ones(len(l)),l,*[l[:,i]*l[:,j] for i,j in PAIRS],l**3])\\ndef fit(l,r):\\n a=basis(l); rng=np.random.default_rng(443); best=(np.inf,None)\\n # Rank-one sweep excursions affect a minority of measurements.\\n for j in range(350):\\n  ids=rng.choice(len(a),min(18,len(a)),replace=False); b=np.linalg.lstsq(a[ids],r[ids],rcond=None)[0]\\n  if np.linalg.matrix_rank(a[ids])<a.shape[1]: continue\\n  for _ in range(3):\\n   errs=np.linalg.norm(a@b-r,axis=1); keep=np.argsort(errs)[:int(.7*len(a))]; b=np.linalg.lstsq(a[keep],r[keep],rcond=None)[0]\\n  loss=np.mean(np.sort(np.linalg.norm(a@b-r,axis=1))[:int(.7*len(a))]**2)\\n  if loss<best[0]: best=loss,b\\n b=best[1]; err=np.linalg.norm(a@b-r,axis=1); clean=err < max(0.00015,5*np.median(err)); return np.linalg.lstsq(a[clean],r[clean],rcond=None)[0]\\ndef inv(r,b):\\n shape=r.shape; r=r.reshape(-1,4); l=(r-b[0])@np.linalg.inv(b[1:5]); l=np.clip(l,-1.7,1.7)\\n for k in range(25):\\n  e=basis(l)@b-r; jac=np.broadcast_to(b[1:5].T,(len(l),4,4)).copy(); jac+=b[9:].T[None,:,:]*3*l[:,None,:]**2\\n  for idx,(i,j) in enumerate(PAIRS):\\n   jac[:,:,i]+=l[:,j,None]*b[5+idx]; jac[:,:,j]+=l[:,i,None]*b[5+idx]\\n  step=np.linalg.solve(jac,e[...,None])[...,0]; l-=step/np.maximum(1,np.max(abs(step),axis=1,keepdims=True)/.4)\\n return l.reshape(shape)\\nif __name__=='__main__':\\n b=fit(L,R); e=R-basis(L)@b; q=np.linalg.norm(e,axis=1); print('full residual quantiles',np.quantile(q,[0,.25,.5,.65,.7,.75,.8,.9,.95,1])); print('contaminated rows',np.where(q>.001)[0]); print('coefficients',b.round(5)); print('linear singular values',np.linalg.svd(b[1:5],compute_uv=False))\\n for fold,te in enumerate(np.array_split(np.random.default_rng(55).permutation(len(L)),5)):\\n  tr=np.setdiff1d(np.arange(len(L)),te); bf=fit(L[tr],R[tr]); qc=np.linalg.norm(R[te]-basis(L[te])@bf,axis=1); clean=q[te]<.001; pred=inv(R[te][clean],bf); de=(pred-L[te][clean]).sum(1); print('fold',fold,'clean',sum(clean),'forward max',max(qc[clean]),'total inverse RMSE/max',np.sqrt(np.mean(de**2)),max(abs(de)))\\n for name in ('train','test'):\\n  z=D[name]; raw=np.concatenate((z['past_channel_raw'].reshape(-1,4),z['hold_channel_raw'])); l=inv(raw,b); err=np.linalg.norm(basis(l)@b-raw,axis=1); print(name,'inverse residual',np.quantile(err,[.5,.95,1]),'load quantiles',np.quantile(l,[0,.05,.95,1],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 projected cubic bridge → H2 full sparse cubic bridge recovered by trimming rank-one excursions; the previous cubic raw-sum fit had 0.00076 worst-fold RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop the contaminated bridge direction\",\n      \"rejected_reason\": \"That leaves three equations for four loads, and the failed Cauchy probe did not establish that the fourth equation was unrecoverable: SciPy can rescale the supplied Jacobian in place.\"\n    }\n  ],\n  \"rationale\": \"Test whether the clean majority identifies the full forward bridge without modifying the design matrix. Held-out clean-sweep inversion and deployment reconstruction will determine whether this calibration is accurate enough to use for the hereditary fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6538aa37208e2a9105101109aaa80de62b932774ed80a98e9d882300a3963004",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33221.89,
+      "usage_known": true,
+      "prompt_tokens": 35983,
+      "cached_tokens": 14976,
+      "completion_tokens": 1333
+    }
+  ]
+}

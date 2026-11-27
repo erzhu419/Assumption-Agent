@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b667c231c44047b588c26e95cf7e66c3",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:16.616631+00:00",
+  "ended_at_utc": "2026-11-27T19:39:37.489192+00:00",
+  "request_sha256": "d5ae7a00d9bb0957bf63b1372a81cfc0f71523769a6e4bd9731462db6a775077",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53496,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36594,
+    "cached_tokens": 14976,
+    "completion_tokens": 762
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport json, pickle, numpy as np\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('record count',len(log))\\nfor entry in log:\\n print({k:v for k,v in entry.items() if k!='facility_telemetry_trace'}); a=np.asarray(entry['facility_telemetry_trace'],float); print('trace shape, mean, last:',a.shape,a.mean(0),a[-1])\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nfor key,g in [('train',i['dataset']['train']),('test',i['dataset']['test']),('diagnostic',i['campaign_diagnostics'])]:\\n a=g['aux_chamber_telemetry']; print(key,'telemetry mean/std:',a.mean(0),a.std(0)); print('reference centers and scales by lab:',[(int(l),round(np.median(g['ref_coupons'][g['lab_id']==l].mean(0)),4),round(np.median(g['ref_coupons'][g['lab_id']==l].std(0)),4)) for l in np.unique(g['lab_id'])])\\nPY\\nsed -n '48,120p' /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -24\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 free chamber transient → H2 two exponential drift decays with unit initial slope and chamber-local feature alignment; the unconstrained two-decay precursor has worst leave-one-lab-out RMSE of 0.00429 for strain and 0.00407 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a linear drift term to the chamber response\",\n      \"rejected_reason\": \"The extra term drives the fitted slow decay toward the search boundary without a material improvement in held-out error.\"\n    }\n  ],\n  \"rationale\": \"The fitted decay amplitudes divided by their time constants are 0.552 and 0.444, summing to the measured initial slope of about one. Inspect the apparatus summaries before fixing the slow decay, and check whether the test reference panel resembles the diagnostic panel. Keep the specified joint normalization for the material fit; the diagnostic comparison supports separate chamber normalization for deployment drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "267791e1e56176775f45793b450b341e652f4780510bc3fbb95f10611e215b05",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21972.45,
+      "usage_known": true,
+      "prompt_tokens": 36594,
+      "cached_tokens": 14976,
+      "completion_tokens": 762
+    }
+  ]
+}

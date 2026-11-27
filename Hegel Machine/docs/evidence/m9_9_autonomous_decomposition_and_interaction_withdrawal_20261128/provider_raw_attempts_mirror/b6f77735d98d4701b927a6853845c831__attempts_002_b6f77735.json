@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b6f77735d98d4701b927a6853845c831",
+  "call_seq": 2,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:32.502850+00:00",
+  "ended_at_utc": "2026-11-27T19:51:53.584243+00:00",
+  "request_sha256": "bb7d26348a4f74dc7d1b963bdf94538f534470e5774b8d17ba839296c200a4a8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 13252,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19311,
+    "cached_tokens": 13696,
+    "completion_tokens": 791
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: a=json.load(f)\\nprint('APPARATUS',json.dumps(a)[:3300])\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\nfor k,v in d.items():\\n print(k, {j:(list(w.keys()) if isinstance(w,dict) else getattr(w,'shape',type(w).__name__)) for j,w in v.items()} if isinstance(v,dict) else getattr(v,'shape',type(v).__name__))\\nc=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; A=np.column_stack((np.ones(len(x)),x)); b=np.linalg.lstsq(A,y,rcond=None)[0];\\nfor _ in range(8):\\n err=np.linalg.norm(y-A@b,axis=1); w=np.minimum(1,np.median(err)*1.5/np.maximum(err,1e-12))**.5; b=np.linalg.lstsq(A*w[:,None],y*w[:,None],rcond=None)[0]\\nprint('AFFINE',b.round(5),'error quantiles',np.quantile(np.linalg.norm(y-A@b,axis=1),[0,.25,.5,.75,.9,.95,.98,1]).round(6)); print('X ranges',x.min(0),x.max(0),'unique values per channel',[len(np.unique(col)) for col in x.T]); print('nonzero channels per row',np.unique(np.count_nonzero(x,axis=1),return_counts=True));\\nfor k in ('train','test','chamber_verification_trials'):\\n s=d.get(k)\\n if isinstance(s,dict):\\n  for j in ('past_channel_raw','hold_channel_raw'):\\n   r=s[j]; h=(r-b[0])@np.linalg.inv(b[1:]); print(k,j,h.shape,'rough load quantiles',np.quantile(h.reshape(-1,4),[0,.01,.5,.99,1],axis=0).round(3).tolist())\\nfor k,v in c.get('single_channel_sweeps',{}).items():\\n q=np.asarray(v); print('SWEEP',k,q.shape,q.flatten()[:8])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (robust affine mixing) → H2 (robust nonlinear forward calibration); no held-out calibration metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible inverse directly to raw bridge readings\",\n      \"rejected_reason\": \"Gross spikes would contaminate the predictor coordinates; the forward fit keeps the known calibration loads as predictors.\"\n    }\n  ],\n  \"rationale\": \"Read the apparatus log to identify the active setting, then use a robust affine fit to locate spike rows and compare the operating range with calibration coverage. These diagnostics determine which nonlinear terms and extrapolation slices to validate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "b6d99f0b47a8afef3adb139a7aaa82d787b92c6caf26be3580726b00bd10eeba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22180.77,
+      "usage_known": true,
+      "prompt_tokens": 19311,
+      "cached_tokens": 13696,
+      "completion_tokens": 791
+    }
+  ]
+}

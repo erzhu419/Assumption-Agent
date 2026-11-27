@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d06f51c3dc0f42cfbca123c8c17f85c9",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:13.743094+00:00",
+  "ended_at_utc": "2026-11-27T19:48:39.087850+00:00",
+  "request_sha256": "52ac3a9a117b93f273e78544d38ae7fa285b439bf827b01d0361ebc34cdebced",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42265,
+    "cached_tokens": 13696,
+    "completion_tokens": 943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns = runpy.run_path('/holdout_task/batch_solver.py')\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd = item['dataset']; tr, te = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\nout = s['solve_batch'](d); a, h = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < a[0] < a[1] < 25 and all(np.isfinite(v).all() for v in out.values())\\nb = s['_bridge'](d['calibration_load_cells']); _, xt = s['_features'](tr, te); p, l = s['_loads'](te, b)\\ninc0, r0 = s['_chamber'](a, h, p, l, xt, dt, np.array([0., 1e-6])); err = np.max(np.abs(inc0[:, 1]/1e-6-out['initial_rate_pred']))\\nassert np.all(inc0[:, 0] == 0) and np.max(np.abs(r0-out['initial_rate_pred'])) < 1e-12 and err < 1e-5\\nprint('Deployment zero-time derivative max error:', err)\\ng = item['campaign_diagnostics']\\nif g is not None:\\n    x, _ = s['_features'](g, g); p, l = s['_loads'](g, b)\\n    inc, rate = s['_chamber'](a, h, p, l, x, dt, t)\\n    base, _ = s['_basis'](a, p, l, x, dt, t)\\n    y = g['strain_curves_obs'] - g['strain_0'][:, None]; r = g['instant_rate_obs']; e = inc-y\\n    clean = np.isfinite(g['coupon_features_raw']).all(axis=1)\\n    rms = lambda z: np.sqrt(np.mean(z*z, axis=0))\\n    assert rms(e[clean])[-1] < .02 and rms(rate[clean]-r[clean]) < .02\\n    print('Verification coupon strain/rate RMSE, by slice:')\\n    for name, sel in [('complete', clean), ('imputed', ~clean), ('highest hold quartile', l >= np.quantile(l, .75))] + [(f'lab {lab}', g['lab_id'] == lab) for lab in np.unique(g['lab_id'])]:\\n        if sel.any(): print(name, int(sel.sum()), float(rms(e[sel]).max()), float(rms(rate[sel]-r[sel])))\\n    print('Last-horizon RMSE (baseline / filtered):', rms(base@h-y)[-1], rms(e)[-1])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber-specific relaxation → H2 unchanged intrinsic relaxation with filtered drift; clean held-out worst-horizon strain RMSE is 0.00321 and initial-rate RMSE is 0.00209.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test the saved solver in an isolated Python process. A zero-time derivative mismatch would require fixing the strain/rate implementation; large residuals confined to imputed coupons or one lab would instead point to feature alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8dd25ff5d5bde346716bd6b91d3ec54ebf4d5cb8ba2e2f4381625bcc44fbf9fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25294.93,
+      "usage_known": true,
+      "prompt_tokens": 42265,
+      "cached_tokens": 13696,
+      "completion_tokens": 943
+    }
+  ]
+}

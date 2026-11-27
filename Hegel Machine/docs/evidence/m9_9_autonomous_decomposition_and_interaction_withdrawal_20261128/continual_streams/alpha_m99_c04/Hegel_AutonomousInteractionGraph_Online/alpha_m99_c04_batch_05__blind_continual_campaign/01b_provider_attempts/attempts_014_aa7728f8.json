@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aa7728f843274aaa8647ef75cfd88236",
+  "call_seq": 14,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:09:43.872222+00:00",
+  "ended_at_utc": "2026-11-27T20:10:16.766136+00:00",
+  "request_sha256": "9f26819cb6a815b8021a43787b3222776333bb45392bb1c53c49df91b2f6bc9a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 76625,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40965,
+    "cached_tokens": 13696,
+    "completion_tokens": 1372
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('downstream_solver.py')\\ns = p.read_text()\\na = s.index('def _chamber_response(')\\nb = s.index('\\\\n\\\\ndef solve_downstream', a)\\ns = s[:a] + '''def _chamber_response(group, x, dt, times, taus, theta):\\n    # Fast load memory is withdrawn; the chamber retains a small slow-branch gap.\\n    hold = np.sum(group['hold_channel_raw'], axis=-1)\\n    past = np.sum(group['past_channel_raw'], axis=-1)\\n    age = np.r_[np.cumsum(dt[::-1])[::-1][1:], 0.0]\\n    slow_history = past @ (-np.expm1(-dt / taus[1]) * np.exp(-age / taus[1]))\\n    branch_rates = theta[:2] / taus\\n    drift = theta[2] + x @ theta[3:]\\n    rates = hold[:, None] * branch_rates + drift[:, None] * np.array([0.20, 0.55])\\n    rates[:, 1] -= 0.025 * slow_history * branch_rates[1]\\n    kernels = -taus[:, None] * np.expm1(-times / taus[:, None])\\n    persistent_rate = 0.25 * drift\\n    strain = group['strain_0'][:, None] + rates @ kernels + persistent_rate[:, None] * times\\n    return strain, rates.sum(axis=1) + persistent_rate\\n''' + s[b:]\\ns = s.replace('_chamber_response(test, x_test, times, taus, theta)', '_chamber_response(test, x_test, dt, times, taus, theta)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom chamber_probe import g, d, dt, t, tr, te, x, np, i\\nfrom batch_solver import solve_batch\\nimport downstream_solver as m\\nout = solve_batch(i['dataset'])\\nfor key, y in m.solve_downstream(d).items():\\n    np.testing.assert_array_equal(out[key], y)\\n    assert np.isfinite(y).all(), key\\na,b = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < a[0] < a[1] < 25\\n_, xe = m._features(tr, te)\\nz,r = m._chamber_response(te, xe, dt, np.array([0., 1e-6]), a, b)\\nnp.testing.assert_array_equal(z[:,0], te['strain_0'])\\nnp.testing.assert_allclose((z[:,1]-z[:,0])/1e-6, r, rtol=2e-6, atol=1e-8)\\nxe, _ = m._features(g,g)\\nmissing = np.isnan(g['coupon_features_raw']).any(1)\\nmasks = [g[k]==j for k in ['lab_id','stratum'] for j in np.unique(g[k])] + [~missing, missing]\\nopt = []\\nfor exclude in [-1,*np.unique(tr['lab_id'])]:\\n    mask = tr['lab_id'] != exclude\\n    p,w = (a,b) if exclude == -1 else m._fit({k:v[mask] for k,v in tr.items()}, x[mask], dt, t)\\n    q,s = m._chamber_response(g,xe,dt,t,p,w)\\n    e,f = abs(q-g['strain_curves_obs']), abs(s-g['instant_rate_obs'])\\n    row = np.max([[e[j].mean(), e[j,-1].mean(),f[j].mean()] for j in masks],axis=0)\\n    opt.append(row)\\n    print('withheld benchtop lab', exclude, 'worst curve / final horizon / rate MAE', row)\\nassert np.all(np.max(opt,axis=0) < [.01865,.03115,.01470]), np.max(opt,axis=0)\\nprint('isolated composition, pole bounds, and zero-time derivative: passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 complete load-memory withdrawal -> H2 weak slow-branch retention; across benchtop and diagnostic lab holdouts, the raw slow-history challenger improved worst strain/final-horizon/rate MAE from 0.01865/0.03115/0.01470 to 0.01635/0.02669/0.01385.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the larger drift-orthogonal history correction\",\n      \"rejected_reason\": \"It reverses sign in some splits and pushes worst strain MAE above 0.040 when one benchtop lab is withheld.\"\n    }\n  ],\n  \"rationale\": \"The raw slow-history coefficient stayed positive across all lab splits and improved all three worst-slice metrics. Use a rounded 2.5% retention estimate, then check whether the exact artifact still beats the baseline under lab withholding and preserves the analytical initial rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "fa2fe020137f573657393f3c21bfc7c439a0946fa66179be7a2a2cf6e6b634e5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34074.79,
+      "usage_known": true,
+      "prompt_tokens": 40965,
+      "cached_tokens": 13696,
+      "completion_tokens": 1372
+    }
+  ]
+}

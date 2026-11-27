@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9afb44e5d28746e6b0cd73de8cf93334",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:05.934906+00:00",
+  "ended_at_utc": "2026-11-27T19:45:36.986144+00:00",
+  "request_sha256": "64d446e319855100dc268dd05c13ee79bdf23da2c969743887fff937b07c7729",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55686,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34383,
+    "cached_tokens": 14976,
+    "completion_tokens": 1261
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m99_nonlinear_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nsweeps = s['sensor_calibration_sweeps']\\nx, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\\nS, _ = m._responses(s)\\npulses = item['campaign_diagnostics']\\npx = np.concatenate([(S @ p['w_pulse']).reshape(-1, 4) for p in pulses])\\npr = np.concatenate([p['y_pulse_raw'].reshape(-1, 4) for p in pulses])\\nshape = (len(pulses), len(s['mu_shifts']), -1, 4)\\n\\ndef features(x, mode):\\n    a = [np.ones(len(x)), *x.T]\\n    if mode == 'quadratic':\\n        a += [x[:, i]*x[:, j] for i in range(4) for j in range(i, 4)]\\n    return np.column_stack(a)\\n\\nfor mode in ('affine', 'quadratic', 'rational'):\\n    held, pulse = [], []\\n    for fold in range(5):\\n        test = np.arange(len(x)) % 5 == fold\\n        a = features(x[~test], mode)\\n        b = np.linalg.lstsq(a, raw[~test], rcond=None)[0]\\n        if mode == 'rational':\\n            # Channel-wise saturation after the full affine map. Fit on sweeps only.\\n            fit = least_squares(lambda p: ((a @ p[:20].reshape(5,4)) / (1+x[~test]**2*p[20:]) - raw[~test]).ravel(), np.r_[b.ravel(),np.zeros(4)], bounds=(np.r_[np.full(20,-np.inf),np.zeros(4)], np.full(24,np.inf)), gtol=1e-12)\\n            b, sat = fit.x[:20].reshape(5,4), fit.x[20:]\\n        def predict(v):\\n            y = features(v, mode) @ b\\n            return y / (1+v**2*sat) if mode == 'rational' else y\\n        held.append(np.sqrt(np.mean((predict(x[test])-raw[test])**2,axis=0)).max())\\n        pulse.append(np.sqrt(np.mean((predict(px)-pr).reshape(shape)**2,axis=2)).max())\\n    print(mode, 'worst held-out sweep RMS', max(held), 'worst pulse/shift/channel RMS in raw units', max(pulse))\\n\\nout = m.solve_batch(s)\\nZ = s['Z_nuisance']\\nPz = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nr = m._calibrate(s)-S@out['weights']\\nK = len(s['mu_shifts'])\\nprint('observation RMS by shift before and after ridge nuisance projection', np.sqrt(np.mean(r.reshape(K,-1)**2,axis=1)), np.sqrt(np.mean((r-Z@(Pz@r)).reshape(K,-1)**2,axis=1)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_nonlinear_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall rows → H2 cyclic upwind rows on both axes; the full affine calibration gives 3.29e-6 worst held-out pulse/shift/channel RMS in calibrated units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift, or within-batch class recall\",\n      \"rejected_reason\": \"The study has no relay states, stochastic evolution equation, or class labels. The applicable checks are nonlinear rosette response and continuous nuisance residuals.\"\n    }\n  ],\n  \"rationale\": \"The earlier audit compared only affine models. This check tests whether omitted channel interactions or saturation produce a reproducible error on held-out sweeps and independent tracer pulses. Revisit calibration only if both improve materially; report nuisance residuals by shift without changing the specified ridge projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6652317615095be2fe1527edaa76a17d5628e4cf8c1b26f92622459bbf415020",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32198.76,
+      "usage_known": true,
+      "prompt_tokens": 34383,
+      "cached_tokens": 14976,
+      "completion_tokens": 1261
+    }
+  ]
+}

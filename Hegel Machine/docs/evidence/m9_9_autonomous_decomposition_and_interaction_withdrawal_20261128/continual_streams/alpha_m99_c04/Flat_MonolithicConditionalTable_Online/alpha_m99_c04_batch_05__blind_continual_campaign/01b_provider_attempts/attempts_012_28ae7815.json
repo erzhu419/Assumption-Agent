@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "28ae78158cd44ed0b491d5a659f9d500",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:51.442039+00:00",
+  "ended_at_utc": "2026-11-27T20:05:33.860601+00:00",
+  "request_sha256": "5793ee1974ba63cf90e557b8f4221050249fc58ee7ec0e8de1dec4e5d24b9998",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65931,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38104,
+    "cached_tokens": 14976,
+    "completion_tokens": 1815
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/m99_stress.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nds, d = item['dataset'], item['campaign_diagnostics']\\ntr, te = ds['train'], ds['test']\\nt, dt = ds['eval_times'], ds['past_dt']\\ncal = ds['calibration_load_cells']\\nbridge = m._fit_bridge(cal)\\nb, mat, terms = bridge\\nL, raw = cal['true_channel_loads'], cal['bridge_raw']\\nraw_fit = b + L @ mat\\nfor ix, coef in terms:\\n    raw_fit += L[:, ix].prod(1)[:, None] * coef\\nerr = np.linalg.norm(raw_fit - raw, axis=1)\\nclean_abs = []\\nfor k in range(4):\\n    val = np.arange(len(L)) % 4 == k\\n    sub = dict(cal, true_channel_loads=L[~val], bridge_raw=raw[~val])\\n    bh, mh, th = m._fit_bridge(sub)\\n    held_fit = bh + L[val] @ mh\\n    for ix, coef in th:\\n        held_fit += L[val][:, ix].prod(1)[:, None] * coef\\n    good = np.linalg.norm(held_fit - raw[val], axis=1) < .01\\n    clean_abs.extend(np.abs(m._decode(raw[val][good], (bh, mh, th)).sum(1) - L[val][good].sum(1)))\\nprint('bridge sweep OOF clean total-load MedAE/p95/max, clean/total:', np.quantile(clean_abs, [.5,.95,1]), len(clean_abs), len(L))\\nfor group, name in [(tr, 'train'), (te, 'test'), (d, 'diagnostic')]:\\n    loads = m._decode(group['hold_channel_raw'], bridge)\\n    print(name, 'hold channel range', loads.min(), loads.max(), 'outside calibration channel bounds', np.sum((loads < L.min(0)) | (loads > L.max(0))))\\n\\nx, _ = m._features(tr, te)\\ntau, theta = m._fit(m._calibrate(tr, bridge), x, dt, t)\\nxd, _ = m._features(d, d)\\ndc = m._calibrate(d, bridge)\\nh = dc['hold_stress']\\nz = theta[2] + xd @ theta[3:]\\nlag = dt.sum() - np.cumsum(dt)\\nmem = dc['past_stress'] @ (-np.expm1(-dt[:, None] / tau) * np.exp(-lag[:, None] / tau))\\nA = np.vstack([np.column_stack([-np.expm1(-t[:, None] / tau), t]), np.r_[1/tau, 1.]])\\nbase = (h[:, None] * theta[:2]) @ A[:, :2].T\\ny = np.column_stack([d['strain_curves_obs'] - d['strain_0'][:, None], d['instant_rate_obs']])\\nlab = d['lab_id']\\nclean = np.isfinite(d['coupon_features_raw']).all(1)\\nscale = np.r_[np.full(len(t), .003), .004]\\n\\ndef report(name, p):\\n    e = np.abs(p - y)\\n    def pair(E):\\n        return [np.median(E[:, :-1]), np.median(E[:, -1])]\\n    print(name, 'worst labs', np.round(np.max([pair(e[lab == l]) for l in np.unique(lab)], axis=0), 6), 'complete', np.round(pair(e[clean]), 6), 'imputed', np.round(pair(e[~clean]), 6), 'worst horizon MedAE', round(np.median(e[:, :-1], axis=0).max(), 6))\\n\\nreport('artifact (diagnostic in-sample reference)', base + z[:, None] * (A @ m._CHAMBER_DRIFT))\\nfeatures = {'linear': [z], 'hold product': [z, z * h], 'drift square': [z, z*z], 'history contrast': [z, mem[:,0] - mem[:,1]], 'history interaction': [z, z * (mem[:,0] - mem[:,1])]}\\nfor a in (.25, 1., 4.):\\n    features[f'drift saturation a={a}'] = [z / (1 + a * z*z)]\\n    features[f'hold saturation a={a}'] = [z / (1 + a * ((h-3.5)/3.5)**2)]\\nfor name, feats in features.items():\\n    design = np.einsum('ij,kb->ikjb', np.array(feats).T, A).reshape(len(h), len(scale), -1)\\n    pred = np.empty_like(y)\\n    for l in np.unique(lab):\\n        fit = (lab != l) & clean\\n        M = (design[fit] / scale[None,:,None]).reshape(-1, design.shape[-1])\\n        v = ((y-base)[fit] / scale).ravel()\\n        p = least_squares(lambda u: M @ u - v, np.linalg.lstsq(M,v,rcond=None)[0], loss='soft_l1', f_scale=2).x\\n        pred[lab == l] = base[lab == l] + design[lab == l] @ p\\n    report(name, pred)\\n    if name == 'linear':\\n        for l in np.unique(lab):\\n            ix = (lab == l) & clean\\n            print('  lab', l, 'n complete', ix.sum(), 'signed curve/rate median', np.median((pred-y)[ix,:-1]), np.median((pred-y)[ix,-1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_stress.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (additional chamber interactions) -> H2 (history withdrawal with linear aligned drift); current leave-one-lab-out worst-lab median absolute errors are 0.00459 strain and 0.00668 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or balanced classification accuracy\",\n      \"rejected_reason\": \"This dataset has continuous strain and rate targets and no relay or class labels; signed residuals by held-out lab test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"A held-out sweep audit can expose bridge errors that in-sample calibration misses. Compare fixed rational and interaction alternatives on held-out labs and separate complete from imputed coupons. Revise calibration or chamber mechanics only if the corresponding audit exposes a material error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9b35186fb48c3fb340ae73900129f0aae3bb621743c4c125110ba5516fcf6534",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43522.28,
+      "usage_known": true,
+      "prompt_tokens": 38104,
+      "cached_tokens": 14976,
+      "completion_tokens": 1815
+    }
+  ]
+}

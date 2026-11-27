@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ede94f33e2b54bdfa23360067b2eaf2b",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:54.721081+00:00",
+  "ended_at_utc": "2026-11-27T19:44:24.234007+00:00",
+  "request_sha256": "2120b96a8cfc13ffa5dd39a985900a6e85dabb653b908ec1a8a9a558db478959",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44047,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31320,
+    "cached_tokens": 14976,
+    "completion_tokens": 1196
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; S,U=m._responses(s)\\npulses=item['campaign_diagnostics']; raw=np.stack([d['y_pulse_raw'].reshape(-1,4) for d in pulses]); target=np.stack([(S@d['w_pulse']).reshape(-1,4) for d in pulses]); K=len(s['mu_shifts'])\\nactual=np.stack([m._calibrate(dict(s,y_obs_raw=d['y_pulse_raw'])).reshape(-1,4) for d in pulses]); e=actual-target\\nprint('candidate worst pulse/shift/channel RMS', np.sqrt((e.reshape(len(pulses),K,-1,4)**2).mean(axis=2)).max())\\nfor model in ('diagonal affine','full affine'):\\n    sweep=[]; pulse=[]; w_delta=[]; field_delta=[]\\n    original=m._calibrate\\n    actual_out=m.solve_batch(s)\\n    for j in range(5):\\n        test=np.arange(len(x))%5==j\\n        scale=np.std(x[~test],axis=0)\\n        a=np.c_[np.ones(len(x)), x]\\n        if model=='full affine':\\n            b, M=np.split(np.linalg.lstsq(a[~test],y[~test],rcond=None)[0],[1],axis=0)\\n        else:\\n            b=np.empty((1,4)); M=np.zeros((4,4))\\n            for ch in range(4): b[0,ch], M[ch,ch]=np.linalg.lstsq(a[~test][:,[0,ch]],y[~test,ch],rcond=None)[0]\\n        inv=np.linalg.inv(M)\\n        de=(y[test]-b)@inv-x[test]\\n        sweep.append(np.sqrt((de**2).mean(axis=0)))\\n        ep=(raw-b)@inv-target\\n        pulse.append(np.sqrt((ep.reshape(len(pulses),K,-1,4)**2).mean(axis=2)))\\n        try:\\n            m._calibrate=lambda study: ((study['y_obs_raw'].reshape(-1,4)-b)@inv).ravel()\\n            out=m.solve_batch(s)\\n        finally: m._calibrate=original\\n        w_delta.append(np.linalg.norm(out['weights']-actual_out['weights'])/np.linalg.norm(actual_out['weights']))\\n        field_delta.append(np.linalg.norm(out['terminal_field']-actual_out['terminal_field'])/np.linalg.norm(actual_out['terminal_field']))\\n    print(model,'worst held-out sweep RMS by channel',np.max(sweep,axis=0),'worst pulse/shift/channel RMS',np.max(pulse),'worst relative output perturbations',max(w_delta),max(field_delta))\\nZ=s['Z_nuisance']; r=S@actual_out['weights']-m._calibrate(s); PZ=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); shifted=(r-Z@(PZ@r)).reshape(K,-1,4); print('projected observation RMS by shift and channel',np.sqrt((shifted**2).mean(axis=1)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall rows → H2 cyclic upwind rows on both axes; worst measured pulse-by-shift RMS is 1.68e-6 and the independent KKT gap is 5.411e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"The study specifies a steady transport inverse problem with continuous observations, no relay state, and no class labels. The relevant nuisance check is residual structure by shift and rosette channel after ridge projection.\"\n    }\n  ],\n  \"rationale\": \"The pulse evidence already resolves boundary closure. This focused audit checks whether small off-diagonal calibration terms help or hurt the worst measured channels and whether calibration uncertainty materially moves the weights or terminal field. Change the calibration only if the comparison shows a material improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0b14ddd7db58294039b3b98cacc09f2728dffa5e99ae3912573fae943ac44c8a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30626.61,
+      "usage_known": true,
+      "prompt_tokens": 31320,
+      "cached_tokens": 14976,
+      "completion_tokens": 1196
+    }
+  ]
+}

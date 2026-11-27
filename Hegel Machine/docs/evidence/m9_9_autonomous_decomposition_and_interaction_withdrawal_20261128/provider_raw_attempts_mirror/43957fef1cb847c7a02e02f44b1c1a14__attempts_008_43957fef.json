@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43957fef1cb847c7a02e02f44b1c1a14",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:22.735341+00:00",
+  "ended_at_utc": "2026-11-27T19:39:43.484398+00:00",
+  "request_sha256": "688dafa27d13be3a3a0faf95236a1bee354d198d9732cbd218e4de92827b9786",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36375,
+    "cached_tokens": 14976,
+    "completion_tokens": 788
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -i 's/^M=h-/M=h[:,None]-/' /tmp/route_m99.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/route_m99.py | grep -E 'alignment|worst lab|facility_init|alpha_m99|^ \\\\[' | grep -vE '^ \\\\[[^]]+\\\\]$' || true\\ncat > /tmp/route_focus.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from route_m99 import *\\ncomplete=~np.isnan(q).any(1)\\nfor name,x in X.items():\\n D=th[2]+x@th[3:]\\n for tag,F in [('linear',np.c_[np.ones(n),D]),('quadratic',np.c_[np.ones(n),D,D**2]),('signed saturation',np.c_[np.ones(n),D,np.tanh(D)]),('linear + branch memory',np.c_[np.ones(n),D,M])]:\\n  A=F[complete]; C=np.linalg.lstsq(A,Z[complete],rcond=None)[0]; E=(F@C)@T.T-Y\\n  worst=[]\\n  for a in np.unique(lab):\\n   fit=complete&(lab!=a); chk=complete&(lab==a); K=np.linalg.lstsq(F[fit],Z[fit],rcond=None)[0]; e=(F[chk]@K)@T.T-Y[chk]; worst.append(np.sqrt([np.mean(e[:,:-1]**2),np.mean(e[:,-1]**2)]))\\n  print(name,tag,'coeff',C.round(4).tolist(),'worst complete',np.max(worst,axis=0).round(5),'missing',np.sqrt([np.mean(E[~complete,:-1]**2),np.mean(E[~complete,-1]**2)]).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/route_focus.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: partial chamber memory and linear drift → H2: history withdrawal with drift routed into branch amplitudes; the fixed-times partial-memory model has worst-lab RMSE 0.0634 strain and 0.0571 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit additional history terms to all coupons\",\n      \"rejected_reason\": \"Missing-feature imputation can mimic a history effect. Fit on complete coupons first and measure the missing-feature error separately.\"\n    }\n  ],\n  \"rationale\": \"The corrected probe compares feature alignment conventions and tests whether nonlinear routing or retained history improves predictions for complete coupons from excluded labs. If the discrepancy is concentrated in incomplete coupons, prioritize the imputation convention rather than expanding the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dbff3e94708754a6defdb24f74aa690bea52db515045b60b471c06124c66f482",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21852.68,
+      "usage_known": true,
+      "prompt_tokens": 36375,
+      "cached_tokens": 14976,
+      "completion_tokens": 788
+    }
+  ]
+}

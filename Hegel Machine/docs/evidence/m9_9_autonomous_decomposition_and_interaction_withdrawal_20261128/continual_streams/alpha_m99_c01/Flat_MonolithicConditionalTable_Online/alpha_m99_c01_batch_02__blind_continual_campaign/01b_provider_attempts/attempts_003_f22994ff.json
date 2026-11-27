@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f22994ffedf6435f9092884d87e31da9",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:26.970397+00:00",
+  "ended_at_utc": "2026-11-27T19:43:57.991370+00:00",
+  "request_sha256": "09c71739ad02f6485e4aae876e1d79a82911f33845f54406d67e43baecbe1268",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24458,
+    "cached_tokens": 14976,
+    "completion_tokens": 1281
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"A=/tmp/hegel_continual_archive; sed -n '55,140p' \\\"$A/alpha_m99_c01_batch_01_solver.py\\\"; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | head -12; cat >/tmp/m99_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/alpha_m99_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,c=d['train'],d['test'],i['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; X,Xe=m._features(tr,te); br=m._bridge(d['calibration_load_cells']); p,h=m._loads(tr,br); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; tau,beta=m._fit(X,p,h,dt,t,y,r)\\n# Apply the deployed feature transform to diagnostic rows, without letting them set it.\\nxc=c['coupon_features_raw'].copy(); labs=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); xx=np.vstack([X,Xe]); impute=np.array([xx[~np.isfinite(raw[:,j]),j][0] for j in range(4)])\\nfor l in np.unique(labs):\\n rr=refs[labs==l]; sel=c['lab_id']==l; xc[sel]=(xc[sel]-np.median(rr.mean(0)))/np.median(rr.std(0))\\nxc=np.where(np.isfinite(xc),xc,impute); x_joint,xc_joint=m._features({k:np.concatenate((tr[k],te[k])) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')},c)\\npc,hc=m._loads(c,br); yc=c['strain_curves_obs']-c['strain_0'][:,None]; rc=c['instant_rate_obs']; A,B=m._design(tau,X,p,h,dt,t); ac,bc=m._design(tau,xc,pc,hc,dt,t); cy=ac@beta; cr=bc@beta\\nif __name__=='__main__':\\n print('tau,beta',tau,beta)\\n def fmt(e):return np.round(np.quantile(abs(e),[.5,.8,.95,1]),6)\\n print('absolute errors train (curve,rate)',fmt(A@beta-y),fmt(B@beta-r)); print('absolute errors chamber baseline',fmt(cy-yc),fmt(cr-rc));\\n if hasattr(m,'_chamber_response'):\\n  yp,rp=m._chamber_response(tau,beta,xc,hc,t); print('absolute errors chamber prior',fmt(yp-yc),fmt(rp-rc))\\n print('curve svd raw',np.linalg.svd(yc,compute_uv=False)); print('curve svd difference',np.linalg.svd(yc-cy,compute_uv=False));\\n E=np.column_stack((-np.expm1(-t[:,None]/tau),t)); coef=np.linalg.lstsq(E,yc.T,rcond=None)[0].T; print('curve temporal basis error',fmt(coef@E.T-yc),'rate tie error',fmt(coef@np.r_[1/tau,1]-rc));\\n base=np.column_stack((bc[:,:2]*tau*beta[:2],bc[:,2:]@beta[2:])); print('observed minus baseline by coeff, first rows:\\\\n',np.round((coef-base)[:14],4)); print('fit each response on linear load and feature inputs:')\\n F=np.c_[np.ones(len(hc)),hc,pc,xc]; fit=np.linalg.lstsq(F,coef,rcond=None)[0]; print(np.round(fit,5));print('linear regression errors',fmt(F@fit-coef)); print('load feature ranges',np.quantile(np.c_[hc,pc,xc],[0,.5,1],axis=0)); print('diagnostic feature transforms differ',np.max(abs(xc-xc_joint),axis=0));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated shared spectrum → H2 chamber-specific memory or drift; bridge affine calibration RMSE is at most 1.21×10⁻⁴ per channel, and chamber holdout error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible chamber regressor directly\",\"rejected_reason\":\"First test whether the shared relaxation basis explains chamber time dependence; only 24 chamber coupons are labeled.\"}],\"rationale\":\"Project chamber curves onto the shared time basis and compare their inferred rates with measured rates. A good temporal fit would localize the change to memory or drift amplitudes; a poor fit would motivate testing chamber time scales and interactions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "db493a4f424d46f328274edcced09cda287034ab0dc2eeeb606cee16f9a74756",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32031.94,
+      "usage_known": true,
+      "prompt_tokens": 24458,
+      "cached_tokens": 14976,
+      "completion_tokens": 1281
+    }
+  ]
+}

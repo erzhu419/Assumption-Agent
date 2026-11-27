@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed7b90596960474bb6afcfdd70e1543b",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:25.063161+00:00",
+  "ended_at_utc": "2026-11-27T19:50:06.717530+00:00",
+  "request_sha256": "9660cd77550771a0b44a7030e297f6618205582a51edf7bb7186427ab8ebe03d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 76827,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45028,
+    "cached_tokens": 14976,
+    "completion_tokens": 1786
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_compact.py <<'PY'\\nfrom m99_rank2 import *\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nb=np.r_[-np.expm1(-t/u),1/u]; y=(E+drift[:,None]*T)@b/(b@b); r=drift; z=r-theta[2]; lab=g['lab_id']; st=g['stratum']; n=len(y); one=np.ones(n); mask=~np.isnan(g['coupon_features_raw']).any(1)\\ndef fit(A, inds=None):\\n A=np.column_stack(A); inds=np.arange(n) if inds is None else np.flatnonzero(inds); e=y[inds]-A[inds]@np.linalg.lstsq(A[inds],y[inds],rcond=1e-10)[0]; return np.sqrt(np.mean(e*e))\\ndef cv(A):\\n A=np.column_stack(A); outs=[]\\n for ids in (lab,st):\\n  e=y.copy()\\n  for k in np.unique(ids):\\n   m=ids==k; e[m]-=A[m]@np.linalg.lstsq(A[~m],y[~m],rcond=1e-10)[0]\\n  outs.append(max(np.sqrt(np.mean(e[ids==k]**2)) for k in np.unique(ids)))\\n return outs\\nL=np.eye(4)[lab]; S=np.eye(3)[st]; c=[one,r,z*z,z**3];\\nfor name,A in [('cubic',c),('quadratic',c[:3]),('stratum offsets',[one,r,*S[:,1:].T]),('stratum gains',[one,r,*S[:,1:].T*z]),('stratum cubic',c+[z**j*S[:,k] for k in (1,2) for j in (0,1,2)]),('lab offsets',[one,r,*L[:,1:].T]),('lab gains',[one,r,*L[:,1:].T*z]),('channels + cubic',c+list(hc.T)),('channel contrast interactions',c+[(hc[:,k]-hc[:,0])*z**j for j in (0,1,2) for k in (1,2,3)])]:\\n print(name,'fit',fit(A),'complete',fit(A,mask),'worst',cv(A))\\nfor k in np.unique(lab):\\n m=lab==k; A=np.c_[one,z,z*z,z**3]; q=np.linalg.lstsq(A[m],y[m],rcond=None)[0]; print('lab',k,'fit coil',q, 'resid',np.c_[st[m],z[m],y[m]-A[m]@q])\\n# Search channel partitions, including instantaneous and branch-memory imbalances.\\nv={f'h{i}':hc[:,i] for i in range(4)}\\nfor j in range(2):\\n w=-np.expm1(-dt/taus[j])*np.exp(-(np.cumsum(dt[::-1])[::-1]-dt)/taus[j]); ch_gap=hc-np.einsum('nsc,s->nc',pc,w)\\n for i in range(4): v[f'g{j}{i}']=ch_gap[:,i]\\nfor k,C in [('h',hc)]+[(f'g{j}',np.column_stack([v[f'g{j}{i}'] for i in range(4)])) for j in range(2)]:\\n for i,j in combinations(range(4),2): v[f'{k}{i}-{k}{j}']=C[:,i]-C[:,j]; v[f'{k}{i}+{k}{j}']=C[:,i]+C[:,j]\\n for j in (1,2,3): v[f'{k}pair{j}']=2*(C[:,0]+C[:,j])-C.sum(1)\\n v[k+'sum']=C.sum(1); v[k+'spread']=C.std(1)\\nfor i in range(4):v[f'x{i}']=G[:,i]\\nfor i,j in combinations(range(4),2):v[f'x{i}-x{j}']=G[:,i]-G[:,j]\\nrank=[]\\nfor k,w in v.items():\\n for labl,A in [('gain',c+[w,w*z,w*z*z]),('cubic',c+[w,w*w,w**3]),('odd gate',c+[w/(1+w*w),r*w/(1+w*w)]),('even gate',c+[1/(1+w*w),r/(1+w*w)]),('compact',c+[w*z*z]),('interaction',c+[w*z,w*z*z])]:\\n  rank.append((max(cv(A)),fit(A),fit(A,mask),k,labl))\\nprint('best by group cv',sorted(rank)[:12]); print('best fit',sorted(rank,key=lambda k:k[1])[:8])\\n# See whether residual is an independent function of drift alone.\\nA=np.c_[one,z,z*z,z**3]; q=np.linalg.lstsq(A,y,rcond=None)[0]; print('cubic',q); print('ordered drift, observed, cubic residual, lab, stratum, missing'); o=np.argsort(r); print(np.c_[r,y,y-A@q,lab,st,~mask][o])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_compact.py > /tmp/m99_compact.txt && sed -n '/cubic fit/,$p' /tmp/m99_compact.txt\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine transient amplitude → H2 compact nonlinear amplitude; the affine model's leave-one-coupon-out amplitude RMSE is 0.0621, and the tested single-index nonlinear fits have worst-lab RMSE of at least 0.127.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the lowest in-sample sparse polynomial\",\"rejected_reason\":\"It was selected from many candidate terms on only 24 coupons; the reported leave-one-out errors do not include term selection.\"}],\"rationale\":\"Test whether the remaining amplitude error follows a load partition, a branch-memory imbalance, or a group shift. Compare worst held-out lab and stratum errors; retain an interaction only if it predicts outside the slice where it was fitted.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "02b12fe0625fede7a95606402b2748fc9f41f9c0e0986a30f2757591fa5a5a20",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42801.85,
+      "usage_known": true,
+      "prompt_tokens": 45028,
+      "cached_tokens": 14976,
+      "completion_tokens": 1786
+    }
+  ]
+}

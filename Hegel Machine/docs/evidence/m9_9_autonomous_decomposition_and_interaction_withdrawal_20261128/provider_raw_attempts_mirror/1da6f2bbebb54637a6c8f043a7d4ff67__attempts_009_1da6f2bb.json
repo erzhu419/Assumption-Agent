@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1da6f2bbebb54637a6c8f043a7d4ff67",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:45.330128+00:00",
+  "ended_at_utc": "2026-11-27T19:52:10.442152+00:00",
+  "request_sha256": "3f401cd89ff5de9437e7ebaff7226a2ee73f1a71853b86e5b6b542d5ef15b986",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57995,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39487,
+    "cached_tokens": 14976,
+    "completion_tokens": 995
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== $f\\\"; sed -n '/^def _axis_operator/,/^def _forward/p' \\\"$f\\\"; done; python3 -I - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_manifest.json'; a=json.load(open(p)); print(str(a)[:2200]); a=json.load(open('/holdout_task/public_asset_index.json')); print('asset keys',list(a)); print({k:v for k,v in a.items() if k!='files'})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport glob,importlib.util,sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp'); from m99_rosette import _calibrated_observations,_fit_rosette,_rosette_design\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; y=_calibrated_observations(s); c=s['sensor_calibration_sweeps']; raw=c['raw_rosette']; coeff=_fit_rosette(c); pred=np.column_stack([_rosette_design(c['ref_rosette'],j)@coeff[j] for j in range(4)]); print('clean calibration max',np.max(abs(pred-raw)[abs(raw)<8]),'calibrated y range',y.min(),y.max()); Z=s['Z_nuisance']; P=np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); print('sensor edges',[(s['sensor_ij'][:,i]==edge).sum() for i,edge in ((0,0),(0,s['nx']-1),(1,0),(1,s['ny']-1))]);\\nfor p in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n spec=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); S,U=m._forward(s); A=P@S; b=P@y; H=A.T@A+s['source_ridge']*np.eye(A.shape[1]); w,nu=m._box_simplex(H,-A.T@b,s['u_box'],s['total_budget']); r=(A@w-b).reshape(len(s['mu_shifts']),-1); q=y-S@w; rr=q-Z@np.linalg.lstsq(Z,q,rcond=None)[0]; print(p.rsplit('/',1)[-1], 'w',np.round(w,4),'per-shift RMSE',np.sqrt((r*r).mean(1)),'unpenalized nuisance RMSE',np.sqrt(np.mean(rr*rr)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 prior wall stencil persists → H2 the calibrated public observations distinguish candidate boundary operators; clean-sweep held-out RMSE was at most 1.4e-5 per channel.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Subtract the public telemetry from the archive trace\",\"rejected_reason\":\"The public auxiliary telemetry has four columns and the apparatus trace has eight; they are not directly comparable.\"}],\"rationale\":\"Verify calibration inversion and compare the three archived wall operators on the same calibrated measurements. If none explains the observations across shifts, test mixed or modified boundary rows rather than selecting the least-bad prior.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e4ee73614e993158065bf810c643965a395588cc48e5df99f9ede30bc7218551",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26243.7,
+      "usage_known": true,
+      "prompt_tokens": 39487,
+      "cached_tokens": 14976,
+      "completion_tokens": 995
+    }
+  ]
+}

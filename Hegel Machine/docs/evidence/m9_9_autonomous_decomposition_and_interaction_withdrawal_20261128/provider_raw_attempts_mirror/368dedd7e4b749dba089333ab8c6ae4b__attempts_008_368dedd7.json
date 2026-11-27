@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "368dedd7e4b749dba089333ab8c6ae4b",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:07:12.724280+00:00",
+  "ended_at_utc": "2026-11-27T20:07:37.164520+00:00",
+  "request_sha256": "981f04f74cbc285db1970b95cec3b5c307309c69cb7c74167fa3e8f2eeef10a3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 45262,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28838,
+    "cached_tokens": 13696,
+    "completion_tokens": 939
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']\\ncal=m._up.calibrate_upstream(d); tr,te=cal['train'],cal['test']; dn=m._dn\\ndt,t=cal['past_dt'],cal['eval_times']; n=len(tr['lab_id']); x=dn._features(tr,te)\\npast,hold,cov=dn._coupon_inputs(tr,x[:n]); obs=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    test=tr['lab_id']==lab; train=~test\\n    taus,theta=dn._fit((past[train],hold[train],cov[train]),dt,t,obs[train],rate[train]); assert 0.05<taus[0]<taus[1]<25\\n    z=np.zeros((test.sum(),2))\\n    for k,w in enumerate(dt):\\n        a=-np.expm1(-w/taus); z=(1-a)*z+a*past[test,k,None]\\n    gap=hold[test,None]-z; drift=cov[test]@theta[2:]; branch=gap*theta[:2]\\n    curves=branch@(-np.expm1(-t[:,None]/taus)).T+drift[:,None]*t\\n    e=np.abs(curves-obs[test]); r=np.abs(branch@(1/taus)+drift-rate[test])\\n    print('held lab',lab,'n',test.sum(),'taus',taus.round(4),'worst horizon median AE',np.median(e,axis=0).max(),'strain P90 AE',np.quantile(e,.9),'rate median/P90 AE',np.quantile(r,[.5,.9]))\\no=m.solve_batch(d); taus=o['estimated_taus']; theta=o['hereditary_weights']; _,h,c=dn._coupon_inputs(te,x[n:]); step=1e-6\\norigin,_=dn._chamber(taus,theta,h,c,np.array([0.])); pulse,_=dn._chamber(taus,theta,h,c,np.array([step])); deriv=(pulse[:,0]-origin[:,0])/step\\nassert np.all(origin==0) and np.allclose(deriv,o['initial_rate_pred'],rtol=1e-5,atol=1e-6)\\nprint('max chamber derivative mismatch',np.max(np.abs(deriv-o['initial_rate_pred'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust benchtop material fit → H2 telemetry-matched chamber preload reset and mixed drift; both schema checks pass, and the largest calibration-path difference is 0.000337 for strain and 0.000206 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema verification alone\",\n      \"rejected_reason\": \"Schema validation cannot detect a lab-dependent material fit or disagreement between the chamber curve and its reported initial rate.\"\n    }\n  ],\n  \"rationale\": \"Hold out each lab’s response measurements to test material-fit stability, and check the chamber rate against the curve derivative on every deployment coupon. A lab-specific failure would warrant revisiting the fit; a derivative mismatch would warrant correcting the chamber equation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8e6cfbda75ef55282306f385d43e65782f1040d36561b03a3cba3830336995c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25598.45,
+      "usage_known": true,
+      "prompt_tokens": 28838,
+      "cached_tokens": 13696,
+      "completion_tokens": 939
+    }
+  ]
+}

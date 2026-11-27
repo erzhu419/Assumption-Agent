@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6398192cde164ae39b5263a381700d04",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:22.126714+00:00",
+  "ended_at_utc": "2026-11-27T19:56:49.556997+00:00",
+  "request_sha256": "e8d93b6f6e1c1b98359f3ef33a25b044aba9914e01d71fe275e1a0f943bdd5f5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42353,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30509,
+    "cached_tokens": 14976,
+    "completion_tokens": 1112
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\narchive = Path('/tmp/hegel_continual_archive')\\nnew = (archive / 'alpha_m99_c03_batch_03_solver.py').read_text()\\nold = (archive / 'alpha_m99_c03_batch_01_solver.py').read_text()\\nchamber = old[old.index('def _chamber('):old.index('def solve_batch(')]\\nstart = new.index('def solve_batch(')\\nnew = new[:start] + chamber + new[start:]\\nstart = new.index('    # Both apparatus indicators')\\nnew = new[:start] + '''    # The latest precursor trace matches the batch 01 chamber setting.\\n    hold = _axial(test['hold_channel_raw'], bridge)\\n    curve, rate = _chamber(taus, theta, hold, x[n:], t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\nPath('batch_solver.py').write_text(new)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; n=len(tr['lab_id']); x=m._features(tr,te); b=m._calibration(d['calibration_load_cells']); a=m._coupon_inputs(tr,x[:n],b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; taus,theta=m._fit(a,dt,t,y,r); print('full fit',taus,theta)\\nfor lab in np.unique(tr['lab_id']):\\n val=tr['lab_id']==lab; fit=~val\\n tv,wv=m._fit(tuple(q[fit] for q in a),dt,t,y[fit],r[fit]); c,v=m._design(tv,tuple(q[val] for q in a),dt,t); ec=c@wv-y[val]; er=v@wv-r[val]; print('held-out lab',lab,'n',sum(val),'taus',tv,'curve MAD',np.nanmedian(abs(ec)),'curve p90',np.nanquantile(abs(ec),.9),'rate median AE',np.nanmedian(abs(er)),'rate p90',np.nanquantile(abs(er),.9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and baseline deployment -> H2 cyclic cubic bridge and batch 01 deployment law; worst-channel bridge OOF RMSE fell from 0.274 to 0.000113.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine four-channel calibration adequately represents the active bridge.\",\n    \"empirical_witness\": \"On ordinary calibration rows, worst-channel OOF RMSE is 0.274 for affine versus 0.000113 for cyclic quadratic cross-talk plus self cubic; the saturated quadratic alternative reaches 0.000131.\",\n    \"causal_blanket_diagnosis\": \"The bridge introduces nonlinear distortion before the physical axial load is summed; material fitting cannot correct that observation map consistently.\",\n    \"sublated_pivot\": \"Fit the sparse nonlinear bridge on the active calibration sweeps and invert it before fitting the hereditary law.\",\n    \"risk_kind\": \"calibration_model_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a fully quadratic bridge basis\",\n      \"rejected_reason\": \"The extra terms worsen held-out error and are not supported by these sweeps.\"\n    },\n    {\n      \"option\": \"Use the batch 03 deployment law\",\n      \"rejected_reason\": \"The latest precursor matches the earlier batch 01 trace, not the precursor associated with baseline deployment.\"\n    }\n  ],\n  \"rationale\": \"Build the first candidate by combining the supported bridge model with the archived chamber law. Isolated schema validation catches nonfinite or malformed outputs; held-out-lab curve and rate errors will show whether the material fit needs revision independently of the blind chamber transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b1e6d13eabab7622035f884dda4cd4f1132b134ba66513797e0b5acf3944388a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28577.26,
+      "usage_known": true,
+      "prompt_tokens": 30509,
+      "cached_tokens": 14976,
+      "completion_tokens": 1112
+    }
+  ]
+}

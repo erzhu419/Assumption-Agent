@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1922301eac1441d59e41aadf502dde3e",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:40.570786+00:00",
+  "ended_at_utc": "2026-11-27T19:58:02.445960+00:00",
+  "request_sha256": "7b9ece18d95b2104d3c087c0af54ed552a8246e5dd51ada8f1e93d49d2fc25f5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59585,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36053,
+    "cached_tokens": 14976,
+    "completion_tokens": 751
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nsed -n '33,88p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\na=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(a); a.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; B=m._fit_rosette(x,y); e=y-m._rosette_design(x)@B\\nprint('calibration rows',len(x),'single-bank slices',[(str(k),[(str(a),np.shape(b)) for a,b in v.items()] if isinstance(v,dict) else np.shape(v)) for k,v in c['single_bank_sweeps'].items()]); print('coefficient array',B.shape,'largest weak coefficients',np.sort(np.abs(B[(np.abs(B)>0)&(np.abs(B)<.03)]))[-8:]); print('nominal per-channel residual MAD',np.median(abs(e-np.median(e,axis=0)),axis=0)); print('gross error locations',np.argwhere(abs(e)>.005).tolist()); print('nuisance singular values',np.linalg.svd(s['Z_nuisance'],compute_uv=False)); print('ridge suppression on nuisance directions',s['nuisance_ridge']/(np.linalg.svd(s['Z_nuisance'],compute_uv=False)**2+s['nuisance_ridge']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Full rosette fit → test whether structured channel terms could reduce the remaining calibration error; the verified sealed-wall candidate has worst held-shift RMSE 0.010252.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the completed schema and KKT checks\",\n      \"rejected_reason\": \"Those checks already passed on the exact candidate. The open question is whether independently excited banks reveal weak, removable calibration terms.\"\n    }\n  ],\n  \"rationale\": \"Inspect coefficient scales and single-bank support to distinguish a reachable calibration error from noise. If the data support a reduced basis, test it on held-out sweeps before changing the solver. Quantify nuisance suppression directly because this study has no class labels or relay states.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d02497cc0e4e5db0019a89c915947087fcce2eae18f7a1f5e4d599d0bfdb1175",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21832.92,
+      "usage_known": true,
+      "prompt_tokens": 36053,
+      "cached_tokens": 14976,
+      "completion_tokens": 751
+    }
+  ]
+}

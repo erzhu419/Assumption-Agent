@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d16b8c3aafcb4f7e99a29d5f5dc910c5",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:11.168890+00:00",
+  "ended_at_utc": "2026-11-27T19:48:47.588355+00:00",
+  "request_sha256": "adf8a5703b607c727bacb474623d491bf7a5ca0cdd8e7df7494beed99aeb5837",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43406,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32705,
+    "cached_tokens": 14976,
+    "completion_tokens": 1598
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_wall_probe.py <<'PY'\\nimport sys,pickle,importlib.util,itertools\\nimport numpy as np\\nfrom scipy.sparse import diags,eye,kron\\nfrom scipy.sparse.linalg import splu\\nfrom scipy.optimize import root\\nfrom m99_cal_probe import design,fit\\np=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/beta_m99_c01_batch_02_solver.py'); prior=importlib.util.module_from_spec(p);p.loader.exec_module(prior)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; x=s['sensor_calibration_sweeps']['ref_rosette']; raw=s['sensor_calibration_sweeps']['raw_rosette']; a=design(x,'pair2'); b=fit(a,raw); good=np.max(abs(a@b-raw),axis=1)<1e-3; a=np.delete(a,[5,6,7,8],axis=1); b=np.linalg.lstsq(a[good],raw[good],rcond=None)[0]\\ndef cal(v): return np.delete(design(v,'pair2'),[5,6,7,8],axis=1)@b\\ny=[]\\nfor target in s['y_obs_raw'].reshape(-1,4):\\n sol=root(lambda v:cal(v[None])[0]-target,np.linalg.solve(b[1:5].T,target-b[0])); assert np.max(abs(sol.fun))<1e-8; y.extend(sol.x)\\ny=np.array(y); print('clean sweeps',good.sum(),'worst inlier',np.max(abs(a[good]@b-raw[good])),'calibrated range',y.min(),y.max())\\nshape=(s['nx'],s['ny']); nn=np.prod(shape); ix,jx=s['sensor_ij'].T; idx=ix+shape[0]*jx; modes=s['source_modes']; rhs=np.stack([v.ravel(order='F') for v in modes],axis=1)\\ndef axis(axis,n,wall):\\n k=s['kappa_'+axis]; v=s['vel_'+axis]; h=s['L'+axis]/(n-1); robin=s['robin_'+axis]\\n if wall=='P': return prior._axis(k,v,h)\\n out=prior._axis(k,v,h).tolil()\\n for i,j in [(0,1),(n-1,n-2)]:\\n  out[i,:]=0; out[i,j]=-k[i]/h**2; out[i,i]=k[i]/h**2+(robin/h if wall=='R' else 0)\\n return out.tocsc()\\ndef forward(walls):\\n ax,ay=[axis(d,n,w) for d,n,w in zip('xy',shape,walls)]; op=(kron(eye(shape[1]),ax)+kron(ay,eye(shape[0]))+diags(s['V_reaction_2d'].ravel(order='F'))).tocsc(); mats=[splu(op+mu*eye(nn,format='csc')).solve(rhs) for mu in s['mu_shifts']]; return np.vstack([m[idx] for m in mats])\\nz=s['Z_nuisance']; rho=s['nuisance_ridge']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']\\ndef estimate(S,tr,ridge):\\n Z=z[tr]; D=S[tr]; Y=y[tr]; p=np.linalg.solve(Z.T@Z+rho*np.eye(Z.shape[1]),Z.T); T=D-Z@(p@D); r=Y-Z@(p@Y); w,nu=prior._box_simplex(T.T@T+ridge*np.eye(len(modes)),-T.T@r,cap,budget); return w,p@(Y-D@w)\\nrows=np.arange(len(y)); masks=[(rows%len(idx))//4==k for k in range(len(idx)//4)]; shifts=[rows//len(idx)==k for k in range(len(s['mu_shifts']))]; allrows=rows>=0\\nfor walls in itertools.product('RNP',repeat=2):\\n S=forward(walls); outputs=[]\\n for r in (0,ridge):\\n  w,g=estimate(S,allrows,r); rmse=lambda e:np.sqrt(np.mean(e**2)); cv=[]\\n  for group in (masks,shifts):\\n   errs=[]\\n   for te in group:\\n    wt,gt=estimate(S,~te,r); errs.append(rmse(S[te]@wt+z[te]@gt-y[te]))\\n   cv.append(max(errs))\\n  outputs.append(np.round([rmse(S@w+z@g-y),*cv],6))\\n print(''.join(walls),*outputs)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_wall_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive univariate rosette -> H2 affine mixing with self-cubics and pairwise interactions; worst-channel held-out 90th-percentile absolute error fell from 0.51849 to 0.00002 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Affine mixing and separate univariate channel curves suffice to calibrate the rosette.\",\n    \"empirical_witness\": \"Adding pairwise products reduced worst-channel held-out p90 error from 0.51849 to 0.00002; three corrupted sweep rows remain distinct from the clean residuals.\",\n    \"causal_blanket_diagnosis\": \"The raw output of a channel depends on simultaneous reference inputs to other channels, not just its own input and linear crosstalk.\",\n    \"sublated_pivot\": \"Fit a robust cross-channel cubic-plus-pairwise calibration, then compare wall stencils on held-out rosettes and shifts.\",\n    \"risk_kind\": \"omitted_sensor_interactions\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the wall stencil from the in-sample objective alone\",\n      \"rejected_reason\": \"Source weights and nuisance terms can compensate for an incorrect stencil; held-out rosettes and shifts test whether that compensation generalizes.\"\n    }\n  ],\n  \"rationale\": \"The latest archive trace has neither of the earlier elevated telemetry channels. Compare Robin, zero-leak, and periodic endpoints on each axis; if the archive-favored setting fails held-out prediction, revisit the telemetry interpretation before committing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "a3f6b0c59bbc465e63d6b8cb90da5bceeed3728006ccacd9cd53e16bd6a93467",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38700.68,
+      "usage_known": true,
+      "prompt_tokens": 32705,
+      "cached_tokens": 14976,
+      "completion_tokens": 1598
+    }
+  ]
+}

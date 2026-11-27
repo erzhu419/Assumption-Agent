@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01547754dbd04d5188d81df5ece5e3dd",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:46.839996+00:00",
+  "ended_at_utc": "2026-11-27T19:48:08.524289+00:00",
+  "request_sha256": "269f639ab38b0b8e28190503fb45f8ac0bb2a132051ed5984742b8179bd534e2",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56620,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32854,
+    "cached_tokens": 13696,
+    "completion_tokens": 743
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat _verified_upstream.py batch_solver.py validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport json,pickle,sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward\\nwith open('public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nwith open('_upstream_param_payload.json') as f: pay=json.load(f)\\ns=item['study']; S,_=_forward(s); m=len(s['sensor_ij']); blocks=[]\\nfor pulse in item['campaign_diagnostics']:\\n    p=dict(s,y_obs_raw=pulse['y_pulse_raw'])\\n    prediction=S@pulse['w_pulse']\\n    blocks.append([np.sqrt(np.mean((prediction-calibrate_upstream(p,params)['y_obs_raw']).reshape(-1,m)**2,axis=1)) for params in (None,pay)])\\nprint('Worst real pulse RMS by calibration path and shift:',np.max(blocks,axis=0))\\nassert np.max(blocks)<1e-5\\nz=s['Z_nuisance']; pr=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); A=S-z@(pr@S)\\nprint('Projected inverse design shape and rank:',A.shape,np.linalg.matrix_rank(A))\\nprint('Minimum objective Hessian eigenvalue:',np.linalg.eigvalsh(A.T@A+s['source_ridge']*np.eye(A.shape[1]))[0])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall stencils -> H2 periodic upwinding on both axes; H2 won all 9 joint holdouts, with worst RMS 5.15e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear, relay, or classification terms\",\n      \"rejected_reason\": \"The supplied measurements are continuous and the specified forward map is linear in source weights; these terms do not correspond to a measured mechanism.\"\n    }\n  ],\n  \"rationale\": \"Inspect whether the batch wrapper and staged adapter implement distinct calibration contracts, then measure their tolerance margins by shift and check whether nuisance projection removes source directions. A calibration contract mismatch would warrant a wrapper change; rank loss would warrant checking identifiability before altering the specified regularization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "da04e721ca7f91f9d920df4f1616dc88a06019f6d3debf3a15882dc2dce62667",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21641.8,
+      "usage_known": true,
+      "prompt_tokens": 32854,
+      "cached_tokens": 13696,
+      "completion_tokens": 743
+    }
+  ]
+}

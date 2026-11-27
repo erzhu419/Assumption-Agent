@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9356afb6861c4f7eae4f665972ad9423",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:36.312119+00:00",
+  "ended_at_utc": "2026-11-27T19:53:15.118735+00:00",
+  "request_sha256": "7e8908fd6cd6c8672224fc0de37d58688ca1b13284d48bb961c6fedd5991f9f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37153,
+    "cached_tokens": 5504,
+    "completion_tokens": 1656
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_chamber.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['dataset']\\ncal = d['calibration_load_cells']\\nL, R = cal['true_channel_loads'], cal['bridge_raw']\\nA = m._bridge_basis(L)\\nJ = [j for k in (2, 3) for j in itertools.combinations_with_replacement(range(4), k)]\\nC = np.column_stack([np.ones(len(L)), L, *[np.prod(L[:, j], axis=1) for j in J]])\\nQ = np.column_stack([L[:, i] + s * L[:, j] for i, j in itertools.combinations(range(4), 2) for s in (-1, 1)])\\n# Prespecified splits: lower amplitudes to upper amplitudes, and mixed loads to single-axis sweeps.\\namp = np.max(abs(L), axis=1)\\nfor name, hold in [('high amplitude', amp >= np.quantile(amp, .75)), ('single-axis', np.count_nonzero(L, axis=1) == 1)]:\\n    train = ~hold\\n    b = m._fit_bridge(L[train], R[train])\\n    forward = A @ b\\n    e = np.linalg.norm(R - forward, axis=1)\\n    good = e < .002\\n    tr, te = train & good, hold & good\\n    assert te.any() and np.linalg.matrix_rank(A[tr]) == A.shape[1]\\n    inv = m._invert_bridge(R[te], b)\\n    print(name, 'clean/held', int(te.sum()), int(hold.sum()), 'clean load-sum RMSE/max', np.sqrt(np.mean((inv-L[te]).sum(1)**2)), np.max(abs((inv-L[te]).sum(1))))\\n    # Compare a dense cubic and tangent terms for denominators 1 + a*(load_i +/- load_j)^2.\\n    # Compete on held forward residuals; no alternative is selected on the held measurements.\\n    def rms(a):\\n        return np.sqrt(np.mean(np.sum(a*a, axis=1)))\\n    dense = C @ np.linalg.lstsq(C[tr], R[tr], rcond=None)[0]\\n    rat = np.column_stack([A, *(forward[:, k, None] * Q**2 for k in range(4))])\\n    tangent = rat @ np.linalg.lstsq(rat[tr], R[tr], rcond=1e-7)[0]\\n    print('  held forward RMS sparse/dense/rational-tangent', *(rms(v[te] - R[te]) for v in (forward, dense, tangent)), 'gross residuals', e[hold & ~good].round(3))\\n\\ntr, te = d['train'], d['test']\\nx, _ = m._features(tr, te)\\nb = m._bridge(cal)\\nlabs = tr['lab_id']\\nfor lab in np.unique(labs):\\n    keep = labs != lab\\n    fit = {k:v[keep] for k,v in tr.items() if isinstance(v,np.ndarray) and v.ndim and len(v)==len(labs)}\\n    taus, theta = m._material(fit, b, x[keep], d['past_dt'], d['eval_times'])\\n    past, hold = m._loads(tr, b)\\n    curve, rate = m._basis(taus, past[~keep], hold[~keep], x[~keep], d['past_dt'], d['eval_times'])\\n    ec = tr['strain_curves_obs'][~keep] - tr['strain_0'][~keep,None] - curve @ theta\\n    er = tr['instant_rate_obs'][~keep] - rate @ theta\\n    print('held lab', lab, 'signed curve/rate medians and rate median absolute error', np.median(ec), np.median(er), np.median(abs(er)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py && cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 robust sparse cubic bridge with baseline chamber dynamics; worst clean-sweep held-out load RMSE is 0.000307, and the maximum leave-one-lab-out relaxation-time shift is 1.75%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification recall, and stochastic drift operators\",\n      \"rejected_reason\": \"The dataset contains continuous strain and rate observations under deterministic step histories, with no relay states or classification labels.\"\n    }\n  ],\n  \"rationale\": \"Amplitude- and sweep-block holdouts can expose calibration errors missed by random folds. A consistent gain from extra polynomial or rational terms would justify revisiting the bridge; signed held-lab residuals can reveal a nuisance offset hidden by absolute errors. The audit leaves the verified artifact unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "fa456a258eb4be245291e92340541e5415ba43a8bd4083997e7a0817c5dc28a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39926.19,
+      "usage_known": true,
+      "prompt_tokens": 37153,
+      "cached_tokens": 5504,
+      "completion_tokens": 1656
+    }
+  ]
+}

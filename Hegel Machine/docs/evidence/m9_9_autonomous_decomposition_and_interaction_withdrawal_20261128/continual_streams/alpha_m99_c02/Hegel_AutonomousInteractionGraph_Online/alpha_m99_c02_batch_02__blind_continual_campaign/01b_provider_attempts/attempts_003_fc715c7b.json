@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc715c7b4b524f45a888657c2bba3fd8",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:27.100948+00:00",
+  "ended_at_utc": "2026-11-27T19:43:52.818947+00:00",
+  "request_sha256": "b66ab57bf07d3444120443b1c1b5ecfb926f6702dba119c1953afcab8fda95cb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24120,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22344,
+    "cached_tokens": 5504,
+    "completion_tokens": 1002
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np,runpy\\ns=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py'); items=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('items',len(items))\\nfor i in items:\\n d=i['dataset']; tr=d['train']; te=d['test']; g=i['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; x,xt=s['_features'](tr,te); b=s['_bridge'](d['calibration_load_cells']); print('keys',list(i),list(d),'t',t,'dt',dt,'bridge',b); a,h=s['_material'](tr,b,x,dt,t); print('material',a,h)\\n # Use the train+deployment panels to put diagnostics in the deployment coordinates.\\n allp={k:np.concatenate([tr[k],te[k]]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}; print('labs',*[np.unique(q['lab_id'],return_counts=True) for q in (tr,te,g)]);\\n X=g['coupon_features_raw'].copy(); Z=np.vstack([x,xt]); lab=allp['lab_id']; cells=np.c_[lab,allp['stratum']]; _,inv,cnt=np.unique(cells,axis=0,return_inverse=True,return_counts=True); w=1/cnt[inv]\\n for L in np.unique(g['lab_id']):\\n  R=allp['ref_coupons'][lab==L]; X[g['lab_id']==L]=(X[g['lab_id']==L]-np.median(R.mean(0)))/np.median(R.std(0))\\n for j in range(4):\\n  good=np.isfinite(allp['coupon_features_raw'][:,j]); X[~np.isfinite(X[:,j]),j]=np.average(Z[good,j],weights=w[good])\\n for q,u in ((tr,x),(g,X)):\\n  p,l=s['_loads'](q,b); A,B=s['_basis'](a,p,l,u,dt,t); y=q['strain_curves_obs']-q['strain_0'][:,None]; r=q['instant_rate_obs']; ec=y-A@h; er=r-B@h; print('residual quantiles by time',np.round(np.quantile(abs(ec),[.5,.9,1],axis=0),6)); print('rate quantiles',np.quantile(abs(er),[.5,.9,1])); T=np.c_[-np.expm1(-t[:,None]/a),t]; c=np.linalg.lstsq(T,ec.T,rcond=None)[0].T; print('fit residual 3-mode quantiles',np.quantile(abs(ec-c@T.T),[.5,.9,1])); print('residual mode coefficients',np.round(c[:8],5)); print('stress range',p.min(),p.max(),l.min(),l.max()); print('feature missing',np.isnan(q['coupon_features_raw']).sum(axis=0))\\n aux=te['aux_chamber_telemetry']; print('aux range/first',aux.min(0),aux.max(0),aux[:3]); print('cal single fields',{k:np.shape(v) for k,v in d['calibration_load_cells']['single_channel_sweeps'].items()})\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(row['facility_telemetry_trace']); print('log', {k:v for k,v in row.items() if k!='facility_telemetry_trace'},a.shape,np.round(a.mean(0),4),a[-1])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 baseline hereditary law -> H2 chamber-specific corrections; residual validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure baseline errors on benchtop and chamber coupons separately. If chamber residuals remain after projection onto the two relaxation amplitudes and linear drift, test altered time dependence rather than only recalibrating amplitudes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "4482cf76e7c078629746d397a756bd31e3c7f32b54de02c342a7cdc205a25870",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26809.91,
+      "usage_known": true,
+      "prompt_tokens": 22344,
+      "cached_tokens": 5504,
+      "completion_tokens": 1002
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c133532f0d847aba9bc1d2bd3fe9a98",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:17.433400+00:00",
+  "ended_at_utc": "2026-11-27T19:40:57.858428+00:00",
+  "request_sha256": "6beff18df64b4f9e8eb1226f6797919e0acf16b2f631c7b187679c6d4b2ec1f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35152,
+    "cached_tokens": 14976,
+    "completion_tokens": 1790
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nimport ast\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nnode = next(n for n in ast.parse(s).body if isinstance(n, ast.FunctionDef) and n.name == '_calibrated_observations')\\nlines = s.splitlines(keepends=True)\\nlines[node.lineno-1:node.end_lineno] = ['''def _calibrated_observations(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    ref_mean, raw_mean = ref.mean(axis=0), raw.mean(axis=0)\\n    centered = ref - ref_mean\\n    # This campaign's banks respond independently; fit their gains and offsets.\\n    gain = np.sum(centered * (raw - raw_mean), axis=0) / np.sum(centered**2, axis=0)\\n    measured = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return ((measured - raw_mean) / gain + ref_mean).ravel()\\n''']\\nPath('/tmp/m99_diagonal.py').write_text(''.join(lines))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nold = load('old', '/holdout_task/batch_solver.py')\\nnew = load('new', '/tmp/m99_diagonal.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; S, U = old._forward(s)\\n    def worst(mod):\\n        e = np.stack([mod._calibrated_observations({**s, 'y_obs_raw':p['y_pulse_raw']})-S@p['w_pulse'] for p in item['campaign_diagnostics']])\\n        e = e.reshape(len(e), len(s['mu_shifts']), -1, 4)\\n        return np.sqrt(np.mean(e**2, axis=2)).max()\\n    print('Worst calibrated pulse/shift/bank RMS, full affine -> bank diagonal:', worst(old), worst(new))\\n    assert worst(new) < worst(old)\\n    a, b = old.solve_batch(s), new.solve_batch(s)\\n    for key in ('weights', 'terminal_field'):\\n        print(key, 'relative change', np.linalg.norm(b[key]-a[key])/np.linalg.norm(a[key]))\\n    cal = s['sensor_calibration_sweeps']; ref, raw = cal['ref_rosette'], cal['raw_rosette']\\n    gains, offsets = np.asarray([np.polyfit(ref[:,j], raw[:,j], 1) for j in range(4)]).T\\n    y = ((s['y_obs_raw'].reshape(-1,4)-offsets)/gains).ravel()\\n    Z = s['Z_nuisance']; P = np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n    w = b['weights']; cap = s['u_box']; budget = s['total_budget']; cert = b['kkt_certificate']\\n    D = P@S; e = D@w-P@y; g = D.T@e+s['source_ridge']*w\\n    obj = (e@e+s['source_ridge']*(w@w))/2\\n    nu = cert['nu_sum']; lo = np.asarray(cert['lam_lower']); hi = np.asarray(cert['lam_upper'])\\n    stationarity = np.max(np.abs(g-nu-lo+hi)); gap = abs(obj-cert['dual_lower_bound'])\\n    print('Independent KKT stationarity and absolute gap:', stationarity, gap)\\n    assert max(stationarity, gap, abs(obj-cert['primal_objective']), abs(w.sum()-budget), abs(lo@w), abs(hi@(cap-w))) < 1e-10\\n    assert np.array_equal(w, cert['weights']) and np.min(w)>=-1e-12 and np.max(w)<=cap+1e-12 and min(lo.min(),hi.min())>=0\\n    np.testing.assert_allclose(b['terminal_field'], np.tensordot(w,U,axes=(0,0)), atol=1e-12, rtol=0)\\nPY\\ncp /tmp/m99_diagonal.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with full affine calibration → H2 reflecting walls with fitted bank-specific gains and offsets; the bank-diagonal challenger reduced worst raw pulse/shift/bank RMS from 1.88e-6 to 1.56e-6 and worst held-out sweep fold/channel RMS from 1.47e-5 to 1.38e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain cross-channel terms or introduce nonlinear interactions\",\n      \"rejected_reason\": \"Neither improved worst-bank tracer prediction, and the independent single-bank sweeps support the simpler gain-and-offset model.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler calibration only if its improvement holds after inversion and the independently reconstructed objective still validates the certificate. The reflecting stencil and optimizer are unchanged; the isolated schema check verifies the installed candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "3acd9fc269f2d9a9e13182aba36ec4828c7e027e6a4b094a28518a316550bac0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42799.24,
+      "usage_known": true,
+      "prompt_tokens": 35152,
+      "cached_tokens": 14976,
+      "completion_tokens": 1790
+    }
+  ]
+}

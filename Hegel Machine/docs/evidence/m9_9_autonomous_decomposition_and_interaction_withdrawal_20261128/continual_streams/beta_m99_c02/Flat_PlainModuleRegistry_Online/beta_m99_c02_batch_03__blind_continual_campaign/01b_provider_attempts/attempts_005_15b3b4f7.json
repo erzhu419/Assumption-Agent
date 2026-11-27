@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "15b3b4f79b304fd59a28dfb1382e1d01",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:36.385833+00:00",
+  "ended_at_utc": "2026-11-27T19:56:07.341473+00:00",
+  "request_sha256": "ef071263ea3c4e2f9599375b7bb59c3ebc48f043f7f0117cf3c03ce7da541bb3",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29484,
+    "cached_tokens": 13696,
+    "completion_tokens": 1249
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _forward, _inverse\\nfrom batch_solver import solve_batch\\nfrom _verified_downstream import solve_downstream\\nwith open('public_batch.pkl','rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']; x = c['ref_rosette']; y = c['raw_rosette']\\nfull = _fit(c); clean = np.max(np.abs(_forward(x, full) - y), axis=1) < .001\\naxis = (x != 0).sum(axis=1) == 1\\nfor name, test in [('axis', axis), ('mixed-low', ~axis & (np.max(abs(x),axis=1)<1)), ('mixed-high', ~axis & (np.max(abs(x),axis=1)>=1))]:\\n    fit = _fit(dict(c, ref_rosette=x[~test], raw_rosette=y[~test])); use = test & clean\\n    err = np.max(abs(_inverse(y[use], fit) - x[use])); print(name, int(use.sum()), 'group-held-out max inverse error', err); assert err < 1e-4\\nrng = np.random.default_rng(55)\\np = rng.uniform(-1.5, 1.5, (3, 7, 4)); p_raw = _forward(p, full); pulse = {'y_pulse_raw': p_raw, 'metadata': 'preserved'}\\nraw_before = s['y_obs_raw'].copy(); sweep_before = y.copy(); bank_before = b['raw_readout'].copy()\\na = calibrate_upstream(dict(s, reference_tracer_pulses=[pulse, {'y_pulse_raw': None}, None])); pp = a['reference_tracer_pulses']\\nassert pp[0]['metadata'] == 'preserved' and pp[0]['y_pulse_raw'].shape == p.shape and pp[1]['y_pulse_raw'] is None and pp[2] is None\\npulse_err = np.max(abs(pp[0]['y_pulse_raw'] - p)); print('pulse round-trip max error', pulse_err); assert pulse_err < 1e-9\\nassert calibrate_upstream(dict(s, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nac = a['sensor_calibration_sweeps']; assert np.array_equal(ac['raw_rosette'], x) and not np.shares_memory(ac['raw_rosette'], x)\\nassert np.array_equal(ac['single_bank_sweeps']['raw_readout'], b['ref_signal']) and not np.shares_memory(ac['single_bank_sweeps']['raw_readout'], b['ref_signal'])\\nassert np.array_equal(raw_before, s['y_obs_raw']) and np.array_equal(sweep_before, y) and np.array_equal(bank_before, b['raw_readout'])\\nassert np.max(abs(_forward(a['y_obs_raw'].reshape(-1,4), full).ravel() - raw_before)) < 1e-9\\nout = solve_batch(s); w = out['weights']; k = out['kkt_certificate']; gap = k['primal_objective'] - k['dual_lower_bound']; print('public simplex sum', w.sum(), 'KKT primal-dual gap', gap)\\nassert abs(w.sum() - s['total_budget']) < 1e-9 and np.min(w) >= -1e-10 and np.max(w) <= s['u_box'] + 1e-10 and abs(gap) < 1e-9\\n# Compare composed recovery against the verified solver given canonical observations.\\ncanonical = rng.uniform(-.65, .65, raw_before.shape); syn = dict(s, y_obs_raw=_forward(canonical.reshape(-1,4), full).ravel())\\nexpected = solve_downstream(dict(a, y_obs_raw=canonical)); actual = solve_batch(syn)\\nfor key in ('weights', 'terminal_field'):\\n    err = np.max(abs(expected[key] - actual[key])); print(key, 'canonical/composed max difference', err); assert err < 1e-9\\nprint('Isolated composed verification passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 additive cubic -> H2 cyclic bilinear coupling plus per-bank cubic; the worst five-fold inverse error was 2.77e-5 on mixed sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema passed, but it does not exercise pulses or check that the inverse transfers across sweep types. Use the isolated final artifacts to verify those paths and compare composed outputs against canonical downstream inputs. A failure would identify whether to revise the fit, pulse handling, or composition.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c20698b52aa88e40c4d911c2e53156e8988802d023b53308b40d45491569661e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32065.44,
+      "usage_known": true,
+      "prompt_tokens": 29484,
+      "cached_tokens": 13696,
+      "completion_tokens": 1249
+    }
+  ]
+}

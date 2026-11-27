@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e32ab6438dfc4682af039615c9bd1ef6",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__beta_m99_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:39.718319+00:00",
+  "ended_at_utc": "2026-11-27T19:33:24.170298+00:00",
+  "request_sha256": "ed4336de30248d7142a72e0e48923a3b98b542e51dca1682ceeae57dc0bf9dcb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39291,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30412,
+    "cached_tokens": 14976,
+    "completion_tokens": 1935
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import minimize\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; out=b.solve_batch(s)\\n# Independent dense stencil and observation assembly, including every wall and corner.\\nnx,ny=s['nx'],s['ny']; n=nx*ny; A=np.diag(s['V_reaction_2d'].flatten(order='F'))\\nfor j in range(ny):\\n for i in range(nx):\\n  row=i+nx*j\\n  for k,stride,axis,size in ((i,1,'x',nx),(j,nx,'y',ny)):\\n   h=s['L'+axis]/(size-1); kap=s['kappa_'+axis]; v=s['vel_'+axis][k]\\n   if k in (0,size-1):\\n    f=kap[k]/h**2; A[row,row+stride*(1 if k==0 else -1)]-=f; A[row,row]+=f+s['robin_'+axis]/h\\n   else:\\n    left=(kap[k]+kap[k-1])/(2*h*h)+max(v,0)/h; right=(kap[k]+kap[k+1])/(2*h*h)+max(-v,0)/h\\n    A[row,row-stride]-=left; A[row,row+stride]-=right; A[row,row]+=left+right\\nD=np.stack([m.flatten(order='F') for m in s['source_modes']],axis=1); mats=[np.linalg.solve(A+mu*np.eye(n),D) for mu in s['mu_shifts']]; ij=s['sensor_ij']; S=np.concatenate([u[ij[:,0]+nx*ij[:,1]] for u in mats]); Sp,Up=b._responses(s)\\nnp.testing.assert_allclose(Sp,S,atol=2e-13,rtol=0)\\nw=out['weights']; field=(mats[-1]@w).reshape((nx,ny),order='F'); err=out['terminal_field']-field\\nedge=np.zeros((nx,ny),dtype=bool); edge[[0,-1],:]=True; edge[:,[0,-1]]=True\\nprint('terminal field max errors, interior / wall incl. corners:',np.max(abs(err[~edge])),np.max(abs(err[edge]))); assert np.max(abs(err))<2e-13\\n# Hold out full rosettes; measure low-dimensional calibration on both excitation families.\\nc=s['sensor_calibration_sweeps']; ref=c['ref_rosette']; raw=c['raw_rosette']; one=np.count_nonzero(ref,axis=1)==1; pred=np.empty_like(raw)\\nfolds=np.empty(len(ref),dtype=int)\\nfor mask in (one,~one): folds[mask]=np.arange(sum(mask))%4\\nfor f in range(4):\\n t=folds!=f; M=np.linalg.lstsq(np.c_[np.ones(sum(t)),ref[t]],raw[t],rcond=None)[0]; pred[~t]=np.linalg.solve(M[1:].T,(raw[~t]-M[0]).T).T\\ncal=[np.max(np.sqrt(np.mean((pred[mask]-ref[mask])**2,axis=0))) for mask in (one,~one)]; print('calibration held-out worst channel RMS, single/mixed:',cal); assert max(cal)<4e-5\\n# Independent projection and QP; certificate checked against the original residual objective.\\nz=s['Z_nuisance']; P=np.eye(len(z))-z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); X=P@S; y=P@b._calibrate(s); r=s['source_ridge']; cap=s['u_box']; total=s['total_budget']\\ndef obj(w): return .5*(np.linalg.norm(X@w-y)**2+r*np.dot(w,w))\\ndef grad(w): return X.T@(X@w-y)+r*w\\nq=minimize(obj,np.full(len(w),total/len(w)),jac=grad,bounds=[(0,cap)]*len(w),constraints=[{'type':'eq','fun':lambda a:a.sum()-total,'jac':lambda a:np.ones_like(a)}],method='SLSQP',options={'ftol':1e-14}); assert q.success; assert np.max(abs(w-q.x))<1e-6\\nc=out['kkt_certificate']; g=grad(w); lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); nu=c['nu_sum']; gap=c['primal_objective']-c['dual_lower_bound']; np.testing.assert_array_equal(c['weights'],w)\\nassert abs(w.sum()-total)<1e-12 and min(w)>=0 and max(w)<=cap\\nassert abs(obj(w)-c['primal_objective'])<1e-12 and abs(gap)<1e-12\\nassert np.min(lo)>=0 and np.min(hi)>=0 and np.max(abs(g-nu-lo+hi))<1e-12\\nassert max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w))))<1e-12\\nprint('public KKT gap / max weight difference vs SLSQP:',gap,np.max(abs(w-q.x)))\\n# Exercise active and vertex faces absent from the public optimum, plus degenerate budgets.\\nrng=np.random.default_rng(43); worst=0.\\nfor n in (2,8,24):\\n for B in (0.,.005,.5,1.,n/2,n-.005,float(n)):\\n  if B>n: continue\\n  for _ in range(20):\\n   F=rng.normal(size=(n,n)); H=.04*np.eye(n)+F.T@F/n; c=rng.normal(size=n)*3\\n   w,nu=b._box_simplex(H,c,1.,B); d=H@w+c-nu\\n   error=max(abs(w.sum()-B),max(0.,-w.min(),w.max()-1),np.max(np.maximum(d,0)*w),np.max(np.maximum(-d,0)*(1-w)))\\n   worst=max(error,worst); assert error<1e-10,(n,B,error)\\nprint('stress worst feasibility/complementarity residual:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (specified Robin stencil and fitted affine rosette) -> H2 (independently verify forward assembly and active-face certificates); held-out Robin worst-fold RMS is 0.00965, versus 0.00962 for face averaging.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace endpoint diffusivity with face averaging\",\n      \"rejected_reason\": \"The held-out RMS gain is only 0.000027 on the worst fold and 0.0000033 pooled; the archive does not identify this stencil change, and the specified baseline uses endpoint diffusivity.\"\n    }\n  ],\n  \"rationale\": \"Keep the specified wall model. The isolated run checks whether ordering or boundary rows alter the terminal field, whether affine calibration fails on either excitation family, and whether the certificate remains valid when the optimum reaches box bounds. A failure would identify which component to revise before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dd88c7d19b771f88364d1f83162b895deb86d9b176d1c070a772677de941ba95",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45535.82,
+      "usage_known": true,
+      "prompt_tokens": 30412,
+      "cached_tokens": 14976,
+      "completion_tokens": 1935
+    }
+  ]
+}

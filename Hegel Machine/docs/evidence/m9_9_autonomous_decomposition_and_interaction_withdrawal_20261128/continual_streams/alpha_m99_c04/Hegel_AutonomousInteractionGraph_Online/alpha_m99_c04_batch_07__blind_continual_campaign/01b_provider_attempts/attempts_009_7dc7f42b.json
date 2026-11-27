@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7dc7f42b0f86440986b8c2dad55e9512",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:15:01.232324+00:00",
+  "ended_at_utc": "2026-11-27T20:15:24.550429+00:00",
+  "request_sha256": "0f2bc1d4788cf31ae3c8221c9c4ad239325fa5ba00efb05a4d9854f42654f006",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45400,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29153,
+    "cached_tokens": 13696,
+    "completion_tokens": 911
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nwith open('public_batch.pkl', 'rb') as f:\\n    c = pickle.load(f)[0]['dataset']['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nrows = np.arange(len(x))\\n# Compare both directions and the no-interaction ablation on identical holdouts.\\nerrors = {direction: np.empty(len(x)) for direction in (0, 1, -1, 2)}\\nfor fold in range(5):\\n    te = rows % 5 == fold\\n    tr = ~te\\n    coeff = up._fit_bridge(x[tr], y[tr])\\n    clean = tr.copy()\\n    clean[tr] = np.linalg.norm(up._forward(x[tr], coeff) - y[tr], axis=1) < 1.\\n    errors[1][te] = np.linalg.norm(up._forward(x[te], coeff) - y[te], axis=1)\\n    for direction in (0, -1, 2):\\n        pred = np.empty_like(y[te])\\n        for i in range(4):\\n            cols = [np.ones(len(x)), *x.T, x[:, i]**3]\\n            if direction:\\n                cols.append(x[:, i] * x[:, (i+direction)%4])\\n            a = np.column_stack(cols)\\n            pred[:, i] = a[te] @ np.linalg.lstsq(a[clean], y[clean, i], rcond=None)[0]\\n        errors[direction][te] = np.linalg.norm(pred - y[te], axis=1)\\nkeep = errors[1] < 1.\\nmixed = keep & (np.count_nonzero(x, axis=1) > 1)\\nfor direction, label in ((0, 'no interaction'), (1, 'next channel'), (-1, 'previous channel'), (2, 'opposite channel')):\\n    r = errors[direction][mixed]\\n    print(label, 'mixed held-out p90', np.quantile(r,.9), 'max', r.max())\\nassert errors[1][mixed].max() < .002\\nassert all(np.quantile(errors[k][mixed], .9) > 10*np.quantile(errors[1][mixed], .9) for k in (0, -1, 2))\\nprint('ng_t04: implemented interaction and channel direction supported on real held-out mixed loads')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent cubics → H2 own-channel cubics with next-channel interactions; the verified worst non-spike per-channel inverse error is 0.000346.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-term and clean-process audits\",\n      \"rejected_reason\": \"Both already passed on the unchanged artifacts; repeating them would not test a new failure mode.\"\n    }\n  ],\n  \"rationale\": \"Test whether the implemented channel orientation is identifiable, rather than merely whether some interaction helps. If the next-channel term does not clearly beat the reversed, opposite, and absent interactions on identical held-out mixed loads, revisit the indexing before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0c4faae003bc538333a7d5f54a144acdb484c130df0a4ae5f7503f50851a0fe0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24496.48,
+      "usage_known": true,
+      "prompt_tokens": 29153,
+      "cached_tokens": 13696,
+      "completion_tokens": 911
+    }
+  ]
+}

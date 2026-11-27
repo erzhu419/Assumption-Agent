@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e150cfed4d8e445ca6e6ca8cc95ad1b0",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:22.348403+00:00",
+  "ended_at_utc": "2026-11-27T20:05:49.009592+00:00",
+  "request_sha256": "65de4b82196826d06fbd78adf1442830eaca0768204e7ee4096f90e9a11c6ad8",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44902,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29653,
+    "cached_tokens": 13696,
+    "completion_tokens": 1066
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat batch_solver.py _verified_upstream.py _upstream_param_payload.json\\npython3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as bs, downstream_solver as ds\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\ncal=bs._up.calibrate_upstream(raw, bs._PAY)\\ntr,te=cal['train'],cal['test']; t=np.asarray(cal['eval_times']); dt=np.asarray(cal['past_dt']); x,xt=ds._features(tr,te)\\np=tr['past_channel_raw'].sum(-1); h=tr['hold_channel_raw'].sum(-1); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nout=bs.solve_batch(raw)\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nprint('tau',out['estimated_taus'],'weights',out['hereditary_weights'],'time range',t[[0,-1]])\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']==lab; tau,b=ds._fit(x[~m],p[~m],h[~m],dt,t,y[~m],r[~m]); a,g=ds._design(tau,x[m],p[m],h[m],dt,t); e=a@b-y[m]; er=g@b-r[m]; print('held-out lab',lab,'n',m.sum(),'strain MAE',np.mean(abs(e)),'strain median AE',np.median(abs(e)), 'late MAE',np.mean(abs(e[:,-max(1,len(t)//4):])), 'rate MAE',np.mean(abs(er)), 'max tau delta',np.max(abs(tau-out['estimated_taus'])))\\nh=te['hold_channel_raw'].sum(-1); tau=out['estimated_taus']; b=out['hereditary_weights']; v,s=ds._predict(tau,b,xt,h,np.array([0,1e-6])); assert np.all(v[:,0]==0); print('initial derivative finite difference max error',np.max(abs(v[:,1]/1e-6-s))); np.testing.assert_allclose(s,out['initial_rate_pred'],atol=1e-12); np.testing.assert_allclose(v[:,1]/1e-6,s,rtol=2e-5)\\nfor name in ('alpha_m99_c01_batch_01_solver','alpha_m99_c01_batch_05_solver'):\\n sys.path.insert(0,'/tmp/hegel_continual_archive'); archive=__import__(name); pred=getattr(archive,'_chamber',None) or archive._predict; av,ar=pred(tau,b,xt,h,t); print(name,'max curve/rate difference vs candidate',np.max(abs(av+te['strain_0'][:,None]-out['predicted_strain'])),np.max(abs(ar-out['initial_rate_pred'])))\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust benchtop fit -> H2 archived reset chamber; public schema passes and staged versus dynamic calibration changes public strain by at most 0.000361, with held-out lab errors pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the schema pass as quantitative validation\",\n      \"rejected_reason\": \"The schema cannot detect a failed fit on a held-out lab, a mismatched initial slope, or sensitivity to the choice of archived chamber coefficients.\"\n    }\n  ],\n  \"rationale\": \"Check upstream calibration semantics against the batch contract, test the benchtop fit on held-out labs, and quantify disagreement between the two archived reset laws. The blind deployment data cannot independently validate either set of chamber coefficients.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6be9a92de4851888c877478f0af33c06a34dea441538c268ac2600df25c8f9dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27798.08,
+      "usage_known": true,
+      "prompt_tokens": 29653,
+      "cached_tokens": 13696,
+      "completion_tokens": 1066
+    }
+  ]
+}

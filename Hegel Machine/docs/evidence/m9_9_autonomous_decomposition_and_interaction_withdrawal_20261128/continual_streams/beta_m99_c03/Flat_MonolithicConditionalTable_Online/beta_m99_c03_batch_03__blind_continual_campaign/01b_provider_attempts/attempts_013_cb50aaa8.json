@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb50aaa8c3c34dbfa8daf87f3b9b4eac",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:19.393125+00:00",
+  "ended_at_utc": "2026-11-27T19:53:54.475364+00:00",
+  "request_sha256": "f95e73c51852887a26fe3ff3f0baa76f9527ef385c8b16654c7e88a046acaa2b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70319,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40231,
+    "cached_tokens": 14976,
+    "completion_tokens": 1469
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nsp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; banks=sw['single_bank_sweeps']; rms={k:[] for k in ('cyclic','pairwise','rational')}\\nfor j in range(4):\\n    take=banks['bank_id']==j; extra=np.zeros((take.sum(),4)); extra[:,j]=banks['ref_signal'][take]\\n    xx=np.vstack((x,extra)); yy=np.r_[y[:,j],banks['raw_readout'][take]]; clean=abs(yy)<8\\n    base=m._rosette_design(xx,j); n=len(x); indices=np.arange(len(xx)); outer=indices%5\\n    a,b,c=base[:,1],base[:,2],base[:,3]\\n    dirs=[xx[:,k] for k in range(4)]+[xx[:,k]+sign*f*xx[:,l] for k,l in itertools.combinations(range(4),2) for sign in (-1,1) for f in (.5,1.,2.)]\\n    pairs=np.column_stack([base]+[q[:,None]**d for q in (a-b,a+b,a-c,a+c,b-c,b+c) for d in (2,3)])\\n    rats=[base]+[np.column_stack((base[:,:4],base[:,4:]/(1+alpha*q[:,None]**2))) for q in dirs for alpha in (1e-5,1e-4,1e-3,.01,.1,1.)]\\n    residuals={k:[] for k in rms}\\n    def err(design,train,test):\\n        coef=np.linalg.lstsq(design[train],yy[train],rcond=None)[0]\\n        return design[test]@coef-yy[test]\\n    for f in range(5):\\n        train=clean&(outer!=f); test=clean&(outer==f)&(indices<n)&(np.count_nonzero(xx,axis=1)>1)\\n        inner=(indices//5+indices%5)%3\\n        def cv(design):\\n            return sum(np.square(err(design,train&(inner!=i),train&(inner==i))).sum() for i in range(3))\\n        for key,design in [('cyclic',base),('pairwise',pairs),('rational',min(rats,key=cv))]:\\n            residuals[key].extend(err(design,train,test))\\n    for key in rms: rms[key].append(float(np.sqrt(np.mean(np.square(residuals[key])))))\\nprint('Held-out joint sweep RMSE by channel:',rms)\\ny_cal=m._calibrated_observations(s); Z=s['Z_nuisance']; shifts=len(s['mu_shifts']); shift_id=np.repeat(np.arange(shifts),len(y_cal)//shifts)\\nfor label,src in [('Robin','s00'),('reflecting','batch_01'),('periodic','batch_02')]:\\n    spec=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/beta_m99_c03_'+src+'_solver.py'); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)\\n    S,_=mod._forward(s); scores=[]\\n    for k in range(shifts):\\n        t=shift_id!=k; z=Z[t]; allcols=np.column_stack((S[t],y_cal[t])); nuisance=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@allcols); proj=allcols-z@nuisance\\n        A,b=proj[:,:-1],proj[:,-1]; w,_=m._box_simplex(A.T@A+s['source_ridge']*np.eye(A.shape[1]),-A.T@b,s['u_box'],s['total_budget']); gamma=nuisance[:,-1]-nuisance[:,:-1]@w\\n        scores.append(float(np.sqrt(np.mean((S[~t]@w+Z[~t]@gamma-y_cal[~t])**2))))\\n    print(label,'leave-one-shift-out RMSE',scores)\\nassert np.isfinite(m.solve_batch(s)['terminal_field']).all()\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unmodeled sensor interactions or nuisance-driven wall selection → H2 cyclic calibration and Robin transport generalize to held-out measurements; current worst-shift fitted RMSE is 0.00874 and independent field relative L2 error is 5.58e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, drift-operator, or within-batch classification tests\",\n      \"rejected_reason\": \"The public study is a steady regression problem with no relay state, stochastic drift, or classification labels. Held-out shifts test the relevant nuisance confounding without inventing a new task.\"\n    }\n  ],\n  \"rationale\": \"Compare pairwise and rational calibration challengers on held-out sweeps, selecting rational terms inside each training fold. Compare wall operators on shifts excluded from both source and nuisance fits. Change the artifact only if this audit exposes a reproducible calibration error or reverses the wall result.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "913708f10f40ddf9f9359e9081588c983be297bca9ed1ebd407b81d5c94a164e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36226.86,
+      "usage_known": true,
+      "prompt_tokens": 40231,
+      "cached_tokens": 14976,
+      "completion_tokens": 1469
+    }
+  ]
+}

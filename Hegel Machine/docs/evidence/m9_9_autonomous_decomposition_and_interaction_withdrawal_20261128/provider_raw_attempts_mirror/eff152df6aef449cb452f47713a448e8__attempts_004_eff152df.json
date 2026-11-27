@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eff152df6aef449cb452f47713a448e8",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:59.391531+00:00",
+  "ended_at_utc": "2026-11-27T19:44:29.431258+00:00",
+  "request_sha256": "5df2c781078d15d61053e229b49f68c0970c3b99caf140f297cc0c1e8227e6a8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34906,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28443,
+    "cached_tokens": 14976,
+    "completion_tokens": 1220
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m99_law.py <<'PY'\\nfrom m99_probe import *\\nfrom itertools import product\\nE=np.c_[-np.expm1(-t[:,None]/tau),t]; er=np.r_[1/tau,1.]; T=np.r_[E,er[None,:]]; Y=np.c_[yc,rc]; Y0=np.c_[cy,cr]; drift=lambda x:beta[2]+x@beta[3:]; Z=hc[:,None]-bc[:,:2]*tau\\ncoef=np.linalg.lstsq(T,Y.T,rcond=None)[0].T; D=coef-np.c_[bc[:,:2]*tau*beta[:2],drift(xc)]; print('residual coefficients vs predictors: [drift,hold,z0,z1,delta A0,delta A1,delta steady,delta rate]'); print(np.round(np.c_[drift(xc),hc,Z,D,rc-cr],4));\\ncs, _=m._features(c,c)\\n_,ct=m._features(tr,c)\\nfor name,xx in [('deployment',xc),('joint',xc_joint),('chamber_only',cs),('train_plus_chamber',ct)]:\\n dc=drift(xx); target=Y-np.c_[ac[:,:,:2]@beta[:2],bc[:,:2]@beta[:2]]-dc[:,None]*T[:,2];\\n for mode,P in [('drift',dc[:,None]),('const+drift',np.c_[np.ones(len(dc)),dc]),('drift_quad',np.c_[dc,dc**2]),('drift_hold',np.c_[dc,dc*hc]),('drift_hist',np.c_[dc,dc*Z]),('drift+hist',np.c_[dc,Z]),('drift+hold+hist',np.c_[dc,hc,Z]),('cubic',np.c_[dc,dc**2,dc**3]),('rational',np.c_[dc,dc/(1+dc**2)]),('reset',np.c_[dc,hc[:,None]-bc[:,:2]*tau])]:\\n  for keep in [False,True]:\\n   # Test rate preserving correction separately from unconstrained shared-time amplitudes.\\n   U=T[:,:2]-T[:,2:3]*er[:2] if keep else T\\n   Q=(P[:,None,:,None]*U[None,:,None,:]).reshape(len(dc),len(t)+1,-1)\\n   preds=np.zeros_like(target); group=c['lab_id']\\n   for lab in np.unique(group):\\n    u=group!=lab; b=np.linalg.lstsq(Q[u].reshape(-1,Q.shape[-1]),target[u].ravel(),rcond=None)[0]; preds[~u]=Q[~u]@b\\n   e=preds-target; ce=max(np.sqrt(np.mean(e[group==l,:-1]**2)) for l in np.unique(group)); re=max(np.sqrt(np.mean(e[group==l,-1]**2)) for l in np.unique(group)); b=np.linalg.lstsq(Q.reshape(-1,Q.shape[-1]),target.ravel(),rcond=None)[0]; print(name,mode,'preserve' if keep else 'free',round(ce,4),round(re,4),np.round(b,3) if max(ce,re)<.08 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_law.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop deployment → H2 chamber-specific redistribution of drift across the shared relaxation branches; the benchtop law has chamber absolute-error P95 of 1.463 for strain and 0.147 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The deployed amplitude and drift terms can be transferred unchanged from benchtop or from the prior reset chamber.\",\n    \"empirical_witness\": \"The current chamber differs from the benchtop prediction by a median absolute strain of 0.281, while projection onto the same relaxation-time basis reduces median absolute strain residual to 0.002.\",\n    \"causal_blanket_diagnosis\": \"The shared temporal basis still explains the measured curves; the mismatch is in how chamber inputs load that basis.\",\n    \"sublated_pivot\": \"Compare constrained amplitude and drift corrections, including rate-preserving forms, on held-out diagnostic labs.\",\n    \"risk_kind\": \"chamber constitutive transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate chamber relaxation times\",\n      \"rejected_reason\": \"The shared temporal basis already reconstructs diagnostic curves near the measurement noise; first test whether a simpler amplitude law generalizes.\"\n    }\n  ],\n  \"rationale\": \"Leave-one-lab-out strain and rate errors will distinguish a transferable drift correction from a fit that depends on one lab's reference normalization or load history.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4c5634ae46e73b12f15f9f61207d37dec3b36c3815b1261afd8300285435f21e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31156.47,
+      "usage_known": true,
+      "prompt_tokens": 28443,
+      "cached_tokens": 14976,
+      "completion_tokens": 1220
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8fdde949171543849f6cbc40f5af76f1",
+  "call_seq": 15,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:15:44.263173+00:00",
+  "ended_at_utc": "2026-11-27T20:16:19.486994+00:00",
+  "request_sha256": "7993da4b192e96314760b4222eaab9605c71848acb6692897d027e17b0c2c421",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 95957,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 51798,
+    "cached_tokens": 14976,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ns = s.replace('amplitude = 1.23 * intrinsic_drift - 0.068\\\\n    profile_weights = np.array([0.15609, 2.06279, 0.25373])', 'amplitude = intrinsic_drift\\\\n    # Estimated on the independently aligned chamber verification cohort.\\\\n    profile_weights = np.array([0.15647532, 2.04929686, 0.25509045])')\\nassert 'amplitude = intrinsic_drift' in s\\ns = s.replace(\\\"    curve, rate = _deployment(taus, theta, _coupon_inputs(test, x[n:], bridge), t)\\\", \\\"    # No deployment history is needed after chamber equilibration.\\\\n    hold = _recover_loads(test['hold_channel_raw'], bridge).sum(axis=-1)\\\\n    drift = np.column_stack((np.ones(len(hold)), x[n:]))\\\\n    curve, rate = _deployment(taus, theta, (None, hold, drift), t)\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nds, d = item['dataset'], item['campaign_diagnostics']\\nout = m['solve_batch'](ds)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nassert all(np.isfinite(v).all() for v in out.values())\\ntr, te = ds['train'], ds['test']\\nbridge = m['_calibration'](ds['calibration_load_cells'])\\nt, dt = ds['eval_times'], ds['past_dt']\\nxx = m['_features'](tr, te)\\nn = len(tr['lab_id'])\\nx = m['_features'](d, d)[:len(d['lab_id'])]\\ninp = m['_coupon_inputs'](d, x, bridge)\\ncurve, rate = m['_deployment'](tau, theta, inp, t)\\nobs = d['strain_curves_obs'] - d['strain_0'][:, None]\\nmiss = np.isnan(d['coupon_features_raw']).any(axis=1)\\nfor label, k in [('complete', ~miss), ('imputed', miss)] + [(f'lab {g}', d['lab_id']==g) for g in np.unique(d['lab_id'])]:\\n    e = np.max(np.sqrt(np.mean((curve[k]-obs[k])**2, axis=0)))\\n    r = np.sqrt(np.mean((rate[k]-d['instant_rate_obs'][k])**2))\\n    print(f'final diagnostic fit {label}: worst-horizon strain RMSE {e:.5f}; rate RMSE {r:.5f}')\\n    assert e < .05 and r < .025\\n_, hold, drift = m['_coupon_inputs'](te, xx[n:], bridge)\\nzero, slope = m['_deployment'](tau, theta, (None,hold,drift), np.array([0., 1e-7]))\\nnp.testing.assert_allclose(zero[:,0],0,atol=1e-12)\\nnp.testing.assert_allclose(zero[:,1]/1e-7,slope,rtol=1e-6,atol=1e-6)\\nnp.testing.assert_allclose(slope,out['initial_rate_pred'])\\ntrain_inputs = m['_coupon_inputs'](tr,xx[:n],bridge)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:,None]\\nr = tr['instant_rate_obs']\\nfor g in np.unique(tr['lab_id']):\\n    k = tr['lab_id'] != g\\n    fit_t, fit_w = m['_fit'](tuple(a[k] for a in train_inputs),dt,t,y[k],r[k])\\n    a,b = m['_design'](fit_t,tuple(a[~k] for a in train_inputs),dt,t)\\n    print(f'benchtop held-out lab {g}: strain median absolute error {np.median(np.abs(a@fit_w-y[~k])):.5f}; rate RMSE {np.sqrt(np.mean((b@fit_w-r[~k])**2)):.5f}; taus {fit_t.round(5)}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine chamber amplitude after memory reset → H2 full reset with intrinsic drift directly driving the chamber response; leave-one-lab-out worst-slice RMSE is 0.03833 for strain and 0.01641 for rate, both on imputed diagnostic coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t14\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the chamber profile using complete diagnostic rows only\",\n      \"rejected_reason\": \"The robust all-row fit slightly improves the imputed slice while giving nearly identical error on complete rows.\"\n    }\n  ],\n  \"rationale\": \"Replace the confounded affine amplitude with the validated intrinsic-drift law while preserving train-only material estimation and joint train/test feature preparation. Verify the exact artifact in an isolated process, checking both output scales, the initial derivative, and material-fit stability across benchtop labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "6de34f8ef48b4002ca1985344bf6b8865a5ba026075185146f34225431bc574e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36442.28,
+      "usage_known": true,
+      "prompt_tokens": 51798,
+      "cached_tokens": 14976,
+      "completion_tokens": 1451
+    }
+  ]
+}

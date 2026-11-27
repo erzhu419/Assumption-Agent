@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d09f1fba8ef846cd8c8da722ce56c0c6",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:49.152932+00:00",
+  "ended_at_utc": "2026-11-27T19:56:13.069894+00:00",
+  "request_sha256": "6ab7d80984d6feba486ea74fe48751d1e23401223af1dd6ed42f14ea15c02027",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46426,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29455,
+    "cached_tokens": 13696,
+    "completion_tokens": 957
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_margin_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    d = item['dataset']; c = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\n    b = _fit_bridge(x, y)\\n    ordinary = np.linalg.norm(y, axis=1) < 10\\n    # Detect coefficient or prediction drift caused by the actual spike rows.\\n    clean_fit = _fit_bridge(x[ordinary], y[ordinary])\\n    probes = [d[group][field].reshape(-1, 4) for group in ('train', 'test') for field in ('past_channel_raw', 'hold_channel_raw')]\\n    raw = np.vstack(probes)\\n    recovered = _inverse(raw, b)\\n    spike_effect = float(np.max(np.abs(recovered - _inverse(raw, clean_fit))))\\n    print('actual spikes: maximum change in operating load recovery', spike_effect)\\n    assert spike_effect < 1e-5\\n    # Certify the symmetric Jacobian is positive definite throughout the\\n    # observed calibration and operating box, not just at sampled inputs.\\n    bounds = np.vstack((x, recovered)); lo, hi = bounds.min(0), bounds.max(0)\\n    nearest = np.maximum(lo, 0) + np.minimum(hi, 0)\\n    nxt = (np.arange(4) + 1) % 4\\n    lower = np.diag(b[1:5]) + 3*b[5]*nearest**2 + np.minimum(b[6]*lo[nxt], b[6]*hi[nxt])\\n    assert np.all(b[5] >= 0)\\n    jlo = b[1:5].T.copy(); jhi = jlo.copy()\\n    jlo[np.arange(4), nxt] += np.minimum(b[6]*lo, b[6]*hi)\\n    jhi[np.arange(4), nxt] += np.maximum(b[6]*lo, b[6]*hi)\\n    off = np.maximum(np.abs((jlo+jlo.T)/2), np.abs((jhi+jhi.T)/2))\\n    np.fill_diagonal(off, 0)\\n    margin = np.min(lower-off.sum(axis=1))\\n    print('symmetric Jacobian lower eigenvalue bound over observed box', margin)\\n    assert margin > 0\\nPY\\npython3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/quadratic bridge → H2 sparse cyclic cubic bridge; worst held-out load-component error is 0.000380039, and the rational challenger did not improve the worst slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Rerun the rational-basis or schema audit\",\n      \"rejected_reason\": \"Those checks passed on the unchanged bundle and would not test a new failure mode.\"\n    }\n  ],\n  \"rationale\": \"Pointwise closure cannot detect an ill-conditioned inverse between observations. Bound conditioning over the measured load range and test whether removing the real spike rows changes recovered operating loads. A failed bound would warrant a tighter conditioning analysis; measurable spike sensitivity would warrant revisiting the robust fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ebde3513ceec4c298f248f0bce421a5fe38b71da12568cc301f020e37f098229",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25020.49,
+      "usage_known": true,
+      "prompt_tokens": 29455,
+      "cached_tokens": 13696,
+      "completion_tokens": 957
+    }
+  ]
+}

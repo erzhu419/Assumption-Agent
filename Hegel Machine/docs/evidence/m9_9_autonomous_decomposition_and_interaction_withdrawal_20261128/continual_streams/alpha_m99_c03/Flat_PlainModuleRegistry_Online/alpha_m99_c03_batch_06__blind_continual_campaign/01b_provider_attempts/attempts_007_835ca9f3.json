@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "835ca9f3845b4802b66fa492990e11cf",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:22:10.570026+00:00",
+  "ended_at_utc": "2026-11-27T20:22:30.329416+00:00",
+  "request_sha256": "3d1531c316af00b75251415e47c9c80b547a92fe86514ff1455717f9f45e4642",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30113,
+    "cached_tokens": 14976,
+    "completion_tokens": 724
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nassert m._reset_chamber()\\nbase = m.solve_batch(d)\\neps = 1e-5\\ntest = d['test']\\nprobe = dict(d, eval_times=np.r_[0., eps, 2*eps, d['eval_times']], test=dict(test, past_channel_raw=test['past_channel_raw'][:, ::-1, :]))\\nout = m.solve_batch(probe)\\ny = out['predicted_strain']\\nslope = (-3*y[:, 0] + 4*y[:, 1] - y[:, 2]) / (2*eps)\\nerr = np.max(np.abs(slope - out['initial_rate_pred']))\\nnp.testing.assert_allclose(y[:, 0], test['strain_0'], rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(slope, out['initial_rate_pred'], rtol=0, atol=1e-7)\\nnp.testing.assert_allclose(y[:, 3:], base['predicted_strain'], rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'], base['initial_rate_pred'], rtol=0, atol=1e-12)\\nprint('Deployment initial-rate max derivative mismatch:', err)\\nprint('Zero-time boundary and history-reset invariance passed for', len(y), 'deployment coupons')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop deployment law -> H2 archive-matched chamber reset; worst held-out lab median absolute errors are 0.00905 for strain and 0.00738 for initial rate, and maximum out-of-fold bridge total-load error is 0.000659.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema, material fit, and bridge calibration have been verified. Check the two deployment outputs together: a slope mismatch would require correcting the initial-rate formula, while sensitivity to reordered prehistory would reveal a wiring error in the reset path. This tests implementation consistency, not accuracy against unavailable chamber labels.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "70ce1f004a499cf882e9c46c22be9d7c084fa2964703781dc5747413bce2219c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20957.79,
+      "usage_known": true,
+      "prompt_tokens": 30113,
+      "cached_tokens": 14976,
+      "completion_tokens": 724
+    }
+  ]
+}

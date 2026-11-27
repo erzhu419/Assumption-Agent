@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a63610dabade46869aa75584c611f9a7",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:12.869650+00:00",
+  "ended_at_utc": "2026-11-27T19:58:31.844829+00:00",
+  "request_sha256": "12b5117b7b9f3f751010b2b7aa5d7c975c99964b77183cc2d46691c3206abe6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24063,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25286,
+    "cached_tokens": 14976,
+    "completion_tokens": 615
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== $(basename \\\"$f\\\")\\\"; sed -n '1,43p' \\\"$f\\\"; done; sed -n '43,175p' /tmp/hegel_continual_archive/beta_m99_c04_batch_04_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport runpy,pickle,glob,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];s=p['study'];ps=p['campaign_diagnostics'];w=np.stack([q['w_pulse'] for q in ps]);raw=np.stack([q['y_pulse_raw'] for q in ps]);c=s['sensor_calibration_sweeps'];print('ref,raw,pulse raw ranges',*[np.quantile(a,[0,.01,.5,.99,1]) for a in [c['ref_rosette'],c['raw_rosette'],raw]]);\\nfor f in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n m=runpy.run_path(f);S,_=m['_design'](s); got=[]\\n for y in raw:\\n  try: got.append(m['_calibrate'](dict(s,y_obs_raw=y)))\\n  except Exception as e: print(type(e).__name__,str(e));break\\n if len(got)==3:\\n  e=(np.asarray(got)-w@S.T).reshape(3,3,8,4);print(f.split('/')[-1], 'rms', np.round(np.sqrt(np.mean(e**2,axis=(2,3))),6),'bank rms',np.round(np.sqrt(np.mean(e**2,axis=(0,1,2))),6), 'max',abs(e).max())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived chamber and rosette laws -> H2 tracer-tested chamber and rosette laws; worst pulse-by-shift RMSE has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the prior solver unchanged\",\"rejected_reason\":\"The archive shows campaign-dependent wall settings, and the available tracer measurements can test whether the latest archived solver transfers.\"}],\"rationale\":\"Measure residuals by pulse, shift, and bank. If none of the archived solvers transfers, the slice pattern and archived formulas will guide separate tests of the wall operator and calibration basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "6d0196e1ab95b04e44fd1b6e097f07e670bb3aa6b616b235bc71452861ce02cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18719.28,
+      "usage_known": true,
+      "prompt_tokens": 25286,
+      "cached_tokens": 14976,
+      "completion_tokens": 615
+    }
+  ]
+}

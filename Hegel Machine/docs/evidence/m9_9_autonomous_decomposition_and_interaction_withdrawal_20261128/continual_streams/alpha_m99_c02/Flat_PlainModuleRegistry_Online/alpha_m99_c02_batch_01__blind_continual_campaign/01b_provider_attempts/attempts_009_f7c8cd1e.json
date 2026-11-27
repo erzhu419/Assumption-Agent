@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7c8cd1e67074c07ba9cf4bed18bf5a7",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:38.719247+00:00",
+  "ended_at_utc": "2026-11-27T19:40:13.207693+00:00",
+  "request_sha256": "0461764fd955cffb8c80ef17bd6b1bd8897b7fb521829a73a30aef6b20a64b64",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58810,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37547,
+    "cached_tokens": 14976,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py').read_text().split('def solve_batch(dataset):')[0]\\nPath('/holdout_task/batch_solver.py').write_text(src+'''# Chamber characterization: the drift transient has unit initial slope.\\n_DRIFT_FAST_FRACTION = 0.55\\n_DRIFT_SLOW_TAU = 5.0\\n\\n\\ndef _chamber(taus, theta, hold, x, t):\\n    drift = theta[2] + x @ theta[3:]\\n    amplitudes = hold[:, None] * theta[:2]\\n    relax = -np.expm1(-t[:, None] / taus)\\n    f = _DRIFT_FAST_FRACTION\\n    slow = _DRIFT_SLOW_TAU\\n    kernel = f * taus[0] * relax[:, 0] - (1.0 - f) * slow * np.expm1(-t / slow)\\n    return amplitudes @ relax.T + drift[:, None] * kernel, amplitudes @ (1.0 / taus) + drift\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = dataset['past_dt'], dataset['eval_times']\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    x_train, x_test = _features(train, test)\\n    taus, theta = _material(train, bridge, x_train, dt, t)\\n    hold = test['hold_channel_raw'] @ bridge[1:] + bridge[0]\\n    curve, rate = _chamber(taus, theta, hold, x_test, t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n''')\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json,pickle,runpy,numpy as np\\ns=runpy.run_path('/holdout_task/batch_solver.py'); globals().update({k:v for k,v in s.items() if k.startswith('_') and not k.startswith('__')}); i=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; g=i['campaign_diagnostics']; print('Item keys:',list(i)); print('Diagnostics keys:',list(g)); a=json.load(open('public_asset_index.json')); print('Asset index:',[(k,str(v)[:220]) for k,v in a.items()]); b=_bridge(d['calibration_load_cells']); dt,t=d['past_dt'],d['eval_times']; xj,_=_features(tr,te); xt,_=_features(tr,tr); xg,_=_features(g,g); print('diag ref:',[(int(l),np.median(g['ref_coupons'][g['lab_id']==l].mean(0)),np.median(g['ref_coupons'][g['lab_id']==l].std(0))) for l in np.unique(g['lab_id'])]);\\nfor tag,x in [('joint',xj),('train only',xt)]:\\n q,w=_material(tr,b,x,dt,t); C,R=_basis(q,*_loads(tr,b),x,dt,t); ec=C@w+tr['strain_0'][:,None]-tr['strain_curves_obs']; er=R@w-tr['instant_rate_obs']; P,U=_chamber(q,w,_loads(g,b)[1],xg,t); E=P+g['strain_0'][:,None]-g['strain_curves_obs']; J=U-g['instant_rate_obs']; rm=lambda z:np.sqrt(np.mean(z*z)); print(tag,q,w,'train MAD',np.median(abs(ec)),np.median(abs(er)), 'diag by lab',[(int(l),rm(E[g['lab_id']==l]),rm(J[g['lab_id']==l])) for l in np.unique(g['lab_id'])]); print('diag early late',rm(E[:,:3]),rm(E[:,-3:]),'complete/missing',[(rm(E[m]),rm(J[m])) for m in [np.isfinite(g['coupon_features_raw']).all(1),~np.isfinite(g['coupon_features_raw']).all(1)]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop transfer → H2 zero chamber prehistory plus a unit-slope two-decay drift; the freely fitted precursor has worst held-out-lab RMSE of 0.00429 strain and 0.00407 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use test-only normalization for deployment\",\"rejected_reason\":\"The deployment contract explicitly specifies joint train/test normalization. A stand-alone diagnostic panel does not establish that the deployment panel was processed separately.\"}],\"rationale\":\"Write the chamber correction while retaining dynamic bridge calibration and the prescribed joint normalization. Compare joint and train-only normalization on real benchtop residuals and chamber diagnostic slices; a systematic deterioration would warrant reexamining how the diagnostic panel transfers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "76d851a970fc7a8110ca088d7248d41c94c68ba044a3aa3938bedf13cbbf906c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35608.49,
+      "usage_known": true,
+      "prompt_tokens": 37547,
+      "cached_tokens": 14976,
+      "completion_tokens": 1439
+    }
+  ]
+}

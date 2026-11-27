@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc4f64140a7a4ef9817c748b2324e394",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:56.760536+00:00",
+  "ended_at_utc": "2026-11-27T20:06:27.150816+00:00",
+  "request_sha256": "40e30a6df049daa58496949c67598d7e70bcff75b449c62b99898cc8013288e0",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49161,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34014,
+    "cached_tokens": 13696,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_alignment.py <<'PY'\\nfrom chamber_probe import *\\nL=H*np.sum(theta[:2]/taus); labs=g['lab_id']; y=np.c_[Y,R]\\ndef group(*groups):\\n return {k:np.concatenate([a[k] for a in groups]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\ndef assess(name, x):\\n D=theta[2]+x@theta[3:]; e=R-L-D\\n print(name,'rate MAE',round(abs(e).mean(),5),'lab',[(int(l),round(e[labs==l].mean(),4),round(abs(e[labs==l]).mean(),4)) for l in np.unique(labs)],'complete/missing',[(int(m.sum()),round(abs(e[m]).mean(),4)) for m in [np.isfinite(g['coupon_features_raw']).all(1), np.isnan(g['coupon_features_raw']).any(1)] if m.any()]); return D\\nassess('train+diag',xg)\\n_,a=prior._features(group(tr,te),g); assess('train+test+diag',a)\\n_,a=prior._features(te,g); assess('test+diag',a)\\n_,a=prior._features(g,g); assess('diag alone',a)\\na,b=prior._features(g,group(tr,te)); assess('same joint separate',a)\\nprint('rate implied and estimated drift and missing columns'); print(np.c_[labs,R-L,drift,np.isnan(g['coupon_features_raw']).astype(int)].round(4))\\nfor l in np.unique(labs):\\n print('ref stats',l,[(round(np.median(q['ref_coupons'][q['lab_id']==l].mean(0)),4),round(np.median(q['ref_coupons'][q['lab_id']==l].std(0)),4)) for q in (tr,te,g)])\\n# Separate the load and drift time kernels without relying on uncertain diagnostic alignment.\\ndef ker(tau):\\n return np.r_[tau*-np.expm1(-t/tau),1.]\\n# Load is history-free; fit normalized unit-load impulse with its DC-rate conserved.\\n# Rate-derived drift is an identification probe only, never a test predictor.\\ndef fit(mask, ds, variant):\\n def pred(p):\\n  a,b=np.exp(p[:2]); k0,k1=ker(a),ker(b); kt=np.r_[t,1.]\\n  u,v,w=p[2:5]; slow=(1-u)*k1 if variant!=2 else (1-u-p[5])*k1+p[5]*kt\\n  return L[:,None]*(u*k0+slow)+ds[:,None]*(v*k0+w*k1+(1-v-w)*kt)\\n start=np.r_[np.log(taus),.9,.2,.55,0.][:6 if variant==2 else 5]\\n if variant==0:\\n  p=np.r_[np.log(taus),least_squares(lambda p:(pred(np.r_[np.log(taus),p])[mask]-y[mask]).ravel(),start[2:]).x]\\n else:\\n  p=least_squares(lambda p:(pred(p)[mask]-y[mask]).ravel(),start,max_nfev=300).x\\n return np.r_[np.exp(p[:2]),p[2:]],pred(p)\\nfor name,ds in [('aligned',drift),('rate implied',R-L)]:\\n for m in range(3):\\n  p,q=fit(np.ones(n,bool),ds,m); rows=[]\\n  for l in np.unique(labs):\\n   _,z=fit(labs!=l,ds,m); e=abs(z[labs==l]-y[labs==l]); rows.append(np.r_[e[:,:-1].mean(),e[:,-1].mean()])\\n  print(name,m,'p=',p.round(6),'worst lab curve/rate=',np.max(rows,axis=0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_alignment.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 free chamber amplitude regression -> H2 conserved hold-load-plus-drift initial rate with two poles and persistent drift; current worst held-out lab MAE is 0.0592 strain and 0.0430 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add history or independent feature coefficients\",\"rejected_reason\":\"Both worsen held-out lab error despite fitting the diagnostic coupons more closely.\"}],\"rationale\":\"Determine whether diagnostic reference alignment explains the remaining rate error before fitting chamber coefficients. Separately test rate-conserving kernels on held-out labs so temporal adjustments cannot mask errors in the initial rate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "88b40737a4e09e7ec82ffee888009377fef9e266772bac22a94ef41d9ddcfe74",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31540.28,
+      "usage_known": true,
+      "prompt_tokens": 34014,
+      "cached_tokens": 13696,
+      "completion_tokens": 1254
+    }
+  ]
+}

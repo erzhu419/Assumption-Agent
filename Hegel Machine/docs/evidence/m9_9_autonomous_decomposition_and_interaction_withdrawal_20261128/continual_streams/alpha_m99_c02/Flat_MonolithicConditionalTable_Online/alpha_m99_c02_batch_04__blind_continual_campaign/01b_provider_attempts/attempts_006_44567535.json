@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4456753560894fbb8398b2b713a3175a",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:02.696079+00:00",
+  "ended_at_utc": "2026-11-27T19:56:33.554729+00:00",
+  "request_sha256": "5519501f7f85d1c3bac0d2b38431ac8818441e3bc7328ba69c4e69052e457b4c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43802,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30801,
+    "cached_tokens": 14976,
+    "completion_tokens": 1280
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; d=item['dataset']; c=d['calibration_load_cells']; l=c['true_channel_loads']; raw=c['bridge_raw']; rng=np.random.default_rng(704)\\ncal=[]\\nfor va in np.array_split(rng.permutation(len(l)),5):\\n tr=np.setdiff1d(np.arange(len(l)),va)\\n b=m._fit_bridge(l[tr],raw[tr]); err=np.linalg.norm(m._bridge_basis(l[va])@b-raw[va],axis=1); clean=err<.0015\\n inv=m._invert_bridge(raw[va][clean],b); total=abs((inv-l[va][clean]).sum(axis=1)); cal.append((np.median(err),np.max(total)))\\n print('bridge fold: median forward',cal[-1][0],'clean count',clean.sum(),'max clean inverse total',cal[-1][1],'excursion minimum',err[~clean].min(initial=np.inf))\\ntrain,test=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; bridge=m._bridge(c); pred=m.solve_batch(d); rows=[]\\nfor lab in np.unique(train['lab_id']):\\n val=train['lab_id']==lab; a={k:v[~val] for k,v in train.items()}; v={k:z[val] for k,z in train.items()}; context={k:np.concatenate([test[k],v[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\n x_a,x_context=m._features(a,context); x_v=x_context[-val.sum():]; tau,theta=m._material(a,bridge,x_a,dt,t); cv,rv=m._basis(tau,*m._loads(v,bridge),x_v,dt,t)\\n e=abs(cv@theta+v['strain_0'][:,None]-v['strain_curves_obs']); er=abs(rv@theta-v['instant_rate_obs']); miss=np.isnan(v['coupon_features_raw']).any(axis=1)\\n summary=(max(np.median(e,axis=0)),np.median(er)); rows.append(summary)\\n print('held lab',lab,'taus',tau,'theta max delta',np.max(abs(theta-pred['hereditary_weights'])),'max horizon median curve / median rate',summary,'p90 curve / rate',(np.quantile(e,.9),np.quantile(er,.9)),'missing slice n/medians',(miss.sum(),np.median(e[miss]),np.median(er[miss])) if miss.any() else (0,))\\nprint('worst fold calibration',np.max(cal,axis=0),'worst held-lab metrics',np.max(rows,axis=0)); print('full taus, weights',pred['estimated_taus'],pred['hereditary_weights']); assert np.all(np.isfinite(np.concatenate([v.ravel() for v in pred.values()])))\\ntau=pred['estimated_taus']; assert .05<tau[0]<tau[1]<25; _,x=m._features(train,test); hold=m._invert_bridge(test['hold_channel_raw'],bridge).sum(axis=-1); h=1e-5; y,r=m._chamber(tau,pred['hereditary_weights'],hold,x,np.array([-h,0.,h])); diff=np.max(abs((y[:,2]-y[:,0])/(2*h)-pred['initial_rate_pred'])); assert np.max(abs(y[:,1]))<1e-12 and diff<1e-7; print('chamber rate derivative max error',diff)\\nchanged={**d,'test':{**test,'past_channel_raw':test['past_channel_raw'][:,::-1,:]}}; after=m.solve_batch(changed); assert all(np.array_equal(after[k],pred[k]) for k in pred)\\nprint('deployment memory-reset invariant passed; deployment labels available:',item.get('campaign_diagnostics') is not None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine bridge and baseline chamber) -> H2 (nonlinear bridge and archived reset-and-routing law); schema passed, calibration median residual is 0.000153 in sample, and held-out metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema compliance alone\",\n      \"rejected_reason\": \"The schema cannot detect poor bridge inversion, unstable material parameters, or an inconsistent initial rate.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps test bridge inversion; leaving each lab’s response labels out tests material stability while retaining the reference panels required by the task. The derivative and history checks catch chamber integration errors without treating blind deployment predictions as independently validated.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d288c5bce18914dfc2c0ebe014d8e81fff377b0d0c9656c2bc41943557504f99",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32005.94,
+      "usage_known": true,
+      "prompt_tokens": 30801,
+      "cached_tokens": 14976,
+      "completion_tokens": 1280
+    }
+  ]
+}

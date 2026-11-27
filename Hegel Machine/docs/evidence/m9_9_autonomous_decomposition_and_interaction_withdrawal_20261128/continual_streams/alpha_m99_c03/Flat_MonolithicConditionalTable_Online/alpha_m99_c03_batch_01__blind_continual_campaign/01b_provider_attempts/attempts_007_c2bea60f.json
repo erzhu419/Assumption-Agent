@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2bea60fd51f439bb3337f0b91d178bc",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:43.576110+00:00",
+  "ended_at_utc": "2026-11-27T19:39:13.803732+00:00",
+  "request_sha256": "36e9a5642aa667173bcaf42ef448f2874fefbb5c977fc2a49af596e816ff949b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50256,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36977,
+    "cached_tokens": 14976,
+    "completion_tokens": 1211
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,46p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\\npython3 - <<'PY'\\nimport json\\nv=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in v:\\n print({k:v for k,v in e.items() if k!='facility_telemetry_trace'})\\nPY\\ncat > /tmp/m99_rank.py <<'PY'\\nfrom m99_inputs import *\\nD=np.vstack((E,er)); obs=np.c_[y,yr]; lab=g['lab_id']; strat=g['stratum']; n=len(lab); p,h,_=cg\\nmiss=np.isnan(g['coupon_features_raw']).any(1)\\nB=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\\nmodels={}\\nfor label,xx in [('diag',m._features(g,g)[-n:]),('joint',m._features(tr,g)[-n:])]:\\n dr=xx[:,1:]@th[3:]\\n for name,F,free in [('drift',np.c_[np.ones(n),dr],False),('drift+quadratic',np.c_[np.ones(n),dr,dr**2],False),('drift+hold interaction',np.c_[np.ones(n),dr,h*dr],False),('drift+linear hold',np.c_[np.ones(n),dr,h],True),('drift+stress contrast',np.c_[np.ones(n),dr,h-p[:,-1]],False),('drift+memory',np.c_[np.ones(n),dr,h[:,None]-R0[:,:2]*tau],False),('features',xx,False)]:\\n  off=np.zeros((n,3)) if free else np.c_[h[:,None]*th[:2],np.zeros(n)]\\n  coef=np.linalg.lstsq(F,B-off,rcond=None)[0]; errors=[]\\n  for blocks in (lab,strat,np.arange(n),np.where(miss,1,0)):\\n   pp=np.zeros_like(B)\\n   for k in np.unique(blocks):\\n    u=blocks==k; pp[u]=off[u]+F[u]@np.linalg.lstsq(F[~u],(B-off)[~u],rcond=None)[0]\\n   e=pp@D.T-obs\\n   errors.append(np.max([[np.mean(e[blocks==k,:-1]**2)**.5,np.mean(e[blocks==k,-1]**2)**.5] for k in np.unique(blocks)],0))\\n  print(label,name,'lab/stratum/coupon/missing RMSE',np.round(errors,4).tolist(),'coef',coef.T.round(4).tolist())\\nprint('per coupon implied chamber scalar'); xx=m._features(g,g)[-n:]; Q=B-np.c_[h[:,None]*th[:2],np.zeros(n)]; C=np.linalg.lstsq(np.c_[np.ones(n),xx[:,1:]@th[3:]],Q,rcond=None)[0]; da=(Q-C[0])/C[1]; print(np.c_[lab,strat,miss,xx[:,1:]@th[3:],da].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_rank.py | tail -39\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: hold-proportional amplitudes with a single material feature score -> H2: retain only chamber terms that transfer across labs and strata; the current scalar model has worst held-out lab curve/rate RMSE of 0.0223/0.0204 with diagnostic-panel scaling.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the lower in-sample error of unrestricted feature and memory coefficients\",\n      \"rejected_reason\": \"Those coefficients did not improve held-out lab errors with diagnostic-panel scaling.\"\n    }\n  ],\n  \"rationale\": \"Compare the single-score chamber law against stress, memory, and interaction terms on held-out labs, strata, and missing-feature coupons. Keep an extra term only if it improves transfer, and use the apparatus log to check the resulting physical interpretation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "cc29c839495e7435c10d2b2f2be82f442af79cdfd7276097bc65eb3d76a5ca9c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31327.58,
+      "usage_known": true,
+      "prompt_tokens": 36977,
+      "cached_tokens": 14976,
+      "completion_tokens": 1211
+    }
+  ]
+}

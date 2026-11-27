@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a550c428f4d145ec829ef607cf7c0eb2",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:57.449624+00:00",
+  "ended_at_utc": "2026-11-27T19:51:29.117370+00:00",
+  "request_sha256": "02c01d163a1027e4d0b46c238b45a6d16d95f4a2e95a2c8dbdfa574527b29729",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 80359,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43314,
+    "cached_tokens": 0,
+    "completion_tokens": 1315
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    # With no fixed payload, the verified transducer fits the supplied sweeps.\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\ncat > /tmp/chamber_release.py <<'PY'\\nimport sys\\nsys.path.insert(0, '/holdout_task')\\nimport pickle\\nimport numpy as np\\nimport downstream_solver as m\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nd = calibrate_upstream(raw)\\nout = solve_batch(raw)\\nfor k, v in m.solve_downstream(d).items():\\n    np.testing.assert_array_equal(out[k], v)\\na, b = d['train'], d['test']\\ndiag = calibrate_upstream(dict(raw, test=item['campaign_diagnostics']))['test']\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nassert all(np.isfinite(v).all() for v in out.values())\\ndt, t = d['past_dt'], d['eval_times']\\nx = m._features(diag)\\nstrain, rate = m._predict(diag, x, tau, theta, dt, t)\\nstart, _ = m._predict(diag, x, tau, theta, dt, np.array([0., 1e-6]))\\nnp.testing.assert_allclose(start[:, 0], diag['strain_0'], rtol=0, atol=1e-14)\\nnp.testing.assert_allclose((start[:, 1]-start[:, 0])/1e-6, rate, rtol=2e-6, atol=1e-8)\\ne, er = strain-diag['strain_curves_obs'], rate-diag['instant_rate_obs']\\nk = np.r_[-np.expm1(-t), 1.]\\nE = np.c_[e, er]\\north = E - np.outer(E @ k / (k @ k), k)\\nlabs = diag['lab_id']\\ncomplete = np.isfinite(diag['coupon_features_raw']).all(1)\\ndef rms(v):\\n    return np.sqrt(np.mean(v*v))\\nprint('diagnostic strain/rate/orthogonal RMSE by lab:', {int(l): [rms(e[labs==l]), rms(er[labs==l]), rms(orth[labs==l])] for l in np.unique(labs)})\\nprint('complete/missing strain and rate RMSE:', [(rms(e[g]),rms(er[g])) for g in (complete,~complete)])\\nprint('missing diagnostics rows [row, feature, local imputation, joint imputation]:')\\nx_joint = m._features(a, b, diag)[-len(x):]\\nfor i, j in zip(*np.where(~np.isfinite(diag['coupon_features_raw']))):\\n    print(i, j, round(x[i,j],5), round(x_joint[i,j],5))\\nprint('diagnostic strain early/late RMSE:',rms(e[:,:3]),rms(e[:,-3:]))\\nxt = m._features(a,b)[:len(a['lab_id'])]\\ncs, rs = m._design(tau, m._inputs(a,xt), dt, t)\\nobs = a['strain_curves_obs']-a['strain_0'][:,None]\\nprint('train median absolute strain/rate residuals:',np.median(np.abs(cs@theta-obs)),np.median(np.abs(rs@theta-a['instant_rate_obs'])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_release.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: intrinsic chronological memory → H2: deployment-local alignment and one-second saturating drift; the dynamic-calibration trial gave worst diagnostic-lab RMSE of 0.01615 for strain and 0.02167 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the staged gain and offset payload in the batch wrapper\",\n      \"rejected_reason\": \"It agrees with the current sweeps, but the batch contract requires fitting the transducer from the supplied dataset. The verified upstream already supports this directly.\"\n    }\n  ],\n  \"rationale\": \"Use the verified upstream's dynamic fit without changing the downstream law. Run the exact composed artifacts in an isolated process to catch interface regressions, and separate drift-aligned error from temporal-shape error to see whether the worst diagnostic slice warrants another constitutive change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f7d174b354208d90ac7b77233912a31ba936c5b14561cab2570fd084a1e25343",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32780.7,
+      "usage_known": true,
+      "prompt_tokens": 43314,
+      "cached_tokens": 0,
+      "completion_tokens": 1315
+    }
+  ]
+}

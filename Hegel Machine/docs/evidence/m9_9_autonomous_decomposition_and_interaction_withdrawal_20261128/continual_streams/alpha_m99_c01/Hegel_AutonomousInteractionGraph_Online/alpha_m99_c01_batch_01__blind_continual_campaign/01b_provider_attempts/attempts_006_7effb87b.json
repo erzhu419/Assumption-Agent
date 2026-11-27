@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7effb87b4dd24efb90872687124e5636",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:15.069446+00:00",
+  "ended_at_utc": "2026-11-27T19:38:45.720791+00:00",
+  "request_sha256": "94295acafe6bf5979d8bbd3ced8aa59e47ce35fe2d8daf6cd7478dfaa7bafe29",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46308,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32587,
+    "cached_tokens": 5504,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chlaw.py <<'PY'\\nexec(open('/tmp/chbasis.py').read().split('C,E=profile(tau)')[0])\\nimport json\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor row in log:\\n for k,v in row.items():\\n  if isinstance(v,dict): print('LOG',k,[(kk,np.shape(vv),str(vv)[:105]) for kk,vv in v.items()])\\n  else: print('LOG',k,np.shape(v),str(v)[:250])\\nA=m._design(tau,xd,pd,hd,dt,t)[1]; r=A[:,2:]@beta[2:]; z=hd[:,None]-A[:,:2]*tau\\n# Fit curve and rate responses together so an unstable split between slow amplitude and linear drift cannot drive model selection.\\nfrom scipy.linalg import qr\\n\\ndef assess(name,F):\\n F=np.c_[np.ones(len(F)),F]; B=np.linalg.lstsq(F,Y,rcond=None)[0]; U,s,_=np.linalg.svd(F,full_matrices=False); H=(U[:,s>1e-9]**2).sum(1); E=Y-F@B; L=E/np.maximum(1-H[:,None],1e-7); C=np.linalg.lstsq(basis(tau),B.T,rcond=None)[0].T\\n print(name, 'coef',np.round(C.T,4).tolist() if F.shape[1]<10 else '-', 'rms', np.round([np.std(E[:,:-1]),np.std(E[:,-1]),np.std(L[:,:-1]),np.std(L[:,-1])],5),'max',np.round(np.max(abs(L),axis=0)[[0,5,11,12]],4)); return E\\n\\ndef cat(*parts): return {k:np.concatenate([s[k] for s in parts],axis=0) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}\\n_,xall=m._features(cat(tr,te),di); _,xself=m._features(di,di)\\nfor name,xj in [('train+diag',xd),('all',xall),('diag-only',xself),('raw',np.where(np.isfinite(di['coupon_features_raw']),di['coupon_features_raw'],0))]:\\n rj=beta[2]+xj@beta[3:]; print('ALIGN',name, np.round(rj-r,4)); assess(name,np.c_[hd,rj]); assess(name+'+z',np.c_[hd,z,rj]); assess(name+'+z+allfeatures',np.c_[hd,z,xj])\\nrj=beta[2]+xself@beta[3:];\\nfor name,F in [('hold+drift+nonlin',np.c_[hd,rj,rj**2,rj**3,hd*rj]),('hist',np.c_[hd,pd,rj]),('bridge hold component',np.c_[di['hold_channel_raw'],rj]),('hist x drift',np.c_[hd,z,rj,rj[:,None]*z]),('lab offset',np.c_[hd,r,np.eye(4)[di['lab_id']][:,1:]]),('stratum offset',np.c_[hd,r,np.eye(3)[di['stratum']][:,1:]]),('hold and drift difference',np.c_[hd,r,rj-r])]: assess(name,F)\\nE=assess('reference align baseline',np.c_[hd,r]); print('residual rows early/mid/late/rate',np.round(E[:,[0,5,11,12]],4)); print('drift perturbation from raw missing',np.where(~np.isfinite(di['coupon_features_raw']))); print('baseline residual singular values',np.linalg.svd(E,compute_uv=False).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chlaw.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear chamber activation from hold and benchtop drift → H2 test whether reference alignment, stress history, or interactions explain the remaining error; the two-input model has coupon-held-out maxima of 0.244 strain and 0.156 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select predictors from fitted slow-mode amplitudes alone\",\"rejected_reason\":\"The slow exponential and linear drift are hard to separate over the observed interval; evaluate both strain and rate directly on held-out coupons.\"}],\"rationale\":\"Check whether reference scaling or imputation explains the residual before adding physical interactions. The comparisons distinguish a coupon preprocessing mismatch from a load-history term and determine which model to carry into grouped validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "73110c5600ea74e66cfceed7dab25bebcad15e71a1c06c09b5114575d9d7dbad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31749.78,
+      "usage_known": true,
+      "prompt_tokens": 32587,
+      "cached_tokens": 5504,
+      "completion_tokens": 1268
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f238100900b142008f821f94402ad03e",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__beta_m99_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:28.904693+00:00",
+  "ended_at_utc": "2026-11-27T19:33:12.483355+00:00",
+  "request_sha256": "b00d7aa982eba8743e9fd56f60624580a25a13209fc41a25e13bde6e609751f2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39735,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30570,
+    "cached_tokens": 14976,
+    "completion_tokens": 1891
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import product\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\n\\n# Independent row-by-row stencil, in the opposite (C) flattening convention.\\ndef axis(k,v,r,L):\\n    n=len(k); h=L/(n-1); d=np.zeros((n,n))\\n    for i in range(n):\\n        if i in (0,n-1):\\n            j=1 if i==0 else n-2\\n            d[i,j]=-k[i]/h**2; d[i,i]=-d[i,j]+r/h\\n        else:\\n            d[i,i-1]=-(k[i]+k[i-1])/(2*h*h)-max(v[i],0)/h\\n            d[i,i+1]=-(k[i]+k[i+1])/(2*h*h)-max(-v[i],0)/h\\n            d[i,i]=-d[i,i-1]-d[i,i+1]\\n    return d\\nax,ay=[axis(s['kappa_'+a],s['vel_'+a],s['robin_'+a],s['L'+a]) for a in 'xy']\\nnx,ny=s['nx'],s['ny']; n=len(s['source_modes'])\\nL=np.kron(ax,np.eye(ny))+np.kron(np.eye(nx),ay)+np.diag(s['V_reaction_2d'].ravel())\\nB=s['source_modes'].reshape(n,-1).T\\nfields=np.stack([np.linalg.solve(L+mu*np.eye(nx*ny),B) for mu in s['mu_shifts']])\\ni,j=s['sensor_ij'].T\\nS=fields[:,i*ny+j,:].reshape(-1,n)\\nSp,Up=m._forward(s)\\nassert np.allclose(Sp,S,atol=2e-13,rtol=0)\\nassert np.allclose(Up,fields[-1].T.reshape(n,nx,ny),atol=2e-13,rtol=0)\\nZ=s['Z_nuisance']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA=P@S; ridge=s['source_ridge']; cap=s['u_box']; H=A.T@A+ridge*np.eye(n)\\nsweep=s['sensor_calibration_sweeps']; R=sweep['ref_rosette']; offset=R.mean(0)\\nM=np.linalg.lstsq(R-offset,sweep['raw_rosette']-sweep['raw_rosette'].mean(0),rcond=None)[0]\\nraw=s['y_obs_raw'].reshape(-1,4)\\ny=((raw-sweep['raw_rosette'].mean(0))@np.linalg.inv(M)+offset).ravel()\\n\\ndef audit(st, calibrated):\\n    out=m.solve_batch(st); w=out['weights']; cert=out['kkt_certificate']; nu=cert['nu_sum']; lo=np.array(cert['lam_lower']); hi=np.array(cert['lam_upper']); budget=st['total_budget']\\n    r=A@w-P@calibrated; g=A.T@r+ridge*w; J=(r@r+ridge*w@w)/2\\n    gap=J-cert['dual_lower_bound']; station=max(abs(g-nu-lo+hi)); comp=max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w))))\\n    assert np.allclose(w,cert['weights'],rtol=0,atol=0)\\n    assert abs(w.sum()-budget)<2e-12 and w.min()>=-2e-12 and w.max()<=cap+2e-12\\n    assert lo.min()>=0 and hi.min()>=0 and max(station,comp,abs(gap))<2e-10\\n    assert abs(J-cert['primal_objective'])<2e-12\\n    assert abs(cert['dual_lower_bound']-(J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()))<2e-12\\n    assert np.max(abs((L+s['mu_shifts'][-1]*np.eye(nx*ny))@out['terminal_field'].ravel()-B@w))<2e-12\\n    return w,J,max(station,comp,abs(gap)),np.sqrt(np.mean(r.reshape(len(fields),-1)**2,axis=1)).max()\\n\\nw,J,kkt,fit=audit(s,y); target=P@y; c=-A.T@target; budget=s['total_budget']; best=np.inf\\nfor face in product((-1,0,1),repeat=n):\\n    f=np.asarray(face); free=np.flatnonzero(f==0); wp=(f==1)*cap; b=budget-wp.sum(); k=len(free)\\n    if b < -1e-12 or b > k*cap+1e-12: continue\\n    if k:\\n        e=np.ones((k,1)); K=np.block([[H[np.ix_(free,free)],e],[e.T,np.zeros((1,1))]])\\n        wp[free]=np.linalg.solve(K,np.r_[-(H@wp+c)[free],b])[:-1]\\n    if wp.min() < -1e-12 or wp.max()>cap+1e-12: continue\\n    err=A@wp-target; best=min(best,0.5*(err@err+ridge*wp@wp))\\nassert abs(J-best)<2e-12\\n\\n# Non-identity affine response: catches transposed calibration or incorrect offsets.\\nT=np.array([[1.15,.08,0,-.03],[-.07,.94,.04,0],[.02,0,1.21,.10],[0,.09,-.06,.83]])\\no=np.array([.04,-.08,.11,-.02]); syn={**s,'sensor_calibration_sweeps':{**sweep,'raw_rosette':R@T+o},'y_obs_raw':(y.reshape(-1,4)@T+o).ravel()}\\nmaxerr=kkt\\nfor b in (0.,cap/3,cap,cap*n/2,cap*(n-1),cap*n-cap/3,cap*n):\\n    _,_,e,_=audit({**syn,'total_budget':b},y); maxerr=max(maxerr,e)\\nassert np.max(abs(audit(syn,y)[0]-w))<2e-12\\nprint(f'worst forward sample error={np.max(abs(Sp-S)):.3g}; public objective error vs exhaustive faces={abs(J-best):.3g}; worst KKT residual/gap={maxerr:.3g}; public worst-shift projected RMSE={fit:.5g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 documented Robin stencil → H2 independently verify the sparse forward model and certified optimum; public schema passes and preliminary worst-shift diagnostic RMSE is 7.3e-3.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema validation alone\",\n      \"rejected_reason\": \"The schema does not detect a transposed grid, incorrect calibration, or an invalid optimality certificate.\"\n    }\n  ],\n  \"rationale\": \"A dense reference in C order detects indexing and stencil mistakes; exhaustive face enumeration checks the public optimum independently. Calibration and budget slices exercise the certificate at both endpoints and in the interior. Any failed check identifies which part of the solver needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "da4751078a27a3a2ee0492ba29ae2e802cda59deb78f428bbd08f9d40fe4d286",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45784.64,
+      "usage_known": true,
+      "prompt_tokens": 30570,
+      "cached_tokens": 14976,
+      "completion_tokens": 1891
+    }
+  ]
+}

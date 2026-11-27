@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d41bfaefaf5f44dabcc8d6cc916adf6f",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:07.162548+00:00",
+  "ended_at_utc": "2026-11-27T19:39:38.358803+00:00",
+  "request_sha256": "87ff9724fbb5458684025f0730d21e180969bb37209902a7cddb5ff665edf82f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43539,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31499,
+    "cached_tokens": 14976,
+    "completion_tokens": 1301
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,210p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nit = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns = it['study']; c = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']; b = c['single_bank_sweeps']; S, _ = m['_forward'](s)\\nbank = s['row_bank_id']; Z = s['Z_nuisance']; Q = np.linalg.qr(Z)[0]\\nprint('rosette bank order matches channels:', np.array_equal(bank.reshape(-1,4), np.tile(np.arange(4),(len(bank)//4,1))))\\nprint('banks per shift:', [np.bincount(t,minlength=4).tolist() for t in np.split(bank,len(s['mu_shifts']))])\\nfor kind in ('diagonal','diagonal+bank','full','quadratic','rational'):\\n    worst = []\\n    for j in range(4):\\n        def design(X):\\n            u = X[:,j]; out = np.c_[np.ones(len(X)),u] if kind.startswith('diagonal') else np.c_[np.ones(len(X)),X]\\n            if kind == 'quadratic': out = np.c_[out,*[X[:,a]*X[:,z] for a in range(4) for z in range(a,4)]]\\n            if kind == 'rational': out = np.c_[out,u/(1+u*u)]\\n            return out\\n        A = design(x); sel = b['bank_id']==j; ab = np.c_[np.ones(sel.sum()),b['ref_signal'][sel]]; yy = b['raw_readout'][sel]; err = []\\n        for i in range(len(x)):\\n            keep = np.arange(len(x))!=i; F, Y = A[keep], y[keep,j]\\n            if kind == 'diagonal+bank': F, Y = np.vstack([F,ab]), np.r_[Y,yy]\\n            p = np.linalg.lstsq(F,Y,rcond=None)[0]; err.append(A[i]@p-y[i,j])\\n        worst.append(np.linalg.norm(err)/len(err)**.5)\\n    print(kind, 'LOO RMSE by bank', np.array(worst), 'worst', max(worst))\\nfor kind in ('diagonal','diagonal+bank','full'):\\n    A = np.c_[np.ones(len(x)),x]; C = np.linalg.lstsq(A,y,rcond=None)[0]\\n    if kind.startswith('diagonal'):\\n        C[1:] = 0\\n        for j in range(4):\\n            u,v = x[:,j],y[:,j]; take = b['bank_id']==j\\n            if kind.endswith('+bank'): u,v = np.r_[u,b['ref_signal'][take]],np.r_[v,b['raw_readout'][take]]\\n            C[[0,j+1],j] = np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]\\n    def calibrate(raw): return np.linalg.solve(C[1:].T,(raw.reshape(-1,4)-C[0]).T).T.ravel()\\n    R = np.column_stack([calibrate(p['y_pulse_raw'])-S@p['w_pulse'] for p in it['campaign_diagnostics']]); Rq = R-Q@(Q.T@R)\\n    print(kind,'pulse max L2',max(np.linalg.norm(R,axis=0)),'worst shift/bank RMSE',max(np.mean(R[np.arange(k,k+len(bank)//len(s['mu_shifts']))[bank[k:k+len(bank)//len(s['mu_shifts'])]==j]]**2)**.5 for k in range(0,len(bank),len(bank)//len(s['mu_shifts'])) for j in range(4)),'profiled pulse max L2',max(np.linalg.norm(Rq,axis=0)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain reflecting walls and test whether bank-aware calibration improves independent pulse agreement; the current worst public pulse L2 residual is 1.12×10⁻⁵.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply a classification or relay audit\",\n      \"rejected_reason\": \"This is a steady transport inversion with continuous measurements; banks and shifts are the relevant observation strata, and there are no class labels or relay states.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration families on held-out sweep rows and independently measured pulses, reporting the worst bank and shift before and after nuisance removal. Change calibration only if the evidence shows a meaningful improvement; the wall stencil and KKT checks are already verified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "561e303cf550a0fe36845a8761973c8d8d61975824f90484c8a25d701b2a8b52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32297.09,
+      "usage_known": true,
+      "prompt_tokens": 31499,
+      "cached_tokens": 14976,
+      "completion_tokens": 1301
+    }
+  ]
+}

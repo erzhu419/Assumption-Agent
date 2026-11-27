@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c8d35e7e73b469188ccadb8fa60d960",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:06.310951+00:00",
+  "ended_at_utc": "2026-11-27T19:53:32.500905+00:00",
+  "request_sha256": "14cd1784c945180fc23a36270fba3a52889175201d1ff8acc3a30f90060e678c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28439,
+    "cached_tokens": 14976,
+    "completion_tokens": 1045
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,42p' /tmp/hegel_continual_archive/beta_m99_c02_batch_02_solver.py; sed -n '62,163p' /tmp/hegel_continual_archive/beta_m99_c02_batch_03_solver.py; cat > /tmp/m99_compare.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\n\\ndef load(tag):\\n p=Path('/tmp/hegel_continual_archive')/f'beta_m99_c02_{tag}_solver.py'\\n spec=importlib.util.spec_from_file_location(tag,p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\n\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\na=load('batch_03'); c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']\\nnp.set_printoptions(precision=6,suppress=True,linewidth=140)\\nfor label, f in [('affine',lambda x,j:np.c_[np.ones(len(x)),x]),('archived polynomial',a._features)]:\\n errors=np.empty_like(y); betas=[]\\n for j in range(4):\\n  d=f(x,j)\\n  def fit(i):\\n   t=d[i]; v=y[i,j]; b=np.linalg.lstsq(t,v,rcond=None)[0]\\n   for _ in range(60):\\n    w=1/np.sqrt(1+((v-t@b)/.006)**2)\\n    b=np.linalg.lstsq(t*w[:,None],v*w,rcond=None)[0]\\n   clean=np.abs(v-t@b)<.015\\n   return np.linalg.lstsq(t[clean],v[clean],rcond=None)[0] if clean.sum()>=2*t.shape[1] else b\\n  for k in range(5):\\n   i=np.arange(len(x))%5==k; errors[i,j]=y[i,j]-d[i]@fit(~i)\\n  betas.append(fit(np.ones(len(x),bool)))\\n print(label,'OOF abs error quantiles',np.quantile(abs(errors),[.5,.8,.9,.95,1],axis=0),'coefficients',np.array(betas),sep='\\\\n')\\n print('corrupt rows',np.flatnonzero(np.max(abs(errors),axis=1)>1))\\nycal=a._calibrate(s)\\nprint('calibrated observed range',ycal.min(),ycal.max())\\nfor tag in ['s00','batch_01','batch_02','batch_03']:\\n m=load(tag); S,U=m._responses(s); H,r=a._profile(S,ycal,s); R=s['source_ridge']; w=a._box_simplex(H.T@H+R*np.eye(H.shape[1]),H.T@r,s['u_box'],s['total_budget']); e=H@w-r\\n print(tag,'weights',w,'shift RMSE',np.sqrt(np.mean(e.reshape(3,-1)**2,axis=1)),'bank RMSE',np.sqrt(np.mean(e.reshape(-1,4)**2,axis=0)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_compare.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived boundary and calibration -> independently tested wall and rosette laws; the initial affine calibration has a worst-channel held-out RMSE of 0.8602 before accounting for corrupted sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the affine RMSE as evidence of nonlinear sensor coupling\",\n      \"rejected_reason\": \"The raw sweep extrema suggest gross corruption, which can inflate affine RMSE even when the underlying law is affine.\"\n    }\n  ],\n  \"rationale\": \"Use robust held-out sweep residuals to distinguish nonlinear terms from corrupted measurements. Then compare archived wall responses using the same calibrated observations so a sensor-model change cannot be mistaken for a boundary change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "82fd73364cfc34ef91712b59714f6fb2a88c69c26d2976c5d2ee0fa665a4c593",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27333.7,
+      "usage_known": true,
+      "prompt_tokens": 28439,
+      "cached_tokens": 14976,
+      "completion_tokens": 1045
+    }
+  ]
+}

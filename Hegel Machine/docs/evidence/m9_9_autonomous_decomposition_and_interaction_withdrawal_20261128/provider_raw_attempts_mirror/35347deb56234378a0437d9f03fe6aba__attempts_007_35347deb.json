@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "35347deb56234378a0437d9f03fe6aba",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:43.315963+00:00",
+  "ended_at_utc": "2026-11-27T19:39:15.087614+00:00",
+  "request_sha256": "18bba99f7d5d0ad42c26b0a86e45fbc33eb21b884c86bb61092f7d415c07c4d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34700,
+    "cached_tokens": 14976,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/z=hist(ta); dr=/,$d' /tmp/chamber_linear.py >/tmp/chamber_temporal.py; cat >>/tmp/chamber_temporal.py <<'PY'\\nxd=_features(g,g)[0]; drift=th[2]+xd@th[3:]; F=T(ta)[:,:2]; R=Y-h[:,None]*(F@th[:2]); time=np.r_[t,0.]; print('time',time); print('empirical drift kernel',drift@R/(drift@drift)); print('fixed spectral coefficients',np.linalg.lstsq(T(ta),drift@R/(drift@drift),rcond=None)[0]); print('counts by lab',np.unique(lab,return_counts=True)); print('diag missing',np.sum(~np.isfinite(g['coupon_features_raw']),0))\\ndef sat(q): return np.r_[-np.expm1(-t/q),1/q]\\nL=np.r_[t,1.]; ex=F.T\\nmodels={'empirical':(lambda a:np.eye(len(time)),[]),'branches':(lambda a:F,[]),'branches+linear':(lambda a:np.c_[F,L],[]),'single saturation':(lambda a:sat(np.exp(a[0]))[:,None],[np.log(1.5)]),'single+linear':(lambda a:np.c_[sat(np.exp(a[0])),L],[np.log(1.5)]),'fast+free saturation':(lambda a:np.c_[ex[0],sat(np.exp(a[0]))],[np.log(3)]),'fixed fast+slow+free':(lambda a:np.c_[F,sat(np.exp(a[0]))],[np.log(1.5)]),'fast+free+linear':(lambda a:np.c_[ex[0],sat(np.exp(a[0])),L],[np.log(3)])}\\nrm=lambda a:np.sqrt(np.mean(a*a));\\nfor name,(basis,seed) in models.items():\\n def fit(m):\\n  def proj(a):\\n   V=basis(a); y=drift[m]@R[m]/(drift[m]@drift[m]); c=np.linalg.lstsq(V,y,rcond=None)[0]; return V@c,c\\n  a=least_squares(lambda a:(R[m]-drift[m,None]*proj(a)[0]).ravel(),seed,bounds=(np.log(.055),np.log(24.9)),max_nfev=150).x if seed else []\\n  return proj(a),np.exp(a)\\n E=np.zeros_like(Y)\\n for l in np.unique(lab):\\n  j=lab==l; (k,c),_=fit(~j); E[j]=R[j]-drift[j,None]*k\\n (k,c),a=fit(np.ones(n,bool)); print(name,'params',np.round(a,5),np.round(c,5),'OOF worst',np.round(np.max([[rm(E[lab==l,:-1]),rm(E[lab==l,-1])] for l in np.unique(lab)],0),6),'early/late',rm(E[:,:3]),rm(E[:,-4:-1]))\\nprint('train/test-only drift difference',np.quantile(np.abs((_features(te,te)[0]-xe)@th[3:]),[0,.5,.9,1])); print('source bridge and features:')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_temporal.py\\nsed -n '1,48p' /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference-panel alignment imputation' | head -5\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber history remapping → H2 zero-memory hold response plus a drift-driven transient using a chamber-local reference panel; worst held-out-lab RMSE is 0.00428 for strain and 0.00408 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep nonlinear drift or free history coefficients\",\n      \"rejected_reason\": \"Once the diagnostic coupons use their own reference panel, these additions do not materially improve held-out error.\"\n    },\n    {\n      \"option\": \"Copy the sampled drift kernel into the solver\",\n      \"rejected_reason\": \"A closed-form kernel would preserve the relationship between strain and initial rate and support other evaluation times.\"\n    }\n  ],\n  \"rationale\": \"After subtracting the intrinsic hold response, the diagnostic residual is almost rank one. Compare closed-form kernels on held-out labs to determine whether that shared response needs a separate time constant or a linear term. Quantify how chamber-local normalization changes deployment drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "116744ea8339745b6ec40d792014491cc8f10e4bda8ed7d81264574d22609726",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32870.87,
+      "usage_known": true,
+      "prompt_tokens": 34700,
+      "cached_tokens": 14976,
+      "completion_tokens": 1320
+    }
+  ]
+}

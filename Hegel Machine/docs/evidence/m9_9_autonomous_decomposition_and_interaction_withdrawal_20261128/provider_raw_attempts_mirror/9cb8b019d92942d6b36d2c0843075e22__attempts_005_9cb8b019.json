@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9cb8b019d92942d6b36d2c0843075e22",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:25.469251+00:00",
+  "ended_at_utc": "2026-11-27T20:05:54.965951+00:00",
+  "request_sha256": "682e6db95f1b887ae2bd14b36363c34731ad6364d44e8125764b0ef07a70e829",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 42622,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30319,
+    "cached_tokens": 13696,
+    "completion_tokens": 1195
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_load.py <<'PY'\\nfrom chamber_probe import *\\nfrom itertools import combinations\\nL=H*np.sum(theta[:2]/taus)\\nC=np.c_[Y,R]\\nlabs=g['lab_id']; scale=np.r_[np.ones(len(t)),1.]\\ndef basis(p):\\n a=np.exp(p); return np.vstack([np.c_[a*-np.expm1(-t[:,None]/a),t],np.ones((1,3))])\\nf=least_squares(lambda p:(C-np.linalg.lstsq(basis(p),C.T,rcond=None)[0].T@basis(p).T).ravel(),np.log(taus)); print('empirical poles',np.exp(f.x)); B=np.linalg.lstsq(basis(f.x),C.T,rcond=None)[0].T; print('amplitudes [load drift fast slow linear]',np.round(np.c_[L,drift,B],4));\\nD=np.c_[np.ones(n),L,drift,Z, xg];print('rate models');\\nfor inds in [(1,2),(0,1,2),(1,2,3,4),(0,1,5,6,7,8)]:\\n A=D[:,inds]; b=np.linalg.lstsq(A,R,rcond=None)[0]; print(inds,b,np.round(R-A@b,4), 'mae',np.mean(abs(R-A@b)))\\ndef fit(terms,free,m):\\n A=D[:,terms]; b0=np.zeros((len(terms),3)); b0[0]=[.8,.2,0]; b0[1]=[.1,.2,.7]\\n def pred(p):return A@p[2:].reshape(b0.shape)@basis(p[:2]).T\\n if free:\\n  p=least_squares(lambda p:(pred(p)[m]-C[m]).ravel(),np.r_[np.log(taus),b0.ravel()],max_nfev=350).x\\n else:\\n  T=basis(np.log(taus)); b=np.linalg.lstsq(np.einsum('ni,tj->ntij',A[m],T).reshape(-1,b0.size),C[m].ravel(),rcond=None)[0]; p=np.r_[np.log(taus),b]\\n return p,pred(p)\\nfor terms in [(1,2),(1,2,0),(1,2,3,4),(1,2,0,5,6,7,8)]:\\n for free in (False,True):\\n  p,S=fit(terms,free,np.ones(n,bool)); print('terms/free/poles/coef',terms,free,np.exp(p[:2]),p[2:].reshape(-1,3)); print('LOLO curve/rate MAE',[(int(l),*np.round(abs(fit(terms,free,labs!=l)[1][labs==l]-C[labs==l]).mean(axis=0)[[0,-1]],5),round(abs(fit(terms,free,labs!=l)[1][labs==l,:-1]-Y[labs==l]).mean(),5)) for l in np.unique(labs)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_load.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived chamber law -> H2 history-suppressed load with two relaxation modes and a possible linear drift; benchtop chamber rate MAE is 1.020, versus free-amplitude joint MAE of 0.00159.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived unit-time drift decay or the unchanged benchtop law suffices for the current chamber.\",\n    \"empirical_witness\": \"Both give initial-rate MAE 1.020 on 24 calibrated chamber coupons; a shared two-pole basis with a linear mode fits strain and initial rate jointly at MAE 0.00159 when coupon amplitudes are free.\",\n    \"causal_blanket_diagnosis\": \"The archive law misses a change in how hold load, prior history, and drift contribute to chamber amplitudes; free amplitudes establish a temporal basis but cannot predict new coupons.\",\n    \"sublated_pivot\": \"Keep the intrinsic material fit on benchtop data and identify the chamber amplitudes from physical coupon predictors under leave-one-lab-out validation.\",\n    \"risk_kind\": \"chamber boundary-law transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use unconstrained per-coupon amplitudes\",\n      \"rejected_reason\": \"They are a useful noise-floor diagnostic but require chamber labels unavailable at prediction time.\"\n    }\n  ],\n  \"rationale\": \"Regress the time-mode amplitudes against normalized hold load, standardized drift, and exact hereditary history; retain history or free poles only if they improve held-out lab predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9eb0d39180800387db94999c2d5e55f5c9ef453426c49484249e63d9dd51eb6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30691.89,
+      "usage_known": true,
+      "prompt_tokens": 30319,
+      "cached_tokens": 13696,
+      "completion_tokens": 1195
+    }
+  ]
+}

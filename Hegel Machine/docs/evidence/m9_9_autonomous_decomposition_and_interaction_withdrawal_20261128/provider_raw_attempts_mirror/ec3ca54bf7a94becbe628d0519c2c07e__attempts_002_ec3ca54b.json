@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec3ca54bf7a94becbe628d0519c2c07e",
+  "call_seq": 2,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:23.933397+00:00",
+  "ended_at_utc": "2026-11-27T19:51:43.455716+00:00",
+  "request_sha256": "3ffafb78713ef26232b8cfe1987381c8a78fdb02a892d608067304b3c5526c88",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12951,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19364,
+    "cached_tokens": 13696,
+    "completion_tokens": 684
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\na=json.load(open(p)); print('LOG',type(a).__name__)\\nif isinstance(a,dict):\\n for k,v in a.items():\\n  print(k,type(v).__name__,len(v) if isinstance(v,(dict,list,str)) else v)\\n  if isinstance(v,list) and v:\\n   for entry in v[-4:]: print(str(entry)[:4500])\\nelse:\\n for entry in a[-4:]: print(str(entry)[:4500])\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; q=s['sensor_calibration_sweeps']; x=q['ref_rosette']; y=q['raw_rosette']; A=np.c_[np.ones(len(x)),x]; keep=np.ones(len(x),bool)\\nfor _ in range(5):\\n B=np.linalg.lstsq(A[keep],y[keep],rcond=None)[0]; e=np.linalg.norm(y-A@B,axis=1); keep=e<max(.03,4*np.median(e))\\nprint('linear coeff rows: intercept, input 0-3\\\\n',B); print('sorted linear residuals',np.round(np.sort(e),5)); print('bank sweeps',q['single_bank_sweeps']); print('bank layout',s['row_bank_id'].reshape(-1,4)[:12])\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $(basename \\\"$f\\\")\\\"; grep -nEi 'calib|rosette|satur|tanh|campaign|pulse|outlier' \\\"$f\\\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent response → H2 coupled affine response with structured saturation; held-out inverse error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible inverse directly to all calibration rows\",\n      \"rejected_reason\": \"Gross EMI rows can dominate the fit, and 80 rows offer limited support for an unconstrained inverse.\"\n    }\n  ],\n  \"rationale\": \"Compare chamber settings and prior calibration code to identify the active response family. The trimmed affine baseline exposes cross-channel coupling and shows whether its residuals warrant a nonlinear model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "cd25c6067de645f4873790b2cebd9ebeeafb2e36038bfa3f0e16264c61ed79e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19478.82,
+      "usage_known": true,
+      "prompt_tokens": 19364,
+      "cached_tokens": 13696,
+      "completion_tokens": 684
+    }
+  ]
+}

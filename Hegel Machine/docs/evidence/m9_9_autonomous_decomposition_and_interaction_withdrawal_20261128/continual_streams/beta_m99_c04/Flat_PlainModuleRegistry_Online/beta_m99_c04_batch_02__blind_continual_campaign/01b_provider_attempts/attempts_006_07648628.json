@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0764862857c84868adfbb052a738452e",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:59.146137+00:00",
+  "ended_at_utc": "2026-11-27T19:46:37.090349+00:00",
+  "request_sha256": "bfd1b2f76c52c83782ee27698dea541c8916f0d3680ca78a1183b3b2f4ddc053",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31122,
+    "cached_tokens": 13696,
+    "completion_tokens": 1591
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat batch_solver.py _verified_upstream.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nimport numpy as np\\nfrom batch_solver import solve_batch, _PAY\\nfrom downstream_solver import _design, _box_simplex, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nfrom wall_probe import s, W, Y, errors, proj\\nfrom itertools import product\\n\\ncal = calibrate_upstream(s, _PAY)\\nS, U = _design(cal)\\nE = proj(S @ W - Y)\\ncandidates = {pair: np.mean(errors(*pair)**2,axis=0) for pair in product(('reflect','robin','double','half','dirichlet','periodic','wraplocal','wraponly'),repeat=2)}\\nfor i in range(W.shape[1]):\\n    held = np.arange(W.shape[1]) != i\\n    best = min(candidates, key=lambda p: np.mean(candidates[p][held]))\\n    rmse = np.sqrt(np.mean(E[:, i]**2))\\n    print('held-out pulse', i, 'selected', best, 'candidate RMSE', rmse)\\n    assert best == ('periodic','periodic') and rmse < 2e-5\\n\\n# Independent dense row assembly checks seam directions and terminal ordering.\\ndef dense_axis(k,v,h):\\n    n=len(k); A=np.zeros((n,n))\\n    for i in range(n):\\n        for step in (-1,1):\\n            j=(i+step)%n\\n            rate=(k[i]+k[j])/(2*h*h)+max(-step*v[i],0)/h\\n            A[i,j]-=rate\\n            A[i,i]+=rate\\n    return A\\nnx,ny=s['nx'],s['ny']; N=nx*ny\\nax=dense_axis(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1)); ay=dense_axis(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1))\\nL=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nQ=np.array([m.ravel(order='F') for m in s['source_modes']]).T\\nix,iy=s['sensor_ij'].T\\nref=[np.linalg.solve(L+mu*np.eye(N),Q) for mu in s['mu_shifts']]\\nD=np.vstack([u[ix+nx*iy,:] for u in ref]); assert np.max(abs(D-S))<1e-11\\nout=solve_batch(s); out2=solve_downstream(cal)\\nw=out['weights']; c=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']; Z=s['Z_nuisance']\\nnp.testing.assert_array_equal(w,out2['weights'])\\nP=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\ny=cal['y_obs_raw']; A=D-Z@(P@D); R=A@w-(y-Z@(P@y)); g=A.T@R+ridge*w\\nnu=c['nu_sum']; lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); J=(R@R+ridge*(w@w))/2\\nlower=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nfield_error=np.max(abs(out['terminal_field']-(ref[-1]@w).reshape((nx,ny),order='F')))\\nchecks={'budget':abs(w.sum()-budget),'bounds':max(0,-min(w),max(w)-cap), 'certificate_weights':np.max(abs(np.asarray(c['weights'])-w)), 'stationarity':np.max(abs(g-nu-lo+hi)), 'complementarity':max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))), 'objective':abs(J-c['primal_objective']), 'lower_bound':abs(lower-c['dual_lower_bound']), 'duality_gap':abs(J-lower), 'terminal_field':field_error}\\nprint('independent contract errors',checks)\\nassert min(lo)>=0 and min(hi)>=0 and max(checks.values())<1e-10\\n\\n# Known optima for both bounds, all-active vertices, and budget endpoints.\\nrng=np.random.default_rng(211); worst=0.; count=0\\nfor n in (4,8,16):\\n    for mode in ('mixed','vertex','zero','full'):\\n        for _ in range(30):\\n            B=rng.normal(size=(n,n)); H=B.T@B+.04*np.eye(n); nu=rng.normal(); cap=.42\\n            if mode=='mixed':\\n                target=rng.uniform(.02,.40,n); target[:2]=(0,cap); rng.shuffle(target)\\n            elif mode=='vertex':\\n                target=np.r_[np.zeros(n//2),np.full(n-n//2,cap)]; rng.shuffle(target)\\n            else:\\n                target=np.full(n,0 if mode=='zero' else cap)\\n            d=nu+np.where(target==0,rng.uniform(.1,2.,n),np.where(target==cap,-rng.uniform(.1,2.,n),0))\\n            b=H@target-d; budget=float(n*cap if mode=='full' else target.sum()); got,_=_box_simplex(H,b,cap,budget)\\n            worst=max(worst,np.max(abs(got-target))); count+=1\\nassert worst<1e-10\\nprint('box-simplex known optima:',count,'worst weight error:',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls -> H2 periodic upwinding on both axes; worst calibrated tracer RMSE was 8.36e-6 before independent artifact verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate passed but cannot detect a wrong seam sign, terminal-field ordering, or invalid dual bound. Verify those against an independently assembled operator and reselect the boundary with each tracer held out. Known-optimum cases exercise active bounds and vertices that the public solution may not reach.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "632c8eb4e81730fd86b81e2d5a1e70ecfcf1cd130706bfbef622df0a3f9066fd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39031.99,
+      "usage_known": true,
+      "prompt_tokens": 31122,
+      "cached_tokens": 13696,
+      "completion_tokens": 1591
+    }
+  ]
+}

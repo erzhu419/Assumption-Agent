@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd0fb5905a67430d84c69b3000636c22",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:28.229240+00:00",
+  "ended_at_utc": "2026-11-27T19:51:52.251844+00:00",
+  "request_sha256": "367a2ca86d0e09758a0eda712fce676d89815abdc4320c6351464f7792496c0f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50226,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33732,
+    "cached_tokens": 14976,
+    "completion_tokens": 826
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/forward_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom itertools import combinations_with_replacement as comb\\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; n=len(y)\\nprint('raw axial rows\\\\n',np.c_[y,r][:16]); print('sweep size',n)\\ngood=np.linalg.norm(r,axis=1)<10\\nprint('excluded',np.flatnonzero(~good));\\ndef basis(x,terms): return np.stack([x[...,t].prod(-1) for t in terms],axis=-1)\\nfor deg in (1,2,3,4):\\n for additive in (True,False):\\n  ts=[t for k in range(deg+1) for t in comb(range(4),k) if not additive or len(set(t))<=1]; a=basis(y,ts); p=np.linalg.lstsq(a[good],r[good],rcond=None)[0]; e=a@p-r; cv=[]\\n  for f in range(5):\\n   test=good&(np.arange(n)%5==f); train=good&~test\\n   cv.extend(a[test]@np.linalg.lstsq(a[train],r[train],rcond=None)[0]-r[test]);\\n  print(deg,additive,len(ts),'rmse',np.mean(e[good]**2)**.5,'cv',np.mean(np.array(cv)**2)**.5,'common shift',e[~good].round(4))\\n  if deg==3 and not additive:\\n   print(list(zip(ts,p.round(5).tolist())))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/forward_probe.py\\nsed -n '45,94p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_02_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: one bridge fit for all rows → H2: a physical bridge plus a distinct fourth-channel sweep offset; the best held-out axial RMSE so far is 0.2211.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Trim 25% of calibration rows\",\n      \"rejected_reason\": \"The prior check found three extreme readings in one sweep, while broad trimming worsened held-out axial recovery.\"\n    }\n  ],\n  \"rationale\": \"Fit forward bridge terms on the ordinary-range rows and predict the three extreme rows. If the clean-row residuals vanish and the excluded rows share a fixed shift, use the identified bridge and model the sweep offset separately; otherwise do not assume the extremes are additive corruption.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6b82b3d7c7931393d92f06eda9a9737b4531f91ac0703d648aa9570c3f35a044",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25153.07,
+      "usage_known": true,
+      "prompt_tokens": 33732,
+      "cached_tokens": 14976,
+      "completion_tokens": 826
+    }
+  ]
+}

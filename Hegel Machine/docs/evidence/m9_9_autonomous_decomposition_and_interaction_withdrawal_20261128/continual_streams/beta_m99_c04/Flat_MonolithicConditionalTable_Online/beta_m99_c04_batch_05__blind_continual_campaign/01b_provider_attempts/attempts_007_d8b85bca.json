@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d8b85bca50c24236bd265c49adf10b1f",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:55.849449+00:00",
+  "ended_at_utc": "2026-11-27T20:00:32.191987+00:00",
+  "request_sha256": "033f5adf8825de80c7df1c590511be0f47793b88c2611bf379dc5049a00e044a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33801,
+    "cached_tokens": 14976,
+    "completion_tokens": 1525
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns = item['study']\\nres = m['solve_batch'](s)\\n# Assemble the dense reference row by row, independently of the sparse solver.\\ndef axis(d, setting):\\n    k,v = s['kappa_'+d],s['vel_'+d]\\n    n=len(k); h=s['L'+d]/(n-1); A=np.zeros((n,n))\\n    for i in range(n):\\n        if i in (0,n-1) and setting!='periodic':\\n            j=1 if i==0 else n-2\\n            A[i,j]=-k[i]/h**2\\n            A[i,i]=-A[i,j]+(s['robin_'+d]/h if setting=='robin' else 0.)\\n        else:\\n            a,b=(i-1)%n,(i+1)%n\\n            A[i,a]=-(k[i]+k[a])/(2*h**2)-max(v[i],0.)/h\\n            A[i,b]=-(k[i]+k[b])/(2*h**2)-max(-v[i],0.)/h\\n            A[i,i]=-A[i,a]-A[i,b]\\n    return A\\nnx,ny=s['nx'],s['ny']; i,j=s['sensor_ij'].T\\nrhs=np.asarray(s['source_modes']).reshape(-1,nx*ny,order='F').T\\nI=np.eye(nx*ny); V=np.diag(s['V_reaction_2d'].ravel(order='F'))\\nps=item['campaign_diagnostics']; wp=np.stack([p['w_pulse'] for p in ps]); yp=np.stack([m['_calibrate'](dict(s,y_obs_raw=p['y_pulse_raw'])) for p in ps])\\nmodels={}\\nfor a,b in itertools.product(('sealed','periodic','robin'),repeat=2):\\n    L=np.kron(np.eye(ny),axis('x',a))+np.kron(axis('y',b),np.eye(nx))+V\\n    fields=[np.linalg.solve(L+mu*I,rhs) for mu in s['mu_shifts']]\\n    S=np.vstack([f[i+nx*j] for f in fields]); models[a,b]=(S,fields[-1],wp@S.T-yp)\\nworst=0.\\nfor h in range(len(ps)):\\n    keep=np.arange(len(ps))!=h\\n    choice=min(models,key=lambda k:np.linalg.norm(models[k][2][keep]))\\n    assert choice==('periodic','sealed'),choice\\n    worst=max(worst,float(np.sqrt(np.mean(models[choice][2][h].reshape(len(s['mu_shifts']),-1)**2,axis=1)).max()))\\nS,last,_=models['periodic','sealed']; field_err=np.max(abs(res['terminal_field']-(last@res['weights']).reshape(nx,ny,order='F')))\\nassert field_err<1e-11 and worst<3e-6,(field_err,worst)\\n# Recompute the objective and certificate independently on the dense design.\\nz=s['Z_nuisance']; P=I[:len(z),:len(z)]-z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\nS=P@S; y=P@m['_calibrate'](s); r=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']\\nw=res['weights']; c=res['kkt_certificate']; lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); nu=c['nu_sum']\\ne=S@w-y; J=(e@e+r*(w@w))/2; g=S.T@e+r*w\\nprimal=max(abs(w.sum()-budget),max(0.,-w.min(),w.max()-cap)); station=max(abs(g-nu-lo+hi)); comp=max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))); gap=J-c['dual_lower_bound']\\nassert np.array_equal(w,c['weights']) and min(lo.min(),hi.min())>=0\\nassert max(primal,station,comp,abs(gap),abs(J-c['primal_objective']))<1e-10\\nassert abs(c['dual_lower_bound']-(J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()))<1e-10\\nprint(f'LOPO worst shift RMSE={worst:.3g}; terminal max error={field_err:.3g}; feasibility={primal:.3g}; stationarity={station:.3g}; complementarity={comp:.3g}; dual gap={gap:.3g}')\\n# Withhold calibration rows before fitting, and report the inlier tail per channel.\\nc=s['sensor_calibration_sweeps']; ref,raw=c['ref_rosette'],c['raw_rosette']; err=np.empty_like(raw)\\nfor fold in range(5):\\n    test=np.arange(len(ref))%5==fold\\n    coeff=m['_fit_rosette'](ref[~test],raw[~test])\\n    err[test]=raw[test]-np.column_stack([m['_rosette_basis'](ref[test],j)@coeff[j] for j in range(4)])\\np90=np.quantile(abs(err),.9,axis=0); print('Out-of-fold absolute calibration error p90 by channel:',p90)\\nassert p90.max()<1e-4,p90\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 common wall setting -> H2 periodic x and sealed y; the worst public pulse-by-shift RMSE is 9.0165e-7, and the written solver passed the schema check.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema check\",\"rejected_reason\":\"Schema validation cannot catch transposed field coordinates, incorrect boundary rows, or invalid KKT values.\"}],\"rationale\":\"Load the exact artifact in an isolated process. Use a dense reference to test field orientation and all nine boundary choices under pulse holdout, and verify the objective and KKT certificate independently. Held-out sweep rows test whether the calibration fit transfers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c85272e809149d5a631f8d349502747b20af0415040973bf04ff6ba4519e20c3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37482.12,
+      "usage_known": true,
+      "prompt_tokens": 33801,
+      "cached_tokens": 14976,
+      "completion_tokens": 1525
+    }
+  ]
+}

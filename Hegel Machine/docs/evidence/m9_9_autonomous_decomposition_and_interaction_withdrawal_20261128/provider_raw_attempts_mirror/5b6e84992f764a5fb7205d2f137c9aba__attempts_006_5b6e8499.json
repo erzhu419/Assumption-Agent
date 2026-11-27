@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5b6e84992f764a5fb7205d2f137c9aba",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:11.757121+00:00",
+  "ended_at_utc": "2026-11-27T19:38:40.298614+00:00",
+  "request_sha256": "e7ae1838defb845c46a60b83438a2ef8bb9d660912972882155de681c23031d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46741,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34245,
+    "cached_tokens": 0,
+    "completion_tokens": 1148
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^print(/,$d' /tmp/chamber_probe.py > /tmp/chamber_scalar.py\\ncat >> /tmp/chamber_scalar.py <<'PY'\\nfrom scipy.optimize import least_squares\\nimport json\\nP=np.vstack((np.c_[-np.expm1(-t[:,None]/taus)],1/taus)); A=Y@np.linalg.pinv(P.T); delta=A-h[:,None]*w[:2]; _,ss,V=np.linalg.svd(delta,full_matrices=False); print('fixed hold anchor delta singular values/direction',ss,V[0]); print('amplitude residual vs nominal drift',np.round(np.c_[lab,drift,delta],4))\\nfor entry in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n q=np.array(entry['facility_telemetry_trace']); print('log',entry['completed_campaign_short_name'],'mean',q.mean(0).round(3),'sd',q.std(0).round(3))\\ncal=d['calibration_load_cells']; print('calibration fields',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in cal.items()]); print('total linear calibration residual RMSE',np.std(cal['bridge_raw']@b[1:]+b[0]-cal['true_channel_loads'].sum(1)))\\nsources={'tr+di':xd,'tr+te+di':s._features({k:np.concatenate((tr[k],te[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')},di)[1], 'di_only':s._features({k:di[k][:0] for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')},di)[1]}\\nfor source,xx in sources.items():\\n v=w[2]+xx@w[3:]; print('feature source:',source)\\n for kind in ['linear','affine','tanh','shift_tanh','rational','shift_rational','linear_tau','shift_tanh_tau']:\\n  shift=kind.startswith('shift') or kind=='affine'; change_tau=kind.endswith('_tau'); nonlinear='tanh' in kind or 'rational' in kind\\n  def pred(p):\\n   k=2; u=v.copy()\\n   if shift: u=u+p[k]; k+=1\\n   if nonlinear:\\n    a=np.exp(p[k]); k+=1\\n    u=np.tanh(a*u)/a if 'tanh' in kind else u/(1+a*u*u)\\n   ts=taus*np.exp(p[k:k+2]) if change_tau else taus\\n   M=np.vstack((-np.expm1(-t[:,None]/ts),1/ts)); return (h[:,None]*w[:2]+u[:,None]*p[:2])@M.T\\n  start=[.4,2.1]+([0.] if shift else [])+([-1.] if nonlinear else [])+([0.,0.] if change_tau else []); E=np.empty_like(Y); worst=[]\\n  for l in np.unique(lab):\\n   m=lab!=l; fit=least_squares(lambda p:(pred(p)-Y)[m].ravel(),start,max_nfev=150); E[~m]=(pred(fit.x)-Y)[~m]; worst.append(np.sqrt(np.mean(E[~m]**2,axis=0)).max())\\n  fit=least_squares(lambda p:(pred(p)-Y).ravel(),start,max_nfev=150); print(kind,np.round([np.std(fit.fun),np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),max(worst)],5),np.round(fit.x,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_scalar.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 additive drift correction → H2 a shared nonlinear drift coordinate drives both branch amplitudes; the best compact linear model has held-out-lab RMSE of 0.0297 strain and 0.0261 rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add more history interaction terms\",\"rejected_reason\":\"The tested products did not improve held-out performance, and both amplitude corrections appear to move together.\"}],\"rationale\":\"Test whether a single drift coordinate explains both branch corrections and whether its remaining error comes from saturation, reference-panel normalization, or a time-constant mismatch. Use the same held-out labs to compare curve and rate errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "04fa2271b44f1c016baa5ec030a020507bf27c82217ebd195f83ff30fdf6d80f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29637.24,
+      "usage_known": true,
+      "prompt_tokens": 34245,
+      "cached_tokens": 0,
+      "completion_tokens": 1148
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f67328c0e564866bc0d70a43c78f6cf",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:41.501813+00:00",
+  "ended_at_utc": "2026-11-27T19:42:08.784577+00:00",
+  "request_sha256": "26ad76cd2d5960248a2a0efcbacaa5edfbb5100ba6e831cb7edf24bd0524c8a9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70681,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40228,
+    "cached_tokens": 14976,
+    "completion_tokens": 1098
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\nold = '_DRIFT_FAST_FRACTION = 0.55\\\\n'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, '_DRIFT_FAST_FRACTION = 0.5593124\\\\n'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\ns = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['campaign_diagnostics']\\nout = s['solve_batch'](d)\\nq, w = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < q[0] < q[1] < 25\\nassert all(np.isfinite(a).all() for a in out.values())\\nb = s['_bridge'](d['calibration_load_cells'])\\nxg, _ = s['_features'](g, g)\\nh = s['_loads'](g, b)[1]\\nt = d['eval_times']\\na, r = s['_chamber'](q, w, h, xg, t)\\nerr = a + g['strain_0'][:, None] - g['strain_curves_obs']\\nrate_err = r - g['instant_rate_obs']\\nrmse = lambda x: np.sqrt(np.mean(x*x))\\nlab = g['lab_id']\\ncomplete = np.isfinite(g['coupon_features_raw']).all(axis=1)\\nprint('final diagnostic RMSE by lab (strain, rate):', [(int(l), rmse(err[lab==l]), rmse(rate_err[lab==l])) for l in np.unique(lab)])\\nprint('early/late strain RMSE:', rmse(err[:, :3]), rmse(err[:, -3:]))\\nprint('complete/missing RMSE (strain, rate):', [(rmse(err[m]), rmse(rate_err[m])) for m in (complete, ~complete)])\\nassert max(rmse(err[lab==l]) for l in np.unique(lab)) < 0.0046\\nassert rmse(err[:, -3:]) < 0.0046\\nassert max(rmse(rate_err[lab==l]) for l in np.unique(lab)) < 0.0043\\nh = s['_loads'](d['test'], b)[1]\\n_, x = s['_features'](d['train'], d['test'])\\neps = 1e-6\\nnear_zero, _ = s['_chamber'](q, w, h, x, np.array([0., eps]))\\nassert np.max(np.abs(near_zero[:, 0])) < 1e-12\\nslope_err = np.max(np.abs(near_zero[:, 1] / eps - out['initial_rate_pred']))\\nprint('deployment initial derivative max discrepancy:', slope_err)\\nassert slope_err < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal drift fraction → H2 diagnostic-estimated drift fraction at fixed slow decay; worst held-out-lab strain RMSE fell from 0.00705 to 0.00434, with the initial-rate RMSE unchanged at 0.00422.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit both the drift fraction and slow decay\",\n      \"rejected_reason\": \"It improves worst-lab strain RMSE by only 0.000019 and is slightly worse on late-time and missing-feature slices.\"\n    }\n  ],\n  \"rationale\": \"Change only the drift fraction: it was stable across held-out labs and nearly halved late-time strain error without altering initial rate. Verify the edited solver in an isolated process; a failed diagnostic margin or derivative check would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "ee9b3c71c1340a3ce01093307cf30e7569d3924f08a2c52b2bc3e8cb6366136c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28363.92,
+      "usage_known": true,
+      "prompt_tokens": 40228,
+      "cached_tokens": 14976,
+      "completion_tokens": 1098
+    }
+  ]
+}

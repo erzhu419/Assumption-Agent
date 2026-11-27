@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c0b45fc4108d48189da65c2027d32243",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:07.718355+00:00",
+  "ended_at_utc": "2026-11-27T19:50:33.609746+00:00",
+  "request_sha256": "e58b1612e2bbae30631f2e50df1dd5e3b1bb4e7148a7a09742645f04425e38f7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58529,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35340,
+    "cached_tokens": 0,
+    "completion_tokens": 1039
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _fit, _chamber_response\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nd = calibrate_upstream(raw)\\ng = calibrate_upstream(dict(raw, test=item['campaign_diagnostics']))['test']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nX, _ = _features(tr, te)\\nF, _ = _features(g, {k:v[:0] for k,v in g.items()})\\nc = np.empty_like(g['strain_curves_obs']); r = np.empty_like(g['instant_rate_obs']); r0 = np.empty_like(r)\\nfor lab in np.unique(g['lab_id']):\\n    keep = tr['lab_id'] != lab\\n    taus, w = _fit({k:v[keep] for k,v in tr.items()}, X[keep], dt, t)\\n    ix = g['lab_id'] == lab\\n    grp = {k:v[ix] for k,v in g.items()}\\n    c[ix], r[ix] = _chamber_response(grp, F[ix], dt, t, taus, w)\\n    zero = dict(grp, past_channel_raw=np.zeros_like(grp['past_channel_raw']))\\n    _, r0[ix] = _chamber_response(zero, F[ix], dt, t, taus, w)\\nrmse = lambda a: np.sqrt(np.mean(a*a))\\ne = r-g['instant_rate_obs']; ea = r0-g['instant_rate_obs']; ec = c-g['strain_curves_obs']\\nprint(f'Pre-hold history intervention, held-lab rate RMSE: retained {rmse(e):.6f}; withdrawn {rmse(ea):.6f}', flush=True)\\nassert rmse(ea) > 10*rmse(e)\\nfor field in ('lab_id', 'stratum'):\\n    for v in np.unique(g[field]):\\n        ix = g[field] == v\\n        print(field, v, 'strain / rate / history-withdrawn rate RMSE', *(round(rmse(a[ix]),6) for a in (ec,e,ea)))\\n        assert rmse(e[ix]) < rmse(ea[ix])\\nix = np.isnan(g['coupon_features_raw']).any(1)\\nprint('Missing-feature strain and rate RMSE:', rmse(ec[ix]), rmse(e[ix]))\\nout = solve_batch(raw)\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25.\\nfor k, shape in (('estimated_taus',(2,)), ('hereditary_weights',(7,)), ('predicted_strain',(len(te['lab_id']),len(t))), ('initial_rate_pred',(len(te['lab_id']),))):\\n    assert out[k].shape == shape and np.isfinite(out[k]).all(), k\\nprint('Isolated final entry point passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 history-free deployment → H2 retained branch memory with saturating drift; held-lab missing-feature strain/rate RMSE was 0.0244/0.0285.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The host rejected the previous probe receipt. Run a standalone, read-only intervention on the final bundle: if removing pre-hold history does not worsen rate error across held-lab slices, revisit the chamber law; otherwise retain it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "58de10a3af5a7dfa1f3ed3faa42459235712499068f6ab1286c0aeccb789ec3b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26967.48,
+      "usage_known": true,
+      "prompt_tokens": 35340,
+      "cached_tokens": 0,
+      "completion_tokens": 1039
+    }
+  ]
+}

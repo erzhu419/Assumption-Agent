@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc9fbbe3e749456bac6b52c0094eac7f",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:13:47.533774+00:00",
+  "ended_at_utc": "2026-11-27T20:14:31.990421+00:00",
+  "request_sha256": "864cfb8c03db9bf4770d001c927ecbab288176151b3ab9a9a6896b0e4a662b12",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78800,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 48254,
+    "cached_tokens": 14976,
+    "completion_tokens": 1938
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/alpha_m99_c03_batch_03_solver.py').read_text()\\np=p[:p.index('def solve_batch(')]+'''def _deployment(taus, theta, inputs, times):\\n    _, hold, drift = inputs\\n    modes = -np.expm1(-times[:, None] / taus)\\n    # Chamber equilibration resets both hereditary states. The remaining\\n    # response separates into one coupon amplitude and one time profile.\\n    intrinsic_drift = drift @ theta[2:]\\n    amplitude = 1.23 * intrinsic_drift - 0.068\\n    profile_weights = np.array([0.15609, 2.06279, 0.25373])\\n    profile = modes @ profile_weights[:2] + profile_weights[2] * times\\n    slope = profile_weights[:2] @ (1.0 / taus) + profile_weights[2]\\n    return (hold[:, None] * (modes @ theta[:2]) + amplitude[:, None] * profile,\\n            hold * (theta[:2] @ (1.0 / taus)) + amplitude * slope)\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    bridge = _calibration(dataset['calibration_load_cells'])\\n    train_inputs = _coupon_inputs(train, x[:n], bridge)\\n    taus, theta = _fit(train_inputs, dt, t,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    curve, rate = _deployment(taus, theta, _coupon_inputs(test, x[n:], bridge), t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(p)\\nPY\\ncat >/tmp/chamber_amplitude.py <<'PY'\\nfrom chamber_probe import *\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\npast,H,F=inp_d; lab=d['lab_id']; s=d['stratum']; miss=np.isnan(d['coupon_features_raw']).any(axis=1)\\nU=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); T=np.r_[t,1.]; R=np.c_[yd,rd]-H[:,None]*(U@th[:2]); _,G=m._design(tau,inp_d,dt,t); Z=H[:,None]-G[:,:2]*tau\\nx=F[:,1:]; one=F[:,0]; r=F@th[2:]; raw=d['coupon_features_raw'].copy(); raw=np.where(np.isfinite(raw),raw,np.nanmean(raw,axis=0));\\nfor g in np.unique(lab):\\n print('lab',g,[(np.median(v['ref_coupons'][v['lab_id']==g].mean(axis=0)).round(4),np.median(v['ref_coupons'][v['lab_id']==g].std(axis=0)).round(4)) for v in (tr,te,d)])\\nprint('diag keys',list(d)); print('test keys',list(te));\\ndef predict(keep, cols):\\n # Fit the temporal mode and amplitude entirely within the fold.\\n _,_,v=np.linalg.svd(R[keep],full_matrices=False); prof=v[0]/v[0,-1]; B=np.c_[U,T]; prof=B@np.linalg.lstsq(B,prof,rcond=None)[0]; prof/=prof[-1]; a=R[keep]@prof/(prof@prof); c=np.linalg.lstsq(cols[keep],a,rcond=None)[0]; return (cols@c)[:,None]*prof,c\\nbase=np.c_[one,r]; models={'r':base,'x':F,'raw':np.c_[one,raw],'z':np.c_[base,Z],'r*z1':np.c_[base,r*Z[:,1]],'r*past4':np.c_[base,r*past[:,4]],'r*z1^2':np.c_[base,r*Z[:,1]**2],'r*z1+z1':np.c_[base,Z[:,1],r*Z[:,1]],'r*z0,z1':np.c_[base,Z,r[:,None]*Z]}\\n# Test a scalar regularized chamber amplitude and simple feature interactions.\\nfor i,j in combinations(range(4),2):\\n for l,a in [('prod',x[:,i]*x[:,j]),('sqdiff',(x[:,i]-x[:,j])**2),('sqsum',(x[:,i]+x[:,j])**2),('rational',r/(1+(x[:,i]-x[:,j])**2))]: models[f'{l}{i}{j}']=np.c_[base,a]\\nfor v,name in ((H,'H'),(Z[:,0],'z0'),(Z[:,1],'z1'),(Z[:,0]-Z[:,1],'z0-z1')):\\n for a in (.1,.25,.5,1.,2.,4.): models[f'r/(1+{a}*{name}^2)']=np.c_[one,r/(1+a*v*v)]\\nrank=[]\\nfor name,M in models.items():\\n E=np.zeros_like(R)\\n for g in np.unique(lab):\\n  k=lab!=g; E[~k]=R[~k]-predict(k,M)[0][~k]\\n worst=np.max([np.sqrt(np.mean(E[lab==g]**2,axis=0)) for g in np.unique(lab)],axis=0)\\n err=R-predict(np.ones(len(R),bool),M)[0]; rank.append((max(worst[:-1]),worst[-1],name,score(err),predict(np.ones(len(R),bool),M)[1].round(5)))\\nprint(*sorted(rank)[:16],sep='\\\\n');print('reference',*[a for a in rank if a[2] in ('r','x','raw','r*z1')],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_amplitude.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent memory and drift corrections → H2 full memory withdrawal plus a single chamber response; the best previous interaction proxy had 0.0968 worst-horizon RMSE on complete-feature coupons held out by lab.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the linear-amplitude solver\",\n      \"rejected_reason\": \"Full withdrawal explains the time structure, but the linear amplitude still misses some coupons. A compact interaction or feature-scale correction may improve held-out predictions.\"\n    }\n  ],\n  \"rationale\": \"Save a runnable baseline now. Refit the time profile inside each held-out lab fold and compare compact amplitude laws, including rational interactions. Compare reference-panel scales to see whether feature alignment, rather than another chamber mechanism, explains the remaining lab dependence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "7a4a9b109dbc21541038beb06dc51ca4887717503c4429c761e0b1491899bf42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45622.8,
+      "usage_known": true,
+      "prompt_tokens": 48254,
+      "cached_tokens": 14976,
+      "completion_tokens": 1938
+    }
+  ]
+}

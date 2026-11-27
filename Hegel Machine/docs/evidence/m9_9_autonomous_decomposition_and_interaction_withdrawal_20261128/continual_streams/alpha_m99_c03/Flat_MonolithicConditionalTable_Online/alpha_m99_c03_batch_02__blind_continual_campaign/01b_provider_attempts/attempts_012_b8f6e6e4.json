@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8f6e6e4b0194e60b62472bcd0aca9a7",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:19.430195+00:00",
+  "ended_at_utc": "2026-11-27T19:47:41.176372+00:00",
+  "request_sha256": "ca4101cf97ce16350ba37265361e83f0d4139d154e1bac359e05ddeda9c1298b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66768,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37750,
+    "cached_tokens": 14976,
+    "completion_tokens": 833
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m99_material_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ntr, te = ds['train'], ds['test']\\nlab = tr['lab_id']\\nx = m._features(tr, te)[:len(lab)]\\na = m._coupon_inputs(tr, x, m._calibration(ds['calibration_load_cells']))\\ndt, t = ds['past_dt'], ds['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nbase_tau, base_th = m._fit(a, dt, t, y, r)\\nprint('full fit tau:', base_tau)\\nfor g in np.unique(lab):\\n    hold = lab == g\\n    tau, th = m._fit(tuple(v[~hold] for v in a), dt, t, y[~hold], r[~hold])\\n    C, R = m._design(tau, tuple(v[hold] for v in a), dt, t)\\n    e, er = C @ th - y[hold], R @ th - r[hold]\\n    print('held lab', g, 'n', hold.sum(), 'tau', tau, 'fractional shift', tau/base_tau-1,\\n          'median absolute curve/rate error', np.nanmedian(abs(e)), np.nanmedian(abs(er)),\\n          'signed median curve/rate error', np.nanmedian(e), np.nanmedian(er))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_material_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared material and retained memory → H2 exponential chamber drift; worst diagnostic lab strain/rate RMS was 0.016153/0.021675, and the host probe reported 4.48% relaxation-spectrum relative error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber interaction and calibration-tail checks\",\n      \"rejected_reason\": \"Those checks already ran on the current artifact. The interaction worsened complete-coupon predictions, and held-out calibration-tail RMS stayed below 0.000322.\"\n    }\n  ],\n  \"rationale\": \"The remaining distinct question is whether one benchtop lab drives the relaxation-spectrum estimate. Leave each lab's response measurements out in turn while keeping the specified label-free joint preprocessing fixed. A large parameter shift paired with a signed held-out residual would justify investigating that lab's influence; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "680614c7b5322c20ebc93a2bf79efd777547903d8d282f943fc192eea3886867",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22855.61,
+      "usage_known": true,
+      "prompt_tokens": 37750,
+      "cached_tokens": 14976,
+      "completion_tokens": 833
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8563e14cd6d54917b992a347334c9e7e",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:19.932011+00:00",
+  "ended_at_utc": "2026-11-27T19:55:58.976873+00:00",
+  "request_sha256": "9f141f1753bc3bc919a374c5baebeefb25d7efed3c177a043b8ef02bc7bc059e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33147,
+    "cached_tokens": 14976,
+    "completion_tokens": 1657
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\\nstart = src.index('def _calibration(')\\nstop = src.index('def _design(', start)\\nbridge = '''# Full cubic includes cross-channel terms that are not captured by isolated sweeps.\\n_TERMS = [term for degree in range(1, 4)\\n          for term in combinations_with_replacement(range(4), degree)]\\n\\n\\ndef _bridge_basis(x):\\n    return np.column_stack([np.ones(len(x))] +\\n                           [np.prod(x[:, term], axis=1) for term in _TERMS])\\n\\n\\ndef _calibration(cal):\\n    raw = np.asarray(cal['bridge_raw'])\\n    a = _bridge_basis(np.asarray(cal['true_channel_loads']))\\n    coef = np.linalg.lstsq(a, raw, rcond=None)[0]\\n    # Downweight entire corrupted sweeps, then refit to the clean measurements.\\n    for _ in range(35):\\n        residual = np.linalg.norm(a @ coef - raw, axis=1)\\n        weight = np.sqrt(0.002 / np.maximum(residual, 0.002))\\n        coef = np.linalg.lstsq(a * weight[:, None], raw * weight[:, None], rcond=None)[0]\\n    residual = np.linalg.norm(a @ coef - raw, axis=1)\\n    good = residual <= max(0.01, 8 * np.median(residual))\\n    return np.linalg.lstsq(a[good], raw[good], rcond=None)[0]\\n\\n\\ndef _bridge_jacobian(x, coef):\\n    jac = np.broadcast_to(coef[1:5].T, (len(x), 4, 4)).copy()\\n    for term, c in zip(_TERMS[4:], coef[5:]):\\n        for i, col in enumerate(term):\\n            rest = term[:i] + term[i+1:]\\n            jac[:, :, col] += np.prod(x[:, rest], axis=1)[:, None] * c\\n    return jac\\n\\n\\ndef _recover_loads(raw, coef):\\n    shape = raw.shape\\n    y = raw.reshape(-1, 4)\\n    x = np.linalg.solve(coef[1:5].T, (y - coef[0]).T).T\\n    for _ in range(30):\\n        residual = _bridge_basis(x) @ coef - y\\n        error = np.linalg.norm(residual, axis=1)\\n        if error.max() < 1e-10:\\n            break\\n        jac = _bridge_jacobian(x, coef)\\n        delta = (np.linalg.pinv(jac) @ residual[..., None])[..., 0]\\n        for _ in range(14):\\n            trial = x - delta\\n            worse = np.linalg.norm(_bridge_basis(trial) @ coef - y, axis=1) > error\\n            if not np.any(worse):\\n                break\\n            delta[worse] *= 0.5\\n        x = np.where(worse[:, None], x, trial)\\n    return x.reshape(shape)\\n\\n\\ndef _coupon_inputs(block, x, bridge):\\n    past = _recover_loads(block['past_channel_raw'], bridge).sum(axis=-1)\\n    hold = _recover_loads(block['hold_channel_raw'], bridge).sum(axis=-1)\\n    return past, hold, np.column_stack((np.ones(len(x)), x))\\n\\n\\n'''\\nsrc = 'from itertools import combinations_with_replacement\\\\n\\\\n' + src[:start] + bridge + src[stop:]\\nsrc = src.replace('# The facility-init trace has no labeled chamber response or constitutive map.\\\\n    # Use the identified benchtop law for this blind campaign.', '# The latest apparatus trace returns both setting channels to facility-init levels.')\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; a=c['true_channel_loads']; y=c['bridge_raw']; b=m['_calibration'](c)\\nfor t,v in zip([()]+m['_TERMS'],b):\\n print(t,np.round(v,5),round(v.sum(),5))\\nfor label in ['train','test']:\\n for key in ['past_channel_raw','hold_channel_raw']:\\n  u=d[label][key]; x=m['_recover_loads'](u,b).reshape(-1,4); e=np.linalg.norm(m['_bridge_basis'](x)@b-u.reshape(-1,4),axis=1)\\n  print(label,key,'reconstruction max',e.max(),'load range',x.min(),x.max(),'minimum Jacobian singular value',np.linalg.svd(m['_bridge_jacobian'](x,b),compute_uv=False)[:,-1].min())\\nout=m['solve_batch'](d); print('fit',out['estimated_taus'],out['hereditary_weights'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (additive cubic bridge) -> H2 (robust joint cubic bridge with baseline chamber response); the joint model predicts the 77 clean held-out sweeps with per-channel RMSE 0.000754.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit each channel's cubic response independently\",\n      \"rejected_reason\": \"The additive cubic leaves a median held-out row error of 0.301; the joint cubic reduces it to 0.000711 and isolates three corrupted sweeps.\"\n    }\n  ],\n  \"rationale\": \"Build the solver around the validated forward calibration. Check inversion residuals and Jacobian conditioning at every public operating point; failures would require changing the inversion or constraining the cubic before validating the material fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "648d1ed1870e9f56af0079ed90e05b1b9f59db7684723aa1b8fedf0374cfe28f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40136.8,
+      "usage_known": true,
+      "prompt_tokens": 33147,
+      "cached_tokens": 14976,
+      "completion_tokens": 1657
+    }
+  ]
+}

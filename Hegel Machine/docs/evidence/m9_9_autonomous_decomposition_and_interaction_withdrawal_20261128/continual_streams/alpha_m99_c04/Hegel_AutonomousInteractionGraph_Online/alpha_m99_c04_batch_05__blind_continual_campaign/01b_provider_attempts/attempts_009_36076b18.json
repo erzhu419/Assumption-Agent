@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36076b18e8ca442895b873de9adaa611",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:07:25.546784+00:00",
+  "ended_at_utc": "2026-11-27T20:07:51.976912+00:00",
+  "request_sha256": "555f552f17244baada66c16281f64d67dfd1ad7516108ecd5afab43f27d39c19",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60797,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37201,
+    "cached_tokens": 13696,
+    "completion_tokens": 1016
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _chamber_response, solve_downstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\nout = solve_batch(d)\\ncal = calibrate_upstream({**d, 'chamber_verification_trials': item['campaign_diagnostics']})\\nref = solve_downstream(cal)\\nfor k in out:\\n    np.testing.assert_array_equal(out[k], ref[k])\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nte = cal['test']\\n_, x = _features(cal['train'], te)\\ncheck, rate = _chamber_response(te, x, np.array([0., 1e-6]), tau, theta)\\nnp.testing.assert_array_equal(check[:, 0], te['strain_0'])\\nnp.testing.assert_allclose((check[:,1]-check[:,0])/1e-6, rate, rtol=2e-6, atol=1e-8)\\nd_new = {**d, 'test': {**d['test'], 'past_channel_raw': -2*d['test']['past_channel_raw']}}\\nperturbed = solve_batch(d_new)\\nfor k in out:\\n    np.testing.assert_array_equal(out[k], perturbed[k])\\ng = cal['chamber_verification_trials']\\nxg, _ = _features(g, g)\\ncurve, rate = _chamber_response(g, xg, cal['eval_times'], tau, theta)\\ne, r = np.abs(curve-g['strain_curves_obs']), np.abs(rate-g['instant_rate_obs'])\\nfor key in ('lab_id','stratum'):\\n    slices = [g[key] == a for a in np.unique(g[key])]\\n    print(key, 'worst curve / final horizon / rate MAE', np.max([[e[m].mean(),e[m,-1].mean(),r[m].mean()] for m in slices],axis=0))\\nm = np.isnan(g['coupon_features_raw']).any(axis=1)\\nprint('missing-feature curve / final horizon / rate MAE', e[m].mean(),e[m,-1].mean(),r[m].mean())\\nprint('isolated composed entrypoint, intrinsic pole bounds, zero-time derivative and history withdrawal: passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived chamber laws → H2 cleared load memory with intrinsic relaxation and 20/55/25 drift partition; the exact candidate has worst diagnostic-slice MAE 0.01766 strain and 0.01415 initial rate, both on coupons with missing features.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change deployment imputation to reduce missing-feature diagnostic error\",\n      \"rejected_reason\": \"Deployment imputation is specified, and the diagnostic error does not show that changing it would improve deployment predictions.\"\n    }\n  ],\n  \"rationale\": \"Verify both exact artifacts through the composed entrypoint in a clean process. A mismatch would require fixing calibration composition, residual dependence on deployment history, or initial-rate consistency before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "967f213611b82dfec363f175c74ffc38024eca7594183794a2bae77ce21ba6d1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26395.78,
+      "usage_known": true,
+      "prompt_tokens": 37201,
+      "cached_tokens": 13696,
+      "completion_tokens": 1016
+    }
+  ]
+}

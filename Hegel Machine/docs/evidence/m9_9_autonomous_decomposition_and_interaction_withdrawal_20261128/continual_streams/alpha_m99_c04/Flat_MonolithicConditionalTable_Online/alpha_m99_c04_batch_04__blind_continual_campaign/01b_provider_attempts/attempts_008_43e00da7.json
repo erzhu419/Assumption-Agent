@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43e00da7decc404e9be33636d2b26f26",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:08.217037+00:00",
+  "ended_at_utc": "2026-11-27T19:58:48.294247+00:00",
+  "request_sha256": "10774ac4902280a2b6bb34f439f3ccc79f683eb9f8290d3a73b28e376e294557",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48610,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32137,
+    "cached_tokens": 14976,
+    "completion_tokens": 1711
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; cal=d['calibration_load_cells']; x,y=cal['true_channel_loads'],cal['bridge_raw']\\n# Hold out high-load sweeps as well as random folds. Learn support and reject\\n# gross calibration faults on the fitting rows only.\\nstrength=np.linalg.norm(x,axis=1)\\nfolds=list(np.array_split(np.random.default_rng(4).permutation(len(x)),4))+[np.argsort(strength)[-16:]]\\nfor j,te in enumerate(folds):\\n    tr=np.setdiff1d(np.arange(len(x)),te)\\n    b=m._fit_bridge({k:cal[k][tr] for k in ('true_channel_loads','bridge_raw')})\\n    def forward(z):\\n        return b[0]+z@b[1]+sum(z[:, ii].prod(axis=1)[:,None]*c for ii,c in b[2])\\n    e=y-forward(x); good=tr[np.linalg.norm(e[tr],axis=1)<.01]\\n    assert len(good)>len(tr)-5\\n    # The full polynomial dictionary already searches pairwise sum/difference\\n    # powers, since their expansions lie in this span. Challenge the retained\\n    # sparse support with the full cubic and with rational denominator terms.\\n    cubic=np.column_stack([x[:,v].prod(axis=1) for v in m._TERMS]); full=cubic@np.linalg.lstsq(cubic[good],y[good],rcond=None)[0]\\n    rat=np.empty_like(y)\\n    for k in range(4):\\n        z=x[:,k]; w=x[:,(k+1)%4]; B=np.column_stack([np.ones(len(x)),x,z*w,z**3]); q=np.column_stack([z*z,w*w,(z-w)**2,(z+w)**2]); start=np.r_[np.linalg.lstsq(B[good],y[good,k],rcond=None)[0],np.zeros(q.shape[1])]\\n        def pred(co): return (B@co[:B.shape[1]])/(1+q@co[B.shape[1]:])\\n        fit=least_squares(lambda co:(pred(co)-y[:,k])[good],start,bounds=(np.r_[np.full(B.shape[1],-np.inf),np.zeros(q.shape[1])],np.full(len(start),np.inf)),gtol=1e-11)\\n        rat[:,k]=pred(fit.x)\\n    clean=te[np.linalg.norm(e[te],axis=1)<.01]\\n    load=np.abs(m._decode(y[clean],b).sum(1)-x[clean].sum(1))\\n    print('bridge slice',j,'n / faults',len(te),len(te)-len(clean),'P90 sparse/full/rational raw',*[float(np.quantile(np.linalg.norm(r[clean],axis=1),.9)) for r in (e,y-full,y-rat)],'max total load error',load.max())\\n# Check chamber initial-rate consistency and actual dependence on chronology.\\nassert item['campaign_diagnostics'] is None and m._history_withdrawn()\\nout=m.solve_batch(d); tau,theta=out['estimated_taus'],out['hereditary_weights']; b=m._fit_bridge(cal); tr=m._calibrate(d['train'],b); xt,xe=m._features(d['train'],d['test']); hold=m._decode(d['test']['hold_channel_raw'],b).sum(1); drift=theta[2]+xe@theta[3:]\\nzero,rate=m._withdrawn_response(hold,drift,np.array([0.,1e-6]),tau,theta)\\nassert np.all(zero[:,0]==0)\\nnp.testing.assert_allclose(rate,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(zero[:,1]/1e-6,rate,rtol=0,atol=1e-5)\\ndt,t=d['past_dt'],d['eval_times']; state=np.zeros((len(xt),2))\\nfor past,h in zip(tr['past_stress'].T,dt):\\n    state=np.exp(-h/tau)*state-np.expm1(-h/tau)*past[:,None]\\nc,r=m._design(tr,xt,dt,t,tau)\\nnp.testing.assert_allclose(r[:,:2],(tr['hold_stress'][:,None]-state)/tau,rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(c[:,:,:2],(tr['hold_stress'][:,None]-state)[:,None,:]*(-np.expm1(-t[:,None]/tau)),rtol=0,atol=1e-12)\\nprint('chamber rate derivative max error',np.max(np.abs(zero[:,1]/1e-6-rate)))\\nfor lab in np.unique(tr['lab_id']):\\n    mask=tr['lab_id']==lab; e=c[mask]@theta+tr['strain_0'][mask,None]-tr['strain_curves_obs'][mask]; re=r[mask]@theta-tr['instant_rate_obs'][mask]\\n    print('lab',lab,'signed strain residual median by horizon',np.median(e,axis=0).round(5),'signed rate median',round(float(np.median(re)),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted bridge terms or lab offsets dominate error -> H2 sparse cubic calibration and a shared material fit suffice; prior worst held-out P90 errors were 0.000341 for bridge readings, 0.02262 for strain, and 0.01300 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or relay-mode checks\",\n      \"rejected_reason\": \"This dataset provides continuous strain and rate measurements and has no classification labels or relay modes; signed residuals by lab are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Compare broader algebraic models on real held-out sweeps, including the high-load slice, to detect a calibration gap worth fixing. Check the chronological recurrence and initial-rate derivative independently; either mismatch would require a constitutive implementation fix. Lab residuals can reveal systematic offsets hidden by pooled error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f21fc76dae7ca12727c26c0f9c9acf92a27a163700dd6f904f2e2fb0d85ae742",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41208.81,
+      "usage_known": true,
+      "prompt_tokens": 32137,
+      "cached_tokens": 14976,
+      "completion_tokens": 1711
+    }
+  ]
+}

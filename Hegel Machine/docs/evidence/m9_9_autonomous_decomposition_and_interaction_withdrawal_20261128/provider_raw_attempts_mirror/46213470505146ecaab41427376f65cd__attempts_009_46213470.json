@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46213470505146ecaab41427376f65cd",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:28.406118+00:00",
+  "ended_at_utc": "2026-11-27T19:58:02.758758+00:00",
+  "request_sha256": "7ddd9b01087f1d46241bb188d91413a8a12fdab01575228752e628398acd398e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49884,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32205,
+    "cached_tokens": 14976,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '''    # The latest prefix trace matches the reset-only chamber setting.\\n    # History affects benchtop characterization but not the chamber hold onset.\\n    hold = _invert_bridge(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    amplitude = hold[:, None] * beta[:2]\\n    drift = beta[2] + xt @ beta[3:]\\n    strain = (test['strain_0'][:, None]\\n              + amplitude @ -np.expm1(-t[None, :] / tau[:, None])\\n              + drift[:, None] * t)\\n    rate = amplitude @ (1 / tau) + drift\\n'''\\nnew = '''    # The prefix equilibration trace matches batch 01 on both setting channels.\\n    # Its chamber resets pre-hold memory and couples coupon drift to both branches.\\n    hold = _invert_bridge(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    drift = beta[2] + xt @ beta[3:]\\n    amplitude = hold[:, None] * beta[:2] + drift[:, None] * np.array([0.38145, 1.89249])\\n    steady = 0.02953 * drift\\n    strain = (test['strain_0'][:, None]\\n              + amplitude @ -np.expm1(-t[None, :] / tau[:, None])\\n              + steady[:, None] * t)\\n    rate = amplitude @ (1 / tau) + steady\\n'''\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nm = load('/holdout_task/batch_solver.py')\\na = load('/tmp/hegel_continual_archive/alpha_m99_c01_batch_01_solver.py')\\nd = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\no = m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in o.values())\\ntau, beta = o['estimated_taus'], o['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\ntr, te = d['train'], d['test']\\n_, xt = m._features(tr, te)\\nbridge = m._bridge(d['calibration_load_cells'])\\nhold = m._invert_bridge(te['hold_channel_raw'], bridge).sum(-1)\\ncurves, rate = a._chamber_response(tau, beta, xt, hold, d['eval_times'])\\nerr = np.max(abs(o['predicted_strain'] - (te['strain_0'][:,None] + curves)))\\nassert err < 1e-12\\nnp.testing.assert_allclose(o['initial_rate_pred'], rate, rtol=1e-13, atol=1e-13)\\n# The same response must give the reported derivative near onset and ignore deployment prehistory.\\neps = 1e-4\\nshort = m.solve_batch(dict(d, eval_times=d['eval_times'])) if False else None\\n# Short-time evaluation is applied only to the chamber law: the fit must retain its original observations.\\ntransient, _ = a._chamber_response(tau, beta, xt, hold, np.array([0., eps/2, eps]))\\nfd = (4*transient[:,1]-transient[:,2]-3*transient[:,0])/eps\\nrate_error = np.max(abs(fd-o['initial_rate_pred']))\\nassert rate_error < 1e-7\\nchanged = m.solve_batch(dict(d, test=dict(te, past_channel_raw=te['past_channel_raw'][:, ::-1])))\\nfor k in o:\\n    np.testing.assert_array_equal(o[k], changed[k])\\nprint('deployment contracts: max archive strain discrepancy', err, 'max onset derivative discrepancy', rate_error, 'all history perturbation outputs unchanged')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset with unchanged drift → H2 full archived reset response with independently calibrated loads; worst held-out benchtop lab p90 is 0.0242 for strain across times and 0.0183 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch 02’s drift law to the reset chamber\",\n      \"rejected_reason\": \"The latest trace matches the setting preceding batch 01 on both informative channels, not the setting preceding batch 02.\"\n    }\n  ],\n  \"rationale\": \"Transfer the complete chamber response fitted on batch 01 verification coupons, not its affine calibration. Check the final artifact against the archived response with the current loads and material fit, and verify onset-rate consistency and independence from deployment prehistory. These checks verify implementation, not blind deployment accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3ac50496759b3538a7dd97cf78ba65e44881c14a1ab6e309f36ebfe5cd2b1adc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35426.65,
+      "usage_known": true,
+      "prompt_tokens": 32205,
+      "cached_tokens": 14976,
+      "completion_tokens": 1416
+    }
+  ]
+}

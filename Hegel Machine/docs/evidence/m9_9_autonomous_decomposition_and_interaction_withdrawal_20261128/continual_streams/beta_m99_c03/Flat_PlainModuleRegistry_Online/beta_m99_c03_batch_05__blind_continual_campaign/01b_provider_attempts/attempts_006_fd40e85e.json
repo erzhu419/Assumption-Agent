@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd40e85ee2144944ba15da5cec16898d",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:50.449618+00:00",
+  "ended_at_utc": "2026-11-27T19:57:31.324228+00:00",
+  "request_sha256": "ee09e865a4fa43e0409f8d18dfd81e8bc379f279d8a7e38c772709012dab499a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50025,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31740,
+    "cached_tokens": 13696,
+    "completion_tokens": 1690
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -eu\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,itertools\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.linalg import solve\\nroot=Path('/holdout_task'); sys.path.insert(0,str(root))\\nimport batch_solver as b, downstream_solver as d\\nfrom _verified_upstream import calibrate_upstream\\nwith (root/'public_batch.pkl').open('rb') as f: items=pickle.load(f)\\nmaxima=np.zeros(5); worst_pulse=0.; worst_loo=0.\\nfor item in items:\\n    raw=item['study']; s=calibrate_upstream(dict(raw,reference_tracer_pulses=item['campaign_diagnostics']))\\n    nx,ny=s['nx'],s['ny']; sample=s['sensor_ij']; modes=s['source_modes']; n=len(modes)\\n    def axis(name,kind):\\n        k=s['kappa_'+name]; v=s['vel_'+name]; h=s['L'+name]/(len(k)-1); M=np.zeros((len(k),len(k)))\\n        for j in range(len(k)):\\n            if kind!='periodic' and j in (0,len(k)-1):\\n                M[j,1 if j==0 else j-1]=-k[j]/h**2\\n                M[j,j]=k[j]/h**2+(s['robin_'+name]/h if kind=='robin' else 0.)\\n            else:\\n                l,r=(j-1)%len(k),(j+1)%len(k)\\n                M[j,l]=-0.5*(k[j]+k[l])/h**2-max(v[j],0)/h\\n                M[j,r]=-0.5*(k[j]+k[r])/h**2-max(-v[j],0)/h\\n                M[j,j]=-M[j,l]-M[j,r]\\n        return M\\n    def oracle(kx,ky):\\n        L=np.kron(np.eye(ny),axis('x',kx))+np.kron(axis('y',ky),np.eye(nx))+np.diag(s['V_reaction_2d'].flatten(order='F'))\\n        rhs=np.stack([m.flatten(order='F') for m in modes],axis=1); blocks=[]\\n        for mu in s['mu_shifts']:\\n            u=solve(L+mu*np.eye(nx*ny),rhs).reshape(nx,ny,n,order='F')\\n            blocks.append(u[sample[:,0],sample[:,1],:])\\n        return np.vstack(blocks),u\\n    pulses=s['reference_tracer_pulses']; W=np.stack([p['w_pulse'] for p in pulses],axis=1); Y=np.stack([p['y_pulse_raw'] for p in pulses],axis=1)\\n    options={}; S,U=oracle('periodic','reflecting')\\n    for kx,ky in itertools.product(('robin','periodic','reflecting'),repeat=2):\\n        P,_=oracle(kx,ky); options[kx,ky]=(P@W-Y).reshape(len(s['mu_shifts']),len(sample),len(pulses))\\n    for held in range(len(pulses)):\\n        train=np.arange(len(pulses))!=held\\n        picked=min(options,key=lambda k: np.mean(options[k][:,:,train]**2)); assert picked==('periodic','reflecting'),picked\\n        worst_loo=max(worst_loo,float(np.sqrt(np.mean(options[picked][:,:,held]**2))))\\n    worst_pulse=max(worst_pulse,float(np.sqrt(np.mean(options['periodic','reflecting']**2,axis=1)).max()))\\n    cand_S,cand_U=d._forward(s); np.testing.assert_allclose(cand_S,S,atol=1e-12,rtol=0); np.testing.assert_allclose(cand_U,np.moveaxis(U,-1,0),atol=1e-12,rtol=0)\\n    z=s['Z_nuisance']; R=np.eye(len(z))-z@solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T,assume_a='pos'); A=R@S\\n    cap=s['u_box']; ridge=s['source_ridge']; H=A.T@A+ridge*np.eye(n)\\n    for idx,(budget,delta) in enumerate(itertools.product((s['total_budget'],0.,cap,n*cap/2,n*cap-cap,n*cap),(0.,1.,-1.))):\\n        t=dict(s,total_budget=budget,y_obs_raw=s['y_obs_raw']+delta*np.linspace(-1,1,len(z))); y=R@t['y_obs_raw']\\n        out=d.solve_downstream(t); w=out['weights']; c=out['kkt_certificate']; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); g=A.T@(A@w-y)+ridge*w\\n        if idx==0:\\n            a=b.solve_batch(raw); np.testing.assert_allclose(a['weights'],w,atol=1e-12,rtol=0); np.testing.assert_allclose(a['terminal_field'],out['terminal_field'],atol=1e-12,rtol=0)\\n        np.testing.assert_array_equal(c['weights'],w); assert min(lo.min(),hi.min())>=0\\n        assert c['primal_objective']>=c['dual_lower_bound']-1e-12\\n        objective=(np.linalg.norm(A@w-y)**2+ridge*np.linalg.norm(w)**2)/2\\n        np.testing.assert_allclose(c['primal_objective'],objective,atol=1e-12,rtol=0)\\n        tangent=objective-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\n        np.testing.assert_allclose(c['dual_lower_bound'],tangent,atol=1e-12,rtol=0)\\n        checks=[max(abs(w.sum()-budget),max(-w.min(),w.max()-cap)),np.max(np.abs(g-nu-lo+hi)),max(np.max(np.abs(w*lo)),np.max(np.abs((cap-w)*hi))),abs(objective-tangent),np.max(np.abs(out['terminal_field']-U@w))]\\n        maxima=np.maximum(maxima,checks)\\nassert worst_pulse<3e-6 and worst_loo<3e-6,(worst_pulse,worst_loo)\\nassert np.max(maxima)<1e-10,maxima\\nprint('worst leave-one-pulse-out RMS:',worst_loo,'worst pulse-by-shift RMS:',worst_pulse)\\nprint('worst feasibility, stationarity, complementarity, dual gap, field error:',maxima.tolist())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared open Robin walls -> H2 periodic x and reflecting y; measured pooled tracer RMS is 7.02e-7, public schema passed, and held-out pulse and certificate checks are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Use a clean process and an independent dense operator to detect indexing or endpoint errors. Select walls without each held-out pulse, then check the field and certificate independently across interior, capped, and endpoint budgets.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "790757ca764e46e11a61004934c7a546697c9e0ecc87e12f040800b6ee41b223",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41946.87,
+      "usage_known": true,
+      "prompt_tokens": 31740,
+      "cached_tokens": 13696,
+      "completion_tokens": 1690
+    }
+  ]
+}

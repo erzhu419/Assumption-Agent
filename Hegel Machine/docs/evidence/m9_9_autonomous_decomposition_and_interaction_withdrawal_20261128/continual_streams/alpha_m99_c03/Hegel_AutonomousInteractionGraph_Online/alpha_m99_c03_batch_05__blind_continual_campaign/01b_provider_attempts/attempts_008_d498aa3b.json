@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d498aa3babf14b25add6554418f04b6e",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:16.096722+00:00",
+  "ended_at_utc": "2026-11-27T20:01:48.974119+00:00",
+  "request_sha256": "ce9b5ed7748440a85e94f20daab65d17ee35f9a44e5a26ea0bb9431639d1e26b",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53624,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34102,
+    "cached_tokens": 13696,
+    "completion_tokens": 1348
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nprior=/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py\\n{ head -n 23 \\\"$prior\\\"; sed -n '37,99p' \\\"$prior\\\"; cat <<'PY'\\n\\ndef _coupon_inputs(block, features):\\n    past = np.asarray(block['past_channel_raw'], dtype=float).sum(axis=-1)\\n    hold = np.asarray(block['hold_channel_raw'], dtype=float).sum(axis=-1)\\n    return past, hold, np.column_stack((np.ones(len(hold)), features))\\n\\n\\ndef _chamber(taus, theta, hold, covariates, times):\\n    # The chamber resets preload memory; the drift kernel has unit slope at zero.\\n    relaxation = -np.expm1(-times[:, None] / taus)\\n    weights = np.array([0.25514561, 0.23475018, 0.51010421])\\n    kernel = weights[0] * times + relaxation @ (weights[1:] * taus)\\n    drift = covariates @ theta[2:]\\n    return (hold[:, None] * (relaxation @ theta[:2]) + drift[:, None] * kernel,\\n            hold * np.sum(theta[:2] / taus) + drift)\\n\\n\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    times = np.asarray(cal_item['eval_times'], dtype=float)\\n    dt = np.asarray(cal_item['past_dt'], dtype=float)\\n    features = _features(train, test)\\n    n = len(train['lab_id'])\\n    tr = _coupon_inputs(train, features[:n])\\n    te = _coupon_inputs(test, features[n:])\\n    target = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    taus, theta = _fit(tr, dt, times, target, train['instant_rate_obs'])\\n    strain, rate = _chamber(taus, theta, te[1], te[2], times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}\\nPY\\n} > downstream_solver.py\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py batch_solver.py\\ncat >/tmp/alignment_check.py <<'PY'\\nexec(open('/tmp/probe.py').read().split(\\\"print('ranges'\\\")[0])\\nraw=np.vstack((tr['coupon_features_raw'],te['coupon_features_raw'])); lab=np.r_[tr['lab_id'],te['lab_id']]; ref=np.vstack((tr['ref_coupons'],te['ref_coupons'])); raw=raw.copy(); n=len(ytr)\\nfor g in np.unique(lab):\\n m=lab==g; raw[m]=(raw[m]-np.median(ref[m].mean(0)))/np.median(ref[m].std(0))\\nmissing=~np.isfinite(raw[:n]).all(1)\\nfor label,feat in [('joint-balanced',x),('joint-plain',np.where(np.isfinite(raw),raw,np.nanmean(raw,axis=0))),('separate-balanced',np.vstack((p._features(tr,tr)[:n],p._features(te,te)[:len(te['lab_id'])])))]:\\n a,b=p._design(tau,(train[0],train[1],np.c_[np.ones(n),feat[:n]]),dt,t)\\n print(label,'train missing residual MAD strain/rate',*[float(np.median(np.abs(e[missing]))) for e in (a@th-ytr,b@th-rtr)],'deployment maximum feature delta',np.max(np.abs(feat[n:]-x[n:])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/alignment_check.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived equal-weight drift -> H2 reset memory with linear and two intrinsic drift components; complete diagnostic RMSE is 0.00267 for strain and 0.00215 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use ordinary mean imputation for deployment\",\n      \"rejected_reason\": \"Ordinary mean explains the stand-alone diagnostic panel, but the deployment contract specifies joint cell-balanced imputation. Check train residuals before treating that discrepancy as transferable.\"\n    }\n  ],\n  \"rationale\": \"Build the solver using only train responses at runtime and encode the chamber law found on complete diagnostic coupons. The schema test checks the composition boundary; the alignment comparison checks whether the diagnostic imputation discrepancy also occurs in the labeled training data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8785a951db2eee574ba57669d619100976f3cbb18d04e7316071b6f29b8ef1c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34085.09,
+      "usage_known": true,
+      "prompt_tokens": 34102,
+      "cached_tokens": 13696,
+      "completion_tokens": 1348
+    }
+  ]
+}

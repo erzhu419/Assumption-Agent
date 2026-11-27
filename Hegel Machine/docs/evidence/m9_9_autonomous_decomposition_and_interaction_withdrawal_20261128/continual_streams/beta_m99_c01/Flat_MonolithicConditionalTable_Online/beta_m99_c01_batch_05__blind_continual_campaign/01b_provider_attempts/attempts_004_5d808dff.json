@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d808dffa24e44f391c88063d7aed7f3",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:23.729025+00:00",
+  "ended_at_utc": "2026-11-27T20:00:59.370556+00:00",
+  "request_sha256": "8f866bf4555c79257327c9524121f81ce9914dbe1dc634b69499f568dbe634c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34115,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28572,
+    "cached_tokens": 14976,
+    "completion_tokens": 1490
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; export OPENBLAS_NUM_THREADS=1; sed -n '64,135p' /tmp/hegel_continual_archive/beta_m99_c01_batch_04_solver.py; cat > /tmp/wall_probe.py <<'PY'\\nimport importlib.util, json, pickle\\nfrom itertools import product\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.sparse import csc_matrix,diags,eye,kron\\nfrom scipy.sparse.linalg import splu\\nP='/tmp/hegel_continual_archive/'\\ndef load(i):\\n spec=importlib.util.spec_from_file_location('m',P+'beta_m99_c01_batch_0'+str(i)+'_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\nperiodic,cal=load(2),load(4)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=it['study']; ds=it['campaign_diagnostics']; raw=np.stack([d['y_pulse_raw'] for d in ds]); w=np.stack([d['w_pulse'] for d in ds]); sw=s['sensor_calibration_sweeps']; co=cal._fit_rosette(sw['ref_rosette'],sw['raw_rosette']); nx,ny=s['nx'],s['ny']; I=eye(nx*ny,format='csc'); reaction=diags(s['V_reaction_2d'].ravel(order='F')); modes=s['source_modes'].reshape(len(w[0]),-1,order='F').T; rhs=modes@w.T; i,j=s['sensor_ij'].T; sens=i+nx*j\\naxes=[]; params=[]\\nfor c,n in [('x',nx),('y',ny)]:\\n k=s['kappa_'+c]; v=s['vel_'+c]; h=s['L'+c]/(n-1); a=periodic._axis(k,v,h).toarray(); axes.append(a); params.append([[(-a[l,r],-a[l,z],k[l]/h**2,s['robin_'+c]/h) for l,r,z in [(0,1,n-1),(n-1,n-2,0)]][q] for q in range(2)])\\nparams=np.array(params).reshape(4,4)\\ndef settings(k):\\n return np.array([[0,0,1] if x=='Robin' else [0,0,0] if x=='sealed' else [1,1,0] for x in k]).ravel()\\ndef calc(p):\\n aa=[]\\n for a,rows,q in zip(axes,p.reshape(2,2,3),params.reshape(2,2,4)):\\n  a=a.copy(); n=len(a)\\n  for (l,r,z),(alpha,beta,gamma),(near,wrap,base,rob) in zip([(0,1,n-1),(n-1,n-2,0)],rows,q):\\n   a[l,r]=-(base+alpha*(near-base));a[l,z]=-beta*wrap;a[l,l]=-a[l,r]-a[l,z]+gamma*rob\\n  aa.append(csc_matrix(a))\\n L=(kron(eye(ny),aa[0])+kron(aa[1],eye(nx))+reaction).tocsc()\\n y=np.concatenate([splu(L+u*I).solve(rhs)[sens] for u in s['mu_shifts']]).T\\n return (cal._rosette_design(y.reshape(-1,4))@co).reshape(raw.shape)\\ndef errors(d): return np.sqrt(np.mean(d*d,axis=1))\\nout=[]\\nfor k in product(['Robin','sealed','periodic'],repeat=4):\\n d=calc(settings(k))-raw; out.append((float(np.max(errors(d))),k,errors(d)))\\nfor row in sorted(out)[:10]: print('discrete',row)\\nfor a in json.load(open(P+'archive_apparatus_log.json')):\\n print('telemetry',a['completed_campaign_short_name'],np.round(np.mean(a['facility_telemetry_trace'],axis=0),3))\\np0=settings(min(out)[1]);print('physical scales',params)\\nfor ids in [[0,1,2],[1,2],[0,2],[0,1]]:\\n opt=least_squares(lambda p:(calc(p)-raw)[ids].ravel(),p0,max_nfev=80,gtol=1e-12)\\n print('free',ids,'RMSE',errors(calc(opt.x)-raw),'coef',np.round(opt.x.reshape(4,3),6),'sv',np.round(np.linalg.svd(opt.jac,compute_uv=False),7))\\nprint('calibration residual absolute quantiles',np.quantile(abs(cal._rosette_design(sw['ref_rosette'])@co-sw['raw_rosette']),[.5,.8,.9,.95,1]))\\nPY\\npython3 /tmp/wall_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared archived wall setting -> H2 independently selected endpoint conditions; archived periodic is closest so far, with worst calibrated tracer RMSE 0.01013.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt archived periodic walls unchanged\",\n      \"rejected_reason\": \"The worst tracer residual is materially larger than the other tracers, and the prior raw comparison reported absolute mean residual rather than RMSE.\"\n    }\n  ],\n  \"rationale\": \"Compare exact endpoint combinations in raw sensor space using the independently fitted calibration. A free endpoint fit with leave-one-pulse-out validation can reveal a repeatable missing boundary term if the discrete combinations fail.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "54a7317bfa8430f15f60126e451929ff52a6cfbd2e4a3bc9fbe1e2489053bc53",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36765.71,
+      "usage_known": true,
+      "prompt_tokens": 28572,
+      "cached_tokens": 14976,
+      "completion_tokens": 1490
+    }
+  ]
+}

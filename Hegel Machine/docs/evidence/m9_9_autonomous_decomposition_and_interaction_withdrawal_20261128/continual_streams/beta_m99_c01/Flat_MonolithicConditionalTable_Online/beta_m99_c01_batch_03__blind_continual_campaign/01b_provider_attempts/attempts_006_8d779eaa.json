@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8d779eaa49624540833636ce9225a045",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:49.007059+00:00",
+  "ended_at_utc": "2026-11-27T19:49:27.576863+00:00",
+  "request_sha256": "9281a32c2d04cb9fe961bd5ac3e11b661c5cf903937e3f1c420776db823b96f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45072,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33054,
+    "cached_tokens": 14976,
+    "completion_tokens": 1637
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/beta_m99_c01_s00_solver.py')\\ns=p.read_text().replace('import numpy as np','from itertools import combinations\\\\n\\\\nimport numpy as np\\\\nfrom scipy.optimize import root',1)\\na=s.index('def _calibrate('); b=s.index('def _box_simplex(',a)\\ns=s[:a]+'''_PAIRS = tuple(combinations(range(4), 2))\\n\\n\\ndef _rosette_design(x):\\n    return np.column_stack((np.ones(len(x)), x, x**3,\\n                            *(x[:, i] * x[:, j] for i, j in _PAIRS)))\\n\\n\\ndef _fit_rosette(ref, raw):\\n    # Use robust pilot residuals to exclude corrupted sweeps as whole rosettes.\\n    design = _rosette_design(ref)\\n    coeff = np.linalg.lstsq(design, raw, rcond=None)[0]\\n    for _ in range(35):\\n        residual = raw - design @ coeff\\n        centered = residual - np.median(residual, axis=0)\\n        scale = np.maximum(1.4826 * np.median(abs(centered), axis=0), 1e-7)\\n        factor = 1 / np.hypot(1, centered / (2.5 * scale))\\n        for j in range(raw.shape[1]):\\n            f = factor[:, j]\\n            coeff[:, j] = np.linalg.lstsq(design * f[:, None], raw[:, j] * f, rcond=None)[0]\\n    residual = raw - design @ coeff\\n    centered = residual - np.median(residual, axis=0)\\n    scale = np.maximum(1.4826 * np.median(abs(centered), axis=0), 1e-7)\\n    clean = np.all(abs(centered) <= 8 * scale, axis=1)\\n    return np.linalg.lstsq(design[clean], raw[clean], rcond=None)[0]\\n\\n\\ndef _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    coeff = _fit_rosette(sweeps['ref_rosette'], sweeps['raw_rosette'])\\n    targets = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    linear = coeff[1:5].T\\n    start = np.linalg.solve(linear, (targets - coeff[0]).T).T\\n\\n    def jacobian(x):\\n        jac = linear + 3 * coeff[5:9].T * x**2\\n        for k, (i, j) in enumerate(_PAIRS, 9):\\n            jac[:, i] += coeff[k] * x[j]\\n            jac[:, j] += coeff[k] * x[i]\\n        return jac\\n\\n    recovered = np.empty_like(start)\\n    for i, (target, initial) in enumerate(zip(targets, start)):\\n        def residual(x):\\n            return _rosette_design(x[None])[0] @ coeff - target\\n        result = root(residual, initial, jac=jacobian, tol=1e-10)\\n        if np.max(abs(result.fun)) > 1e-9:\\n            raise RuntimeError('Rosette inversion did not converge')\\n        recovered[i] = result.x\\n    return recovered.ravel()\\n\\n\\n'''+s[b:]\\ns=s.replace('def _forward(study):\\\\n','def _forward(study):\\\\n    # Both wall controls are at baseline for this campaign.\\\\n')\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); s=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; fit=m['_fit_rosette']; d=m['_rosette_design']; err=np.empty_like(y)\\nfor i in range(5):\\n test=np.arange(len(x))%5==i; err[test]=d(x[test])@fit(x[~test],y[~test])-y[test]\\nprint('calibration OOF channel p90',np.quantile(abs(err),.9,axis=0)); print('corrupted rows',np.flatnonzero(np.max(abs(err),axis=1)>.3)); out=m['solve_batch'](s); w=out['weights']; cert=out['kkt_certificate']; print('budget error',abs(w.sum()-s['total_budget']),'box extrema',w.min(),w.max(),'duality gap',cert['primal_objective']-cert['dual_lower_bound'])\\nassert np.max(np.quantile(abs(err),.9,axis=0)) < 5e-5\\nassert abs(w.sum()-s['total_budget']) < 1e-10 and w.min() >= -1e-10 and w.max() <= s['u_box']+1e-10\\nassert abs(cert['primal_objective']-cert['dual_lower_bound']) < 1e-10\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 periodic walls and additive calibration -> H2 Robin walls on both axes with self-cubic and pairwise rosette terms; worst held-out rosette RMSE was 0.01418 versus 0.03407 for the next-best wall candidate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The previous campaign's periodic endpoint stencil still applies.\",\"empirical_witness\":\"With specified ridge, worst held-out rosette and shift RMSEs were 0.12358 and 0.17127 for periodic walls, versus 0.01418 and 0.01072 for Robin walls.\",\"causal_blanket_diagnosis\":\"Campaign-specific endpoint transport changes the sensor response and cannot be corrected by refitting source weights and nuisance coefficients.\",\"sublated_pivot\":\"Use the documented Robin stencil on both axes and fit the rosette calibration from this study's sweeps.\",\"risk_kind\":\"stale_boundary_operator\",\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Retain squared or general third-order interaction terms\",\"rejected_reason\":\"Squared terms fitted near zero and the broader cubic basis worsened held-out calibration error.\"}],\"rationale\":\"Write the solver using the best-supported endpoint stencil. Run the exact artifact in an isolated Python process to detect schema, calibration, or feasibility regressions before independently auditing the field and certificate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1bd12ab9cb5f3417549eed137565b1b397cd810a4014b9a99e667ff6435d1fda",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39703.55,
+      "usage_known": true,
+      "prompt_tokens": 33054,
+      "cached_tokens": 14976,
+      "completion_tokens": 1637
+    }
+  ]
+}

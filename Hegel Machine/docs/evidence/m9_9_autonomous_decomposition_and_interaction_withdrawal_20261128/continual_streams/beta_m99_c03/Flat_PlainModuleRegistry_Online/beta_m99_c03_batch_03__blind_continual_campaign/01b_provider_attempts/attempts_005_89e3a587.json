@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89e3a587507c4313b61667c40cc821ef",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:58.255466+00:00",
+  "ended_at_utc": "2026-11-27T19:51:23.872654+00:00",
+  "request_sha256": "c12dece458d1d0cf2e790ca7ee1ed8f53eb1bff6ee62ebaa18d5daea542d29d0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39398,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30316,
+    "cached_tokens": 13696,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,itertools,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; clean=np.max(abs(y),axis=1)<5\\nterms=[()]+[j for d in (1,2,3) for j in itertools.combinations_with_replacement(range(4),d)]\\ndef a(x): return np.column_stack([np.prod(x[:,t],axis=1) for t in terms])\\nA=a(x); B=np.linalg.lstsq(A[clean],y[clean],rcond=None)[0]; print('conditioning',np.linalg.cond(A[clean])); print('coefficients:');\\nfor t,b in zip(terms,B):\\n if max(abs(b))>1e-4: print(t,np.round(b,7))\\nb=c['single_bank_sweeps']; xx=np.eye(4)[b['bank_id']]*b['ref_signal'][:,None]; print('bank residual',np.round(b['raw_readout']-(a(xx)@B)[np.arange(len(xx)),b['bank_id']],7))\\nH=A @ np.linalg.pinv(A); e=np.linalg.norm(y-A@np.linalg.lstsq(A,y,rcond=None)[0],axis=1)/np.sqrt(1-np.diag(H)); print('standardized residual quantiles',np.quantile(e,[0,.5,.8,.9,.95,1])); print('largest',sorted(enumerate(e),key=lambda p:p[1])[-10:]); print('max clean row norm',max(np.linalg.norm(y[clean],axis=1))); print('latest vs initial apparatus: equal within',np.array([.007,.001]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable cubic response → H2 multivariate cubic response with cross-channel interactions; maximum clean-row leave-one-out error fell from 0.904 to 5.43e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Mixing plus separable channel curvature suffices.\",\n    \"empirical_witness\": \"On the same 77 clean public sweep rows, the maximum absolute leave-one-out residual fell from 0.904 with the separable cubic to 5.43e-5 with the full cubic.\",\n    \"causal_blanket_diagnosis\": \"Linear mixing and independent channel curvature omit cross-channel terms visible in mixed excitation.\",\n    \"sublated_pivot\": \"Recover the sparse support of the multivariate cubic and test whether bank sweeps identify the same axis response.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a higher-degree separable response\",\n      \"rejected_reason\": \"The degree-five separable model made held-out error worse; cross terms, not additional independent curvature, accounted for the discrepancy.\"\n    }\n  ],\n  \"rationale\": \"The cubic fit has reached the sweep noise floor. Its coefficients and independent bank residuals will determine a compact forward model, while the residual profile will determine how to reject EMI without hard-coding the affected row indices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4c01c64cd454534f54f6176f627d2b7e721d56fdce4ae9554b3bde388fab8e45",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26725.33,
+      "usage_known": true,
+      "prompt_tokens": 30316,
+      "cached_tokens": 13696,
+      "completion_tokens": 1004
+    }
+  ]
+}

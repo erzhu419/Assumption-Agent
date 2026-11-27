@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef2da998199e4a2cb12cbb9d65b12ebd",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:51.947664+00:00",
+  "ended_at_utc": "2026-11-27T19:49:30.931819+00:00",
+  "request_sha256": "08be317c57c162bdeaa6388df5b2c1b47d4642e71700c83848c15b19a654d0fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49231,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33689,
+    "cached_tokens": 14976,
+    "completion_tokens": 1670
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\no=m.solve_batch(s); w=np.array(o['weights']); cert=o['kkt_certificate']; nu=cert['nu_sum']\\nnx,ny=s['nx'],s['ny']; cap=s['u_box']; total=s['total_budget']; ridge=s['source_ridge']\\ndef axis(a,n):\\n    k,v,r=s['kappa_'+a],s['vel_'+a],s['robin_'+a]; h=s['L'+a]/(n-1)\\n    A=np.zeros((n,n))\\n    for i in range(1,n-1):\\n        A[i,i-1]=-(k[i]+k[i-1])/2/h**2-max(v[i],0)/h\\n        A[i,i+1]=-(k[i]+k[i+1])/2/h**2-max(-v[i],0)/h\\n        A[i,i]=-A[i,i-1]-A[i,i+1]\\n    for i,j in ((0,1),(n-1,n-2)):\\n        A[i,j]=-k[i]/h**2; A[i,i]=k[i]/h**2+r/h\\n    return A\\nL=np.kron(np.eye(ny),axis('x',nx))+np.kron(axis('y',ny),np.eye(nx))+np.diag(s['V_reaction_2d'].flatten('F'))\\nB=np.array([mode.flatten('F') for mode in s['source_modes']]).T\\nij=s['sensor_ij']; ix=ij[:,0]+nx*ij[:,1]\\nU=[np.linalg.solve(L+mu*np.eye(nx*ny),B) for mu in s['mu_shifts']]\\nS=np.vstack([u[ix] for u in U]); field=(U[-1]@w).reshape((nx,ny),order='F')\\nerr=np.max(abs(o['terminal_field']-field)); assert err<1e-11,err\\nsweeps=s['sensor_calibration_sweeps']; fit=m._fit_calibration(sweeps['ref_rosette'],sweeps['raw_rosette']); y=m._calibrate(s)\\ninv=max(np.max(abs(m._sensor(x,fit)[0]-raw)) for x,raw in zip(y.reshape(-1,4),s['y_obs_raw'].reshape(-1,4))); assert inv<1e-8,inv\\nZ=s['Z_nuisance']; P=np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nX=P@S; residual=X@w-P@y; g=X.T@residual+ridge*w; J=(residual@residual+ridge*(w@w))/2\\nlow=np.array(cert['lam_lower']); high=np.array(cert['lam_upper']); dual=J-g@w+nu*total+cap*np.minimum(0,g-nu).sum()\\nassert np.allclose(w,cert['weights'],atol=1e-12,rtol=0) and abs(w.sum()-total)<1e-12 and np.min(w)>=-1e-12 and np.max(w)<=cap+1e-12\\nassert np.min(low)>=0 and np.min(high)>=0\\nkkt=max(np.max(abs(g-nu-low+high)),np.max(abs(w*low)),np.max(abs((cap-w)*high)),abs(J-dual),abs(cert['primal_objective']-J),abs(cert['dual_lower_bound']-dual)); assert kkt<1e-11,kkt\\nwall=(ij[:,0]==0)|(ij[:,0]==nx-1)|(ij[:,1]==0)|(ij[:,1]==ny-1)\\nprint('terminal max error',err,'inverse max error',inv,'certificate max error',kkt)\\nprint('observed residual RMSE by shift and wall/interior',[(float(np.sqrt(np.mean(r[wall]**2))),float(np.sqrt(np.mean(r[~wall]**2)))) for r in residual.reshape(-1,len(ix))])\\nrng=np.random.default_rng(321); wx=0.; kx=0.\\nfor case in range(120):\\n    n=len(w); W=rng.normal(size=(n,n)); H=W.T@W+ridge*np.eye(n)\\n    targets=[np.full(n,0.2),np.array([0,cap,0.12,0.19,0,cap,0.31,0.27]),np.array([cap]*3+[0.]*(n-3)),np.zeros(n),np.full(n,cap)]\\n    target=rng.permutation(targets[case%len(targets)]); budget=target.sum(); base=rng.normal()\\n    grad=np.full(n,base); grad[target==0]+=rng.uniform(.02,2,size=(target==0).sum()); grad[target==cap]-=rng.uniform(.02,2,size=(target==cap).sum())\\n    linear=grad-H@target; wh,num=m._box_simplex(H,linear,cap,budget); red=H@wh+linear-num\\n    wx=max(wx,np.max(abs(wh-target))); kx=max(kx,abs(wh.sum()-budget),np.max(abs(wh*np.maximum(red,0))),np.max(abs((cap-wh)*np.maximum(-red,0))))\\nassert wx<1e-9 and kx<1e-9,(wx,kx)\\nprint('120 active-set stress cases: worst weight error',wx,'worst feasibility/complementarity error',kx)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine calibration and periodic closure → H2 robust coupled cubic calibration and Robin closure; worst held-out inlier error is 3.54e-5, and the projected residual norm is 0.0811 versus 0.9415 for reflecting and 1.0161 for periodic walls.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema check\",\"rejected_reason\":\"The schema check does not verify field ordering, the certificate formulas, or behavior when weights hit box bounds.\"}],\"rationale\":\"Keep the candidate unchanged. Use an independent dense forward assembly to check ordering and the certificate on the public study, and known-optimum cases to test active bounds not reached by the public solution. A failure would identify which part of the solver needs repair.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2906ebfe05945f7690d32426c3452ca5ed188e56588f63d1a05ea4a67cd610aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40117.73,
+      "usage_known": true,
+      "prompt_tokens": 33689,
+      "cached_tokens": 14976,
+      "completion_tokens": 1670
+    }
+  ]
+}

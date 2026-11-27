@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8604a55001034d6aa6fe049fa1eb836c",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:41.970983+00:00",
+  "ended_at_utc": "2026-11-27T19:39:11.139449+00:00",
+  "request_sha256": "9499b22a43a8c540e542f5073799d20e670f42fe545b14c594ddb2f669126857",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49880,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35316,
+    "cached_tokens": 13696,
+    "completion_tokens": 1208
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^print(/,$d' /tmp/chamber_probe.py > /tmp/chamber_alignment.py\\ncat >> /tmp/chamber_alignment.py <<'PY'\\nfrom scipy.optimize import least_squares\\nkeys=('coupon_features_raw','ref_coupons','lab_id','stratum')\\ndef join(*parts):\\n return {k:np.concatenate([a[k] for a in parts]) for k in keys}\\nempty={k:tr[k][:0] for k in keys}\\nfor name,other in [('train-only',empty),('train+test',te),('train+test+diag',join(te,di))]:\\n xx=s._features(tr,other)[0]; ts,ww=s._material(tr,b,xx,dt,t); a,q=s._basis(ts,*s._loads(tr,b),xx,dt,t); e=a@ww+tr['strain_0'][:,None]-tr['strain_curves_obs']; er=q@ww-tr['instant_rate_obs']; print(name,'tau',ts.round(6),'weights',ww.round(6),'median abs curve/rate',np.median(abs(e)),np.median(abs(er)))\\nP=np.vstack((-np.expm1(-t[:,None]/taus),1/taus)); base=(h[:,None]*w[:2])@P.T; D=Y-base\\nfor label,xx in [('diag only',s._features(empty,di)[1]),('joint train+diag',xd)]:\\n v=w[2]+xx@w[3:]; print(label,'drift range',np.round([v.min(),v.max()],4))\\n for mode in ('slope','slope+offset','slope+history','slope+history+offset','free drift','shared power'):\\n  if mode=='slope': F=v[:,None]\\n  elif mode=='slope+offset': F=np.c_[v,one]\\n  elif mode=='slope+history': F=np.c_[v,z0,z1]\\n  elif mode=='slope+history+offset': F=np.c_[v,z0,z1,one]\\n  elif mode=='free drift': F=np.c_[one,xx]\\n  else: F=np.c_[v,v*np.abs(v)]\\n  N=(P[None,:,:,None]*F[:,None,None,:]).reshape(n,len(t)+1,-1); E=np.zeros_like(D); worst=[]\\n  for l in np.unique(lab):\\n   m=lab!=l; fit=np.linalg.lstsq(N[m].reshape(-1,N.shape[-1]),D[m].ravel(),rcond=None)[0]; E[~m]=N[~m]@fit-D[~m]; worst.append(np.sqrt(np.mean(E[~m]**2,axis=0)).max())\\n  fit=np.linalg.lstsq(N.reshape(-1,N.shape[-1]),D.ravel(),rcond=None)[0]; print(mode,'fit/OOF strain/rate/worst',np.round([np.sqrt(np.mean((N@fit-D)**2)),np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),max(worst)],5),'coeff',fit.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_alignment.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonlinear chamber response → H2 a linear rank-one drift correction after chamber reference alignment; held-out-lab RMSE is 0.00389 for strain and 0.00472 for initial rate, with worst lab-by-time RMSE 0.00664.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a nonlinear drift or change the spectrum\",\n      \"rejected_reason\": \"Chamber-only reference alignment removed most of the held-out error without changing the time constants or adding nonlinear parameters.\"\n    }\n  ],\n  \"rationale\": \"Compare the compact chamber law against residual history, offset, and feature-weight terms to see whether any improves held-out labs. Separately check whether the material fit is sensitive to panel composition while retaining the specified joint train/test standardization for intrinsic estimation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c3eb0ac56ff91cc0f86649cd585ee1c29b0a8601f7965bd34ea5a67e891b414c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30267.69,
+      "usage_known": true,
+      "prompt_tokens": 35316,
+      "cached_tokens": 13696,
+      "completion_tokens": 1208
+    }
+  ]
+}

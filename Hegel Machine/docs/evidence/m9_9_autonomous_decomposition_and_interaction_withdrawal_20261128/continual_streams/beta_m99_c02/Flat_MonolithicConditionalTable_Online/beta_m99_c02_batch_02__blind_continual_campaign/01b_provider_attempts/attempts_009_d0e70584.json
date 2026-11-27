@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0e7058403104bafa2307e1148157533",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:26.231585+00:00",
+  "ended_at_utc": "2026-11-27T19:44:51.764100+00:00",
+  "request_sha256": "1c8d9f4afaccfd810fa17fad58650e41a784b4146874f59dfd626a830f6fd395",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48667,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32383,
+    "cached_tokens": 14976,
+    "completion_tokens": 1009
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; A=np.c_[np.ones(len(x)),x]\\nS,_=m._responses(s); K=len(s['mu_shifts']); pulses=item['campaign_diagnostics']\\nraw=np.stack([d['y_pulse_raw'].reshape(-1,4) for d in pulses]); target=np.stack([(S@d['w_pulse']).reshape(-1,4) for d in pulses])\\nbase=m.solve_batch(s); original=m._calibrate\\nfor diagonal in (True,False):\\n    held=[]; pulse=[]; deltas=[]\\n    for fold in range(6):\\n        test=np.arange(len(x))%5==fold; train=~test\\n        if diagonal:\\n            coef=np.zeros((5,4))\\n            for ch in range(4):\\n                cols=[0,ch+1]; coef[cols,ch]=np.linalg.lstsq(A[train][:,cols],y[train,ch],rcond=None)[0]\\n        else:\\n            coef=np.linalg.lstsq(A[train],y[train],rcond=None)[0]\\n        offset,M=coef[0],coef[1:]; inv=np.linalg.inv(M)\\n        if test.any(): held.append(np.sqrt(np.mean(((y[test]-offset)@inv-x[test])**2,axis=0)))\\n        e=((raw-offset)@inv-target).reshape(len(pulses),K,-1,4)\\n        pulse.append(float(np.sqrt(np.mean(e**2,axis=2)).max()))\\n        try:\\n            m._calibrate=lambda study: ((study['y_obs_raw'].reshape(-1,4)-offset)@inv).ravel()\\n            out=m.solve_batch(s)\\n        finally:\\n            m._calibrate=original\\n        deltas.append([np.linalg.norm(out[k]-base[k])/np.linalg.norm(base[k]) for k in ('weights','terminal_field')])\\n    print('diagonal' if diagonal else 'full', 'worst held-out sweep RMS by channel',np.max(held,axis=0),'worst folded pulse/shift/channel RMS',max(pulse[:5]),'all-data pulse/shift/channel RMS',pulse[5],'all-data relative weight and field changes',deltas[5])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall rows → H2 cyclic upwind rows on both axes; worst measured pulse-by-shift RMS is 1.68e-6 and worst pulse/shift/channel RMS is 2.89e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the verified artifact without correcting the comparison\",\n      \"rejected_reason\": \"The audit indexed channel ch rather than ch+1 after prepending the intercept, so its diagonal-calibration result cannot guide model selection.\"\n    }\n  ],\n  \"rationale\": \"The indexing error is in the audit, not the saved solver. Compare both calibration models on identical folds and known-weight pulses; edit the verified artifact only if the corrected comparison shows a meaningful improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "48ff77eb38c8629f1feade2918487323ad5812abe25d432bcb1be06b567584f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26659.95,
+      "usage_known": true,
+      "prompt_tokens": 32383,
+      "cached_tokens": 14976,
+      "completion_tokens": 1009
+    }
+  ]
+}

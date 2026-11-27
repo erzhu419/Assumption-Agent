@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "605fd463ba494038ab4e4a91d96375be",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:24.098732+00:00",
+  "ended_at_utc": "2026-11-27T19:47:57.724237+00:00",
+  "request_sha256": "9d8faa71fa4c80fe9ffec47e781b2312a24ab01a088776f93a681f681c9f73aa",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53144,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32158,
+    "cached_tokens": 13696,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(study: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(study))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nfrom wall_probe import s, W, pulses, predict\\n\\nbase = solve_batch(s)\\ncal = calibrate_upstream(s)\\nnp.testing.assert_array_equal(base['weights'], solve_downstream(cal)['weights'])\\nY = np.column_stack([calibrate_upstream({**s, 'y_obs_raw': p['y_pulse_raw']})['y_obs_raw'] for p in pulses])\\nZ = s['Z_nuisance']\\nR = predict('periodic', 'periodic') - Y\\nworst = 0.\\nshift = np.repeat(np.arange(len(s['mu_shifts'])), len(s['sensor_ij']))\\nfor ids in (shift, s['row_bank_id']):\\n    for k in np.unique(ids):\\n        test = ids == k\\n        nuisance = np.linalg.lstsq(Z[~test], R[~test], rcond=None)[0]\\n        worst = max(worst, np.sqrt(np.mean((R[test]-Z[test]@nuisance)**2,axis=0)).max())\\nprint('dynamic calibration: worst held-out shift/bank pulse RMSE',worst)\\nassert worst < 1e-4\\n\\nsweep = s['sensor_calibration_sweeps']\\nraw = sweep['raw_rosette']\\nmask = np.all(abs(raw) <= 8.5, axis=1)\\nscale = np.array([1.05,.95,1.08,.92]); offset = np.array([.03,-.04,.05,-.02])\\nmoved = raw.copy(); moved[mask] = raw[mask]*scale+offset\\nassert np.array_equal(mask,np.all(abs(moved)<=8.5,axis=1))\\ntrial = solve_batch({**s, 'sensor_calibration_sweeps':{**sweep, 'raw_rosette':moved}, 'y_obs_raw':(s['y_obs_raw'].reshape(-1,4)*scale+offset).ravel()})\\nfor key in ('weights','terminal_field'):\\n    err = np.max(abs(base[key]-trial[key])); print('gain/offset invariance',key,err)\\n    assert err < 1e-10\\nfor out in (base,trial):\\n    w = out['weights']; c=out['kkt_certificate']; gap=c['primal_objective']-c['dual_lower_bound']\\n    assert abs(w.sum()-s['total_budget']) < 1e-10 and min(w) >= -1e-10 and max(w) <= s['u_box']+1e-10 and abs(gap) < 1e-10\\n    print('KKT duality gap',gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed calibration payload → H2 per-study sweep calibration with unchanged periodic transport; the gain/offset stress test reduced maximum weight drift from 0.227 to 6.73e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"A fixed calibration payload preserves source estimates when the documented rosette gains and offsets change across studies.\",\n    \"empirical_witness\": \"Changing only the gains and offsets on the public observations and sweeps moved a weight by 0.227 with fixed calibration versus 6.73e-15 with the empirical fit; on the unchanged public study the two fits differed by only 6.22e-5.\",\n    \"causal_blanket_diagnosis\": \"The fixed payload converts sensor variation into a change in inferred source weights even though chamber physics and nuisance inputs are unchanged.\",\n    \"sublated_pivot\": \"Use the verified upstream transducer's existing empirical-fit path in the batch entry point; leave the calibrated downstream interface and periodic operator unchanged.\",\n    \"risk_kind\": \"sensor_calibration_transfer\",\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit calibration again in the downstream solver\",\n      \"rejected_reason\": \"The downstream interface already receives calibrated coordinates; a second fit there would break the modular handoff.\"\n    }\n  ],\n  \"rationale\": \"The sensor-transfer test exposes a material fixed-payload failure without weakening the evidence for periodic walls. Verify the revised entry point in isolation: a tracer regression would implicate calibration, while a failed invariance or KKT check would block submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0dd0c6eacdd7e53302d0d47274763641521f0df3c4d88a7f749d2184d325cb33",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34733.5,
+      "usage_known": true,
+      "prompt_tokens": 32158,
+      "cached_tokens": 13696,
+      "completion_tokens": 1392
+    }
+  ]
+}

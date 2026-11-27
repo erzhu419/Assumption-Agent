@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a62fbc82c6d4388b4b9efb97bb1a937",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:33.731535+00:00",
+  "ended_at_utc": "2026-11-27T19:49:57.017707+00:00",
+  "request_sha256": "902a814a70eacecdba49989a6e36b5976e338db069ceff9086711d42c92dd4e2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39998,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29587,
+    "cached_tokens": 14976,
+    "completion_tokens": 889
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'];c=p['calibration_load_cells'];x=c['bridge_raw'];y=c['true_channel_loads'];print('calibration',x.shape, 'raw range',x.min(0),x.max(0),'true range',y.min(0),y.max(0))\\ndef meta(d,ind=''):\\n if isinstance(d,dict):\\n  for k,v in d.items():\\n   print(ind,k,type(v).__name__,getattr(v,'shape',''));meta(v,ind+' ')\\n elif isinstance(d,(tuple,list)) and len(d): print(ind,len(d),type(d[0]).__name__);meta(d[0],ind+' ')\\nmeta(c['single_channel_sweeps'])\\nfor key in ['train','test']:\\n s=p[key]; z=np.vstack((s['past_channel_raw'].reshape(-1,4),s['hold_channel_raw']));print(key,'raw range',z.min(0),z.max(0))\\nfrom itertools import combinations_with_replacement\\nfrom sklearn.model_selection import KFold\\nfor direction,(xx,yy) in enumerate(((x,y),(y,x))):\\n for degree in range(1,5):\\n  for kind in ['additive','full'][:1 if degree==1 else 2]:\\n   terms=[()] + [j for k in range(1,degree+1) for j in combinations_with_replacement(range(4),k) if kind=='full' or len(set(j))==1]; zz=(xx-np.mean(xx,0))/np.std(xx,0); a=np.column_stack([np.prod(zz[:,j],axis=1) for j in terms]); pred=np.empty_like(yy); worst=0\\n   for tr,te in KFold(5,shuffle=True,random_state=1).split(a):\\n    pred[te]=a[te]@np.linalg.lstsq(a[tr],yy[tr],rcond=None)[0]; worst=max(worst,np.std((pred[te]-yy[te]).sum(1)))\\n   e=pred-yy; print('direction,degree,basis,p',direction,degree,kind,len(terms),'cv channel',np.sqrt(np.mean(e**2,0)).round(5),'total',np.sqrt(np.mean(e.sum(1)**2)).round(5),'worst',round(worst,5))\\nprint('calibration first rows');print(np.c_[x[:6],y[:6]].round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge inversion -> H2 nonlinear calibration with the baseline chamber law; affine calibration has 0.577 RMS total-load error in sample, and held-out error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived affine bridge\",\n      \"rejected_reason\": \"Its total-load residual could bias the shared material fit. Held-out calibration will distinguish nonlinear structure from measurement noise before replacing it.\"\n    }\n  ],\n  \"rationale\": \"Compare additive and interaction terms in both calibration directions on held-out sweeps. If the forward bridge is markedly simpler, invert it rather than fitting a high-degree inverse; deployment ranges will show where extrapolation matters.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "982d33342709616bbbda2d39709bb8ae90e72aba45a2ac8fc8f889cb3f592cd8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24402.46,
+      "usage_known": true,
+      "prompt_tokens": 29587,
+      "cached_tokens": 14976,
+      "completion_tokens": 889
+    }
+  ]
+}

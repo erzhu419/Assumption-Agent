@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6fae22f3aac457a89387ff4376ec167",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:01.597027+00:00",
+  "ended_at_utc": "2026-11-27T19:48:36.983327+00:00",
+  "request_sha256": "b0f0ee84acc0e274310fef7ec506bc8bdf78a0da9f8e2d1761697dd718dfa6ca",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39013,
+    "cached_tokens": 14976,
+    "completion_tokens": 1486
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_stress_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ni = pickle.load(open(root+'public_batch.pkl','rb'))[0]\\nd, g = i['dataset'], i['campaign_diagnostics']\\ntr, te, dt, t = d['train'], d['test'], d['past_dt'], d['eval_times']\\nxt, _ = m._features(tr, te)\\ns = m._stress_map(d['calibration_load_cells'])\\ntau, th = m._fit(tr, xt, s, dt, t)\\nx, _ = m._features(g, g)\\ncomplete = np.isfinite(g['coupon_features_raw']).all(1)\\nlab = g['lab_id']\\npast = s[0]+g['past_channel_raw']@s[1:]\\nhold = s[0]+g['hold_channel_raw']@s[1:]\\nz = np.zeros((len(lab),2))\\nfor j, dtj in enumerate(dt):\\n    z = z*np.exp(-dtj/tau)+past[:,j,None]*(-np.expm1(-dtj/tau))\\ngap = hold[:,None]-z\\nB = np.vstack([np.c_[-np.expm1(-t[:,None]/tau), t], np.r_[1/tau,1.]])\\nc,r = m._design(g,x,s,dt,t,tau)\\nassert np.allclose(r[:,:2]*tau, gap, rtol=0, atol=2e-14)\\ny = np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]\\nprior = (gap*th[:2])@B[:,:2].T\\nv = y-prior\\nscale = np.r_[np.full(len(t),.004),.006]\\nrd = th[2]+x@th[3:]\\nbase = rd[:,None,None]*B[None,:,:]\\n# All candidates use the same outer splits and independently refit their coefficients.\\nfor name in ('base','gap_sum_and_difference','drift_x_gap_difference','rational_drift','rational_gap_difference'):\\n    err = np.full_like(y,np.nan)\\n    for l in np.unique(lab):\\n        fit = complete & (lab!=l)\\n        check = complete & (lab==l)\\n        q = gap[:,0]-gap[:,1]\\n        if name == 'rational_drift':\\n            q = rd\\n        if name == 'gap_sum_and_difference':\\n            F = np.concatenate([base, (gap.sum(1)[:,None,None]*B[None,:,:2]), (q[:,None,None]*B[None,:,:2])],axis=2)\\n        elif name == 'drift_x_gap_difference':\\n            F = np.concatenate([base,q[:,None,None]*base],axis=2)\\n        else:\\n            F = base\\n        rational = name.startswith('rational_')\\n        def predict(p):\\n            return (F@p[:-1])/(1+p[-1]*q[:,None]**2) if rational else F@p\\n        p = np.r_[.33,2.49,-.26,np.zeros(F.shape[-1]-3)]\\n        kwargs = {}\\n        if rational:\\n            p = np.r_[p,0.]\\n            kwargs['bounds'] = (np.r_[np.full(F.shape[-1],-np.inf),0.],np.inf)\\n        o = least_squares(lambda p: ((predict(p)-v)[fit]/scale).ravel(),p,loss='soft_l1',f_scale=1.5,**kwargs)\\n        err[check] = (predict(o.x)-v)[check]\\n    scores = np.array([np.sqrt(np.mean(err[complete & (lab==l)]**2,axis=0)) for l in np.unique(lab)])\\n    print(name, 'worst-lab early/late/rate RMSE', np.round([np.max(np.sqrt(np.mean(scores[:,:3]**2,1))),np.max(np.sqrt(np.mean(scores[:,-4:-1]**2,1))),np.max(scores[:,-1])],6), 'pooled strain/rate RMSE',np.round([np.sqrt(np.mean(err[complete,:-1]**2)),np.sqrt(np.mean(err[complete,-1]**2))],6))\\n    if name=='base':\\n        print('held-out signed lab mean deviations (curve, rate)', [(int(l), np.round([err[complete & (lab==l),:-1].mean(),err[complete & (lab==l),-1].mean()],6).tolist()) for l in np.unique(lab)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_stress_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared-spectrum drift redistribution → H2: test stress contrasts and rational saturation; the current worst held-out slice is incomplete diagnostics, with late-strain/rate RMSE 0.02964/0.02573.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, HJB, or balanced-accuracy checks\",\n      \"rejected_reason\": \"This task has continuous strain and rate outputs, no relay or classification labels, and a specified hereditary recurrence rather than an HJB operator. The relevant nuisance check is signed error by held-out lab.\"\n    }\n  ],\n  \"rationale\": \"Check the exact load recurrence and test whether stress contrasts or rational saturation improve prediction on complete held-out chamber coupons. Use complete coupons here to avoid mistaking the diagnostic imputation offset for missing physics. A consistent gain on both strain and rate would justify a challenger; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "553ebf28f6a6bcd71a2ca7181a4b7b2329aab95f8f1c5956159f6bc088308a6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36508.83,
+      "usage_known": true,
+      "prompt_tokens": 39013,
+      "cached_tokens": 14976,
+      "completion_tokens": 1486
+    }
+  ]
+}

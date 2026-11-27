@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27507fb72d3f4cfea410f1d17ffd89c0",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:57.678116+00:00",
+  "ended_at_utc": "2026-11-27T19:46:31.024853+00:00",
+  "request_sha256": "ff5bd968e016273bdced4c95bc483c52d167ab656a8167f004c30e358c3fd7c6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53528,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34684,
+    "cached_tokens": 14976,
+    "completion_tokens": 1395
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m99.py <<'PY'\\nimport importlib.util\\nimport pickle\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['campaign_diagnostics']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nb = m._bridge(d['calibration_load_cells'])\\nxtr, _ = m._features(tr, te)\\ntau, theta = m._material(tr, b, xtr, dt, t)\\nx, _ = m._features(g, {k: v[:0] for k, v in g.items()})\\npast, hold = m._loads(g, b)\\nc, r = m._basis(tau, past, hold, x, dt, t)\\nbase, rate = c @ theta, r @ theta\\ny = g['strain_curves_obs'] - g['strain_0'][:, None]\\nz = hold[:, None] - r[:, :2] * tau\\ndrift = theta[2] + x @ theta[3:]\\nu = t[:, None] / tau\\nF = -np.expm1(-u) - u\\nlab = g['lab_id']\\ncomplete = np.isfinite(g['coupon_features_raw']).all(1)\\nfor name in ('linear drift', 'rational drift', 'rational gap difference', 'paired history differences'):\\n    err = np.empty_like(y)\\n    extras = []\\n    for ell in np.unique(lab):\\n        held = lab == ell\\n        fit = ~held & complete\\n        signal = drift if name != 'rational gap difference' else z[:, 0] - z[:, 1]\\n        scale = max(np.sqrt(np.mean(signal[fit]**2)), 1e-8)\\n        q2 = (signal / scale)**2\\n        D = drift[:, None, None] * F[None, :, :]\\n        if name == 'paired history differences':\\n            D = np.concatenate((D, ((hold[:, None] - z)[:, None, :] * F[None, :, :])), axis=2)\\n        target = (y - base)[fit].ravel()\\n        A = D[fit].reshape(len(target), -1)\\n        init = np.linalg.lstsq(A, target, rcond=None)[0]\\n        if name.startswith('rational'):\\n            def predict(q):\\n                return (D @ q[:-1]) / (1 + q[-1] * q2[:, None])\\n            init = np.r_[init, 0.001]\\n            bounds = (np.r_[[-np.inf] * (len(init) - 1), 0.], np.inf)\\n        else:\\n            def predict(q):\\n                return D @ q\\n            bounds = (-np.inf, np.inf)\\n        q = least_squares(lambda q: predict(q)[fit].ravel() - target, init,\\n                          bounds=bounds, loss='soft_l1', f_scale=.003).x\\n        if name.startswith('rational'):\\n            extras.append(round(float(q[-1]), 6))\\n        err[held] = abs((base + predict(q) - y)[held])\\n    worst_lab = max(err[lab == ell].mean() for ell in np.unique(lab))\\n    worst_complete_lab = max(err[(lab == ell) & complete].mean() for ell in np.unique(lab) if np.any((lab == ell) & complete))\\n    print(f'{name}: worst lab={worst_lab:.6f}, worst complete lab={worst_complete_lab:.6f}, complete={err[complete].mean():.6f}, missing={err[~complete].mean():.6f}, worst horizon={err.mean(0).max():.6f}, saturation={extras}')\\nre = abs(rate - g['instant_rate_obs'])\\nprint(f'All derivative-conserving candidates: rate MAE complete={re[complete].mean():.6f}, missing={re[~complete].mean():.6f}, worst lab={max(re[lab == ell].mean() for ell in np.unique(lab)):.6f}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m99.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Linear drift routing → test whether saturation or paired history differences improve transfer; current worst held-out lab MAEs are 0.01963 for strain and 0.02407 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or stochastic-control checks\",\n      \"rejected_reason\": \"This task predicts continuous strain and rates from prescribed hereditary mechanics; those checks do not test a reachable failure. Held-out labs and missing-feature slices address the relevant nuisance.\"\n    }\n  ],\n  \"rationale\": \"The audit tests whether the linear correction misses a repeatable load- or drift-dependent interaction. Fit each challenger without the held-out lab and preserve the initial derivative in every model. Change the artifact only if a challenger materially improves held-out strain without worsening the vulnerable slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7129c9101784330225bbeb181984d4184fb08f4ef61840d2f829896232d87dac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34383.15,
+      "usage_known": true,
+      "prompt_tokens": 34684,
+      "cached_tokens": 14976,
+      "completion_tokens": 1395
+    }
+  ]
+}

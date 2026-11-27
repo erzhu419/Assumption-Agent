@@ -1,0 +1,352 @@
+{
+  "world_id": "alpha_m99_c04",
+  "cluster_id": "cluster_m99_04_alpha",
+  "family": "alpha",
+  "arm": "Flat_PlainModuleRegistry_Online",
+  "wall_sec": 2621.28,
+  "strict_passes": 5,
+  "episode_count": 7,
+  "zero_llm_episodes_total": 1,
+  "zero_turn_passed_closures": 1,
+  "total_turns_used": 75,
+  "total_pre_llm_probe_wall_ms": 43897.2,
+  "total_post_llm_probe_wall_ms": 34733.81,
+  "total_localization_probe_wall_ms": 2751.51,
+  "total_decomposition_probe_wall_ms": 15759.2,
+  "total_coverage_probe_wall_ms": 10467.04,
+  "total_official_verifier_wall_ms": 34524.52,
+  "separability_withdrawal_receipts": [],
+  "autonomous_decomposition_events": [
+    {
+      "step": 2,
+      "event": "E2_down",
+      "accepted": true,
+      "attempts_used": 2,
+      "diagnosis": "The upstream holdout omits `single_channel_sweeps`, so the unconditional lookup raised `KeyError`. The calibrator now normalizes sweeps when present and leaves the key absent otherwise. Both solvers consume calibrated loads directly: D0 uses linear drift, and D1 uses saturating drift for chamber predictions only. The four public checks were not rerun. Exact monolith agreement is not guaranteed because the monoliths fit a joint map on all rows, whereas the required fallback uses a diagonal fit on inliers.",
+      "verification_probes": [
+        {
+          "role": "decomp_upstream_holdout",
+          "probe_id": "uprobe_b6e89f9bc6664590",
+          "wall_ms": 735.93
+        },
+        {
+          "role": "decomp_upstream_holdout",
+          "probe_id": "uprobe_445203368e2a4b11",
+          "wall_ms": 677.19
+        },
+        {
+          "role": "decomp_canonical_interface_check",
+          "probe_id": "ntprobe_ad4cc56b311046a2",
+          "wall_ms": 679.19
+        },
+        {
+          "role": "decomp_s0_public_gate",
+          "probe_id": "dprobe_3a1071a913184e7c",
+          "wall_ms": 6816.77
+        },
+        {
+          "role": "decomp_e1_public_gate",
+          "probe_id": "dprobe_8e1697c71e304c84",
+          "wall_ms": 6850.12
+        }
+      ],
+      "total_probe_wall_ms": 15759.2,
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "verification": {
+            "valid": false,
+            "reason": "upstream_holdout_failed:{'locus': 'upstream_transducer', 'component_probe_executed': True, 'execution_status': 'completed', 'evidence_origin': 'direct_component_probe', 'failure_tier': 'SCHEMA_FAILURE', 'failure_kind': 'schema_or_interface', 'diagonal_ols_r2': 1.0, 'off_diagonal_corr_max': 0.250283, 'chosen_up_holdout_rmse': None, 'candidate_code_sha256': '62252fa23f2b266d0592db04055a2c6efe5d008175ebbf34c57095431b4e79b8', 'probe_id': 'uprobe_b6e89f9bc6664590', 'probe_wall_ms': 735.93, 'return_code': 1, 'stderr_excerpt': ' <module>\\n    out = fn(ds, pay) if len(inspect.signature(fn).parameters) >= 2 else fn(ds)\\n          ^^^^^^^^^^^\\n  File \"/work/up_mod.py\", line 30, in calibrate_upstream\\n    sweeps = calibrated[\\'single_channel_sweeps\\']\\n             ~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\\nKeyError: \\'single_channel_sweeps\\'', 'upstream_observables': {'up_stat_01_diagonal_ols_r2': 1.0, 'up_stat_02_off_diagonal_corr_max': 0.250283, 'up_stat_03_cal_frobenius_rms': 0.915085, 'up_stat_04_cal_row_count': 80.0}}"
+          }
+        },
+        {
+          "attempt": 2,
+          "verification": {
+            "valid": true,
+            "upstream_holdout_rmse": 0.0001183,
+            "canonical_interface_check": {
+              "cal_identity_err": 0.0,
+              "shape_ok": true,
+              "transformed_signal": true
+            },
+            "total_probe_wall_ms": 15023.27
+          }
+        }
+      ]
+    }
+  ],
+  "guard_induction_events": [
+    {
+      "step": 2,
+      "event": "E2_down",
+      "layer": "plain_downstream",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Channel 1 is the only feature with sufficient empirical spread (2.95012). The midpoint threshold gives a margin of 1.47506 on both witnesses, so each guard accepts its own witness and rejects the other.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_02_log_channel_1_mean",
+            "op": ">",
+            "threshold": 1.086503
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "dn_r00_d0": {
+          "all_of": [
+            {
+              "feature_name": "dn_stat_02_log_channel_1_mean",
+              "op": "<=",
+              "threshold": 1.086503
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 3,
+      "event": "E3_up",
+      "layer": "plain_upstream",
+      "accepted": true,
+      "attempts_used": 1,
+      "diagnosis": "Off-diagonal correlation alone separates all supplied witnesses. Its empirical spread is 0.52961, and the midpoint threshold is 0.2606695 from the nearest witness on either side, exceeding the required 0.035 margin.",
+      "new_branch_guard": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_02_off_diagonal_corr_max",
+            "op": ">",
+            "threshold": 0.5192215
+          }
+        ]
+      },
+      "existing_branch_guards": {
+        "up_r00_u0": {
+          "all_of": [
+            {
+              "feature_name": "up_stat_02_off_diagonal_corr_max",
+              "op": "<=",
+              "threshold": 0.5192215
+            }
+          ]
+        }
+      },
+      "attempts_log": [
+        {
+          "attempt": 1,
+          "partition_check": {
+            "valid": true,
+            "reasons": []
+          }
+        }
+      ]
+    },
+    {
+      "step": 5,
+      "event": "E5_coupled_break",
+      "layer": "plain_downstream",
+      "accepted": false,
+      "attempts_used": 0,
+      "skipped_infeasible_dn_obs_collision": true,
+      "colliding_pairs": [
+        [
+          "dn_r01_d1",
+          "dn_r05_E5_coupled_break"
+        ]
+      ]
+    }
+  ],
+  "empirical_coverage_receipts": [
+    {
+      "receipt_id": "ecov_76da31379f07a7e091a9324e",
+      "new_binding_id": "dn_r05_E5_coupled_break",
+      "new_solver_sha256": "c3da21a1d3199de357a968ad5400890bbb2ba004ba3463c74fa5951cd39066b2",
+      "old_binding_id": "dn_r00_d0",
+      "old_solver_sha256": "8097aa7e48c07c2955611726e17597df7bafd7c0b18a62fa378985ef0dc3e5eb",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "44abf53208d0ca8fffd787099fc345a2a3345456f3c1edc80a5a078f3f12dac1"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "plain_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "5c7b5f4e039bf5eb293b576a8f1bf6c37c0f31304062d721331968cb215faf48"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5217.18,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "0226656ef7b1f90d20c13305f16270e3a8b289e2e96ce9288e5f6ea881cca522"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "9d22d090bd8f02badb253108eab6a4179113ecc4f5b4881cf425cb4f6836d359"
+      ],
+      "dependency_bundle_sha256s": [
+        "9e0676d132019f7899b8e6d0c1779b255d4293b45233d1dda3674fac224d80de"
+      ],
+      "probe_ids": [
+        "cprobe_6f38f2bb477848f3"
+      ]
+    },
+    {
+      "receipt_id": "ecov_a29aac6e16e24462efdcbe97",
+      "new_binding_id": "dn_r05_E5_coupled_break",
+      "new_solver_sha256": "c3da21a1d3199de357a968ad5400890bbb2ba004ba3463c74fa5951cd39066b2",
+      "old_binding_id": "dn_r01_d1",
+      "old_solver_sha256": "94f5c751ee482586b51e787da46880503ee04cb48657b4a8ac3dd700d86e9f9f",
+      "witness_ids": [
+        "wit_alpha_m99_c04_batch_02"
+      ],
+      "witness_input_sha256s": [
+        "314cec0db82b16defb47764d17824d759e545f7264b7894e89f5f9a03dd8ffb1"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "plain_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "8f20639a7f61635fb119c577fecc262a574b6cae6e3c51e1cbd683aec4a21109"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5249.86,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "f776d3225c325d71a75adcce945a68623cc4e92c1375e07574ce2296af45619b"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "61c05c6c2134b6a816877b36b1e8ff7a6c8fbab668be9ebfa3349f6bde06c417"
+      ],
+      "dependency_bundle_sha256s": [
+        "5a70dfb7afb4fccd0db5db13d4772fa20f6087d8f2f625429285e9be41c2a6af"
+      ],
+      "probe_ids": [
+        "cprobe_d95d0ffd9f314e50"
+      ]
+    }
+  ],
+  "episodes_meta": [
+    {
+      "stream_step": 1,
+      "causal_event": "E1_down",
+      "true_regime": "U0__D1",
+      "event_category": "autonomous_decomposition_and_d1",
+      "task_id": "alpha_m99_c04_batch_01__blind_continual_campaign",
+      "short_name": "alpha_m99_c04_batch_01",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 12,
+      "pre_llm_probe_wall_ms": 9174.83,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 2,
+      "causal_event": "E2_down",
+      "true_regime": "U0__D2",
+      "event_category": "separable_d2_discovery",
+      "task_id": "alpha_m99_c04_batch_02__blind_continual_campaign",
+      "short_name": "alpha_m99_c04_batch_02",
+      "execution_mode": "llm_monolithic_solve",
+      "strict_pass": true,
+      "turns_used": 12,
+      "pre_llm_probe_wall_ms": 5466.02,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 15759.2
+    },
+    {
+      "stream_step": 3,
+      "causal_event": "E3_up",
+      "true_regime": "U1__D0",
+      "event_category": "localized_upstream_u1_discovery",
+      "task_id": "alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+      "short_name": "alpha_m99_c04_batch_03",
+      "execution_mode": "llm_upstream_module_solve",
+      "strict_pass": true,
+      "turns_used": 11,
+      "pre_llm_probe_wall_ms": 6267.68,
+      "localization_probe_wall_ms": 667.97,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 4,
+      "causal_event": "E4_valid_comb",
+      "true_regime": "U1__D1",
+      "event_category": "unseen_separable_U1_x_D1",
+      "task_id": "alpha_m99_c04_batch_04__blind_continual_campaign__downstream_module",
+      "short_name": "alpha_m99_c04_batch_04",
+      "execution_mode": "llm_downstream_module_solve",
+      "strict_pass": false,
+      "turns_used": 12,
+      "pre_llm_probe_wall_ms": 6091.03,
+      "localization_probe_wall_ms": 737.3,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 5,
+      "causal_event": "E5_coupled_break",
+      "true_regime": "U1__D2_coupled",
+      "event_category": "nonseparable_U1_x_D2_interaction_break",
+      "task_id": "alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+      "short_name": "alpha_m99_c04_batch_05",
+      "execution_mode": "llm_downstream_module_solve",
+      "strict_pass": true,
+      "turns_used": 13,
+      "pre_llm_probe_wall_ms": 6210.69,
+      "localization_probe_wall_ms": 759.77,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 6,
+      "causal_event": "E6_separable_revisit",
+      "true_regime": "U0__D2",
+      "event_category": "separable_U0_x_D2_revisit",
+      "task_id": "alpha_m99_c04_batch_06__blind_continual_campaign__downstream_module",
+      "short_name": "alpha_m99_c04_batch_06",
+      "execution_mode": "llm_downstream_module_solve",
+      "strict_pass": false,
+      "turns_used": 15,
+      "pre_llm_probe_wall_ms": 5160.98,
+      "localization_probe_wall_ms": 586.47,
+      "decomposition_probe_wall_ms": 0.0
+    },
+    {
+      "stream_step": 7,
+      "causal_event": "E7_coupled_revisit",
+      "true_regime": "U1__D2_coupled",
+      "event_category": "coupled_U1_x_D2_revisit",
+      "task_id": "alpha_m99_c04_batch_07__blind_continual_campaign",
+      "short_name": "alpha_m99_c04_batch_07",
+      "execution_mode": "zero_llm_public_gate_verified_reuse",
+      "strict_pass": true,
+      "turns_used": 0,
+      "pre_llm_probe_wall_ms": 5525.97,
+      "localization_probe_wall_ms": 0.0,
+      "decomposition_probe_wall_ms": 0.0
+    }
+  ]
+}

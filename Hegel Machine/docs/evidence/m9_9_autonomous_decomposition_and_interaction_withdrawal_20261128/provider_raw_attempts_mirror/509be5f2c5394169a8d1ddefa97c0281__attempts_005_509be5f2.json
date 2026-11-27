@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "509be5f2c5394169a8d1ddefa97c0281",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:36.893346+00:00",
+  "ended_at_utc": "2026-11-27T19:38:12.572321+00:00",
+  "request_sha256": "4f77cac4ee2f2a7f0f8ab00ed5b7c4538b586f688c1dff79cbe0296ed304ff1a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38009,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29075,
+    "cached_tokens": 0,
+    "completion_tokens": 1497
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_structure.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\np=dict(np.load('/tmp/chamber_probe.npz')); globals().update(p)\\na=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; cal=ds['calibration_load_cells']; n,k=y.shape\\nR=np.c_[np.ones(len(cal['bridge_raw'])),cal['bridge_raw']]; print('linear bridge residual by channel',np.sqrt(np.mean((R@np.linalg.lstsq(R,cal['true_channel_loads'],rcond=None)[0]-cal['true_channel_loads'])**2,axis=0)))\\nfor g in [tr,te,d]:\\n print('reference stats',[(l,len(g['lab_id'][g['lab_id']==l]),round(np.median(g['ref_coupons'][g['lab_id']==l].mean(0)),3),round(np.median(g['ref_coupons'][g['lab_id']==l].std(0)),3)) for l in np.unique(g['lab_id'])], 'missing',np.isnan(g['coupon_features_raw']).sum(0))\\nage=np.r_[np.cumsum(dt[::-1])[::-1][1:],0.]; mem=lambda q: past@(-np.expm1(-dt[:,None]/q)*np.exp(-age[:,None]/q))\\nz=mem(tau); gap=hold[:,None]-z\\nw=np.r_[np.full(k-1,1/max(sc[0],1e-6)),1/max(sc[1],1e-6)]; idx=np.arange(n)\\ndef fit(des, ii=idx, free=True):\\n def design(q,ii):\\n  B=np.vstack([np.c_[-np.expm1(-t[:,None]/q),t],np.r_[1/q,1]])\\n  return np.column_stack([(D[ii,None,:]*B[None,:,j,None]).reshape(len(ii)*k,-1) for j,D in enumerate(des)])\\n yw=(y[ii]*w).ravel(); ww=np.tile(w,len(ii))\\n def prof(lq, returnbeta=False):\\n  A=design(np.exp(lq),ii)*ww[:,None]; beta=np.linalg.lstsq(A,yw,rcond=None)[0]; return beta if returnbeta else A@beta-yw\\n lq=np.log(tau)\\n if free:\\n  opt=least_squares(prof,lq,bounds=(np.log([.25,1.25]),np.log([1.15,12.])),diff_step=1e-4); lq=opt.x\\n return np.exp(lq),np.split(prof(lq,True),np.cumsum([D.shape[1] for D in des])[:-1]),(design(np.exp(lq),idx)@prof(lq,True)).reshape(n,k)\\nO=np.ones(n); H=np.c_[O,hold]; Hd=np.c_[H,dr]; Hg=np.c_[H,z]; Hgd=np.c_[Hg,dr]; Hp=np.c_[H,past]; Hpd=np.c_[Hp,dr]; Hpx=np.c_[Hp,x]; dx=np.c_[O,x]\\nmodels={'hold+dr':[Hd]*3,'hold+mem+dr':[Hgd]*3,'all histories':[Hpd]*3,'all features':[Hpx]*3,'causal sparse':[np.c_[H,z[:,0]],Hgd,np.c_[O,dr]],'two gaps+dr':[np.c_[O,gap,dr]]*3,'instant-hold fast':[H,Hgd,np.c_[O,dr]],'fast and slow linear drift':[Hgd,Hgd,dx]}\\nfor name,des in models.items():\\n for free in (False,True):\\n  q,c,yhat=fit(des,free=free); e=yhat-y; cv=np.zeros_like(y)\\n  for l in np.unique(d['lab_id']):\\n   sel=d['lab_id']==l; cv[sel]=fit(des,idx[~sel],free)[2][sel]-y[sel]\\n  print(name,free,'poles',q,'train rmse',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),'LOLO',np.round([np.sqrt(np.mean(cv[:,:-1]**2)),np.sqrt(np.mean(cv[:,-1]**2)),max(np.sqrt(np.mean(cv[d['lab_id']==l,:-1]**2)) for l in np.unique(d['lab_id']))],5),'coef',c)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop chamber law → H2 chamber-specific history and drift; benchtop-law chamber P90 absolute errors are 1.006 strain and 1.881 initial rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The chamber follows the unchanged benchtop constitutive law.\",\"empirical_witness\":\"Diagnostic median absolute strain and rate errors are 0.487 and 1.414 versus 0.00811 and 0.00500 on benchtop coupons.\",\"causal_blanket_diagnosis\":\"A chamber-specific effect remains after applying the same fitted bridge and intrinsic material parameters.\",\"sublated_pivot\":\"Keep the intrinsic fit fixed and test whether chamber response is predicted by shared poles with changed history and drift coefficients.\",\"risk_kind\":\"deployment mechanism mismatch\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a separate amplitude and drift to each coupon\",\"rejected_reason\":\"The small in-sample residual does not establish a rule for unlabeled deployment coupons.\"}],\"rationale\":\"Profile fixed and free poles with stress-history and drift bases, refitting inside each held-out lab fold. This tests whether the extra parameters improve transfer or simply absorb nuisance variation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "4d67db4243060cf442292645565926ef9b7c3bbdfbe0332b2231858bcd2da326",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36758.11,
+      "usage_known": true,
+      "prompt_tokens": 29075,
+      "cached_tokens": 0,
+      "completion_tokens": 1497
+    }
+  ]
+}

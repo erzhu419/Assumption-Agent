@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f99d88391f1f4504aab92b0cb6338f90",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:26.777771+00:00",
+  "ended_at_utc": "2026-11-27T19:54:54.857696+00:00",
+  "request_sha256": "25eedaed0488082c7e92ee92208f29215210f788050ab6c0f5fcb8f15c83ce50",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58599,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33246,
+    "cached_tokens": 13696,
+    "completion_tokens": 1061
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit_forward, _forward, _inverse\\nfrom batch_solver import solve_batch\\nfrom _verified_downstream import solve_downstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; cal = s['sensor_calibration_sweeps']; bank = cal['single_bank_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    support = np.count_nonzero(x, axis=1)\\n    joint = np.flatnonzero(support > 1)\\n    outer = joint[np.argsort(np.max(abs(x[joint]), axis=1))[-len(joint)//4:]]\\n    folds = [(f'bank{j}', (support == 1) & (x[:, j] != 0), bank['bank_id'] == j) for j in range(4)]\\n    folds.append(('outer joint quartile', np.isin(np.arange(len(x)), outer), np.zeros_like(bank['bank_id'], dtype=bool)))\\n    normalized = calibrate_upstream(s)\\n    baseline = solve_batch(s)\\n    worst = np.zeros(4)\\n    for label, test, btest in folds:\\n        train_bank = {k: np.asarray(v)[~btest] for k, v in bank.items()}\\n        coef = _fit_forward(x[~test], y[~test], train_bank)\\n        # Public clean readings are below 4 in absolute magnitude; gross spike rows exceed 12.\\n        clean = test & (np.max(abs(y), axis=1) < 8)\\n        inv_err = np.max(abs(_inverse(y[clean], coef)-x[clean]))\\n        obs = _inverse(s['y_obs_raw'], coef)\\n        res = solve_downstream(dict(normalized, y_obs_raw=obs))\\n        cert = res['kkt_certificate']; w = res['weights']\\n        assert abs(cert['primal_objective']-cert['dual_lower_bound']) < 1e-10\\n        assert abs(w.sum()-s['total_budget']) < 1e-10 and np.min(w) >= -1e-10 and np.max(w) <= s['u_box']+1e-10\\n        err = [inv_err, np.max(abs(obs-normalized['y_obs_raw'])), np.max(abs(w-baseline['weights'])), np.max(abs(res['terminal_field']-baseline['terminal_field']))]\\n        worst = np.maximum(worst, err)\\n        print(label, 'clean heldout', clean.sum(), 'inverse error, obs/weights/field shifts', np.array(err))\\n    print('worst inverse error, obs/weights/field shifts:', worst)\\n    assert worst[0] < 1e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the sparse cyclic cubic replaces affine and quadratic response, with worst held-out inverse error of 3.09e-5; the remaining check is how bank and amplitude holdouts affect downstream weights and fields.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and full-cubic comparisons\",\n      \"rejected_reason\": \"The prior real-measurement audit already showed both had worse outer-amplitude error. It did not measure how calibration uncertainty propagates to the downstream outputs.\"\n    }\n  ],\n  \"rationale\": \"Refit without each bank's pure-channel rows and without the outer joint quartile, then pass the same real observations through each fit. This detects downstream sensitivity that a low sweep error or KKT gap alone would miss. If weights or fields move materially, revisit the calibration fit rather than editing the verified downstream solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "3881571814be300725aa71aaf8ef8a01b3e0afc0fc58298e8eb87b4f1cada39e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27991.61,
+      "usage_known": true,
+      "prompt_tokens": 33246,
+      "cached_tokens": 13696,
+      "completion_tokens": 1061
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1b0072929984771b47ea48f59210a3e",
+  "call_seq": 14,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:28.392447+00:00",
+  "ended_at_utc": "2026-11-27T19:49:54.152144+00:00",
+  "request_sha256": "079909d768339ceb8e6e8e707dc600b1e2c71cf320e5a515bfccd9763a82799f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 63908,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35156,
+    "cached_tokens": 13696,
+    "completion_tokens": 1036
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n# Reuse the development probe's independent endpoint parameterization.\\nscope = {'__name__': 'seam_audit'}\\nsource = open('/tmp/probe_wall.py').read().split(\\\"print('Robin');\\\")[0]\\nexec(source, scope)\\nst, predict, W = (scope[key] for key in ('st', 'predict', 'W'))\\ncalibrate = scope['calibrate_upstream']\\nY = np.array([calibrate({**st, 'y_obs_raw': pulse['y_pulse_raw']}, None)['y_obs_raw'] for pulse in scope['item']['campaign_diagnostics']])\\nexact = []\\nfor axis in 'xy':\\n    k, v = st['kappa_'+axis], st['vel_'+axis]\\n    h = st['L'+axis]/(len(k)-1)\\n    wrap = (k[0]+k[-1])/(2*h*h)\\n    exact.extend([0., 0., ((k[0]+k[1])/2+h*max(-v[0],0))/k[0], ((k[-2]+k[-1])/2+h*max(v[-1],0))/k[-1], wrap+max(v[0],0)/h, wrap+max(-v[-1],0)/h])\\nexact = np.array(exact)\\nscale = np.maximum(1., np.abs(exact))\\nworst_error = 0.\\nfor omit in range(len(W)):\\n    keep = np.arange(len(W)) != omit\\n    def residual(delta):\\n        return (predict(exact+scale*delta)-Y)[keep].ravel()\\n    fit = least_squares(residual, np.zeros_like(exact), gtol=1e-13, xtol=1e-12, ftol=1e-12)\\n    inferred = predict(exact+scale*fit.x)[omit]\\n    fixed = predict(exact)[omit]\\n    fit_rmse = np.sqrt(np.mean((inferred-Y[omit])**2))\\n    fixed_rmse = np.sqrt(np.mean((fixed-Y[omit])**2))\\n    worst_error = max(worst_error, fixed_rmse)\\n    print(f'held-out pulse={omit}: periodic={fixed_rmse:.6e}, free endpoints={fit_rmse:.6e}, largest normalized coefficient correction={np.max(np.abs(fit.x)):.6e}')\\n    assert fit.success and fixed_rmse < 2e-6\\nprint(f'ng_t04 endpoint-model audit passed: worst held-out periodic RMSE={worst_error:.6e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independently fitted endpoint coefficients) -> H2 (parameter-free periodic stencil); worst measured pulse-by-shift RMSE is 6.697e-7 and worst calibration-fold RMSE is 1.141e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the schema or analytic Fourier check\",\n      \"rejected_reason\": \"Both already passed; neither compares the periodic law against independently adjustable endpoint coefficients under the same dynamic calibration.\"\n    }\n  ],\n  \"rationale\": \"Fit the unrestricted endpoint model on two real pulses and test it against the fixed periodic law on the third. A material held-out improvement would justify investigating a missing endpoint term; otherwise keep the verified solver unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "0a7ca14cc5388393f0b01e192ee261ec0091e00e939108fff27394304fa76d8f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26888.79,
+      "usage_known": true,
+      "prompt_tokens": 35156,
+      "cached_tokens": 13696,
+      "completion_tokens": 1036
+    }
+  ]
+}

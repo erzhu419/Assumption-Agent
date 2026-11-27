@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8cfb424e7f27414e9f5bfd635f18e1c1",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:56.579156+00:00",
+  "ended_at_utc": "2026-11-27T19:42:27.545842+00:00",
+  "request_sha256": "451e5123d6aeb35898e32fe182b3f5640e0a78ae29d323d112f5a276e0e292c8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53611,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34343,
+    "cached_tokens": 14976,
+    "completion_tokens": 1263
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; c=s['sensor_calibration_sweeps']; X=c['ref_rosette']; Y=c['raw_rosette']; b=c['single_bank_sweeps']; S,U=m._responses(s)\\nfolds=np.array_split(np.argsort(np.linalg.norm(X,axis=1)),5)\\ndef fit(kind,idx):\\n if kind=='affine': return np.linalg.lstsq(np.c_[np.ones(len(idx)),X[idx]],Y[idx],rcond=None)[0]\\n coef=np.zeros((5,4))\\n for j in range(4):\\n  xx,yy=X[idx,j],Y[idx,j]; k=b['bank_id']==j\\n  if kind=='bank': xx,yy=b['ref_signal'][k],b['raw_readout'][k]\\n  if kind=='joint': xx,yy=np.r_[xx,b['ref_signal'][k]],np.r_[yy,b['raw_readout'][k]]\\n  coef[[0,j+1],j]=np.linalg.lstsq(np.c_[np.ones(len(xx)),xx],yy,rcond=None)[0]\\n return coef\\ndef inv(raw,B): return np.linalg.solve(B[1:].T,(raw.reshape(-1,4)-B[0]).T).T.ravel()\\nwall=np.any((s['sensor_ij']==0)|(s['sensor_ij']==np.array([s['nx']-1,s['ny']-1])),axis=1)\\npulses=a['campaign_diagnostics']; ref=np.concatenate([(S@p['w_pulse']).reshape(-1,4) for p in pulses]); raw=np.concatenate([p['y_pulse_raw'].reshape(-1,4) for p in pulses]); oracle=np.linalg.lstsq(np.c_[np.ones(len(ref)),ref],raw,rcond=None)[0]\\nA,y=m._profile(S,inv(s['y_obs_raw'],oracle),s); H=A.T@A+s['source_ridge']*np.eye(A.shape[1]); w0,_=m._box_simplex(H,-A.T@y,s['u_box'],s['total_budget']); f0=np.tensordot(w0,U,axes=1)\\nfor kind in ('affine','diagonal','joint','bank'):\\n B=fit(kind,np.arange(len(X))); folds_rmse=[]\\n for hold in folds:\\n  pred=np.c_[np.ones(len(hold)),X[hold]]@fit(kind,np.setdiff1d(np.arange(len(X)),hold)); folds_rmse.append(np.sqrt(np.mean((pred-Y[hold])**2,axis=0)).max())\\n slices=[]\\n for p in pulses:\\n  e=(S@p['w_pulse']-inv(p['y_pulse_raw'],B)).reshape(len(s['mu_shifts']),-1); slices.append(max(np.sqrt(np.mean(e[:,k]**2,axis=1)).max() for k in (wall,~wall)))\\n _,yhat=m._profile(S,inv(s['y_obs_raw'],B),s); w,nu=m._box_simplex(H,-A.T@yhat,s['u_box'],s['total_budget']); f=np.tensordot(w,U,axes=1); g=A.T@(A@w-y)+s['source_ridge']*w; gap=g@w-nu*s['total_budget']-s['u_box']*np.minimum(0,g-nu).sum(); print(kind,'sweep worst',max(folds_rmse),'pulse worst by pulse',slices,'weights rel vs pulse calibration',np.linalg.norm(w-w0)/np.linalg.norm(w0),'field rel',np.linalg.norm(f-f0)/np.linalg.norm(f0),'gap vs pulse calibration',gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full affine calibration → H2 independent-bank calibration; current worst wall/interior tracer RMS is 1.35e-6 and the independent host KKT gap is 1.82e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit calibration to the diagnostic pulses in the solver\",\n      \"rejected_reason\": \"Pulses are unavailable to solve_batch and should remain an independent validation reference for sweep-only fits.\"\n    }\n  ],\n  \"rationale\": \"The pulse data show no measurable off-diagonal coupling, whereas the full sweep fit estimates small cross-channel terms. Compare diagonal, joint, and bank-only fits on held-out sweeps and independent tracer slices, and propagate the differences to weights, terminal fields, and a pulse-referenced certificate gap before changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5c6d038ce89720e1b1665486f982c55bebe49adb685faa6193d84677120e2237",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32057.92,
+      "usage_known": true,
+      "prompt_tokens": 34343,
+      "cached_tokens": 14976,
+      "completion_tokens": 1263
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc1f171dad104e04a19f0c0193f0c7b4",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:27.201066+00:00",
+  "ended_at_utc": "2026-11-27T19:54:10.213454+00:00",
+  "request_sha256": "83c13283ace8546920715d1ecd54b1c29b152608329973cdc1f925ef3800ae1d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49702,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30585,
+    "cached_tokens": 13696,
+    "completion_tokens": 1806
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette.py <<'PY'\\nimport json, pickle, sys\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_forward, _forward, _inverse\\nfrom batch_solver import solve_batch\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log = json.load(f)\\nfor entry in log:\\n    trace = np.asarray(entry['facility_telemetry_trace'])\\n    print('apparatus', entry['completed_campaign_short_name'], 'trace median', np.median(trace, axis=0).round(5))\\n\\nterms = {degree: [()] + [t for k in range(1, degree+1) for t in combinations_with_replacement(range(4), k)] for degree in (2, 3)}\\ndef design(a, degree):\\n    return np.column_stack([a[:, t].prod(axis=1) for t in terms[degree]])\\n\\ndef challenge(a, y, test, channel, degree, rational):\\n    d, dt = design(a, degree), design(test, degree)\\n    q, qt = a[:, channel]**2, test[:, channel]**2\\n    def fit(alpha):\\n        m = d / (1 + alpha*q[:, None])\\n        c = np.linalg.lstsq(m, y, rcond=None)[0]\\n        return np.sum((m@c-y)**2), c\\n    alpha = 0.\\n    if rational:\\n        opt = minimize_scalar(lambda v: fit(v)[0], bounds=(0., 2.), method='bounded', options={'xatol':1e-9})\\n        if opt.fun < fit(0.)[0]:\\n            alpha = opt.x\\n    return (dt@fit(alpha)[1])/(1+alpha*qt)\\n\\nfor item in items:\\n    study = item['study']; sweeps = study['sensor_calibration_sweeps']; bank = sweeps['single_bank_sweeps']\\n    x, y = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    ids, signal, readout = (bank[k] for k in ('bank_id','ref_signal','raw_readout'))\\n    single = np.eye(4)[ids]*signal[:, None]\\n    axis = np.count_nonzero(x, axis=1)==1\\n    emi = np.max(np.abs(y), axis=1)>8\\n    joint = np.flatnonzero(~axis)\\n    peak = np.max(abs(x), axis=1)\\n    edge = joint[np.argsort(peak[joint])[-len(joint)//4:]]\\n    folds = [('bank'+str(j), axis & (x[:,j]!=0), ids==j) for j in range(4)]\\n    folds += [('outer joint quartile', np.isin(np.arange(len(x)),edge), np.zeros_like(ids,dtype=bool))]\\n    config = [(2,False),(3,False),(2,True),(3,True)]\\n    worst = np.zeros(6)\\n    for name, test, banktest in folds:\\n        tr = ~test\\n        b = {k: np.asarray(v)[~banktest] for k,v in bank.items()}\\n        c = _fit_forward(x[tr], y[tr], b)\\n        take = test & ~emi\\n        # Train alternatives on the same clean training sweeps, with no access to held-out measurements.\\n        ok = tr & (np.max(abs(_forward(x,c)-y), axis=1)<.005)\\n        sx = _forward(single,c)[np.arange(len(ids)),ids]\\n        single_ok = abs(sx-readout)<.005\\n        bclean = ~banktest & single_ok\\n        f = _forward(x[take],c)\\n        obs_error = np.max(abs(_inverse(y[take],c)-x[take]))\\n        clean_bank_test = banktest & single_ok\\n        bank_error = np.max(abs(sx[clean_bank_test]-readout[clean_bank_test]), initial=0.)\\n        residuals = [np.max(abs(f-y[take])), obs_error]\\n        for degree, rat in config:\\n            predictions = []\\n            for j in range(4):\\n                sel = bclean & (ids==j)\\n                predictions.append(challenge(np.r_[x[ok],single[sel]], np.r_[y[ok,j],readout[sel]], x[take], j, degree, rat))\\n            residuals.append(np.max(abs(np.column_stack(predictions)-y[take])))\\n        worst = np.maximum(worst,residuals)\\n        print(name, 'rosette/single heldout clean counts', take.sum(), clean_bank_test.sum(), 'errors sparse F/I, full Q/C, rational Q/C', np.array(residuals), 'single', bank_error)\\n        assert obs_error < 1e-4 and bank_error < 1e-4\\n    print('worst', worst, 'public diagnostics', item.get('campaign_diagnostics'), 'pulse present', study.get('reference_tracer_pulses') is not None)\\n    result = solve_batch(study)\\n    cert = result['kkt_certificate']\\n    gap = abs(cert['primal_objective']-cert['dual_lower_bound'])\\n    assert np.all(np.isfinite(result['terminal_field'])) and gap<1e-10\\n    print('composed KKT gap',gap)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the sparse cyclic cubic replaces affine and quadratic response; the existing worst held-out inverse error is 3.09e-5, and the new audit tests whether that margin holds when whole banks or the outer amplitude slice are withheld.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification confounding, relay modes, or alternative PDE drift operators\",\n      \"rejected_reason\": \"The public task is paired sensor regression feeding a fixed downstream PDE solver; bank-stratified calibration is applicable, but class labels and relay states are not part of its contract.\"\n    }\n  ],\n  \"rationale\": \"Withhold each bank's pure-channel sweeps and the highest-amplitude joint readings to detect bank shortcuts or extrapolation error. Compare against full polynomial bases, which span pairwise sum and difference terms through cubic order, and against rational saturation challengers fitted only on training rows. Reconsider the calibration only if a challenger improves a material held-out margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "32d73f148d916104d9371b22321e25d20368580acd584531e55847878fa564d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44176.59,
+      "usage_known": true,
+      "prompt_tokens": 30585,
+      "cached_tokens": 13696,
+      "completion_tokens": 1806
+    }
+  ]
+}

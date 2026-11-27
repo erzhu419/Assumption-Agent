@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63bd3ef2597244b8bb1dc937b6b60be0",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:08:00.002410+00:00",
+  "ended_at_utc": "2026-11-27T20:08:25.116879+00:00",
+  "request_sha256": "58065b7134f5583d54ed15cea1b17de9b7c0b4d26705c9d657fef836176d19a3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66785,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37340,
+    "cached_tokens": 14976,
+    "completion_tokens": 988
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '/^def _fit(/,/^def solve_batch(/p' batch_solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,b=d['train'],d['test']; n=len(a['lab_id']); t,dt=d['eval_times'],d['past_dt']; x=m['_features'](a,b); u=m['_coupon_inputs'](a,x[:n],m['_calibration'](d['calibration_load_cells'])); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; ce=np.empty_like(y); re=np.empty_like(r)\\nfor l in np.unique(a['lab_id']):\\n j=a['lab_id']==l; tau,w=m['_fit'](tuple(z[~j] for z in u),dt,t,y[~j],r[~j]); A,B=m['_design'](tau,tuple(z[j] for z in u),dt,t); ce[j]=y[j]-A@w; re[j]=r[j]-B@w\\nmed=lambda v,axis=0: np.median(np.abs(v-np.median(v,axis=axis)),axis=axis)\\nprint('horizons',t.round(4),'OOF curve MAD',med(ce).round(5),'OOF rate MAD',round(med(re),5)); print('OOF curve tail fractions |e|>0.04',np.mean(abs(ce)>0.04,axis=0).round(3)); print('OOF worst strain cell residuals',np.sort(abs(ce[(a['lab_id']==2)&(a['stratum']==0)]).ravel())[-6:].round(5)); print('OOF worst rate cell residuals',re[(a['lab_id']==0)&(a['stratum']==0)].round(5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fixed robust observation weighting → horizon-specific weighting only if held-out noise supports it; worst lab–stratum MAE is 0.03316 for strain and 0.01100 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the sparse cubic bridge with the pairwise rational model\",\n      \"rejected_reason\": \"The rational model had slightly higher held-out bridge error and fitted denominator strengths below 0.000061.\"\n    },\n    {\n      \"option\": \"Fit a chamber correction from the setting change\",\n      \"rejected_reason\": \"The setting trace has no paired chamber strain or rate observations to estimate that correction.\"\n    }\n  ],\n  \"rationale\": \"Check whether the worst cells reflect a few sensor outliers or a consistent mismatch in curve and rate weighting. If the typical residual scale varies materially by horizon, compare a training-fold-only weighting challenger; if the error is concentrated in isolated outliers, retain the verified fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "07b50645938216e376aa4bb89f4c0bc83201392612db547b9fc1426e21c63a8d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26274.04,
+      "usage_known": true,
+      "prompt_tokens": 37340,
+      "cached_tokens": 14976,
+      "completion_tokens": 988
+    }
+  ]
+}

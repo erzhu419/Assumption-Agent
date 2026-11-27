@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7750d70fe929454ebb12f54c2b4c7cf0",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:09:43.020028+00:00",
+  "ended_at_utc": "2026-11-27T20:10:10.729617+00:00",
+  "request_sha256": "14e44366b331d4f45e61fee8978f480fc473ebc4e983d2e25dab84fba2902ab3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51980,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33038,
+    "cached_tokens": 14976,
+    "completion_tokens": 1116
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, runpy\\nimport numpy as np\\nroot='/holdout_task/'\\nm=runpy.run_path(root+'batch_solver.py')\\ni=pickle.load(open(root+'public_batch.pkl','rb'))[0]; d=i['dataset']\\nprint('blind:',i.get('campaign_diagnostics') is None,'dataset keys:',list(d),'train keys:',list(d['train']),'test keys:',list(d['test']))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n print('apparatus metadata:',{k:v for k,v in e.items() if k!='facility_telemetry_trace'})\\nc=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; ok=np.max(np.abs(y),axis=1)<8; x=x[ok]; y=y[ok]\\nz=m['_bridge_terms'](x)\\nextra=np.column_stack([*((x[:,j]-x[:,k])**3 for j in range(4) for k in range(j+1,4)), *((x[:,j]-x[:,k])/(1+a*(x[:,j]+x[:,k])**2) for j in range(4) for k in range(j+1,4) for a in (.1,1.)), *((x[:,j]*x[:,k]*x[:,l]) for j in range(4) for k in range(j+1,4) for l in range(k+1,4))])\\norder=np.argsort(np.max(np.abs(x),axis=1)); slices=np.array_split(order,5)\\nfor name,design in [('cyclic-cubic',z),('cyclic-cubic + difference/rational/triple',np.column_stack([z,extra]))]:\\n rms=[]\\n for te in slices:\\n  tr=np.setdiff1d(order,te); err=design[te]@np.linalg.lstsq(design[tr],y[tr],rcond=None)[0]-y[te]; rms.append(np.sqrt(np.mean(err**2)))\\n print(name,'load-amplitude-block held-out raw RMS:',np.round(rms,7))\\ntr,te=d['train'],d['test']; X,_=m['_features'](tr,te); p,h=m['_loads'](tr,m['_bridge'](c)); t,dt=d['eval_times'],d['past_dt']; Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; labs=tr['lab_id']; strata=tr['stratum']; aux=tr['aux_chamber_telemetry']\\nfor lab in np.unique(labs):\\n v=labs==lab; u=~v; tau,theta=m['_fit'](X[u],p[u],h[u],dt,t,Y[u],R[u]); a,b=m['_design'](tau,X[v],p[v],h[v],dt,t); ec=a@theta-Y[v]; er=b@theta-R[v]\\n print('held lab',lab,'signed median curve (first, last) and rate',np.round([np.median(ec[:,0]),np.median(ec[:,-1]),np.median(er)],6),'stratum counts',np.unique(strata[v],return_counts=True)[1].tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic-cubic calibration and archive-transferred redistribution → H2 retain them unless amplitude-block validation or additional apparatus metadata supports a revision; current worst calibration fold RMS is 1.17×10⁻⁴ and worst held-out lab/horizon median strain error is 0.0144.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB dynamics, or balanced classification accuracy\",\n      \"rejected_reason\": \"The supplied problem is continuous viscoelastic regression with no relay state, stochastic control operator, or class labels. Signed held-out lab residuals test the relevant nuisance risk.\"\n    }\n  ],\n  \"rationale\": \"Hold out contiguous load-amplitude blocks to detect extrapolation error masked by random calibration folds. Change the bridge only if a richer basis improves the worst block materially. Inspect signed lab residuals for systematic offsets and apparatus metadata for evidence that changes the deployment law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "b948f7757b81fd6a9544ac0f395c7ff30545f137ad0cb45cf5108625ab1a6fbd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28891.31,
+      "usage_known": true,
+      "prompt_tokens": 33038,
+      "cached_tokens": 14976,
+      "completion_tokens": 1116
+    }
+  ]
+}

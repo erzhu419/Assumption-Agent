@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45d2c9cd55d34112911d7059f3788bb8",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:12:36.219682+00:00",
+  "ended_at_utc": "2026-11-27T20:13:14.193696+00:00",
+  "request_sha256": "a6d039903f8aeb1bbfba9f88db2cc5adab6b5f5883f4a49a155360d801c90416",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 31343,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26787,
+    "cached_tokens": 16256,
+    "completion_tokens": 1614
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Calibrate the four coupled bridge channels in load coordinates.\\\"\\\"\\\"\\nfrom __future__ import annotations\\n\\nimport numpy as np\\n\\n\\ndef _fit_bridge(loads, raw):\\n    # Each bridge has linear cross-talk, an own-channel cubic, and an\\n    # interaction with the next load channel (with wraparound).\\n    design = np.stack((np.ones_like(loads), *[np.broadcast_to(loads[:, i, None], loads.shape) for i in range(4)],\\n                       loads**3, loads * np.roll(loads, -1, axis=1)), axis=-1)\\n\\n    def fit(weights):\\n        return np.column_stack([\\n            np.linalg.lstsq(design[:, i] * weights[:, None], raw[:, i] * weights, rcond=None)[0]\\n            for i in range(4)\\n        ])\\n\\n    coeff = fit(np.ones(len(loads)))\\n    for floor in (1., .1, .01, .001):\\n        for _ in range(12):\\n            err = np.linalg.norm(np.einsum('nci,ic->nc', design, coeff) - raw, axis=1)\\n            coeff = fit(1 / np.sqrt(np.maximum(err, floor)))\\n    err = np.linalg.norm(np.einsum('nci,ic->nc', design, coeff) - raw, axis=1)\\n    median = np.median(err)\\n    scale = 1.4826 * np.median(np.abs(err - median))\\n    return fit((err <= median + 8 * max(scale, 1e-9)).astype(float))\\n\\n\\ndef _forward(loads, coeff):\\n    offset, linear, cubic, mixed = coeff[0], coeff[1:5], coeff[5], coeff[6]\\n    return offset + loads @ linear + cubic * loads**3 + mixed * loads * np.roll(loads, -1, axis=1)\\n\\n\\ndef _invert(raw, coeff):\\n    target = np.asarray(raw, dtype=float).reshape(-1, 4)\\n    linear, cubic, mixed = coeff[1:5], coeff[5], coeff[6]\\n    x = np.linalg.solve(linear.T, (target - coeff[0]).T).T\\n    channels = np.arange(4)\\n    for _ in range(30):\\n        residual = _forward(x, coeff) - target\\n        if np.max(np.abs(residual), initial=0.) < 1e-11:\\n            break\\n        jac = np.broadcast_to(linear.T, (len(x), 4, 4)).copy()\\n        jac[:, channels, channels] += 3 * cubic * x**2 + mixed * np.roll(x, -1, axis=1)\\n        jac[:, channels, (channels + 1) % 4] += mixed * x\\n        delta = np.linalg.solve(jac, residual[..., None])[..., 0]\\n        trial = x - delta\\n        norm = np.linalg.norm(residual, axis=1)\\n        for _ in range(12):\\n            worse = np.linalg.norm(_forward(trial, coeff) - target, axis=1) > norm\\n            if not np.any(worse):\\n                break\\n            delta[worse] *= .5\\n            trial[worse] = x[worse] - delta[worse]\\n        x = trial\\n    return x.reshape(np.shape(raw))\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a copy of the dataset with canonical load coordinates.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    coeff = _fit_bridge(np.asarray(cal['true_channel_loads']), np.asarray(cal['bridge_raw']))\\n    out = dict(dataset)\\n    sweeps = cal['single_channel_sweeps']\\n    out['calibration_load_cells'] = dict(cal, bridge_raw=cal['true_channel_loads'].copy(),\\n                                         single_channel_sweeps=dict(sweeps, cmd_stress=sweeps['true_stress'].copy()))\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        group = dataset.get(name)\\n        if group is not None:\\n            out[name] = dict(group)\\n            for field in ('past_channel_raw', 'hold_channel_raw'):\\n                out[name][field] = _invert(group[field], coeff)\\n    return out\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nimport json\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n v=e['facility_telemetry_trace']; print(e['completed_campaign_index'],e['completed_campaign_short_name'],str(v[-1] if isinstance(v,list) else v)[:700])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or diagonal cubic → H2 cyclic pair interactions plus own-channel cubics; the broader quadratic basis reached 0.00050 held-out p90 bridge error versus 0.6878 without interactions.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Linear cross-talk and independent channel cubics suffice.\",\n    \"empirical_witness\": \"Adding quadratic interactions reduced five-fold p90 forward error from 0.6878 to 0.00050; the fitted interactions followed a cyclic channel pattern.\",\n    \"causal_blanket_diagnosis\": \"Each bridge's response to its own load depends on the adjacent load channel; three gross residuals are a separate calibration contamination.\",\n    \"sublated_pivot\": \"Keep linear cross-talk and diagonal cubics, add the four supported pair terms, and fit before numerically inverting.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Full cubic polynomial\",\n      \"rejected_reason\": \"It raises held-out p90 error to 0.00193 and adds terms with coefficients near the measurement-noise floor.\"\n    }\n  ],\n  \"rationale\": \"Fit the observed bridge structure without baking in coefficients. The public schema gate will detect integration or nonfinite output failures; the next check should quantify held-out inverse error and round-trip residuals on each trial slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "aa399ab74e346df0d12de79b5d6d0f5ee90457874be47895bb2b0104761ff57c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39196.63,
+      "usage_known": true,
+      "prompt_tokens": 26787,
+      "cached_tokens": 16256,
+      "completion_tokens": 1614
+    }
+  ]
+}

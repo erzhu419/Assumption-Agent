@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a02e7e3a85a47328293881b8385f01e",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:44.048265+00:00",
+  "ended_at_utc": "2026-11-27T19:49:14.332939+00:00",
+  "request_sha256": "d2d1eb7f012cd2a81c527196a6920f9fc9fd14df6a196bc0d8cfb4969317b033",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32793,
+    "cached_tokens": 13696,
+    "completion_tokens": 1176
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nfrom batch_solver import _PAY, solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream, _forward\\nsys.path.insert(0, '/tmp')\\nfrom probe_wall import st, forward, W, Y\\n\\n# Withdraw wrap flux on each axis separately while retaining its local diffusion.\\nperiodic, reflecting = [], []\\nfor d in 'xy':\\n    k, v = st['kappa_'+d], st['vel_'+d]\\n    h = st['L'+d]/(len(k)-1)\\n    end = k[[0,-1]]\\n    inward = (0.5*(end+k[[1,-2]]) + h*np.maximum(v[[0,-1]]*[-1,1],0))/end\\n    wrap = (end.mean()+h*np.maximum(v[[0,-1]]*[1,-1],0))/end\\n    periodic.append([0,0,*inward,*wrap])\\n    reflecting.append([0,0,*inward,0,0])\\nz = st['Z_nuisance']\\nP = np.eye(len(z))-z@np.linalg.solve(z.T@z+st['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\ndef worst(e):\\n    return np.sqrt(np.mean(e.reshape(len(st['mu_shifts']),-1,4,e.shape[1])**2,axis=1)).max()\\nfor label, rows in [('both_periodic',periodic),('without_x_wrap',[reflecting[0],periodic[1]]),('without_y_wrap',[periodic[0],reflecting[1]])]:\\n    e = forward(rows)[0]-Y\\n    print(f'{label}: worst_raw={worst(e):.8g} worst_profiled={worst(P@e):.8g}')\\n\\n# Check whether refitting the sensor sweeps, instead of using the verified\\n# parameter payload, would materially change the fit or the certified solution.\\nfor item in pickle.load(open('public_batch.pkl','rb')):\\n    raw = item['study']\\n    fixed = solve_batch(raw)\\n    fitted = solve_downstream(calibrate_upstream(raw))\\n    S, _ = _forward(calibrate_upstream(raw,_PAY))\\n    residuals = {name: [] for name in ('staged','sweep_refit')}\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        pulse_study = dict(raw,y_obs_raw=pulse['y_pulse_raw'])\\n        for name,payload in [('staged',_PAY),('sweep_refit',None)]:\\n            obs = calibrate_upstream(pulse_study,payload)['y_obs_raw']\\n            residuals[name].append(S@pulse['w_pulse']-obs)\\n    for name, columns in residuals.items():\\n        if columns:\\n            print(f'{name}: worst_tracer_slice={worst(np.column_stack(columns)):.8g}')\\n    print('refit_max_weight_change', np.max(abs(fitted['weights']-fixed['weights'])), 'refit_max_field_change', np.max(abs(fitted['terminal_field']-fixed['terminal_field'])))\\n    for name,out in [('staged',fixed),('sweep_refit',fitted)]:\\n        c=out['kkt_certificate']\\n        print(name,'certificate_gap',c['primal_objective']-c['dual_lower_bound'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Local wall rows → periodic flux on both axes; worst public tracer RMSE across pulse, shift and bank was 8.49e-6, with a maximum stressed duality gap of 2.96e-14.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, drift-equation, or classification checks\",\n      \"rejected_reason\": \"This task has no relay state, stochastic drift equation, or class labels. The relevant confounding test is whether nuisance profiling masks an incorrect transport boundary.\"\n    }\n  ],\n  \"rationale\": \"Withdraw wrap flux on each axis separately to test whether both couplings are required after nuisance profiling. Compare the staged sensor calibration against a sweep refit on known-weight tracers; revisit calibration only if the difference is material.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b8c73349199f22a5bae8466c83059be461612b631a32dc6180565ee1ad41801a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30240.83,
+      "usage_known": true,
+      "prompt_tokens": 32793,
+      "cached_tokens": 13696,
+      "completion_tokens": 1176
+    }
+  ]
+}

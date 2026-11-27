@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a0de44382444b3094fcb294d9d90ab2",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:08.452113+00:00",
+  "ended_at_utc": "2026-11-27T19:47:31.152585+00:00",
+  "request_sha256": "975b92c7d6624c2614d66591ac63d1905f36b6ccc33d3fc1b793393c518fb8e3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31184,
+    "cached_tokens": 13696,
+    "completion_tokens": 884
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport sys\\nsys.path[:0] = ['/tmp', '/holdout_task']\\nimport numpy as np\\nfrom probe_boundary import s, W, Y, pred\\nfrom downstream_solver import _forward\\nS, _ = _forward(s)\\nmodels = {'periodic_upwind': S @ W, 'open_robin': pred(np.ones(8)), 'reflecting': pred(np.r_[np.zeros(4), np.ones(4)])}\\nZ = s['Z_nuisance']; ridge = s['nuisance_ridge']; m = len(s['sensor_ij'])\\nworst = 0.0; margin = np.inf; count = 0\\nfor shift in range(len(s['mu_shifts'])):\\n    for pulse in range(W.shape[1]):\\n        rows = np.arange(len(Y)) // m != shift\\n        cols = np.arange(W.shape[1]) != pulse\\n        zs = Z[rows]\\n        proj = np.linalg.solve(zs.T @ zs + ridge*np.eye(zs.shape[1]), zs.T)\\n        scores = []\\n        for name, prediction in models.items():\\n            r = (prediction - Y)[rows][:, cols]\\n            r -= zs @ (proj @ r)\\n            scores.append((np.sqrt(np.mean(r*r)), name))\\n        scores.sort()\\n        winner = scores[0][1]\\n        held = models[winner][~rows, pulse] - Y[~rows, pulse]\\n        worst = max(worst, np.sqrt(np.mean(held*held)))\\n        margin = min(margin, scores[1][0]/scores[0][0])\\n        count += 1\\n        assert winner == 'periodic_upwind', scores\\nprint(f'ng_t04: periodic upwind won {count}/{count} joint pulse-and-shift holdouts; worst raw held-out RMS={worst:.8g}; minimum training runner-up/winner RMS={margin:.3g}')\\nassert worst < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall stencils -> H2 periodic upwind on both axes; worst held-pulse RMS across shifts is 5.15e-6, and all 32 sensor-held folds selected H2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the schema and certificate validation\",\n      \"rejected_reason\": \"Both already passed on the unchanged artifact. Neither tests whether the boundary selection depends on a particular shift or on nuisance estimates fitted outside the fold.\"\n    }\n  ],\n  \"rationale\": \"Hold out a tracer pulse and a shift jointly, fit nuisance terms on training rows only, and score the untouched pulse-by-shift block without nuisance adjustment. If periodic upwind loses a fold or exceeds 1e-5 RMS, revisit the boundary or calibration; otherwise retain the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c8f92edc2df44a96325409528306ef2fe3bb1f19a8c988b1ac2fe5cb9535333f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23827.54,
+      "usage_known": true,
+      "prompt_tokens": 31184,
+      "cached_tokens": 13696,
+      "completion_tokens": 884
+    }
+  ]
+}

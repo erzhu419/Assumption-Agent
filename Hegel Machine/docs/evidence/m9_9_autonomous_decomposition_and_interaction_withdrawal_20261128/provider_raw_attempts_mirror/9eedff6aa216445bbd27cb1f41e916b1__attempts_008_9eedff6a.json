@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9eedff6aa216445bbd27cb1f41e916b1",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:39.763024+00:00",
+  "ended_at_utc": "2026-11-27T19:53:12.216146+00:00",
+  "request_sha256": "07cdc079b24032962f53592603b1123f85ce10a054f928d855f67580e7c87593",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32063,
+    "cached_tokens": 13696,
+    "completion_tokens": 1352
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit_forward, _forward, _inverse\\nfrom batch_solver import solve_batch\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; cal = s['sensor_calibration_sweeps']; bank = cal['single_bank_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    emi = np.max(np.abs(y), axis=1) > 8  # Public gross spikes exceed 12; clean readings stay below 4.\\n    rng = np.random.default_rng(31)\\n    folds = [('all pure-channel rows', axis)]\\n    for i, ids in enumerate(np.array_split(rng.permutation(np.flatnonzero(~axis)), 8)):\\n        folds.append((f'joint fold {i}', np.isin(np.arange(len(x)), ids)))\\n    worst_raw = worst_ref = 0.\\n    for name, test in folds:\\n        c = _fit_forward(x[~test], y[~test], bank)\\n        clean = test & ~emi\\n        ef = np.max(np.abs(_forward(x[clean], c)-y[clean]))\\n        ei = np.max(np.abs(_inverse(y[clean], c)-x[clean]))\\n        worst_raw, worst_ref = max(worst_raw, ef), max(worst_ref, ei)\\n        print(name, 'held-out clean count', clean.sum(), 'max forward/ref errors', ef, ei)\\n    assert max(worst_raw, worst_ref) < 1e-4\\n\\n    coeff = _fit_forward(x, y, bank)\\n    expected = np.vstack((rng.uniform(-0.4, 0.4, (32, 4)), rng.uniform(-1.8, 1.8, (128, 4)))).reshape(2, 80, 4)\\n    pulse = _forward(expected.reshape(-1, 4), coeff).reshape(expected.shape)\\n    p_in = dict(s, reference_tracer_pulses=[{'y_pulse_raw': pulse, 'metadata': 7}])\\n    norm = calibrate_upstream(p_in)\\n    recovered = norm['reference_tracer_pulses'][0]\\n    pulse_err = np.max(np.abs(recovered['y_pulse_raw']-expected))\\n    assert recovered['metadata'] == 7 and recovered['y_pulse_raw'].shape == pulse.shape and pulse_err < 1e-10\\n    assert p_in['reference_tracer_pulses'][0]['y_pulse_raw'] is pulse\\n    assert calibrate_upstream(dict(s, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n    assert ('reference_tracer_pulses' in calibrate_upstream(s)) == ('reference_tracer_pulses' in s)\\n    ns = norm['sensor_calibration_sweeps']\\n    np.testing.assert_array_equal(ns['raw_rosette'], x)\\n    np.testing.assert_array_equal(ns['single_bank_sweeps']['raw_readout'], bank['ref_signal'])\\n    assert not np.shares_memory(ns['raw_rosette'], x)\\n    assert not np.shares_memory(ns['single_bank_sweeps']['raw_readout'], bank['ref_signal'])\\n    obs_roundtrip = np.max(np.abs(_forward(norm['y_obs_raw'].reshape(-1, 4), coeff).ravel()-s['y_obs_raw']))\\n    assert obs_roundtrip < 1e-10\\n    res = solve_batch(s); w = res['weights']; cert = res['kkt_certificate']\\n    assert np.all(np.isfinite(res['terminal_field']))\\n    assert np.min(w) >= -1e-10 and np.max(w) <= s['u_box']+1e-10 and abs(w.sum()-s['total_budget']) < 1e-10\\n    gap = abs(cert['primal_objective']-cert['dual_lower_bound']); assert gap < 1e-10\\n    print(f'worst held-out forward={worst_raw:.3g} inverse={worst_ref:.3g}; pulse round-trip={pulse_err:.3g}; obs round-trip={obs_roundtrip:.3g}; KKT gap={gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: sparse cyclic cubic plus separate EMI rejection passes the public schema; the largest in-fit clean-channel residual is 2.89e-5, pending held-out verification.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Hold out all pure-channel rosette rows and partition the joint sweeps to detect dependence on a particular calibration slice. In an isolated process, separately test pulse inversion, identity normalization, and downstream feasibility; failures would localize the fix without changing the verified downstream solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1f1ef9ce029f6fb2863f87849976bcb0758c0e980d50dc5dc1ba7e362dc445ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33567.17,
+      "usage_known": true,
+      "prompt_tokens": 32063,
+      "cached_tokens": 13696,
+      "completion_tokens": 1352
+    }
+  ]
+}

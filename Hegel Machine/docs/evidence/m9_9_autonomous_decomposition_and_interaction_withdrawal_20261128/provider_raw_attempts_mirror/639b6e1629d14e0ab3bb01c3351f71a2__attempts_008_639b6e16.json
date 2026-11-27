@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "639b6e1629d14e0ab3bb01c3351f71a2",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:22.964948+00:00",
+  "ended_at_utc": "2026-11-27T19:39:47.541773+00:00",
+  "request_sha256": "8748e0f91812ef669eff1b14116ec4ab0bbdee5e20d28986149e74658a06beec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44458,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31335,
+    "cached_tokens": 14976,
+    "completion_tokens": 924
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; S,U=m._design(s); Q=np.linalg.qr(s['Z_nuisance'],mode='reduced')[0]\\nmodels={name:[] for name in ('diagonal_rosette','single_bank','pooled_diagonal')}\\nfor j in range(4):\\n    q=b['bank_id']==j; xb=b['ref_signal'][q]; yb=b['raw_readout'][q]; xr=x[:,j]; yr=y[:,j]\\n    fit=lambda a,d: np.linalg.lstsq(np.c_[np.ones(len(a)),a],d,rcond=None)[0]\\n    ar=fit(xr,yr); ab=fit(xb,yb); ap=fit(np.r_[xr,xb],np.r_[yr,yb]); print('bank',j,'independent sweep transfer RMS (rosette to single, single to rosette)',np.sqrt(np.mean((yb-ar[0]-ar[1]*xb)**2)),np.sqrt(np.mean((yr-ab[0]-ab[1]*xr)**2)))\\n    for name,a in zip(models,(ar,ab,ap)): models[name].append(a)\\nfor name, coefficients in [('current',None),*models.items()]:\\n    rms=[]\\n    for p in item['campaign_diagnostics']:\\n        raw=p['y_pulse_raw']\\n        if coefficients is None: cal=m._calibrate(dict(s,y_obs_raw=raw))\\n        else:\\n            offset,gain=np.asarray(coefficients).T; cal=((raw.reshape(-1,4)-offset)/gain).ravel()\\n        r=cal-S@p['w_pulse']; r=r-Q@(Q.T@r); rms.append(np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\n    print(name,'pulse-by-shift RMS',np.asarray(rms).tolist(),'worst',np.max(rms))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sealed walls with full affine calibration -> H2 sealed walls with diagonal calibration if independent sweeps and tracer pulses agree; worst held-out rosette RMS is 1.10e-5 for diagonal versus 1.14e-5 for full affine.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch calibration based on rosette CV alone\",\n      \"rejected_reason\": \"The small raw-scale gain does not establish better inverse calibration at tracer signal levels.\"\n    }\n  ],\n  \"rationale\": \"The bank IDs identify channels, not batches. Test whether gains and offsets transfer between the independent sweep types, then compare their predictions on tracer pulses. Keep the verified solver if the small CV improvement does not translate to the tracer measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "7d04203617790774ac5a8643b38156edcee13b86db93a633276711f9362657ad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25676.77,
+      "usage_known": true,
+      "prompt_tokens": 31335,
+      "cached_tokens": 14976,
+      "completion_tokens": 924
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5171af600c924b348bc109712e1ff4c9",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:14.345072+00:00",
+  "ended_at_utc": "2026-11-27T20:00:51.185821+00:00",
+  "request_sha256": "c6f44633c3da91a1c31fbf996bdec2f172433b8769defdea0a0db148d40b79c1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32414,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27437,
+    "cached_tokens": 14976,
+    "completion_tokens": 1551
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe05.py <<'PY'\\nimport numpy as np,pickle,runpy,itertools,json\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c02_batch_04_solver.py'); base=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c02_batch_02_solver.py')\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; dt,t=ds['past_dt'],ds['eval_times']; c=ds['calibration_load_cells']; l,r=c['true_channel_loads'],c['bridge_raw']; b=m['_bridge'](c)\\nprint('cal range',l.min(),l.max()); print('archive coefficient',b.round(5)); print('archive cal residual percentiles',np.percentile(np.linalg.norm(m['_bridge_basis'](l)@b-r,axis=1),[0,25,50,65,75,90,100]))\\nfor p,cols in [('affine',[np.ones(len(l)),l]),('archive',[m['_bridge_basis'](l)]),('all pairs',[np.ones(len(l)),l,np.array([l[:,a]*l[:,b] for a,b in itertools.combinations(range(4),2)]).T,l**3]),('all squares pairs cubes',[np.ones(len(l)),l,np.array([l[:,a]*l[:,b] for a,b in itertools.combinations_with_replacement(range(4),2)]).T,l**3]),('all third degree',[np.ones(len(l)),l,*[np.array([l[:,inds].prod(axis=1) for inds in itertools.combinations_with_replacement(range(4),k)]).T for k in [2,3]]])]:\\n a=np.column_stack(cols); rng=np.random.default_rng(9); losses=[]\\n for ids in np.array_split(rng.permutation(len(a)),5):\\n  train=np.setdiff1d(np.arange(len(a)),ids); ats,rs=a[train],r[train]; cut=int(.73*len(train)); best=(np.inf,None)\\n  for _ in range(70):\\n   s=rng.choice(len(train),min(len(train),a.shape[1]+6),False); coef=np.linalg.lstsq(ats[s],rs[s],rcond=None)[0]\\n   for j in range(5):\\n    ix=np.argsort(np.linalg.norm(ats@coef-rs,axis=1))[:cut]; coef=np.linalg.lstsq(ats[ix],rs[ix],rcond=None)[0]\\n   mse=np.mean((ats[ix]@coef-rs[ix])**2)\\n   if mse<best[0]:best=mse,coef\\n  losses.extend(np.linalg.norm(a[ids]@best[1]-r[ids],axis=1))\\n print(p,'cal oof',np.percentile(losses,[25,50,65,75,90]))\\nxt,xe=m['_features'](tr,te); _,x=m['_features']({k:np.concatenate([tr[k],te[k]]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')},d); tt,w=m['_material'](tr,b,xt,dt,t); print('material',tt,w)\\nfor name,s,xx in [('train',tr,xt),('diagnostics',d,x)]:\\n past,hold=m['_loads'](s,b); ac,ar=m['_basis'](tt,past,hold,xx,dt,t); y=s['strain_curves_obs']-s['strain_0'][:,None]; v=s['instant_rate_obs']; drift=w[2]+xx@w[3:]; f=-np.expm1(-t[:,None]/tt); F=np.vstack([np.column_stack([f,t]),np.r_[1/tt,1]]); Y=np.column_stack([y,v]); amps=np.linalg.lstsq(F,Y.T,rcond=None)[0].T; E=Y-amps@F.T\\n def report(label,curve,rate):\\n  print(name,label,'median abs curve/rate',np.median(abs(y-curve)),np.median(abs(v-rate)),'max lab MAE',max(np.mean(abs(y[s['lab_id']==lab]-curve[s['lab_id']==lab])) for lab in np.unique(s['lab_id'])))\\n report('baseline',ac@w,ar@w); report('batch04',*m['_chamber'](tt,w,hold,xx,t)); report('batch02',*base['_chamber'](tt,w,past,hold,xx,dt,t)); print('free intrinsic time fit percentiles',np.percentile(abs(E),[50,90,100]),'missing',np.isnan(s['coupon_features_raw']).sum(1));\\n if name=='diagnostics':\\n  gap=ar[:,:2]*tt; state=hold[:,None]-gap; q=np.column_stack([hold,drift,state]); good=np.isfinite(s['coupon_features_raw']).all(1); print('amp regression on hold drift states',np.linalg.lstsq(q[good],amps[good],rcond=None)[0]); print('residual sign across time',np.quantile(E,[.1,.5,.9],axis=0).round(5)); print('amplitudes span',np.quantile(amps,[0,.5,1],axis=0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived load bridge and chamber laws -> H2 isolate transducer error from chamber-law mismatch; calibration and chamber worst-slice metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the exact apparatus trace match to select batch 04's law\",\n      \"rejected_reason\": \"The current campaign provides labeled chamber measurements, so the trace match can be tested rather than assumed.\"\n    }\n  ],\n  \"rationale\": \"Held-out calibration residuals distinguish a changed bridge basis from sweep outliers. Comparing the archived laws and a free-amplitude fit on current coupons then tests whether the chamber needs different routing or different time dependence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "728ee6af5b3a6263e52e607c04b2d5fbe4f2a09b5231c39717b8436cd8dc8f3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38005.05,
+      "usage_known": true,
+      "prompt_tokens": 27437,
+      "cached_tokens": 14976,
+      "completion_tokens": 1551
+    }
+  ]
+}

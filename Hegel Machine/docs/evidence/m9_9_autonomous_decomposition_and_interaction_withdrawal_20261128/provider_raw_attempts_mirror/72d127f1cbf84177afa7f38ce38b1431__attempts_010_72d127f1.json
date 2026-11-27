@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "72d127f1cbf84177afa7f38ce38b1431",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:17.752348+00:00",
+  "ended_at_utc": "2026-11-27T19:40:50.546187+00:00",
+  "request_sha256": "323e7681cffcc4bb5f18f23c57fc5fd2ba9249b4bc501cd3568d8ceb794fb17a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60023,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36711,
+    "cached_tokens": 14976,
+    "completion_tokens": 1351
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_gate_audit.py <<'PY'\\nimport contextlib, io\\nimport numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    exec(open('/tmp/chamber_cv.py').read().split('for name,x in stds.items():')[0])\\nx = stds['diag']\\ndrift = th[2] + x @ th[3:]\\nbasis = np.vstack([B, R])\\nyobs = np.c_[y, v]\\nbase = (hold[:, None] * th[:2]) @ basis[:, :2].T\\nw = np.r_[np.ones(len(t)), .65]\\ncontrast = z[:, 0] - z[:, 1]\\nq = drift / np.std(drift)\\nmodels = {'fixed': None, 'linear': drift[:, None], 'contrast': np.c_[drift, contrast], 'pair_product': np.c_[drift, x[:, 0]*x[:, 1], x[:, 2]*x[:, 3]], 'triple_product': np.c_[drift, x[:, 0]*x[:, 1]*x[:, 2]], 'rational': np.c_[drift, drift/(1+q*q)], 'lab_shift_control': np.c_[drift, np.eye(len(np.unique(labs)))[labs]]}\\nfor name, f in models.items():\\n    if f is not None:\\n        design = (basis[None, :, :, None] * f[:, None, None, :]).reshape(len(y), len(w), -1)\\n    e = np.zeros_like(yobs)\\n    for lab in np.unique(labs):\\n        a = labs != lab\\n        if f is None:\\n            e[~a] = yobs[~a] - base[~a] - (drift[~a,None]*[.25,1.8,.03]) @ basis.T\\n        else:\\n            coef = np.linalg.lstsq((design[a]*w[None,:,None]).reshape(-1, design.shape[-1]), ((yobs-base)[a]*w).ravel(), rcond=None)[0]\\n            e[~a] = yobs[~a] - base[~a] - design[~a] @ coef\\n    def score(a):\\n        return [np.sqrt(np.mean(e[a,:-1]**2)), np.sqrt(np.mean(e[a,-1]**2))]\\n    miss = np.isnan(g['coupon_features_raw']).any(axis=1)\\n    print(name, 'worst lab', np.max([score(labs==l) for l in np.unique(labs)],0).round(6), 'complete/missing', np.round([score(~miss), score(miss)],6).tolist(), 'worst lab absolute rate bias', round(max(abs(e[labs==l,-1].mean()) for l in np.unique(labs)),6))\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; true=cal['true_channel_loads'].sum(1)\\nX=np.c_[np.ones(len(raw)),raw]; Q=np.c_[X, *(raw[:,j]*raw[:,k] for j in range(4) for k in range(j,4))]\\nfor label, a in [('affine',X),('quadratic',Q)]:\\n    e=[]\\n    for part in np.array_split(np.argsort(true),5):\\n        mask=np.ones(len(raw),bool); mask[part]=False\\n        er=a[part]@np.linalg.lstsq(a[mask],true[mask],rcond=None)[0]-true[part]\\n        e.append(np.sqrt(np.mean(er**2)))\\n    print('bridge',label,'held-out stress quintile RMSE',np.round(e,8).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_gate_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop transfer → H2 withdrawn load memory and redistributed drift; worst diagnostic-lab RMSE was 0.00960 for strain and 0.00811 for initial rate, and host strain/rate MAEs were 0.00189/0.001009.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, Fokker–Planck/HJB, or balanced-accuracy checks\",\n      \"rejected_reason\": \"The supported inputs contain continuous stress and strain observations, not relay modes, stochastic-control states, or class labels. Lab and missingness slices test applicable nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted history contrasts, feature products, or saturating drift improve chamber prediction across held-out labs, and whether bridge curvature matters at held-out stress extremes. If a challenger improves both strain and initial rate without relying on lab identity, investigate it before changing the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ed5141eb4f6d0732a6206eb637d28f3cea6ff0b28e0953cbdba6cbb9239b4b2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33948.41,
+      "usage_known": true,
+      "prompt_tokens": 36711,
+      "cached_tokens": 14976,
+      "completion_tokens": 1351
+    }
+  ]
+}

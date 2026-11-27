@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "26d218d32f144c98b5726b88d2de4e74",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:13.927119+00:00",
+  "ended_at_utc": "2026-11-27T19:57:52.583573+00:00",
+  "request_sha256": "e59cb6434e6f2ce75d88595d4d24c7bd87554293756ec3d70af10d339ebcc0cb",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 43276,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29827,
+    "cached_tokens": 13696,
+    "completion_tokens": 1641
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nfrom itertools import product\\nimport numpy as np\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _box_simplex, _forward\\nfrom _verified_upstream import calibrate_upstream\\nfrom chamber_pulses import forward\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nworst_pulse = worst_gap = worst_comp = worst_feas = worst_stat = worst_field = 0.\\nfor item in items:\\n    study = item['study']\\n    pulses = item.get('campaign_diagnostics')\\n    s = calibrate_upstream(dict(study, reference_tracer_pulses=pulses))\\n    out = solve_batch(study)\\n    S, U = _forward(s)\\n    reference_S = forward(s, ('PP', 'NN'))\\n    np.testing.assert_allclose(S, reference_S, atol=1e-12, rtol=0)\\n    if pulses:\\n        calibrated = s['reference_tracer_pulses']\\n        W = np.column_stack([p['w_pulse'] for p in calibrated])\\n        Y = np.column_stack([p['y_pulse_raw'] for p in calibrated])\\n        candidates = {''.join(b): forward(s, (b[:2], b[2:])) @ W - Y for b in product('RNP', repeat=4)}\\n        for j in range(W.shape[1]):\\n            train = np.arange(W.shape[1]) != j\\n            best = min(candidates, key=lambda b: np.mean(candidates[b][:, train] ** 2))\\n            assert best == 'PPNN', (j, best)\\n            rmse = np.sqrt(np.mean(candidates[best][:, j].reshape(len(s['mu_shifts']), -1)**2, axis=1))\\n            worst_pulse = max(worst_pulse, rmse.max())\\n    cert = out['kkt_certificate']; w = out['weights']; cap = s['u_box']; budget = s['total_budget']\\n    z = s['Z_nuisance']; y = s['y_obs_raw']; ridge = s['source_ridge']\\n    P = np.eye(len(y)) - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n    T = P @ reference_S; r = T @ w - P @ y\\n    obj = .5 * (r @ r + ridge * (w @ w)); g = T.T @ r + ridge * w\\n    lo, hi = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper']); nu = cert['nu_sum']\\n    exact_dual = obj - g @ w + nu * budget + cap * np.minimum(0, g-nu).sum()\\n    np.testing.assert_allclose([cert['primal_objective'], cert['dual_lower_bound']], [obj, exact_dual], atol=1e-12, rtol=0)\\n    np.testing.assert_array_equal(w, cert['weights'])\\n    assert min(lo.min(), hi.min()) >= 0 and obj - exact_dual >= -1e-12\\n    worst_feas = max(worst_feas, abs(w.sum()-budget), -w.min(), w.max()-cap)\\n    worst_stat = max(worst_stat, np.max(abs(g-nu-lo+hi)))\\n    worst_comp = max(worst_comp, max(abs(lo*w)), max(abs(hi*(cap-w))))\\n    worst_gap = max(worst_gap, abs(obj-exact_dual))\\n    from chamber_pulses import axis\\n    nx, ny = s['nx'], s['ny']\\n    L = np.kron(np.eye(ny), axis(s, 'x', 'PP').toarray()) + np.kron(axis(s, 'y', 'NN').toarray(), np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    rhs = np.einsum('k,kij->ij', w, s['source_modes']).ravel(order='F')\\n    field = np.linalg.solve(L + s['mu_shifts'][-1] * np.eye(nx*ny), rhs).reshape((nx,ny), order='F')\\n    worst_field = max(worst_field, np.max(abs(field - out['terminal_field'])))\\nassert worst_pulse < 1e-4 and max(worst_feas,worst_stat,worst_comp,worst_gap,worst_field) < 1e-9\\nrng = np.random.default_rng(558); worst_stress = 0.\\nfor case in range(120):\\n    n = 8; A = rng.normal(size=(n,n)); H = A.T @ A + .04*np.eye(n); c = rng.normal(size=n)*10; cap=.42\\n    for b in [0., cap*1e-5, 2*cap, 1.4, cap*(n-1e-5), n*cap]:\\n        w,nu = _box_simplex(H,c,cap,b); reduced = H@w+c-nu\\n        err = max(abs(w.sum()-b), -w.min(), w.max()-cap, max(w*np.maximum(0,reduced)), max((cap-w)*np.maximum(0,-reduced)))\\n        worst_stress = max(worst_stress, err)\\nassert worst_stress < 1e-9\\nprint(f'{len(items)} public items; held-pulse worst shift RMSE={worst_pulse:.3g}; terminal max error={worst_field:.3g}; feasibility={worst_feas:.3g}; stationarity={worst_stat:.3g}; complementarity={worst_comp:.3g}; gap={worst_gap:.3g}; 720 QP stress cases worst error={worst_stress:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 uniform Robin walls -> H2 periodic x and reflecting y; worst calibrated pulse-by-shift RMSE is 7.03e-7, and the published schema passes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema check does not test the wall stencil, terminal indexing, or KKT accuracy. Hold out each pulse to test the stencil choice, compare the terminal field with a dense solve, and test KKT accuracy at ordinary and saturated budgets. A failure would identify which component needs a correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c10ba81a283a6b7ec03a54acec240e01a5d3110ab12f89731870af3f91844ffe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39854.69,
+      "usage_known": true,
+      "prompt_tokens": 29827,
+      "cached_tokens": 13696,
+      "completion_tokens": 1641
+    }
+  ]
+}

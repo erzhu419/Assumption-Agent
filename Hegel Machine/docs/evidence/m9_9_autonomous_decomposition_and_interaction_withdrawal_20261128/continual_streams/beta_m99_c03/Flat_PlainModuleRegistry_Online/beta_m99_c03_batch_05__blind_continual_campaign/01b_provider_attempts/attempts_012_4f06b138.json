@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f06b13897bd4985824d6efb8d76f73f",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:29.136480+00:00",
+  "ended_at_utc": "2026-11-27T19:59:49.742007+00:00",
+  "request_sha256": "a811dde9f643c014324cb45df49a2bc26cd9b24199c0299ca61efb082b987c1d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59274,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33457,
+    "cached_tokens": 13696,
+    "completion_tokens": 750
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -eu\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\nfrom batch_solver import solve_batch\\nwith (root / '_upstream_param_payload.json').open() as f:\\n    payload = json.load(f)\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    items = pickle.load(f)\\nworst = dict(weights=0., terminal_field=0., calibrated_observations=0.)\\nfor item in items:\\n    raw = item['study']\\n    explicit = calibrate_upstream(raw, payload)\\n    implicit = calibrate_upstream(raw)\\n    actual = solve_batch(raw)\\n    expected = solve_downstream(explicit)\\n    for key in ('weights', 'terminal_field'):\\n        worst[key] = max(worst[key], float(np.max(np.abs(actual[key] - expected[key]))))\\n    worst['calibrated_observations'] = max(worst['calibrated_observations'], float(np.max(np.abs(explicit['y_obs_raw'] - implicit['y_obs_raw']))))\\nprint('Maximum difference from documented explicit-payload composition:', worst)\\nassert max(worst.values()) < 1e-12, worst\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared open Robin walls -> H2 periodic x and reflecting y; worst nuisance-adjusted held-out tracer RMS was 9.89e-7, with the nearest alternative at least 91.5 times worse.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat boundary-stencil and KKT stress tests\",\"rejected_reason\":\"They already passed on the unchanged bundle; they do not test whether omitting the staged payload changes adapter behavior.\"}],\"rationale\":\"The adapter calls the upstream calibrator without the payload supplied in the documented composition. Compare both paths on the public study in isolation. If the calibrated observations or deliverables differ, restore the documented composition before submitting.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a40ea3b7b774e9e74b79b1e8a7a3c52fd3610f5c518884a5eab4091e357c3838",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21744.51,
+      "usage_known": true,
+      "prompt_tokens": 33457,
+      "cached_tokens": 13696,
+      "completion_tokens": 750
+    }
+  ]
+}

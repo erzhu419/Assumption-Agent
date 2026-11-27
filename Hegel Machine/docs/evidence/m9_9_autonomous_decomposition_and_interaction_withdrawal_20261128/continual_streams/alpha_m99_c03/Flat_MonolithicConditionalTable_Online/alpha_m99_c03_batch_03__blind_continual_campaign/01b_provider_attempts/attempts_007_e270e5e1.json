@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e270e5e122da4e449830a1270712f596",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:54.029489+00:00",
+  "ended_at_utc": "2026-11-27T19:51:26.661487+00:00",
+  "request_sha256": "46186d232ed0a2cdc93e9257b78bd3b811553260144a9ab3fcb00f57697b8817",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44000,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30927,
+    "cached_tokens": 14976,
+    "completion_tokens": 1332
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cwr\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; n=len(y); a=np.c_[np.ones(n),y]; fit=np.linalg.lstsq(a,r,rcond=None)[0]; e=r-a@fit; _,s,v=np.linalg.svd(e,full_matrices=False); q=e@v[0]\\nb=np.c_[np.ones(n),r]; inv=np.linalg.lstsq(b,y,rcond=None)[0]; err=b@inv-y\\nprint('forward residual singular values',s,'dominant direction',v[0]); print('rows: index, measured load, dominant residual, orthogonal norm, affine axial residual'); ids=np.unique(np.r_[np.arange(0,n,3),np.argsort(abs(q))[-10:]]); print(np.c_[np.arange(n),y,q,np.linalg.norm(e-q[:,None]*v[0],axis=1),err.sum(1)][ids]); print('single sweep',np.c_[c['single_channel_sweeps']['lab_id'],c['single_channel_sweeps']['true_stress'],c['single_channel_sweeps']['cmd_stress']]);\\ndef terms(x,deg): return np.column_stack([np.ones(len(x))]+[x[:,idx].prod(1) for j in range(1,deg+1) for idx in cwr(range(x.shape[1]),j)])\\nfor blocked in (False,True):\\n results={k:np.empty(n) for k in ('affine','quadratic','projected affine','trimmed forward','trimmed inverse','robust inverse')}\\n for f in range(5):\\n  te=(np.arange(n)//(n//5) if blocked else np.arange(n)%5)==f; tr=~te\\n  def pred(name,x,keep): results[name][te]=x[te]@np.linalg.lstsq(x[keep],y[keep].sum(1),rcond=None)[0]\\n  pred('affine',b,tr); pred('quadratic',terms(r,2),tr)\\n  m=np.linalg.lstsq(a[tr],r[tr],rcond=None)[0]; _,_,v=np.linalg.svd(r[tr]-a[tr]@m,full_matrices=False); pred('projected affine',terms(r@v[1:].T,1),tr)\\n  keep=tr.copy()\\n  for _ in range(10):\\n   m=np.linalg.lstsq(a[keep],r[keep],rcond=None)[0]; norm=np.linalg.norm(r-a@m,axis=1); order=np.flatnonzero(tr); keep=np.zeros(n,bool); keep[order[np.argsort(norm[tr])[:int(.75*tr.sum())]]]=True\\n  m=np.linalg.lstsq(a[keep],r[keep],rcond=None)[0]; results['trimmed forward'][te]=np.linalg.solve(m[1:].T,(r[te]-m[0]).T).sum(0); pred('trimmed inverse',b,keep)\\n  from scipy.optimize import least_squares\\n  z=y[tr].sum(1); initial=np.linalg.lstsq(b[tr],z,rcond=None)[0]; results['robust inverse'][te]=b[te]@least_squares(lambda p:b[tr]@p-z,initial,loss='soft_l1',f_scale=.06).x\\n print('blocked',blocked)\\n for k,p in results.items():\\n  z=p-y.sum(1); print(k,'RMSE',np.mean(z*z)**.5,'max',max(abs(z)),'20-row RMSE',np.sqrt((z.reshape(4,-1)**2).mean(1)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\nsed -n '1,53p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_02_solver.py\\npython3 - <<'PY'\\nimport json,numpy as np\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n x=np.asarray(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],x.mean(0).round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: generic polynomial bridge → H2: a dominant shared distortion or a distinct sweep regime; the best held-out axial RMSE so far is 0.2211, with maximum absolute error 0.6214.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat all calibration rows as a single affine population\",\n      \"rejected_reason\": \"The dominant forward residual singular value is 46.09 versus 2.26 for the next direction; row-level and blocked validation can show whether exploiting that structure improves axial recovery.\"\n    }\n  ],\n  \"rationale\": \"The previous command found a dominant residual direction but stopped before comparing models. Check whether the distortion is shared across the sweep or concentrated in particular blocks; that will determine whether to project, trim, or instead fit distinct regimes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2e10cfa602577af99558d74c140cd4a875e730e94d85c5b2ea1c2bef105917e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33750.32,
+      "usage_known": true,
+      "prompt_tokens": 30927,
+      "cached_tokens": 14976,
+      "completion_tokens": 1332
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6107990ae0114019b3d90da00a76401e",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:35.295619+00:00",
+  "ended_at_utc": "2026-11-27T19:33:01.675623+00:00",
+  "request_sha256": "dfec55301e4d3f9dbe46ab6c7da4024587e80896864b224a7d8b08762da8ee8c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34779,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28796,
+    "cached_tokens": 14976,
+    "completion_tokens": 1059
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; tr=d['train']; te=d['test']; print('diagnostics', type(i.get('campaign_diagnostics')).__name__, 'fields',list(d),list(te))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('facility entries',[(v['completed_campaign_short_name'],list(v)) for v in log])\\nc=d['calibration_load_cells']; a=c['bridge_raw']; y=c['true_channel_loads'].sum(1); L=np.c_[np.ones(len(a)),a]; Q=np.column_stack([L]+[a[:,j]*a[:,k] for j in range(4) for k in range(j,4)])\\nfold=np.empty(len(a),int); fold[np.argsort(np.linalg.norm(a-a.mean(0),axis=1))]=np.arange(len(a))%5\\nfor label,A in [('affine',L),('quadratic',Q)]:\\n e=np.empty(len(y));\\n for g in range(5):\\n  f=fold!=g; e[~f]=A[~f]@np.linalg.lstsq(A[f],y[f],rcond=None)[0]-y[~f]\\n print('calibration OOF',label,'RMS',np.sqrt(np.mean(e**2)),'max',max(abs(e)))\\nx,_=m._features(tr,te); p,h=m._loads(tr,m._bridge(c)); t=d['eval_times']; dt=d['past_dt']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; ec=np.empty_like(y); er=np.empty_like(r); gap=np.empty((len(h),2));\\nfor lab in np.unique(tr['lab_id']):\\n f=tr['lab_id']!=lab; tau,beta=m._fit(x[f],p[f],h[f],dt,t,y[f],r[f]); A,B=m._design(tau,x[~f],p[~f],h[~f],dt,t); ec[~f]=y[~f]-A@beta; er[~f]=r[~f]-B@beta; gap[~f]=B[:,:2]*tau; print('lab',lab,'signed medians early/late/rate',np.round([np.median(ec[~f,:4]),np.median(ec[~f,-4:]),np.median(er[~f])],5))\\nX=np.c_[x,gap,gap[:,0]-gap[:,1],gap[:,0]*gap[:,1],tr['aux_chamber_telemetry']]; R=np.c_[np.median(ec[:,:4],axis=1),np.median(ec[:,-4:],axis=1),er]; X-=np.vstack([X[tr['lab_id']==lab].mean(0) for lab in tr['lab_id']]); R-=np.vstack([R[tr['lab_id']==lab].mean(0) for lab in tr['lab_id']]); print('within-lab OOF residual correlations, early/late/rate by features, gap, contrasts, telemetry',np.round(np.corrcoef(np.c_[R,X].T)[:3,3:],2))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge and two-branch mechanics -> H2 richer calibration or drift only if supported by real measurements; held-out p90 errors are 0.02555 for strain and 0.01595 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes or Fokker–Planck/HJB drift\",\"rejected_reason\":\"The supplied model is a deterministic hereditary recurrence with no relay, diffusion, or control state.\"}],\"rationale\":\"Compare held-out affine and quadratic calibration to detect bridge curvature that could justify a model change. Check signed out-of-fold mechanics residuals within labs for systematic drift or interaction effects; pursue a correction only if the residual pattern supports it.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9f24ad7f92248f4c0cf2040df4f73c1030abdf2088ba6fd971faa96fcf50ec61",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27473.32,
+      "usage_known": true,
+      "prompt_tokens": 28796,
+      "cached_tokens": 14976,
+      "completion_tokens": 1059
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "497f427e046c40728d4ee6b95d324f92",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:15.501495+00:00",
+  "ended_at_utc": "2026-11-27T19:52:39.286951+00:00",
+  "request_sha256": "6b54746ee5b7b20344435b538b911b9867ca6b89227e0f79f8b819ce9c81c708",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 20853,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22690,
+    "cached_tokens": 13696,
+    "completion_tokens": 933
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _verified_downstream.py && cat public_asset_index.json && python3 - <<'PY'\\nimport pickle,json,numpy as np\\nfrom scipy.linalg import qr\\nfrom itertools import combinations_with_replacement\\nx,y=[pickle.load(open('public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells'][k] for k in ('true_channel_loads','bridge_raw')]\\nnp.set_printoptions(precision=4,suppress=True,linewidth=130)\\nprint('first calibration loads and raw',np.c_[x,y][:22]); print('absolute load percentiles',np.percentile(abs(x),[0,25,50,75,100],axis=0)); print('nonzero counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True))\\nX=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(X,y,rcond=None)[0]\\nfor i in range(12):\\n e=np.linalg.norm(y-X@b,axis=1); W=np.minimum(1,(np.median(e)*2.5/np.maximum(e,1e-12))**2); b=np.linalg.lstsq(X*W[:,None]**.5,y*W[:,None]**.5,rcond=None)[0]\\ne=y-X@b; print('affine',b); print('largest residuals',np.c_[np.arange(len(x)),x,e][np.argsort(np.linalg.norm(e,axis=1))[-12:]]); print('residuals by row block:')\\nfor i in range(0,len(x),10):print(i,np.round(np.percentile(abs(e[i:i+10]),[25,50,75],axis=0),3))\\nfor n in range(1,5):\\n ij=[s for j in range(1,n+1) for s in combinations_with_replacement(range(4),j)]; D=np.c_[np.ones(len(x)),np.array([np.prod(x[:,s],axis=1) for s in ij]).T]; print('degree',n,'rank',np.linalg.matrix_rank(D),'terms',D.shape[1]);\\n if n<=3:\\n  clean=np.max(abs(e),axis=1)<2; E=[]\\n  for i in np.flatnonzero(clean):\\n   m=clean.copy();m[i]=False; E.append(y[i]-D[i]@np.linalg.lstsq(D[m],y[m],rcond=None)[0]);\\n  print('LOO residual quantiles',np.percentile(abs(np.array(E)),[50,90,100],axis=0))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log structure', list(log) if isinstance(log,dict) else type(log).__name__); entries=next(v for v in log.values() if isinstance(v,list)) if isinstance(log,dict) else log\\nfor v in entries:\\n if isinstance(v,dict) and 'facility_telemetry_trace' in v:\\n  a=np.asarray(v['facility_telemetry_trace']);print(v.get('completed_campaign_short_name'),a.mean(axis=0),a.std(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine cross-talk → H2 identifiable nonlinear bridge terms; held-out error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check whether the calibration design identifies mixed terms and whether held-out residuals justify them. If high-order terms are unidentifiable or unstable, retain a smaller model rather than extrapolate them into the hold-load range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "749777606ff35d69da3a8f7e69d3639556fc65fa709ba9e55a304fdfb1675a5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24911.13,
+      "usage_known": true,
+      "prompt_tokens": 22690,
+      "cached_tokens": 13696,
+      "completion_tokens": 933
+    }
+  ]
+}

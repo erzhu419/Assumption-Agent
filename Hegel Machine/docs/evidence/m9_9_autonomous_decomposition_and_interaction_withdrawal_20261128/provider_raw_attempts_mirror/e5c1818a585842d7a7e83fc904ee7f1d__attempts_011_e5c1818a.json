@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5c1818a585842d7a7e83fc904ee7f1d",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:48.557700+00:00",
+  "ended_at_utc": "2026-11-27T20:04:29.295201+00:00",
+  "request_sha256": "b60f21b49c20f9275d4c52cc1bcdcfac86086feba0f497bce9a4bddb514582b4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61544,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36704,
+    "cached_tokens": 14976,
+    "completion_tokens": 1731
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nassert s.count('def _fit_rosette(ref, raw):') == 1\\ns = s.replace('def _fit_rosette(ref, raw):', 'def _fit_rosette(ref, raw, single_bank_sweeps=None):')\\nold = '    return np.linalg.lstsq(design[clean], raw[clean], rcond=None)[0]'\\nnew = '''    coeff = np.linalg.lstsq(design[clean], raw[clean], rcond=None)[0]\\n    if single_bank_sweeps is None:\\n        return coeff\\n\\n    # Each bank sweep drives one input and measures that same output only.\\n    banks = np.asarray(single_bank_sweeps['bank_id'])\\n    bank_ref = np.zeros((len(banks), ref.shape[1]))\\n    bank_ref[np.arange(len(banks)), banks] = single_bank_sweeps['ref_signal']\\n    bank_design = _rosette_design(bank_ref)\\n    bank_raw = np.asarray(single_bank_sweeps['raw_readout'])\\n    residual = raw - design @ coeff\\n    centered = residual - np.median(residual, axis=0)\\n    scale = np.maximum(1.4826 * np.median(abs(centered), axis=0), 1e-7)\\n    clean = np.all(abs(centered) <= 8 * scale, axis=1)\\n    predicted = (bank_design @ coeff)[np.arange(len(banks)), banks]\\n    bank_clean = abs(bank_raw - predicted) <= 8 * scale[banks]\\n    for j in range(raw.shape[1]):\\n        selected = bank_clean & (banks == j)\\n        coeff[:, j] = np.linalg.lstsq(\\n            np.vstack((design[clean], bank_design[selected])),\\n            np.concatenate((raw[clean, j], bank_raw[selected])),\\n            rcond=None,\\n        )[0]\\n    return coeff'''\\nassert s.count(old) == 1\\ns = s.replace(old, new)\\nold = \\\"    coeff = _fit_rosette(sweeps['ref_rosette'], sweeps['raw_rosette'])\\\"\\nnew = \\\"    coeff = _fit_rosette(sweeps['ref_rosette'], sweeps['raw_rosette'],\\\\n                         sweeps['single_bank_sweeps'])\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit = pickle.load(open(p+'public_batch.pkl','rb'))[0]; s = it['study']; sw = s['sensor_calibration_sweeps']; S,U = m._forward(s)\\nbase = m._fit_rosette(sw['ref_rosette'], sw['raw_rosette'])\\njoint = m._fit_rosette(sw['ref_rosette'], sw['raw_rosette'], sw['single_bank_sweeps'])\\nraw = np.array([d['y_pulse_raw'].reshape(-1,4) for d in it['campaign_diagnostics']]); ref = np.array([(S@d['w_pulse']).reshape(-1,4) for d in it['campaign_diagnostics']]); A = np.array([m._rosette_design(x) for x in ref]); r0 = A@base-raw; r1 = A@joint-raw\\nfor name,r in [('base',r0),('joint',r1)]:\\n print(name, 'worst pulse RMSE', np.sqrt(np.mean(r*r,axis=(1,2))).max(), 'worst bank RMSE', np.sqrt(np.mean(r*r,axis=(0,1))).max(), 'worst pulse-shift RMSE', np.sqrt(np.mean(r.reshape(len(r),len(s['mu_shifts']),-1)**2,axis=2)).max())\\nassert np.mean(r1*r1)<np.mean(r0*r0) and np.sqrt(np.mean(r1*r1,axis=(1,2))).max()<2e-6\\nZ = s['Z_nuisance']; P = np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); T = P@S; rho=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']\\nfor name,study in [('observation',s)]+[(f'pulse {i}',dict(s,y_obs_raw=r.ravel())) for i,r in enumerate(raw)]:\\n y=m._calibrate(study); assert np.max(abs(m._rosette_design(y.reshape(-1,4))@joint-study['y_obs_raw'].reshape(-1,4)))<1e-9\\n out=m.solve_batch(study); w=np.asarray(out['weights']); cert=out['kkt_certificate']; e=T@w-P@y; g=T.T@e+rho*w; J=(e@e+rho*(w@w))/2; nu=cert['nu_sum']; dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n assert np.all((w>=0)&(w<=cap)) and abs(w.sum()-budget)<1e-11 and abs(J-dual)<1e-10\\n assert np.max(abs(g-nu-np.asarray(cert['lam_lower'])+cert['lam_upper']))<1e-10\\n assert abs(J-cert['primal_objective'])<1e-10 and abs(dual-cert['dual_lower_bound'])<1e-10\\n assert np.allclose(out['terminal_field'],np.tensordot(w,U,axes=(0,0)),rtol=0,atol=1e-12)\\n print(name,'KKT gap',abs(J-dual))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 rosette-only calibration → H2 robust joint calibration; in six sweep folds, worst independent tracer RMSE fell from 2.58e-6 to 2.32e-6 and worst channel RMSE fell from 4.63e-6 to 3.89e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rosette-only fit\",\n      \"rejected_reason\": \"The joint fit improves worst-fold transfer and worst-channel error without adding model terms or fitting tracer responses.\"\n    }\n  ],\n  \"rationale\": \"Adopt the measured calibration improvement without changing the verified transport stencil or optimizer. Verify that the production fit reproduces the tracer improvement and that inversion, the terminal field, and the KKT certificate still pass in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "05d4a47408c46d2746ee1c95ddbbbb57589ab1c126fd5cd67801670d6ad4b01e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41885.67,
+      "usage_known": true,
+      "prompt_tokens": 36704,
+      "cached_tokens": 14976,
+      "completion_tokens": 1731
+    }
+  ]
+}

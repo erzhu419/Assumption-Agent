@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71e84c211b1d4199b4d833ee3f17449c",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:58.510218+00:00",
+  "ended_at_utc": "2026-11-27T19:45:28.307093+00:00",
+  "request_sha256": "c6e28f8c80d89e4121bd93a92dfd1dd8ab5daa5ac3d3bff7f28036f9ae1914af",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33095,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28276,
+    "cached_tokens": 14976,
+    "completion_tokens": 1222
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_probe.py <<'PY'\\nimport sys,pickle,json,importlib.util\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\np='/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py'; s=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr=d['train']; te=d['test']; g=i['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; cal=d['calibration_load_cells']; x=cal['true_channel_loads']; y=cal['bridge_raw']; np.set_printoptions(precision=5,suppress=True)\\ndef poly(x, degree):\\n terms=[()] + [z for k in range(1,degree+1) for z in combinations_with_replacement(range(4),k)]\\n return np.column_stack([np.prod(x[:,z],axis=1) for z in terms]),terms\\nif __name__=='__main__':\\n for k in range(1,4):\\n  A,terms=poly(x,k); B=np.linalg.lstsq(A,y,rcond=None)[0]; r=y-A@B; h=np.sum(np.linalg.svd(A,full_matrices=False)[0][:,:np.linalg.matrix_rank(A)]**2,axis=1); loo=r/np.maximum(1-h[:,None],1e-12)\\n  print('bridge',k,'rank',np.linalg.matrix_rank(A),'RMS',np.sqrt(np.mean(r*r,axis=0)),'LOO RMS',np.sqrt(np.mean(loo*loo,axis=0))); print('large coeffs',[(z,b.round(4).tolist()) for z,b in zip(terms,B) if np.max(abs(b))>.004])\\n for e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n  a=np.asarray(e['facility_telemetry_trace']); print('apparatus', {k:v for k,v in e.items() if k!='facility_telemetry_trace'},'mean',a.mean(0),'std',a.std(0))\\n bridge=m._calibration(cal); X=m._features(tr,te); n=len(tr['lab_id']); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('archived fit',taus,theta)\\n Xg=m._features(tr,g)[n:]; cg=m._coupon_inputs(g,Xg,bridge); T=np.c_[-np.expm1(-t[:,None]/taus),t]; print('time basis condition',np.linalg.cond(T))\\n for name,b,c in [('train',tr,ct),('diag',g,cg)]:\\n  F,R=m._design(taus,c,dt,t); obs=b['strain_curves_obs']-b['strain_0'][:,None]; rate=b['instant_rate_obs']; err=obs-F@theta; er=rate-R@theta; raw_amp=np.linalg.lstsq(T,obs.T,rcond=None)[0].T; gap=R[:,:2]*taus; amp0=np.c_[gap*theta[:2],R[:,2:]@theta[2:]]; ej=raw_amp-amp0\\n  print(name,'resid time med',np.median(err,axis=0),'rmse',np.sqrt(np.mean(err**2,axis=0)),'rate median rmse',np.median(er),np.sqrt(np.mean(er**2)),'amp correction med/std',np.median(ej,axis=0),np.std(ej,axis=0),'basis error RMS',np.sqrt(np.mean((obs-raw_amp@T.T)**2))); print('examples hold, gaps, drift, rel amp, rate correction',np.c_[c[1],gap,amp0[:,2],ej,er][:10])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel 2>&1 | head -28\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine bridge and shared chamber law -> H2 separate empirical bridge calibration and chamber correction; worst-slice error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a chamber correction directly to strain residuals\",\"rejected_reason\":\"Mixed-channel sweep errors would be absorbed into the correction; test bridge interactions first and inspect the residual time basis separately.\"}],\"rationale\":\"Held-out calibration errors distinguish an affine bridge from identifiable mixed-load terms. Time-resolved diagnostic residuals and the independently measured initial rates show whether the chamber difference lies in branch amplitudes, drift, or an additional transient.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5b86b5124a554fde2541129792c5d1fd6dee6c276b6d7aff71d541d1e385a63f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30957.93,
+      "usage_known": true,
+      "prompt_tokens": 28276,
+      "cached_tokens": 14976,
+      "completion_tokens": 1222
+    }
+  ]
+}

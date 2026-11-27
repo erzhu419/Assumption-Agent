@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3479e8bfda524c59bbe197550636fac4",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:14.909687+00:00",
+  "ended_at_utc": "2026-11-27T19:47:46.100105+00:00",
+  "request_sha256": "f7b33e2406505c2f4016199e67a5a86b3215ffb7dd6e5845536405e8482473d3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64414,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38446,
+    "cached_tokens": 14976,
+    "completion_tokens": 1277
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',root+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open(root+'public_batch.pkl','rb')); d=i[0]['dataset']; g=i[0]['campaign_diagnostics']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']\\no=m.solve_batch(d); tau=o['estimated_taus']; th=o['hereditary_weights']; assert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(a).all() for a in o.values())\\nxt,xe=m._features(tr,te); s=m._stress_map(d['calibration_load_cells'])\\ny0,_=m._deployment_response(te,xe,s,dt,np.array([0.]),tau,th); eps=1e-6; yp,_=m._deployment_response(te,xe,s,dt,np.array([eps]),tau,th); ym,_=m._deployment_response(te,xe,s,dt,np.array([-eps]),tau,th)\\nerr=np.max(abs((yp-ym)[:,0]/(2*eps)-o['initial_rate_pred'])); assert err<1e-7 and np.array_equal(y0[:,0],te['strain_0']); print('deployment derivative max error',err)\\nfor l in np.unique(tr['lab_id']):\\n    a=tr['lab_id']!=l; sub=lambda mask:{k:v[mask] for k,v in tr.items()}; u,w=m._fit(sub(a),xt[a],s,dt,t); c,r=m._design(sub(~a),xt[~a],s,dt,t,u); e=c@w+tr['strain_0'][~a,None]-tr['strain_curves_obs'][~a]; q=r@w-tr['instant_rate_obs'][~a]; print('benchtop held-out lab',l,'max relative tau change',np.max(abs(u/tau-1)),'median abs early/late/rate',*[round(float(np.median(abs(v))),5) for v in (e[:,:3],e[:,-3:],q)])\\nxd,_=m._features(g,g); miss=np.isnan(g['coupon_features_raw']); complete=~miss.any(1); c,r=m._design(g,xd,s,dt,t,tau); prior=np.c_[c[:,:,:2]@th[:2],r[:,:2]@th[:2]]; y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; b=np.vstack([np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]]); drive=th[2]+xd@th[3:]; scales=np.r_[np.full(len(t),.004),.006]; labs=g['lab_id']; cv=np.empty_like(y)\\nfor l in np.unique(labs):\\n    hold=labs==l; a=~hold & complete\\n    def residual(k): return ((prior[a]+drive[a,None]*(b@k)-y[a])/scales).ravel()\\n    k=least_squares(residual,m._CHAMBER_DRIFT,loss='soft_l1',f_scale=1.5).x; cv[hold]=prior[hold]+drive[hold,None]*(b@k)-y[hold]\\nfor name,mask in [(str(l),complete&(labs==l)) for l in np.unique(labs)]+[('missing',~complete)]:\\n    print('chamber held-out slice',name,'n',mask.sum(),'RMSE early/late/rate',*[round(float(np.sqrt(np.mean(v*v))),5) for v in (cv[mask,:3],cv[mask,-4:-1],cv[mask,-1])])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: withdrawn load memory → H2: retained hereditary state with redistributed drift; the host verified public strain MAE 0.002752 and rate MAE 0.008914.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit immediately after schema and host checks\",\n      \"rejected_reason\": \"Those checks do not show whether one lab drives the material fit or whether the chamber error is concentrated at specific horizons or among incomplete coupons.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the exact saved solver without changing it. A derivative mismatch would require fixing the rate formula; instability across benchtop labs would require revisiting the robust fit. Separate complete and incomplete chamber coupons to distinguish a constitutive miss from the known diagnostic imputation offset.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9ff29289b2fa05c558844c11fe2d0bd668ad41145a7fa499ee69ffd1fe158cbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32302.48,
+      "usage_known": true,
+      "prompt_tokens": 38446,
+      "cached_tokens": 14976,
+      "completion_tokens": 1277
+    }
+  ]
+}

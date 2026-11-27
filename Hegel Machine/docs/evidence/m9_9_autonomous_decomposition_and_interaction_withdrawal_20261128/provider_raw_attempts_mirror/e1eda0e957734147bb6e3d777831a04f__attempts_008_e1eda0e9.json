@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e1eda0e957734147bb6e3d777831a04f",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:09.354695+00:00",
+  "ended_at_utc": "2026-11-27T19:51:44.003699+00:00",
+  "request_sha256": "66e141a7a5578e437b615037b2f4584878356590473c6f7deaf2e40a157d61a5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37395,
+    "cached_tokens": 14976,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cat > /tmp/m99_rosette.py <<'PY'\\nimport numpy as np\\n\\n\\ndef _rosette_design(ref, j):\\n    own, nxt, prev = ref[:, j], ref[:, (j + 1) % 4], ref[:, (j - 1) % 4]\\n    return np.column_stack((np.ones(len(ref)), own, nxt, prev, own*nxt, own**3))\\n\\n\\ndef _fit_rosette(sweeps):\\n    ref, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    banks = sweeps['single_bank_sweeps']\\n    coef = []\\n    for j in range(4):\\n        take = banks['bank_id'] == j\\n        axes = np.zeros((np.count_nonzero(take), 4))\\n        axes[:, j] = banks['ref_signal'][take]\\n        design = _rosette_design(np.vstack((ref, axes)), j)\\n        target = np.r_[raw[:, j], banks['raw_readout'][take]]\\n        clean = np.abs(target) < 8.0\\n        coef.append(np.linalg.lstsq(design[clean], target[clean], rcond=None)[0])\\n    return np.asarray(coef)\\n\\n\\ndef _calibrated_observations(study):\\n    coef = _fit_rosette(study['sensor_calibration_sweeps'])\\n    meas = study['y_obs_raw'].reshape(-1, 4)\\n    j = np.arange(4)\\n    nxt, prev = (j + 1) % 4, (j - 1) % 4\\n    linear = np.zeros((4, 4))\\n    linear[j, j], linear[j, nxt], linear[j, prev] = coef[:, 1:4].T\\n    x = np.linalg.solve(linear, (meas - coef[:, 0]).T).T\\n    for _ in range(20):\\n        residual = x @ linear.T + coef[:, 0] + coef[:, 4]*x*x[:, nxt] + coef[:, 5]*x**3 - meas\\n        if np.max(np.abs(residual)) < 1e-13:\\n            return x.ravel()\\n        jac = np.broadcast_to(linear, (len(x), 4, 4)).copy()\\n        jac[:, j, j] += coef[:, 4]*x[:, nxt] + 3*coef[:, 5]*x**2\\n        jac[:, j, nxt] += coef[:, 4]*x\\n        x -= np.linalg.solve(jac, residual[..., None])[..., 0]\\n    raise RuntimeError('Sensor rosette inversion did not converge')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,json,pickle,numpy as np\\nsys.path.insert(0,'/tmp'); from m99_rosette import _fit_rosette,_calibrated_observations,_rosette_design\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); np.set_printoptions(precision=5,suppress=True)\\ntraces=[]\\nfor e in a+[dict(completed_campaign_short_name='public_input',facility_telemetry_trace=s['aux_manifold_telemetry'])]:\\n t=np.asarray(e['facility_telemetry_trace']); traces.append(t); print(e['completed_campaign_short_name'], 'mean',t.mean(0),'std',t.std(0),'first',t[0],'last',t[-1],'sv',np.linalg.svd(t,compute_uv=False))\\nfor i in range(1,len(traces)):\\n d=traces[i]-traces[i-1]; print('transition',i,'delta mean',d.mean(0),'rms',np.sqrt(np.mean(d*d,axis=0)), 'first',d[0], 'last',d[-1])\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']; coef=_fit_rosette(c); pred=np.column_stack([_rosette_design(x,j) @ coef[j] for j in range(4)]); m=abs(raw)<8\\nprint('calibration residual max',np.max(abs((pred-raw)[m])),'calibrated observation min/max',np.min(_calibrated_observations(s)),np.max(_calibrated_observations(s)))\\nprint('sensors on left/right/bottom/top',[(s['sensor_ij'][:,i]==edge).sum() for i,edge in ((0,0),(0,s['nx']-1),(1,0),(1,s['ny']-1))])\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== $f\\\"; sed -n '/^def _axis_operator/,/^def _forward/p' \\\"$f\\\"; done\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette → H2 cyclic neighbor mixing, a bilinear interaction, and an own-channel cubic; the clean-sweep cubic family has worst-channel held-out RMSE of 1.4e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep every cubic monomial\",\n      \"rejected_reason\": \"The clean fits isolate a cyclic six-term response per channel; the full cubic has worse held-out error.\"\n    }\n  ],\n  \"rationale\": \"Fit the observed cyclic structure and verify that it inverts the actual observation range. Compare compact telemetry transitions against the known wall stencils; if the log does not identify the new stencil uniquely, use calibrated observation slices to discriminate candidates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c26ddae5d99f1dd66679b39f861619f6a556a0a02dbfe087728ecc4eadcdc285",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35763.3,
+      "usage_known": true,
+      "prompt_tokens": 37395,
+      "cached_tokens": 14976,
+      "completion_tokens": 1425
+    }
+  ]
+}

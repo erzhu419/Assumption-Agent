@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4d3830b3de864780ac22a241ee4d73d9",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:51.984596+00:00",
+  "ended_at_utc": "2026-11-27T19:40:21.397502+00:00",
+  "request_sha256": "5a89c226e77d418e4a8150684810f1738bad4158fcd862fb3e585dd03e80a39f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65633,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42544,
+    "cached_tokens": 14976,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_alignment.py <<'PY'\\nexec(open('/tmp/probe_chamber.py').read().split('for tag,')[0])\\nimport json\\nraw=d['coupon_features_raw']; ld=d['lab_id']; missing=np.isnan(raw).any(1); Y=np.c_[yc,rc]; age=np.cumsum(dt[::-1])[::-1]-dt\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print('apparatus',a['completed_campaign_short_name'],np.round(np.mean(a['facility_telemetry_trace'],axis=0),4));\\nfor tag,rs,ls in [('joint',ref,lab),('diagnostic',d['ref_coupons'],ld),('train',tr['ref_coupons'],tr['lab_id']),('test',te['ref_coupons'],te['lab_id'])]:\\n print('reference',tag,[(int(l),round(np.median(rs[ls==l].mean(0)),4),round(np.median(rs[ls==l].std(0)),4)) for l in np.unique(ls)])\\n X=raw.copy()\\n for l in np.unique(ld):\\n  R=rs[ls==l]; X[ld==l]=(X[ld==l]-np.median(R.mean(0)))/np.median(R.std(0))\\n for imp in ('joint','diagnostic','zero'):\\n  _,iv,ct=np.unique(np.c_[ld,d['stratum']],axis=0,return_inverse=True,return_counts=True); wgt=1/ct[iv]; calc=np.nansum(X*wgt[:,None],axis=0)/(np.isfinite(X).T@wgt)\\n  Xc=np.where(np.isfinite(X),X,{'joint':np.mean(np.r_[x,xt],axis=0),'diagnostic':calc,'zero':0}[imp]); r=beta[2]+Xc@beta[3:]; F=np.c_[hc,r]\\n  def fit(ii):\\n   def proj(v):\\n    u=np.exp(v); T=np.r_[-np.expm1(-t[:,None]/u),[1/u]]; A=(T[None,:,:,None]*F[:,None,None,:]).reshape(len(Y),Y.shape[1],-1); B=A[ii].reshape(-1,4); c=np.linalg.lstsq(B,Y[ii].ravel(),rcond=None)[0]; return A@c-Y,c\\n   sol=least_squares(lambda v:proj(v)[0][ii].ravel(),np.log(tau),bounds=(np.log([.4,2.]),np.log([1.,9.])),max_nfev=45); e,c=proj(sol.x); return e,c,np.exp(sol.x)\\n  err,c,u=fit(~missing); oo=np.zeros_like(Y)\\n  for l in np.unique(ld):\\n   e,_,_=fit((ld!=l)&~missing); oo[ld==l]=e[ld==l]\\n  m=lambda e:np.round(np.sqrt(np.mean(e**2,axis=0))[[-2,-1]],5)\\n  print(tag,imp,'tau',np.round(u,4),'coef',np.round(c,4),'complete-fit',m(err[~missing]),'complete-OOF',m(oo[~missing]),'missing-OOF',m(oo[missing]),'worst lab',np.max([m(oo[(ld==l)&~missing]) for l in np.unique(ld)],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_alignment.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether diagnostic reference-panel mismatch, rather than a new chamber interaction, drives the worst held-out-lab RMSE of 0.171 at the final horizon and 0.116 in initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit interactions suggested by the residual correlations\",\n      \"rejected_reason\": \"Both branches show similar residual patterns, which may come from a shared feature-alignment error. Test that explanation first.\"\n    }\n  ],\n  \"rationale\": \"Compare how alternative diagnostic reference panels and imputation conventions affect the same compact law. Fit on complete coupons and score held-out labs and missing-feature coupons separately. A clear gain on complete coupons would favor correcting diagnostic alignment before adding terms; deployment will still use the specified joint train/test standardization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "53dc2ec1d917c352a150434bf2286ac5fa852db9012908fe3c843643cceac96f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30530.34,
+      "usage_known": true,
+      "prompt_tokens": 42544,
+      "cached_tokens": 14976,
+      "completion_tokens": 1202
+    }
+  ]
+}

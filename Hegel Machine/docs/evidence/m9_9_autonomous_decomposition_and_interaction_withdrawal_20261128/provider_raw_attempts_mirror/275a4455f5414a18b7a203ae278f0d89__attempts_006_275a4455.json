@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "275a4455f5414a18b7a203ae278f0d89",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:13.933994+00:00",
+  "ended_at_utc": "2026-11-27T19:38:42.063123+00:00",
+  "request_sha256": "442f54a22c30589900fd569df15912d99ae0df489d6f6b2414bcc98e3f8f95e9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47326,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35511,
+    "cached_tokens": 14976,
+    "completion_tokens": 1122
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cat > /tmp/m99_chamber.py <<'PY'\\nfrom m99_inputs import *\\nD=np.vstack((E,er)); obs=np.c_[y,yr]; B=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\\np,h,_=cg; lab=g['lab_id']; n=len(h); hist=h[:,None]-R0[:,:2]*tau\\nkeys=('lab_id','stratum','coupon_features_raw','ref_coupons')\\nmerge=lambda *blocks:{k:np.concatenate([b[k] for b in blocks]) for k in keys}\\nfeat={'all':m._features(tr,merge(te,g))[-n:], 'train_diag':m._features(tr,g)[-n:], 'diag':m._features(g,g)[-n:]}\\ndef ref_transform(refset):\\n    xx=g['coupon_features_raw'].copy()\\n    for l in np.unique(lab):\\n        panel=refset['ref_coupons'][refset['lab_id']==l]\\n        xx[lab==l]=(xx[lab==l]-np.median(panel.mean(0)))/np.median(panel.std(0))\\n    mu=np.nanmean(x,0)\\n    return np.where(np.isfinite(xx),xx,mu)\\nfeat['train_test']=ref_transform(merge(tr,te)); feat['train']=ref_transform(tr)\\nprint('nominal material',tau,th)\\nfor key,xx in feat.items():\\n    drift=xx@th[3:]; offset=np.outer(h,th[:2]); offset=np.c_[offset,np.zeros(n)]\\n    for model,F,fixed in [('drift',np.c_[np.ones(n),drift],True),('linear',np.c_[np.ones(n),xx],True),('linear + memory',np.c_[np.ones(n),xx,hist],True),('linear + hold',np.c_[np.ones(n),xx,h],False),('linear + hold + memory',np.c_[np.ones(n),xx,h,hist],False)]:\\n        target=B-offset if fixed else B\\n        pred=np.zeros_like(B)\\n        for l in np.unique(lab):\\n            v=lab==l; coef=np.linalg.lstsq(F[~v],target[~v],rcond=None)[0]; pred[v]=F[v]@coef\\n        if fixed: pred+=offset\\n        res=pred@D.T-obs\\n        rm=np.array([[np.mean(res[lab==l,:-1]**2)**.5,np.mean(res[lab==l,-1]**2)**.5] for l in np.unique(lab)])\\n        fit=np.linalg.lstsq(F,target,rcond=None)[0]\\n        erfit=(F@fit-target)@D.T\\n        print(key,model,'fit',np.sqrt(np.mean(erfit**2,axis=0))[[0,5,11,12]].round(4),'worst_lab',rm.max(0).round(4),'pooled',np.array([np.mean(res[:,:-1]**2),np.mean(res[:,-1]**2)])**.5)\\n        if key in ('all','train_test') and model in ('drift','linear','linear + memory'): print('coef',fit.T.round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_chamber.py | tail -43\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: chamber correction from nominal drift and memory -> H2: hold-proportional branch amplitudes plus a shared feature correction; the nominal-drift-plus-memory model has worst held-out lab curve/rate RMSE of 0.0664/0.0581.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit six unrestricted history coefficients per branch\",\"rejected_reason\":\"The previous fit was unstable across labs. Test whether the small apparent history effect survives after accounting for coupon features.\"}],\"rationale\":\"Compare compact chamber laws on held-out labs. Also test whether reference-panel scaling explains the apparent gap between nominal drift and the observed feature dependence; that determines how to fit the chamber correction without changing the required train/test preprocessing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2e0ffd0c597144f52dc0f5585367cfcd206034a98988775c5108152373e7d984",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29222.13,
+      "usage_known": true,
+      "prompt_tokens": 35511,
+      "cached_tokens": 14976,
+      "completion_tokens": 1122
+    }
+  ]
+}

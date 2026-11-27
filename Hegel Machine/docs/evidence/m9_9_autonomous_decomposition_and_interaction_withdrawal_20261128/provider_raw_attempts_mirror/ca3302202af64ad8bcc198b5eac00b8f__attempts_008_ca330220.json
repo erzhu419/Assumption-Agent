@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca3302202af64ad8bcc198b5eac00b8f",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:25.673678+00:00",
+  "ended_at_utc": "2026-11-27T20:02:54.815655+00:00",
+  "request_sha256": "edc09f1e67d7f45743203e544dd19c8498e0df85a8e79205ea08552148197761",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61144,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37250,
+    "cached_tokens": 14976,
+    "completion_tokens": 1157
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\nds=item['dataset']; tr,te=ds['train'],ds['test']; diag=item['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']\\nout=m.solve_batch(ds); tau,th=out['estimated_taus'],out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25.0\\nbridge=m._calibration(ds['calibration_load_cells'])\\nx=m._features(tr,te); n=len(tr['lab_id']); hold=m._axial(te['hold_channel_raw'],bridge)\\ny0=m._chamber(tau,th,hold,x[n:],np.array([0.,1e-6]))[0]\\nassert np.max(abs(y0[:,0])) < 1e-12\\nerr=np.max(abs(y0[:,1]/1e-6-out['initial_rate_pred']))\\nassert err < 1e-4, err\\nprint('max initial derivative difference',err)\\nxd=m._features(diag,diag)[:len(diag['lab_id'])]\\nhd=m._axial(diag['hold_channel_raw'],bridge)\\ncd,rd=m._chamber(tau,th,hd,xd,t)\\nce=cd+diag['strain_0'][:,None]-diag['strain_curves_obs']; re=rd-diag['instant_rate_obs']\\ndef rmse(a): return float(np.sqrt(np.mean(a*a)))\\nslices=[]\\nfor name,group in [('lab',diag['lab_id']),('missing',np.isnan(diag['coupon_features_raw']).any(axis=1))]:\\n    for k in np.unique(group):\\n        i=group==k\\n        vals=(rmse(ce[i]),rmse(re[i])); slices.append(vals)\\n        print(name,k,int(i.sum()),'strain/rate RMSE',vals)\\nworst=tuple(np.max(slices,axis=0)); print('worst diagnostic slice RMSE',worst)\\nprint('worst diagnostic horizon RMSE',max(rmse(c) for c in ce.T))\\nassert worst[0]<.04 and worst[1]<.025, worst\\nq=m._coupon_inputs(tr,x[:n],bridge)\\ncurve=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    i=tr['lab_id']==lab\\n    ts,ws=m._fit(tuple(a[~i] for a in q),dt,t,curve[~i],rate[~i]); a,b=m._design(ts,tuple(z[i] for z in q),dt,t)\\n    print('held-out benchtop lab',lab,'strain/rate median absolute error',float(np.median(abs(a@ws-curve[i]))),float(np.median(abs(b@ws-rate[i]))),'max relative tau change',float(np.max(abs(ts/tau-1))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset/logarithmic drift -> H2 reset/square-root drift; worst-lab diagnostic RMSE is 0.01319 for strain and 0.00779 for initial rate, and the host probe reports deployment MAE of 0.000927 and 0.001323, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the chamber law on verification coupons\",\n      \"rejected_reason\": \"The exact candidate already passes the host scientific probe; only a material error on a supported slice would justify changing it.\"\n    }\n  ],\n  \"rationale\": \"Run the exact artifact in isolated Python. Check whether the predicted strain and initial rate agree at time zero, whether errors concentrate in a lab or among coupons with missing features, and whether withholding a benchtop lab destabilizes the fitted spectrum.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3ed94cedfe3b9ac0f078e6a737981215b7465edebd8ecbdf82318b5bc40ab1d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30300.33,
+      "usage_known": true,
+      "prompt_tokens": 37250,
+      "cached_tokens": 14976,
+      "completion_tokens": 1157
+    }
+  ]
+}

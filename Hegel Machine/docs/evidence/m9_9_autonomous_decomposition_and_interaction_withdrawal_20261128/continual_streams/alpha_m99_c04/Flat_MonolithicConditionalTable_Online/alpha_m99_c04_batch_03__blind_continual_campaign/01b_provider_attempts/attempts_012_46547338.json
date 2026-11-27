@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46547338fbd84d3a8037cefae7600da2",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:50.265498+00:00",
+  "ended_at_utc": "2026-11-27T19:54:19.687521+00:00",
+  "request_sha256": "2d3d692011df6e1fe7bcaa7aee54ad876acc66f72408f96948beb81cd435c398",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58981,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35168,
+    "cached_tokens": 14976,
+    "completion_tokens": 1195
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '84,152p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; x=cal['true_channel_loads']; y=cal['bridge_raw']; off,mat,terms=m._fit_bridge(cal)\\npred=off+x@mat+sum(x[:,j].prod(1)[:,None]*v for j,v in terms)\\ngood=np.linalg.norm(pred-y,axis=1)<.01\\nprint('excluded calibration rows',np.flatnonzero(~good))\\n# Select any extra quotient term using only the training side of each outer fold.\\nerrs=[]; extras=[]; stress=[]\\nfor fold in range(4):\\n held=np.arange(len(x))%4==fold; train=~held; test=held&good\\n b=m._fit_bridge({k:cal[k][train] for k in ('bridge_raw','true_channel_loads')}); o,L,terms=b\\n base=o+x@L+sum(x[:,j].prod(1)[:,None]*v for j,v in terms)\\n r=y-base; ok=train&(np.linalg.norm(r,axis=1)<.01)\\n A=np.column_stack([np.ones(len(x)),x]+[x[:,j].prod(1) for j,v in terms]); Q=np.column_stack([x[:,i]+sign*x[:,j] for i in range(4) for j in range(i+1,4) for sign in (-1,1)]+[x[:,i] for i in range(4)])\\n best=None\\n for a in (.1,1.,4.):\\n  for q in Q.T:\\n   h=A/(1+a*q[:,None]**2); h-=A@np.linalg.lstsq(A[ok],h[ok],rcond=None)[0]\\n   for v in h.T:\\n    norm=v[ok]@v[ok]\\n    if norm<1e-10: continue\\n    c=v[ok]@r[ok]/norm; gain=norm*(c@c)\\n    if best is None or gain>best[0]: best=(gain,v[:,None]*c)\\n errs.extend(r[test]); extras.extend((r-best[1])[test]); stress.extend(m._decode(y[test],b).sum(1)-x[test].sum(1))\\nfor name,e in [('cubic',errs),('quotient augmentation',extras),('decoded total stress',stress)]:\\n e=np.asarray(e); print(name,'held-out RMS',np.sqrt(np.mean(e**2)),'max abs',np.max(abs(e)))\\na=m._calibrate(d['train'],(off,mat,m._fit_bridge(cal)[2])); z,_=m._features(d['train'],d['test']); dt,t=d['past_dt'],d['eval_times']; tau,theta=m._fit(a,z,dt,t); C,R=m._design(a,z,dt,t,tau); ec=C@theta+a['strain_0'][:,None]-a['strain_curves_obs']; er=R@theta-a['instant_rate_obs']\\nfor k in np.unique(a['lab_id']):\\n ii=a['lab_id']==k; print('lab',k,'signed strain/rate median residual',np.median(ec[ii]),np.median(er[ii]))\\nfor entry in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n v=np.asarray(entry['facility_telemetry_trace']); print(entry['completed_campaign_short_name'],'facility above 1.5 counts',np.sum(v>1.5,axis=0).tolist())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse cubic bridge → facility-initial chamber law; worst held-out median absolute error was 0.01428 for strain and 0.01006 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay-mode, HJB, or classification checks\",\"rejected_reason\":\"The supplied task has no relay state, stochastic control equation, or classification labels; the relevant nuisance check is signed residual bias by lab.\"}],\"rationale\":\"Use held-out calibration points to test whether a pairwise rational correction improves on the cubic bridge. A material improvement would justify revising calibration; systematic signed residuals by lab would motivate checking feature alignment before changing the relaxation law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f39b73316c5992ca88e3778a6cebd700cd4892e3a941e251d4267a36fc545c3b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30593.03,
+      "usage_known": true,
+      "prompt_tokens": 35168,
+      "cached_tokens": 14976,
+      "completion_tokens": 1195
+    }
+  ]
+}

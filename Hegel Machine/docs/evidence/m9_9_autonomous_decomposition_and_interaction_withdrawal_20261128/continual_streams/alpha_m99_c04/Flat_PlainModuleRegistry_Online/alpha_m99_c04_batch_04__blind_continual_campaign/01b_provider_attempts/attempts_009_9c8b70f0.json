@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c8b70f077854dfabc6281c83bc921fe",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:01.270462+00:00",
+  "ended_at_utc": "2026-11-27T20:04:24.119191+00:00",
+  "request_sha256": "c6f2206d767a01a5530b2d4cb076261bc82ecb0734661ccbb255377723dab495",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31019,
+    "cached_tokens": 13696,
+    "completion_tokens": 904
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json,pickle,sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _design,_features\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; d=item['dataset']; c=calibrate_upstream(d); tr,te=c['train'],c['test']; dt,t=c['past_dt'],c['eval_times']; out=solve_batch(d); taus,w=out['estimated_taus'],out['hereditary_weights']; _,x=_features(tr,te)\\nassert .05 < taus[0] < taus[1] < 25\\nfor k,shape in zip(['estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'],[(2,),(7,),(len(x),len(t)),(len(x),)]):\\n assert out[k].shape == shape and np.isfinite(out[k]).all(),k\\np=te['past_channel_raw'].sum(-1); h=te['hold_channel_raw'].sum(-1); z=np.zeros((len(x),2))\\nfor j,dj in enumerate(dt):\\n a=np.exp(-dj/taus); z=a*z+(1-a)*p[:,j,None]\\ng=(h[:,None]-z)*w[:2]; drift=w[2]+x@w[3:]; expected=te['strain_0'][:,None]+g@(-np.expm1(-t[None,:]/taus[:,None]))+drift[:,None]*t\\nprint('explicit recurrence maximum absolute errors:',np.max(abs(expected-out['predicted_strain'])),np.max(abs(g@(1/taus)+drift-out['initial_rate_pred'])))\\nnp.testing.assert_allclose(expected,out['predicted_strain'],rtol=0,atol=1e-12); np.testing.assert_allclose(g@(1/taus)+drift,out['initial_rate_pred'],rtol=0,atol=1e-12)\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); v=np.array([r['facility_telemetry_trace'] for r in log]); print('facility mean values by record:'); print(np.round(v.mean(axis=1),4)); print('maximum within-trace pairwise drift for final plateau channels:'); print(np.round(np.ptp(v[-1],axis=0),4))\\nPY\\ntail -14 /tmp/hegel_continual_archive/alpha_m99_c04_batch_02_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 transfer the archived chamber correction -> H2 use the validated benchtop law unless the matching facility trace supplies a physical correction; worst held-out lab curve p90 error is 0.02310 and worst rate RMSE is 0.00780.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a correction to coupon telemetry\",\"rejected_reason\":\"The public data contain no deployment responses and show no consistent benchtop residual pattern attributable to telemetry.\"}],\"rationale\":\"Verify both outputs in an isolated process against an independently stepped recurrence. A discrepancy would identify a history-indexing or initial-rate error. Compare the absolute facility plateau levels with the one archived correction before deciding whether the log supports more than setting identification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cb24dd19e99341e00ea82c7ae32fbe105f338e60e838332350e32e34ddaf83e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24000.24,
+      "usage_known": true,
+      "prompt_tokens": 31019,
+      "cached_tokens": 13696,
+      "completion_tokens": 904
+    }
+  ]
+}

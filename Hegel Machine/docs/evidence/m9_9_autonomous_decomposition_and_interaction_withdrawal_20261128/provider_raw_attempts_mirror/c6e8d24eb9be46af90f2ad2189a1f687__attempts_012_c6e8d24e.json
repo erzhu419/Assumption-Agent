@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c6e8d24eb9be46af90f2ad2189a1f687",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:32.398110+00:00",
+  "ended_at_utc": "2026-11-27T19:51:55.798286+00:00",
+  "request_sha256": "bc7dc2698915266b0cc88a38fccb048d4ae2b7fdaedca6ad3eddad6d28012ff9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 82203,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42954,
+    "cached_tokens": 13696,
+    "completion_tokens": 892
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_release.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features,_predict\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\nd=item['dataset']; out=solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_weights']; t=d['eval_times']\\nc=calibrate_upstream(dict(d,test=item['campaign_diagnostics']))['test']; x=_features(c)\\np,r=_predict(c,x,tau,theta,d['past_dt'],t)\\nel=p+(theta[2]+x@theta[3:])[:,None]*(t+np.expm1(-t))-c['strain_curves_obs']; es=p-c['strain_curves_obs']; er=r-c['instant_rate_obs']\\nfor lab in np.unique(c['lab_id']):\\n    i=c['lab_id']==lab\\n    old,new,rate=(float(np.sqrt(np.mean(z[i]**2))) for z in (el,es,er))\\n    print(f'lab={lab} linear_strain_rmse={old:.6f} saturating_strain_rmse={new:.6f} rate_rmse={rate:.6f}')\\n    assert new<old\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: intrinsic chronological memory plus linear drift → H2: intrinsic memory plus one-second saturating chamber drift; the current candidate's worst diagnostic-lab RMSE is 0.01615 for strain and 0.02167 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit chamber memory or add a missingness-specific correction\",\n      \"rejected_reason\": \"The worst-lab residual is aligned with the drift amplitude, while the orthogonal RMSE is at most 0.003 across labs. The four missing-feature diagnostic rows do not justify overriding the specified imputation.\"\n    }\n  ],\n  \"rationale\": \"The bundle passed the schema and isolated-process checks, but the host rejected the prior structural-resolution probe. This read-only comparison changes only the drift kernel and tests whether it improves strain in every diagnostic lab. If any lab fails that comparison, leave the structural resolution open.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "9e74097e9c7ca5b1da5e0c967e3b7a791f74f57121d7d83a45d424ac9c433cc9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24525.74,
+      "usage_known": true,
+      "prompt_tokens": 42954,
+      "cached_tokens": 13696,
+      "completion_tokens": 892
+    }
+  ]
+}

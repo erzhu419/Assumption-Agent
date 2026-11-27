@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "91949e514c9d4a1281a9b1498fc0b008",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:54.352445+00:00",
+  "ended_at_utc": "2026-11-27T19:44:20.460984+00:00",
+  "request_sha256": "2b3e9f26a9c98355c7dee0f8f1b84e922176001d1dc7673f65093837e08cc55d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31605,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25402,
+    "cached_tokens": 13696,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/chamber_probe.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True)\\ns=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; tr=d['train']; te=d['test']; g=item['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; x,xt=s['_features'](tr,te); b=s['_bridge'](d['calibration_load_cells']); a,h=s['_material'](tr,b,x,dt,t)\\nif g is None: raise SystemExit('blind')\\n_,X=s['_features'](tr,g); p,l=s['_loads'](g,b); Y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; F,R=s['_basis'](a,p,l,X,dt,t); base=np.c_[F@h,R@h];\\ndef temporal(tau):\\n return np.r_[np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1][None,:]]\\ndef amplitudes(tau):\\n T=temporal(tau); return np.linalg.lstsq(T,Y.T,rcond=None)[0].T\\nfor seed in ([.65,3],[.5,6],[.8,12]):\\n fit=least_squares(lambda u:(amplitudes(np.exp(u))@temporal(np.exp(u)).T-Y).ravel(),np.log(seed),bounds=(np.log([.05,.05]),np.log([25,40]))); q=np.exp(fit.x);print('chamber apparent taus',q,'column rms',np.sqrt(np.mean(fit.fun.reshape(Y.shape)**2,axis=0)))\\nprint('base apparent taus',a,'free amps column rms',np.sqrt(np.mean((amplitudes(a)@temporal(a).T-Y)**2,axis=0)))\\ngap=R[:,:2]*a; drift=R[:,2:]@h[2:]; A=amplitudes(q); print('rows: hold,past end, feature drift, gap1, gap2, A1,A2,drift'); print(np.c_[l,p[:,-1],drift,gap,A]); print('corr base/correction'); print(np.corrcoef(np.c_[p,l,X,gap,drift,A,np.subtract(A,np.c_[gap*h[:2],drift])].T)[-6:,:14]);\\nfor k,v in d['calibration_load_cells']['single_channel_sweeps'].items():print(k,v[:12])\\nfor label in np.unique(tr['lab_id']):\\n for name,z in [('tr',tr),('te',te),('diag',g)]:\\n  r=z['ref_coupons'][z['lab_id']==label];print(label,name,np.median(r.mean(0)),np.median(r.std(0)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged deployment law → H2 chamber-specific dynamics; baseline chamber maximum error is 1.712 strain and 0.161 initial rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The fitted benchtop law transfers unchanged to deployment.\",\"empirical_witness\":\"Chamber median absolute strain error rises to 0.701 at t=4, while benchtop median absolute error stays below 0.012 at every horizon.\",\"causal_blanket_diagnosis\":\"A good benchtop fit does not identify the deployment chamber's memory and drift response.\",\"sublated_pivot\":\"Keep intrinsic material fitting on benchtop measurements and identify the deployment correction from verification coupons.\",\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Fit shared chamber time constants with free coupon amplitudes to distinguish altered temporal dynamics from changes in history and drift. Compare reference panels to see whether feature alignment could explain part of the residual.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "c2e367d72308003baefc013082a37fb1ed9223c21b1b8300574154579f719962",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27231.92,
+      "usage_known": true,
+      "prompt_tokens": 25402,
+      "cached_tokens": 13696,
+      "completion_tokens": 1050
+    }
+  ]
+}

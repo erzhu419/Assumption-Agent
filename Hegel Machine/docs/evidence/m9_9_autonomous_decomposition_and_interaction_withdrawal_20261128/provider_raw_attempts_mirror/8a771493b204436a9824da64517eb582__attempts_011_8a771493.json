@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8a771493b204436a9824da64517eb582",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:08:14.671058+00:00",
+  "ended_at_utc": "2026-11-27T20:08:37.922843+00:00",
+  "request_sha256": "a8d17c18f0a10fb60577bc306d33cc461654d10bc389adfa1806db9d95246495",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52194,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30847,
+    "cached_tokens": 13696,
+    "completion_tokens": 928
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.stats import spearmanr\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('batch',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; cal=m._up.calibrate_upstream(d); dn=m._dn\\ntr,te=cal['train'],cal['test']; lab=tr['lab_id']; st=tr['stratum']; dt,t=cal['past_dt'],cal['eval_times']; n=len(lab)\\nx=dn._features(tr,te); inputs=dn._coupon_inputs(tr,x[:n]); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; ec=np.empty_like(y); er=np.empty_like(r)\\nfor l in np.unique(lab):\\n g=lab==l; fit=~g\\n z,b=dn._fit(tuple(v[fit] for v in inputs),dt,t,y[fit],r[fit]); a,ar=dn._design(z,tuple(v[g] for v in inputs),dt,t)\\n ec[g]=a@b-y[g]; er[g]=ar@b-r[g]\\nfor l in np.unique(lab):\\n g=lab==l; print('lab',l,'median signed curve/rate',np.round([np.median(ec[g]),np.median(er[g])],5))\\nfor j in np.unique(st):\\n g=st==j; print('stratum',j,'median signed curve/rate',np.round([np.median(ec[g]),np.median(er[g])],5))\\nfor name,v in [('load',inputs[1]),('load history',inputs[0].mean(1)),*[(f'telemetry {j}',z) for j,z in enumerate(tr['aux_chamber_telemetry'].T)]]:\\n # Remove lab locations before comparing pooled rank correlations.\\n def center(a):\\n  b=a.copy()\\n  for l in np.unique(lab):\\n   g=lab==l; b[g]-=np.median(b[g])\\n  return b\\n print(name,'within-lab rho curve/rate',np.round([spearmanr(center(v),center(e)).statistic for e in (np.median(ec,axis=1),er)],3))\\nassert np.isfinite(ec).all() and np.isfinite(er).all()\\nPY\\nsed -n '/^def solve_batch/,$p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py | head -32\\ncat /holdout_task/_upstream_param_payload.json\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared two-branch material fit → H2 telemetry-matched chamber reset and mixed drift; worst held-out-lab horizon median absolute strain error is 0.0153 and worst P90 initial-rate error is 0.0187.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check whether signed held-out residuals reveal lab or stratum bias, or dependence on load, history, or nuisance telemetry that pooled errors could conceal. Compare the earlier alternate chamber law to confirm the telemetry distinction implies a change in prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d567d170a9d7b92523346f40eb5440f2d11c0ad9faca97a574d0b60966f8982f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24410.73,
+      "usage_known": true,
+      "prompt_tokens": 30847,
+      "cached_tokens": 13696,
+      "completion_tokens": 928
+    }
+  ]
+}

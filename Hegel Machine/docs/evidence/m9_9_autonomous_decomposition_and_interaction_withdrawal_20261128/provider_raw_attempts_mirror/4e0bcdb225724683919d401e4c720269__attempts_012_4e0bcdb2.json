@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e0bcdb225724683919d401e4c720269",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:00.271838+00:00",
+  "ended_at_utc": "2026-11-27T20:04:27.081271+00:00",
+  "request_sha256": "088c0127b377ce596fd27301da1a80435cf77a7b170b6fdc0bcf07cc5f19e236",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65387,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36864,
+    "cached_tokens": 14976,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nds=item['dataset']; tr,te=ds['train'],ds['test']; dg=item['campaign_diagnostics']; cal=ds['calibration_load_cells']; raw=cal['bridge_raw']; loads=cal['true_channel_loads']; t,dt=ds['eval_times'],ds['past_dt']; n=len(tr['lab_id']); x=m._features(tr,te); xd=m._features(dg,dg)[:len(dg['lab_id'])]; out=m.solve_batch(ds); ts0=out['estimated_taus']; b0=m._calibration(cal); q=np.max(abs(loads),axis=1); order=np.argsort(q,kind='stable'); rank=np.empty_like(order); rank[order]=np.arange(len(q)); split=np.minimum(3,4*rank//len(q)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; cy=dg['strain_curves_obs']-dg['strain_0'][:,None]; ry=dg['instant_rate_obs']; missing=np.isnan(dg['coupon_features_raw']).any(axis=1)\\ndef rm(a): return np.sqrt(np.mean(a*a))\\nfor k in range(4):\\n    held=split==k\\n    sub=dict(cal,bridge_raw=raw[~held],true_channel_loads=loads[~held]); b=m._calibration(sub)\\n    st=m._axial(raw[held],b)-loads[held].sum(axis=1); st0=m._axial(raw[held],b0)-loads[held].sum(axis=1)\\n    ts,ws=m._fit(m._coupon_inputs(tr,x[:n],b),dt,t,y,r)\\n    c,p=m._chamber(ts,ws,m._axial(dg['hold_channel_raw'],b),xd,t)\\n    slices=[dg['lab_id']==a for a in np.unique(dg['lab_id'])]+[missing,~missing]\\n    worst=np.max([(rm((c-cy)[i]),rm((p-ry)[i])) for i in slices],axis=0)\\n    print('held bridge amplitude quartile',k,'n',held.sum(),'load abs p90 (full/held)',np.round([np.quantile(abs(st0),.9),np.quantile(abs(st),.9)],6),'max tau relative shift',round(np.max(abs(ts/ts0-1)),6),'worst diagnostic strain/rate RMSE',np.round(worst,6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset with logarithmic drift -> H2 reset with square-root drift; the verified solver’s worst diagnostic slice is missing-feature coupons, with strain RMSE 0.02578 and initial-rate RMSE 0.01690.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber-law comparison\",\n      \"rejected_reason\": \"The held-out-lab audit already tested partial memory, pairwise interactions, and rational corrections without finding a material and consistent improvement.\"\n    },\n    {\n      \"option\": \"Test relay modes or within-batch balanced accuracy\",\n      \"rejected_reason\": \"The dataset has neither relay states nor class labels; lab-stratified strain and rate residuals are the applicable nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Withhold each measured bridge-load amplitude quartile in turn to detect a calibration range on which the fitted spectrum or chamber predictions depend disproportionately. If one range materially degrades both calibration and downstream predictions, inspect the bridge fit before changing the already verified chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1988c7dfc3e711eb0400c51ea8797cf37ee1aa3e8f755ae0019ab99186cc2325",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27957.21,
+      "usage_known": true,
+      "prompt_tokens": 36864,
+      "cached_tokens": 14976,
+      "completion_tokens": 1071
+    }
+  ]
+}

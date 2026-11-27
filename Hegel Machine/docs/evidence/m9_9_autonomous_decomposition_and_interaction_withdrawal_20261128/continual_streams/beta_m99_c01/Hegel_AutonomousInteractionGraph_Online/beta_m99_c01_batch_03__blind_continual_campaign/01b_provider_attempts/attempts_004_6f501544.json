@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f501544cb4d4190a567284fa84a6378",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:50.839841+00:00",
+  "ended_at_utc": "2026-11-27T19:52:18.671527+00:00",
+  "request_sha256": "bf83e2824c701c58457767f0fe8fada4b5c4cb32ee5623c58a0ad61c57e74ac2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 27407,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24857,
+    "cached_tokens": 5504,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; print('bank',type(b),[(k,np.shape(v)) for k,v in b.items()] if isinstance(b,dict) else [(type(v),list(v)) for v in b][:4]); x=c['ref_rosette']; y=c['raw_rosette']; n=len(x); amp=np.max(np.abs(y),axis=1); good=amp<5; print('largest row amplitudes',np.sort(amp)[-17:]); print('excluded',np.flatnonzero(~good)); print('bank examples', {k:np.asarray(v).ravel()[:10] for k,v in b.items()} if isinstance(b,dict) else '')\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); prev=None\\nfor e in (a.values() if isinstance(a,dict) else a):\\n t=np.asarray(e['facility_telemetry_trace']); print('telemetry',e.get('completed_campaign_short_name'),np.round(t.mean(0),4),np.round(t.std(0),4),'change',None if prev is None else np.round(np.sqrt(np.mean((t-prev)**2,axis=0)),4)); prev=t\\nfor model in ['linear','odd3','diag3','diag5','full2','full3','full3diag5']:\\n powers=[()]+[(i,) for i in range(4)]\\n if model=='odd3': powers += [(i,)*3 for i in range(4)]\\n if model in ('diag3','diag5'): powers += [(i,)*d for d in range(2,int(model[-1])+1) for i in range(4)]\\n if model.startswith('full'): powers += [idx for d in range(2,3 if model=='full2' else 4) for idx in combinations_with_replacement(range(4),d)]\\n if model=='full3diag5': powers += [(i,)*d for d in (4,5) for i in range(4)]\\n D=np.column_stack([np.prod(x[:,idx],axis=1) for idx in powers]); pred=np.zeros_like(y); fold=np.random.default_rng(817).permutation(n)%5\\n for k in range(5):\\n  tr=good & (fold!=k); pred[fold==k]=D[fold==k]@np.linalg.lstsq(D[tr],y[tr],rcond=None)[0]\\n err=pred-y; coef=np.linalg.lstsq(D[good],y[good],rcond=None)[0]; print(model,'cv rmse',np.round(np.sqrt(np.mean(err[good]**2,axis=0)),7),'max',np.max(np.abs(err[good])),'fit residual quantiles',np.quantile(np.linalg.norm((D@coef-y)[good],axis=1),[0.1,.5,.9,1]))\\n if model in ['odd3','diag5','full3']: print([(p,np.round(v,5).tolist()) for p,v in zip(powers,coef) if np.max(np.abs(v))>0.01])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine mixing -> H2 sparse nonlinear rosette transfer; the axis sweeps show curvature, but held-out error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit each axis sweep independently\",\"rejected_reason\":\"The fourth axis sweep contains several gross spikes, and axis-only fits cannot identify interaction terms.\"}],\"rationale\":\"Compare sparse diagonal and mixed bases on held-out clean sweep rows. If mixed terms do not improve prediction, keep the simpler model; if structured residuals remain, use them to identify the missing transfer terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "8dc3d2d6739739b2094958b8de8a11208833d20cd2693939b50118be9a1be39f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27791.42,
+      "usage_known": true,
+      "prompt_tokens": 24857,
+      "cached_tokens": 5504,
+      "completion_tokens": 1030
+    }
+  ]
+}

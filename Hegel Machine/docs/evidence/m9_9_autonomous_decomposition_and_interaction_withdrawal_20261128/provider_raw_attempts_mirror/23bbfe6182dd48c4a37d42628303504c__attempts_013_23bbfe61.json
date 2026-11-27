@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "23bbfe6182dd48c4a37d42628303504c",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:39.999984+00:00",
+  "ended_at_utc": "2026-11-27T19:42:08.635942+00:00",
+  "request_sha256": "27f60ac2f4a8b25419d57333d5dd059ce5f8344d020ea116e6e3fbd9e0e83b54",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38894,
+    "cached_tokens": 14976,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_v01.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('def _fit(train, x, stress, dt, times):', 'def _fit_initial(train, x, stress, dt, times):', 1)\\nanchor = 'def _chamber_response('\\nassert s.count(anchor) == 1\\ns = s.replace(anchor, '''def _fit(train, x, stress, dt, times):\\n    taus, theta = _fit_initial(train, x, stress, dt, times)\\n    curve_obs = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    rate_obs = train['instant_rate_obs']\\n\\n    def residuals(p):\\n        curves, rates = _design(train, x, stress, dt, times, np.exp(p[:2]))\\n        return curves @ p[2:] - curve_obs, rates @ p[2:] - rate_obs\\n\\n    start = np.r_[np.log(taus), theta]\\n    curve_err, rate_err = residuals(start)\\n    curve_scale = max(_mad(curve_err), 1e-10)\\n    rate_scale = max(_mad(rate_err), 1e-10)\\n    horizon_scale = np.clip([_mad(col) for col in curve_err.T],\\n                            .75 * curve_scale, 1.5 * curve_scale)\\n\\n    def objective(p):\\n        c, r = residuals(p)\\n        return np.r_[(c / horizon_scale).ravel(), r / rate_scale]\\n\\n    lower = np.r_[np.log([.05000001] * 2), np.full(7, -np.inf)]\\n    upper = np.r_[np.log([24.999999] * 2), np.full(7, np.inf)]\\n    p = least_squares(objective, start, bounds=(lower, upper),\\n                      loss='cauchy', f_scale=2.5, x_scale='jac').x\\n    order = np.argsort(p[:2])\\n    return np.exp(p[:2][order]), np.r_[p[2:4][order], p[4:]]\\n\\n\\n''' + anchor)\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nfor path in ('/tmp/batch_solver_v01.py', '/holdout_task/batch_solver.py'):\\n    spec=importlib.util.spec_from_file_location('candidate',path)\\n    m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n    o=m.solve_batch(d)\\n    assert all(np.isfinite(v).all() for v in o.values())\\n    assert .05 < o['estimated_taus'][0] < o['estimated_taus'][1] < 25\\n    print(path, 'taus', o['estimated_taus'], 'theta', o['hereditary_weights'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 one strain noise scale → H2 bounded horizon-specific scales; worst held-out chamber-lab early/late/rate RMSE improved from 0.008057/0.013739/0.010003 to 0.007871/0.013304/0.009793.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Trim strain outliers and refit\",\"rejected_reason\":\"Trimming improved worst-lab late strain but worsened early strain and initial rate.\"}],\"rationale\":\"The horizon-scaled fit improved all three worst-lab metrics but slightly worsened the complete-feature slice. Verify the exact challenger and compare its spectrum and prediction errors with the archived baseline before deciding which to retain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "57d70e9f4ae546670e914f6f0d4f1d0da72f631c8f610babd1b63e760ef8298d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29719.15,
+      "usage_known": true,
+      "prompt_tokens": 38894,
+      "cached_tokens": 14976,
+      "completion_tokens": 1172
+    }
+  ]
+}

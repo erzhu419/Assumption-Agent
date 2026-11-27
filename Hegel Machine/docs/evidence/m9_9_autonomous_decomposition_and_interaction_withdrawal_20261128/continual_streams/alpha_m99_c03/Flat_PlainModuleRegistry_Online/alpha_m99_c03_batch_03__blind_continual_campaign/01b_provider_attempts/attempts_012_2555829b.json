@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2555829b24cc4b1f91b97ccf8afaaad6",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:34.620787+00:00",
+  "ended_at_utc": "2026-11-27T19:58:16.006935+00:00",
+  "request_sha256": "33fa5d44af0a0c2173ad242f4de70432fef29320c25ee041ab0167313e98e805",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63028,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37116,
+    "cached_tokens": 14976,
+    "completion_tokens": 1752
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncp /holdout_task/batch_solver.py /tmp/full_cubic_solver.py\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/full_cubic_solver.py')\\ns = p.read_text()\\nold = '    return np.linalg.lstsq(a[good], raw[good], rcond=None)[0]'\\nnew = '''    coef = np.linalg.lstsq(a[good], raw[good], rcond=None)[0]\\n    # Screen below the observed separation between noise and bridge terms,\\n    # then refit each channel with only its supported terms.\\n    for j in range(raw.shape[1]):\\n        keep = abs(coef[:, j]) > 0.01\\n        keep[0] = True\\n        coef[~keep, j] = 0.0\\n        coef[keep, j] = np.linalg.lstsq(a[good][:, keep], raw[good, j], rcond=None)[0]\\n    return coef'''\\nassert s.count(old) == 1\\nPath('/tmp/sparse_cubic_solver.py').write_text(s.replace(old, new))\\nPY\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\npaths = ['/tmp/full_cubic_solver.py', '/tmp/sparse_cubic_solver.py']\\nmodels = [runpy.run_path(p) for p in paths]\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\na = models[0]['_bridge_basis'](x)\\nouter = np.argsort(np.linalg.norm(x, axis=1))[-12:]\\nfolds = [outer] + [np.setdiff1d(np.arange(i, len(x), 5), outer) for i in range(5)]\\nerrors = np.full((2, len(x)), np.nan)\\nfor held in folds:\\n    train = np.ones(len(x), bool); train[held] = False\\n    cal = {'true_channel_loads': x[train], 'bridge_raw': y[train]}\\n    full = models[0]['_calibration'](cal)\\n    clean = held[np.linalg.norm(a[held] @ full - y[held], axis=1) < 1]\\n    for i, m in enumerate(models):\\n        b = m['_calibration'](cal)\\n        recovered = m['_recover_loads'](y[clean], b)\\n        errors[i, clean] = (recovered - x[clean]).sum(axis=1)\\nrmse = lambda e: np.sqrt(np.nanmean(e**2, axis=1))\\nall_err, high_err = rmse(errors), rmse(errors[:, outer])\\nprint('Inverse axial RMSE (full, sparse): all', all_err, 'high load', high_err)\\nprint('High-load worst axial absolute error:', np.nanmax(abs(errors[:, outer]), axis=1))\\nif np.all([all_err[1] < all_err[0], high_err[1] < high_err[0]]):\\n    Path('/holdout_task/batch_solver.py').write_bytes(Path(paths[1]).read_bytes())\\n    print('Promoted sparse bridge')\\nelse:\\n    print('Retained full cubic: sparse fit did not improve both inverse stress slices')\\nPY\\ncd /holdout_task\\npython3 validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\ntr, te = d['train'], d['test']; t, dt = d['eval_times'], d['past_dt']\\nout = m['solve_batch'](d)\\nfor k, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(te['lab_id']), len(t)), 'initial_rate_pred': (len(te['lab_id']),)}.items():\\n    assert out[k].shape == shape and np.isfinite(out[k]).all(), k\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\ncoef = m['_calibration'](d['calibration_load_cells'])\\nfor label, block in [('train', tr), ('test', te)]:\\n    for key in ['past_channel_raw', 'hold_channel_raw']:\\n        raw = block[key].reshape(-1, 4)\\n        load = m['_recover_loads'](raw, coef)\\n        e = np.linalg.norm(m['_bridge_basis'](load) @ coef - raw, axis=1).max()\\n        print(label, key, 'worst inversion residual', e)\\n        assert e < 1e-7\\nx = m['_features'](tr, te)[:len(tr['lab_id'])]\\nu = m['_coupon_inputs'](tr, x, coef)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]; r = tr['instant_rate_obs']\\nmetrics = []\\nfor lab in np.unique(tr['lab_id']):\\n    h = tr['lab_id'] == lab\\n    ts, w = m['_fit'](tuple(a[~h] for a in u), dt, t, y[~h], r[~h])\\n    a, b = m['_design'](ts, tuple(a[h] for a in u), dt, t)\\n    e = abs(a @ w - y[h]); q = abs(b @ w - r[h])\\n    metrics.append([np.nanmedian(e[:, :3]), np.nanmedian(e[:, -3:]), np.nanmedian(q)])\\nprint('Worst held-lab early strain, late strain, rate median AE:', np.max(metrics, axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full cubic bridge) -> H2 (sparse coupled cubic bridge); held-out high-load forward raw-sum RMSE drops from 0.000809 to 0.000284, with inverse axial error still to be checked.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational pairwise coupling\",\n      \"rejected_reason\": \"It did not improve held-out forward errors over the sparse cubic.\"\n    },\n    {\n      \"option\": \"Add lab-specific response offsets\",\n      \"rejected_reason\": \"Held-lab signed residuals vary in sign and do not establish a transferable offset.\"\n    }\n  ],\n  \"rationale\": \"A better forward fit does not guarantee better recovered physical stress. Promote the sparse bridge only if it lowers held-out inverse axial RMSE both overall and at high loads, then verify that the exact artifact still inverts every public operating point and preserves grouped strain and rate performance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "de681d2237b13b9bcef7de876f3bd43dc859dd06006fe91256303eded6d0a637",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42504.47,
+      "usage_known": true,
+      "prompt_tokens": 37116,
+      "cached_tokens": 14976,
+      "completion_tokens": 1752
+    }
+  ]
+}

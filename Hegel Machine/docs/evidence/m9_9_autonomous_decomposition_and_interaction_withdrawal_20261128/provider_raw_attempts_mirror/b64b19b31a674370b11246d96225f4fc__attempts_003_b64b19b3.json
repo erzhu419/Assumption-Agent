@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b64b19b31a674370b11246d96225f4fc",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:48.228207+00:00",
+  "ended_at_utc": "2026-11-27T19:57:04.301416+00:00",
+  "request_sha256": "7e7b2550045f1655b65e2ef64ed3f06f3988887bed983942bba79cabf00adc9e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22100,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22076,
+    "cached_tokens": 13696,
+    "completion_tokens": 560
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log structure:',list(p) if isinstance(p,dict) else len(p)); seq=p if isinstance(p,list) else next((v for v in p.values() if isinstance(v,list)),[])\\nfor e in seq[-4:]:\\n print('entry fields',list(e) if isinstance(e,dict) else type(e)); print('apparatus summary',str({k:v for k,v in e.items() if any(s in k.lower() for s in ('apparatus','transduc','chamber','campaign','setting'))})[:800] if isinstance(e,dict) else str(e)[:180])\\nb=pickle.load(open('public_batch.pkl','rb'));print('batch size',len(b));c=b[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads'];y=c['bridge_raw'];print('support counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True));print('first rows (true,raw)');print(np.c_[x,y][:12].round(5));print('last rows');print(np.c_[x,y][-5:].round(5));\\nfor s in ('train','test'):\\n d=b[0]['dataset'][s]; z=np.vstack((d['past_channel_raw'].reshape(-1,4),d['hold_channel_raw']));print(s,'raw quantiles',np.quantile(z,[0,.5,1],axis=0).round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 nonlinear forward calibration; held-out residuals not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The prior output was truncated. Inspect just the calibration support and apparatus metadata: sparse or correlated load settings would change which nonlinear terms can be identified and how validation folds should be split.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3f31af8d2b1a1a69841a7c74003fc2f89983f7c414084968cb127b660b62c349",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17228.95,
+      "usage_known": true,
+      "prompt_tokens": 22076,
+      "cached_tokens": 13696,
+      "completion_tokens": 560
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e77f429d45074217a4c57246613978a1",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:13:12.151224+00:00",
+  "ended_at_utc": "2026-11-27T20:13:46.079071+00:00",
+  "request_sha256": "9a168b3ca419d56f821326d6d3962659e40d1a4aa1a03a3691916b20edd290ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45841,
+    "cached_tokens": 14976,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_rankone.py <<'PY'\\nfrom chamber_probe import *\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\npast,H,F=inp_d; lab=d['lab_id']; missing=np.isnan(d['coupon_features_raw']).any(axis=1)\\nU=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); T=np.r_[t,1.]; R=np.c_[yd,rd]-H[:,None]*(U@th[:2]); l,s,v=np.linalg.svd(R,full_matrices=False); curve=v[0]/v[0,-1]; aim=R@curve/(curve@curve)\\nprint('rank-one temporal response',curve.round(5),'basis weights',np.linalg.lstsq(np.c_[U,T],curve,rcond=None)[0].round(5)); print('curve relative to t', (curve/T).round(5))\\nfor label,f in [('two material modes',np.c_[U,T]), ('fast mode',np.c_[U[:,0],T]), ('slow mode',np.c_[U[:,1],T])]:\\n q=np.linalg.lstsq(f,curve,rcond=None)[0]; print(label,q,score(curve-f@q))\\ndef ex(p):\\n k=np.exp(p[0]); return np.r_[-np.expm1(-t/k),1/k]\\ndef err(p):\\n f=np.c_[ex(p),T]; return curve-f@np.linalg.lstsq(f,curve,rcond=None)[0]\\nfit=least_squares(err,[0]); print('single pole',np.exp(fit.x),score(fit.fun))\\n_,G=m._design(tau,inp_d,dt,t); z=H[:,None]-G[:,:2]*tau; r=F@th[2:]; tel=d.get('aux_chamber_telemetry'); raw=d['coupon_features_raw']; names=['r','hold','z0','z1',*[f'p{i}' for i in range(past.shape[1])],*[f'x{i}' for i in range(4)]]; V=np.c_[r,H,z,past,F[:,1:]]\\nif tel is not None:\\n V=np.c_[V,tel]; names.extend(f'aux{i}' for i in range(tel.shape[1]))\\nfor label,xnew in [('train,test,diag',xd),('train,diag',xd2)]:\\n rnew=th[2]+xnew@th[3:]; c=np.linalg.lstsq(np.c_[rnew,np.ones(len(rnew))][~missing],aim[~missing],rcond=None)[0]; print(label,c,score(aim-np.c_[rnew,np.ones(len(rnew))]@c))\\nprint('index lab stratum r target residual rawx and telemetry'); print(np.c_[np.arange(len(r)),lab,d['stratum'],r,aim,aim-1.2*r,raw,*([tel] if tel is not None else [])].round(4))\\nV0=np.c_[np.ones(len(r)),r]; terms=[j for k in (1,2,3) for j in combinations_with_replacement(range(len(names)),k) if k<3 or (0 in j)]; W=np.column_stack([np.prod(V[:,j],axis=1) for j in terms]); remaining=np.linalg.norm(W-V0@np.linalg.lstsq(V0,W,rcond=None)[0],axis=0)>1e-8; W=W[:,remaining]; terms=[k for k,keep in zip(terms,remaining) if keep]; cand=[]\\nfor k,term in enumerate(terms):\\n M=np.c_[V0,W[:,k]]; e=np.empty(len(r));\\n for g in np.unique(lab):\\n  mask=lab==g; e[mask]=aim[mask]-M[mask]@np.linalg.lstsq(M[~mask],aim[~mask],rcond=None)[0]\\n c=np.linalg.lstsq(M,aim,rcond=None)[0]; cand.append((np.sqrt(np.mean(e**2)),np.max(abs(e)),tuple(names[i] for i in term),c.round(5).tolist(),np.sqrt(np.mean((aim-M@c)**2))))\\nprint('top single additions, LOLO (selection not nested)'); print(*sorted(cand)[:15],sep='\\\\n'); print('top in-sample'); print(*sorted(cand,key=lambda x:x[-1])[:10],sep='\\\\n')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_rankone.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fast-only withdrawal → H2 full withdrawal followed by one chamber response; the second singular value falls from 0.560 to 0.0183, while the current interaction proxy still has 0.0968 worst complete-feature horizon RMSE in held-out labs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit the temporal response independently at each horizon\",\n      \"rejected_reason\": \"Full memory withdrawal leaves a rank-one signal above noise, so one time response can be tested against both strain and initial rate.\"\n    }\n  ],\n  \"rationale\": \"Separate the nearly rank-one response into its time shape and one amplitude per coupon. If the time shape is stable but the amplitude misses, focus the next model on drift scaling, feature preparation, or a low-order interaction rather than adding relaxation branches.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "73c5a77f765b73f336d80b90b78ed1169a1da6a2f47e3b68cd10d64549152318",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35093.87,
+      "usage_known": true,
+      "prompt_tokens": 45841,
+      "cached_tokens": 14976,
+      "completion_tokens": 1418
+    }
+  ]
+}

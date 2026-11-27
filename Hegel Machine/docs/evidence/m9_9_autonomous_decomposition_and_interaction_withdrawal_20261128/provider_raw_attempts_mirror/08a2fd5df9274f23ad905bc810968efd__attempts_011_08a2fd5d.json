@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "08a2fd5df9274f23ad905bc810968efd",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:48.594012+00:00",
+  "ended_at_utc": "2026-11-27T19:53:21.120906+00:00",
+  "request_sha256": "aa1c3df297ba20924e8e1fc9f6e780a5e659fd95b61ab0788bbd543e208401f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59629,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35453,
+    "cached_tokens": 14976,
+    "completion_tokens": 1338
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np = '/holdout_task/batch_solver.py'\\ns = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; raw = c['bridge_raw']; y = c['true_channel_loads']\\npeak = np.max(abs(raw), axis=1); ok = peak < 8\\nprint('raw peak max nominal / min offset:', peak[ok].max(), peak[~ok].min())\\na = m._bridge_terms(y)\\nres = raw - a @ m._bridge(c)\\nprint('offset mean by channel:', res[~ok].mean(0).round(5), 'max deviation:', np.max(abs(res[~ok] - res[~ok].mean(0))))\\nfold = np.random.default_rng(17).permutation(len(y)) % 5\\nij = list(itertools.combinations(range(4), 2))\\ndiff = np.column_stack([y[:, i] - y[:, j] for i,j in ij]); sums = np.column_stack([y[:, i] + y[:, j] for i,j in ij])\\nextra = np.column_stack([y*y, diff*diff, diff**3, sums**3, *[np.prod(y[:, k], axis=1) for k in itertools.combinations(range(4),3)]])\\nfor name, candidates in [('nominal',[a]), ('expanded pair/triple',[np.column_stack([a,extra])]), ('rational',[a / (1 + k*q[:, None]**2) for q in np.column_stack([y,diff,sums]).T for k in (0.001,0.01,0.1)])]:\\n    errors = []\\n    for j in range(5):\\n        tr = ok & (fold != j); va = ok & (fold == j)\\n        def inner_score(x):\\n            return sum(np.sum((x[b] @ np.linalg.lstsq(x[tr & ~b], raw[tr & ~b], rcond=None)[0] - raw[b])**2) for f in range(5) if f != j for b in [tr & (fold == f)])\\n        x = min(candidates, key=inner_score) if len(candidates)>1 else candidates[0]\\n        e = x[va] @ np.linalg.lstsq(x[tr], raw[tr], rcond=None)[0] - raw[va]\\n        errors.append((np.sqrt(np.mean(e**2)),np.sqrt(np.mean(e.sum(1)**2))))\\n    print(name, 'worst fold channel / summed forward RMSE', np.max(errors,axis=0))\\ntrain,test = d['train'],d['test']; x,_ = m._features(train,test)\\npast,hold = m._loads(train,m._bridge(c)); dt,t=d['past_dt'],d['eval_times']; curve=train['strain_curves_obs']-train['strain_0'][:,None]; rate=train['instant_rate_obs']\\nce=np.empty_like(curve); re=np.empty_like(rate)\\nfor lab in np.unique(train['lab_id']):\\n    b=train['lab_id']==lab; a=~b\\n    tau,theta=m._fit(x[a],past[a],hold[a],dt,t,curve[a],rate[a]); u,v=m._design(tau,x[b],past[b],hold[b],dt,t)\\n    ce[b]=u@theta-curve[b]; re[b]=v@theta-rate[b]\\nfor name, groups in [('stratum', train['stratum']), ('hold load tertile', np.digitize(hold,np.quantile(hold,[1/3,2/3])))]:\\n    for k in np.unique(groups):\\n        b=groups==k; print(name,k,'n',b.sum(),'median signed curve early/late and rate',np.round([np.median(ce[b,:3]),np.median(ce[b,-3:]),np.median(re[b])],6))\\nz=m.solve_batch(d); assert all(np.isfinite(v).all() for v in z.values())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: coupled cubic bridge with baseline chamber mechanics → H2: retain it unless an expanded bridge basis improves held-out error or coupon slices reveal systematic drift; worst held-out inverse total-load RMSE is 0.0002344.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB operators, or classification balanced accuracy\",\n      \"rejected_reason\": \"The documented system is continuous hereditary regression with no relay state, stochastic control operator, or class labels. Signed held-out residuals by stratum, load, and time can reveal the nuisance bias relevant here.\"\n    }\n  ],\n  \"rationale\": \"Check whether the three offset sweeps are cleanly separated, whether pairwise, triple, or rational terms reduce held-out calibration error beyond the measurement floor, and whether early or late strain or onset rate has systematic bias in real coupon slices. Change the bridge or drift model only if those tests identify a specific defect.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f753d886e4f9c7b0f1bc8c2e6d6a5da04c773ff320bb791145b18925248feb86",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33641.91,
+      "usage_known": true,
+      "prompt_tokens": 35453,
+      "cached_tokens": 14976,
+      "completion_tokens": 1338
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbecfc1421d84225a9f7cb5e3a4ae6b9",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:47.863964+00:00",
+  "ended_at_utc": "2026-11-27T19:54:25.676193+00:00",
+  "request_sha256": "beccd9af681a6eabf4e630c53cdad5362696828f2892cdb5f20399b487a62366",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 36715,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27651,
+    "cached_tokens": 13696,
+    "completion_tokens": 1588
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nprint('Calibration fields:', sorted(c)); print('Dataset fields:', sorted(d))\\nb = u._fit(x, y); r = np.linalg.norm(u._design(x) @ b - y, axis=1)\\nprint('Residual gap and excluded spikes:', np.sort(r)[-6:])\\nclean = r < .01\\naxis = np.count_nonzero(x, axis=1) == 1\\nedge = np.max(np.abs(x), axis=1) > 1.3\\ncontrast = np.ptp(x, axis=1) >= np.quantile(np.ptp(x[clean & ~axis], axis=1), .75)\\nslices = {'axis': axis, 'mixed-edge': ~axis & edge, 'opposing-load': ~axis & contrast, 'mixed-interior': ~axis & ~edge}\\nlag = x - np.roll(x, -1, axis=1)\\na0 = u._design(x)\\n# Add rational departures to the current basis, rather than requiring them to replace it.\\na1 = np.column_stack((a0, x**5 / (1 + .2*x*x), lag**3 / (1 + .2*lag*lag)))\\ndef fit(A, Y):\\n    coef = np.linalg.lstsq(A, Y, rcond=None)[0]\\n    for _ in range(15):\\n        e = np.linalg.norm(Y - A @ coef, axis=1)\\n        w = 1 / np.hypot(1, e / max(2*np.median(e), 1e-5))\\n        coef = np.linalg.lstsq(A*w[:, None], Y*w[:, None], rcond=None)[0]\\n    return coef\\nrng = np.random.default_rng(261128); fwd = [[], []]; inv = []\\nfor _ in range(5):\\n    order = np.r_[rng.permutation(np.flatnonzero(axis)), rng.permutation(np.flatnonzero(~axis))]\\n    fold = np.empty(len(x), int); fold[order] = np.arange(len(x)) % 5\\n    e = [np.zeros_like(y), np.zeros_like(y)]; z = np.zeros_like(x)\\n    for k in range(5):\\n        tr = fold != k; te = ~tr & clean\\n        for j, A in enumerate((a0, a1)):\\n            coef = fit(A[tr], y[tr]); e[j][te] = A[te] @ coef - y[te]\\n        z[te] = u._invert(y[te], u._fit(x[tr], y[tr])) - x[te]\\n    for dest, row in zip(fwd, e): dest.append(row)\\n    inv.append(z)\\nfor name, mask in slices.items():\\n    mask = mask & clean\\n    if not np.any(mask): continue\\n    p, q = (np.sqrt(np.mean(np.asarray(e)[:, mask]**2)) for e in fwd)\\n    z = np.asarray(inv)[:, mask]; inv_rms = np.sqrt(np.mean(z**2)); summed = np.sqrt(np.mean(z.sum(axis=-1)**2))\\n    print(f'{name}: n={mask.sum()}, forward RMS polynomial={p:.8g}, rational-augmented={q:.8g}, inverse RMS={inv_rms:.8g}, total-load RMS={summed:.8g}')\\n    assert inv_rms < 5e-4 and summed < 1e-3\\nout = u.calibrate_upstream(d)\\nfor name in ('train','test','chamber_verification_trials'):\\n    split = d.get(name)\\n    if split is None: continue\\n    print(name, 'fields:', sorted(split))\\n    if 'lab_id' not in split: continue\\n    for lab in np.unique(split['lab_id']):\\n        keep = split['lab_id'] == lab\\n        if not np.any(keep): continue\\n        replay = max(np.max(np.abs(u._design(out[name][field][keep].reshape(-1,4)) @ b - split[field][keep].reshape(-1,4))) for field in u._CHANNEL_FIELDS)\\n        print(f'{name} lab={lab}: n={keep.sum()}, max replay residual={replay:.4g}')\\n        assert replay < 1e-9\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine mixing) → H2 (quadratic coupling plus channel-wise cubics); existing worst held-out inverse RMS is 0.000115 per channel and 0.000300 for total load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or drift operators as if they were upstream requirements\",\n      \"rejected_reason\": \"The upstream contract is a static continuous calibration from paired loads and bridge readings, not a relay controller, classifier, or dynamical solver.\"\n    }\n  ],\n  \"rationale\": \"Compare rational and pair-difference terms on held-out measured loads to detect systematic curvature the polynomial misses. Revisit the inverse if the opposing-load slice fails, and inspect any lab-specific replay failure before changing the calibration. Lab replay measures numerical convergence, not lab-specific calibration accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d347df6d65d3cfd4c269371ace061d745fd151942ed65ac3e9bfe1b540288fcd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38983.1,
+      "usage_known": true,
+      "prompt_tokens": 27651,
+      "cached_tokens": 13696,
+      "completion_tokens": 1588
+    }
+  ]
+}

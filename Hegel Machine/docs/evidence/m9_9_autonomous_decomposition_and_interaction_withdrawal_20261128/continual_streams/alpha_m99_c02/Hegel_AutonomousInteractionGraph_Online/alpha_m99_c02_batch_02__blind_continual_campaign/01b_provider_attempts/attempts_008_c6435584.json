@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c643558450374ac9a3fb6db2d6261c79",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:00.414962+00:00",
+  "ended_at_utc": "2026-11-27T19:46:26.426425+00:00",
+  "request_sha256": "e98b95416ef6182fd2af44f7087ef3ca37a18b5d1e474496735bb4778b17f45c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37800,
+    "cached_tokens": 13696,
+    "completion_tokens": 1015
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_lab.py <<'PY'\\nimport contextlib,io,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): v=runpy.run_path('/tmp/chamber_structure.py')\\np,l,a,h,t,dt,Y,g,tr,te,align=(v[k] for k in ('p','l','a','h','t','dt','Y','g','tr','te','align'))\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nb=v['b']; d=v['s']; cal=v['v']['d']['calibration_load_cells']; raw=cal['bridge_raw']; ce=raw@b[1:]+b[0]-cal['true_channel_loads'].sum(1); print('cal residual RMS/max',np.std(ce),max(abs(ce))); print('aux summaries',[(x['aux_chamber_telemetry'].mean(0),x['aux_chamber_telemetry'].std(0)) for x in (tr,te)])\\nfor name,X in [('diag',align([g])),('joint',align([tr,te,g])[-len(l):]),('train_test',np.load('/tmp/chamber_train_test.npz')['X'])]:\\n r=h[2]+X@h[3:]; labs=np.eye(4)[g['lab_id']]; missing=np.isnan(g['coupon_features_raw']); U=np.c_[np.ones(len(l)),l,p,r];\\n for mode,D in [('base',U),('lab',np.c_[U,labs[:,1:]]),('lab+missing',np.c_[U,labs[:,1:],missing[:,missing.any(0)]]),('lab+r2',np.c_[U,labs[:,1:],r*r])]:\\n  C=np.linalg.lstsq(D,Y,rcond=None)[0]; E=Y-D@C; Q,S,_=np.linalg.svd(D,full_matrices=False); hat=np.sum(Q[:,S>1e-9]**2,axis=1); ok=hat<.99999; L=E[ok]/(1-hat[ok,None]); print(name,mode,'RMSE',np.sqrt(np.mean(E**2)),np.sqrt(np.mean(L**2)),np.max(abs(L)),'rate',np.sqrt(np.mean(L[:,-1]**2)),'valid',sum(ok),'last coefficients',C[:,-2]);\\nprint('diagnostic missing locations',np.argwhere(np.isnan(g['coupon_features_raw'])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_lab.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic' | head -8\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 residual chamber dynamics → H2 lab-dependent feature coordinates plus chamber dynamics; current worst-horizon leave-one-coupon-out RMSE is 0.0193 for strain and 0.0195 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add another relaxation mode\",\n      \"rejected_reason\": \"The dominant residual follows the existing filtered drift response and clusters by lab; another time constant would not explain that coupon dependence.\"\n    }\n  ],\n  \"rationale\": \"Measure whether lab alignment, missing features, or drift curvature explains the held-out residual. Use lab offsets only to diagnose alignment error, not as deployment coefficients unless they transfer under the specified joint normalization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "39139a43ce178b2cee5c0fc6ce32dceb5911b6dbadce104f7a15920db8d99c1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27097.44,
+      "usage_known": true,
+      "prompt_tokens": 37800,
+      "cached_tokens": 13696,
+      "completion_tokens": 1015
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6389dfc731f743878d3d9247c3e946d3",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:29.039305+00:00",
+  "ended_at_utc": "2026-11-27T19:33:03.790233+00:00",
+  "request_sha256": "8f20124ff8fd5474b7517d6ede8ff202a37aadc65781dc70968e309dd2f25884",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34496,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28983,
+    "cached_tokens": 14976,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open(p+'public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); dt=np.asarray(d['past_dt']); t=np.asarray(d['eval_times']); x=m._features(tr,te); bridge=m._calibration(d['calibration_load_cells']); c=m._coupon_inputs(tr,x[:n],bridge); ce=m._coupon_inputs(te,x[n:],bridge)\\nout=m.solve_batch(d); tau=out['estimated_taus']; th=out['hereditary_weights']; assert 0.05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values())\\n# Compare the compact memory formula and both forecasts with an independent chronological implementation.\\npast,hold,drift=ce; z=np.zeros((len(hold),2));\\nfor j,delta in enumerate(dt):\\n g=np.exp(-delta/tau); z=g*z+(1-g)*past[:,j,None]\\ngap=hold[:,None]-z; amp=gap*th[:2]; slope=drift@th[2:]; expected=te['strain_0'][:,None]+amp@(1-np.exp(-t[None,:]/tau[:,None]))+slope[:,None]*t\\nprint('independent recurrence max strain/rate differences',np.max(np.abs(expected-out['predicted_strain'])),np.max(np.abs(amp@(1/tau)+slope-out['initial_rate_pred'])))\\nnp.testing.assert_allclose(expected,out['predicted_strain'],atol=1e-12); np.testing.assert_allclose(amp@(1/tau)+slope,out['initial_rate_pred'],atol=1e-12)\\n# Test nonlinear bridge terms out of fold, separating single-axis from mixed loads.\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; ycal=cal['true_channel_loads']; one=np.count_nonzero(ycal,axis=1)==1\\nB=np.c_[np.ones(len(raw)),raw]; Q=np.c_[B,*[raw[:,a]*raw[:,b] for a in range(4) for b in range(a,4)]]\\nfold=np.empty(len(raw),int)\\nfor mask in (one,~one): fold[mask]=np.arange(mask.sum())%5\\nfor name,A in [('affine',B),('quadratic',Q)]:\\n pred=np.empty_like(ycal)\\n for j in range(5):\\n  keep=fold!=j; pred[~keep]=A[~keep]@np.linalg.lstsq(A[keep],ycal[keep],rcond=None)[0]\\n print(name,'OOF axial RMSE single/mixed',*[np.sqrt(np.mean((pred[mask]-ycal[mask]).sum(1)**2)) for mask in (one,~one)])\\n# Look for systematic errors in high-load/history coupons and within each lab.\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; u=tr['instant_rate_obs']; e=np.empty_like(y); f=np.empty_like(u)\\nfor lab in np.unique(tr['lab_id']):\\n keep=tr['lab_id']!=lab; a,b=m._fit(tuple(v[keep] for v in c),dt,t,y[keep],u[keep]); P,R=m._design(a,tuple(v[~keep] for v in c),dt,t); e[~keep]=y[~keep]-P@b; f[~keep]=u[~keep]-R@b\\nslices={f'lab_{lab}':tr['lab_id']==lab for lab in np.unique(tr['lab_id'])}\\nfor name,v in [('abs_hold',np.abs(c[1])),('past_span',np.ptp(c[0],axis=1))]:\\n slices[name]=v>=np.quantile(v,.8)\\nprint('train vs deployment ranges (hold stress and history span)',[(v.min(),v.max(),w.min(),w.max()) for v,w in [(c[1],ce[1]),(np.ptp(c[0],axis=1),np.ptp(ce[0],axis=1))]])\\nfor name,mask in slices.items():\\n print(name,mask.sum(),'early/late/rate p90',*[round(np.quantile(np.abs(v),.9),6) for v in (e[mask,:3],e[mask,-3:],f[mask])],'signed medians',*[round(np.median(v),6) for v in (e[mask,:3],e[mask,-3:],f[mask])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration and two-branch memory → H2: revise only if held-out calibration or coupon slices expose systematic error; current worst held-out lab p90 absolute errors are 0.022831 for strain and 0.015670 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes and within-batch classification accuracy\",\n      \"rejected_reason\": \"The task has neither relay state nor classification labels. The relevant nuisance check is signed forecast error within each held-out lab.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence catches chronology or rate errors; held-out mixed-load sweeps determine whether interaction terms improve axial calibration; early, late, and high-load coupon slices test whether pooled fit quality hides a systematic residual. The blind chamber response cannot be validated from these measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3fc682533d0b6081100c0969ca8550ee39d45152d53c6b235be173ff2eb229d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35841.77,
+      "usage_known": true,
+      "prompt_tokens": 28983,
+      "cached_tokens": 14976,
+      "completion_tokens": 1457
+    }
+  ]
+}

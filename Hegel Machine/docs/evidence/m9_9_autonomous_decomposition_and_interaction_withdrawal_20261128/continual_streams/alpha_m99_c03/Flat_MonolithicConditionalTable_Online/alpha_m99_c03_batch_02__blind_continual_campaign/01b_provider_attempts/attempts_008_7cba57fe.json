@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7cba57fe4cc248678385b283f3c8b248",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:32.096191+00:00",
+  "ended_at_utc": "2026-11-27T19:46:08.169674+00:00",
+  "request_sha256": "a057d44c3b217435aa0732fa1d4fe3538772b26a4df28ea7c79f33f17ca7d196",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58592,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37770,
+    "cached_tokens": 14976,
+    "completion_tokens": 1581
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py').read_text()\\na = src.index('def _chamber(')\\nb = src.index('def solve_batch(', a)\\nsrc = src[:a] + '''def _chamber(taus, theta, coupons, dt, times):\\n    # This chamber retains the hereditary state. Its drift rate decays as exp(-t).\\n    curve, rate = _design(taus, coupons, dt, times)\\n    drift = coupons[2] @ theta[2:]\\n    return (curve[:, :, :2] @ theta[:2] - drift[:, None] * np.expm1(-times),\\n            rate @ theta)\\n\\n\\n''' + src[b:]\\nsrc = src.replace(\\\"    _, hold, _ = _coupon_inputs(test, x[n:], bridge)\\\\n    curve, rate = _chamber(taus, theta, hold, x[n:], t)\\\", \\\"    deployment = _coupon_inputs(test, x[n:], bridge)\\\\n    curve, rate = _chamber(taus, theta, deployment, dt, t)\\\")\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]\\nds, diag = item['dataset'], item['campaign_diagnostics']\\nout = m.solve_batch(ds)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nassert {k: v.shape for k, v in out.items()} == dict(estimated_taus=(2,), hereditary_weights=(7,), predicted_strain=ds['test']['hold_channel_raw'].shape[:1]+ds['eval_times'].shape, initial_rate_pred=ds['test']['hold_channel_raw'].shape[:1])\\nassert all(np.isfinite(v).all() for v in out.values())\\nbr = m._calibration(ds['calibration_load_cells'])\\ndt, t = ds['past_dt'], ds['eval_times']\\nrms = lambda e: np.sqrt(np.mean(e**2))\\nfor block, x in [(ds['test'], m._features(ds['train'], ds['test'])[len(ds['train']['lab_id']):]), (diag, m._features(diag, diag)[:len(diag['lab_id'])])]:\\n    coupons = m._coupon_inputs(block, x, br)\\n    curve, rate = m._chamber(tau, theta, coupons, dt, t)\\n    past, hold, z = coupons\\n    state = np.zeros((len(hold), 2))\\n    for j, step in enumerate(dt):\\n        decay = np.exp(-step / tau)\\n        state = decay * state + (1-decay) * past[:, j, None]\\n    branch = (hold[:, None] - state) * theta[:2]\\n    ref = branch @ (-np.expm1(-t[:, None]/tau)).T - (z @ theta[2:])[:, None]*np.expm1(-t)\\n    assert np.allclose(curve, ref, atol=1e-12, rtol=0)\\n    tiny, _ = m._chamber(tau, theta, coupons, dt, np.array([0., 1.e-7]))\\n    assert np.allclose(tiny[:, 0], 0, atol=1e-12)\\n    assert np.allclose(tiny[:, 1]/1.e-7, rate, atol=1e-6, rtol=1e-6)\\n    if block is ds['test']:\\n        np.testing.assert_allclose(out['predicted_strain'], block['strain_0'][:, None] + ref)\\n        np.testing.assert_allclose(out['initial_rate_pred'], rate)\\n        continue\\n    e = block['strain_0'][:,None] + curve - block['strain_curves_obs']\\n    er = rate - block['instant_rate_obs']\\n    print('diagnostic pooled curve/rate RMS:', rms(e), rms(er))\\n    groups = {'earliest': (e[:,0],er), 'latest': (e[:,-1],er)}\\n    for lab in np.unique(block['lab_id']):\\n        idx = block['lab_id'] == lab\\n        groups[f'lab_{lab}'] = (e[idx], er[idx])\\n    missing = np.isnan(block['coupon_features_raw']).any(axis=1)\\n    for name, idx in [('missing', missing), ('complete', ~missing), ('high_hold', hold >= np.quantile(hold,.75)), ('low_hold', hold <= np.quantile(hold,.25))]:\\n        groups[name] = (e[idx], er[idx])\\n    for name,(ce,re) in groups.items():\\n        print(name, 'curve/rate RMS', round(rms(ce),6), round(rms(re),6))\\nprint('clean-process recurrence and initial derivative checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained hereditary memory → H2 unit-timescale exponential drift with unchanged intrinsic amplitude; the prior tied-amplitude comparison yielded worst held-out lab curve/rate RMS of 0.01610/0.02172.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an amplitude correction on chamber coupons\",\n      \"rejected_reason\": \"The diagnostic multiplier is 0.993, and the best screened interaction improves leave-one-coupon-out curve RMS by less than 0.0001.\"\n    }\n  ],\n  \"rationale\": \"Replace only the rejected chamber transfer. Verify the output schema, compare the deployed hereditary calculation with the chronological recurrence, and check that the reported rate is the derivative at zero. Diagnostic lab, missing-feature, load, and horizon slices will show whether the fixed law leaves a concentrated error worth investigating.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "521a6a309ad4da48b2abb8cf49a921f8097491f0971ad4d0e842d7769a807da6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38352.59,
+      "usage_known": true,
+      "prompt_tokens": 37770,
+      "cached_tokens": 14976,
+      "completion_tokens": 1581
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4b61f01d71674df183042b1da513540a",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:47.917829+00:00",
+  "ended_at_utc": "2026-11-27T19:57:18.858608+00:00",
+  "request_sha256": "e231241ea9f64c938e3fc59f346053ee81150232115b72c50caee55ff01738ea",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41683,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28285,
+    "cached_tokens": 13696,
+    "completion_tokens": 1281
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat _verified_downstream.py\\npython3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl','rb') as f: items=pickle.load(f)\\nd=items[0]['dataset']; c=d['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']\\nprint('scope:',len(items),'public items; dataset keys:',list(d),'diagnostics:',items[0].get('campaign_diagnostics'))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor run in log:\\n    t=run['facility_telemetry_trace']; print('apparatus',run['completed_campaign_short_name'],len(t),str(t[-1])[:350] if t else None)\\naxis=np.flatnonzero(np.count_nonzero(x,axis=1)==1); mixed=np.flatnonzero(np.count_nonzero(x,axis=1)>1)\\nrng=np.random.default_rng(20)\\nfolds=[np.r_[a,m] for a,m in zip(np.array_split(rng.permutation(axis),8),np.array_split(rng.permutation(mixed),8))]\\nfolds.extend(axis[x[axis,j]!=0] for j in range(4)); folds.append(np.argsort(np.linalg.norm(x,axis=1))[-12:])\\nfrom scipy.optimize import root\\n\\ndef design(z,mode):\\n    p,n=np.roll(z,1,axis=-1),np.roll(z,-1,axis=-1)\\n    h=u._bridge(z); diff=z-n\\n    terms=[np.ones_like(z),h]\\n    if mode=='pair': terms += [diff, p*diff, diff**2, diff**3]\\n    if mode in ('local saturation','difference saturation'):\\n        q=z if mode=='local saturation' else diff\\n        terms += [h*q*q/(1+0.3*q*q), z*q*q/(1+0.3*q*q)]\\n    return np.stack(terms,axis=-1)\\n\\nfor mode in ('baseline','pair','local saturation','difference saturation'):\\n    worst=np.zeros((3,3)); sse=np.zeros(3); count=np.zeros(3)\\n    for i,te in enumerate(folds):\\n        tr=np.setdiff1d(np.arange(len(x)),te); off,gain=u._fit_bridge(x[tr],y[tr]); e=np.linalg.norm(y[tr]-off-gain*u._bridge(x[tr]),axis=1)\\n        clean=tr[e<max(.002,8*np.median(e))]\\n        # Independent gross-error reporting rule: never score a canonical-range row with a spike-size bridge reading as a clean inverse target.\\n        te=te[np.max(abs(y[te]),axis=1)<5]\\n        a=design(x[clean],mode); w=np.stack([np.linalg.lstsq(a[:,j],y[clean,j],rcond=None)[0] for j in range(4)])\\n        def forward(z): return np.sum(design(z,mode)*w,axis=-1)\\n        pred=u._invert(y[te],off,gain)\\n        if mode!='baseline':\\n            for j,r in enumerate(y[te]):\\n                ans=root(lambda z:forward(z)-r,pred[j]); assert np.max(abs(ans.fun))<1e-9; pred[j]=ans.x\\n        err=pred-x[te]; k=0 if i<8 else 1 if i<12 else 2\\n        worst[k]=np.maximum(worst[k],[abs(forward(x[te])-y[te]).max(),abs(err).max(),abs(err.sum(axis=1)).max()]); sse[k]+=(err**2).sum(); count[k]+=err.size\\n    print(mode,'max forward / inverse / total by slice:',worst.tolist(),'inverse RMSE:',np.sqrt(sse/count).tolist())\\nPY\\npython3 validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: challenge the verified cyclic cubic bridge with pair-difference and rational saturation terms; current worst held-out errors are 3.58e-4 per channel and 5.56e-4 for summed loads.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode and classification audits directly to bridge calibration\",\n      \"rejected_reason\": \"The upstream task estimates continuous loads, not relay states or class labels. Inspect the actual dataset and downstream interface for relevant nuisance variables instead.\"\n    }\n  ],\n  \"rationale\": \"If a missing bridge term causes systematic error, it should improve held-out inverse accuracy on whole-axis or high-load rows after fitting only on the training rows. The interface and apparatus log inspection will identify whether any additional campaign setting is relevant before changing the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "982ea0ca97994cf8c08684493830ae5fd9b06c4f48a01a4de8eb56102a322a78",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32087.15,
+      "usage_known": true,
+      "prompt_tokens": 28285,
+      "cached_tokens": 13696,
+      "completion_tokens": 1281
+    }
+  ]
+}

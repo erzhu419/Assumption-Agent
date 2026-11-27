@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7fa9b9c044da4167834a3f721c177366",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:07:55.600702+00:00",
+  "ended_at_utc": "2026-11-27T20:08:18.911410+00:00",
+  "request_sha256": "6d231b63fdeeaa8372715d0f0ea2b0c95921134aea31e63708ec6293158c736f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31269,
+    "cached_tokens": 13696,
+    "completion_tokens": 848
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json,pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features,_gap,solve_downstream\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: rows=json.load(f)\\nfor i,row in enumerate(rows):\\n a=np.array(row['facility_telemetry_trace']); print(i,row['completed_campaign_short_name'],'next archive entry:',rows[i+1]['completed_campaign_short_name'] if i+1<len(rows) else 'target', 'markers',a.mean(0)[[2,7]].round(4))\\nwith open('public_batch.pkl','rb') as f: d=calibrate_upstream(pickle.load(f)[0]['dataset'])\\ntr,te=d['train'],d['test']; x,xt=_features(tr,te)\\no=solve_downstream(d); tau,b=o['estimated_taus'],o['hereditary_weights']\\nfor split,s,xx in [('train',tr,x),('test',te,xt)]:\\n p=s['past_channel_raw'].sum(-1); h=s['hold_channel_raw'].sum(-1); g=_gap(tau,p,h,d['past_dt']); drift=b[2]+xx@b[3:]; aux=np.asarray(s['aux_chamber_telemetry']); q=np.column_stack((h,g,drift,xx)); c=np.corrcoef(np.column_stack((aux,q)),rowvar=False)[:aux.shape[1],aux.shape[1]:]; print(split,'aux correlation with hold, gaps, drift, and standardized features:\\\\n',c.round(2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sustained channel-7 marker → candidate hold-driven reset; worst held-out benchtop stratum MAEs are 0.01715 for strain and 0.00825 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the deployment law solely from the sustained marker\",\n      \"rejected_reason\": \"The established transfer laws differ, and repeated traces may precede different campaigns; the archive labels must be aligned before treating the marker as decisive.\"\n    }\n  ],\n  \"rationale\": \"The exact recurrence and held-out stratum checks support the benchtop fit but cannot distinguish chamber laws. Align each prefix trace with the next campaign and check whether public coupon telemetry separates hold-driven from history-dependent inputs. If the marker is shared and telemetry is uninformative, retain the latest verified law as a prior rather than claiming unique identification.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7aa88ce1d814c629b611132d92a4bc4d7f87084f60c859ae46c4c36a14c16e75",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23275.91,
+      "usage_known": true,
+      "prompt_tokens": 31269,
+      "cached_tokens": 13696,
+      "completion_tokens": 848
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af55b5e4ad0c4e36ad42e2303e56a4e8",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:07.377729+00:00",
+  "ended_at_utc": "2026-11-27T19:37:39.106719+00:00",
+  "request_sha256": "1c068038e98ade502625c7937ff1d093501953bc797520cb6aa6d86a4094e23f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31473,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26222,
+    "cached_tokens": 0,
+    "completion_tokens": 1314
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_probe.py <<'PY'\\nimport numpy as np, sys, pickle\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m99_c02_s00_solver as s\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,di=d['train'],d['test'],i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; b=s._bridge(d['calibration_load_cells']); x,xt=s._features(tr,te); _,xd=s._features(tr,di); taus,w=s._material(tr,b,x,dt,t); p,h=s._loads(di,b); C,R=s._basis(taus,p,h,xd,dt,t); g=R[:,:2]*taus; y=di['strain_curves_obs']-di['strain_0'][:,None]; r=di['instant_rate_obs']; Y=np.c_[y,r]; B=np.vstack((np.c_[-np.expm1(-t[:,None]/taus),t],np.r_[1/taus,1])); n=len(h); lab=di['lab_id']; drift=R[:,2:]@w[2:]; one=np.ones(n); g0,g1=g.T; z0,z1=(h[:,None]-g).T\\nprint('lab counts',np.unique(lab,return_counts=True)); print('tau/w',taus,w); print('ranges',np.quantile(np.c_[h,g,z0,z1,drift],[0,.5,1],axis=0));\\nfor k in [2,3]:\\n A=Y@np.linalg.pinv(B[:,:k].T); E=Y-A@B[:,:k].T; print('free amplitudes',k,'residual RMS/max',np.std(E),np.abs(E).max(),'amp and drift ranges',np.quantile(A,[0,.5,1],axis=0));\\nprint('h,g0,g1,drift, free2 normalized amplitudes'); print(np.round(np.c_[h,g,drift,(Y@np.linalg.pinv(B[:,:2].T))/w[:2]],4))\\nmodels={'gap':g,'gap+1':np.c_[g,one],'gap+h':np.c_[g,h],'gap+h+1':np.c_[g,h,one],'gap+g0*g1':np.c_[g,g0*g1],'gap+z0*z1':np.c_[g,z0*z1],'gap+h+drift':np.c_[g,h,drift],'gap+h+quad':np.c_[g,h,g0*g0,g0*g1,g1*g1,g0*h,g1*h,h*h],'linear histories':np.c_[h,p],'gap+h+X':np.c_[g,h,xd],'gap+1+X':np.c_[g,one,xd]}\\nfor label,F in models.items():\\n for k in [2,3]:\\n  N=(F[:,None,None,:]*B[None,:,:k,None]).reshape(n,len(t)+1,-1); E=np.empty_like(Y)\\n  for l in np.unique(lab):\\n   m=lab!=l; fit=np.linalg.lstsq(N[m].reshape(-1,N.shape[-1]),Y[m].ravel(),rcond=None)[0]; E[~m]=N[~m]@fit-Y[~m]\\n  fit=np.linalg.lstsq(N.reshape(-1,N.shape[-1]),Y.ravel(),rcond=None)[0]; print(label,k,'fit/LOLO curve/rate/worst',*np.round([np.std(N@fit-Y),np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),np.abs(E).max()],5), 'coef',np.round(fit,4) if k==2 and F.shape[1]<=4 else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct benchtop transfer → H2 chamber-specific amplitudes and drift at the shared spectrum; chamber RMSE falls from 0.526 strain and 1.057 rate to 0.00221 and 0.00856 with free coupon coefficients, before out-of-fold validation.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The benchtop history and drift law directly predicts deployment coupons after bridge calibration.\",\"empirical_witness\":\"Chamber curve and rate RMSE are 0.526 and 1.057 under direct transfer; retaining the intrinsic time constants and refitting coupon coefficients gives 0.00221 and 0.00856.\",\"causal_blanket_diagnosis\":\"The chamber changes the coefficient mapping, while the observed curve shapes remain compatible with the two intrinsic relaxation modes.\",\"sublated_pivot\":\"Keep the train-only material fit and test compact chamber coefficient mappings on held-out labs.\",\"risk_kind\":\"deployment constitutive shift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit separate chamber time constants immediately\",\"rejected_reason\":\"The shared time constants already fit chamber curve shape closely when amplitudes and drift are free; first identify their transferable mapping.\"}],\"rationale\":\"Leave-one-lab-out errors will distinguish transferable gap, load, and interaction terms from fits that merely reconstruct the verification coupons. Test both two-branch and drift-augmented models, scoring strain and rate separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "41d93c9e1fcfbbbedb1e68313e456e61528a3207d42085f26698262b4a0bee71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32871.04,
+      "usage_known": true,
+      "prompt_tokens": 26222,
+      "cached_tokens": 0,
+      "completion_tokens": 1314
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43be56575afa490b9f422e4165487627",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:59.870868+00:00",
+  "ended_at_utc": "2026-11-27T19:45:32.875788+00:00",
+  "request_sha256": "dab714e88479d2f07407e56a5bf547798f18613446ce83ab8df8004378cf9948",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46492,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32777,
+    "cached_tokens": 13696,
+    "completion_tokens": 1388
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_factors.py <<'PY'\\nimport contextlib,io,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): v=runpy.run_path('/tmp/chamber_structure.py')\\np,l,a,h,t,dt,Y,g,tr,te,align=(v[k] for k in ('p','l','a','h','t','dt','Y','g','tr','te','align'))\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nX=align([g]); r=h[2]+X@h[3:]; N,K=Y.shape\\nD=np.c_[np.ones(N),l,p,X]; B=np.linalg.lstsq(D,Y,rcond=None)[0]; print('linear coefficient trajectories (offset, hold, six intervals, four features)');print(B)\\ndef mem(q):\\n return np.exp(-np.r_[np.cumsum(dt[:0:-1])[::-1],0]/q)*-np.expm1(-dt/q)\\ndef temp(q): return np.r_[-np.expm1(-t/q),1/q]\\nlin=np.r_[t,1.]; ones=np.ones(N)\\ndef fit(mode,X,itr):\\n r=h[2]+X@h[3:]; rr=np.c_[ones,X] if mode.endswith('free') else np.c_[ones,r]\\n outer=lambda z,f:z[:,None]*f\\n def basis(q):\\n  if mode.startswith('same'): u,w=q[:2]\\n  else: u,w=q[2:4]\\n  G1=l-p@mem(u);G2=l-p@mem(w); F1,F2=map(temp,q[:2]);\\n  cols=[outer(G1,F1),outer(G2,F2),outer(l,lin)]\\n  if 'cross' in mode: cols.extend([outer(G1,F2),outer(G2,F1),outer(l,F1),outer(l,F2)])\\n  if 'drift' in mode: cols.extend([outer(z,lin) for z in rr.T]);\\n  cols.extend([outer(z,F2) for z in rr.T]);\\n  if 'fast' in mode: cols.extend([outer(z,F1) for z in rr.T]);\\n  return np.stack(cols,axis=-1)\\n def calc(q,out=False):\\n  A=basis(np.exp(q)); C=np.linalg.lstsq(A[itr].reshape(-1,A.shape[-1]),Y[itr].ravel(),rcond=1e-9)[0]; P=A@C\\n  return (np.exp(q),C,P) if out else (P[itr]-Y[itr]).ravel()\\n u0=[.65,1.8] + ([] if mode.startswith('same') else list(a)); z=least_squares(calc,np.log(u0),bounds=(np.log(.08),np.log(25)),max_nfev=180);return calc(z.x,True)\\nfor mode in ['same-drift','separate-drift','separate-driftfast','separate-crossdrift','separate-driftfree','separate-driftfastfree','separate-crossdriftfree']:\\n q,C,P=fit(mode,X,np.arange(N)); E=P-Y\\n errors=np.array([fit(mode,X,np.delete(np.arange(N),i))[2][i]-Y[i] for i in range(N)])\\n print(mode,'q',q,'C',C,'rms in,loo',np.sqrt(np.mean(E**2)),np.sqrt(np.mean(errors**2)),'worst time,rate,max',np.max(np.sqrt(np.mean(errors[:,:-1]**2,axis=0))),np.sqrt(np.mean(errors[:,-1]**2)),np.max(abs(errors)))\\n if mode in ('separate-drift','separate-crossdriftfree'): print('residuals last and rate',E[:,[-2,-1]].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_factors.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 baseline chamber transfer → H2 separate hereditary and drift responses; the best tested linear design has leave-one-coupon-out RMSE 0.0162 and maximum error 0.0456.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit independent regressions at every horizon\",\n      \"rejected_reason\": \"They do not tie initial rate to the derivative of strain, and their extra coefficients worsened leave-one-coupon-out error.\"\n    }\n  ],\n  \"rationale\": \"Test whether separate history and response times, branch cross-coupling, or a distinct feature response explain the remaining chamber error. Refit the time constants in each coupon fold so any improvement reflects prediction on held-out coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "142fe5caa9e085678ab2298352599b59097c8649675127f0e307a205c2cc845d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34166.94,
+      "usage_known": true,
+      "prompt_tokens": 32777,
+      "cached_tokens": 13696,
+      "completion_tokens": 1388
+    }
+  ]
+}

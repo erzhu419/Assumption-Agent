@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "beee1611fa6f4cd4964dd9cc50a38274",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:36:41.794650+00:00",
+  "ended_at_utc": "2026-11-27T19:37:02.983461+00:00",
+  "request_sha256": "bbf1989b7b1022d6765081764c1d15efd3085e9ba386f114feb945bf1e962dda",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24306,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24820,
+    "cached_tokens": 14976,
+    "completion_tokens": 818
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np,runpy\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log type',type(log));\\nfor item in (log if isinstance(log,list) else [log]):\\n print('entry keys',list(item));\\n for k,v in item.items():\\n  print(k, repr(v)[:450] if not isinstance(v,list) else (len(v),repr(v[:2])[:450]))\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; np.set_printoptions(precision=5,suppress=True); print('sweeps',np.c_[x[:25],y[:25]]); print('single',c['single_bank_sweeps']);\\nprior=runpy.run_path('/tmp/hegel_continual_archive/beta_m99_c04_s00_solver.py'); S,_=prior['_design'](s)\\nfor p in a['campaign_diagnostics']:\\n err=prior['_calibrate'](dict(s,y_obs_raw=p['y_pulse_raw']))-S@p['w_pulse']; print('baseline pulse RMSE',np.sqrt(np.mean(err**2)), 'by shift',np.sqrt(np.mean(err.reshape(3,-1)**2,axis=1)))\\nfor degree in (1,2,3):\\n from itertools import combinations_with_replacement\\n m=[tuple(t) for d in range(1,degree+1) for t in combinations_with_replacement(range(4),d)]; X=np.column_stack([np.ones(len(x))]+[np.prod(x[:,k],axis=1) for k in m]); print('degree',degree,'rank',np.linalg.matrix_rank(X));\\n for start in (0,20,40,60):\\n  test=np.arange(start,start+20); train=np.setdiff1d(np.arange(len(x)),test); coef=np.linalg.lstsq(X[train],y[train],rcond=None)[0]; print(start,'rmse',np.sqrt(np.mean((X[test]@coef-y[test])**2,axis=0)))\\n if degree==2: print('quadratic fit',list(zip([()]+m,np.linalg.lstsq(X,y,rcond=None)[0])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette and open Robin walls -> H2 independently identified sensor interactions and tracer-tested wall rows; pulse and held-out calibration errors not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit wall parameters directly to affine-inverted pulses\",\n      \"rejected_reason\": \"A rosette interaction could masquerade as a wall effect; first measure whether an affine calibration holds on withheld sweeps.\"\n    }\n  ],\n  \"rationale\": \"The sweep comparison determines whether to retain affine inversion or add interactions. Per-shift pulse errors establish the baseline against which an alternative wall operator must improve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e0c5d1ec77ec84c01b48c2d9f920e6b08f7a988ccfaf3834b625a93c4d03ae59",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22331.99,
+      "usage_known": true,
+      "prompt_tokens": 24820,
+      "cached_tokens": 14976,
+      "completion_tokens": 818
+    }
+  ]
+}

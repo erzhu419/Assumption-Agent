@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6a06afd939754f8bbf49d9548526caba",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:38.000411+00:00",
+  "ended_at_utc": "2026-11-27T19:49:56.220922+00:00",
+  "request_sha256": "1314a9098b493533d75db5ab2e7d96ae2bfdf2ce8e11c4969bc4ab8909db106c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23725,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24358,
+    "cached_tokens": 14976,
+    "completion_tokens": 671
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/alpha_m99_c01_s00_solver.py /tmp/hegel_continual_archive/alpha_m99_c01_batch_02_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS reference-panel imputation'; python3 - <<'PY'\\nimport pickle, numpy as np\\nnp.set_printoptions(precision=5,suppress=True)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; print('timing',d['past_dt'],d['eval_times'])\\nfor name in ('train','test'):\\n s=d[name]; a=s['aux_chamber_telemetry']; print(name,'telemetry first rows',a[:6]); print('telemetry mean/std and percentiles',a.mean(0),a.std(0),np.quantile(a,[0,.25,.5,.75,1],axis=0)); print('lab, stratum, counts',np.unique(np.c_[s['lab_id'],s['stratum']],axis=0,return_counts=True)); print('ref range',np.nanmin(s['ref_coupons'],axis=0),np.nanmax(s['ref_coupons'],axis=0))\\nc=d['calibration_load_cells']; print('sweep fields:',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]); print('cal affine rmse',np.mean((np.c_[np.ones(len(c['bridge_raw'])),c['bridge_raw']]@np.linalg.lstsq(np.c_[np.ones(len(c['bridge_raw'])),c['bridge_raw']],c['true_channel_loads'],rcond=None)[0]-c['true_channel_loads'])**2,axis=0)**.5)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: carry forward the batch-02 chamber law → H2: decode the apparatus signature and select memory and drift effects separately; deployment error is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the batch-02 law unchanged\",\n      \"rejected_reason\": \"The latest log signature matches facility initialization on both shifted channels, but that resemblance does not yet identify which effects remain active.\"\n    }\n  ],\n  \"rationale\": \"Read the untruncated archived laws to test whether each shifted log channel corresponds to a distinct chamber effect. Inspect coupon telemetry for independent evidence and measure affine calibration residuals so a bridge mismatch is not mistaken for a chamber-law change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "51cdc30c315a5863712764abba3f2c136b18fd791aac7856fa09adc721c922c1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19352.67,
+      "usage_known": true,
+      "prompt_tokens": 24358,
+      "cached_tokens": 14976,
+      "completion_tokens": 671
+    }
+  ]
+}

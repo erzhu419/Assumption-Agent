@@ -1,0 +1,176 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c03_batch_02_6ea753ec80bd",
+    "source_hash": "6ea753ec80bdd07920cd9bc7d4cf845842da7c58042fb08857cfe5b263c212e4",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c03_batch_02__blind_continual_campaign",
+    "task_id": "alpha_m99_c03_batch_02__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/m99_align.py",
+        "archived_relpath": "producers/tmp__m99_align.py",
+        "bytes": 1224,
+        "sha256": "2e2e210bdaf82f519ae1d5cc0f72ffcb7918b7f2872b4deefef019b0e39cf061"
+      },
+      {
+        "container_path": "/tmp/m99_amp.py",
+        "archived_relpath": "producers/tmp__m99_amp.py",
+        "bytes": 1511,
+        "sha256": "3a8e0e3ccf7c34fb62af0690566d3e74b2597fc1665bdb605d2d37b8b91f791b"
+      },
+      {
+        "container_path": "/tmp/m99_chamber.py",
+        "archived_relpath": "producers/tmp__m99_chamber.py",
+        "bytes": 2219,
+        "sha256": "ec8f465c540db8b5c158ca7785c5c6bfe64e501277da84c5acda3e74e19c07de"
+      },
+      {
+        "container_path": "/tmp/m99_compact.py",
+        "archived_relpath": "producers/tmp__m99_compact.py",
+        "bytes": 2813,
+        "sha256": "99ef8ace69243b9f8fec974fc1c2d4e01abc32ca136a0e7d8b3586606e6b1a01"
+      },
+      {
+        "container_path": "/tmp/m99_finalize.py",
+        "archived_relpath": "producers/tmp__m99_finalize.py",
+        "bytes": 4812,
+        "sha256": "3d5c74393f5f2bc044d6ca7b6acf23d92600213a15bd2127712faf3cc0872992"
+      },
+      {
+        "container_path": "/tmp/m99_grammar.py",
+        "archived_relpath": "producers/tmp__m99_grammar.py",
+        "bytes": 3241,
+        "sha256": "15c1cad2da3f2813050f645c65921d4e7fbd006151a1a150968976c43672cf5e"
+      },
+      {
+        "container_path": "/tmp/m99_lab.py",
+        "archived_relpath": "producers/tmp__m99_lab.py",
+        "bytes": 2569,
+        "sha256": "92a318e7b67e517dd0e441290dd84fd09a7ce0707e53cbf78fd0f05d80a3757f"
+      },
+      {
+        "container_path": "/tmp/m99_probe.py",
+        "archived_relpath": "producers/tmp__m99_probe.py",
+        "bytes": 2569,
+        "sha256": "0a5174b0b4af08a0967fe047d8282e55d8d027cf8376dd9bdaccef84b7ac1e8f"
+      },
+      {
+        "container_path": "/tmp/m99_rank2.py",
+        "archived_relpath": "producers/tmp__m99_rank2.py",
+        "bytes": 2210,
+        "sha256": "a15d279a3804b1e9a69dcac07924bb8fc387743dc8dab1870acc5f1376b14fa4"
+      },
+      {
+        "container_path": "/tmp/m99_residual.py",
+        "archived_relpath": "producers/tmp__m99_residual.py",
+        "bytes": 2915,
+        "sha256": "ee1f95fceedd65ac58e56f79f158e557cd9f900603946fb4b9c8531a40f1def0"
+      },
+      {
+        "container_path": "/tmp/m99_verify.py",
+        "archived_relpath": "producers/tmp__m99_verify.py",
+        "bytes": 1749,
+        "sha256": "3cb7bbe83e7b3e4a92532d0246158362d471c8edb1eaf15586eae93420952675"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m99_c03_s00_solver.py",
+        "bytes": 4803,
+        "sha256": "f265086b7e40b42fb7e9e6331eb97c20438baf87746eb3ffdeb06bf376f3526c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat validate_public_schema.py && cat public_asset_index.json && ls -l /tmp/hegel_continual_archive && for f in /tmp/hegel_continual_archive/*.json; do echo \"--- $f\"; head -c 18000 \"$f\"; echo; done && for f in /tmp/hegel_continual_archive/*solver.py; do echo \"--- $f\"; sed -n '1,270p' \"$f\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation'; cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_batch.pkl','rb') as f: item=pickle.load(f)[0]\ndef des",
+      "ls -l /tmp/hegel_continual_archive; for f in /tmp/hegel_continual_archive/*solver.py; do printf '\\n--- %s ---\\n' \"$f\"; wc -l \"$f\"; grep -nE '^(def |class |import |from )' \"$f\"; done; python3 - <<'PY'\nimport glob,json,pickle,numpy as np\nfor p in glob.glob('/tmp/hegel_continual_archive/*.json'):\n    x=json.load(open(p)); print(p,repr(x)[-5000:])\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; print('dataset',[(k, list(v) if isinstance(v,dict) else np.shape(v)) for k,v in d.items()]); print('times',d['past_dt'],d['eval_times']); c=d['calibration_load_cells'];\nfor k,",
+      "sed -n '1,160p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; python3 - <<'PY'\nimport json,pickle,numpy as np\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log entries',len(log))\nfor e in log:\n print({k:v for k,v in e.items() if k!='facility_telemetry_trace'}); a=np.array(e['facility_telemetry_trace']);print('trace mean/std',a.mean(0).round(4),a.std(0).round(4))\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];c=i['dataset']['calibration_load_cells'];x=c['true_channel_loads'];y=c['bridge_raw']; print('unique each',*[np.unique(z)",
+      "cat > /tmp/m99_probe.py <<'PY'\nimport sys,pickle,json,importlib.util\nimport numpy as np\nfrom itertools import combinations_with_replacement\np='/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py'; s=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr=d['train']; te=d['test']; g=i['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; cal=d['calibration_load_cells']; x=cal['true_channel_loads']; y=cal['bridge_raw']; np.set_printoptions(precisi",
+      "cat > /tmp/m99_chamber.py <<'PY'\nfrom m99_probe import *\nfrom scipy.optimize import least_squares\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']);\nG=m._features(tr,g)[n:]; cg=m._coupon_inputs(g,G,bridge); F,R=m._design(taus,cg,dt,t); obs=g['strain_curves_obs']-g['strain_0'][:,None]; rate=g['instant_rate_obs']; Y=np.c_[obs,rate]; base=np.c_[F@theta,R@theta]; P,H,D=cg; drift=D@theta[2:]; gap=R[:,:2]*taus; AB=gap*theta[:2]; n=len(H);\ndef bas",
+      "sed -i \"s/('drift',np.c_\\[drift\\]\\]/['drift',np.c_[drift]]/\" /tmp/m99_chamber.py && OPENBLAS_NUM_THREADS=1 python3 /tmp/m99_chamber.py",
+      "sed -i '21s/\\]\\]):/\\]\\]\\]:/' /tmp/m99_chamber.py && OPENBLAS_NUM_THREADS=1 python3 /tmp/m99_chamber.py | tee /tmp/m99_chamber_report.txt",
+      "sed -n '1,120p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; cat > /tmp/m99_residual.py <<'PY'\nfrom m99_probe import *\nfrom scipy.optimize import least_squares, minimize_scalar\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs'])\nY=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; print('fields',[(k,np.shape(v)) for k,v in g.items()]); print('test fields',list(te)); print('lab counts',np.unique(g['lab_id']",
+      "cat > /tmp/m99_rank2.py <<'PY'\nfrom m99_probe import *\nfrom scipy.optimize import minimize_scalar\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('intrinsic',taus,theta,'eval times',t)\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\n a=np.asarray(e['facility_telemetry_trace']); print('apparatus', {k:str(v)[:220] for k,v in e.items() if k!='facility_telemetry_trace'},'mean',a.mean(0).round(5))\npr",
+      "cat > /tmp/m99_amp.py <<'PY'\nfrom m99_rank2 import *\nfrom itertools import combinations_with_replacement\nfrom scipy.optimize import least_squares\namp=q[:,0]; delta=amp-drift\nprint('feature rows: x0 x1 x2 x3 drift amp amp-minus-drift'); print(np.c_[G,drift,amp,delta]); print('test telemetry',te['aux_chamber_telemetry'][:6], 'stats',np.mean(te['aux_chamber_telemetry'],0),np.std(te['aux_chamber_telemetry'],0));\nfor label,V in [('x',G),('x,drift',np.c_[G,drift]),('x,hold',np.c_[G,hc]),('drift,hold',np.c_[drift,hc]),('drift,stress',np.c_[drift,H,gap]),('drift,features,stress',np.c_[drift,G,H,gap])]",
+      "cat > /tmp/m99_grammar.py <<'PY'\nfrom m99_rank2 import *\nfrom itertools import combinations, combinations_with_replacement\nfrom scipy.optimize import least_squares\n# With drift removed, project directly onto the identified chamber transient.\nb=np.r_[-np.expm1(-t/u),1/u]; a=(E+drift[:,None]*T)@b/(b@b); n=len(a)\nbase=np.c_[np.ones(n),drift]; past=(pc*(-np.expm1(-dt[:,None]/taus)*np.exp(-(np.cumsum(dt[::-1])[::-1]-dt)[:,None]/taus))[:,:,None]) if False else None\nprint('group, stratum, amp, error vs affine drift'); print(np.c_[g['lab_id'],g['stratum'],a,a-base@np.linalg.lstsq(base,a,rcond=None)[0]",
+      "cat > /tmp/m99_compact.py <<'PY'\nfrom m99_rank2 import *\nfrom itertools import combinations\nfrom scipy.optimize import least_squares\nb=np.r_[-np.expm1(-t/u),1/u]; y=(E+drift[:,None]*T)@b/(b@b); r=drift; z=r-theta[2]; lab=g['lab_id']; st=g['stratum']; n=len(y); one=np.ones(n); mask=~np.isnan(g['coupon_features_raw']).any(1)\ndef fit(A, inds=None):\n A=np.column_stack(A); inds=np.arange(n) if inds is None else np.flatnonzero(inds); e=y[inds]-A[inds]@np.linalg.lstsq(A[inds],y[inds],rcond=1e-10)[0]; return np.sqrt(np.mean(e*e))\ndef cv(A):\n A=np.column_stack(A); outs=[]\n for ids in (lab,st):\n  e=y.co",
+      "cat > /tmp/m99_lab.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from m99_rank2 import *\nfrom scipy.optimize import least_squares\nlab=g['lab_id']; st=g['stratum']; missing=np.isnan(g['coupon_features_raw']); print('missing locations',np.argwhere(missing).tolist()); print('eval ranges by lab in test',[(l,int(sum(te['lab_id']==l))) for l in np.unique(te['lab_id'])]);\nfor name,blocks in [('tr+g',[tr,g]),('tr+te+g',[tr,te,g]),('tr+te',[tr,te]),('g',[g])]:\n ref=np.vstack([v['ref_coupons'] for v in blocks]); labs=np.concatenate([v['lab_id'] for v in blocks]); strata",
+      "sed -i \"s/amp=Y@b\\/(b@b) if 'b' in globals() else Y@basis(1.)\\[:,0\\]\\/(basis(1.)\\[:,0\\]@basis(1.)\\[:,0\\]);/b0=basis(1.)[:,0]; amp=Y@b0\\/(b0@b0);/\" /tmp/m99_lab.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_lab.py | grep -E 'impute|affine on complete|model|strata worst' | cut -c1-155\ncat > /tmp/m99_align.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from m99_rank2 import *\nfrom itertools import combinations\nlab=g['lab_id']; missing=np.isnan(g['coupon_features_raw']); clean=~missing.any(1)\nb=basis(1.)[:,0]; amp=(E+drift[:,None]*T)@b/(b@b)\nprint('transient time',u)\n",
+      "cat > /tmp/m99_finalize.py <<'PY'\nimport contextlib,io\nwith contextlib.redirect_stdout(io.StringIO()):\n from m99_rank2 import *\nfrom pathlib import Path\nfrom scipy.optimize import minimize_scalar\nlabs=g['lab_id']; st=g['stratum']; raw=g['coupon_features_raw']; complete=np.isfinite(raw).all(1); w=theta[3:];\nY=E+drift[:,None]*T\nscore=np.nan_to_num(raw)@w\nL=(labs[:,None]==np.unique(labs)).astype(float)\nA=np.c_[L,L*score[:,None]]\ndef time_basis(v): return np.r_[-np.expm1(-t/v),1/v]\ndef fit(keep, fixed=None):\n def profile(v):\n  b=time_basis(v); amp=Y@b/(b@b); p=np.linalg.lstsq(A[keep],amp[keep],rco",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\ns=s[:s.index('    # The facility-init')]+'''    # The chamber reference population is the deployment block, not the\n    # pooled benchtop/deployment reference used to identify the material.\n    chamber_x = _features(test, test)[:len(test['lab_id'])]\n    curve, rate = _chamber_response(taus, theta, _coupon_inputs(test, chamber_x, bridge), dt, t)\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\n            'predict"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__m99_finalize.py",
+      "primary_producer_container_path": "/tmp/m99_finalize.py",
+      "selected_channels": [
+        "m99_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5215,
+        "sha256": "9954d7d3926a4f38c9d47a960deb807a5a50fc667a5c12840ad01aa7f0b22638",
+        "content_addressed_ref": "content_addressed_blobs/9954d7d3926a4f38c9d47a960deb807a5a50fc667a5c12840ad01aa7f0b22638.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "poly"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "6ea753ec80bdd07920cd9bc7d4cf845842da7c58042fb08857cfe5b263c212e4",
+      "verified_post_package": true,
+      "verified_turn": 16,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\ns=s[:s.index('    # The facility-init')]+'''    # The chamber reference ",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "6ea753ec80bdd07920cd9bc7d4cf845842da7c58042fb08857cfe5b263c212e4",
+        "expected_candidate_sha256": "6ea753ec80bdd07920cd9bc7d4cf845842da7c58042fb08857cfe5b263c212e4",
+        "computed_candidate_sha256": "6ea753ec80bdd07920cd9bc7d4cf845842da7c58042fb08857cfe5b263c212e4",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5215
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_6ea753ec"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "poly",
+        "code": "def poly(x, degree):\n    from itertools import combinations_with_replacement\n    terms = [()] + [z for k in range(1, degree + 1) for z in combinations_with_replacement(range(4), k)]\n    return (np.column_stack([np.prod(x[:, z], axis=1) for z in terms]), terms)"
+      }
+    ]
+  }
+}

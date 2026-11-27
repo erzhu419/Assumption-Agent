@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "851b54e903d44af1a6ffd34a0c5c3132",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:58.201991+00:00",
+  "ended_at_utc": "2026-11-27T19:39:28.031402+00:00",
+  "request_sha256": "ad76cda11b37d962f19a0d25abd201cb2e0f8a78ddf93003d356c10ddc72d868",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44788,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32912,
+    "cached_tokens": 14976,
+    "completion_tokens": 1223
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '1,52p' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py\\nsed '/^def solve_batch(/,$d' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _chamber_response(hold, drift, times, taus, theta):\\n    # Chamber verification supports no inherited load state; the material\\n    # drift drive instead feeds both transients and a small linear tail.\\n    redistribution = np.array([0.25, 1.80, 0.03])\\n    amplitudes = hold[:, None] * theta[:2] + drift[:, None] * redistribution[:2]\\n    tail = drift * redistribution[2]\\n    curves = amplitudes @ (-np.expm1(-times[:, None] / taus)).T + tail[:, None] * times\\n    rates = amplitudes @ (1.0 / taus) + tail\\n    return curves, rates\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt = np.asarray(dataset['past_dt'])\\n    times = np.asarray(dataset['eval_times'])\\n    x_train, x_test = _features(train, test)\\n    stress = _stress_map(dataset['calibration_load_cells'])\\n    taus, theta = _fit(train, x_train, stress, dt, times)\\n    hold = stress[0] + test['hold_channel_raw'] @ stress[1:]\\n    curves, rates = _chamber_response(hold, theta[2] + x_test @ theta[3:], times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rates}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, io, importlib.util, numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/chamber_cv.py').read().split('for name,x in stds.items():')[0])\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); mod=importlib.util.module_from_spec(s); s.loader.exec_module(mod)\\nfg=stds['diag']; out=mod.solve_batch(d)\\nfor label,x in [('diagnostic-local',fg),('deployment-panel',stds['train+test'])]:\\n strain,rate=mod._chamber_response(hold,th[2]+x@th[3:],t,tau,th)\\n for l in np.unique(labs):\\n  a=labs==l; print(label,l,'strain/rate',np.sqrt(np.mean((strain[a]-y[a])**2)),np.sqrt(np.mean((rate[a]-v[a])**2)))\\nprint('train/test feature center differences by lab:')\\nfor lab in np.unique(te['lab_id']):\\n def panel(q):\\n  a=q['ref_coupons'][q['lab_id']==lab]; return np.median(a.mean(0)),np.median(a.std(0))\\n print(lab,'train',panel(tr),'test',panel(te),'diag',panel(dg))\\nprint({k:(np.shape(a),bool(np.isfinite(a).all())) for k,a in out.items()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop transfer → H2 withdrawn chamber memory and drift redistribution at intrinsic relaxation times; worst held-out lab RMSE was 0.00960 for strain and 0.00811 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add chamber relaxation times or residual history coefficients\",\n      \"rejected_reason\": \"Extra terms did not reliably improve both held-out outputs, and fitted history coefficients were close to zero.\"\n    }\n  ],\n  \"rationale\": \"Build the solver around the supported chamber law while preserving the specified joint deployment feature transform and train-only material fit. Verify the exact artifact and compare reference-panel statistics to see whether panel alignment explains the remaining validation error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9919b4632dc5e9cfe2c4fbad87d6b9a904a4561e059c7bf37f24bdf6cb3554aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30935.39,
+      "usage_known": true,
+      "prompt_tokens": 32912,
+      "cached_tokens": 14976,
+      "completion_tokens": 1223
+    }
+  ]
+}

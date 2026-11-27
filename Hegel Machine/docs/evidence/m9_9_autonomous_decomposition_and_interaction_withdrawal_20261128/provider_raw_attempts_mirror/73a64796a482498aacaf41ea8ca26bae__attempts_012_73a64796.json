@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "73a64796a482498aacaf41ea8ca26bae",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:13.703444+00:00",
+  "ended_at_utc": "2026-11-27T19:41:37.464571+00:00",
+  "request_sha256": "a3986372ae1f4d499fc9721b2e41f106d51dd0e1aa0484e307a18f4e145eb2a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37735,
+    "cached_tokens": 13696,
+    "completion_tokens": 906
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^for name,M/,$d' /tmp/chamber_margin_audit.py > /tmp/chamber_rate_audit.py\\ncat >> /tmp/chamber_rate_audit.py <<'PY'\\nA=r[:,None,None]*P[None,:,:]; F=np.concatenate((A,r[:,None,None]*np.r_[t,1][None,:,None]),axis=2)\\nfor name,M in [('two modes',A),('two modes + steady drift',F)]:\\n E=np.empty_like(Y)\\n for lab in np.unique(L):\\n  m=L==lab; q=np.linalg.lstsq(M[~m].reshape(-1,M.shape[-1]),(Y-base)[~m].ravel(),rcond=None)[0]; E[m]=(base+M@q-Y)[m]\\n  print(name,'held-out lab',lab,'parameters',q.round(6),'strain/rate/worst-horizon RMSE',np.sqrt(np.mean(E[m,:-1]**2)),np.sqrt(np.mean(E[m,-1]**2)),np.sqrt(np.mean(E[m]**2,axis=0)).max())\\n q=np.linalg.lstsq(M.reshape(-1,M.shape[-1]),(Y-base).ravel(),rcond=None)[0]; print(name,'all-data coefficients',q,'implied drift contribution to initial rate',q[:2]@(1/ts)+(q[2] if len(q)>2 else 0))\\n for name,m in [('missing',np.isnan(a['coupon_features_raw']).any(1)),('large absolute drift',abs(r)>=np.median(abs(r)))]: print(name,'curve/rate RMSE',np.sqrt(np.mean(E[m,:-1]**2)),np.sqrt(np.mean(E[m,-1]**2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_rate_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber history reset with two drift-coupled modes → H2 a residual steady drift may improve initial-rate prediction; pooled held-out rate RMSE fell from 0.00472 to 0.00359 while worst lab-by-time RMSE stayed near 0.00664.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote pairwise, rational, or quadratic calibration terms\",\n      \"rejected_reason\": \"They did not show a clear held-out advantage across the affected outputs.\"\n    }\n  ],\n  \"rationale\": \"The steady term cuts pooled initial-rate error by 24% without increasing worst-horizon error materially. Check whether that improvement reaches the worst rate lab and missing-feature coupons, and whether the fitted term is stable across folds. Promote it only if the gains transfer across those slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2fb02292c3d352bb49be5d835ccf78af10278704980647b942f10d0ccc544cfe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24855.58,
+      "usage_known": true,
+      "prompt_tokens": 37735,
+      "cached_tokens": 13696,
+      "completion_tokens": 906
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "250e1b5807714d4180c3b7850ce7bcc2",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:06:44.063505+00:00",
+  "ended_at_utc": "2026-11-27T20:07:13.917817+00:00",
+  "request_sha256": "78ae326d8a0f9ec20190d4efc4a6fb35b48edc26edddccb65b4e7823272986d6",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31040,
+    "cached_tokens": 13696,
+    "completion_tokens": 1169
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    # Without a cached payload, the verified transducer fits the current sweeps.\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream, _features, _fit, _design, _chamber\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    raw = pickle.load(f)[0]['dataset']\\ncal = calibrate_upstream(raw)\\nout = solve_batch(raw)\\ndirect = solve_downstream(cal)\\ntr, te = cal['train'], cal['test']\\nt, dt = cal['eval_times'], cal['past_dt']\\nx, xt = _features(tr, te)\\nexpected = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(xt), len(t)), 'initial_rate_pred': (len(xt),)}\\nassert set(out) == set(expected)\\nfor key, shape in expected.items():\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\n    np.testing.assert_array_equal(out[key], direct[key])\\ntau, beta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25.\\nhold = te['hold_channel_raw'].sum(-1)\\neps = 1e-6\\nq, r = _chamber(tau, beta, xt, hold, np.array([0., eps]))\\nassert np.all(q[:, 0] == 0.)\\nnp.testing.assert_allclose(r, out['initial_rate_pred'], rtol=0, atol=1e-12)\\nerr = np.max(np.abs(q[:, 1] / eps - r))\\nassert err < 1e-5\\np, h = tr['past_channel_raw'].sum(-1), tr['hold_channel_raw'].sum(-1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrate = tr['instant_rate_obs']\\nmetrics = []\\nfor lab in np.unique(tr['lab_id']):\\n    a = tr['lab_id'] != lab\\n    ft, fb = _fit(x[a], p[a], h[a], dt, t, y[a], rate[a])\\n    c, d = _design(ft, x[~a], p[~a], h[~a], dt, t)\\n    ce, re = abs(c @ fb - y[~a]), abs(d @ fb - rate[~a])\\n    metrics.append((ce.mean(), re.mean(), ce.mean(0).max()))\\n    print('lab', lab, 'strain MAE', ce.mean(), 'rate MAE', re.mean(), 'worst horizon MAE', ce.mean(0).max())\\nworst = np.max(metrics, axis=0)\\nassert worst[0] < .019 and worst[1] < .009\\nprint('Worst:', worst, 'maximum deployment tangent discrepancy:', err)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sustained channel-7 marker → hold-driven reset; worst held-out benchtop lab MAEs before the calibration edit were 0.01788 for strain and 0.00810 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the cached calibration payload\",\n      \"rejected_reason\": \"It is numerically close on this batch, but the entry point must fit the supplied sweeps on each call; the verified upstream already supports that.\"\n    }\n  ],\n  \"rationale\": \"Use the existing upstream fit rather than duplicating calibration. Rerun the isolated entry-point and held-out lab checks on the edited bundle to catch composition errors or a regression from the calibration change. The blind deployment law remains supported by the matching archive setting, not by labeled deployment measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "9f40ed21b6a710f18229e163d2926eee594fb3a42c2180b0538df275440fad13",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30998.05,
+      "usage_known": true,
+      "prompt_tokens": 31040,
+      "cached_tokens": 13696,
+      "completion_tokens": 1169
+    }
+  ]
+}

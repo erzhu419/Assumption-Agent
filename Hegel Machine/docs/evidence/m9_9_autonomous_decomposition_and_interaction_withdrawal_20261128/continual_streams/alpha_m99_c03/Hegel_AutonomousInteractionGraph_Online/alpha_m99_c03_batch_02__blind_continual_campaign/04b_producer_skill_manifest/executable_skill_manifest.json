@@ -1,0 +1,182 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c03_batch_02_c3a1f77c0f84",
+    "source_hash": "c3a1f77c0f84dc074b98c534411fcb5b8cd8ac11b1600c58070687b6d388d27f",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c03_batch_02__blind_continual_campaign",
+    "task_id": "alpha_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/chamber_alignment.py",
+        "archived_relpath": "producers/tmp__chamber_alignment.py",
+        "bytes": 2582,
+        "sha256": "06c630a2e68c805286d9899878aae407c30ba4c0f6d2a5fc6a0acf7fcb5dd47d"
+      },
+      {
+        "container_path": "/tmp/chamber_final_audit.py",
+        "archived_relpath": "producers/tmp__chamber_final_audit.py",
+        "bytes": 1758,
+        "sha256": "d51c3a22dff69a0bdef1f9545b20e916feee8f413342edd0cbac7f212ea6c85d"
+      },
+      {
+        "container_path": "/tmp/chamber_identify.py",
+        "archived_relpath": "producers/tmp__chamber_identify.py",
+        "bytes": 1753,
+        "sha256": "a3a0be777720cc422b7eff6ae678af4a45084d0d02a9e569069709d70706c8c7"
+      },
+      {
+        "container_path": "/tmp/chamber_modes.py",
+        "archived_relpath": "producers/tmp__chamber_modes.py",
+        "bytes": 2057,
+        "sha256": "936a8ade45a26b33f4cb786e9654d56f2463ddefc1f776e1a88d867bd3b3f859"
+      },
+      {
+        "container_path": "/tmp/chamber_nominal.py",
+        "archived_relpath": "producers/tmp__chamber_nominal.py",
+        "bytes": 2445,
+        "sha256": "2d0d05a74ea799f97bc8abefe35b57b62ee147200dae7231de42db18a2c83510"
+      },
+      {
+        "container_path": "/tmp/chamber_probe.py",
+        "archived_relpath": "producers/tmp__chamber_probe.py",
+        "bytes": 2378,
+        "sha256": "f33903b93073a0130ff8c67b7ca370c1b8ed9347c1ce6709e735bbbd34152ba5"
+      },
+      {
+        "container_path": "/tmp/chamber_release.py",
+        "archived_relpath": "producers/tmp__chamber_release.py",
+        "bytes": 2191,
+        "sha256": "ac11c16594b253f65cc89d325b3b69f693a7c27eafeed7ffff83e65df02eb77b"
+      },
+      {
+        "container_path": "/tmp/chamber_structure.py",
+        "archived_relpath": "producers/tmp__chamber_structure.py",
+        "bytes": 2695,
+        "sha256": "cd88f54378af481227d00c38a35e62a75e4bc36da0b739d689955eb124550609"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m99_c03_batch_01_solver.py",
+        "bytes": 5008,
+        "sha256": "4f73573428a96620b9217987ad741b7b98968fb430dd824d51f244e04cf21417"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m99_c03_s00_solver.py",
+        "bytes": 4803,
+        "sha256": "f265086b7e40b42fb7e9e6331eb97c20438baf87746eb3ffdeb06bf376f3526c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l /holdout_task /tmp/hegel_continual_archive && cat batch_solver.py _verified_upstream.py _upstream_param_payload.json validate_public_schema.py && python3 - <<'PY'\nimport json,pickle, pathlib,numpy as np\np=pathlib.Path('/tmp/hegel_continual_archive')\nfor name in ['archive_manifest.json','archive_apparatus_log.json']:\n f=p/name\n if f.exists():\n  x=json.loads(f.read_text()); print(name, json.dumps(x,indent=2)[-14000:])\na=pickle.load(open('public_batch.pkl','rb'))\nprint('batch length',len(a))\ndef show(x,d=0):\n if isinstance(x,dict):\n  for k,v in x.items():\n   print('  '*d",
+      "cd /holdout_task && cat _verified_upstream.py validate_public_schema.py && cat /tmp/hegel_continual_archive/*solver.py && python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\nx=json.load(open(p)); print('log structure:', type(x).__name__, list(x) if isinstance(x,dict) else len(x)); print(json.dumps(x,separators=(',',':'))[-6500:]); a=pickle.load(open('public_batch.pkl','rb')); print('items',len(a));\nfor i,q in enumerate(a):\n d=q['dataset']; print(i,{k: (list(v) if isinstance(v,dict) else (getattr(v,'shape',None) or str(v)[:350])) for k,v i",
+      "cd /holdout_task && cat /tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py && python3 - <<'PY'\nimport json,numpy as np,pickle\nx=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('archive', type(x),list(x) if isinstance(x,dict) else len(x));\nfor a in (next(v for v in x.values() if isinstance(v,list)) if isinstance(x,dict) else x):\n print({k:v for k,v in a.items() if k!='facility_telemetry_trace'}); t=np.asarray(a['facility_telemetry_trace']); print('telemetry mean',t.mean(0),'std',t.std(0))\nd=pickle.load(open('public_batch.pkl','rb'))[0]; print('time',",
+      "cd /holdout_task && diff -u /tmp/hegel_continual_archive/*s00_solver.py /tmp/hegel_continual_archive/*batch_01_solver.py | tail -70; python3 - <<'PY'\nimport json\nx=json.load(open('public_asset_index.json')); print(str(x)[:1600]); print(open('_upstream_param_payload.json').read())\nPY\ncat > /tmp/chamber_probe.py <<'PY'\nimport sys, pickle, json, importlib.util\nimport numpy as np\nfrom scipy.optimize import least_squares\nsys.path.insert(0,'/holdout_task')\nfrom _verified_upstream import calibrate_upstream\nspec=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_m99_c03",
+      "cat > /tmp/chamber_identify.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\nP,H,X=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; r=-np.expm1(-t[:,None]/taus); K=np.c_[np.vstack([r,1/taus]),np.r_[t,1.]]; complete=np.isfinite(diag['coupon_features_raw']).all(1); age=np.cumsum(dt[::-1])[::-1]-dt; W=-np.expm1(-dt[:,None]/taus)*np.exp(-age[:,None]/taus); print('nominal history weights',W.T.round(5)); print('complete',complete.sum());\nfor tail in [True, False]:\n k=K if tail else K[:,:2]; coeff=Q@np.linalg.pinv(k.T); err=Q-coeff@k.T; print('temporal linear?',tail,'curv",
+      "cat /holdout_task/batch_solver.py; cat > /tmp/chamber_modes.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\nP,H,X=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; complete=np.isfinite(diag['coupon_features_raw']).all(1)\ndef expk(tau): return np.r_[-np.expm1(-t/tau),1/tau]\ndef intk(tau): return tau*expk(tau)\ndef model(p,kind):\n f,s=p[:2]; col=[expk(f),expk(s)]\n if kind=='linear': col += [np.r_[t,1.]]\n if kind=='third': col += [intk(p[2])]\n if kind=='repeat_fast': col += [np.r_[t*np.exp(-t/f),1.]]\n if kind=='repeat_slow': col += [np.r_[t*np.exp(-t/s),1.]]\n if kind==",
+      "cat /holdout_task/_verified_upstream.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | grep -Ei 'viscoelastic|relaxation' | cut -c1-240 | head -8; cat > /tmp/chamber_structure.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\nprint('keys',list(diag),list(b)); print('labs',np.bincount(a['lab_id']),np.bincount(b['lab_id']),np.bincount(diag['lab_id']))\nP,H,X=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; D=X@theta[2:]; complete=np.isfinite(diag['coupon_features_raw']).all(1)\nfor lab in np.unique(diag['lab_id']):\n print('panel',",
+      "cat > /tmp/chamber_alignment.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\nP,H,_=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; complete=np.isfinite(diag['coupon_features_raw']).all(1); labs=diag['lab_id']; idx=np.arange(len(Q)); age=np.cumsum(dt[::-1])[::-1]-dt\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); entries=log if isinstance(log,list) else next(v for v in log.values() if isinstance(v,list));\nfor row in entries:\n print('apparatus', {k:(v if np.isscalar(v) else str(v)[:160]) for k,v in row.items() if k!='facility_telemet",
+      "sed -n '1,160p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py; cat /holdout_task/validate_public_schema.py; cat >/tmp/chamber_nominal.py <<'PY'\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\nP,H,_=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; X=q._features(diag,diag)[:len(P)]; D=theta[2]+X@theta[3:]; labs=diag['lab_id']; complete=np.isfinite(diag['coupon_features_raw']).all(1); age=np.cumsum(dt[::-1])[::-1]-dt\nK=np.r_[-np.expm1(-t[:,None]/taus),[1/taus]]; W=-np.expm1(-dt[:,None]/taus)*np.exp(-age[:,None]/taus); G=(H[:,None]-P@W)*theta[:2]; B=G@K.T; k=np.",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\ns=Path('/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py').read_text().split('def solve_batch(')[0]\ns=s[:s.index('def _calibration(')]+s[s.index('def _design('):]\ns=s.replace('def _features(train, test):\\n    x = np.vstack((train[\\'coupon_features_raw\\'], test[\\'coupon_features_raw\\'])).astype(float)\\n    ref = np.vstack((train[\\'ref_coupons\\'], test[\\'ref_coupons\\']))\\n    lab = np.r_[train[\\'lab_id\\'], test[\\'lab_id\\']]\\n    stratum = np.r_[train[\\'stratum\\'], test[\\'stratum\\']]', '''def _features(*blocks):\n    x ",
+      "set -e\ncd /holdout_task\ncat > batch_solver.py <<'PY'\nfrom _verified_upstream import calibrate_upstream\nfrom downstream_solver import solve_downstream\n\n\ndef solve_batch(dataset: dict) -> dict:\n    # With no fixed payload, the verified transducer fits the supplied sweeps.\n    return solve_downstream(calibrate_upstream(dataset))\nPY\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\ncat > /tmp/chamber_release.py <<'PY'\nimport sys\nsys.path.insert(0, '/holdout_task')\nimport pickle\nimport numpy as np\nimport downstream_solver as m\nfrom batch_solver import solve_batc",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_release.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys,pickle,numpy as np\nsys.path.insert(0,'/holdout_task')\nfrom batch_solver import solve_batch\nfrom downstream_solver import _features,_predict\nfrom _verified_upstream import calibrate_upstream\nwith open('/holdout_task/public_batch.pkl','rb') as f:\n    item=pickle.load(f)[0]\nd=item['dataset']; out=solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_wei"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m99_c03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py",
+      "selected_channels": [
+        "m99_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 275,
+        "sha256": "2ac5383e211b743a8c80f0cc4b44f2edd8c7d01791adf15fd335ef6993eaee69",
+        "content_addressed_ref": "content_addressed_blobs/2ac5383e211b743a8c80f0cc4b44f2edd8c7d01791adf15fd335ef6993eaee69.py"
+      },
+      {
+        "declared_root": "/holdout_task/downstream_solver.py",
+        "filename": "downstream_solver.py",
+        "bytes": 5002,
+        "sha256": "3b71cd6eefddd779fb97ea0259c0fa7183eb791e1bb8c449d6a9e328537c9e9c",
+        "content_addressed_ref": "content_addressed_blobs/3b71cd6eefddd779fb97ea0259c0fa7183eb791e1bb8c449d6a9e328537c9e9c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/downstream_solver.py"
+    ],
+    "exported_pure_functions": [
+      "inp",
+      "obs",
+      "rms"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c3a1f77c0f84dc074b98c534411fcb5b8cd8ac11b1600c58070687b6d388d27f",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_release.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport sys,pic",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c3a1f77c0f84dc074b98c534411fcb5b8cd8ac11b1600c58070687b6d388d27f",
+        "expected_candidate_sha256": "c3a1f77c0f84dc074b98c534411fcb5b8cd8ac11b1600c58070687b6d388d27f",
+        "computed_candidate_sha256": "c3a1f77c0f84dc074b98c534411fcb5b8cd8ac11b1600c58070687b6d388d27f",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 275
+          },
+          {
+            "path": "/holdout_task/downstream_solver.py",
+            "bytes": 5002
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_c3a1f77c"
+    }
+  },
+  "structure": {
+    "full_producer_count": 10,
+    "reusable_ast_function_closures": [
+      {
+        "name": "inp",
+        "code": "def inp(block, x):\n    return (block['past_channel_raw'].sum(-1), block['hold_channel_raw'].sum(-1), np.column_stack((np.ones(len(x)), x)))"
+      },
+      {
+        "name": "obs",
+        "code": "def obs(block):\n    return (block['strain_curves_obs'] - block['strain_0'][:, None], block['instant_rate_obs'])"
+      },
+      {
+        "name": "rms",
+        "code": "def rms(v):\n    return np.sqrt(np.mean(v * v))"
+      }
+    ]
+  }
+}

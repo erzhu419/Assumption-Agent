@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62b4c0a6f51643eba96567d2352add03",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:55.382359+00:00",
+  "ended_at_utc": "2026-11-27T19:54:27.666817+00:00",
+  "request_sha256": "f67880077cd5d097628f70ada510454b6b46839bbeac038d498cd10d82e77124",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45750,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30588,
+    "cached_tokens": 13696,
+    "completion_tokens": 1347
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/audit_rosette.py <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_rosette, _invert_rosette\\nfrom batch_solver import solve_batch\\n\\nstudy = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nsweep = study['sensor_calibration_sweeps']\\nx, y = sweep['ref_rosette'], sweep['raw_rosette']\\nj = np.arange(4)\\nk = (j + 1) % 4\\namplitude = np.max(abs(y), axis=1)\\n# The three EMI rows are separated from the clean rows by a >8-unit gap.\\nclean = amplitude < 8\\nterms = [p for degree in (2, 3) for p in combinations_with_replacement(range(4), degree)]\\nfull = np.column_stack([np.prod(x[:, p], axis=1) for p in terms])\\n\\ndef design(ch, family, a):\\n    base = np.column_stack((np.ones(len(x)), x, x[:, ch]**3, x[:, ch]*x[:, k[ch]]))\\n    if family == 'mixed':\\n        extra = [i for i, p in enumerate(terms) if p not in {(ch,)*3, tuple(sorted((ch, k[ch])))}]\\n        return np.column_stack((base, full[:, extra]))\\n    if family in ('self', 'sum', 'difference'):\\n        q = x[:, ch] if family == 'self' else x[:, ch] + (1 if family == 'sum' else -1)*x[:, k[ch]]\\n        return base/(1 + a*q[:, None]**2)\\n    return base\\n\\ndef alternative(train, test, family, a=0):\\n    tr = train & clean\\n    return np.column_stack([d[test] @ np.linalg.lstsq(d[tr], y[tr, ch], rcond=None)[0]\\n                            for ch in j for d in [design(ch, family, a)]])\\n\\nfolds = [('shuffled', np.random.default_rng(1203).permutation(len(x)) % 5, range(5)),\\n         ('high amplitude', np.max(abs(x), axis=1) > 1.45, [1]),\\n         ('axis', np.arange(len(x)) < 16, [1])]\\nworst = 0\\nfor name, fold, keys in folds:\\n    for key in keys:\\n        train = fold != key\\n        test = ~train & clean\\n        coef = _fit_rosette(x[train], y[train])\\n        forward = coef[:, 0] + x[test] @ coef[:, 1:5].T + coef[:, 5]*x[test]**3 + coef[:, 6]*x[test]*x[test][:, k]\\n        inverse = np.max(abs(_invert_rosette(y[test], coef) - x[test]))\\n        worst = max(worst, inverse)\\n        print(name, key, 'inverse max', f'{inverse:.3g}', 'forward max', f'{np.max(abs(forward-y[test])):.3g}', end='; ')\\n        print('full mixed max', f'{np.max(abs(alternative(train,test,\\\"mixed\\\")-y[test])):.3g}', end='; ')\\n        rows = np.flatnonzero(train & clean)\\n        inner = np.full(len(x), -1)\\n        inner[rows] = np.random.default_rng(42).permutation(len(rows)) % 3\\n        options = [(family, a) for family in ('self', 'sum', 'difference') for a in (0, 1e-5, 1e-4, 1e-3, 1e-2, .1)]\\n        def score(option):\\n            return sum(np.sum((alternative(train & (inner != i), inner == i, *option)-y[inner == i])**2) for i in range(3))\\n        opt = min(options, key=score)\\n        print('nested rational', opt, 'max', f'{np.max(abs(alternative(train,test,*opt)-y[test])):.3g}')\\nassert worst < 1e-4, worst\\nout = solve_batch(study)\\nprint('isolated composed solve:', len(out['weights']), 'weights; budget error', abs(out['weights'].sum()-study['total_budget']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or diagonal-only mixing -> H2 cyclic pair coupling plus self-cubics; the verified bundle's worst held-out inverse error is 3.49e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test batch classification, relay modes, or drift equations\",\n      \"rejected_reason\": \"The public task is a single continuous rosette calibration study; those mechanisms have no corresponding labels or state in this interface.\"\n    }\n  ],\n  \"rationale\": \"Compare the saved transfer against unrestricted cubic interactions and rational terms built from channel sums and differences, selecting rational settings only inside the training split. A consistent edge-slice improvement would justify revisiting the transfer; otherwise retain the compact model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "1e05c64659fb3b919bdaa82a7c56545d1c5a4cdf52f284f28710cca0d4e9c657",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33410.26,
+      "usage_known": true,
+      "prompt_tokens": 30588,
+      "cached_tokens": 13696,
+      "completion_tokens": 1347
+    }
+  ]
+}

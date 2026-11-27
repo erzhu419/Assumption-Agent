@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42ba46a9649f4d9ab283235dc0326e77",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:09.111366+00:00",
+  "ended_at_utc": "2026-11-27T19:47:46.131714+00:00",
+  "request_sha256": "fd9b78fdadb8251d4c582d7458d8066365fb8c155512330b7727d2dceece6e7d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 33296,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26012,
+    "cached_tokens": 13696,
+    "completion_tokens": 1610
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_probe.py <<'PY'\\nimport sys, json, pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nold=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c04_batch_01_solver.py')\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; raw=a['dataset']; g0=a['campaign_diagnostics']; pay=json.load(open('/holdout_task/_upstream_param_payload.json'))\\nd=calibrate_upstream(raw,pay); g=calibrate_upstream(dict(raw,test=g0),pay)['test']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; sm=np.r_[0.,np.ones(4)]; feat=old['_features']; X,Z=feat(tr,te); taus,theta=old['_fit'](tr,X,sm,dt,t)\\ncat=lambda a,b:{k:np.concatenate([a[k],b[k]]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}\\nxs={'local':feat(g,{k:v[:0] for k,v in g.items()})[0], 'train+diag':feat(tr,g)[1], 'all+diag':feat(cat(tr,te),g)[1]}\\nfor f in ['labs','strata']:\\n k={'labs':'lab_id','strata':'stratum'}[f]; print(f,[np.unique(q[k],return_counts=True)[1] for q in (tr,te,g)])\\ncal=raw['calibration_load_cells']; br,tl=cal['bridge_raw'],cal['true_channel_loads']; ii=(np.abs(br)<=8.5).all(1); print('calibration affine',np.linalg.lstsq(np.c_[tl[ii],np.ones(ii.sum())],br[ii],rcond=None)[0].round(6)); print('taus,theta',taus,theta)\\ny=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']; h=g['hold_channel_raw'].sum(-1); p=g['past_channel_raw'].sum(-1); age=np.r_[np.cumsum(dt[::-1])[::-1][1:],0.]; z=p@(-np.expm1(-dt[:,None]/taus)*np.exp(-age[:,None]/taus)); L=h*np.sum(theta[:2]/taus); H=-z*theta[:2]/taus\\nrm=lambda x:np.sqrt(np.mean(x*x)); med=lambda x:np.median(np.abs(x));\\nprint('signal units',rm(y),rm(r), 'past/hold',np.c_[h,p][:4].round(3)); print('reference nan counts',[np.isnan(q['coupon_features_raw']).sum() for q in (tr,te,g)])\\nfor name,x in xs.items():\\n D=theta[2]+x@theta[3:]; c0,r0=old['_chamber_response'](g,x,sm,t,taus,theta); cb,rb=old['_design'](g,x,sm,dt,t,taus); print(name,'archived curve/rate RMSE',rm(y-c0),rm(r-r0),'bench',rm(y-cb@theta),rm(r-rb@theta))\\n designs={'L D':np.c_[L,D],'L D H':np.c_[L,D,H],'L D H 1':np.c_[L,D,H,np.ones(len(g['lab_id']))],'L D H x':np.c_[L,H,np.ones(len(g['lab_id'])),x],'L D p':np.c_[L,D,p]}\\n for label,A in designs.items():\\n  b=np.linalg.lstsq(A,r,rcond=None)[0]; print(' rate',label,'rm/med',round(rm(r-A@b),5),round(med(r-A@b),5),'coef',b.round(4))\\n  if label not in ('L D','L D H','L D H x'):continue\\n  for drift in [False,True]:\\n   def basis(poles):\\n    a=-np.expm1(-t[None,:]/poles[:,None])*poles[:,None]; return np.vstack([a,t]) if drift else a\\n   n=A.shape[1]; m=2+drift; ini=np.linalg.lstsq(np.einsum('ij,kt->itjk',A,basis(taus)).reshape(-1,n*m),y.ravel(),rcond=None)[0]\\n   def pred(v):\\n    f=A@v[2:].reshape(n,m); return f@basis(np.exp(v[:2])),f.sum(1)\\n   def res(v):\\n    cy,cr=pred(v); return np.r_[(cy-y).ravel(),cr-r]\\n   fit=least_squares(res,np.r_[np.log(taus),ini],bounds=(np.r_[np.log([.025,.025]),np.repeat(-np.inf,n*m)],np.r_[np.log([50.,50.]),np.repeat(np.inf,n*m)]),loss='soft_l1',f_scale=.005,x_scale='jac',max_nfev=150)\\n   cy,cr=pred(fit.x); print(' curve',label,'drift',drift,'poles',np.exp(fit.x[:2]).round(4),'rm/med',np.round([rm(y-cy),med(y-cy),rm(r-cr),med(r-cr)],5),'coef',fit.x[2:].reshape(n,m).round(4).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited chamber law → H2 altered pole, history, or drift coupling; diagnostic errors have not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived chamber coefficients unchanged\",\n      \"rejected_reason\": \"The current diagnostics allow separate tests of whether the archived load, history, and drift terms still apply.\"\n    }\n  ],\n  \"rationale\": \"Fit the intrinsic spectrum on benchtop coupons only. Compare the archived law with compact chamber models on calibrated diagnostics, testing rate and curve errors separately before selecting candidates for held-out validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "412b1cc8d4e3bdcfb329e625c1e549cb0a128ec935a218f6ec26c07099f2b76f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39285.5,
+      "usage_known": true,
+      "prompt_tokens": 26012,
+      "cached_tokens": 13696,
+      "completion_tokens": 1610
+    }
+  ]
+}

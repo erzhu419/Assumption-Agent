@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2c549eac88394b66afcb7dd10cad573f",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:05.772287+00:00",
+  "ended_at_utc": "2026-11-27T20:02:36.346515+00:00",
+  "request_sha256": "c67ca9e470bda11fbec248522e3dbf35fb862f0333091b94b857c9678090ce17",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41147,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29533,
+    "cached_tokens": 14976,
+    "completion_tokens": 1189
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"grep -A25 '^def _deployment_response' /tmp/hegel_continual_archive/alpha_m99_c04_batch_02_solver.py; cat >/tmp/m99_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/alpha_m99_c04_batch_04_solver.py'\\ns=importlib.util.spec_from_file_location('old',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; d=i['campaign_diagnostics']; tr=ds['train']; te=ds['test']; dt=ds['past_dt']; t=ds['eval_times']; cal=ds['calibration_load_cells']; bridge=m._fit_bridge(cal)\\nraw=cal['bridge_raw']; true=cal['true_channel_loads']; b,M,terms=bridge; err=np.linalg.norm(raw-b-true@M-sum((true[:,inds].prod(1)[:,None]*v for inds,v in terms),start=np.zeros_like(raw)),axis=1); print('bridge residual quantiles',np.quantile(err,[0,.5,.8,.9,.95,1])); print('bridge nonlinear terms',terms)\\nx,xe=m._features(tr,te); _,xd=m._features(tr,d); trc=m._calibrate(tr,bridge); dc=m._calibrate(d,bridge); taus,theta=m._fit(trc,x,dt,t); print('material',taus,theta)\\ndef targets(g): return g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']\\ny,r=targets(d); c0,r0=targets(tr); ca,ra=m._design(trc,x,dt,t,taus); print('train MAD',m._mad(ca@theta-c0),m._mad(ra@theta-r0))\\ndef report(name,c,p):\\n e=c-y; f=p-r; print(name,'MAD',m._mad(e),m._mad(f),'worst lab MedAE',max(np.median(abs(e[d['lab_id']==k])) for k in np.unique(d['lab_id'])),max(np.median(abs(f[d['lab_id']==k])) for k in np.unique(d['lab_id'])),'MAE',np.mean(abs(e)),np.mean(abs(f)))\\nca,ra=m._design(dc,xd,dt,t,taus); report('baseline',ca@theta,ra@theta)\\nh=dc['hold_stress']; past=dc['past_stress']; drift=theta[2]+xd@theta[3:]; report('history withdrawn',*m._withdrawn_response(h,drift,t,taus,theta))\\nphi=np.column_stack([-np.expm1(-t[:,None]/taus),t]); psi=np.r_[1/taus,1.]; A=np.vstack([phi,psi]); coeff=np.array([least_squares(lambda u:A@u-v,np.linalg.lstsq(A,v,rcond=None)[0],loss='soft_l1',f_scale=.005).x for v in np.column_stack([y,r])]); print('per coupon temporal fit MAD',m._mad(coeff@phi.T-y),m._mad(coeff@psi-r)); age=np.r_[np.cumsum(dt[::-1])[::-1][1:],0.]; history=past@(-np.expm1(-dt[:,None]/taus)*np.exp(-age[:,None]/taus)); print('correlations rows [hold, histories fast/slow, drift, hold*drift, history*drift fast/slow, history^2 fast/slow]'); Z=np.column_stack([h,history,drift,h*drift,history*drift[:,None],history**2]); print(np.corrcoef(Z.T,coeff.T)[:-3,-3:]); print('first 5 [hold,histories,drift,amp0,amp1,tail]',np.column_stack([h,history,drift,coeff])[:5]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared material spectrum) -> H2 (campaign-specific chamber law); worst-lab diagnostic error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a flexible chamber surrogate immediately\",\n      \"rejected_reason\": \"The verification coupons can first test whether the material time constants still explain the chamber response and whether only the amplitudes or drift law changed.\"\n    }\n  ],\n  \"rationale\": \"Check bridge residuals before attributing errors to chamber mechanics. Compare archived laws by lab, then separate errors in temporal shape from errors in branch amplitudes and drift to guide the next fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "cc75ac91c226510c4b30805aa42856e60301b8bf38434ab8f26b51dd5c08250b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31700.12,
+      "usage_known": true,
+      "prompt_tokens": 29533,
+      "cached_tokens": 14976,
+      "completion_tokens": 1189
+    }
+  ]
+}

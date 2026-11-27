@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4fd12ce37adf4b3b98643263bd5d11a0",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:29.993175+00:00",
+  "ended_at_utc": "2026-11-27T19:38:58.938100+00:00",
+  "request_sha256": "d8c360cf3278318c0680bd31e658c049e21c4abe844c6bf13dc402574b7aebc2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48812,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32772,
+    "cached_tokens": 0,
+    "completion_tokens": 1155
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_rate.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nz=np.load('/tmp/chamber_probe.npz'); p,h,x,dt,t,tau,th=[z[k] for k in ('past','hold','features','dt','t','taus','theta')]; n=len(h); e=z['er']; E=z['ec']; after=np.cumsum(dt[::-1])[::-1]-dt\\nmem=lambda a:p@(-np.expm1(-dt[:,None]/np.atleast_1d(a))*np.exp(-after[:,None]/np.atleast_1d(a)))\\nm=mem(tau); f=-np.expm1(-t[:,None]/tau); c=z['corr']; np.set_printoptions(precision=5,suppress=True)\\ndef cv(A,Y):\\n B=np.linalg.lstsq(A,Y,rcond=None)[0]; q=np.linalg.qr(A,mode='reduced')[0]; R=Y-A@B; den=1-(q*q).sum(1); O=R/den.reshape((-1,)+(1,)*(Y.ndim-1)); return B,np.sqrt(np.mean(R**2,axis=0)),np.sqrt(np.mean(O**2,axis=0)),np.max(abs(O),axis=0)\\no=np.ones(n); H=np.c_[o,h,m]; print('memory',m[:5]); print('rate remainder',np.c_[e,e-th[0]/tau[0]*m[:,0],e-m@(th[:2]/tau)])\\nfor name,A in [('fast',np.c_[o,m[:,0]]),('both',np.c_[o,m]),('mem and hold',H),('history',np.c_[o,h,p]),('fast plus feature',np.c_[o,m[:,0],x]),('history + feature',np.c_[o,h,p,x])]: print(name,cv(A,e))\\nfor name,Y in [('fast',c[:,0]),('slow',c[:,1]),('drift',c[:,2]),('shape1',E[:,3]-e*f[3,0]*tau[0]),('shape2',E[:,-1]-e*f[-1,0]*tau[0])]:\\n print(name)\\n for nm,A in [('H',H),('H+x',np.c_[H,x]),('H+hold*x',np.c_[H,h[:,None]*x]),('H+mem1*x',np.c_[H,m[:,1,None]*x]),('H+gap1*x',np.c_[H,(h-m[:,1])[:,None]*x]),('H+gap0*x',np.c_[H,(h-m[:,0])[:,None]*x]),('H+prev*x',np.c_[H,p[:,-1,None]*x])]: print(nm,cv(A,Y))\\nprint('rate single tau free')\\nfor extra in [o[:,None],np.c_[o,h],np.c_[o,h,m[:,1]]]:\\n def fun(a):\\n  A=np.c_[extra,mem(np.exp(a[0]))]; return A@np.linalg.lstsq(A,e,rcond=None)[0]-e\\n fit=least_squares(fun,[np.log(tau[0])]); a=np.exp(fit.x[0]); print(a,cv(np.c_[extra,mem(a)],e))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_rate.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_structure.py | sed -n '/^ fast$/,/^ drift$/p' | cut -c1-220\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop law -> H2 chamber correction that separates initial-rate memory from time-dependent strain; baseline worst errors are 2.469 strain and 2.622 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the greedy interaction terms from the in-sample scan\",\n      \"rejected_reason\": \"The initial-rate correction is already well explained by fast memory; the extra terms need held-out evidence before they can be interpreted as chamber interactions.\"\n    }\n  ],\n  \"rationale\": \"Test whether fast memory alone predicts the rate correction and compare physically grouped predictors for the remaining curve shape. Leave-one-coupon-out errors distinguish transferable mechanisms from terms that only fit the 24 diagnostic coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1e3bd6650045ccf0a46ddb1f57aba16f38cdb867521a42d5688a71bbd0d98aa9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30049.67,
+      "usage_known": true,
+      "prompt_tokens": 32772,
+      "cached_tokens": 0,
+      "completion_tokens": 1155
+    }
+  ]
+}

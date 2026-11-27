@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dae50e21a0fa44a3865d2dc02a85e379",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:10:31.646508+00:00",
+  "ended_at_utc": "2026-11-27T20:10:52.211056+00:00",
+  "request_sha256": "e27fa4a1d11fd23bf21460516fc351082faa6e819c3163f62fbd782c41704643",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51994,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32673,
+    "cached_tokens": 14976,
+    "completion_tokens": 711
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd=i['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; ok=np.max(np.abs(y),axis=1)<8\\nx,y=x[ok],y[ok]; order=np.argsort(np.max(np.abs(x),axis=1)); scores=[]\\nfor v in np.array_split(order,5):\\n u=np.setdiff1d(order,v)\\n coeff=m['_bridge']({'true_channel_loads':x[u],'bridge_raw':y[u]})\\n affine=np.linalg.lstsq(np.c_[np.ones(len(u)),x[u]],y[u],rcond=None)[0]\\n candidates=(m['_invert_bridge'](y[v],coeff),np.linalg.solve(affine[1:].T,(y[v]-affine[0]).T).T)\\n scores.append([np.sqrt(np.mean((p.sum(axis=1)-x[v].sum(axis=1))**2)) for p in candidates]); print('max channel load in block:',round(float(np.max(np.abs(x[v]))),4),'total-load RMS cyclic/affine:',scores[-1])\\na,b=np.max(scores,axis=0); print('worst held-out physical total-load RMS cyclic/affine:',a,b); assert a < b\\nPY\\nsed -n '/^def solve_batch/,$p' /tmp/hegel_continual_archive/alpha_m99_c01_batch_02_solver.py | tail -25\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration → H2 cyclic-cubic calibration with archived drift redistribution; worst amplitude-block raw RMS is 1.205×10⁻⁴, and this check measures error in the physical total load used by the solver.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the lower forward bridge residual as sufficient\",\n      \"rejected_reason\": \"Forward residuals alone do not show whether inversion improves total axial load on unseen calibration rows.\"\n    }\n  ],\n  \"rationale\": \"Test the submitted inverse on held-out calibration loads. If the cyclic bridge does not improve worst-block total-load error, revisit calibration before changing the chamber model. Compare the transferred coefficients with the archived equation and correct any transcription mismatch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "90404c8e29fcff73c3ed59aba261bd4fc1da77b1bbe1598484a8c673095182e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20528.42,
+      "usage_known": true,
+      "prompt_tokens": 32673,
+      "cached_tokens": 14976,
+      "completion_tokens": 711
+    }
+  ]
+}

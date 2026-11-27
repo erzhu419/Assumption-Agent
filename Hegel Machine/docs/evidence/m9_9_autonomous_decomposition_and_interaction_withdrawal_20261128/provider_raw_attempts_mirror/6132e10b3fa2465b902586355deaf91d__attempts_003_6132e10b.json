@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6132e10b3fa2465b902586355deaf91d",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:36:47.337453+00:00",
+  "ended_at_utc": "2026-11-27T19:37:26.239352+00:00",
+  "request_sha256": "1fd7f2b6f050ffbe1d8b2eb75abd1d5a431893165440c0182039966d75728199",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23686,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23888,
+    "cached_tokens": 18048,
+    "completion_tokens": 1240
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -42 /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py; cat > /tmp/probe_m99.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nspec=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,g=d['train'],d['test'],i['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; print('t,dt',t,dt); print('diagnostic inputs',[(k,v.shape) for k,v in g.items()]); print('lab counts',*[np.unique(s['lab_id'],return_counts=True) for s in (tr,te,g)]); print('diagnostic telemetry first rows',g['aux_chamber_telemetry'][:5]); cal=d['calibration_load_cells']; raw,y=cal['bridge_raw'],cal['true_channel_loads']; a=np.column_stack((np.ones(len(raw)),raw)); q=np.column_stack([raw[:,j]*raw[:,k] for j in range(4) for k in range(j,4)]); print('cal raw range',raw.min(0),raw.max(0)); print('cal true range',y.min(0),y.max(0));\\nfor A in (a,np.column_stack((a,q))):\\n err=np.concatenate([y[j::5]-A[j::5]@np.linalg.lstsq(A[np.arange(len(y))%5!=j],y[np.arange(len(y))%5!=j],rcond=None)[0] for j in range(5)]); print('cal CV channel and total rmse',np.sqrt(np.mean(err**2,axis=0)),np.sqrt(np.mean(err.sum(1)**2)))\\nb=m._bridge(cal); x,_=m._features(tr,te); gx=m._features(tr,g)[1]; out=m.solve_batch(d); ta,th=out['estimated_taus'],out['hereditary_weights']; print('material',ta,th)\\ndef probe(s,x):\\n past,h=m._loads(s,b); c,r=m._basis(ta,past,h,x,dt,t); y=s['strain_curves_obs']-s['strain_0'][:,None]; v=s['instant_rate_obs']; e=y-c@th; er=v-r@th; print('baseline curve rms and initial-rate rms',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(er**2))); print('curve residual singular values',np.linalg.svd(e,compute_uv=False)); print('curve residual median by time',np.median(e,axis=0)); B=np.column_stack((-np.expm1(-t[:,None]/ta),t)); coef=np.linalg.lstsq(B,e.T,rcond=None)[0].T; print('temporal residual RMS',np.sqrt(np.mean((e-coef@B.T)**2)),'rate discrepancy RMS',np.sqrt(np.mean((er-coef@np.r_[1/ta,1])**2))); print('temporal correction coeff range',coef.min(0),coef.max(0)); F=np.c_[c[:,-1,:2]/B[-1,:2],h,past,x,s['aux_chamber_telemetry']]; names=['gap0','gap1','hold']+[f'past{j}' for j in range(past.shape[1])]+[f'x{j}' for j in range(4)]+[f'aux{j}' for j in range(4)]; R=np.corrcoef(np.c_[coef,er,F].T)[:4,4:]; print('strongest correlations by correction component (two branches, drift, rate)',[[(names[j],round(row[j],3)) for j in np.argsort(-abs(row))[:6]] for row in R]); return coef\\nprint('TRAIN'); probe(tr,x); print('CHAMBER'); probe(g,gx)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_m99.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unchanged benchtop transfer → H2: a chamber correction separable into memory and drift; chamber residual metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unrestricted chamber response directly\",\n      \"rejected_reason\": \"With only 24 verification coupons, first test whether the measured residuals retain the two relaxation modes and linear drift; that result determines which chamber terms need fitting.\"\n    }\n  ],\n  \"rationale\": \"Held-out bridge sweeps distinguish nonlinear calibration error from constitutive mismatch. Projecting train and chamber residuals onto the same temporal basis, then checking its implied initial rate against observations, tests whether to alter chamber amplitudes or the relaxation dynamics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "dce0c59c2e9f969d449126c5cc36c4d98d5c3780d81b77fe026bf4481c6feed4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40037.89,
+      "usage_known": true,
+      "prompt_tokens": 23888,
+      "cached_tokens": 18048,
+      "completion_tokens": 1240
+    }
+  ]
+}

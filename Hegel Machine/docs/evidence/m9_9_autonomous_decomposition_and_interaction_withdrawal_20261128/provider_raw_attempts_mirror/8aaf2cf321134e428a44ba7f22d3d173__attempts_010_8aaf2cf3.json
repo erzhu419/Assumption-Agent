@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8aaf2cf321134e428a44ba7f22d3d173",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:08.822038+00:00",
+  "ended_at_utc": "2026-11-27T19:59:37.493279+00:00",
+  "request_sha256": "6180d3af4db4c1121cccdf9040f5f658cf8ef1ecd65f2808b627e4052a7a07cc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52785,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32959,
+    "cached_tokens": 14976,
+    "completion_tokens": 1178
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_transfer_audit.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\n\\nroot = Path('/holdout_task')\\narchive = Path('/tmp/hegel_continual_archive')\\nm = load('candidate', root / 'batch_solver.py')\\nprior = load('precedent', archive / 'alpha_m99_c04_batch_01_solver.py')\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nrecords = json.loads((archive / 'archive_apparatus_log.json').read_text())\\nz = np.asarray(records[-1]['facility_telemetry_trace'])[:, [1, 5]]\\np = np.asarray([r['facility_telemetry_trace'] for r in records[:-1]])[:, :, [1, 5]]\\nfor label, keep in [('first half', slice(None, 12)), ('second half', slice(12, None))]:\\n    dist = np.linalg.norm(p[:, keep].mean(1) - z[keep].mean(0), axis=1)\\n    order = np.argsort(dist)\\n    print(label, records[order[0]]['completed_campaign_short_name'], 'nearest and runner-up', dist[order[:2]].tolist())\\n    assert records[order[0]]['completed_campaign_short_name'] == 'alpha_m99_c04_s00'\\nout = m.solve_batch(d)\\nbridge = m._fit_bridge(d['calibration_load_cells'])\\ntrain, test = d['train'], d['test']\\nxt, xe = m._features(train, test)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nt = d['eval_times']\\nhold = m._decode(test['hold_channel_raw'], bridge).sum(axis=-1)\\ncurves, rate = prior._chamber_response(hold, theta[2] + xe @ theta[3:], t, tau, theta)\\nprint('archived chamber transfer max strain and rate discrepancy', np.max(np.abs(out['predicted_strain'] - (test['strain_0'][:, None] + curves))), np.max(np.abs(out['initial_rate_pred'] - rate)))\\nnp.testing.assert_allclose(out['predicted_strain'], test['strain_0'][:, None] + curves, rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rate, rtol=0, atol=1e-12)\\nreversed_history = dict(d, test=dict(test, past_channel_raw=test['past_channel_raw'][:, ::-1, :]))\\nchanged = m.solve_batch(reversed_history)\\nfor key in out:\\n    np.testing.assert_allclose(changed[key], out[key], rtol=0, atol=1e-12)\\nprint('deployment outputs unchanged when measured deployment stress histories are reversed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_transfer_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 the whole-trace match hides a transient setting or the implementation retains deployment memory -> H2 both trace halves select the same precedent and the solver reproduces its memory-withdrawn response; the latest worst held-out strain and rate P90 errors are 0.02262 and 0.01300.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the bridge grammar and lab-bias comparisons\",\n      \"rejected_reason\": \"The prior audit already tested these on real measurements. It did not test whether the chamber precedent is stable across trace windows or whether deployment predictions are invariant to actual stress-history order.\"\n    }\n  ],\n  \"rationale\": \"Verify the remaining transfer risk without changing the artifact: disagreement between trace halves would warrant revisiting the chamber selection, while disagreement with the archived response or sensitivity to reversed deployment histories would warrant fixing the constitutive handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ba0e48e5c0d089ce1a62b98aa2bf6a11bf182bcd017c6fb3aa17ff1ba48ff822",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29815.85,
+      "usage_known": true,
+      "prompt_tokens": 32959,
+      "cached_tokens": 14976,
+      "completion_tokens": 1178
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca9d5968eac043a18ad00185b7cdda42",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:48.590590+00:00",
+  "ended_at_utc": "2026-11-27T20:05:16.559005+00:00",
+  "request_sha256": "1db7b21039359ba0ebcb0cea1b0b3bfd4fcd52e231c345dee8157324d2dad709",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73740,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41074,
+    "cached_tokens": 14976,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_margin.py <<'PY'\\nexec(open('/tmp/m99_check_candidate.py').read().split('out =')[0])\\nout=m.solve_batch(ds); tau=out['estimated_taus']; beta=out['hereditary_weights']; t=ds['eval_times']; br=m._bridge(ds['calibration_load_cells']); p,h=m._loads(g,br); x=m._chamber_features(g); d=beta[2]+x@beta[3:]; y=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']; l=g['lab_id']; missing=np.isnan(g['coupon_features_raw']).any(1)\\nf=-np.expm1(-t[:,None]/tau); G=f*tau-t[:,None]; base=(h[:,None]*beta[:2])@f.T+d[:,None]*t; A=d[:,None,None]*G; target=y-base\\nage=np.cumsum(ds['past_dt'][::-1])[::-1]-ds['past_dt']; z=p@(np.exp(-age[:,None]/tau)*-np.expm1(-ds['past_dt'][:,None]/tau))\\n# Each added term tests a physically distinct failure: retained memory, load-drift coupling, or drift saturation.\\ndef correction(q): return q[:,None,None]*G\\nsets={'fixed':None,'fit_shares':A,'retained_memory':np.concatenate((A,-z[:,None,:]*f),axis=2),'load_drift':np.concatenate((A,correction(d*(h-3))),axis=2),'difference_interaction':np.concatenate((A,correction(d*(z[:,0]-z[:,1]))),axis=2),'rational_drift':np.concatenate((A,correction(d/(1+d*d))),axis=2)}\\nfor name,mat in sets.items():\\n E=np.empty_like(y)\\n for lab in np.unique(l):\\n  a=l!=lab; b=~a\\n  if mat is None: E[b]=A[b]@np.array([.25,.50])-target[b]; continue\\n  w=np.linalg.lstsq(mat[a].reshape(-1,mat.shape[-1]),target[a].ravel(),rcond=None)[0]; E[b]=mat[b]@w-target[b]\\n  if name=='fit_shares': print('fit shares without lab',lab,np.round(w,6))\\n print(name,'held-lab overall RMSE',round(np.sqrt(np.mean(E**2)),6),'max complete/missing/late',*(round(np.max(abs(e)),6) for e in [E[~missing],E[missing],E[:,-1]]))\\nerr=h*np.sum(beta[:2]/tau)+d-r\\nprint('onset max by lab',[(int(i),round(np.max(abs(err[l==i])),6),round(np.mean(err[l==i]),6)) for i in np.unique(l)])\\ncal=ds['calibration_load_cells']; raw=cal['bridge_raw']; loads=cal['true_channel_loads']; nominal=np.max(abs(raw),axis=1)<8; inv=m._invert_bridge(raw[nominal],br)\\nprint('nominal calibration axial stress RMSE and max',np.sqrt(np.mean((inv.sum(1)-loads[nominal].sum(1))**2)),np.max(abs(inv.sum(1)-loads[nominal].sum(1))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_margin.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop transfer → H2 chamber reset with onset-preserving drift redistribution; current maximum absolute errors are 0.0132 strain and 0.00487 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply classification, relay-mode, or stochastic-control checks\",\"rejected_reason\":\"The inputs describe continuous strain and rate measurements with no class labels, relay states, or stochastic-control dynamics. Lab-wise residuals are the relevant nuisance check.\"}],\"rationale\":\"Use held-lab verification to test whether retained memory, a pairwise memory difference, a load interaction, or drift saturation improves worst-slice strain. Check onset bias by lab and calibration error in axial stress separately so a strain improvement cannot mask either failure.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5f7335a7855667e0ec8e00eac41738484552ead5644b48ce9630e10c7f6a8ecb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27920.23,
+      "usage_known": true,
+      "prompt_tokens": 41074,
+      "cached_tokens": 14976,
+      "completion_tokens": 1074
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "66cc6830794e47f38e496625e391f442",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:33.594569+00:00",
+  "ended_at_utc": "2026-11-27T19:45:08.121147+00:00",
+  "request_sha256": "20a222c79784b4e2c767df701ab4d822eaf68a65f7cdb50705f29831e5e0768e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49180,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33027,
+    "cached_tokens": 14976,
+    "completion_tokens": 1479
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /holdout_task\\ncp batch_solver.py /tmp/m99_affine_baseline.py\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\na = s.index('def _calibrate(')\\nb = s.index('\\\\ndef ', a + 1)\\ns = s[:a] + '''def _calibrate(study):\\n    \\\"\\\"\\\"Fit per-channel gain and offset from the campaign's rosette sweeps.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    ref_mean, raw_mean = ref.mean(axis=0), raw.mean(axis=0)\\n    centered = ref - ref_mean\\n    gain = (centered * (raw - raw_mean)).sum(axis=0) / (centered ** 2).sum(axis=0)\\n    obs = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return ((obs - raw_mean) / gain + ref_mean).ravel()\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nold = load('/tmp/m99_affine_baseline.py')\\nnew = load('/holdout_task/batch_solver.py')\\nS, U = new._forward(s)\\nz = s['Z_nuisance']\\nP = np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\nij = s['sensor_ij']\\nwall = ((ij == 0) | (ij == np.array([s['nx']-1, s['ny']-1]))).any(axis=1)\\nscores = []\\nfor mod in (old, new):\\n    pulse_scores = []\\n    for pulse in item['campaign_diagnostics']:\\n        y = mod._calibrate(dict(s, y_obs_raw=pulse['y_pulse_raw']))\\n        e = (S @ pulse['w_pulse'] - y)\\n        ep = e - z @ (P @ e)\\n        pulse_scores.append([np.sqrt(np.mean(a*a)) for a in (e, ep, ep.reshape(-1, len(ij))[:,wall])])\\n    scores.append(np.max(pulse_scores, axis=0))\\nprint('worst tracer RMSE (all, projected, projected wall), affine then diagonal:', scores)\\nassert np.all(scores[1] < scores[0])\\nout = new.solve_batch(s)\\nw = np.asarray(out['weights']); c = out['kkt_certificate']\\ny = new._calibrate(s); T = S - z @ (P @ S); r = y - z @ (P @ y)\\ne = T @ w - r; rho = s['source_ridge']; cap = s['u_box']; B = s['total_budget']\\ng = T.T @ e + rho*w; J = (e @ e + rho*(w @ w))/2\\nnu = c['nu_sum']; lo = np.asarray(c['lam_lower']); hi = np.asarray(c['lam_upper'])\\nassert np.array_equal(w, c['weights']) and np.all(lo >= 0) and np.all(hi >= 0)\\ncert = max(abs(w.sum()-B), -min(w), max(w)-cap, max(abs(g-nu-lo+hi)), max(abs(w*lo)), max(abs((cap-w)*hi)), abs(J-c['primal_objective']), abs(J-c['dual_lower_bound']))\\nf = out['terminal_field']\\nres = (s['V_reaction_2d']+s['mu_shifts'][-1])*f - np.einsum('m,mij->ij', w, s['source_modes'])\\nfor ax, key in enumerate('xy'):\\n    k, v = s['kappa_'+key], s['vel_'+key]\\n    h = s['L'+key]/(len(k)-1)\\n    for d in (1,-1):\\n        a = (k+np.roll(k,d))/(2*h*h) + np.maximum(d*v,0)/h\\n        res += a.reshape((-1,1) if ax==0 else (1,-1))*(f-np.roll(f,d,axis=ax))\\nfield_res = np.max(np.abs(res))\\nprint('KKT max residual', cert, 'terminal PDE max residual', field_res)\\nassert cert < 1e-10 and field_res < 1e-11\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full affine calibration) → H2 (per-channel gain and offset): all 80 inner folds selected H2, and worst nuisance-projected wall tracer RMSE fell from 6.53×10⁻⁷ to 4.90×10⁻⁷.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain full affine calibration\",\n      \"rejected_reason\": \"Cross-channel terms worsened held-out sweep prediction and measured tracer prediction, including the projected wall slice.\"\n    }\n  ],\n  \"rationale\": \"Change only calibration; the periodic transport and optimizer already passed stress tests. Verify that the saved edit preserves the measured tracer improvement and still returns a valid field and KKT certificate in isolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5ab7f473919f0c24a4736a20ebe1c0c4fc9ddeaf1a99f71c7fcf3818063b7078",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36855.88,
+      "usage_known": true,
+      "prompt_tokens": 33027,
+      "cached_tokens": 14976,
+      "completion_tokens": 1479
+    }
+  ]
+}

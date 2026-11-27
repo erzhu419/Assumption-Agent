@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0eec86f57e58436d87d784d11e9451bd",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:14.098152+00:00",
+  "ended_at_utc": "2026-11-27T19:37:41.268489+00:00",
+  "request_sha256": "bbd6416ff708edbe87b98ca17f81fe9b7b570011de3b6f3837ed2405af533c62",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33602,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28712,
+    "cached_tokens": 14976,
+    "completion_tokens": 1105
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; sed '/for label,h,c0 /,$d' /tmp/explore_m99.py > /tmp/m99_inputs.py; cat >> /tmp/m99_inputs.py <<'PY'\\nE=np.c_[-np.expm1(-t[:,None]/tau),t]; er=np.r_[1/tau,1]\\ny=g['strain_curves_obs']-g['strain_0'][:,None]; yr=g['instant_rate_obs']; A0,R0=m._design(tau,cg,dt,t)\\nPY\\ncat > /tmp/m99_probe.py <<'PY'\\nfrom m99_inputs import *\\nfrom scipy.optimize import least_squares\\nfor label,h,ci in [('train',tr,c),('diag',g,cg)]:\\n a,r=m._design(tau,ci,dt,t); ec=h['strain_curves_obs']-h['strain_0'][:,None]-a@th; eR=h['instant_rate_obs']-r@th\\n print(label,'curve/rate RMSE',np.sqrt(np.mean(ec**2)),np.sqrt(np.mean(eR**2)),'absolute medians',np.median(abs(ec)),np.median(abs(eR)))\\nD=np.vstack((E,er)); obs=np.c_[y,yr]; B=np.array([least_squares(lambda b: D@b-o,np.linalg.lstsq(D,o,rcond=None)[0],loss='soft_l1',f_scale=.015).x for o in obs]); print('fixed time basis RMSE/Q50/Q90',np.sqrt(np.mean((B@D.T-obs)**2)),np.quantile(abs(B@D.T-obs),[.5,.9],axis=0).round(4));\\np,h,x=cg; nomdr=x@th[2:]; a=R0[:,:2]*tau; z=h[:,None]-a; print('amplitude/hold summary',np.quantile(B[:,:2]/h[:,None],[0,.25,.5,.75,1],axis=0)); print('drift quantiles',np.quantile(B[:,-1],[0,.25,.5,.75,1]),'drift vs baseline',np.linalg.lstsq(np.c_[np.ones(len(h)),nomdr],B[:,-1],rcond=None)[0]);\\nfor name,F in [('hold',h[:,None]),('hold+nominal memory',np.c_[h,z]),('hold+past',np.c_[h,p]),('hold+past+features',np.c_[h,p,x]),('hold+past squared',np.c_[h,p,p*p]),('hold+past+hold*past',np.c_[h,p,h[:,None]*p])]:\\n F=np.c_[np.ones(len(h)),F]; co=np.linalg.lstsq(F,B,rcond=None)[0]; rms=[]\\n for lab in np.unique(g['lab_id']):\\n  keep=g['lab_id']!=lab; pred=F[~keep]@np.linalg.lstsq(F[keep],B[keep],rcond=None)[0]; rms.append(np.sqrt(np.mean((pred-B[~keep])**2,axis=0)))\\n print(name,'in/LOLO',np.sqrt(np.mean((F@co-B)**2,axis=0)).round(4),np.max(rms,axis=0).round(4));\\n if name in ('hold+nominal memory','hold+past'): print('co',co.round(4))\\nprint('bridge matrix',bridge.round(5)); print('first diagnostics observations',obs[:3].round(4)); print('train,test telemetry',[(np.mean(k['aux_chamber_telemetry'],axis=0),np.std(k['aux_chamber_telemetry'],axis=0)) for k in (tr,te)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shared relaxation with baseline deployment amplitudes and drift -> H2: chamber-specific branch amplitudes and drift; quantitative slice metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unregularized coupon-level amplitude fits for prediction\",\"rejected_reason\":\"They describe the diagnostic traces but cannot predict unseen coupons without a transferable load-history law.\"}],\"rationale\":\"Measure the baseline errors and compare compact load-history bases by held-out lab. If even the fixed-time basis leaves structured residuals, revise the chamber time law before fitting amplitude corrections.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "7312926aa85dfd80e7e5c4aaded24d236c7ce00ceeda2a23243c826e39a93c30",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28306.97,
+      "usage_known": true,
+      "prompt_tokens": 28712,
+      "cached_tokens": 14976,
+      "completion_tokens": 1105
+    }
+  ]
+}

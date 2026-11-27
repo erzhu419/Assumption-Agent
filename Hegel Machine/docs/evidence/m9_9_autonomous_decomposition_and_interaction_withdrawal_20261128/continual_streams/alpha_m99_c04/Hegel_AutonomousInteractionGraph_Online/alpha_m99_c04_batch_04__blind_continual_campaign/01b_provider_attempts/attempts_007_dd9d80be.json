@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dd9d80be44ff4814ad82c2248be9417c",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:52.263904+00:00",
+  "ended_at_utc": "2026-11-27T20:02:28.236623+00:00",
+  "request_sha256": "23463b1319f11353167970a811804310b614410cfbbfb3c1c99cb6bd64701fbb",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41556,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29132,
+    "cached_tokens": 13696,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_bridge.py <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log = json.load(f)\\nprint('Apparatus log (prefix):', json.dumps(log)[-3800:])\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\na = m._design(x)\\nnxt, prv = x[:, m._NEXT], x[:, m._PREV]\\n# A squared difference adds a missing neighboring quadratic; saturation tests\\n# the corresponding rational basis. Neither changes the base invertible model.\\ndef add_features(kind):\\n    q = x - nxt\\n    if kind == 'difference':\\n        return (q*q)[..., None]\\n    if kind == 'rational':\\n        return np.stack([q**2/(1+s*q**2) for s in (.15, .6)] + [x**3/(1+.3*q**2)], axis=-1)\\n    return np.empty((*x.shape, 0))\\ndef pred(z, b):\\n    return np.einsum('nif,if->ni', z, b)\\naxis = np.count_nonzero(x, axis=1) == 1\\nmix = np.flatnonzero(~axis)\\nfolds = [(f'axis{i}', np.flatnonzero(axis & (x[:, i] != 0))) for i in range(4)]\\nfolds += [('high mixed', mix[np.argsort(np.max(abs(x[mix]), axis=1))[-max(8, len(mix)//5):]])]\\nfolds += [(f'mixed{i}', v) for i, v in enumerate(np.array_split(np.random.default_rng(9).permutation(mix), 5))]\\nworst = {}\\nfor label, val in folds:\\n    tr = ~np.isin(np.arange(len(x)), val)\\n    b = m._fit_bridge(x[tr], y[tr]); train_r = np.linalg.norm(pred(a[tr], b)-y[tr], axis=1)\\n    clean_tr = np.flatnonzero(tr)[train_r < .01]\\n    clean_val = val[np.linalg.norm(pred(a[val], b)-y[val], axis=1) < .01]\\n    if not len(clean_val):\\n        continue\\n    # Test whether the four channels are scaled copies of the same transfer law.\\n    def unpack(p):\\n        return np.c_[p[:4], p[4:8, None]*np.r_[1.,p[8:]][None, :]]\\n    p0 = np.r_[b[:,0], b[:,1], np.median(b[:,2:]/b[:,1,None], axis=0)]\\n    shared = unpack(least_squares(lambda p: (pred(a[clean_tr], unpack(p))-y[clean_tr]).ravel(), p0).x)\\n    z0 = x[clean_val]; obs = y[clean_val]\\n    for kind in ('base', 'shared', 'difference', 'rational'):\\n        z = np.concatenate([a, add_features(kind)], axis=-1)\\n        coef = (b if kind == 'base' else shared if kind == 'shared' else np.stack([np.linalg.lstsq(z[clean_tr, j], y[clean_tr,j], rcond=None)[0] for j in range(4)]))\\n        err = np.max(np.abs(pred(z[clean_val], coef)-obs))\\n        worst[kind] = max(worst.get(kind,0.), err)\\n        print(label, kind, 'forward_max', format(err,'.7g'), end='; ')\\n        if kind in ('base','shared'):\\n            e = m._inverse(obs,coef)-z0\\n            print('inverse_chan/sum', format(np.max(abs(e)),'.7g'),format(np.max(abs(e.sum(axis=1))),'.7g'),end='; ')\\n    print('clean/rejected', len(clean_val), len(val)-len(clean_val))\\nprint('Worst forward per-channel error:', worst)\\nfor part in ('train','test'):\\n    print(part, 'laboratories (counts):', np.unique(d[part]['lab_id'], return_counts=True), 'strata:', np.unique(d[part]['stratum'], return_counts=True))\\nprint('Bridge calibration fields:', sorted(c), 'classification labels or relay modes: none in supplied calibration schema')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unrestricted polynomial bridge → H2: robust cyclic cubic bridge; prior clean held-out maxima were 0.0002702 per channel and 0.0004114 in summed load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch centering or test relay modes\",\n      \"rejected_reason\": \"The upstream task is paired continuous calibration, not classification or relay control. Check whether the data actually expose an upstream batch nuisance before introducing an adjustment.\"\n    },\n    {\n      \"option\": \"Fit a Fokker–Planck or HJB drift\",\n      \"rejected_reason\": \"The bridge calibration consists of static paired load and readout measurements; the verified downstream solver handles chamber dynamics.\"\n    }\n  ],\n  \"rationale\": \"Withhold whole axis sweeps and the highest-load mixed block, and compare the current model with neighboring differences, rational terms, and a shared transfer law fitted only within each training fold. A material improvement on the highest-load or summed-load slice would justify changing the calibration; a noise-scale fluctuation alone would not.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "7ac5469c0822b2a774ee6dfe8eff9a177a3b216b0ddcd2dd9f206015fde24979",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37102.58,
+      "usage_known": true,
+      "prompt_tokens": 29132,
+      "cached_tokens": 13696,
+      "completion_tokens": 1521
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "614db9db8ff649c090714650225d5d2c",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:14.431144+00:00",
+  "ended_at_utc": "2026-11-27T19:49:08.335283+00:00",
+  "request_sha256": "da453bc5b0df97e6fd5b94f7593f4cf37e7f0e39b12e6b3404b896f07803c1c7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69788,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42457,
+    "cached_tokens": 14976,
+    "completion_tokens": 2358
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_grammar.py <<'PY'\\nfrom m99_rank2 import *\\nfrom itertools import combinations, combinations_with_replacement\\nfrom scipy.optimize import least_squares\\n# With drift removed, project directly onto the identified chamber transient.\\nb=np.r_[-np.expm1(-t/u),1/u]; a=(E+drift[:,None]*T)@b/(b@b); n=len(a)\\nbase=np.c_[np.ones(n),drift]; past=(pc*(-np.expm1(-dt[:,None]/taus)*np.exp(-(np.cumsum(dt[::-1])[::-1]-dt)[:,None]/taus))[:,:,None]) if False else None\\nprint('group, stratum, amp, error vs affine drift'); print(np.c_[g['lab_id'],g['stratum'],a,a-base@np.linalg.lstsq(base,a,rcond=None)[0]].round(5))\\ndef report(A,mask=None):\\n A=np.asarray(A); l=np.ones(n,dtype=bool) if mask is None else mask\\n c=np.linalg.lstsq(A[l],a[l],rcond=None)[0]; e=a[l]-A[l]@c; U,s,_=np.linalg.svd(A[l],full_matrices=False); h=(U[:,s>s[0]*1e-10]**2).sum(1); return np.sqrt(np.mean((e/np.maximum(1-h,1e-12))**2)),np.sqrt(np.mean(e**2)),c\\nB={'r':drift,'rc':drift-theta[2], 'H':H, 'gap0':gap[:,0],'gap1':gap[:,1], **{f'x{i}':G[:,i] for i in range(4)}, **{f'h{i}':hc[:,i] for i in range(4)}}\\nfor i in range(4):\\n for j in range(i):\\n  for s in (-1,1): B[f'x{i}{s:+}x{j}']=G[:,i]+s*G[:,j]; B[f'h{i}{s:+}h{j}']=hc[:,i]+s*hc[:,j]\\nterms={}\\nfor name,z in B.items():\\n for k,f in [('raw',z),('sq',z*z),('cube',z**3),('abs',abs(z)),('zabs',z*abs(z)),('relu',np.maximum(z,0)),('tanh',np.tanh(z)),('inv',1/(1+z*z))]: terms[f'{k}:{name}']=f\\nfor a1,a2 in combinations_with_replacement(B,2):\\n z,w=B[a1],B[a2]\\n for label,f in [('*',z*w),('^2*',z*z*w),('*^2',z*w*w),('/(1+sq)',z/(1+w*w)),('div-rev',w/(1+z*z)),('*abs',z*abs(w))]: terms[f'{a1}{label}{a2}']=f\\nfor idx in combinations_with_replacement(['r','x0','x1','x2','x3','h0','h1','h2','h3'],3): terms['*'.join(idx)]=B[idx[0]]*B[idx[1]]*B[idx[2]]\\nprint('baseline',report(base)[:2]); ranked=sorted(((*report(np.c_[base,z])[:2],name) for name,z in terms.items())); print('best single',ranked[:14]);\\nfor name in [z[-1] for z in ranked[:5]]:\\n chosen=[name]; A=np.c_[base,terms[name]]\\n for _ in range(3):\\n  best=min(((*report(np.c_[A,z])[:2],key) for key,z in terms.items() if key not in chosen)); chosen.append(best[-1]); A=np.c_[A,terms[best[-1]]]; print('sparse',chosen,best[:2],report(A)[2].round(5))\\n# Test whether a cubic of one unknown feature contrast accounts for the residual.\\nfor V,label in [(G,'features'),(np.c_[G,hc],'features+channels'),(np.c_[G, H, gap],'features+axial')]:\\n def regress(p,sel,kind):\\n  z=V@p[:-1]+p[-1]; f={'cube':z**3,'tanh':np.tanh(z),'rational':z/(1+z*z),'gate':drift/(1+z*z)}[kind]; A=np.c_[base,f]; c=np.linalg.lstsq(A[sel],a[sel],rcond=None)[0]; return A@c\\n for kind in ('cube','tanh','rational','gate'):\\n  rng=np.random.default_rng(59)\\n  def fit(sel):\\n   best=None\\n   for _ in range(5):\\n    f=least_squares(lambda p:(regress(p,sel,kind)-a)[sel],rng.normal(0,.4,V.shape[1]+1),bounds=(-5,5),max_nfev=130)\\n    if best is None or f.cost<best.cost: best=f\\n   return best,regress(best.x,sel,kind)\\n  allsel=np.arange(n); f,y=fit(allsel); out=a.copy()\\n  for lab in np.unique(g['lab_id']):\\n   test=g['lab_id']==lab; _,pred=fit(allsel[~test]); out[test]=pred[test]-a[test]\\n  print(label,kind,'fit/worst lab',np.sqrt(np.mean((a-y)**2)),max(np.sqrt(np.mean(out[g['lab_id']==lab]**2)) for lab in np.unique(g['lab_id'])),f.x.round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_grammar.py > /tmp/m99_grammar_report.txt && sed -n '/group, stratum/,$p' /tmp/m99_grammar_report.txt\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear chamber transient amplitude -> H2 nonlinear amplitude with the same approximately 1.001 s transient; free-amplitude diagnostic worst-horizon RMSE is 0.00310, while affine drift leaves 0.055 amplitude residual standard deviation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic feature basis\",\n      \"rejected_reason\": \"It interpolates all 24 diagnostics and cannot establish transfer to new coupons.\"\n    }\n  ],\n  \"rationale\": \"Remove the benchtop drift explicitly and test sparse products, contrasts, and rational terms against the transient amplitude. Use leave-one-lab-out errors to distinguish a transferable feature contrast from a nonlinear fit that only improves the development sample.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "98d0afa713262d216e8e0533c5f74490bb9ba3016fcf98bab0a1af65ef3ee9ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 55021.87,
+      "usage_known": true,
+      "prompt_tokens": 42457,
+      "cached_tokens": 14976,
+      "completion_tokens": 2358
+    }
+  ]
+}

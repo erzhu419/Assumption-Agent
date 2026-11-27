@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8e9fad0bf2f648008a57629c15faf747",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:42:23.222184+00:00",
+  "ended_at_utc": "2026-11-27T19:42:53.472052+00:00",
+  "request_sha256": "d05852f4fc2752ca57572c6b7dec54257d66d04341aa27c15fe9f48e42e4ecb6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36727,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29993,
+    "cached_tokens": 14976,
+    "completion_tokens": 1214
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_wrap.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m99_probe import *\\nfrom scipy.optimize import least_squares\\nC=models['linear']; ycal=np.linalg.solve(C[1:].T,(raw.reshape(-1,4,3)-C[0][None,:,None]).transpose(1,0,2).reshape(4,-1)).reshape(4,-1,3).transpose(1,0,2).reshape(raw.shape)\\nprint('affine sweep residual rms/max',np.sqrt(np.mean((feat(x,'linear')@C-y)**2)),np.max(np.abs(feat(x,'linear')@C-y)))\\nfor k in 'xy':\\n print(k,'kappa endpoints',s['kappa_'+k][[0,1,-2,-1]],'v endpoints',s['vel_'+k][[0,-1]],'h',s['L'+k]/(s['n'+k]-1))\\ndef getaxis(ax,p,form):\\n k=s['kappa_'+ax]; v=s['vel_'+ax]; h=s['L'+ax]/(len(k)-1); m=axis(k,v,h,0,'reflect').tolil()\\n for a,(i,j,b) in enumerate([(0,1,len(k)-1),(len(k)-1,len(k)-2,0)]):\\n  edge=(k[i]+k[b])/2/h**2; inner=(k[i]+k[j])/2/h**2; adv=(-1 if a else 1)*v[i]/h\\n  if form=='fit': near,wrap,leak=p[3*a:3*a+3]\\n  elif form=='scale': near,wrap,leak=k[i]/h**2,edge*p[0],0\\n  else:\\n   near=(inner if 'face' in form else k[i]/h**2)+(max(-adv,0) if 'adv' in form else 0)\\n   wrap=(k[i]/h**2 if 'local' in form else edge)+(max(adv,0) if 'adv' in form else 0)\\n   leak=0\\n  m[i,j]=-near; m[i,b]=-wrap; m[i,i]=near+wrap+leak\\n return m.tocsc()\\ndef calc(form,p=()):\\n n=len(p)//2\\n return S_for(getaxis('x',p[:n],form),getaxis('y',p[n:],form))\\ndef score(e): return np.sqrt(np.mean(e*e,axis=0)).round(8)\\nfor f in ['base','face','local','adv','faceadv','localadv','facelocal','facelocaladv']:\\n e=calc(f)-ycal; print(f,score(e),'projected',score(proj(e)))\\nfor f,p in [('scale',np.ones(2)),('fit',np.concatenate([[s['kappa_'+a][i]/h**2,(s['kappa_'+a][0]+s['kappa_'+a][-1])/2/h**2,0] for a in 'xy' for h in [s['L'+a]/(s['n'+a]-1)] for i in [0,-1]]))]:\\n for held in [None,0,1,2]:\\n  train=[i for i in range(3) if i!=held]; o=least_squares(lambda p:(calc(f,p)-ycal)[:,train].ravel(),p,gtol=1e-13,ftol=1e-12,xtol=1e-12); print(f,'held',held,'parameters',o.x.round(6),'RMSE',score(calc(f,o.x)-ycal),'jac singular min',np.linalg.svd(o.jac,compute_uv=False)[-1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_wrap.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (zero-leak endpoints) → H2 (periodic coupling on both axes); diffusion-only wrap reduces worst measured pulse RMSE from 0.06464 to 0.002462.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The prior campaign's zero-leak nearest-neighbor boundary stencil applies unchanged.\",\"empirical_witness\":\"Worst-pulse RMSE falls from 0.06464 to 0.002462 when opposite-endpoint coupling is added on both axes using affine-calibrated observations.\",\"causal_blanket_diagnosis\":\"The inherited stencil omits a direct transport path between opposite endpoints; changing calibration polynomial degree does not remove the discrepancy.\",\"sublated_pivot\":\"Keep the documented interior and test conservative periodic endpoint rows, including upwind contributions and face averaging.\",\"risk_kind\":\"omitted boundary coupling\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ship the first periodic candidate\",\"rejected_reason\":\"Residuals still exceed the calibration noise floor; endpoint advection or face conventions could explain the remainder.\"}],\"rationale\":\"Compare physically specified wrap stencils and use leave-one-pulse-out fits to distinguish a missing endpoint term from an overfit coefficient correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "486e4dfdd6e0ecfc615c8ebc2f00e051561ddd983e9a163886be5debae3ef8be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31360.2,
+      "usage_known": true,
+      "prompt_tokens": 29993,
+      "cached_tokens": 14976,
+      "completion_tokens": 1214
+    }
+  ]
+}

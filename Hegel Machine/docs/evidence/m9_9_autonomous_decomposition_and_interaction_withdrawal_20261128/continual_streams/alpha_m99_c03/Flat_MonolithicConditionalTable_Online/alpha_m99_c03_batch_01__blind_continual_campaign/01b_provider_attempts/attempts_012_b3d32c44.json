@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3d32c4452e84c17ad650c4146739566",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:03.972546+00:00",
+  "ended_at_utc": "2026-11-27T19:41:34.589526+00:00",
+  "request_sha256": "e5f3fd94dd445472cd6a6afba9cb92514aa6a7470b0f89f64707783dccf16e90",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70965,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42294,
+    "cached_tokens": 14976,
+    "completion_tokens": 1237
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text(); a=s.index('# Chamber response'); b=s.index('def solve_batch',a)\\ns=s[:a]+'''def _chamber(taus, theta, hold, x, times):\\n    # Chamber equilibration resets the branch memory. The drift rate\\n    # starts at its intrinsic value and decays as 1 / (1 + t).\\n    drift = theta[2] + x @ theta[3:]\\n    branch = hold[:, None] * theta[:2]\\n    basis = -np.expm1(-times[:, None] / taus)\\n    return (branch @ basis.T + drift[:, None] * np.log1p(times),\\n            branch @ (1.0 / taus) + drift)\\n\\n\\n'''+s[b:]; p.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; g=i['campaign_diagnostics']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; out=m.solve_batch(d); tau=out['estimated_taus']; th=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values())\\nx=m._features(g,g)[-len(g['lab_id']):]; b=m._calibration(d['calibration_load_cells']); _,h,_=m._coupon_inputs(g,x,b); c,r=m._chamber(tau,th,h,x,t); y=g['strain_curves_obs']-g['strain_0'][:,None]; yr=g['instant_rate_obs']; e=c-y; er=r-yr\\nfor name,groups in [('lab',g['lab_id']),('stratum',g['stratum']),('coupon',np.arange(len(h))),('missing',np.isnan(g['coupon_features_raw']).any(1))]:\\n print(name,'worst diagnostic strain/rate RMSE',np.max([[np.mean(e[groups==k]**2)**.5,np.mean(er[groups==k]**2)**.5] for k in np.unique(groups)],axis=0))\\nprint('horizon RMSE range', np.sqrt(np.mean(e**2,axis=0))[[0,-1]],'pooled diagnostic curve/rate RMSE',np.sqrt([np.mean(e**2),np.mean(er**2)]))\\na,_=m._chamber(tau,th,h,x,np.array([0.,1.e-7])); assert np.max(abs(a[:,0]))<1e-12; assert np.max(abs((a[:,1]-a[:,0])/1.e-7-r))<2e-6\\nxj=m._features(tr,te); inp=m._coupon_inputs(tr,xj[:len(tr['lab_id'])],b); cz,rz=m._design(tau,inp,dt,t); ey=cz@th-(tr['strain_curves_obs']-tr['strain_0'][:,None]); ez=rz@th-tr['instant_rate_obs']; print('worst benchtop lab median absolute curve/rate residual',np.max([[np.median(abs(ey[tr['lab_id']==k])),np.median(abs(ez[tr['lab_id']==k]))] for k in np.unique(tr['lab_id'])],axis=0)); assert np.sqrt(np.mean(e**2))<.03 and np.sqrt(np.mean(er**2))<.03\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: empirical chamber offsets and slopes → H2: reset branch memory plus logarithmic creep driven by the full intrinsic drift score; the logarithmic challenger had worst held-out coupon strain/rate RMSE of 0.0322/0.0304 before fixing its timescale to one.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep fitted chamber exponential weights\",\n      \"rejected_reason\": \"The logarithmic kernel matched the measured horizon dependence with comparable or better worst-slice error and preserves the intrinsic initial drift rate without independent chamber coefficients.\"\n    }\n  ],\n  \"rationale\": \"The fitted logarithmic timescale was 0.995, and the measured hold-load slopes matched the reset-memory prediction across horizons. Verify that fixing the timescale to one preserves diagnostic accuracy and that the submitted rate equals the strain derivative at zero. If either check fails, keep the prior verified candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0499cfd7eed39d2df351684571910ff823e2abe4a22117241f2d372fd76e3451",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31714.16,
+      "usage_known": true,
+      "prompt_tokens": 42294,
+      "cached_tokens": 14976,
+      "completion_tokens": 1237
+    }
+  ]
+}

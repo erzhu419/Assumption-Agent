@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7c94fa790104a8cad238f62fd4f94b0",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:23.138871+00:00",
+  "ended_at_utc": "2026-11-27T19:53:51.496807+00:00",
+  "request_sha256": "54daed5e4a484289f0dfe647db9680d12991db6c057623580f002ef37072bd3c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30448,
+    "cached_tokens": 13696,
+    "completion_tokens": 1081
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import _fit, _forward, _invert, calibrate_upstream\\n\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    s = item['study']; sweep = s['sensor_calibration_sweeps']\\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\\n    fit = _fit(x, y)\\n    clean = np.linalg.norm(_forward(x, fit) - y, axis=1) < 1\\n    # Quantify residual EMI influence and how calibration uncertainty propagates\\n    # through the actual downstream inverse problem, not just through the sensor.\\n    canonical = calibrate_upstream(s)\\n    obs = canonical['y_obs_raw'].reshape(-1, 4)\\n    j = np.broadcast_to(fit[1:5].T, (len(obs), 4, 4)).copy()\\n    k = np.arange(4); nxt = (k + 1) % 4\\n    j[:, k, k] += fit[5] * obs[:, nxt] + 3 * fit[6] * obs**2\\n    j[:, k, nxt] += fit[5] * obs\\n    sigma = np.linalg.svd(j, compute_uv=False)[:, -1].min()\\n    base = solve_batch(s)['weights']\\n    splits = [np.flatnonzero(clean)] + [np.setdiff1d(np.arange(len(x)), v) for v in np.split(np.arange(len(x)), [4, 8, 12, 16, 32, 48, 64])]\\n    drift = []; output_drift = []\\n    for keep in splits:\\n        st = dict(s, sensor_calibration_sweeps=dict(sweep, ref_rosette=x[keep], raw_rosette=y[keep]))\\n        alt = calibrate_upstream(st)['y_obs_raw'].reshape(-1, 4)\\n        drift.append(np.max(np.abs(alt - obs), axis=0))\\n        output_drift.append(np.max(np.abs(solve_batch(st)['weights'] - base)))\\n    print('minimum observation Jacobian singular value:', sigma)\\n    print('EMI removal: per-channel drift:', drift[0].tolist(), 'weight drift:', output_drift[0])\\n    print('blocked deletion: worst per-channel drift:', np.max(drift[1:], axis=0).tolist(), 'worst weight drift:', max(output_drift[1:]), 'weight drift / box cap:', max(output_drift[1:]) / s['u_box'])\\n    assert sigma > 0.1 and np.max(drift) < 2e-4\\n    assert max(output_drift) / s['u_box'] < 1e-3\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (separable nonlinear response) → H2 (cyclic pair interactions and channelwise cubics with full linear mixing); worst held-out inverse error is 3.37e-5, and the prior audit found no improvement in worst blocked-fold error from added pairwise or rational terms.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the pairwise and rational basis comparison\",\n      \"rejected_reason\": \"The blocked comparison already settled that question on the public data. The remaining unmeasured margin is how calibration perturbations affect the solved source weights.\"\n    }\n  ],\n  \"rationale\": \"A small forward residual can mask an ill-conditioned inverse or downstream amplification. Measure the inverse Jacobian on real observations and propagate sweep-block deletion and EMI removal through the saved composition. If EMI removal materially improves stability, revisit the row rejection; if small sensor perturbations amplify downstream, compare candidates on source-weight stability rather than forward residual alone.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "fe32e4fd0730499466d40d82035e97f29d54c89fc17925beff72ff5b964d5025",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28307.95,
+      "usage_known": true,
+      "prompt_tokens": 30448,
+      "cached_tokens": 13696,
+      "completion_tokens": 1081
+    }
+  ]
+}

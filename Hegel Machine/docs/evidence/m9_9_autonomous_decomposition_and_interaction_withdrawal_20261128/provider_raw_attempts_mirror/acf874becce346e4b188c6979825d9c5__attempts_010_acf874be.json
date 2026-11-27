@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acf874becce346e4b188c6979825d9c5",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:09.999668+00:00",
+  "ended_at_utc": "2026-11-27T20:03:44.866666+00:00",
+  "request_sha256": "d80d56942df390c4074e9d6c42ec44d459ba5c8eb460a36312cea88b3fa218e2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65339,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37457,
+    "cached_tokens": 14976,
+    "completion_tokens": 1498
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\ncat >/tmp/m99_gate_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nds=item['dataset']; diag=item['campaign_diagnostics']; out=m.solve_batch(ds)\\ntau,th=out['estimated_taus'],out['hereditary_weights']; assert 0.05<tau[0]<tau[1]<25\\nb=m._calibration(ds['calibration_load_cells']); t=ds['eval_times']; dt=ds['past_dt']; lab=diag['lab_id']; n=len(lab)\\nx=m._features(diag,diag)[:n]; q=m._coupon_inputs(diag,x,b); past,h,F=q\\ny=diag['strain_curves_obs']-diag['strain_0'][:,None]; r=diag['instant_rate_obs']; d=F@th[2:]\\nC,R=m._chamber(tau,th,h,x,t); G=2*t/(1+np.sqrt(1+t)); phi=-np.expm1(-t[:,None]/tau)\\n_,train_R=m._design(tau,q,dt,t); mem=h[:,None]-tau*train_R[:,:2]\\n# Perturb the reset law with separately retained branch states, then with a saturating drift-amplitude correction.\\nmem_c=-mem[:,None,:]*th[:2]*phi[None,:,:]; mem_r=-mem*th[:2]/tau\\nhd=(h-np.median(h)); u=np.c_[h-past[:,-1],mem[:,0]-mem[:,1],hd*d,hd*(x[:,0]-x[:,1])*d]\\nblocks={'partial memory':(mem_c,mem_r),'pair differences and cross-products':(u[:,None,:]*G[None,:,None],u),'rational amplitude':((d/(1+hd**2)-d)[:,None,None]*G[None,:,None],(d/(1+hd**2)-d)[:,None])}\\n\\ndef summarize(C,R):\\n    rm=lambda z: float(np.sqrt(np.mean(z*z)))\\n    labs=[(rm((C-y)[lab==k]),rm((R-r)[lab==k])) for k in np.unique(lab)]\\n    complete=~np.isnan(diag['coupon_features_raw']).any(axis=1)\\n    return np.round([*np.max(labs,axis=0),rm((C-y)[complete]),rm((R-r)[complete]),rm((C-y)[~complete]),rm((R-r)[~complete]),max(rm(z) for z in (C-y).T)],6)\\n\\nprint('columns: worst-lab strain/rate; complete strain/rate; missing strain/rate; worst horizon strain')\\nprint('candidate',summarize(C,R))\\nfor name,(bc,br) in blocks.items():\\n    cc=C.copy(); rr=R.copy()\\n    for l in np.unique(lab):\\n        test=lab==l; fit=~test\\n        a=least_squares(lambda a: np.r_[((C+bc@a-y)[fit]).ravel(),np.sqrt(len(t))*(R+br@a-r)[fit]],np.zeros(br.shape[1]),loss='soft_l1',f_scale=.005).x\\n        cc[test]+=bc[test]@a; rr[test]+=br[test]@a\\n    print(name,summarize(cc,rr))\\n# A rational time-rate law preserves the initial rate; estimate its scale only outside the scored lab.\\nbranch=C-d[:,None]*G; cr=C.copy()\\nfor l in np.unique(lab):\\n    fit=lab!=l; test=~fit\\n    def g(p):\\n        a=np.exp(p[0]); return np.arctan(a*t)/a\\n    p=least_squares(lambda p: (branch[fit]+d[fit,None]*g(p)-y[fit]).ravel(),[-1.],loss='soft_l1',f_scale=.005,bounds=(-8,5)).x\\n    cr[test]=branch[test]+d[test,None]*g(p)\\nprint('rational time rate',summarize(cr,R))\\nprint('lab strain/rate mean residuals',[(int(l),np.round([np.mean((C-y)[lab==l]),np.mean((R-r)[lab==l])],6).tolist()) for l in np.unique(lab)])\\nPY\\npython3 -I /tmp/m99_gate_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset with logarithmic drift -> H2 reset with square-root drift; the worst measured diagnostic slice is coupons with missing features, at 0.02578 strain RMSE and 0.01690 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add residual corrections based on pooled diagnostic fit\",\n      \"rejected_reason\": \"Pooled fit can hide lab-specific failure; compare corrections on held-out labs before changing the solver.\"\n    },\n    {\n      \"option\": \"Test relay states, stochastic control operators, and balanced accuracy\",\n      \"rejected_reason\": \"This task has continuous strain and rate outputs, with no relay state, stochastic control equation, or class labels. Lab-stratified residuals test the applicable nuisance concern.\"\n    }\n  ],\n  \"rationale\": \"Audit whether partial memory, pairwise interactions, or rational drift laws materially improve the worst lab, missing-feature slice, or prediction horizon. Only a material improvement on held-out labs would warrant a solver change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4fd097244f842745aa6aed2dd752fffae7d5395d6859c3b82438f967e5eb1463",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37224.4,
+      "usage_known": true,
+      "prompt_tokens": 37457,
+      "cached_tokens": 14976,
+      "completion_tokens": 1498
+    }
+  ]
+}

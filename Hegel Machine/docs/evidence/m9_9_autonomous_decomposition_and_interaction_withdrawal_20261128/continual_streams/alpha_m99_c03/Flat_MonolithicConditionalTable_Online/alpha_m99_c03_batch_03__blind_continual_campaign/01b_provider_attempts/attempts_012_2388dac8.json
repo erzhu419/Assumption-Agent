@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2388dac882694b898b375939a4f30fb1",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:28.512851+00:00",
+  "ended_at_utc": "2026-11-27T19:54:00.332736+00:00",
+  "request_sha256": "b457b4a25000dc104fa95bd8ab709d22fb6b5e6c40404ff1b65f0ce8cf44a8ed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74116,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41487,
+    "cached_tokens": 14976,
+    "completion_tokens": 1314
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; r,y=c['bridge_raw'],c['true_channel_loads']; idx=np.arange(len(y)); errors={k:np.empty(len(y)) for k in ('cyclic','augmented')}; clean=np.ones(len(y),bool)\\nfor f in range(5):\\n    valid=idx//16==f; train=~valid\\n    norms=np.linalg.norm(r,axis=1); med=np.median(norms[train]); bad=norms>med+8*np.median(abs(norms[train]-med)); clean[valid]=~bad[valid]\\n    coeff=m._calibration({'bridge_raw':r[train],'true_channel_loads':y[train]}); nxt=(np.arange(4)+1)%4\\n    def forward(z): return coeff[0]+z@coeff[1:5]+coeff[5]*z**3+coeff[6]*z*z[...,nxt]\\n    v=valid&~bad; tr=train&~bad\\n    errors['cyclic'][v]=m._axial(r[v],coeff)-y[v].sum(1)\\n    def extra(z):\\n        pairs=[z[:,i]-z[:,j] for i in range(4) for j in range(i+1,4)]\\n        return np.column_stack([q for a in pairs for q in (a*a,a/(1+a*a))]+[np.prod(z[:,[j for j in range(4) if j!=i]],axis=1) for i in range(4)])\\n    # Fit omitted terms in forward residuals and apply the correction at the physical inverse.\\n    beta=np.linalg.lstsq(extra(y[tr]),r[tr]-forward(y[tr]),rcond=None)[0]\\n    from scipy.optimize import root\\n    for i in np.flatnonzero(v):\\n        x0=np.linalg.solve(coeff[1:5].T,r[i]-coeff[0]); z=root(lambda x:forward(x)+extra(x[None])[0]@beta-r[i],x0)\\n        if np.linalg.norm(z.fun,np.inf)>1e-7: raise RuntimeError('challenger inverse did not converge')\\n        errors['augmented'][i]=z.x.sum()-y[i].sum()\\nfor k,e in errors.items():\\n    groups=[e[clean&(idx//16==f)] for f in range(5)]; print(k,'blocked axial RMSE',round(np.sqrt(np.mean(e[clean]**2)),8),'worst fold RMSE',round(max(np.sqrt(np.mean(g*g)) for g in groups),8),'max absolute',round(max(abs(e[clean])),8))\\na,b=d['train'],d['test']; x=m._features(a,b); n=len(a['lab_id']); u=m._coupon_inputs(a,x[:n],m._calibration(c)); t,dt=d['eval_times'],d['past_dt']; yc=a['strain_curves_obs']-a['strain_0'][:,None]; yr=a['instant_rate_obs']; ec=np.empty_like(yc); er=np.empty_like(yr)\\nfor lab in np.unique(a['lab_id']):\\n    v=a['lab_id']==lab; tau,w=m._fit(tuple(z[~v] for z in u),dt,t,yc[~v],yr[~v]); C,R=m._design(tau,tuple(z[v] for z in u),dt,t); ec[v]=C@w-yc[v]; er[v]=R@w-yr[v]\\nfor st in np.unique(a['stratum']):\\n    v=a['stratum']==st; print('held-out stratum',st,'n',sum(v),'strain bias/median abs',np.nanmedian(ec[v]),np.nanmedian(abs(ec[v])),'rate bias/median abs',np.nanmedian(er[v]),np.nanmedian(abs(er[v])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: sparse cyclic cubic bridge → H2: test for omitted nonlinear terms and signed stratum bias; current worst held-out axial error is 0.000464 and worst leave-one-lab-out horizon median strain error is 0.01401.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, stochastic control operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"There are no relay states, stochastic control operators, or class labels in this continuous mechanical model. Held-out signed residuals are the relevant nuisance diagnostic.\"\n    }\n  ],\n  \"rationale\": \"Blocked calibration folds test whether omitted pairwise, rational, or three-way terms materially improve axial recovery. Signed errors from lab-held-out fits test whether pooled error hides stratum bias. Change the solver only if either diagnostic exposes a material shortfall.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0ec9033f572b5b6e8153e6cf5c7ce6997a4e820da56c1e41a4008deeffd91bd2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32990.13,
+      "usage_known": true,
+      "prompt_tokens": 41487,
+      "cached_tokens": 14976,
+      "completion_tokens": 1314
+    }
+  ]
+}

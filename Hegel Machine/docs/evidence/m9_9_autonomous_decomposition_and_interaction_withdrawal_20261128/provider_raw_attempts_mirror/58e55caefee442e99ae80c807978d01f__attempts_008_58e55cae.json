@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58e55caefee442e99ae80c807978d01f",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:33:23.524688+00:00",
+  "ended_at_utc": "2026-11-27T19:33:54.905187+00:00",
+  "request_sha256": "3d208ecd87b18100c42b356ad943654c838a93930a89cbebaaa5cdb7dc1e49e8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41108,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29544,
+    "cached_tokens": 14976,
+    "completion_tokens": 1303
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,b=d['train'],d['test']; x,_=m._features(a,b); lab=a['lab_id']; t=d['eval_times']; dt=d['past_dt']; w=m._bridge(d['calibration_load_cells'])\\npast,hold=m._loads(a,w); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; aux=a['aux_chamber_telemetry']; ix=list(combinations(range(x.shape[1]),2))\\n# Fixed challenger bases; coefficients and scaling are learned only inside each training fold.\\nbases={'feature_interactions':np.column_stack([x[:,i]*x[:,j] for i,j in ix]),'pairwise_quotients':np.column_stack([(x[:,i]+sign*x[:,j])/(1+(x[:,i]-sign*x[:,j])**2) for i,j in ix for sign in (-1,1)]),'chamber_telemetry':aux}\\ndef metrics(c,v):\\n return np.array([np.quantile(abs(c),.9),np.quantile(abs(v),.9),np.max(np.quantile(abs(c),.9,axis=0)),abs(np.median(v))])\\nrecords={k:[] for k in ('baseline',*bases)}\\nfor label in np.unique(lab):\\n va=lab==label; tr=~va; train={k:v[tr] for k,v in a.items()}\\n tau,theta=m._material(train,w,x[tr],dt,t); c,v=m._basis(tau,past,hold,x,dt,t); ec=y-c@theta; er=r-v@theta\\n records['baseline'].append(metrics(ec[va],er[va]))\\n print('lab',label,'baseline',records['baseline'][-1].round(6),'signed median rate residual',round(np.median(er[va]),6))\\n for k,z in bases.items():\\n  z=(z-z[tr].mean(0))/np.maximum(z[tr].std(0),1e-12)\\n  # Early-time strain is not divided by t; prediction and scoring remain in physical output units.\\n  def residual(beta):\\n   q=z[tr]@beta\\n   return np.r_[((ec[tr]-q[:,None]*t)/.015).ravel(),(er[tr]-q)/.008,25*beta]\\n  fit=least_squares(residual,np.zeros(z.shape[1]),loss='soft_l1',f_scale=1.5)\\n  q=z[va]@fit.x\\n  records[k].append(metrics(ec[va]-q[:,None]*t,er[va]-q))\\n  print('lab',label,k,records[k][-1].round(6))\\nfor k,values in records.items(): print('worst:',k,np.max(values,axis=0).round(6),'[strain p90, rate p90, horizon p90, absolute signed median rate]')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated two-branch law -> H2 add a drift correction only if it transfers across labs; current worst held-out-lab p90 is 0.02289 for strain and 0.01136 for initial rate, with one lab-time strain p90 of 0.267.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification recall, or stochastic control operators\",\n      \"rejected_reason\": \"The supplied model has continuous strain and rate outputs, with no relay, class labels, or control process.\"\n    },\n    {\n      \"option\": \"Use benchtop telemetry residuals to infer a deployment-only correction\",\n      \"rejected_reason\": \"Benchtop outcomes can expose nuisance effects in the material fit but cannot identify a separate chamber law without chamber outcomes or a telemetry-to-law mapping.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted interaction or rational drift terms explain systematic residuals on real held-out coupons. Promote a correction only if it reduces worst-lab error without materially worsening the other output. Signed rate residuals help distinguish group bias from isolated strain outliers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2a2c227738a8cad16b28ad2ab6ecef8d525ab1ddb6f1ef1155be9d0d1d3db0c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32486.71,
+      "usage_known": true,
+      "prompt_tokens": 29544,
+      "cached_tokens": 14976,
+      "completion_tokens": 1303
+    }
+  ]
+}

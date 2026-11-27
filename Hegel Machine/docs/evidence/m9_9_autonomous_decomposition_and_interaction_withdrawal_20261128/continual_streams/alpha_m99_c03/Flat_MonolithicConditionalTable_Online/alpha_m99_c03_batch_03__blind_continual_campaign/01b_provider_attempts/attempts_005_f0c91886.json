@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0c91886b30f47cd801ecb30e3b68a05",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:53.388938+00:00",
+  "ended_at_utc": "2026-11-27T19:50:23.509647+00:00",
+  "request_sha256": "e3e933a45c54d6f4fb9739f85c90cfb7eac2ab7bd354b983c767ec73dc71a069",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30139,
+    "cached_tokens": 14976,
+    "completion_tokens": 1245
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import root\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; n=len(y)\\nprint('true range',y.min(0),y.max(0),'singular values',np.linalg.svd(y-y.mean(0),compute_uv=False))\\nfor k in ('train','test'):\\n for j in ('past_channel_raw','hold_channel_raw'):\\n  x=d[k][j].reshape(-1,4); print(k,j,'outside sweep range',((x<r.min(0))|(x>r.max(0))).sum(0),'range',x.min(0),x.max(0))\\nterms=[()] + [(i,) for i in range(4)] + list(combinations_with_replacement(range(4),2))+list(combinations_with_replacement(range(4),3))\\ndef design(x,ts): return np.stack([x[...,t].prod(-1) for t in ts],axis=-1)\\nfor label,ts in [('affine',terms[:5]),('quadratic',terms[:15]),('cubic',terms),('additive quadratic',terms[:5]+[t for t in terms[5:15] if t[0]==t[1]])]:\\n pred=np.empty_like(y); resid=np.empty_like(r); failures=0\\n for f in range(5):\\n  te=np.arange(n)%5==f\\n  a=np.linalg.lstsq(design(y[~te],ts),r[~te],rcond=None)[0]\\n  resid[te]=design(y[te],ts)@a-r[te]\\n  seed=design(r[te],terms[:5])@np.linalg.lstsq(design(r[~te],terms[:5]),y[~te],rcond=None)[0]\\n  for i,s in zip(np.flatnonzero(te),seed):\\n   z=root(lambda v:design(v,ts)@a-r[i],s); pred[i]=z.x; failures+=int(not z.success)\\n e=pred-y; a=np.linalg.lstsq(design(y,ts),r,rcond=None)[0]\\n print(label,'forward RMSE',np.sqrt(np.mean(resid**2,0)).round(6),'load RMSE',np.sqrt(np.mean(e**2,0)).round(6),'total RMSE/max',np.sqrt(np.mean(e.sum(1)**2)),np.max(np.abs(e.sum(1))),'root failures',failures)\\n if label=='quadratic':\\n  for term,coef in zip(ts,a): print(term,coef.round(5))\\nprint('lab counts and missing features')\\nfor k in ('train','test'):\\n b=d[k]; print(k,np.unique(b['lab_id'],return_counts=True),np.isnan(b['coupon_features_raw']).sum(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine inverse bridge → H2: test a nonlinear forward bridge with physical inversion; the best inverse-polynomial model so far has held-out total-stress RMSE 0.2211 and worst absolute error 0.6214.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine inverse adequately describes all four load-cell channels.\",\n    \"empirical_witness\": \"Adding quadratic terms reduced held-out RMSE in every channel, from 0.398–0.531 to 0.118–0.150, but total-stress RMSE only fell from 0.2502 to 0.2211.\",\n    \"causal_blanket_diagnosis\": \"Errors partially cancel in the axial sum, masking channel-level bridge nonlinearity.\",\n    \"sublated_pivot\": \"Compare forward bridge models by held-out physical-load recovery, then retain the simplest one that materially improves axial stress.\",\n    \"risk_kind\": \"calibration_bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic inverse bridge\",\n      \"rejected_reason\": \"Its held-out total-stress RMSE rose to 1.703, with a worst absolute error of 12.025.\"\n    },\n    {\n      \"option\": \"Carry forward the previous chamber's exponential drift\",\n      \"rejected_reason\": \"The latest apparatus trace returns both indicators to facility-init levels, supporting baseline transfer rather than persistence of the prior setting.\"\n    }\n  ],\n  \"rationale\": \"Comparing forward and inverse calibration detects whether the remaining axial error comes from fitting the bridge in the wrong direction. If forward inversion improves held-out axial stress and converges over the coupon range, use it; otherwise retain the better validated inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5d45fdb98ca3c262affbc6a20855db74fa10d51dda0cb6fc87048136e08205d9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31250.12,
+      "usage_known": true,
+      "prompt_tokens": 30139,
+      "cached_tokens": 14976,
+      "completion_tokens": 1245
+    }
+  ]
+}

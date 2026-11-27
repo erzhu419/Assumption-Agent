@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "372429d0d2df4698ba6ec5cc87fefb97",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:19.848641+00:00",
+  "ended_at_utc": "2026-11-27T19:46:52.830641+00:00",
+  "request_sha256": "5b0e7303d812f16b31422463e6dbc56f85d94015d2ffcb778cdd78e42c5ba95f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62705,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39699,
+    "cached_tokens": 14976,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; x,xe=m._features(tr,te); b=m._bridge(d['calibration_load_cells']); p,h=m._loads(tr,b); Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; out=m.solve_batch(d); tau=out['estimated_taus']; assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values())\\nfor lab in np.unique(tr['lab_id']):\\n mask=tr['lab_id']==lab; k=~mask; ta,w=m._fit(x[k],p[k],h[k],dt,t,Y[k],R[k]); a,r=m._design(ta,x[mask],p[mask],h[mask],dt,t); print('benchtop held lab',lab,'curve/rate median absolute',round(np.median(abs(a@w-Y[mask])),5),round(np.median(abs(r@w-R[mask])),5),'tau max rel shift',round(np.max(abs(ta/tau-1)),5))\\n# An affine change of raw bridge units must be absorbed by recalibration.\\nsc=np.array([1.3,.75,1.7,.9]); sh=np.array([.3,-.2,.15,.45]); d2=dict(d); d2['calibration_load_cells']=dict(d['calibration_load_cells']); d2['calibration_load_cells']['bridge_raw']=d['calibration_load_cells']['bridge_raw']*sc+sh\\nfor name in ('train','test'):\\n d2[name]=dict(d[name]);\\n for key in ('past_channel_raw','hold_channel_raw'): d2[name][key]=d[name][key]*sc+sh\\nout2=m.solve_batch(d2); delta={k:float(np.max(abs(out[k]-out2[k]))) for k in out}; print('bridge gauge deltas',delta); assert max(delta.values())<1e-5\\n# Test the implemented redistribution at both zero and a near-zero horizon.\\nh0=1e-5; small=m.solve_batch(dict(d,eval_times=np.r_[0.,h0,t])); assert np.max(abs(small['predicted_strain'][:,0]-te['strain_0']))<1e-12\\n# Evaluate the fixed chamber law at the original horizon; the shared fitted material is independent of diagnostics.\\nc=i['campaign_diagnostics']; z=m._features(c,c)[0]; pc,hc=m._loads(c,b); a,r=m._design(tau,z,pc,hc,dt,t); w=out['hereditary_weights']; dr=w[2]+z@w[3:]; correction=(-np.expm1(-t[:,None]/tau)*tau-t[:,None])@np.array([.680,.582]); e=a@w+dr[:,None]*correction-(c['strain_curves_obs']-c['strain_0'][:,None]); er=r@w-c['instant_rate_obs']; missing=~np.isfinite(c['coupon_features_raw']).all(1)\\nfor name,g in [('early',e[:,:4]),('middle',e[:,4:8]),('late',e[:,8:]),('complete',e[~missing]),('missing',e[missing])]: print('chamber',name,'strain RMSE',round(np.sqrt(np.mean(g*g)),5))\\nprint('chamber rate RMSE complete/missing',*[round(np.sqrt(np.mean(er[u]**2)),5) for u in (~missing,missing)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop deployment → H2 initial-rate-preserving drift redistribution; worst held-out diagnostic hold-tertile RMSE is 0.01917 for strain and 0.02141 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add chamber history interactions\",\"rejected_reason\":\"The held-out gain was small, and the remaining error is concentrated in diagnostics with missing features rather than complete coupons.\"}],\"rationale\":\"Use an isolated Python process to check the final artifact. A leave-one-lab-out failure would warrant revisiting the material fit; sensitivity to bridge units would warrant revisiting calibration; horizon and missing-feature slices locate any remaining chamber error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a40caaebce4e635d4cd1757d9ce73afaaea440f987b56d757926c0cb5444ad6b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34105.89,
+      "usage_known": true,
+      "prompt_tokens": 39699,
+      "cached_tokens": 14976,
+      "completion_tokens": 1359
+    }
+  ]
+}

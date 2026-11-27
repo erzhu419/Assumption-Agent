@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5590ae126d64db1b2a51923ef5a504b",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:19.878404+00:00",
+  "ended_at_utc": "2026-11-27T19:37:50.183007+00:00",
+  "request_sha256": "ce750cce233769e22229aa2c373ea1d9f72c9d0ac32d64848a993a4c9bd53197",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26456,
+    "cached_tokens": 5504,
+    "completion_tokens": 1247
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chbasis.py <<'PY'\\nexec(open('/tmp/chprobe.py').read().split('for name,g,xx')[0])\\nfrom scipy.optimize import least_squares\\nfrom scipy.linalg import lstsq\\nY=np.column_stack((di['strain_curves_obs']-di['strain_0'][:,None],di['instant_rate_obs']))\\ndef basis(tau):\\n return np.vstack((np.column_stack((-np.expm1(-t[:,None]/tau),t)),np.r_[1/tau,1]))\\ndef profile(tau):\\n A=basis(tau); C=lstsq(A,Y.T)[0].T; return C,Y-C@A.T\\nC,E=profile(tau); print('fixed spectrum residual quantiles by output',np.quantile(abs(E[:,:-1]),[.5,.9,1]),np.quantile(abs(E[:,-1]),[.5,.9,1]))\\nf=least_squares(lambda u:profile(np.exp(u))[1].ravel(),np.log(tau)); T=np.exp(f.x); C,E=profile(T); print('free chamber spectrum',T,'resid quantiles',np.quantile(abs(E),[.5,.9,1])); print('Y tail singular values',np.linalg.svd(Y,compute_uv=False))\\na,rr=m._design(T,xd,pd,hd,dt,t); gap=rr[:,:2]*T; drift=rr[:,2:]@beta[2:]; D=C-np.column_stack((gap*beta[:2],drift)); print('amplitudes',np.round(C[:10],5)); print('corrections',np.round(D[:10],5))\\nF=np.column_stack((hd,pd,gap,xd,drift,di['lab_id'],di['stratum'])); names=['hold']+[f'p{k}' for k in range(pd.shape[1])]+['g0','g1']+[f'x{k}' for k in range(xd.shape[1])]+['drift','lab','stratum'];\\nfor v in (C,D):\\n print('correlations',[(n,*np.round([np.corrcoef(F[:,j],v[:,k])[0,1] for k in range(3)],3)) for j,n in enumerate(names)])\\nfor name,s in [('train',tr),('test',te),('diag',di)]:\\n print(name,'sum of loads by channel mean/sd',[(np.round(np.mean(s[k],axis=tuple(range(s[k].ndim-1))),3),np.round(np.std(s[k],axis=tuple(range(s[k].ndim-1))),3)) for k in ['past_channel_raw','hold_channel_raw']])\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; y=cal['true_channel_loads']; a=np.c_[np.ones(len(raw)),raw]; print('cal affine component errors RMS',np.sqrt(np.mean((a@lstsq(a,y)[0]-y)**2,axis=0))); print('sweeps',[(l,np.round(lstsq(np.c_[np.ones(sum(cal['single_channel_sweeps']['lab_id']==l)),cal['single_channel_sweeps']['cmd_stress'][cal['single_channel_sweeps']['lab_id']==l]],cal['single_channel_sweeps']['true_stress'][cal['single_channel_sweeps']['lab_id']==l])[0],5)) for l in np.unique(cal['single_channel_sweeps']['lab_id'])]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chbasis.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -18\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged chamber law → H2 characterize separate chamber memory and drift corrections; the baseline chamber 90th-percentile absolute errors are 0.986 strain and 1.885 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The benchtop law with an affine bridge transfers unchanged to the deployment chamber.\",\n    \"empirical_witness\": \"The chamber median absolute rate residual is 1.046 versus 0.00455 on train; chamber curve residuals also have strong low-rank structure.\",\n    \"causal_blanket_diagnosis\": \"The discrepancy is concentrated in the deployment chamber; the first test is whether it changes amplitudes, temporal modes, or both.\",\n    \"sublated_pivot\": \"Keep the intrinsic estimate train-only and recover the chamber temporal basis and its load-dependent coefficients from verification coupons.\",\n    \"risk_kind\": \"Chamber-to-benchtop transfer failure\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a separate chamber spectrum without checking the shared basis\",\n      \"rejected_reason\": \"A change in mode amplitudes could explain the mismatch without changing the relaxation times.\"\n    }\n  ],\n  \"rationale\": \"Jointly project chamber curves and initial rates onto the physical time basis, then compare fixed and free spectra. If neither fits, search for an additional time term; if one fits, focus on how load history and coupon features determine its amplitudes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "1926cfe5008f683c504a418a44b5577a9c08d6b8151a8b7f667436c0a272a126",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31393.25,
+      "usage_known": true,
+      "prompt_tokens": 26456,
+      "cached_tokens": 5504,
+      "completion_tokens": 1247
+    }
+  ]
+}

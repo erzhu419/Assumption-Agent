@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d9651a5fcef94ed28141619ef8a5bf16",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:49.781300+00:00",
+  "ended_at_utc": "2026-11-27T19:56:22.076815+00:00",
+  "request_sha256": "f21aad160038617cadf73acac640dffe45b65ae2600cbf700c7b44aa6c5ce006",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39186,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29385,
+    "cached_tokens": 26752,
+    "completion_tokens": 1332
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /tmp/hegel_continual_archive\\ngrep '^_CHAMBER_' alpha_m99_c01_batch_01_solver.py\\nsed '/^def solve_batch/,$d' alpha_m99_c01_batch_03_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    t, dt = np.asarray(dataset['eval_times']), np.asarray(dataset['past_dt'])\\n    x, xt = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    p, h = _loads(train, bridge)\\n    tau, beta = _fit(x, p, h, dt, t,\\n                     train['strain_curves_obs'] - train['strain_0'][:, None],\\n                     train['instant_rate_obs'])\\n\\n    # The latest prefix trace matches the reset-only chamber setting.\\n    # History affects benchtop characterization but not the chamber hold onset.\\n    hold = _invert_bridge(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    amplitude = hold[:, None] * beta[:2]\\n    drift = beta[2] + xt @ beta[3:]\\n    strain = (test['strain_0'][:, None]\\n              + amplitude @ -np.expm1(-t[None, :] / tau[:, None])\\n              + drift[:, None] * t)\\n    rate = amplitude @ (1 / tau) + drift\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; bridge=m._bridge(d['calibration_load_cells']); x,xt=m._features(tr,te); p,h=m._loads(tr,bridge); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d); print('fit tau, theta',out['estimated_taus'],out['hereditary_weights'])\\nfor part in (tr,te):\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  raw=part[key]; z=m._invert_bridge(raw,bridge); print('key, n, round-trip max, max abs load',key,len(raw),np.max(np.abs(m._bridge_terms(z)@bridge-raw)),np.max(np.abs(z)))\\nfor lab in np.unique(tr['lab_id']):\\n k=tr['lab_id']!=lab; tau,beta=m._fit(x[k],p[k],h[k],dt,t,y[k],r[k]); a,b=m._design(tau,x[~k],p[~k],h[~k],dt,t); e=np.abs(a@beta-y[~k]); q=np.abs(b@beta-r[~k]); print('lab',lab,'tau',tau,'curve med/p90',np.quantile(e,[.5,.9]),'early/late p90',np.quantile(e[:,0],.9),np.quantile(e[:,-1],.9),'rate med/p90',np.quantile(q,[.5,.9]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and chamber carryover → H2 nonlinear bridge and chamber memory reset; nominal bridge leave-one-out p90 falls from 0.550 to 0.000250 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Batch 01's affine transducer calibration transfers to the current campaign.\",\n    \"empirical_witness\": \"On 77 nominal calibration rows, the forward affine model has leave-one-out p90 error 0.550 raw units versus 0.000250 with the archived cyclic pair-product and cubic basis.\",\n    \"causal_blanket_diagnosis\": \"The load bridge and chamber memory changed independently: the trace supports transferring the reset setting, while the current calibration sweeps rule out transferring the affine bridge.\",\n    \"sublated_pivot\": \"Fit the nonlinear bridge on current sweeps, retain benchtop history for material fitting, and remove test history at chamber hold onset.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the full cubic calibration basis\",\n      \"rejected_reason\": \"It lowers in-sample error but raises nominal leave-one-out p90 from 0.000250 to 0.000420.\"\n    }\n  ],\n  \"rationale\": \"Build the reset-only candidate and check the archived drift coefficients for evidence of a missing chamber term. Inverse round-trip checks detect Newton failures on coupon loads; leave-one-lab-out errors separate unreliable material fits from the unlabelled chamber-law inference.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "49b685635dfd7f1ca463452d7287ed066b155500f6c7c6ae61387618b122db4e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33402.22,
+      "usage_known": true,
+      "prompt_tokens": 29385,
+      "cached_tokens": 26752,
+      "completion_tokens": 1332
+    }
+  ]
+}

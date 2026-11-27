@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6bab2b32a7ef4538bfe5870c8bac328f",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:50.914355+00:00",
+  "ended_at_utc": "2026-11-27T19:46:33.090402+00:00",
+  "request_sha256": "33e8c51929960a9503028d1efb6af53ee18337f470c621d05e39effe9388b743",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46538,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31465,
+    "cached_tokens": 13696,
+    "completion_tokens": 1784
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream, _box_simplex\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nworst_pulse = worst_field = worst_gap = worst_comp = worst_qp = 0.\\nfor item in items:\\n    st = item['study']\\n    nx, ny = int(st['nx']), int(st['ny'])\\n    def axis(key, n):\\n        k, v = st['kappa_'+key], st['vel_'+key]\\n        h = st['L'+key]/(n-1)\\n        a = np.zeros((n,n))\\n        for i in range(n):\\n            l, r = (i-1)%n, (i+1)%n\\n            left = (k[i]+k[l])/(2*h*h) + max(v[i],0)/h\\n            right = (k[i]+k[r])/(2*h*h) + max(-v[i],0)/h\\n            a[i,l] -= left\\n            a[i,r] -= right\\n            a[i,i] += left+right\\n        np.testing.assert_allclose(a.sum(1), 0, atol=2e-13)\\n        return a\\n    a = np.kron(np.eye(ny),axis('x',nx)) + np.kron(axis('y',ny),np.eye(nx)) + np.diag(st['V_reaction_2d'].flatten(order='F'))\\n    rhs = np.column_stack([m.flatten(order='F') for m in st['source_modes']])\\n    sensors = [i+nx*j for i,j in st['sensor_ij']]\\n    fields = [np.linalg.solve(a+mu*np.eye(nx*ny),rhs) for mu in st['mu_shifts']]\\n    s = np.vstack([u[sensors] for u in fields])\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        cal = calibrate_upstream({**st,'y_obs_raw':pulse['y_pulse_raw']},None)['y_obs_raw']\\n        err = (s @ pulse['w_pulse'] - cal).reshape(len(fields),-1)\\n        worst_pulse = max(worst_pulse,float(np.max(np.sqrt(np.mean(err**2,axis=1)))))\\n    cal = calibrate_upstream(st,None)\\n    out = solve_batch(st)\\n    downstream = solve_downstream(cal)\\n    for key in ('weights','terminal_field'):\\n        np.testing.assert_allclose(out[key],downstream[key],atol=1e-14,rtol=0)\\n    w, cap, budget = out['weights'], st['u_box'], st['total_budget']\\n    worst_field = max(worst_field,float(np.max(abs(out['terminal_field']-(fields[-1]@w).reshape((nx,ny),order='F')))))\\n    z = st['Z_nuisance']\\n    p = np.eye(len(s))-z@np.linalg.solve(z.T@z+st['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\n    s, y, ridge = p@s, p@cal['y_obs_raw'], st['source_ridge']\\n    h, c = s.T@s+ridge*np.eye(len(w)), -s.T@y\\n    def objective(w):\\n        e=s@w-y\\n        return (e@e+ridge*(w@w))/2\\n    for b in (budget, cap, min(2*cap,len(w)*cap), 0.,len(w)*cap):\\n        ww, nu = (w,out['kkt_certificate']['nu_sum']) if b==budget else _box_simplex(h,c,cap,b)\\n        g = s.T@(s@ww-y)+ridge*ww\\n        lo,hi = np.maximum(g-nu,0), np.maximum(nu-g,0)\\n        obj = objective(ww)\\n        dual = obj-g@ww+nu*b-cap*hi.sum()\\n        assert abs(ww.sum()-b)<1e-12 and ww.min()>=-1e-12 and ww.max()<=cap+1e-12\\n        worst_gap=max(worst_gap,abs(obj-dual))\\n        worst_comp=max(worst_comp,np.max(abs(ww*lo)),np.max(abs((cap-ww)*hi)))\\n        if b==budget:\\n            cert=out['kkt_certificate']\\n            for key, ref in [('weights',ww),('lam_lower',lo),('lam_upper',hi),('primal_objective',obj),('dual_lower_bound',dual)]:\\n                np.testing.assert_allclose(cert[key],ref,rtol=0,atol=1e-12)\\n            np.testing.assert_allclose(g-nu-np.array(cert['lam_lower'])+cert['lam_upper'],0,atol=1e-12)\\n            opt=minimize(objective,np.full(len(w),budget/len(w)),jac=lambda v:h@v+c,method='SLSQP',bounds=[(0,cap)]*len(w),constraints={'type':'eq','fun':lambda v:v.sum()-budget,'jac':lambda v:np.ones(len(v))},options={'ftol':1e-14})\\n            assert opt.success, opt.message\\n            worst_qp=max(worst_qp,abs(opt.fun-obj))\\nassert worst_pulse<2e-6 and worst_field<1e-12 and worst_gap<1e-11 and worst_comp<1e-11 and worst_qp<1e-10\\nprint(f'items={len(items)} worst_pulse_shift_rmse={worst_pulse:.3e} worst_terminal_field_abs_error={worst_field:.3e} worst_kkt_gap={worst_gap:.3e} worst_complementarity={worst_comp:.3e} independent_qp_objective_difference={worst_qp:.3e}')\\nsys.argv=['validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path('/holdout_task/validate_public_schema.py',run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (uncoupled endpoints) -> H2 (periodic upwind seams on both axes); worst public pulse-by-shift RMSE was 6.70e-7, pending independent verification of the saved artifacts.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the schema pass as final verification\",\n      \"rejected_reason\": \"It does not detect a wrong seam stencil, field permutation, or invalid KKT certificate.\"\n    }\n  ],\n  \"rationale\": \"Run both saved artifacts in an isolated Python process. Compare them against independently assembled dense fields and an independent optimizer, checking each pulse and shift as well as the reported certificate. A field or pulse mismatch would trigger a stencil or ordering correction; a certificate mismatch would trigger a projection or active-set correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1cccbdd8ed95a5b342465df6f2bf57dd00a38d1f8785d885ba52eecbbf0e58bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43258.91,
+      "usage_known": true,
+      "prompt_tokens": 31465,
+      "cached_tokens": 13696,
+      "completion_tokens": 1784
+    }
+  ]
+}

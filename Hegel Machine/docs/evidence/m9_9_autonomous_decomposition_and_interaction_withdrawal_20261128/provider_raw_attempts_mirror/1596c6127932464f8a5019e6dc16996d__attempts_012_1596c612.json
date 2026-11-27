@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1596c6127932464f8a5019e6dc16996d",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:08:43.817451+00:00",
+  "ended_at_utc": "2026-11-27T20:09:12.318128+00:00",
+  "request_sha256": "11070be15e6e0d4c468c26345eddcb15b79c9cdb2fce552ca0055ab34e92f867",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 63635,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35983,
+    "cached_tokens": 13696,
+    "completion_tokens": 1133
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_reduce.py <<'PY'\\nfrom chamber_probe import *\\nimport downstream_solver as m\\nxd,_=m._features(g,g)\\nq,s=m._chamber_response(g,xd,t,taus,theta)\\ne=np.c_[g['strain_curves_obs']-q,R-s]\\nlab=g['lab_id']; complete=np.isfinite(g['coupon_features_raw']).all(1)\\nk=np.c_[-taus[None,:]*np.expm1(-t[:,None]/taus),t]; k=np.r_[k,[[1.,1.,1.]]]; b=k@np.array([.2,.55,.25]); kb=k[:,0]-k[:,1]\\nmake=lambda a,v: np.asarray(a)[:,None]*v\\n# Compare rate-conserving load terms with residual history on the same held-out coupons.\\nz0,z1=Z.T; h0=theta[0]/taus[0]; h1=theta[1]/taus[1]; href=4.\\nchoice={'baseline':[], 'linear hold':[make(H,kb)], 'saturating hold':[make(H/(1+(H/href)**2),kb)], 'constant transfer':[make(np.ones(n),kb)], 'slow history':[make(h1*z1,k[:,1])], 'both history':[make(h0*z0,k[:,0]),make(h1*z1,k[:,1])], 'hold and slow history':[make(H/(1+(H/href)**2),kb),make(h1*z1,k[:,1])]}\\nfor name,cols in choice.items():\\n for project in (False,True):\\n  P=e.copy(); coefficients=[]\\n  if cols:\\n   A=np.stack(cols,axis=-1)\\n   project_drift=lambda u: u-np.einsum('ntj,t,s->nsj',u,b,b)/(b@b)\\n   W=project_drift(A) if project else A\\n   y=project_drift(e[...,None])[...,0] if project else e\\n   for l in np.unique(lab):\\n    trn=(lab!=l)&complete; te=lab==l\\n    c=np.linalg.lstsq(W[trn].reshape(-1,len(cols)),y[trn].ravel(),rcond=None)[0]; coefficients.append(c); P[te]-=A[te]@c\\n  metric=lambda masks: np.max([[abs(P[a,:-1]).mean(),abs(P[a,-2]).mean(),abs(P[a,-1]).mean()] for a in masks],axis=0).round(6)\\n  print(name,'project',project,'worst',metric([lab==l for l in np.unique(lab)]+[complete,~complete]+[g['stratum']==j for j in np.unique(g['stratum'])]),'coeff',np.round(coefficients,5))\\nprint('archive entries:')\\nimport json\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print({key: (f'{type(value).__name__} len={len(value)}' if isinstance(value,(list,dict)) else value) for key,value in a.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c \\\"import sys; sys.path[:0]=['/tmp','/holdout_task']; import chamber_reduce\\\"\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 complete chamber history withdrawal -> H2 small residual history or rate-conserving load redistribution; the held-out nonlinear challenger reduced worst strain MAE from 0.01766 to 0.01463 without changing initial-rate MAE of 0.01415.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the four-term nonlinear correction immediately\",\n      \"rejected_reason\": \"A constant transfer or a single history term may account for the gain. The current comparison does not separate either effect from reference-panel drift error.\"\n    }\n  ],\n  \"rationale\": \"Compare simpler corrections on the same held-out labs, with and without removing the drift direction during fitting. Promote a correction only if its sign and benefit persist and its strain and initial-rate effects agree with the same response law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f0dc63fa84f9aafe27d6310316357afd12b28ee622b98d208ceca9a8032b9a77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29695.01,
+      "usage_known": true,
+      "prompt_tokens": 35983,
+      "cached_tokens": 13696,
+      "completion_tokens": 1133
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a93d2107dec84dfebe3fca4625555745",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:45.701663+00:00",
+  "ended_at_utc": "2026-11-27T19:53:04.257831+00:00",
+  "request_sha256": "aa92d8a525b8a54a7f8584d12b15bb36c60512914d8d970e25ac1329a15bcb46",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44175,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32043,
+    "cached_tokens": 13696,
+    "completion_tokens": 681
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat validate_public_schema.py\\npython3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; ix=np.arange(len(x)); axis=np.count_nonzero(x,axis=1)==1; clean=np.max(abs(y),axis=1)<5\\nerr=np.zeros_like(x)\\nfor k in range(5):\\n    train=ix%5!=k; test=~train&clean\\n    err[test]=u._inverse(y[test],*u._fit(x[train],y[train]))-x[test]\\nfor name,mask in [('axis',axis),('mixed',~axis),('central',np.max(abs(x),axis=1)<.7),('tail',np.max(abs(x),axis=1)>1.1)]:\\n    print(name,'inverse max',np.max(abs(err[mask&clean])), 'worst-channel RMSE', np.sqrt(np.max(np.mean(err[mask&clean]**2,axis=0))))\\nsource=open('upstream_transducer.py').read(); trial={}; exec(source.replace('range(35)','range(400)'),trial)\\nfor name,fit in [('current',u._fit),('longer fit',trial['_fit'])]:\\n    a,g,q=fit(x,y); r=y-a-g*(x+u._terms(x)@q)\\n    print(name,'clean forward RMS',np.sqrt(np.mean(r[clean]**2)), 'clean max',np.max(abs(r[clean])), 'q',q)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 channel-specific cyclic cubic → H2 shared cyclic cubic with EMI downweighting; the shared clean-row prototype reached 3.12e-5 worst-slice held-out inverse error, while deployed full-fit clean residuals are larger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Measure held-out inverse error using the actual artifact, with gross EMI still present in training folds. The longer-fit comparison distinguishes incomplete convergence from a model limitation and determines whether the fitting loop needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1d004877b6acbc06e265c310ae69e8601c3a0362d55cf858feb470689070069f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19675.39,
+      "usage_known": true,
+      "prompt_tokens": 32043,
+      "cached_tokens": 13696,
+      "completion_tokens": 681
+    }
+  ]
+}

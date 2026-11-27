@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f5a2f9a50394f01beed372fe7ebd010",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:14.933224+00:00",
+  "ended_at_utc": "2026-11-27T19:39:46.748425+00:00",
+  "request_sha256": "4314341ceee83442b70d8f8d66aeab7ed55b3bbc9e1780de883fed49b65180ba",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54058,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37621,
+    "cached_tokens": 14976,
+    "completion_tokens": 1309
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/for name,g,X,P,H /,$d' /tmp/probe_m99.py >/tmp/reset_m99.py\\ncat >>/tmp/reset_m99.py <<'PY'\\nY=np.column_stack((c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs'])); labs=c['lab_id']; strata=c['stratum']; missing=np.isnan(c['coupon_features_raw']).any(1); n=len(labs)\\nkeys=('coupon_features_raw','ref_coupons','lab_id','stratum')\\ndef join(a,b): return {k:np.concatenate([a[k],b[k]],axis=0) for k in keys}\\nfor name,g in [('train',tr),('test',te),('diag',c)]:\\n print(name,list(g),'N',len(g['lab_id']),'missing',np.isnan(g['coupon_features_raw']).sum(0)); R=g['ref_coupons']; print('ref center scale',[(int(l),round(float(np.median(R[g['lab_id']==l].mean(0))),4),round(float(np.median(R[g['lab_id']==l].std(0))),4)) for l in np.unique(g['lab_id'])]); u=g.get('aux_chamber_telemetry'); print('telemetry',None if u is None else (u.shape,np.round(np.mean(u,axis=0),3),np.round(np.std(u,axis=0),3)))\\nfor tag,xx in [('diag',m._features(c,c)[1]),('test_diag',m._features(te,c)[1]),('train_test_diag',m._features(join(tr,te),c)[1]),('train_diag',m._features(tr,c)[1])]:\\n D=beta[2]+xx@beta[3:]; H=hc; F=np.vstack((np.column_stack((-np.expm1(-t[:,None]/tau),t)),np.r_[1/tau,1.])); base=H[:,None]*beta[:2]@F[:,:2].T\\n for kind in ('zero','offset','full'):\\n  K=[D[:,None]*F[None,:,j] for j in (0,1)]\\n  if kind!='zero': K += [np.broadcast_to(F[None,:,j],Y.shape) for j in (0,1)]\\n  if kind=='full': K += [np.broadcast_to(F[None,:,2],Y.shape)]\\n  K=np.stack(K,axis=-1)\\n  def fit(idx):\\n   A=K[idx].reshape(-1,K.shape[-1]); yy=(Y-base)[idx].ravel(); z=np.linalg.lstsq(A,yy,rcond=None)[0]; return least_squares(lambda b:A@b-yy,z,loss='soft_l1',f_scale=.003).x\\n  def rms(e): return [np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]\\n  coef=fit(np.ones(n,dtype=bool)); e=K@coef+base-Y; mask=[labs==l for l in np.unique(labs)]+[strata==s for s in np.unique(strata)]; worst=np.max([rms((K@fit(~w)+base-Y)[w]) for w in mask],0); print(tag,kind,'coef',coef.round(5),'complete',np.round(rms(e[~missing]),5),'missing',np.round(rms(e[missing]),5),'worst',worst.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/reset_m99.py | grep -E '^(train |test |diag |ref center|telemetry|test_diag|train_test_diag|train_diag|material)'; sed -n '1,150p' /tmp/hegel_continual_archive/alpha_m99_c01_s00_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained history → H2 reset memory with the intrinsic hold-stress weights and feature-driven branch offsets; the fixed-spectrum reset model has worst held-out strain/rate RMSE 0.01795/0.01387 across labs and strata.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy independently fitted chamber time constants\",\n      \"rejected_reason\": \"Free time constants improved the in-sample fit slightly but worsened the reset model’s worst held-out strain and rate errors.\"\n    },\n    {\n      \"option\": \"Add history or polynomial terms\",\n      \"rejected_reason\": \"They did not consistently improve both held-out outputs; residuals instead concentrate among coupons with missing features.\"\n    }\n  ],\n  \"rationale\": \"Test whether the chamber drift is absorbed into the two branch amplitudes rather than retained as a linear term. Compare reference panels available at deployment and separate complete from missing-feature errors; this determines whether to change the chamber law or the alignment and imputation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2b85e020101ba903d8dd94a8d9c3d136147e6b5b78c7cd7f6808596409f94797",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32915.84,
+      "usage_known": true,
+      "prompt_tokens": 37621,
+      "cached_tokens": 14976,
+      "completion_tokens": 1309
+    }
+  ]
+}

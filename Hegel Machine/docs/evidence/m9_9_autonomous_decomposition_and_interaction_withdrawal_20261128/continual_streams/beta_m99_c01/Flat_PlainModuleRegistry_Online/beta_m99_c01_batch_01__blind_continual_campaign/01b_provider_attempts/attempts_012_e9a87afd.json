@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9a87afdff4749d89b319b34a9cb1cad",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:37.913465+00:00",
+  "ended_at_utc": "2026-11-27T19:41:06.261097+00:00",
+  "request_sha256": "06868b2c38ead146837334814a42bd46e4fa800c00dfa72bc13d084c37ed742d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63722,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37700,
+    "cached_tokens": 14976,
+    "completion_tokens": 1107
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/m99_final_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; sw = s['sensor_calibration_sweeps']; x,y = sw['ref_rosette'],sw['raw_rosette']\\nfor axis in ('x','y'):\\n    k=s['kappa_'+axis]; h=s['L'+axis]/(len(k)-1)\\n    A=m['_axis'](k,s['vel_'+axis],h)\\n    err=np.max(np.abs(A@np.ones(len(k))))\\n    print(axis,'constant-state stencil residual',err)\\n    assert err < 1e-12\\n# Compare the saved model's calibration family to a predeclared saturation\\n# model, without using tracer responses or held-out sweep rows to fit either.\\nE=np.empty((2,*y.shape))\\nfor i in range(5):\\n    test=np.arange(len(x))%5==i\\n    for j in range(4):\\n        z=x[:,j]; X=np.c_[np.ones(len(z)),z]\\n        b,g=np.linalg.lstsq(X[~test],y[~test,j],rcond=None)[0]\\n        E[0,test,j]=b+g*z[test]-y[test,j]\\n        def model(p,z):\\n            return p[0]+p[1]*z/(1+p[2]*z*z)\\n        p=least_squares(lambda p: model(p,z[~test])-y[~test,j],(b,g,0),bounds=([-np.inf,-np.inf,0],np.inf),gtol=1e-13).x\\n        E[1,test,j]=model(p,z[test])-y[test,j]\\nprint('held-out sweep RMSE by channel (affine, saturating):',np.sqrt(np.mean(E**2,axis=1)).tolist())\\nS,_=m['_forward'](s); Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nE=np.array([m['_calibrate'](dict(s,y_obs_raw=p['y_pulse_raw']))-S@p['w_pulse'] for p in item['campaign_diagnostics']]); banks=s['row_bank_id']; block=np.repeat(np.arange(len(s['mu_shifts'])),len(s['sensor_ij']))\\nfor name,V in [('direct',E),('projected',E-(E@P.T)@Z.T)]:\\n    worst=max(np.sqrt(np.mean(V[:,(banks==b)&(block==k)]**2,axis=1)).max() for b in np.unique(banks) for k in np.unique(block) if np.any((banks==b)&(block==k)))\\n    print(name,'worst tracer bank/pulse/shift RMSE',worst)\\n    assert worst<5e-6\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_final_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin with full affine calibration → H2 zero wall loss with independent affine channels; worst bank–pulse–shift RMSE is 4.67×10⁻⁶ and the worst independent KKT gap across the three tested budgets is 8.26×10⁻¹⁶.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit classifier balance or relay modes\",\n      \"rejected_reason\": \"The chamber has continuous measurements and no class labels or relay states. Bank-wise tracer errors before and after projection directly test whether pooling or nuisance removal hides a mismatch.\"\n    }\n  ],\n  \"rationale\": \"Check exact constant-state conservation for the zero-loss stencil and test whether a rational saturation term improves held-out sweep predictions. Revisit the stencil if conservation fails, and revisit calibration only if the challenger exposes a material error on held-out data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "ce6a3a9abd557fddad60ab10cfdd4c193e9dba0e2ad0e78cdc5f527c11f0ab6f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29518.7,
+      "usage_known": true,
+      "prompt_tokens": 37700,
+      "cached_tokens": 14976,
+      "completion_tokens": 1107
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7aa5f7aca679492da1d7f6d741e3b460",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:56.501873+00:00",
+  "ended_at_utc": "2026-11-27T19:53:20.593170+00:00",
+  "request_sha256": "2d5d6ea08238c4e2aea1e3a6c4ee42da038419aeb1822accd4e39d22860c5e10",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22492,
+    "cached_tokens": 13696,
+    "completion_tokens": 900
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\na=json.load(open(p)); print('log root',list(a) if isinstance(a,dict) else len(a)); entries=next((v for v in a.values() if isinstance(v,list)),[a]) if isinstance(a,dict) else a\\nfor e in entries: print({k:v for k,v in e.items() if 'bridge' in k or 'transduc' in k},list(e))\\nfor e in entries[-2:]: print(json.dumps(e)[-4200:])\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; print(list(d),i.get('campaign_diagnostics')); c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('axis raw:'); print(np.round(np.c_[x,y][:16],5));\\nfor degree in range(1,5):\\n terms=[p for deg in range(degree+1) for p in combinations_with_replacement(range(4),deg)]; A=np.column_stack([np.prod(x[:,p],axis=1) for p in terms]);\\n def fit(m):\\n  b=np.linalg.lstsq(A[m],y[m],rcond=None)[0]\\n  for _ in range(28):\\n   r=np.linalg.norm(y[m]-A[m]@b,axis=1); w=1/np.hypot(max(0.0003,np.median(r)),r); b=np.linalg.lstsq(A[m]*w[:,None],y[m]*w[:,None],rcond=None)[0]\\n  return b\\n b=fit(np.ones(len(x),bool)); r=np.linalg.norm(y-A@b,axis=1); oof=np.zeros(len(x)); f=np.random.default_rng(30).permutation(len(x))%5\\n if degree<4:\\n  for j in range(5): oof[f==j]=np.linalg.norm(y[f==j]-A[f==j]@fit(f!=j),axis=1)\\n print('degree',degree,'fit',np.quantile(r,[.5,.8,.9,.95,1]),'oof',np.quantile(oof,[.5,.8,.9,.95,1])); print('outliers',sorted(enumerate(r),key=lambda q:-q[1])[:5]);\\n if degree in (2,3):\\n  for p,v in zip(terms,b):\\n   if max(abs(v))>.001: print(p,np.round(v,5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine bridge -> H2 nonlinear diagonal response with interaction terms; ordinary affine fit has channelwise 95th-percentile absolute residuals of 1.17–1.51, with robust held-out error pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\"option\":\"Fit the inverse directly\",\"rejected_reason\":\"The calibration design varies true loads, and forward residuals can isolate corrupted bridge readings without treating them as clean predictors.\"}\n  ],\n  \"rationale\": \"Compare robust affine and polynomial fits on held-out calibration rows to distinguish spike effects from missing nonlinear terms. Axis responses and the apparatus log will guide the choice of a compact model if unrestricted polynomials do not generalize.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "b5ba1f163bc8726d0bc6a86d2cfc3cb15930a0b468301d65c4590ba793a76c36",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24048.97,
+      "usage_known": true,
+      "prompt_tokens": 22492,
+      "cached_tokens": 13696,
+      "completion_tokens": 900
+    }
+  ]
+}

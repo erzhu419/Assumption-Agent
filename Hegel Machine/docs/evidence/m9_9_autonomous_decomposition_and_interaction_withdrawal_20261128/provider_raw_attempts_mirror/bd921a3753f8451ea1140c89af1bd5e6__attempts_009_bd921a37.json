@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bd921a3753f8451ea1140c89af1bd5e6",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:12.318921+00:00",
+  "ended_at_utc": "2026-11-27T19:47:43.792876+00:00",
+  "request_sha256": "0f65f9e0f3e7c41d59f2d457cbeeb8f07ddefb884e93acd482b4ad10b31e1d49",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52019,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35082,
+    "cached_tokens": 14976,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_rank2.py <<'PY'\\nfrom m99_probe import *\\nfrom scipy.optimize import minimize_scalar\\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('intrinsic',taus,theta,'eval times',t)\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.asarray(e['facility_telemetry_trace']); print('apparatus', {k:str(v)[:220] for k,v in e.items() if k!='facility_telemetry_trace'},'mean',a.mean(0).round(5))\\nprint('fields diagnostic',list(g),'test',list(te))\\nG=m._features(tr,g)[n:]; cg=m._coupon_inputs(g,G,bridge); P,H,D=cg; F,R=m._design(taus,cg,dt,t); drift=D@theta[2:]; E=np.c_[g['strain_curves_obs']-g['strain_0'][:,None]-F@theta,g['instant_rate_obs']-R@theta]; T=np.r_[t,1.];\\ndef basis(u): return np.c_[np.r_[-np.expm1(-t/u),1/u],T]\\ndef project(u):\\n B=basis(u); q=np.linalg.lstsq(B,E.T,rcond=None)[0].T; return q,E-q@B.T\\nu=minimize_scalar(lambda u:np.sum(project(u)[1]**2),bounds=(.2,4),method='bounded').x; q,err=project(u); print('rank2 time',u,'RMSE horizon/rate',np.sqrt(np.mean(err**2,axis=0))); print('drift vs linear coefficient',np.polyfit(drift,q[:,1],1),'max linear drift residual',np.max(abs(q[:,1]-np.polyval(np.polyfit(drift,q[:,1],1),drift))));\\nraw=g['hold_channel_raw']; hist=g['past_channel_raw']; ch=lambda raw:raw@bridge[1:]+bridge[0]; hc=ch(raw); pc=ch(hist); gap=R[:,:2]*taus; Z={'drift':drift,'hold':H,'gap0':gap[:,0],'gap1':gap[:,1]};\\nfor a in range(4):\\n Z[f'x{a}']=G[:,a]; Z[f'h{a}']=hc[:,a]; Z[f'pmean{a}']=pc[:,:,a].mean(1); Z[f'plast{a}']=pc[:,-1,a]\\n for b in range(a):\\n  Z[f'h{a}-h{b}']=hc[:,a]-hc[:,b]; Z[f'h{a}+h{b}']=hc[:,a]+hc[:,b]; Z[f'h{a}*h{b}']=hc[:,a]*hc[:,b]; Z[f'x{a}-x{b}']=G[:,a]-G[:,b]; Z[f'x{a}+x{b}']=G[:,a]+G[:,b]; Z[f'x{a}*x{b}']=G[:,a]*G[:,b]\\nfor j in (0,1):\\n r=q[:,j]-np.polyval(np.polyfit(drift,q[:,j],1),drift); print('coefficient',j,'drift fit',np.polyfit(drift,q[:,j],1),'residual std',r.std(),'top correlations',sorted([(abs(np.corrcoef(r,z)[0,1]),k) for k,z in Z.items()],reverse=True)[:12])\\nprint('rows drift, exp amplitude, linear coefficient, hold channels\\\\n',np.c_[drift,q,hc].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_rank2.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 changed chamber relaxation times -> H2 unchanged material branches plus a shared rank-two correction; the earlier drift-only models still leave at least 0.0588 in-sample initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a generic predictor to residual trajectories\",\n      \"rejected_reason\": \"Only 24 labeled diagnostic coupons are available, and the first two residual singular values are 9.69 and 1.02 versus 0.018 for the third. Fit and explain the shared time basis first.\"\n    }\n  ],\n  \"rationale\": \"Fit the time basis before constraining the coupon amplitudes. If exponential-plus-linear leaves systematic horizon or rate errors, revise the basis. If it reaches the noise floor, use the separate amplitude and slope estimates to distinguish drift scaling from stress or feature interactions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3ca5242660391599758d5a5a487beb8a73d132c71e5f493daaa69c821f5b500e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32577.91,
+      "usage_known": true,
+      "prompt_tokens": 35082,
+      "cached_tokens": 14976,
+      "completion_tokens": 1298
+    }
+  ]
+}

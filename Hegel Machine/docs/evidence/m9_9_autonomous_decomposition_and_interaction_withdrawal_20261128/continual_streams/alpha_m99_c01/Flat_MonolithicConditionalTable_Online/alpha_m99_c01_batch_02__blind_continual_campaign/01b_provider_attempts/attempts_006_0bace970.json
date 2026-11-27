@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bace9706ddd40ffb42f24a271a93107",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:43.831389+00:00",
+  "ended_at_utc": "2026-11-27T19:45:12.846749+00:00",
+  "request_sha256": "39f13713a6973af6b6123aaa2c1ed1228c0591996322bf506e196187aa92c258",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45225,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33367,
+    "cached_tokens": 14976,
+    "completion_tokens": 1195
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m99_residual.py <<'PY'\\nfrom m99_probe import *\\nfrom itertools import combinations\\nxs,_=m._features(c,c)\\nE=-np.expm1(-t[:,None]/tau); Y=np.c_[yc,rc]; base=np.c_[ac[:,:,:2]@beta[:2],bc[:,:2]@beta[:2]]\\nT=np.r_[np.c_[E,t],np.r_[1/tau,1.][None,:]]; U=T[:,:2]-T[:,2:3]/tau\\nlabs=c['lab_id']; miss=~np.isfinite(c['coupon_features_raw']); ds=beta[2]+xs@beta[3:]\\nfit=np.linalg.lstsq((ds[:,None,None]*T).reshape(-1,3),(Y-base).ravel(),rcond=None)[0]; e=base+(ds[:,None]*fit)@T.T-Y\\nprint('fitted chamber coefficients (two transient, one steady)',fit,'initial rate multiplier',fit@T[-1]); print('per coupon: lab, missing count, drift, mean signed strain residual, final residual, rate residual'); print(np.round(np.c_[labs,miss.sum(1),ds,e[:,:-1].mean(1),e[:,-2:]],5))\\n# Fit on complete coupons first to distinguish fit bias caused by imputation from a constitutive term.\\nsel=~miss.any(1); fits=[]\\nfor name,u in [('all',np.ones(len(ds),bool)),('complete',sel)]:\\n q=(ds[:,None,None]*U).reshape(len(ds),len(t)+1,2); target=Y-base-ds[:,None]*T[:,2]\\n b=np.linalg.lstsq(q[u].reshape(-1,2),target[u].ravel(),rcond=None)[0]; err=q@b-target\\n print(name,'conserved fractions',b/tau,'steady multiplier',1-(b/tau).sum(),'curve/rate rmse complete',np.sqrt(np.mean(err[sel,:-1]**2)),np.sqrt(np.mean(err[sel,-1]**2)),'missing',np.sqrt(np.mean(err[~sel,:-1]**2)),np.sqrt(np.mean(err[~sel,-1]**2)))\\n refs=c['ref_coupons']; print('diagnostic feature centers',np.round(np.mean(xs,0),4))\\nprint('chamber rate residual after single drift adjustment',np.round((rc-base[:,-1])-ds,4))\\nprint('train/test raw fit check: magnitude of test normalization effect',np.quantile(np.abs((m._features(te,te)[0]-Xe)@beta[3:]),[0,.5,.9,1]))\\nprint('archive telemetry summary (mean, last, within-trace std):')\\nimport json\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n z=np.asarray(row['facility_telemetry_trace']); print(row['completed_campaign_short_name'],np.round(np.vstack((z.mean(0),z[-1],z.std(0))),4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_residual.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 changed chamber drift → H2 same initial rate with drift redistributed across the shared modes; rate-preserving leave-one-lab-out RMSE is at most 0.0162 for strain and 0.0177 for rate under chamber-only diagnostic normalization.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a fitted history interaction\",\n      \"rejected_reason\": \"The history term improves worst-lab strain RMSE by only 0.0008 and does not improve worst-lab rate RMSE; first check whether the remaining strain error is concentrated in coupons with missing features.\"\n    }\n  ],\n  \"rationale\": \"Compare complete and incomplete coupons to decide how to calibrate the chamber coefficients. Measure how much feature normalization changes deployment drift, while keeping the specified joint train/test normalization in the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "19f34ce841934106361a4a1c41594a9343929ae06a9da66f781373f3491ce38a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30177.97,
+      "usage_known": true,
+      "prompt_tokens": 33367,
+      "cached_tokens": 14976,
+      "completion_tokens": 1195
+    }
+  ]
+}

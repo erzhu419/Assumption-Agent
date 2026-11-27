@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "633e4445df3d4eb2adf0aaff6791e726",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:14.390477+00:00",
+  "ended_at_utc": "2026-11-27T19:56:39.647860+00:00",
+  "request_sha256": "691dec7f31597daf303efb6185c432fe17908d96d1e9b1e0ec7dfacdf52ae74b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50550,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30639,
+    "cached_tokens": 16256,
+    "completion_tokens": 998
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_condition_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _inverse\\n\\nj = np.arange(4)\\nk = (j+1)%4\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    d = item['dataset']; c = d['calibration_load_cells']; x = c['true_channel_loads']\\n    b = _fit_bridge(x, c['bridge_raw'])\\n    operating = np.vstack([_inverse(d[g][f], b).reshape(-1,4) for g in ('train','test') for f in ('past_channel_raw','hold_channel_raw')])\\n    points = np.vstack((x, operating))\\n    lo, hi = points.min(0), points.max(0)\\n    pending = [(lo, hi, 0)]\\n    certified = np.inf; sampled = np.inf; count = 0; unresolved = 0\\n    while pending:\\n        low, high, depth = pending.pop()\\n        mid = (low+high)/2; rad = (high-low)/2\\n        jac = b[1:5].T.copy()\\n        jac[j,j] += 3*b[5]*mid**2 + b[6]*mid[k]\\n        jac[j,k] += b[6]*mid\\n        ev = np.linalg.eigvalsh((jac+jac.T)/2)[0]\\n        sampled = min(sampled, ev)\\n        # Use the exact diagonal minimum on the sub-box plus absolute\\n        # off-diagonal perturbation radii to bound the eigenvalue from below.\\n        closest = np.maximum(low,0)+np.minimum(high,0)\\n        sq_min = np.minimum(3*b[5]*closest**2, 3*b[5]*np.maximum(low**2,high**2))\\n        diag_loss = 3*b[5]*mid**2 - sq_min + np.abs(b[6])*rad[k]\\n        edge = np.abs(b[6])*rad/2\\n        bound = ev - np.max(diag_loss+edge+np.roll(edge,1))\\n        if bound > 0.02 or depth == 16:\\n            certified = min(certified,bound); count += 1; unresolved += bound <= 0\\n        else:\\n            i = np.argmax(rad)\\n            p = high.copy(); p[i] = mid[i]\\n            q = low.copy(); q[i] = mid[i]\\n            pending.extend(((low,p,depth+1),(q,high,depth+1)))\\n    print(f'operating and calibration box: symmetric Jacobian lower bound={certified:.9g}; minimum center eigenvalue={sampled:.9g}; sub-boxes={count}; unresolved={unresolved}')\\n    assert unresolved == 0\\nPY\\npython3 -I /tmp/bridge_condition_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/quadratic bridge → H2 sparse cyclic cubic bridge; worst held-out load-component error is 0.000380039, and removing the observed spike rows changes recovered operating loads by at most 2.64e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the bridge model after the negative whole-box bound\",\n      \"rejected_reason\": \"A negative lower bound does not establish that the fitted Jacobian is ill-conditioned or that the inverse is nonunique.\"\n    }\n  ],\n  \"rationale\": \"The spike check passed, but the whole-box diagonal-dominance bound was inconclusive. Subdivide the observed load box and bound the symmetric Jacobian on each sub-box. A positive bound certifies uniqueness and inverse stability there; if any sub-box remains unresolved, inspect it before deciding whether the solver needs a change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a03a5a0be64e3de839aca6536de6e688ec84fd5abde6c1f615629f7c4240f66e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26405.6,
+      "usage_known": true,
+      "prompt_tokens": 30639,
+      "cached_tokens": 16256,
+      "completion_tokens": 998
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "97c899a44f2f466fbfc98c33c2250550",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:12.545504+00:00",
+  "ended_at_utc": "2026-11-27T19:52:32.801505+00:00",
+  "request_sha256": "3a9a97ae4553d991fbbfbbe9b31d0dc1923e0e40669efb75ee2b7eb23607cf33",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35738,
+    "cached_tokens": 14976,
+    "completion_tokens": 750
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\ntr, te = d['train'], d['test']\\nx, _ = m._features(tr, te)\\np, h = m._loads(tr, m._bridge(d['calibration_load_cells']))\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nfull = m.solve_batch(d)['estimated_taus']\\nfor lab in np.unique(tr['lab_id']):\\n    val = tr['lab_id'] == lab\\n    fit = ~val\\n    tau, theta = m._fit(x[fit], p[fit], h[fit], dt, t, y[fit], r[fit])\\n    curve, rate = m._design(tau, x[val], p[val], h[val], dt, t)\\n    ec, er = abs(curve @ theta - y[val]), abs(rate @ theta - r[val])\\n    assert np.isfinite(ec).all() and np.isfinite(er).all()\\n    print(f'lab={lab} n={val.sum()} max_tau_relative_shift={max(abs(tau/full-1)):.5f} curve_median_AE={np.median(ec):.6f} curve_p90_AE={np.quantile(ec,.9):.6f} rate_median_AE={np.median(er):.6f} rate_p90_AE={np.quantile(er,.9):.6f}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: inherited redistribution with affine calibration → H2: baseline chamber mechanics with coupled cubic calibration; worst held-out calibration fold total-load RMSE is 0.0002344, and the host probe reports strain MAE 0.000588.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Recheck the schema or artifact identity\",\n      \"rejected_reason\": \"Both are already verified; neither would detect dependence of the material fit on one lab.\"\n    }\n  ],\n  \"rationale\": \"Leave one lab’s measured responses out at a time while retaining the specified joint, unlabeled feature preprocessing. If removing one lab destabilizes the spectrum or produces a large systematic error in held-out curves or rates, investigate that lab’s residuals before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "523a98f8dba8ab908e8cc552c287c5f405121117b09a4fa8b19efa9a74394a0d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21383.27,
+      "usage_known": true,
+      "prompt_tokens": 35738,
+      "cached_tokens": 14976,
+      "completion_tokens": 750
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f86134d4692f4ced94b5752a406fbe7c",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:19.056206+00:00",
+  "ended_at_utc": "2026-11-27T20:02:50.458040+00:00",
+  "request_sha256": "d499ea943f91a523c3d48ef7c8cccf771b5bd5d40ca026b02b4f8ba0dd0cdcf0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56172,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34414,
+    "cached_tokens": 14976,
+    "completion_tokens": 1253
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import root\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; S,U=m._responses(s); Z=s['Z_nuisance']; ridge=s['source_ridge']; nz=s['nuisance_ridge']; cap=s['u_box']\\ndef calibrations(train):\\n    a=m._fit_calibration(x[train],y[train]); b=a.copy()\\n    for j,f in enumerate(a):\\n        t=x[train]; D=np.column_stack((np.ones(len(t)),t,t[:,j]**3,*[t[:,k]*t[:,l] for k,l in m._PAIRS])); yy=y[train,j]; e=D@f-yy; med=np.median(e); scale=max(1e-10,1.4826*np.median(abs(e-med))); good=abs(e-med)<6*scale; keep=abs(f)>10*scale\\n        b[j]=0; b[j,keep]=np.linalg.lstsq(D[good][:,keep],yy[good],rcond=None)[0]\\n    return a,b\\ndef invert(raw,F):\\n    ans=[]\\n    for o in raw.reshape(-1,4):\\n        r=root(lambda q: (m._sensor(q,F)[0]-o,m._sensor(q,F)[1]),np.linalg.solve(F[:,1:5],o-F[:,0]),jac=True,tol=1e-11)\\n        assert np.max(abs(r.fun))<1e-9\\n        ans.append(r.x)\\n    return np.asarray(ans).ravel()\\nbanks=len(s['sensor_ij']); groups=np.repeat(np.arange(len(s['mu_shifts'])),banks); I=np.eye(S.shape[1]); stats=[[],[]]; production=[[],[]]\\nfor k in range(5):\\n    for mode,F in enumerate(calibrations(np.arange(len(x))%5!=k)):\\n        production[mode].append(invert(s['y_obs_raw'],F))\\n        for ip,pulse in enumerate(item['campaign_diagnostics']):\\n            w=pulse['w_pulse']; truth=S@w; residual=invert(pulse['y_pulse_raw'],F)-truth\\n            for omit in [-1,*np.unique(groups)]:\\n                keep=groups!=omit; z=Z[keep]; A=S[keep]; P=lambda v: v-z@np.linalg.solve(z.T@z+nz*np.eye(z.shape[1]),z.T@v); X=P(A); H=X.T@X+ridge*I\\n                # Isolate weight error caused by calibration, not regularization bias in the known pulse.\\n                C=np.block([[H,np.ones((len(w),1))],[np.ones((1,len(w))),np.zeros((1,1))]])\\n                dw=np.linalg.solve(C,np.r_[X.T@P(residual[keep]),0.])[:-1]\\n                stats[mode].append((k,ip,omit,np.sqrt(np.mean(residual[keep]**2)),np.linalg.norm(dw)/np.linalg.norm(w),np.linalg.norm(np.tensordot(dw,U,axes=1))/np.linalg.norm(np.tensordot(w,U,axes=1))))\\nfor name,st,ys in zip(('baseline','sparse'),stats,production):\\n    a=np.array(st); j=np.argmax(a[:,4]); print(name,'worst calibrated RMSE / relative weight / relative field',a[:,3:].max(0),'worst weight case fold,pulse,omission',a[j,:3].astype(int)); print(name,'production inversion across folds max channel std',np.std(ys,axis=0).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared reflecting walls → H2 periodic x and reflecting y; worst public tracer RMSE is 1.99e-6, and the audit will test whether sparse calibration improves recovered weights and fields.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the polynomial and rational basis audit\",\n      \"rejected_reason\": \"It already showed that the expanded basis worsens held-out sweep error in every bank; repeating it would not establish downstream impact.\"\n    }\n  ],\n  \"rationale\": \"The sparse refit reduced tracer error in raw sensor units, but that does not establish better weights or terminal fields. Propagate actual tracer calibration errors through the nuisance projection and budget-constrained inverse, including omitted-shift slices. Promote the refit only if it improves the downstream bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4e3ac16dfed214d866031bd1aeb25d7e49a30058d382175d1819df6e772e4546",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32555.7,
+      "usage_known": true,
+      "prompt_tokens": 34414,
+      "cached_tokens": 14976,
+      "completion_tokens": 1253
+    }
+  ]
+}

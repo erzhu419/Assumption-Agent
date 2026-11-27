@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce178be406e84668846d474e150f6800",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:10.700730+00:00",
+  "ended_at_utc": "2026-11-27T19:40:43.859757+00:00",
+  "request_sha256": "d47c0c203f0fab723b9876c23a33b87a82f3f3bbb52da4346986aafc85d28133",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66748,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40485,
+    "cached_tokens": 14976,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^def solve_batch(/,$d' /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Proportional drift routing identified on the campaign's chamber coupons.\\n# The chamber starts both memory states at zero and retains the intrinsic times.\\n_CHAMBER_ROUTE = np.array([0.38421, 1.86456, 0.02876])\\n\\n\\ndef _chamber(taus, theta, hold, x, t, route=_CHAMBER_ROUTE):\\n    drift = theta[2] + x @ theta[3:]\\n    amplitudes = hold[:, None] * theta[:2] + drift[:, None] * route[:2]\\n    slope = route[2] * drift\\n    curve = amplitudes @ (-np.expm1(-t[:, None] / taus)).T + slope[:, None] * t\\n    rate = amplitudes @ (1.0 / taus) + slope\\n    return curve, rate\\n\\n\\ndef solve_batch(dataset):\\n    train, test = dataset['train'], dataset['test']\\n    t, dt = dataset['eval_times'], dataset['past_dt']\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    x_train, x_test = _features(train, test)\\n    taus, theta = _material(train, bridge, x_train, dt, t)\\n    hold = test['hold_channel_raw'] @ bridge[1:] + bridge[0]\\n    curve, rate = _chamber(taus, theta, hold, x_test, t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; g=i['campaign_diagnostics']; t=d['eval_times']; dt=d['past_dt']; bridge=m._bridge(d['calibration_load_cells']); x,xt=m._features(tr,te)\\no=m.solve_batch(d); ta,th=o['estimated_taus'],o['hereditary_weights']; print('material',ta,th)\\nfor label, x0 in [('joint',x),('train local',m._features(tr,tr)[0])]:\\n ta0,th0=m._material(tr,bridge,x0,dt,t); C,R=m._basis(ta0,*m._loads(tr,bridge),x0,dt,t); ce=C@th0-(tr['strain_curves_obs']-tr['strain_0'][:,None]); re=R@th0-tr['instant_rate_obs']; print(label,'train median absolute errors',np.median(abs(ce)),np.median(abs(re)))\\ncl,rl=m._chamber(ta,th,m._loads(te,bridge)[1],m._features(te,te)[1],t); print('test local versus joint prediction RMS',np.sqrt(np.mean((cl+te['strain_0'][:,None]-o['predicted_strain'])**2)),np.sqrt(np.mean((rl-o['initial_rate_pred'])**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: chamber offset plus proportional routing → H2: complete history withdrawal with proportional drift routing; worst held-out diagnostic lab RMSE is 0.00429 strain and 0.00406 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Include chamber offsets\",\n      \"rejected_reason\": \"Offsets slightly improved the pooled fit but worsened both worst-lab metrics.\"\n    },\n    {\n      \"option\": \"Use test-only feature normalization\",\n      \"rejected_reason\": \"The task specifies joint train/test normalization. Standalone diagnostic normalization validates the routing law but does not establish a different normalization rule for unlabeled deployment coupons.\"\n    }\n  ],\n  \"rationale\": \"Implement the smallest chamber law supported by both held-out observables while retaining the verified affine bridge and train-only material fit. Check the output contract and quantify whether the panel convention materially affects deployment predictions before final stress testing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5b25c870c54c000a2339a80bcf7b704da2a08e5f037120a199bceef7e7b8e8dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34319.65,
+      "usage_known": true,
+      "prompt_tokens": 40485,
+      "cached_tokens": 14976,
+      "completion_tokens": 1387
+    }
+  ]
+}

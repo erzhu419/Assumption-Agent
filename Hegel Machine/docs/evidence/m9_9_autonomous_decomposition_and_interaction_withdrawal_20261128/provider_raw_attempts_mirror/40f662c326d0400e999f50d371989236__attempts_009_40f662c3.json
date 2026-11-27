@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "40f662c326d0400e999f50d371989236",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:26.160835+00:00",
+  "ended_at_utc": "2026-11-27T19:51:50.282386+00:00",
+  "request_sha256": "088723928e1a0e62d89b8bd23d31f35e923197a722acf6dc2df4121158346279",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53816,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36799,
+    "cached_tokens": 14976,
+    "completion_tokens": 904
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport ast\\nfrom pathlib import Path\\nprior = Path('/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py').read_text()\\nprobe = Path('/tmp/bridge_probe.py').read_text()\\nold_tree = ast.parse(prior)\\nprobe_tree = ast.parse(probe)\\ndef select(source, tree, names):\\n    return '\\\\n\\\\n'.join(ast.get_source_segment(source, n) for n in tree.body if isinstance(n, ast.FunctionDef) and n.name in names)\\nbase = select(prior, old_tree, {'_features', '_basis', '_material', 'solve_batch'})\\nassert len(ast.parse(base).body) == 4\\nbridge = select(probe, probe_tree, {'basis', 'fit', 'inv'})\\nimport re\\nfor a,b in [('basis','_bridge_basis'),('fit','_fit_bridge'),('inv','_invert_bridge')]:\\n    bridge = re.sub(r'(?<!\\\\.)\\\\b'+a+r'\\\\(',b+'(',bridge)\\nloads = '''def _bridge(cal):\\n    return _fit_bridge(cal['true_channel_loads'], cal['bridge_raw'])\\n\\n\\ndef _loads(split, bridge):\\n    past = _invert_bridge(split['past_channel_raw'], bridge).sum(axis=-1)\\n    hold = _invert_bridge(split['hold_channel_raw'], bridge).sum(axis=-1)\\n    return past, hold\\n'''\\nout = '''\\\"\\\"\\\"Calibrate the nonlinear load bridge and fit the intrinsic relaxation law.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n# The low-low facility trace matches the baseline chamber setting.\\nPAIRS = ((0, 1), (0, 3), (1, 2), (2, 3))\\n\\n'''+bridge+'\\\\n\\\\n'+loads+'\\\\n\\\\n'+base+'\\\\n'\\ncompile(out,'batch_solver.py','exec')\\nPath('/holdout_task/batch_solver.py').write_text(out)\\nprint(base)\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine inverse → H2 robust sparse cubic bridge with baseline chamber dynamics; worst clean-sweep held-out total-load RMSE is 0.000307, and worst deployment forward-reconstruction residual is 5.44e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Discard the rank-one residual direction before inversion\",\n      \"rejected_reason\": \"Only three calibration rows are grossly contaminated. Trimming them recovers all four forward equations and validates total-load inversion on held-out clean sweeps.\"\n    }\n  ],\n  \"rationale\": \"Preserve the archived baseline chamber law, which matches the latest facility trace, while replacing the falsified affine calibration. The isolated schema check will catch integration errors before the material fit is evaluated across held-out coupon groups.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cc59dd2ba753c7715115cecd06fbbae2f530f409bf6cba8ad7fb59cab8860c99",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24083.48,
+      "usage_known": true,
+      "prompt_tokens": 36799,
+      "cached_tokens": 14976,
+      "completion_tokens": 904
+    }
+  ]
+}

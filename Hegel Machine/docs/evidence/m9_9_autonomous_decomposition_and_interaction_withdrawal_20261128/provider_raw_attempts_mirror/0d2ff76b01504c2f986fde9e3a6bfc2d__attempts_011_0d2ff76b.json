@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d2ff76b01504c2f986fde9e3a6bfc2d",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:23.881554+00:00",
+  "ended_at_utc": "2026-11-27T20:00:51.336091+00:00",
+  "request_sha256": "a91819290b3436e47783c319e31a89c05c41d6bfd493268a2aa6d882a9d176eb",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56199,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33080,
+    "cached_tokens": 13696,
+    "completion_tokens": 1070
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_nuisance_audit.py <<'PY'\\nimport contextlib\\nimport io\\nimport runpy\\nimport sys\\n\\nimport numpy as np\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom downstream_solver import _design\\n\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    p = runpy.run_path('/tmp/wall_probe.py')\\ns = p['s']\\nerrors = {(a, b): p['residual'](params) for _, a, b, params in p['rank']}\\nselected = ('periodic', 'sealed')\\nZ = s['Z_nuisance'].reshape(*errors[selected].shape[:2], -1)\\nS, _ = _design(s)\\nshipped = (S @ p['W'] - p['Y']).reshape(errors[selected].shape)\\nnp.testing.assert_allclose(shipped, errors[selected], rtol=0, atol=1e-12)\\n\\ndef nuisance_free(r, z):\\n    a = r.reshape(-1, r.shape[-1])\\n    x = z.reshape(len(a), -1)\\n    return a - x @ np.linalg.lstsq(x, a, rcond=None)[0]\\n\\ndef rmse(r):\\n    return np.sqrt(np.mean(r * r))\\n\\nworst_held = 0.0\\nmin_train_margin = np.inf\\nmin_held_margin = np.inf\\nfor shift in range(shipped.shape[0]):\\n    tr_s = np.arange(shipped.shape[0]) != shift\\n    for pulse in range(shipped.shape[2]):\\n        tr_p = np.arange(shipped.shape[2]) != pulse\\n        train = {k: rmse(nuisance_free(r[tr_s][:, :, tr_p], Z[tr_s])) for k, r in errors.items()}\\n        assert min(train, key=train.get) == selected, (shift, pulse, train)\\n        train_margin = min(v for k, v in train.items() if k != selected) - train[selected]\\n        held = {k: rmse(nuisance_free(r[shift:shift+1, :, pulse:pulse+1], Z[shift:shift+1])) for k, r in errors.items()}\\n        held_margin = min(v for k, v in held.items() if k != selected) - held[selected]\\n        min_train_margin = min(min_train_margin, train_margin)\\n        min_held_margin = min(min_held_margin, held_margin)\\n        worst_held = max(worst_held, held[selected])\\nassert worst_held < 1e-5, worst_held\\nprint(f'Crossed shift/pulse holdout after unregularized nuisance removal: all {shipped.shape[0]*shipped.shape[2]} training folds select periodic-x/sealed-y; worst held RMSE {worst_held:.6g}; minimum RMSE advantage on training folds {min_train_margin:.6g}, on held slices {min_held_margin:.6g}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_nuisance_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared wall stencil → H2 periodic x and sealed y; worst held-pulse RMSE is 1.035e-6 before the crossed shift/pulse nuisance audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit classification balance or relay modes\",\n      \"rejected_reason\": \"The deliverable is a steady PDE inverse problem, with neither classification labels nor relay states. The relevant confounder is overlap between boundary responses and the measured nuisance basis.\"\n    }\n  ],\n  \"rationale\": \"Remove the full nuisance subspace without ridge shrinkage, then select the boundary stencil with both a shift and a pulse held out. If another stencil wins a training fold, revisit whether the boundary is identifiable independently of nuisance. The audit writes only to /tmp and checks that the shipped operator matches the selected stencil.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d6e59538e16c3268a4567a2c4f29a8ee17050369f0bbd9268e6855f1e5d8fc73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28619.23,
+      "usage_known": true,
+      "prompt_tokens": 33080,
+      "cached_tokens": 13696,
+      "completion_tokens": 1070
+    }
+  ]
+}

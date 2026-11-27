@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d4b5d7f8aac647cb846253cbadc87347",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:33.092052+00:00",
+  "ended_at_utc": "2026-11-27T19:53:05.099068+00:00",
+  "request_sha256": "7b4bf72a04ecd27356fd481b141868b11c5282095e6375a2f562ce081a3a3b07",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42741,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29955,
+    "cached_tokens": 13696,
+    "completion_tokens": 1330
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import _fit,_forward,_inverse,_features\\nitems=pickle.load(open('public_batch.pkl','rb'))\\nfor item in items:\\n s=item['study']; c=s['sensor_calibration_sweeps']; x,y,b=(c[k] for k in ('ref_rosette','raw_rosette','single_bank_sweeps'))\\n p=_fit(x,y,b); e=np.max(abs(_forward(x,p)-y),axis=1); good=e<1e-3\\n ids=b['bank_id']; bx=np.eye(4)[ids]*b['ref_signal'][:,None]; br=b['raw_readout']; bg=abs(_forward(bx,p)[np.arange(len(ids)),ids]-br)<1e-3\\n # Hold out the highest pairwise excitations together; ordinary LOO can leave near neighbours in training.\\n interaction=np.max(abs(x*np.roll(x,-1,axis=1)),axis=1); strong=interaction>=np.quantile(interaction[good],.80)\\n q=_fit(x[~strong],y[~strong],b); z=_inverse(y[strong&good],q)\\n print('joint high-interaction holdout',len(z),'inverse max',float(np.max(abs(z-x[strong&good]))))\\n # Entire isolated-bank measurement series is independent of the rosette-only fit.\\n q=_fit(x,y,{k:v[:0] for k,v in b.items()}); print('independent bank forward max',float(np.max(abs(_forward(bx,q)[np.arange(len(ids)),ids][bg]-br[bg]))))\\n # Grouped CV: keep opposite-sign pair excitations together and check whether\\n # mild rational saturation improves the worst inverse error. Select its\\n # saturation strength on training data only.\\n candidates=(0., .001, .01, .05, .2, 1.)\\n errors=[]\\n for sign in (False,True):\\n  test=(x[:,0]*x[:,1]>0)==sign; test &= np.count_nonzero(x,axis=1)>1\\n  tr=good&~test; te=good&test\\n  picked=[]; preds=[]\\n  for j in range(4):\\n   def design(a):\\n    d=_features(x,j); d[:,-1]/=1+a*x[:,j]**2; return d\\n   def bank_design(a):\\n    d=_features(bx,j); d[:,-1]/=1+a*bx[:,j]**2; return d\\n   use=bg&(ids==j)\\n   models=[]\\n   for a in candidates:\\n    d=design(a); A=np.vstack((d[tr],bank_design(a)[use])); Y=np.r_[y[tr,j],br[use]]\\n    Q,R=np.linalg.qr(A); w=np.linalg.solve(R,Q.T@Y); loo=(Y-A@w)/(1-np.sum(Q**2,axis=1)); models.append((np.mean(loo**2),a,d[te]@w))\\n   _,a,pred=min(models,key=lambda t:t[0]); picked.append(a); preds.append(pred)\\n  q=_fit(x[~test],y[~test],b)\\n  ei=float(np.max(abs(_inverse(y[te],q)-x[te]))); errors.append(ei)\\n  print('pair sign holdout',sign,int(te.sum()),'inverse max',ei,'rational strengths',picked,'forward max',float(np.max(abs(np.column_stack(preds)-y[te]))))\\n # Preserve the measured EMI direction but reduce its size below the gross\\n # amplitude screen, to check that the residual trim still rejects it.\\n yd=y.copy(); yp=_forward(x,p); yd[~good]=yp[~good]+.05*(y[~good]-yp[~good]); q=_fit(x,yd,b)\\n delta=float(np.max(abs(_inverse(s['y_obs_raw'],q)-_inverse(s['y_obs_raw'],p))))\\n print('diminished measured EMI: observation-coordinate shift',delta)\\n assert max(errors)<2e-4 and np.max(abs(z-x[strong&good]))<2e-4 and delta<1e-5\\n print('study count',len(items),'classification labels and relay states: not part of schema')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separable curvature → H2 sparse cyclic cubic; current worst held-out inverse error is 3.12e-5, with blocked excitation and reduced-EMI tests pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply batch-centered classification or relay-mode tests\",\"rejected_reason\":\"This study supplies continuous calibration targets and a transport inverse problem, not class labels or relay state.\"}],\"rationale\":\"Blocked sign and high-interaction holdouts can expose missing coupled terms that single-row tests miss; compare rational saturation using training-fold selection. Independent bank sweeps test axis transfer, and attenuating the observed EMI tests whether residual rejection works below the gross amplitude screen. A failure would change the response basis or the outlier fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f7cb18abac50ca9173d30e0a2cf282eaa1dbcfa288d406ca3eba37cf23e23d2f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33124.9,
+      "usage_known": true,
+      "prompt_tokens": 29955,
+      "cached_tokens": 13696,
+      "completion_tokens": 1330
+    }
+  ]
+}

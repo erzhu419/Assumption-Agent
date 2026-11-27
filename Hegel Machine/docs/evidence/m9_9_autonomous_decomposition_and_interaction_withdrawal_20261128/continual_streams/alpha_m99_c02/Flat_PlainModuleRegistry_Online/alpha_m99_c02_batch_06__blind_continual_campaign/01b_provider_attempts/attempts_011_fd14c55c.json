@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd14c55c24954e908e994a3f76a4da76",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:33.510420+00:00",
+  "ended_at_utc": "2026-11-27T20:05:56.394887+00:00",
+  "request_sha256": "3c6e1511c437b3dae9d994705c3e98b685dd4ec1e7dbee798eab98fa115ebbe4",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59951,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33434,
+    "cached_tokens": 13696,
+    "completion_tokens": 870
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\nsed -n '1,120p' downstream_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; tr, te = d['train'], d['test']\\nprint('diagnostics present:', item['campaign_diagnostics'] is not None)\\nprint('dataset keys:', sorted(d), 'test keys:', sorted(te))\\nprint('missing features train/test:', [np.isnan(s['coupon_features_raw']).sum(axis=0).tolist() for s in (tr,te)])\\na = d['calibration_load_cells']; raw = a['bridge_raw']; y = a['true_channel_loads']; errs = []\\nfor i in range(len(raw)):\\n    use = (np.arange(len(raw)) != i) & np.all(abs(raw) <= 8.5, axis=1)\\n    pred = []\\n    for j in range(4):\\n        gain, off = np.linalg.lstsq(np.c_[y[use,j], np.ones(use.sum())], raw[use,j], rcond=None)[0]\\n        pred.append((raw[i,j]-off)/gain)\\n    errs.append(np.asarray(pred)-y[i])\\ne = np.asarray(errs)\\nprint('LOO bridge max abs by channel and total:', np.max(abs(e),axis=0), np.max(abs(e.sum(axis=1))))\\nprint('test support (lab, stratum, n):', [(int(l), int(s), int(n)) for (l,s),n in zip(*np.unique(np.c_[te['lab_id'],te['stratum']],axis=0,return_counts=True))])\\nprint('clean solve finite:', {k: (v.shape, bool(np.isfinite(v).all())) for k,v in solve_batch(d).items()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated two-branch relaxation → H2: retained-history chamber law inferred from the apparatus log; worst held-out lab-by-horizon strain MAE is 0.0418 and worst held-out lab rate MAE is 0.00787.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification metrics, or field-equation drift\",\n      \"rejected_reason\": \"The published inputs and outputs define coupon relaxation regressions, with no relay state, class label, or field equation. The relevant slices are load channels, labs, strata, and time horizons.\"\n    }\n  ],\n  \"rationale\": \"Leave-one-sweep-out bridge errors can reveal channel-specific calibration failures hidden by summation; missingness and lab-by-stratum support identify where to test the exact hereditary model for nuisance bias. A bridge failure would justify changing calibration, while a structured residual would justify a targeted constitutive comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "627f9a51465673a2175eb5bcf8006230d8e83505adbb6c177de8b03913430690",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24088.73,
+      "usage_known": true,
+      "prompt_tokens": 33434,
+      "cached_tokens": 13696,
+      "completion_tokens": 870
+    }
+  ]
+}

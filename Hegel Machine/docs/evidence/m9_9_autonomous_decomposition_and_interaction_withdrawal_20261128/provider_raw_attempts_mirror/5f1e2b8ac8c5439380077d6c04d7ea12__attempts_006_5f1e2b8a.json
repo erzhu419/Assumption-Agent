@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f1e2b8ac8c5439380077d6c04d7ea12",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:58.832388+00:00",
+  "ended_at_utc": "2026-11-27T19:50:22.555331+00:00",
+  "request_sha256": "d3887e13829a236427f477839ae24b1af5348c04ce6c9eed793eb01875751f44",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41069,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30345,
+    "cached_tokens": 14976,
+    "completion_tokens": 916
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; R=C['bridge_raw']; L=C['true_channel_loads']; S=L.sum(1)\\nJ=[()]+[j for k in (1,2,3) for j in combinations_with_replacement(range(4),k)]\\nA=np.column_stack([np.prod(L[:,j],axis=1) for j in J]); B=np.linalg.lstsq(A,R,rcond=None)[0]; E=R-A@B\\nu,s,v=np.linalg.svd(E,full_matrices=False); print('forward residual singular values',s,'right vectors',v.round(5)); print('coefficients: monomial, raw sum, projection orthogonal to largest residual direction, raw channels');\\nfor j,b in zip(J,B): print(j,round(b.sum(),6),(b@v[1:].T).round(5),b.round(5))\\nZ=np.column_stack([S**k for k in range(4)]); beta=np.linalg.lstsq(Z,R.sum(1),rcond=None)[0]; print('scalar total-load cubic',beta,'rmse',np.std(R.sum(1)-Z@beta));print('only nonzero count / maximum load by calibration block');\\nfor start in range(0,len(L),8):\\n z=L[start:start+8]; print(start,np.count_nonzero(z,axis=1),np.max(abs(z)).round(3),np.linalg.norm(E[start:start+8],axis=1).round(4))\\nfor name in ('train','test'):\\n q=D[name]; raw=np.vstack((q['past_channel_raw'].reshape(-1,4),q['hold_channel_raw']));print(name,'raw totals',np.quantile(raw.sum(1),[0,.1,.5,.9,1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge inversion -> H2 nonlinear bridge with a conserved raw-signal sum; affine held-out total-load RMSE was 0.620, whereas cubic forward raw-sum RMSE was 0.00046.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine inverse adequately describes the active calibration bridge.\",\n    \"empirical_witness\": \"Five-fold affine inverse total-load RMSE was 0.620. In the forward direction, a full cubic predicted the raw-channel sum to 0.00046 RMSE even though individual raw-channel RMSEs were 3.49–3.96.\",\n    \"causal_blanket_diagnosis\": \"Large nonlinear terms appear to cancel in the raw-channel sum. This must be checked before attempting to invert the individual channels.\",\n    \"sublated_pivot\": \"Identify the conserved aggregate and determine whether it depends only on total load or also on the channel load distribution.\",\n    \"risk_kind\": \"bridge model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a higher-degree unconstrained inverse\",\n      \"rejected_reason\": \"Held-out error rose sharply with polynomial degree, while the forward raw-channel sum showed a much simpler structure.\"\n    }\n  ],\n  \"rationale\": \"The coefficient and residual directions distinguish a scalar calibration law from one that also requires channel contrasts. That determines whether to invert a single cubic or recover additional low-noise combinations first.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1b4461124de24a11265250a39cf9e919022c664bd9855d61e86ab3024292d992",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24847.35,
+      "usage_known": true,
+      "prompt_tokens": 30345,
+      "cached_tokens": 14976,
+      "completion_tokens": 916
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "49d8ca0eec71481f811bb8a6b725eeac",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:18.158381+00:00",
+  "ended_at_utc": "2026-11-27T20:03:46.378377+00:00",
+  "request_sha256": "7d2abbe126f0c52febff182b35cd72651965465e97e2a65c952252769de3c7fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34603,
+    "cached_tokens": 14976,
+    "completion_tokens": 1088
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=it['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; b=sw['single_bank_sweeps']; j=np.asarray(b['bank_id']); z=np.zeros((len(j),4)); z[np.arange(len(j)),j]=b['ref_signal']; u=np.asarray(b['raw_readout']); D=m._rosette_design; A=D(x); B=D(z); S,_=m._forward(s)\\nP=np.stack([D((S@d['w_pulse']).reshape(-1,4)) for d in it['campaign_diagnostics']]); Y=np.stack([d['y_pulse_raw'].reshape(-1,4) for d in it['campaign_diagnostics']]); rng=np.random.default_rng(471)\\nfolds=list(zip(np.array_split(rng.permutation(len(x)),6),np.array([rng.permutation(np.flatnonzero(j==k)) for k in range(4)]).T)); folds.append((np.array([],int),np.array([],int)))\\nfor h,hb in folds:\\n t=np.setdiff1d(np.arange(len(x)),h); tb=np.setdiff1d(np.arange(len(j)),hb); c=m._fit_rosette(x[t],y[t]); r=y[t]-A[t]@c; med=np.median(r,axis=0); scale=np.maximum(1.4826*np.median(abs(r-med),axis=0),1e-7); clean=t[np.all(abs(r-med)<=8*scale,axis=1)]; e=u-(B@c)[np.arange(len(j)),j]; good=tb[abs(e[tb])<=8*scale[j[tb]]]; C=c.copy()\\n for k in range(4):\\n  q=good[j[good]==k]; C[:,k]=np.linalg.lstsq(np.vstack([A[clean],B[q]]),np.r_[y[clean,k],u[q]],rcond=None)[0]\\n print('full' if not len(h) else 'fold','retained bank counts',np.bincount(j[good],minlength=4))\\n for label,coef in [('base',c),('joint',C)]:\\n  pr=P@coef-Y; hr=y[h]-A[h]@coef; bh=u[hb]-(B[hb]@coef)[np.arange(len(hb)),j[hb]]; cleanh=abs(y[h]-A[h]@c)<1e-4; cleanb=abs(e[hb])<1e-4\\n  print(label,'pulse worst',np.sqrt(np.mean(pr**2,axis=(1,2))).max(),'channel worst',np.sqrt(np.mean(pr**2,axis=(0,1))).max(),'sweep',np.sqrt(np.mean(hr[cleanh]**2)) if cleanh.any() else None,'bank sweep',np.sqrt(np.mean(bh[cleanb]**2)) if cleanb.any() else None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 joint-rosette sweeps suffice → H2 independent single-bank sweeps may reduce channel bias; current worst held-out tracer RMSE is 1.89e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit bank offsets to tracer residuals\",\n      \"rejected_reason\": \"That would reuse validation responses and could absorb transport signal.\"\n    }\n  ],\n  \"rationale\": \"The single-bank sweeps contain paired measurements and an apparent outlier. Compare a robust joint fit against the verified calibration, keeping both sweep types held out within each fold and using tracers only for validation. Change the artifact only if the extra measurements consistently improve transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2c65fe22ee7a4ce796a2fc60c3828c284e5a52bf3f5266cd3708bfbf64bdaf2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29388.65,
+      "usage_known": true,
+      "prompt_tokens": 34603,
+      "cached_tokens": 14976,
+      "completion_tokens": 1088
+    }
+  ]
+}

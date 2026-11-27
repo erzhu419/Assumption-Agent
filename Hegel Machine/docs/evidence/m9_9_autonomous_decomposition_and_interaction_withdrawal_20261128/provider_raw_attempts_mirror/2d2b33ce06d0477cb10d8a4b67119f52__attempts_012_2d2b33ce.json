@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2d2b33ce06d0477cb10d8a4b67119f52",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:31.578702+00:00",
+  "ended_at_utc": "2026-11-27T19:52:03.074633+00:00",
+  "request_sha256": "d146b04f5a09e308154678154c4c6d7ff338f24b18ea285d7f401234619d8759",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 66461,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36593,
+    "cached_tokens": 13696,
+    "completion_tokens": 1309
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\ng = item['campaign_diagnostics']\\nlabels = ('strain_curves_obs', 'instant_rate_obs')\\ntest = {k:v for k,v in g.items() if k not in labels}\\n# Use measured zero-load bridge readings, not raw-channel zeros.\\ncells = raw['calibration_load_cells']\\nb = np.asarray(cells['bridge_raw'])\\nl = np.asarray(cells['true_channel_loads'])\\nkeep = (np.abs(b) <= 8.5).all(axis=1)\\nzero = np.array([np.linalg.lstsq(np.c_[l[keep,j], np.ones(keep.sum())], b[keep,j], rcond=None)[0][1] for j in range(4)])\\nwith_memory = solve_batch(dict(raw, test=test))\\nwithout_memory = solve_batch(dict(raw, test=dict(test, past_channel_raw=np.broadcast_to(zero, test['past_channel_raw'].shape).copy())))\\nfor field, ix in [('all', np.ones(len(g['lab_id']), dtype=bool)), ('complete', np.isfinite(g['coupon_features_raw']).all(axis=1)), *[(f'lab {lab}', g['lab_id']==lab) for lab in np.unique(g['lab_id'])]]:\\n    retained, withdrawn = [], []\\n    for key, label in zip(('predicted_strain','initial_rate_pred'), labels):\\n        retained.append(np.sqrt(np.mean((with_memory[key][ix]-g[label][ix])**2)))\\n        withdrawn.append(np.sqrt(np.mean((without_memory[key][ix]-g[label][ix])**2)))\\n    print(field, 'end-to-end strain/rate RMSE, retained versus withdrawn:', retained, withdrawn)\\n    assert all(a < b for a,b in zip(retained, withdrawn))\\nfor key in ('estimated_taus','hereditary_weights'):\\n    np.testing.assert_array_equal(with_memory[key], without_memory[key])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 history-free deployment → H2 retained branch memory with saturating drift; held-lab missing-feature RMSE is 0.0244 for strain and 0.0285 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add the fitted pairwise drift correction\",\n      \"rejected_reason\": \"It modestly improves worst-lab error but worsens complete-coupon initial-rate RMSE from 0.00163 to 0.00189, and the complete-coupon lab offsets are already small.\"\n    }\n  ],\n  \"rationale\": \"Test history withdrawal through the public entry point rather than an internal helper. If the gain disappears, revisit the adapter; if the intrinsic estimates change when only deployment history changes, fix the train/test separation. This probe leaves both artifacts and the public fixture unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "0add23ffeb935b2c084ef336594d95819cea4182db5bf27443f453f45f33050b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32554.69,
+      "usage_known": true,
+      "prompt_tokens": 36593,
+      "cached_tokens": 13696,
+      "completion_tokens": 1309
+    }
+  ]
+}

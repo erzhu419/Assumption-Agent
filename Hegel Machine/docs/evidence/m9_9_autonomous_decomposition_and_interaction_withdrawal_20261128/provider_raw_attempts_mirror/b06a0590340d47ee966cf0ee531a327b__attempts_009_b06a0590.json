@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b06a0590340d47ee966cf0ee531a327b",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:53.960322+00:00",
+  "ended_at_utc": "2026-11-27T19:50:33.884384+00:00",
+  "request_sha256": "ac55694de9b6cf35034524c91aa5e82196ac3a5d5cdf6cfcebb0b89c1f28f83d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48875,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32213,
+    "cached_tokens": 14976,
+    "completion_tokens": 1678
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m99_margin_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\n\\ndef fit_rational(x,y,base,qs):\\n    # Train-only selection: allow saturation along either signed neighbor contrast.\\n    best=(float('inf'),None,None,None)\\n    for qid,q in enumerate(qs):\\n        for a in (0.,.001,.01,.05,.15,.5):\\n            D=base/(1+a*q[:,None]**2)\\n            b=np.linalg.lstsq(D,y,rcond=None)[0]\\n            loss=np.linalg.norm(D@b-y)\\n            if loss<best[0]: best=(loss,qid,a,b)\\n    return best[1:]\\n\\ndef contrasts(x,j):\\n    t=x[:,j]; prev=x[:,(j-1)%4]; nxt=x[:,(j+1)%4]\\n    return [t]+[t+c*v for v in (prev,nxt) for c in (-1.,-.5,.5,1.)]\\n\\nfor item in items:\\n    s=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; rows=np.arange(len(x)); pure=np.count_nonzero(x,axis=1)==1\\n    # Hold out whole single-channel sweep families, then split the mixed sweeps.\\n    folds=[rows[pure & (x[:,j]!=0)] for j in range(4)]\\n    folds+=list(np.array_split(np.random.default_rng(481).permutation(rows[~pure]),5))\\n    stats={k:np.empty_like(y) for k in ('cyclic','expanded','rational_no_cubic','rational_cyclic')}\\n    for test in filter(len,folds):\\n        tr=np.setdiff1d(rows,test); b=m._fit_rosette(x[tr],y[tr]); train=np.column_stack([m._rosette_basis(x[tr],j)@b[j] for j in range(4)])\\n        e=np.linalg.norm(train-y[tr],axis=1); keep=tr[e<=5*max(np.median(e),1e-12)]\\n        for j in range(4):\\n            base=m._rosette_basis(x,j); stats['cyclic'][test,j]=base[test]@b[j]-y[test,j]\\n            t=x[:,j]; prev=x[:,(j-1)%4]; nxt=x[:,(j+1)%4]; opp=x[:,(j+2)%4]\\n            expanded=np.column_stack([base,opp,t*prev,prev*nxt,t*opp,t*prev*nxt,(t-prev)**2,(t+nxt)**2])\\n            stats['expanded'][test,j]=expanded[test]@np.linalg.lstsq(expanded[keep],y[keep,j],rcond=None)[0]-y[test,j]\\n            qs=contrasts(x,j)\\n            for name,D in [('rational_no_cubic',base[:,:5]),('rational_cyclic',base)]:\\n                idx,a,v=fit_rational(x[keep],y[keep,j],D[keep],[q[keep] for q in qs]); stats[name][test,j]=(D[test]@v)/(1+a*qs[idx][test]**2)-y[test,j]\\n    gross=np.linalg.norm(stats['cyclic'],axis=1)>3\\n    print('gross rows',rows[gross].tolist())\\n    for name,e in stats.items():\\n        print(name,'max clean single/mixed',*[float(np.max(abs(e[mask]))) for mask in (pure&~gross,~pure&~gross)],'clean RMSE',float(np.sqrt(np.mean(e[~gross]**2))))\\n    S,U=m._design(s); y=m._calibrate(s); z=s['Z_nuisance']; cap=s['u_box']; budget=s['total_budget']; r=s['source_ridge']; nr=s['nuisance_ridge']; zdim=z.shape[1]\\n    by_sensor=np.tile(np.arange(len(s['sensor_ij'])),len(s['mu_shifts']))\\n    scores=[]\\n    for sensor in np.unique(by_sensor):\\n        te=by_sensor==sensor; tr=~te; zz=z[tr]; pz=np.linalg.solve(zz.T@zz+nr*np.eye(zdim),zz.T)\\n        pair=[]\\n        for profile in (False,True):\\n            X=S[tr]; yy=y[tr]\\n            if profile: X=X-zz@(pz@X); yy=yy-zz@(pz@yy)\\n            w,nu=m._box_simplex(X.T@X+r*np.eye(X.shape[1]),X.T@yy,cap,budget)\\n            yhat=S[te]@w\\n            if profile: yhat+=z[te]@(pz@(y[tr]-S[tr]@w))\\n            pair.append(np.sqrt(np.mean((yhat-y[te])**2)))\\n        scores.append(pair)\\n    print('leave-physical-sensor-out RMSE worst unprofiled/profiled',np.max(scores,axis=0),'median',np.median(scores,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette → H2 robust cyclic cubic calibration with open Robin walls; worst clean held-out sweep error is 3.41e-5 and worst leave-shift-out RMSE is 0.00993.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck drift, or within-batch classification\",\n      \"rejected_reason\": \"This contract is a steady linear transport solve with continuous observations; it has no relay state, stochastic drift, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Hold out entire single-channel sweep families to test whether omitted signed contrasts or rational saturation improve calibration where random folds could miss them. Hold out each physical sensor across all shifts to check whether nuisance profiling improves prediction at unseen sensors rather than just tightening the training fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b871a103af741c2e6b5dd0877f9dcc2f0c4d1a4ac518cf22b3f9641a203c17f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40986.11,
+      "usage_known": true,
+      "prompt_tokens": 32213,
+      "cached_tokens": 14976,
+      "completion_tokens": 1678
+    }
+  ]
+}

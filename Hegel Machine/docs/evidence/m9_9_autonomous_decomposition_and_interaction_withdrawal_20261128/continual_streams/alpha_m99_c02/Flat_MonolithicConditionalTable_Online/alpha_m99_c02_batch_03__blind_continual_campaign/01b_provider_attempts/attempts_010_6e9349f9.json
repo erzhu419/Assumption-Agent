@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6e9349f918d44e74b8699fdc78779858",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:55.358520+00:00",
+  "ended_at_utc": "2026-11-27T19:52:21.719739+00:00",
+  "request_sha256": "e6a3c9ecddbf6397ff958867c13273c0c418a3d2c0c7a0a313822a2febfc98af",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63464,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39602,
+    "cached_tokens": 14976,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open(p+'public_batch.pkl','rb'))[0]; d=item['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; labs=tr['lab_id']\\nassert item['campaign_diagnostics'] is None\\nout=m.solve_batch(d); assert all(np.isfinite(a).all() for a in out.values()); assert 0.05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nprint('full taus',out['estimated_taus'],'weights',out['hereditary_weights'])\\nb=m._bridge(d['calibration_load_cells']); worst=np.zeros(4)\\nfor lab in np.unique(labs):\\n    fit=labs!=lab; val=~fit\\n    def subset(mask): return {k:v[mask] for k,v in tr.items() if isinstance(v,np.ndarray) and v.ndim and len(v)==len(labs)}\\n    train,held=subset(fit),subset(val)\\n    pool={k:np.concatenate((held[k],te[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\n    x_train,x_pool=m._features(train,pool)\\n    taus,theta=m._material(train,b,x_train,dt,t)\\n    c,r=m._basis(taus,*m._loads(held,b),x_pool[:val.sum()],dt,t)\\n    ec=np.abs(held['strain_0'][:,None]+c@theta-held['strain_curves_obs']); er=np.abs(r@theta-held['instant_rate_obs']); mid=len(t)//2\\n    metrics=np.array([np.median(ec[:,:mid]),np.median(ec[:,mid:]),np.median(er),np.max(np.abs(taus/out['estimated_taus']-1))]); worst=np.maximum(worst,metrics)\\n    complete=np.isfinite(held['coupon_features_raw']).all(1)\\n    print('held lab',lab,'n',val.sum(),'taus',taus,'early/late/rate median abs, tau max relative shift',metrics,'rate median by complete/missing',[np.median(er[mask]) if mask.any() else None for mask in (complete,~complete)])\\nprint('worst early/late/rate median abs, tau relative shift',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 robust sparse cubic bridge with baseline chamber dynamics; worst clean-sweep held-out load RMSE is 0.000307, and the host measured strain MAE of 0.001149 and rate MAE of 0.000791.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the existing schema and host receipt\",\n      \"rejected_reason\": \"The receipt verifies deployment accuracy but does not show whether fitting the shared spectrum depends disproportionately on one benchtop lab.\"\n    }\n  ],\n  \"rationale\": \"Hold out each lab’s mechanical responses while retaining the prescribed joint reference-panel preprocessing. A large lab-specific shift in the relaxation times or a concentrated early, late, or rate error would warrant revisiting the material fit; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "578365ace4f2106f9d3ecab23291021e14d69a0817e890693189e8009cc50806",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27491.21,
+      "usage_known": true,
+      "prompt_tokens": 39602,
+      "cached_tokens": 14976,
+      "completion_tokens": 915
+    }
+  ]
+}

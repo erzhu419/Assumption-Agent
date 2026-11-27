@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0161a711d4ad4bf1adbf07772cea9d48",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:07:18.046471+00:00",
+  "ended_at_utc": "2026-11-27T20:07:57.714153+00:00",
+  "request_sha256": "056e1578aba5b65cefa2080aad1365ee34754eafd2c4494ec0222f9118016080",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60809,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35674,
+    "cached_tokens": 14976,
+    "completion_tokens": 1758
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_chamber_bridge.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import minimize_scalar\\n\\nroot = '/holdout_task/'\\nm = runpy.run_path(root + 'batch_solver.py')\\nd = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nbasis, fit, recover = (m[k] for k in ('_bridge_basis', '_calibration', '_recover_loads'))\\na = basis(x)\\nfolds = np.array_split(np.random.default_rng(230).permutation(len(x)), 5)\\nerrors = {k: [] for k in ('sparse_cubic', 'pairwise_quotient', 'dense_cubic')}\\nstrengths = []\\nfor fold in folds:\\n    train = np.ones(len(x), dtype=bool)\\n    train[fold] = False\\n    b = fit({'bridge_raw': y[train], 'true_channel_loads': x[train]})\\n    residual = np.linalg.norm(a @ b - y, axis=1)\\n    clean = train & (residual < 0.01)\\n    test = fold[residual[fold] < 0.01]\\n    errors['sparse_cubic'].extend(np.linalg.norm(a[test] @ b - y[test], axis=1))\\n    dense = np.linalg.lstsq(a[clean], y[clean], rcond=None)[0]\\n    errors['dense_cubic'].extend(np.linalg.norm(a[test] @ dense - y[test], axis=1))\\n    pred = np.empty_like(y[test])\\n    for j in range(4):\\n        use = b[:, j] != 0\\n        p = a[:, use]\\n        nxt = x[:, (j + 1) % 4]\\n        qs = (x[:, j], nxt, x[:, j] - nxt, x[:, j] + nxt)\\n        def project(q, strength):\\n            z = p / (1 + strength * q[:, None]**2)\\n            w = np.linalg.lstsq(z[clean], y[clean, j], rcond=None)[0]\\n            return np.mean((z[clean] @ w - y[clean, j])**2), z[test] @ w\\n        candidates = [(project(qs[0], 0), 0.)]\\n        for q in qs:\\n            opt = minimize_scalar(lambda s: project(q, s)[0], bounds=(0, 1), method='bounded', options={'xatol': 1e-9})\\n            candidates.append((project(q, opt.x), opt.x))\\n        (_, pred[:, j]), s = min(candidates, key=lambda v: v[0][0])\\n        strengths.append(s)\\n    errors['pairwise_quotient'].extend(np.linalg.norm(pred - y[test], axis=1))\\nfor k, e in errors.items():\\n    print(k, 'clean OOF forward bridge error p95/max', np.percentile(e, [95, 100]))\\nprint('quotient denominator strength median/max', np.percentile(strengths, [50, 100]))\\nb = fit(c)\\nprint('calibration inverse axial worst by applied load sign:', [(str(sign), float(np.max(abs(recover(y[mask], b).sum(1) - x[mask].sum(1))))) for sign, mask in [(sign, (np.sign(x.sum(1)) == sign) & (np.linalg.norm(a @ b - y, axis=1) < 0.01)) for sign in np.unique(np.sign(x.sum(1)))] if mask.any()])\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\nu = m['_coupon_inputs'](tr, m['_features'](tr, te)[:n], b)\\nt, dt = d['eval_times'], d['past_dt']\\ncurve = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrate = tr['instant_rate_obs']\\nerrors = []\\nfor lab in np.unique(tr['lab_id']):\\n    test = tr['lab_id'] == lab\\n    pars = m['_fit'](tuple(z[~test] for z in u), dt, t, curve[~test], rate[~test])\\n    a, b = m['_design'](pars[0], tuple(z[test] for z in u), dt, t)\\n    ce, re = curve[test] - a @ pars[1], rate[test] - b @ pars[1]\\n    print('held-out lab', lab, 'signed medians (early curve, late curve, rate)', np.round([np.median(ce[:, :len(t)//2]), np.median(ce[:, len(t)//2:]), np.median(re)], 6))\\n    for st in np.unique(tr['stratum'][test]):\\n        cell = tr['stratum'][test] == st\\n        errors.append((int(lab), int(st), int(cell.sum()), float(np.mean(abs(ce[cell]))), float(np.mean(abs(re[cell])))))\\nprint('worst lab/stratum cells (lab, stratum, n, curve MAE, rate MAE):', max(errors, key=lambda e:e[3]), max(errors, key=lambda e:e[4]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber_bridge.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse cubic bridge and calibrated benchtop fallback → change only a component with a measured failure; worst held-out lab MAE is 0.02101 for strain and 0.00683 for rate, and maximum held-out axial error is 0.000511.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification or relay-mode diagnostics\",\n      \"rejected_reason\": \"This task has continuous strain and rate outcomes and no relay state. Signed held-out errors by lab and horizon directly test for bias that pooled errors could hide.\"\n    }\n  ],\n  \"rationale\": \"Test whether a pairwise rational term improves held-out bridge predictions or whether aggregate errors conceal a lab or stratum failure. A meaningful bridge gain would warrant testing the challenger on inverse axial loads before promotion; systematic held-out offsets would warrant investigating the material estimator. Neither result would establish an unlabeled chamber response law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e54ba32dd1e4a1e4347c7309f17a828db619fe2d08c447e0e53581ce5ce33138",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42048.55,
+      "usage_known": true,
+      "prompt_tokens": 35674,
+      "cached_tokens": 14976,
+      "completion_tokens": 1758
+    }
+  ]
+}

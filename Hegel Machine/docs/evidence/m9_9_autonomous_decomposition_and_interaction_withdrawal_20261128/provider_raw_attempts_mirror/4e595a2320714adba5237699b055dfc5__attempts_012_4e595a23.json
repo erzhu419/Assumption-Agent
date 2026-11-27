@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e595a2320714adba5237699b055dfc5",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:11.172142+00:00",
+  "ended_at_utc": "2026-11-27T19:48:40.936711+00:00",
+  "request_sha256": "94f095f50fe0e42f57599f954d421bf17c85a88d911d25e10ce1e3b6ed69394b",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 63362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34818,
+    "cached_tokens": 13696,
+    "completion_tokens": 1226
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_wrap_links.py <<'PY'\\nimport sys\\nsys.path[:0] = ['/tmp', '/holdout_task']\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nfrom probe_boundary import s, W, Y\\nfrom downstream_solver import _axis_operator, _forward\\n\\nnx, ny = s['nx'], s['ny']\\naxes = [_axis_operator(s['kappa_'+a], s['vel_'+a], s['L'+a]) for a in 'xy']\\ni, j = s['sensor_ij'].T\\nmodes = np.column_stack([u.ravel(order='F') for u in s['source_modes']])\\nreaction = diags(s['V_reaction_2d'].ravel(order='F'))\\nidentity = eye(nx*ny, format='csc')\\nS, _ = _forward(s)\\nmodels = {'periodic': S @ W}\\nfor axis, label in enumerate('xy'):\\n    for end in (0, -1):\\n        ops = axes.copy()\\n        a = ops[axis].tolil()\\n        row, opposite = (0, a.shape[0]-1) if end == 0 else (a.shape[0]-1, 0)\\n        a[row,row] += a[row,opposite]\\n        a[row,opposite] = 0\\n        assert np.max(np.abs(np.asarray(a.sum(axis=1)))) < 1e-12\\n        ops[axis] = a.tocsc()\\n        L = (kron(eye(ny),ops[0])+kron(ops[1],eye(nx))+reaction).tocsc()\\n        models[f'no_{label}_wrap_row_{row}'] = np.concatenate([splu(L+mu*identity).solve(modes @ W)[i+nx*j] for mu in s['mu_shifts']])\\nnshift, m, npulse = len(s['mu_shifts']), len(i), W.shape[1]\\nerrors = {name:(y-Y).reshape(nshift,m,npulse) for name,y in models.items()}\\nworst, min_margin, wins = 0., np.inf, 0\\nfor shift in range(nshift):\\n    for pulse in range(npulse):\\n        train_shift = np.arange(nshift) != shift\\n        train_pulse = np.arange(npulse) != pulse\\n        scores = sorted((np.sqrt(np.mean(r[train_shift][:,:,train_pulse]**2)), name) for name,r in errors.items())\\n        e, name = scores[0]\\n        wins += name == 'periodic'\\n        worst = max(worst, float(np.sqrt(np.mean(errors[name][shift,:,pulse]**2))))\\n        min_margin = min(min_margin, scores[1][0]/e)\\nprint('Single-link ablation worst pulse-by-shift RMS:', {name:float(np.sqrt(np.mean(r*r,axis=1)).max()) for name,r in errors.items()})\\nprint(f'ng_t04: full periodic won {wins}/{nshift*npulse} folds against every individual wrap-link deletion; worst held-out RMS={worst:.8g}; minimum runner-up/winner training RMS={min_margin:.4g}')\\nassert wins == nshift*npulse and worst < 1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/audit_wrap_links.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall stencils -> H2 periodic upwinding on both axes; H2 won 9/9 joint pulse-and-shift holdouts with worst RMS 5.15e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat schema, calibration, or KKT checks\",\n      \"rejected_reason\": \"Those checks passed on the unchanged artifacts; they cannot tell whether one of the four directed endpoint links is unnecessary.\"\n    }\n  ],\n  \"rationale\": \"Remove each directed endpoint link separately while preserving zero transport row sums. If an ablation wins a training fold, reconsider that link; otherwise use the held-out tracer residuals to close the boundary-stencil finding without changing the verified solvers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "17fc28b3be5b3ff7ad7344b1898055729cd16a8ccddc09795b2626aadc52cd5d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30886.76,
+      "usage_known": true,
+      "prompt_tokens": 34818,
+      "cached_tokens": 13696,
+      "completion_tokens": 1226
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "29b6c3b30f80424b96677b71b5fef40f",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:00.689559+00:00",
+  "ended_at_utc": "2026-11-27T19:48:39.786523+00:00",
+  "request_sha256": "16a9ec8a1bcf4999c55017a09dd45b1e633b08cb3c9c1ba91891741f5d948156",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33850,
+    "cached_tokens": 13696,
+    "completion_tokens": 1659
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -B /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _design\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\ncal = calibrate_upstream(s)\\nS, U = _design(cal)\\nZ = s['Z_nuisance']\\npulses = item['campaign_diagnostics']\\nW = np.column_stack([p['w_pulse'] for p in pulses])\\nY = np.column_stack([calibrate_upstream(dict(s, y_obs_raw=p['y_pulse_raw']))['y_obs_raw'] for p in pulses])\\ndef reference(periodic):\\n    axes = []\\n    for a in ('x','y'):\\n        k, v = s['kappa_'+a], s['vel_'+a]\\n        n = len(k)\\n        h = s['L'+a]/(n-1)\\n        A = np.zeros((n,n))\\n        for i in range(n):\\n            if not periodic and i in (0,n-1):\\n                j = 1 if i == 0 else n-2\\n                A[i,j] = -k[i]/h**2\\n                A[i,i] = -A[i,j]\\n            else:\\n                for step in (-1,1):\\n                    j = (i+step)%n\\n                    q = (k[i]+k[j])/(2*h*h) + max(-step*v[i],0)/h\\n                    A[i,j] -= q\\n                    A[i,i] += q\\n        axes.append(A)\\n    nx,ny = s['nx'],s['ny']\\n    L = np.kron(np.eye(ny),axes[0])+np.kron(axes[1],np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    Q = np.column_stack([a.ravel(order='F') for a in s['source_modes']])\\n    i,j = s['sensor_ij'].T\\n    solutions = [np.linalg.solve(L+mu*np.eye(nx*ny),Q) for mu in s['mu_shifts']]\\n    return np.vstack([u[i+nx*j] for u in solutions]), solutions[-1]\\nD, last = reference(True)\\nnp.testing.assert_allclose(S,D,atol=1e-11,rtol=0)\\nR = S@W-Y\\nR0 = reference(False)[0]@W-Y\\nworst = 0.\\nfor groups in (s['row_bank_id'], np.repeat(np.arange(len(s['mu_shifts'])),len(s['sensor_ij']))):\\n    for k in np.unique(groups):\\n        test = groups == k\\n        def rmse(r):\\n            z = np.linalg.lstsq(Z[~test],r[~test],rcond=None)[0]\\n            return np.sqrt(np.mean((r[test]-Z[test]@z)**2,axis=0)).max()\\n        err = rmse(R)\\n        assert err < 1e-5 and err < rmse(R0)\\n        worst = max(worst,err)\\nout = solve_batch(s)\\nw = out['weights']\\nc = out['kkt_certificate']\\nP = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\ny = cal['y_obs_raw']\\nA = D-Z@(P@D)\\nr = A@w-y+Z@(P@y)\\ng = A.T@r+s['source_ridge']*w\\nJ = (r@r+s['source_ridge']*(w@w))/2\\ncap,budget,nu = s['u_box'],s['total_budget'],c['nu_sum']\\nlo,hi = np.array(c['lam_lower']),np.array(c['lam_upper'])\\nlb = J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\ne = max(abs(w.sum()-budget),max(0,-min(w),max(w)-cap,-min(lo),-min(hi)),np.max(abs(c['weights']-w)),np.max(abs(g-nu-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(cap-w))),abs(J-c['primal_objective']),abs(lb-c['dual_lower_bound']),abs(J-lb),np.max(abs(out['terminal_field']-(last@w).reshape((s['nx'],s['ny']),order='F'))))\\nassert e < 1e-10\\nsweep = s['sensor_calibration_sweeps']\\nraw = sweep['raw_rosette']\\nvalid = np.all(abs(raw)<=8.5,axis=1)\\na = np.array([1.05,.95,1.08,.92]); b = np.array([.03,-.04,.05,-.02])\\nnew_raw = np.where(valid[:,None],raw*a+b,raw)\\nassert np.array_equal(valid,np.all(abs(new_raw)<=8.5,axis=1))\\ntrial = dict(s, sensor_calibration_sweeps=dict(sweep, raw_rosette=new_raw), y_obs_raw=(s['y_obs_raw'].reshape(-1,4)*a+b).ravel())\\nother = solve_batch(trial)\\ndrift = max(np.max(abs(out[key]-other[key])) for key in ('weights','terminal_field'))\\nassert drift < 1e-10\\nprint('verified on unchanged public inputs: worst held-out pulse RMSE',worst,'max independent contract error',e,'in-memory calibration stress drift',drift)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls and fixed calibration → H2 periodic walls and per-study calibration; worst held-out shift/bank tracer RMSE is 2.995e-6 and gain/offset stress weight drift is 6.73e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The host rejected the earlier resolution probe, so run verification separately from any artifact edit. The unchanged public data test periodic seams, held-out nuisance prediction, and the full output contract; a separate in-memory input tests calibration transfer. A failure would identify which module needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9ef1dbd6af463d5ac0a245066b899ecfaa3654abe25d412cfeb53a18eb9f4dbc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40216.68,
+      "usage_known": true,
+      "prompt_tokens": 33850,
+      "cached_tokens": 13696,
+      "completion_tokens": 1659
+    }
+  ]
+}

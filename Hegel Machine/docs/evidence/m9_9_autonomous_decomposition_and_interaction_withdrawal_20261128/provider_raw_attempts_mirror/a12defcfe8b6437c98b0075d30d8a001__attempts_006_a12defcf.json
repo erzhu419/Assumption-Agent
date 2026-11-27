@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a12defcfe8b6437c98b0075d30d8a001",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:02.932310+00:00",
+  "ended_at_utc": "2026-11-27T20:03:38.409321+00:00",
+  "request_sha256": "4812c639e10c72646b51f7322f073c2243b6bc115ce4b71ef2e82ae6c2cd5b1c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39341,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29778,
+    "cached_tokens": 14976,
+    "completion_tokens": 1492
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nfrom scipy import sparse\\nfrom scipy.sparse.linalg import spsolve\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n s=item['study']; sw=s['sensor_calibration_sweeps']; ref,raw=sw['ref_rosette'],sw['raw_rosette']; banks=sw['single_bank_sweeps']; powers=[q for d in (2,3) for q in itertools.combinations_with_replacement(range(4),d)]\\n def features(x,j,family):\\n  base=m._rosette_design(x,j)\\n  if family=='archived': return base\\n  poly=np.column_stack([np.ones(len(x)),x,*[np.prod(x[:,q],axis=1) for q in powers]])\\n  if family=='cubic': return poly\\n  nxt=x[:,(j+1)%4]; own=x[:,j]; prev=x[:,(j-1)%4]; q=np.column_stack([own,nxt,prev,own-nxt,own+prev,nxt-prev]); return np.column_stack([poly,*[v/(1+a*q*q) for a in (.25,1.) for v in (np.ones((len(x),1)),own[:,None],nxt[:,None])]])\\n for family in ('archived','cubic','quotient'):\\n  errs=[]\\n  for j in range(4):\\n   take=banks['bank_id']==j; axes=np.zeros((take.sum(),4)); axes[:,j]=banks['ref_signal'][take]; bank_y=banks['raw_readout'][take]; clean_bank=abs(bank_y)<8; clean=abs(raw[:,j])<8\\n   A=features(ref,j,family); B=features(axes[clean_bank],j,family)\\n   for fold in np.array_split(np.random.default_rng(11).permutation(len(ref)),5):\\n    train=clean.copy(); train[fold]=False; test=fold[clean[fold]]; D=np.vstack([A[train],B]); y=np.r_[raw[train,j],bank_y[clean_bank]]; coef=np.linalg.lstsq(D,y,rcond=1e-10)[0]; errs.append(np.sqrt(np.mean((A[test]@coef-raw[test,j])**2)))\\n  print(family,'worst clean held-out fold/channel calibration RMSE',max(errs))\\n def axis(a,periodic):\\n  k,v=s['kappa_'+a],s['vel_'+a]; n=len(k); h=s['L'+a]/(n-1); A=np.zeros((n,n))\\n  for i in range(n):\\n   if not periodic and i in (0,n-1):\\n    A[i,i]=k[i]/h**2; A[i,1 if i==0 else n-2]=-A[i,i]; continue\\n   l,r=(i-1)%n,(i+1)%n; A[i,l]-=.5*(k[i]+k[l])/h**2+max(v[i],0)/h; A[i,r]-=.5*(k[i]+k[r])/h**2+max(-v[i],0)/h; A[i,i]=-A[i].sum()\\n  assert np.max(abs(A.sum(axis=1)))<1e-10\\n  return sparse.csc_matrix(A)\\n nx,ny=s['nx'],s['ny']; ax,ay=axis('x',True),axis('y',False); L=sparse.kron(sparse.eye(ny),ax)+sparse.kron(ay,sparse.eye(nx))+sparse.diags(s['V_reaction_2d'].ravel(order='F')); S,_=m._forward(s); ij=s['sensor_ij']; ind=ij[:,0]+nx*ij[:,1]; coef=m._fit_rosette(sw); worst=0.\\n for pulse in item.get('campaign_diagnostics') or []:\\n  src=np.tensordot(pulse['w_pulse'],s['source_modes'],axes=1).ravel(order='F'); ideal=np.concatenate([spsolve((L+mu*sparse.eye(nx*ny)).tocsc(),src)[ind] for mu in s['mu_shifts']]); np.testing.assert_allclose(ideal,S@pulse['w_pulse'],atol=1e-12,rtol=0); refp=ideal.reshape(-1,4); pred=np.column_stack([m._rosette_design(refp,j)@coef[j] for j in range(4)]).ravel(); err=(pred-pulse['y_pulse_raw']).reshape(len(s['mu_shifts']),-1,4); worst=max(worst,np.sqrt(np.mean(err**2,axis=1)).max())\\n assert worst<1e-5\\n Z=s['Z_nuisance']; print('public study keys:',list(s)); print('worst pulse/shift/channel RMSE:',worst,'nuisance design shape/rank:',Z.shape,np.linalg.matrix_rank(Z))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared wall law -> H2 periodic x and reflecting y; current worst public tracer slice RMSE is 1.66e-6, pending independent stencil and held-out calibration checks.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification confounding, relay modes, or stochastic drift\",\n      \"rejected_reason\": \"The public task is a steady continuous inverse problem with a specified nuisance projection, not a labeled cohort, relay, or stochastic drift model.\"\n    }\n  ],\n  \"rationale\": \"An independent wall assembly detects wraparound, indexing, and conservation errors; a mismatch would require a stencil fix. Held-out calibration compares the current model with cubic and pairwise quotient terms; expand the model only if the added terms improve held-out error and tracer prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9b88b56525a620684cb3701a3ff46ed4d6e68db7806ba699f3f9431a17a09c4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36578.63,
+      "usage_known": true,
+      "prompt_tokens": 29778,
+      "cached_tokens": 14976,
+      "completion_tokens": 1492
+    }
+  ]
+}

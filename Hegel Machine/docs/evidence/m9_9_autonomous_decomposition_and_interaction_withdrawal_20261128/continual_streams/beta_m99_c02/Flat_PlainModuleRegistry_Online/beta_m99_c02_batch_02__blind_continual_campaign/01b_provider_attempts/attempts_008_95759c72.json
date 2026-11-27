@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95759c729e0d4b3bb2d2cfafe4901c2a",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:23.596569+00:00",
+  "ended_at_utc": "2026-11-27T19:50:55.639955+00:00",
+  "request_sha256": "4022daad720cdf4fe622e78f1520f212487653199cc1d18b2730d003d0718fd7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49487,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31461,
+    "cached_tokens": 13696,
+    "completion_tokens": 1340
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _axis, _responses, solve_downstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nwith open('_upstream_param_payload.json') as f:\\n    payload = json.load(f)\\ns = item['study']; pulses = item['campaign_diagnostics']; ns = len(s['sensor_ij']); nk = len(s['mu_shifts'])\\nS, _ = _responses(s)\\nvariants = {'dynamic': None, 'staged': payload}\\nfor name,pay in variants.items():\\n    observed = np.array([calibrate_upstream(dict(s, y_obs_raw=p['y_pulse_raw']), pay)['y_obs_raw'] for p in pulses])\\n    expected = np.array([S@p['w_pulse'] for p in pulses])\\n    e = (expected - observed).reshape(len(pulses), nk, ns)\\n    ij = s['sensor_ij']; wall = ((ij == 0) | (ij == np.array([s['nx']-1,s['ny']-1]))).any(axis=1)\\n    print(name, 'worst pulse/shift/sensor abs error', np.max(abs(e)), 'worst shift RMSE by sensor stratum', [np.sqrt(np.mean(e[:,:,m]**2,axis=2)).max() for m in (wall,~wall)], 'max channel bias', abs(e.reshape(-1,4).mean(0)).max())\\n    assert np.max(abs(e)) < 2e-5\\nfor a in 'xy':\\n    n = s['n'+a]; h = s['L'+a]/(n-1); k,v = s['kappa_'+a], s['vel_'+a]; A = _axis(k,v,h).toarray()\\n    err = 0.0\\n    for i in range(n):\\n        j,l = (i-1)%n,(i+1)%n\\n        row = np.zeros(n)\\n        row[j] -= .5*(k[i]+k[j])/h**2 + max(v[i],0)/h\\n        row[l] -= .5*(k[i]+k[l])/h**2 + max(-v[i],0)/h\\n        row[i] -= row.sum()\\n        err = max(err, abs(row-A[i]).max())\\n    print(a, 'all-row stencil max error',err,'max constant-field residual',abs(A@np.ones(n)).max())\\n    assert err < 1e-12\\nsw = s['sensor_calibration_sweeps']; x,y = sw['ref_rosette'],sw['raw_rosette']; incl=(abs(y)<=8.5).all(1); x,y=x[incl],y[incl]\\nr = {'diagonal': [], 'full': []}\\nfor i in range(len(x)):\\n    tr=np.arange(len(x))!=i\\n    for model in r:\\n        pred=[]\\n        for ch in range(4):\\n            design=np.c_[np.ones(len(x)), x[:,ch] if model=='diagonal' else x]\\n            a=np.linalg.lstsq(design[tr],y[tr,ch],rcond=None)[0]\\n            pred.append(design[i]@a)\\n        r[model].append(np.array(pred)-y[i])\\nfor model,err in r.items():\\n    print(model,'leave-one-sweep-out worst channel RMSE',np.sqrt(np.mean(np.asarray(err)**2,axis=0)).max())\\nfor name,pay in variants.items():\\n    out = solve_batch(s) if name=='dynamic' else solve_downstream(calibrate_upstream(s,pay)); w = out['weights']; cert = out['kkt_certificate']; gap = cert['primal_objective'] - cert['dual_lower_bound']\\n    assert abs(gap)<1e-9 and abs(w.sum()-s['total_budget'])<1e-12\\n    print(name,'certificate gap',gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin or reflecting walls → H2 periodic upwind transport; worst held-out pulse-by-shift RMSE was 1.54e-6 with dynamic calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification confounding, relay modes, or stochastic drift\",\n      \"rejected_reason\": \"This study contains continuous tracer readings and a steady transport operator, not labeled cohorts, relays, or stochastic dynamics.\"\n    }\n  ],\n  \"rationale\": \"Run a read-only audit targeted at failures that pooled pulse error could hide. Wall-localized errors would reopen the boundary stencil; channel bias and a material held-out improvement from the full affine fit would reopen sensor calibration. The exact row check isolates endpoint and velocity-sign errors without changing either deliverable or the public fixtures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8a1f8d7d694155094086458ec829f1353b01a867fd01ee05a8697adb570cd19b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33178.02,
+      "usage_known": true,
+      "prompt_tokens": 31461,
+      "cached_tokens": 13696,
+      "completion_tokens": 1340
+    }
+  ]
+}

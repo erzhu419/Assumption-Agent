@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b344ba2b07b74a49a9dbd2990ec84e36",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:43.656848+00:00",
+  "ended_at_utc": "2026-11-27T19:40:13.204190+00:00",
+  "request_sha256": "d01dab59d73e1c071f38b5c6e67c9cbc82ddef37afa56a80f09836b3ff446d26",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60450,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37621,
+    "cached_tokens": 13696,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print('apparatus metadata', {k:v for k,v in row.items() if k!='facility_telemetry_trace'}); q=np.asarray(row['facility_telemetry_trace']); print('channel means',q.mean(0).round(4),'first/last',q[[0,-1]].round(3))\\nitems=pickle.load(open('public_batch.pkl','rb'));print('public batches',len(items));i=items[0];d=i['dataset'];a=i['campaign_diagnostics']; out=s.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values()); ts,w=out['estimated_taus'],out['hereditary_weights'];assert .05<ts[0]<ts[1]<25\\nb=s._bridge(d['calibration_load_cells']);_,h=s._loads(a,b);_,x=s._features({k:v[:0] for k,v in a.items()},a);v=w[2]+x@w[3:];t=d['eval_times']; K=np.vstack((-np.expm1(-t[:,None]/ts),1/ts)); Y=np.c_[a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']];base=(h[:,None]*w[:2])@K.T;A=v[:,None,None]*K;err=np.zeros_like(Y)\\nfor l in np.unique(a['lab_id']):\\n m=a['lab_id']==l;g=np.linalg.lstsq(A[~m].reshape(-1,2),(Y-base)[~m].ravel(),rcond=None)[0];err[m]=(base+A@g-Y)[m];print('held-out chamber lab',l,'gains',g.round(5),'curve/rate/worst horizon',*[round(z,6) for z in (np.sqrt(np.mean(err[m,:-1]**2)),np.sqrt(np.mean(err[m,-1]**2)),np.sqrt(np.mean(err[m]**2,0)).max())])\\nfixed=base+A@s._CHAMBER_DRIFT_GAIN-Y; ix=np.isnan(a['coupon_features_raw']).any(1)\\nfor name,m in [('complete',~ix),('imputed',ix)]:print('chamber slice',name,int(m.sum()),'OOF strain/rate RMSE',np.sqrt(np.mean(err[m,:-1]**2)),np.sqrt(np.mean(err[m,-1]**2)))\\nprint('fixed candidate diagnostic RMSE',np.sqrt(np.mean(fixed[:,:-1]**2)),np.sqrt(np.mean(fixed[:,-1]**2)))\\ntr,te=d['train'],d['test']; xt,_=s._features(tr,te); p,h=s._loads(tr,b); ix=np.isnan(tr['coupon_features_raw']).any(1)\\nfor l in np.unique(tr['lab_id']):\\n m=tr['lab_id']==l; sub={k:v[~m] for k,v in tr.items()}; taus,theta=s._material(sub,b,xt[~m],d['past_dt'],t);C,R=s._basis(taus,p[m],h[m],xt[m],d['past_dt'],t); ec=C@theta+tr['strain_0'][m,None]-tr['strain_curves_obs'][m];er=R@theta-tr['instant_rate_obs'][m]; print('held-out material lab',l,'taus',taus.round(5),'max weight change',abs(theta-w).max(),'curve/rate median abs',np.median(abs(ec)),np.median(abs(er)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct benchtop transfer → H2 chamber reset with drift-coupled branch amplitudes; current held-out chamber RMSE is 0.00389 for strain and 0.00472 for rate, with worst lab-by-time RMSE 0.00664.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema passed but does not test the chamber mechanism. Verify the exact artifact on held-out chamber labs and missing-feature slices, and check whether any held-out material lab destabilizes the spectrum. A concentrated error would point to reference alignment; unstable time constants would point to the intrinsic fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3d165579f70ec6aca7b075fd53be43b26cc53efcf0666f7f9380c0681c3ca4de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30671.28,
+      "usage_known": true,
+      "prompt_tokens": 37621,
+      "cached_tokens": 13696,
+      "completion_tokens": 1192
+    }
+  ]
+}

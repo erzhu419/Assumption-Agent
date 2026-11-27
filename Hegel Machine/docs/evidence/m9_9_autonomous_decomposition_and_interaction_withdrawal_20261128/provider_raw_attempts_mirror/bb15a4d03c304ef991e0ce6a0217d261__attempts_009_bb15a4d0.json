@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb15a4d03c304ef991e0ce6a0217d261",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:41.759401+00:00",
+  "ended_at_utc": "2026-11-27T19:55:06.401500+00:00",
+  "request_sha256": "6c38aeb4066befcc1a68df76e4c80132f074560ba1578b9b4d19a8874cb0272c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45090,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29548,
+    "cached_tokens": 13696,
+    "completion_tokens": 987
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']; a = u._design(x)\\nfull = u._fit(x, y); r = np.linalg.norm(a @ full - y, axis=1)\\nspike = r > 1; axis = np.count_nonzero(x, axis=1) == 1\\nprint('Spike indices:', np.flatnonzero(spike).tolist())\\n# Hold out each complete axis sweep; no neighboring points from that sweep remain in training.\\n# Score the excited load and leakage into each unloaded channel separately.\\nworst = 0.; worst_leak = 0.\\nfor j in range(4):\\n    sweep = axis & (x[:, j] != 0); score = sweep & ~spike\\n    if not score.any(): continue\\n    b = u._fit(x[~sweep], y[~sweep]); err = u._invert(y[score], b) - x[score]\\n    excited = np.sqrt(np.mean(err[:, j]**2)); leak = np.max(np.sqrt(np.mean(np.delete(err, j, axis=1)**2, axis=0)))\\n    worst = max(worst, excited); worst_leak = max(worst_leak, leak)\\n    print(f'Withheld axis {j}: n={score.sum()}, excited RMS={excited:.7g}, worst leakage RMS={leak:.7g}')\\n# Compare the fit including the spike block to a fit that removes it entirely,\\n# using actual operating inputs to quantify spike influence on the inverse.\\nclean = u._fit(x[~spike], y[~spike]); influence = 0.\\nfor split in ('train','test'):\\n    for field in u._CHANNEL_FIELDS:\\n        raw = d[split][field]; delta = np.max(np.abs(u._invert(raw, full) - u._invert(raw, clean)))\\n        influence = max(influence, delta)\\n        print(f'{split}/{field}: largest load change after removing spike block={delta:.7g}')\\nprint('Worst grouped sweep RMS:', worst, 'worst leakage RMS:', worst_leak, 'max spike influence:', influence)\\nassert max(worst, worst_leak) < 5e-4 and influence < 5e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine mixing) → H2 (quadratic coupling plus channel-wise cubics); worst held-out inverse RMS remains 0.000115 per channel and 0.000300 for total load, with whole-sweep holdout pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis comparison or schema check\",\n      \"rejected_reason\": \"The exact candidate already passed isolated schema validation, and rational terms raised held-out error on every measured slice.\"\n    }\n  ],\n  \"rationale\": \"Random row folds can leave neighboring points from the same sweep in training. Withholding each complete sweep tests whether mixed-load measurements identify its response and cross-channel leakage. Removing the observed spike block tests its influence on actual operating loads; excessive leakage would prompt a basis review, while excessive spike influence would prompt a robust-fit revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ad8a58b288c804ac20450da2f80267b7200a6ab0ee8307639563d744009b59e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25764.7,
+      "usage_known": true,
+      "prompt_tokens": 29548,
+      "cached_tokens": 13696,
+      "completion_tokens": 987
+    }
+  ]
+}

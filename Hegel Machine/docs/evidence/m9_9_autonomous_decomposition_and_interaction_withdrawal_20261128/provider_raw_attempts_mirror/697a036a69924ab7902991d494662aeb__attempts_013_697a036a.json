@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "697a036a69924ab7902991d494662aeb",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:31.571116+00:00",
+  "ended_at_utc": "2026-11-27T19:50:03.374932+00:00",
+  "request_sha256": "e8002acb62d03943fd523fb819835c87989fb947f2e0c613bb6541cfa0b65765",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 72734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37874,
+    "cached_tokens": 0,
+    "completion_tokens": 1303
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport sys\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _design, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nfrom wall_probe import s, W, pulses, pay, predict\\n\\ncal = calibrate_upstream(s)\\nY = np.column_stack([calibrate_upstream(dict(s, y_obs_raw=p['y_pulse_raw']))['y_obs_raw'] for p in pulses])\\nS, _ = _design(cal)\\nZ = s['Z_nuisance']\\nruns = {'periodic': S @ W - Y, 'reflecting': predict('reflect','reflect') - Y, 'open Robin': predict('robin','robin') - Y}\\nn = len(s['sensor_ij'])\\nassert n % 4 == 0\\nblocks = (np.arange(len(Y)) % n) // 4\\nerrors = {k: [] for k in runs}\\nfor block in np.unique(blocks):\\n    test = blocks == block\\n    for name, residual in runs.items():\\n        coef = np.linalg.lstsq(Z[~test], residual[~test], rcond=None)[0]\\n        errors[name].append(np.sqrt(np.mean((residual[test]-Z[test]@coef)**2,axis=0)).max())\\nfor name, e in errors.items():\\n    print(name, 'worst held-out complete-rosette pulse RMSE', max(e))\\nassert max(errors['periodic']) < 1e-5\\nassert all(np.all(np.array(errors['periodic']) < np.array(errors[name])) for name in ('reflecting','open Robin'))\\n\\nsweep = s['sensor_calibration_sweeps']\\nx, y = sweep['ref_rosette'], sweep['raw_rosette']\\nvalid = np.all(abs(y) <= 8.5, axis=1)\\norder = np.flatnonzero(valid)[np.argsort(np.linalg.norm(x[valid],axis=1))]\\nworst = np.zeros(2)\\nfor test in np.array_split(order, 5):\\n    train = np.ones(len(x), dtype=bool)\\n    train[test] = False\\n    query = dict(s, sensor_calibration_sweeps=dict(sweep, raw_rosette=y[train], ref_rosette=x[train]), y_obs_raw=y[test].ravel())\\n    for i, p in enumerate((None,pay)):\\n        refit = calibrate_upstream(query,p)['y_obs_raw'].reshape(-1,4)\\n        worst[i] = max(worst[i], np.sqrt(np.mean((refit-x[test])**2,axis=0)).max())\\nprint('Worst amplitude-block sweep RMSE: empirical and fixed', *worst)\\nassert worst[0] < 1e-4\\nbase = solve_batch(s)\\nnp.testing.assert_array_equal(base['weights'], solve_downstream(cal)['weights'])\\ncert = base['kkt_certificate']\\nassert abs(cert['primal_objective'] - cert['dual_lower_bound']) < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls and fixed calibration → H2 periodic walls and per-study calibration; worst leave-one-sensor-out pulse RMSE was 3.51e-6 and worst held-out sweep channel RMSE was 1.47e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Rerun the previous audit unchanged\",\n      \"rejected_reason\": \"That audit passed numerically but its receipt was rejected. Holding out complete rosettes and contiguous sweep amplitude ranges tests failure modes the earlier folds did not cover.\"\n    }\n  ],\n  \"rationale\": \"Run a read-only isolated probe. Holding out complete rosettes tests whether shared channel structure hid a wrong wall stencil; holding out amplitude ranges tests whether interleaved sweep folds hid a calibration error. A failure would reopen the corresponding module.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "734b961e5280f67831164359499e7c14165de50fd9d721659279d7fdaf8c78c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32934.46,
+      "usage_known": true,
+      "prompt_tokens": 37874,
+      "cached_tokens": 0,
+      "completion_tokens": 1303
+    }
+  ]
+}

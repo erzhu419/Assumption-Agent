@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e43cef228a9c4e97a488ee1d4d157502",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:51.692795+00:00",
+  "ended_at_utc": "2026-11-27T19:41:19.210028+00:00",
+  "request_sha256": "cf4f539091fbae91422b573cbea2d5e06003b29c729debb668351d91d03dcf7c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42110,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30539,
+    "cached_tokens": 14976,
+    "completion_tokens": 1122
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -n '1,57p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x); S,_=m._responses(s)\\nidx=np.asarray(s['sensor_ij']); wall=(idx[:,0]==0)|(idx[:,0]==s['nx']-1)|(idx[:,1]==0)|(idx[:,1]==s['ny']-1)\\nassert np.any(wall) and np.any(~wall)\\ndef features(z,i,name):\\n t=z[:,i]; other=[j for j in range(4) if j!=i]; base=[np.ones(len(z)),t]\\n if name in ('affine','pairwise','rational','cubic'): base += [z[:,j] for j in other]\\n if name=='pairwise': base += [(t-z[:,j])**2 for j in other]+[(t+z[:,j])**2 for j in other]\\n if name=='rational': base += [t/(1+z[:,j]**2) for j in range(4)]\\n if name=='cubic': base += [t*t,t*t*t]\\n return np.column_stack(base)\\nfor name in ['diagonal','affine','pairwise','rational','cubic']:\\n worst=0.; errors=[]\\n for hold in np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5):\\n  train=np.setdiff1d(np.arange(n),hold); pred=[]\\n  for i in range(4):\\n   A=features(x,i,name); pred.append(A[hold]@np.linalg.lstsq(A[train],y[train,i],rcond=None)[0])\\n  error=np.asarray(pred).T-y[hold]; errors.append(float(np.max(np.sqrt(np.mean(error**2,axis=0)))))\\n print(name,'worst held-out-channel RMSE by amplitude fold',errors,'worst',max(errors))\\nfor i,p in enumerate(a['campaign_diagnostics']):\\n u=(S@p['w_pulse']); e=(u-m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))).reshape(len(s['mu_shifts']),-1)\\n print('pulse',i,'wall/interior max-shift RMS',*[np.max(np.sqrt(np.mean(e[:,sel]**2,axis=1))) for sel in (wall,~wall)])\\nZ=s['Z_nuisance']; Q,_=np.linalg.qr(Z,mode='reduced'); u,sv,v=np.linalg.svd(S,full_matrices=False); U=u[:,sv>sv[0]*np.finfo(float).eps*max(S.shape)]; A,_=m._profile(S,m._calibrate(s),s); print('max source/nuisance subspace cosine',np.linalg.norm(Q.T@U,2),'profiled minimum singular value',np.linalg.svd(A,compute_uv=False)[-1],'strong convexity floor',s['source_ridge'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with the current calibration → H2 richer calibration only if held-out sweeps and tracer slices improve; current worst pulse-by-shift RMS is 1.27e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test batch classification, relay modes, or stochastic drift\",\n      \"rejected_reason\": \"This task is a steady continuous inverse problem with no class labels or relay state. Source–nuisance overlap is the relevant confounding check.\"\n    }\n  ],\n  \"rationale\": \"Hold out calibration amplitudes to test whether nonlinear or cross-channel terms fix a measurable error. Split tracer residuals by wall versus interior to detect a localized stencil error, and measure source–nuisance overlap to see whether profiling leaves any source directions weakly identified.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "71f313a50cb17762ce7de1d1e10786a2ecc159f1b5e1e703cc607ca55c044528",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28693.22,
+      "usage_known": true,
+      "prompt_tokens": 30539,
+      "cached_tokens": 14976,
+      "completion_tokens": 1122
+    }
+  ]
+}

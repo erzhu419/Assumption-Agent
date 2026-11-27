@@ -1,0 +1,107 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m99_c04_s00_7bd3492eddac",
+    "source_hash": "7bd3492eddacf6a1097c31d0872e3d48eb2dcf4c950bdc75af492fc1629dcece",
+    "parent_ids": [],
+    "source_episode_id": "beta_m99_c04_s00__blind_continual_campaign",
+    "task_id": "beta_m99_c04_s00__blind_continual_campaign",
+    "wormhole_family": "m99_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/chamber_probe.py",
+        "archived_relpath": "producers/tmp__chamber_probe.py",
+        "bytes": 4033,
+        "sha256": "84a106659541ef3222a58972d5b416f03b6661d3eefda38c310fa24107b19530"
+      },
+      {
+        "container_path": "/tmp/chamber_withdrawal_audit.py",
+        "archived_relpath": "producers/tmp__chamber_withdrawal_audit.py",
+        "bytes": 3599,
+        "sha256": "5081ff0e1eaae78119d488e4fa76679c8df23bfdc816bee543cfde48491a4ad4"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py; if [ -d /tmp/hegel_continual_archive ]; then ls -lh /tmp/hegel_continual_archive; for f in archive_manifest.json archive_apparatus_log.json; do p=/tmp/hegel_continual_archive/$f; if [ -f \"$p\" ]; then printf '\\n--- %s ---\\n' \"$f\"; tail -c 10000 \"$p\"; fi; done; fi; python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_batch.pkl','rb') as f: batch=pickle.load(f)\nprint('batch length:',len(batch))\ndef inspect(o, depth=0):\n    for k,v in o.items():\n        if isinstance(v,dict):\n            print('",
+      "cd /holdout_task && cat validate_public_schema.py; ls -lh /tmp/hegel_continual_archive/; python3 - <<'PY'\nimport json\nfrom pathlib import Path\nroot=Path('/tmp/hegel_continual_archive')\nfor name in ['archive_manifest.json','archive_apparatus_log.json']:\n p=root/name\n if not p.exists(): continue\n a=json.loads(p.read_text())\n print(name, type(a).__name__)\n def summarize(v,d=0):\n  if d>5: return str(v)[:150]\n  if isinstance(v,dict): return {k:summarize(x,d+1) for k,x in v.items()}\n  if isinstance(v,list): return [summarize(x,d+1) for x in (v if len(v)<=5 else v[:1]+v[-3:])]\n  return v\n print(json.",
+      "cat >/tmp/chamber_probe.py <<'PY'\nimport json,pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.sparse import diags,kron,eye,csc_matrix\nfrom scipy.sparse.linalg import splu\nfrom scipy.optimize import minimize\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nlog=json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text())\nfor item in log:\n a=np.array(item['facility_telemetry_trace']); print('archive',item['completed_campaign_short_name'], a.shape);print(a)\nprint('aux',np.round(s['aux_manifold_telemetry'][:6],4))\nC=s['sensor_calibratio",
+      "set -e\ncat > /holdout_task/batch_solver.py <<'PY'\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _axis(kappa, velocity, h, robin):\n    n = len(kappa)\n    face = (kappa[:-1] + kappa[1:]) / (2 * h**2)\n    lower = -face - np.maximum(velocity[1:], 0) / h\n    upper = -face - np.maximum(-velocity[:-1], 0) / h\n    lower[-1] = -kappa[-1] / h**2\n    upper[0] = -kappa[0] / h**2\n    main = -np.r_[0., lower] - np.r_[upper, 0.]\n    main[[0, -1]] += robin / h\n    return diags((lower, main, upper), (-1, 0, 1), shape=(n, n), format='csc')\n\n\ndef _design(",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.optimize import minimize\n\npath = '/holdout_task/batch_solver.py'\nspec = importlib.util.spec_from_file_location('candidate', path)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\n\ndef axis(key):\n    k, v = s['kappa_'+key], s['vel_'+key]\n    n = len(k)\n    h = s['L'+key] / (n - 1)\n    rob = s['robin_'+key]\n    a = np.zeros((n, n))\n    for j in range(1, n-1):\n        kp, k",
+      "set -e\ncat >/tmp/chamber_withdrawal_audit.py <<'PY'\nimport contextlib, importlib.util, io, pickle\nimport numpy as np\n\ndef load(name, path):\n    sp = importlib.util.spec_from_file_location(name, path)\n    m = importlib.util.module_from_spec(sp)\n    sp.loader.exec_module(m)\n    return m\n\nwith contextlib.redirect_stdout(io.StringIO()):\n    p = load('probe', '/tmp/chamber_probe.py')\nm = load('candidate', '/holdout_task/batch_solver.py')\ns = p.s\ncal = s['sensor_calibration_sweeps']\nx, y = cal['ref_rosette'], cal['raw_rosette']\nprint('Study keys:', sorted(s)); print('Calibration keys:', sorted(cal))",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle\nimport numpy as np\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\nc = s['sensor_calibration_sweeps']\nx, y = c['ref_rosette'], c['raw_rosette']\ncoef = np.linalg.lstsq(np.c_[x, np.ones(len(x))], y, rcond=None)[0]\nprint('Joint affine diagonal gains:', np.diag(coef[:4]), 'offsets:', coef[4])\nb = c['single_bank_sweeps']\nfor j, bank in enumerate(np.unique(b['bank_id'])):\n    mask = b['bank_id'] == bank\n    a, r = b['ref_signal'][mask], b['raw_readout'][mask]\n    X = np.c_[a, np.ones(len(a))]\n    join"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__chamber_probe.py",
+      "primary_producer_container_path": "/tmp/chamber_probe.py",
+      "selected_channels": [
+        "m99_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5065,
+        "sha256": "89fc06655645429f23c22ec2ef23770de57ca62ed14e05da63360f0d68083b33",
+        "content_addressed_ref": "content_addressed_blobs/89fc06655645429f23c22ec2ef23770de57ca62ed14e05da63360f0d68083b33.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "describe"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m99_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "7bd3492eddacf6a1097c31d0872e3d48eb2dcf4c950bdc75af492fc1629dcece",
+      "verified_post_package": true,
+      "verified_turn": 7,
+      "verification_command": "set -e\ncat >/tmp/chamber_withdrawal_audit.py <<'PY'\nimport contextlib, importlib.util, io, pickle\nimport numpy as np\n\ndef load(name, path):\n    sp = importlib.util.spec_from_file_location(name, path)\n    m = importlib.util.module_from_spec(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "7bd3492eddacf6a1097c31d0872e3d48eb2dcf4c950bdc75af492fc1629dcece",
+        "expected_candidate_sha256": "7bd3492eddacf6a1097c31d0872e3d48eb2dcf4c950bdc75af492fc1629dcece",
+        "computed_candidate_sha256": "7bd3492eddacf6a1097c31d0872e3d48eb2dcf4c950bdc75af492fc1629dcece",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5065
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_7bd3492e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "describe",
+        "code": "def describe(v):\n    if isinstance(v, dict):\n        return {k: describe(z) for (k, z) in v.items()}\n    if isinstance(v, (list, tuple)):\n        return (len(v), describe(v[0]) if len(v) else None)\n    return (getattr(v, 'shape', None), type(v).__name__)"
+      }
+    ]
+  }
+}

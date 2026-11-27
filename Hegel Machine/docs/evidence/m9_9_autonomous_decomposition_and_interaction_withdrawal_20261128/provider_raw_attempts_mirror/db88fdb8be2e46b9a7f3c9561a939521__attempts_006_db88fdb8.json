@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db88fdb8be2e46b9a7f3c9561a939521",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:32.304162+00:00",
+  "ended_at_utc": "2026-11-27T19:58:51.757789+00:00",
+  "request_sha256": "6029e00e5f823a4056b42fad67beb12de3dfe066ec19dfdc1fd87b69d5585c3c",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 45350,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29760,
+    "cached_tokens": 13696,
+    "completion_tokens": 733
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat batch_solver.py validate_public_schema.py /tmp/hegel_continual_archive/archive_manifest.json && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features,_material,_basis,_loads\\nnp.set_printoptions(precision=4,suppress=True)\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in a:\\n f=np.asarray(e['facility_telemetry_trace']); z=np.fft.rfft(f,axis=0)[1:]; k=np.argmax(abs(z),axis=0); p=z[k,np.arange(8)]; print(e['completed_campaign_short_name'],'dc',f.mean(0),'bins',k+1,'amp',abs(p)/12,'phase',np.angle(p))\\nb=np.array([e['facility_telemetry_trace'] for e in a]);print('pair trace rms',np.sqrt(np.mean((b[:,None]-b[None,:])**2,axis=(2,3))))\\nd=calibrate_upstream(pickle.load(open('public_batch.pkl','rb'))[0]['dataset']); tr=d['train']; x,_=_features(tr,d['test']); dt,t=d['past_dt'],d['eval_times'];\\nfor lab in np.unique(tr['lab_id']):\\n keep=tr['lab_id']!=lab; sub={k:v[keep] for k,v in tr.items()}; ho={k:v[~keep] for k,v in tr.items()}; tau,th=_material(sub,x[keep],dt,t); c,r=_basis(tau,*_loads(ho),x[~keep],dt,t); ec=c@th+ho['strain_0'][:,None]-ho['strain_curves_obs']; er=r@th-ho['instant_rate_obs']; print('held lab',lab,'tau',tau,'theta',th,'strain MedAE',np.median(abs(ec)),'worst horizon MedAE',np.max(np.median(abs(ec),axis=0)),'rate MedAE',np.median(abs(er)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (shared two-branch material) -> H2 (deployment setting inferred from the preceding apparatus trace); public schema passes, and held-lab errors have not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the repeated channel-4 level as a fully identified chamber law\",\"rejected_reason\":\"It identifies a recurring apparatus state, but does not establish which constitutive term it changes.\"}],\"rationale\":\"Compare trace shape as well as level to see whether prior states give additional evidence for the blind deployment law. Independently hold out each lab from the material fit to detect slow-branch instability or calibration mismatch before changing the chamber model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "a93bd530dd424191d85b2314b931afb0ca916a488a0ca2369d32edd72fb1e826",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20584.28,
+      "usage_known": true,
+      "prompt_tokens": 29760,
+      "cached_tokens": 13696,
+      "completion_tokens": 733
+    }
+  ]
+}

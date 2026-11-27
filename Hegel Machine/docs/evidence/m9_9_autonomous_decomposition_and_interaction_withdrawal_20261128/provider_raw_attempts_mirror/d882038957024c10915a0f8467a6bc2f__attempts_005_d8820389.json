@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d882038957024c10915a0f8467a6bc2f",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:32.520740+00:00",
+  "ended_at_utc": "2026-11-27T19:38:04.926080+00:00",
+  "request_sha256": "e2f09497c42082fad3f153417b2ec7b850616d1f2f3a4fbb61a789dddb2c91a1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38423,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29949,
+    "cached_tokens": 14976,
+    "completion_tokens": 1318
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/chamber_linear.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\ns=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py'); globals().update({k:v for k,v in s.items() if k.startswith('_') and not k.startswith('__')})\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; g=i['campaign_diagnostics']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; b=_bridge(d['calibration_load_cells']); xt,xe=_features(tr,te); _,xg=_features({k:np.concatenate((tr[k],te[k])) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')},g); ta,th=_material(tr,b,xt,dt,t); p,h=_loads(g,b); cv,rt=_basis(ta,p,h,xg,dt,t); Y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; lab=g['lab_id']; n=len(lab)\\ndef T(q): return np.r_[np.c_[-np.expm1(-t[:,None]/q),t], [np.r_[1/q,1.]]]\\ndef hist(q):\\n z=np.zeros((n,len(q)))\\n for w,a in zip(dt,p.T): z+=-np.expm1(-w/q)*(a[:,None]-z)\\n return z\\nz=hist(ta); dr=rt[:,2:]@th[2:]; print('material:',ta,th)\\nfor name,A in {'hold':h[:,None],'hold+history':np.c_[h,z],'hold+history+drift':np.c_[h,z,dr],'hold+past':np.c_[h,p],'hold+past+drift':np.c_[h,p,dr],'hold+past+features':np.c_[h,p,np.ones(n),xg]}.items():\\n def predict(f,j,free):\\n  F=A[f]; B=np.linalg.lstsq(F,Y[f],rcond=None)[0]\\n  def calc(q):\\n   M=T(q); C=np.linalg.lstsq(M,B.T,rcond=None)[0].T\\n   return C,M\\n  q=ta if not free else np.exp(least_squares(lambda l:(F@calc(np.exp(l))[0]@calc(np.exp(l))[1].T-Y[f]).ravel(),np.log(ta),bounds=(np.log([.1,1.1]),np.log([1.09,40]))).x)\\n  C,M=calc(q); return A[j]@C@M.T,q,C\\n for free in (False,True):\\n  e=np.zeros_like(Y)\\n  for l in np.unique(lab):\\n   j=lab==l; e[j]=predict(~j,j,free)[0]-Y[j]\\n  pp,q,C=predict(np.ones(n,bool),np.ones(n,bool),free); rm=lambda a:np.sqrt(np.mean(a*a)); print(name,free,'q',np.round(q,4),'train',round(rm(pp-Y),5),'LOLO curve/rate worst',np.round(np.max([[rm(e[lab==l,:-1]),rm(e[lab==l,-1])] for l in np.unique(lab)],axis=0),5)); print(np.round(C,5))\\ncal=d['calibration_load_cells']['single_channel_sweeps'];\\nfor l in np.unique(cal['lab_id']):\\n j=cal['lab_id']==l; print('sweep',l,np.polynomial.polynomial.polyfit(cal['cmd_stress'][j],cal['true_stress'][j],1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_linear.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop law → H2 chamber-specific load-history amplitudes; the unchanged law misses diagnostic strain by up to 1.377 and initial rate by up to 1.947.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The calibrated benchtop constitutive law transfers unchanged to the chamber.\",\"empirical_witness\":\"Diagnostic median absolute errors are 0.395 strain and 1.013 initial rate; allowing coupon-specific amplitudes on the same time basis lowers these to 0.00164 and 0.00069.\",\"causal_blanket_diagnosis\":\"The two-branch time basis remains plausible, but the mapping from calibrated load history to amplitudes and drift does not transfer.\",\"sublated_pivot\":\"Keep the benchtop material estimate and compare chamber-specific amplitude maps under leave-one-lab-out validation.\",\"risk_kind\":\"constitutive transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the freely fitted slow chamber time constant\",\"rejected_reason\":\"Per-coupon slow amplitude and drift can compensate for one another; held-out predictions should decide whether changing the time constant helps.\"}],\"rationale\":\"Compare nested hold, history, and drift maps while holding out each lab. If the full history improves prediction, its fitted coefficients will show which earlier loads matter; the command-to-load sweeps check whether lab gains could instead explain the discrepancy.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0bbd96e7dcdc2081675ef06f090c15a4837c3e480cb424c5f04487b820c9d846",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33486.31,
+      "usage_known": true,
+      "prompt_tokens": 29949,
+      "cached_tokens": 14976,
+      "completion_tokens": 1318
+    }
+  ]
+}

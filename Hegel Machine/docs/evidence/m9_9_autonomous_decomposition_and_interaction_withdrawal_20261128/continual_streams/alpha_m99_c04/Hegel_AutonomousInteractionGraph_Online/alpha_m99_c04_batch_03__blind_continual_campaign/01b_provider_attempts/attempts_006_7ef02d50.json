@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ef02d508e83485b9a6dc9f2b74de87f",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:01.478018+00:00",
+  "ended_at_utc": "2026-11-27T19:56:32.042139+00:00",
+  "request_sha256": "6993dbf4e90c5ac6236d8b324f574f7374f036aec1c3cafbcbfb8e7b11578067",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41632,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29997,
+    "cached_tokens": 13696,
+    "completion_tokens": 1239
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nimport batch_solver as b\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']; x, y = cal['true_channel_loads'], cal['bridge_raw']\\no, g = u._fit_bridge(x,y)\\nclean = np.linalg.norm(y-o-g*u._bridge(x),axis=1) < .01\\nprint('Excluded gross calibration spikes:',np.flatnonzero(~clean).tolist())\\nassert (~clean).sum() == 3\\naxis = np.flatnonzero(np.count_nonzero(x,axis=1)==1)\\nmixed = np.flatnonzero(np.count_nonzero(x,axis=1)>1)\\nrng = np.random.default_rng(20)\\nslices = {'mixed/axis': [np.r_[a,m] for a,m in zip(np.array_split(rng.permutation(axis),8),np.array_split(rng.permutation(mixed),8))], 'whole axis': [axis[x[axis,j]!=0] for j in range(4)], 'highest load': [np.argsort(np.linalg.norm(x,axis=1))[-12:]]}\\nfor name, folds in slices.items():\\n    worst = np.zeros(3)\\n    for hold in folds:\\n        train = np.setdiff1d(np.arange(len(x)),hold); t = hold[clean[hold]]\\n        off,gain = u._fit_bridge(x[train],y[train])\\n        error = u._invert(y[t],off,gain)-x[t]\\n        worst = np.maximum(worst,[abs(off+gain*u._bridge(x[t])-y[t]).max(),abs(error).max(),abs(error.sum(axis=1)).max()])\\n    print(name,'max forward, inverse, summed-load error:',worst)\\n    assert worst[1]<5e-4 and worst[2]<7e-4\\nkey = 'chamber_verification_trials'\\nbase = {k:v for k,v in ds.items() if k != key}\\nassert key not in u.calibrate_upstream(base)\\nassert u.calibrate_upstream({**base,key:None})[key] is None\\nwith_trials = {**base,key:ds['test']}\\nbefore = {(group,field):with_trials[group][field].copy() for group in ('train','test',key) for field in ('past_channel_raw','hold_channel_raw')}\\nout = u.calibrate_upstream(with_trials)\\nfor (group,field),raw in before.items():\\n    fitted = out[group][field]\\n    assert np.array_equal(with_trials[group][field],raw)\\n    assert fitted.shape == raw.shape\\n    error = abs(o+g*u._bridge(fitted)-raw).max()\\n    assert error<2e-11\\n    print(group,field,'round-trip max:',error)\\ncn = out['calibration_load_cells']; s = cn['single_channel_sweeps']\\nassert np.array_equal(cn['bridge_raw'],x) and not np.shares_memory(cn['bridge_raw'],x)\\nassert np.array_equal(s['cmd_stress'],s['true_stress']) and not np.shares_memory(s['cmd_stress'],s['true_stress'])\\nassert np.linalg.norm(cal['bridge_raw']-y) == 0 and not np.array_equal(cal['bridge_raw'],x)\\nsol = b.solve_batch(ds)\\nn = len(ds['test']['lab_id']); nt = len(ds['eval_times'])\\nfor k, shape in [('estimated_taus',(2,)),('hereditary_weights',(7,)),('predicted_strain',(n,nt)),('initial_rate_pred',(n,))]:\\n    assert np.shape(sol[k])==shape and np.all(np.isfinite(sol[k])), (k,np.shape(sol[k]))\\nprint('Isolated composed outputs verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the gain-normalized cyclic cubic bridge caps held-out per-channel and summed-load errors at 3.58e-4 and 5.56e-4, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Insert an explicit null trial key when it is absent\",\n      \"rejected_reason\": \"The public schema passed, and there are no trial loads to transform when the key is absent; preserving absence avoids a needless schema change.\"\n    }\n  ],\n  \"rationale\": \"The prior isolated run stopped because its assertion treated an absent trial key as an explicit null. Keep both artifacts unchanged and finish verification against absent, null, and populated trial branches. Any failure now identifies a branch, calibration slice, or composed output that needs correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "eb65600446a963c0d073835a7075058c4d7e4311d83df266944cf8fee385bab8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31706.88,
+      "usage_known": true,
+      "prompt_tokens": 29997,
+      "cached_tokens": 13696,
+      "completion_tokens": 1239
+    }
+  ]
+}

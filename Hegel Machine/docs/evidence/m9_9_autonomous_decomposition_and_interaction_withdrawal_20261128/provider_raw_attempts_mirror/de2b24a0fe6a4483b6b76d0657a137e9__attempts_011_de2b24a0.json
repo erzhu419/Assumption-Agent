@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de2b24a0fe6a4483b6b76d0657a137e9",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:55.682943+00:00",
+  "ended_at_utc": "2026-11-27T20:06:17.886896+00:00",
+  "request_sha256": "7a4ba5506f27f80a2046a5ae93063140299e09f51911dcbd37593b6a1309d608",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 69965,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41925,
+    "cached_tokens": 13696,
+    "completion_tokens": 785
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/print('\\\\''fixed reset/,$d' /tmp/m99_kernel.py > /tmp/m99_reset.py; cat >> /tmp/m99_reset.py <<'PY'\\nfrom itertools import product\\nX=features(d,d)[0]; D=theta[2]+X@theta[3:]; good=~missing\\nB=np.c_[V,Q*taus]; Y0=E\\nfor name,J in [('nominal',K),('free_mix',None)]:\\n if J is None:\\n  a=np.linalg.lstsq((D[good,None,None]*B).reshape(-1,3),Y0[good].ravel(),rcond=None)[0]; J=B@a; print('estimated kernel fractions [linear,fast,slow]',a,'sum',a.sum())\\n print(name,'complete-case RMSE rate,strain',np.sqrt(np.mean((Y0[good]-D[good,None]*J)**2,axis=0)).round(5))\\n implied=Y0@J/(J@J)\\n for i in np.flatnonzero(missing):\\n  j=np.flatnonzero(np.isnan(d['coupon_features_raw'][i])); print('missing row',i,'lab/stratum',L[i],d['stratum'][i],'columns',j,'inferred delta',np.round((implied-D)[i]/theta[3+j],4),'used',X[i,j].round(4))\\nprint('reference transforms: split/lab/count/center/scale')\\nfor name,s in [('train',tr),('test',te),('diag',d)]:\\n for l in np.unique(L):\\n  p=s['ref_coupons'][s['lab_id']==l];print(name,l,len(p),round(np.median(p.mean(0)),4),round(np.median(p.std(0)),4))\\nprint('missing per split:',[np.isnan(z['coupon_features_raw']).sum(axis=0).tolist() for z in (tr,te,d)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_reset.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Unchanged benchtop memory → full chamber reset and a shared filtered-drift kernel; with free coupon drift amplitudes, the nominal kernel leaves 0.00380 rate RMSE and at most 0.00300 strain RMSE per horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy a fitted history correction\",\"rejected_reason\":\"The rank-one residual after subtracting the reset elastic response indicates that the leading discrepancy is in drift, not stress history.\"}],\"rationale\":\"Estimate the kernel on complete diagnostic coupons, then use the remaining error on missing-feature coupons to identify the imputation rule. Comparing lab reference centers and scales will determine whether deployment needs its own panel rather than the joint material-fit panel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9e7fbb577968e24339ca8e080279de23236b905a2b43c55d092be61af8364022",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22151.02,
+      "usage_known": true,
+      "prompt_tokens": 41925,
+      "cached_tokens": 13696,
+      "completion_tokens": 785
+    }
+  ]
+}

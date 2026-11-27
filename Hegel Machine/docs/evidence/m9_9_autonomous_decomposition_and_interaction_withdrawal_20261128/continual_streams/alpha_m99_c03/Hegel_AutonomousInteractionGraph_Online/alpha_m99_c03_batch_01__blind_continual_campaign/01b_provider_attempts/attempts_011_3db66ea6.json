@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3db66ea6eebe4ff98dbb0160c7c0891f",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:31.084948+00:00",
+  "ended_at_utc": "2026-11-27T19:41:08.834790+00:00",
+  "request_sha256": "31d18809c51db20454f984a5bb316cf6136606940fbbb4dac69903b84868ceb3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71105,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42086,
+    "cached_tokens": 0,
+    "completion_tokens": 1623
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_clean.py <<'PY'\\nimport numpy as np,pickle,sys\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport alpha_m99_c03_s00_solver as m\\nz=np.load('/tmp/chamber_probe.npz'); p,h,dt,t,tau,th,Y,v=[z[k] for k in ('past','hold','dt','t','taus','theta','curve','rate')]; it=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; q=it['campaign_diagnostics']; d=it['dataset']; tr,te=d['train'],d['test']; x=m._features(q,{k:q[k][:0] for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}); good=np.isfinite(q['coupon_features_raw']).all(1); r=th[2]+x@th[3:]; F=np.vstack([np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]]); y=np.c_[Y,v]; base=h[:,None]*(F[:,:2]@th[:2]); mem=p@(-np.expm1(-dt[:,None]/tau)*np.exp(-(np.cumsum(dt[::-1])[::-1]-dt)[:,None]/tau));\\nfor name,co in [('half',[.5,.5,0]),('half-plus',[.5,.45,.05]),('equal-plus',[.475,.475,.05])]:\\n pred=base+r[:,None]*(F@(np.array(co)*np.r_[tau,1.])); err=y-pred; print(name,'clean',np.round(np.sqrt(np.mean(err[good]**2,0)),4),'missing',np.round(np.max(abs(err[~good]),1),4));\\nfor name,A in [('r',r[:,None]),('r+1',np.c_[r,np.ones(len(r))]),('r+features',np.c_[r,np.ones(len(r)),x]),('r+hold+mem',np.c_[r,h,mem])]:\\n def fit(mask):\\n  B=np.linalg.lstsq(A[mask],y[mask]-base[mask],rcond=None)[0]; return B,base+A@B\\n B,pred=fit(good); errs=np.stack([y[i]-fit(good & (np.arange(len(r))!=i))[1][i] for i in range(len(r))]); print(name,'clean fitted latent',np.round(B@np.linalg.pinv(F.T),5),'OOF RMSE/max',np.round([np.sqrt(np.mean(errs[:,:-1]**2)),abs(errs[:,:-1]).max(),np.sqrt(np.mean(errs[:,-1]**2)),abs(errs[:,-1]).max()],5));\\nprint('diag errors by lab and missing (half-plus)'); err=y-base-r[:,None]*(F@(np.r_[tau,1.]*[.5,.45,.05])); print(np.round(np.c_[q['lab_id'],~good,r,err[:,0],err[:,-2:]],5));\\nfor block in [tr,te,q]:\\n print('telemetry',[(k,np.shape(val),np.round(np.mean(val,axis=0),3)) for k,val in block.items() if 'telemetry' in k]); print('refs',[(i,np.round(block['ref_coupons'][block['lab_id']==i].mean(0),3).tolist()) for i in np.unique(block['lab_id'])]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_clean.py\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    bridge = _calibration(dataset['calibration_load_cells'])\\n    tr = _coupon_inputs(train, x[:n], bridge)\\n    taus, theta = _fit(tr, dt, times, train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    _, hold, drift_design = _coupon_inputs(test, x[n:], bridge)\\n    drift = drift_design @ theta[2:]\\n    relaxation = -np.expm1(-times[:, None] / taus)\\n    shares = np.array([0.50, 0.45])\\n    drift_kernel = relaxation @ (taus * shares) + (1.0 - shares.sum()) * times\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + hold[:, None] * (relaxation @ theta[:2])\\n                                + drift[:, None] * drift_kernel,\\n            'initial_rate_pred': hold * np.sum(theta[:2] / taus) + drift}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separate chamber time constants -> H2 withdrawn preload memory and a drift transient on the shared material spectrum; the shared-basis hold-and-drift model has leave-one-coupon-out RMSE of 0.0281 strain and 0.0246 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Fit separate chamber time constants\",\"rejected_reason\":\"Once amplitudes are predicted from hold stress and drift, free time constants do not improve held-out strain or initial rate.\"}],\"rationale\":\"Build the shared-spectrum candidate now. Compare derivative-preserving drift kernels on complete and missing-feature diagnostic coupons to distinguish a constitutive error from panel alignment or imputation error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "94cb503b154a0904f6148cf540d695e89ea3f514c83f19618f26bc3c645d584b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38927.37,
+      "usage_known": true,
+      "prompt_tokens": 42086,
+      "cached_tokens": 0,
+      "completion_tokens": 1623
+    }
+  ]
+}

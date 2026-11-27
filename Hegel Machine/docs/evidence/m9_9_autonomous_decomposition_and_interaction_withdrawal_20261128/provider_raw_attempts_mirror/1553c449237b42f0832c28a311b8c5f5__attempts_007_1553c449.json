@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1553c449237b42f0832c28a311b8c5f5",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:51.981963+00:00",
+  "ended_at_utc": "2026-11-27T19:39:21.482517+00:00",
+  "request_sha256": "1c011692527561a826265b0e121f390130780b49163fa30513417fcde1b26091",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50812,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35280,
+    "cached_tokens": 14976,
+    "completion_tokens": 1206
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/route_m99.py <<'PY'\\nimport contextlib,io,json\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from probe_m99 import *\\np,h=m._loads(g,b); lab=g['lab_id']; n=len(h)\\nT=np.vstack((np.c_[-np.expm1(-t[:,None]/ta),t],np.r_[1/ta,1.]))\\nY=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]\\nM=h-m._basis(ta,p,h,gx,dt,t)[1][:,:2]*ta\\nY=Y-(h[:,None]*th[:2])@T[:,:2].T\\n# Test no history, partial history, and diagnostic feature normalization independently.\\nfields=('coupon_features_raw','ref_coupons','lab_id','stratum')\\ndef combine(*sets): return {k:np.concatenate([s[k] for s in sets]) for k in fields}\\nX={'train+test+diag':gx,'train+diag':m._features(tr,g)[1],'diag':m._features(g,g)[1],'test+diag':m._features(te,g)[1]}\\n# Normalize diagnostic features with train+test panel and fill using train+test only.\\nj=combine(tr,te); raw=j[fields[0]].copy(); q=g[fields[0]].copy()\\nfor a in np.unique(lab):\\n panel=j['ref_coupons'][j['lab_id']==a]; mu=np.median(panel.mean(0)); sd=np.median(panel.std(0)); q[lab==a]=(q[lab==a]-mu)/sd; raw[j['lab_id']==a]=(raw[j['lab_id']==a]-mu)/sd\\n_,cell,count=np.unique(np.c_[j['lab_id'],j['stratum']],axis=0,return_inverse=True,return_counts=True); w=1/count[cell]; fill=np.nansum(raw*w[:,None],axis=0)/(w@np.isfinite(raw)); X['train+test panel']=np.where(np.isnan(q),fill,q)\\nZ=Y@np.linalg.pinv(T.T); print('raw inferred amplitudes after hold (columns); missing feature count'); print(np.c_[Z,np.isnan(q).sum(1)])\\nfor name,x in X.items():\\n D=th[2]+x@th[3:]; print('alignment',name)\\n for variant,F in [('route',np.c_[np.ones(n),D]),('route+memory',np.c_[np.ones(n),D,M]),('free feature weights',np.c_[np.ones(n),x])]:\\n  E=np.zeros_like(Y)\\n  for a in np.unique(lab):\\n   keep=lab!=a; C=np.linalg.lstsq(F[keep],Y[keep],rcond=None)[0]@np.linalg.pinv(T.T); E[~keep]=F[~keep]@C@T.T-Y[~keep]\\n  C=np.linalg.lstsq(F,Y,rcond=None)[0]@np.linalg.pinv(T.T); print(variant,'C',C,'worst lab',np.max([np.sqrt([np.mean(E[lab==a,:-1]**2),np.mean(E[lab==a,-1]**2)]) for a in np.unique(lab)],axis=0),'complete/missing',*[np.sqrt(np.mean(E[k]**2)) for k in [~np.isnan(q).any(1),np.isnan(q).any(1)]])\\n  if variant=='route': print('signed residual by coupon',np.c_[D,(F@C@T.T-Y)[:,-1],lab])\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n A=np.array(row['facility_telemetry_trace']); print(row['completed_campaign_short_name'],A.mean(0),A.std(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/route_m99.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine correction to benchtop memory and drift → H2: chamber withdraws hereditary history and routes coupon drift into the relaxation amplitudes; the current fixed-times physical model has worst-lab RMSE 0.0634 strain and 0.0571 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retune chamber time constants\",\"rejected_reason\":\"Profiling produced unstable slow times across labs and did not materially improve either prediction metric.\"}],\"rationale\":\"The fitted hold coefficients match the intrinsic branch weights, while fitted history and linear-drift contributions are small. Test the simpler withdrawal-and-routing law on excluded labs and separate normalization and imputation errors before adding chamber terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "892896db473ac289b850cc26f8eb67abc59f3187cee06fd390c764cb1360a531",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30606.94,
+      "usage_known": true,
+      "prompt_tokens": 35280,
+      "cached_tokens": 14976,
+      "completion_tokens": 1206
+    }
+  ]
+}

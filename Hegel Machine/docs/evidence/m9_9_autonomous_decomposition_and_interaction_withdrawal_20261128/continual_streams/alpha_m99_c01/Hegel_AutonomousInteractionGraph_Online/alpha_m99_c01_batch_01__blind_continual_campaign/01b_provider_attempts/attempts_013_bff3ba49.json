@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bff3ba49bee24bd49ca47e37ee64ff34",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:38.213396+00:00",
+  "ended_at_utc": "2026-11-27T19:42:14.813651+00:00",
+  "request_sha256": "593f30324f0a7b64d5e51c23f1210b6eadb29736d03f97b16c9852a0888778df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73518,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40309,
+    "cached_tokens": 13696,
+    "completion_tokens": 1543
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/ch_margin_audit.py <<'PY'\\nexec(open('/tmp/chbasis.py').read().split('C,E=profile(tau)')[0])\\nlab = di['lab_id']\\nraw = di['coupon_features_raw']\\nxv = raw.copy()\\nfor l in np.unique(lab):\\n    mask = lab == l\\n    refs = di['ref_coupons'][mask]\\n    xv[mask] = (xv[mask] - np.median(refs.mean(0))) / np.median(refs.std(0))\\nxv = np.where(np.isfinite(xv), xv, np.nanmean(xv, axis=0))\\nP = basis(tau)\\nQ = Y - hd[:, None] * (P[:, :2] @ beta[:2])\\nr = beta[2] + xv @ beta[3:]\\n_, rate_design = m._design(tau, xv, pd, hd, dt, t)\\nz = hd[:, None] - rate_design[:, :2] * tau\\n\\ndef features(kind, a=0.):\\n    F = np.column_stack((np.ones(len(r)), r))\\n    extras = {'affine': [], 'pairwise': [z[:,0]-z[:,1], hd-z[:,0]], 'cross': [r*(z[:,0]-z[:,1]),r*hd], 'three-way': [r*hd*(z[:,0]-z[:,1])], 'curvature': [r*r,r**3], 'lab-centered': [r-np.array([np.mean(r[lab==l]) for l in lab])], 'rational': [r/(1+a*r*r)-r]}\\n    return np.column_stack([F,*extras[kind]])\\n\\ndef predict(F, fit, val):\\n    B = np.linalg.lstsq(F[fit], Q[fit], rcond=None)[0] @ np.linalg.pinv(P.T)\\n    return F[val] @ B @ P.T\\n\\nfor name in ('affine','pairwise','cross','three-way','curvature','lab-centered','rational'):\\n    e = np.empty_like(Q)\\n    pars = []\\n    for l in np.unique(lab):\\n        fit = lab != l\\n        if name == 'rational':\\n            def inner(a):\\n                F = features(name,a)\\n                loss = []\\n                for j in np.unique(lab[fit]):\\n                    sk = lab == j\\n                    err = Q[sk]-predict(F,fit & ~sk,sk)\\n                    loss.append(np.mean(err[:,:-1]**2)+np.mean(err[:,-1]**2))\\n                return np.mean(loss)\\n            a = min((.05,.2,1.,4.), key=inner)\\n            pars.append(a)\\n        else:\\n            a = 0.\\n        e[~fit] = Q[~fit]-predict(features(name,a),fit,~fit)\\n    print(name,'RMSE and max curve/rate',np.round([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),np.max(abs(e[:,:-1])),np.max(abs(e[:,-1]))],6),'inner rational settings',pars)\\n    if name == 'affine':\\n        for l in np.unique(lab):\\n            k = lab == l\\n            print('  lab',l,'signed mean curve/rate',np.round([e[k,:-1].mean(),e[k,-1].mean()],6))\\n        for label,k in [('negative drift',r<0),('positive drift',r>=0)]:\\n            if k.any(): print(' ',label,int(k.sum()),'max curve/rate',np.round([np.max(abs(e[k,:-1])),np.max(abs(e[k,-1]))],6))\\n\\ncal = d['calibration_load_cells']\\nxcal = cal['bridge_raw']; ycal = cal['true_channel_loads'].sum(1)\\nF = np.column_stack((np.ones(len(xcal)), xcal))\\nG = np.column_stack([F]+[xcal[:,j]*xcal[:,k] for j in range(4) for k in range(j,4)])\\ngroups = np.argsort(np.argsort(ycal)) % 5\\nfor label,design in [('affine bridge',F),('quadratic bridge',G)]:\\n    e = np.empty_like(ycal)\\n    for j in range(5):\\n        k = groups == j\\n        e[k] = ycal[k]-design[k] @ np.linalg.lstsq(design[~k],ycal[~k],rcond=None)[0]\\n    print(label,'total stress CV RMS/max', np.round([np.sqrt(np.mean(e**2)),np.max(abs(e))],7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/ch_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted load interactions or lab offsets → H2 affine reset-and-transfer suffices; current held-out lab maxima are 0.00776 strain and 0.00689 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, HJB, or balanced-accuracy checks\",\n      \"rejected_reason\": \"The measurements contain continuous strain and rates under a specified relaxation law, with no relay states, stochastic-control equation, or class labels. Check signed errors and lab-centered predictors instead.\"\n    }\n  ],\n  \"rationale\": \"If a load interaction, nonlinear bridge, or lab correction lowers the worst errors for both outputs on held-out measurements, investigate it before changing the solver. Otherwise retain the verified affine model. The audit also checks whether the apparent accuracy hides a signed bias in any lab or a larger error at negative drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "a8250dd788ccfc74a67366430326d66fa09d4695e98e14b269f680f02cef3c4a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37681.89,
+      "usage_known": true,
+      "prompt_tokens": 40309,
+      "cached_tokens": 13696,
+      "completion_tokens": 1543
+    }
+  ]
+}

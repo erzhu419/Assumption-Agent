@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78a4883385e84984b3665ab07a6e73cf",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:03.037963+00:00",
+  "ended_at_utc": "2026-11-27T19:54:28.222873+00:00",
+  "request_sha256": "8293e708a9db7ba3cfa8768bd2ec601954c1854b148c11dcc2ada5690fc38ad2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40061,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28133,
+    "cached_tokens": 13696,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette_margin.py <<'PY'\\nimport pickle\\nimport sys\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nfrom upstream_transducer import _fit_forward, _inverse, calibrate_upstream\\nfrom _verified_downstream import solve_downstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nsweeps = study['sensor_calibration_sweeps']\\nx, y = sweeps['ref_rosette'], sweeps['raw_rosette']\\nrows = np.arange(len(x))\\nscorable = np.max(abs(y), axis=1) < 8  # visibly separated EMI, used only for scoring\\nreference = calibrate_upstream(study)\\nweights = solve_downstream(reference)['weights']\\nworst = np.zeros(4)\\nobs_shift = weight_shift = 0.\\nfor fold in range(5):\\n    test = rows % 5 == fold\\n    coef = _fit_forward(x[~test], y[~test])\\n    err = abs(_inverse(y[test & scorable], coef) - x[test & scorable])\\n    worst = np.maximum(worst, err.max(axis=0))\\n    obs = _inverse(study['y_obs_raw'], coef)\\n    obs_shift = max(obs_shift, float(np.max(abs(obs - reference['y_obs_raw']))))\\n    w = solve_downstream(dict(reference, y_obs_raw=obs))['weights']\\n    weight_shift = max(weight_shift, float(np.max(abs(w - weights))))\\nprint('Worst held-out inverse error by channel:', worst)\\nprint('Largest observation change across refits:', obs_shift)\\nprint('Largest downstream weight change across refits:', weight_shift)\\nprint('Minimum downstream box slack:', min(weights.min(), study['u_box'] - weights.max()))\\nassert max(worst) < 1e-4 and obs_shift < 1e-4 and weight_shift < 1e-4\\nPY\\npython3 -I /tmp/audit_rosette_margin.py && python3 -I -c 'import runpy,sys; sys.path.insert(0,\\\"/holdout_task\\\"); sys.argv=[\\\"/holdout_task/validate_public_schema.py\\\",\\\"/holdout_task/batch_solver.py\\\"]; runpy.run_path(sys.argv[0],run_name=\\\"__main__\\\")'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust cyclic cubic calibration → test whether channel-specific errors affect the downstream solution; worst held-out inverse error is 3.30e-5, versus 2.67e-5 for the shared-coefficient challenger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-saturation and signed-pair comparison\",\n      \"rejected_reason\": \"The real-sweep comparison already showed no worst-slice improvement from rational saturation over the shared cubic.\"\n    },\n    {\n      \"option\": \"Audit relay modes, stochastic-control drift, or classification by cohort\",\n      \"rejected_reason\": \"The supplied study is a steady transport inverse problem with continuous sensor readings, not a relay, stochastic-control, or classification task.\"\n    }\n  ],\n  \"rationale\": \"Test a remaining failure mode: a small sweep error could be concentrated in one channel or amplified into a material shift in the constrained PDE estimate. If either margin fails, compare the shared-coefficient challenger on that specific metric before changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0e9a037c5eea2db9ed5223a140d102f4df6ed75ea3c440e5f44eb5cadf1be3b6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26311.0,
+      "usage_known": true,
+      "prompt_tokens": 28133,
+      "cached_tokens": 13696,
+      "completion_tokens": 983
+    }
+  ]
+}

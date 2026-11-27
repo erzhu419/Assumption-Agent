@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0d6be875d38b4bceac72cdca776f9bc0",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:35.718106+00:00",
+  "ended_at_utc": "2026-11-27T19:58:01.474131+00:00",
+  "request_sha256": "ffc26ab11a0943f7e60747d9f27c1167ffb54b7aac9a31d54858de96e7295a2d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31991,
+    "cached_tokens": 14976,
+    "completion_tokens": 971
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_bridge_support.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\na = m._bridge_basis(x)\\nrecords = {'current': [], 'sparse nonlinear': []}\\nfor va in np.array_split(np.random.default_rng(704).permutation(len(x)), 5):\\n    tr = np.setdiff1d(np.arange(len(x)), va)\\n    b = m._fit_bridge(x[tr], y[tr])\\n    clean = tr[np.linalg.norm(a[tr] @ b - y[tr], axis=1) < .0015]\\n    keep = va[np.linalg.norm(a[va] @ b - y[va], axis=1) < .0015]\\n    assert len(keep) and len(clean) > a.shape[1]\\n    sparse = np.zeros_like(b)\\n    for j in range(y.shape[1]):\\n        support = np.r_[np.ones(5, dtype=bool), np.abs(b[5:, j]) > .01]\\n        sparse[support, j] = np.linalg.lstsq(a[clean][:, support], y[clean, j], rcond=None)[0]\\n    high = np.linalg.norm(x[keep], axis=1) >= np.quantile(np.linalg.norm(x[tr], axis=1), .8)\\n    for label, coef in [('current', b), ('sparse nonlinear', sparse)]:\\n        err = np.abs((m._invert_bridge(y[keep], coef) - x[keep]).sum(axis=1))\\n        records[label].append((err, err[high]))\\nfor label, rows in records.items():\\n    all_err = np.concatenate([e for e, _ in rows]); high_err = np.concatenate([e for _, e in rows])\\n    print(label, 'worst fold median / max total-load error:', max(np.median(e) for e, _ in rows), all_err.max(), 'high-load count / max:', len(high_err), high_err.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_bridge_support.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared nonlinear bridge basis) → H2 (channel-specific nonlinear support only if it materially improves high-load inversion); the current maximum clean held-out total-load error is 0.000423.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the expanded-basis and lab-holdout audits\",\n      \"rejected_reason\": \"Those checks are settled. The untested question is whether small off-channel coefficients degrade inverse total load at the upper end of the measured range.\"\n    }\n  ],\n  \"rationale\": \"Select nonlinear support inside each calibration fold and compare both fits on the same held-out sweeps. A material reduction in high-load inverse error would justify testing a replacement end to end; otherwise retain the verified solver. Classification and relay checks do not apply to these continuous measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e0b9a1bee282f96cdea62eb0570c778481a18852e044067aba01a42932fb6e9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25719.27,
+      "usage_known": true,
+      "prompt_tokens": 31991,
+      "cached_tokens": 14976,
+      "completion_tokens": 971
+    }
+  ]
+}

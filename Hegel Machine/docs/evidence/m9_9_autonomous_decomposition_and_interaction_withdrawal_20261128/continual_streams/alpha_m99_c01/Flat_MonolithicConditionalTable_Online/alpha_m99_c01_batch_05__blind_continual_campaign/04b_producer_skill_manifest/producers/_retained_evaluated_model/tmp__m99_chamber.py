@@ -1,0 +1,8 @@
+exec(open('/tmp/m99_probe.py').read().split('for name,part,xx,pp,hh in')[0])
+y=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']; Y=np.column_stack((y,r)); f=-np.expm1(-t[:,None]/tau); F=np.vstack((np.column_stack((f,t)),np.r_[1/tau,1])); C=Y@np.linalg.pinv(F.T); print('fixed temporal basis residual rms/max',np.sqrt(np.mean((C@F.T-Y)**2)),np.max(abs(C@F.T-Y)))
+age=np.cumsum(dt[::-1])[::-1]-dt; z=pg@(np.exp(-age[:,None]/tau)*-np.expm1(-dt[:,None]/tau)); drift=beta[2]+xg@beta[3:]; base=np.column_stack(((hg[:,None]-z)*beta[:2],drift)); reset=np.column_stack((hg[:,None]*beta[:2],drift)); R=C-base; np.set_printoptions(precision=5,suppress=True,linewidth=130)
+for name,A,V in [('total h, z0, z1, drift',np.c_[hg,z,drift],C),('offset, total h, z0, z1, drift',np.c_[np.ones(len(hg)),hg,z,drift],C),('reset residual from drift',drift[:,None],C-reset),('base residual from drift',drift[:,None],R),('full linear histories, drift',np.c_[hg,pg,drift],C),('drift features',np.c_[np.ones(len(hg)),xg],C-reset)]:
+ W=np.linalg.lstsq(A,V,rcond=None)[0]; E=(A@W-V)@F.T; lev=np.sum(A*np.linalg.pinv(A).T,axis=1); print(name,'coef',W,'rmse curve/rate',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),'max loo',np.max(abs(E/(1-lev[:,None])),axis=0)[[0,5,11,12]])
+for name,M in [('bench',base),('reset only',reset),('redistribution only',base+drift[:,None]*np.r_[.680*tau[0],.582*tau[1],1-.680-.582-1]),('reset & archived drift',reset+drift[:,None]*np.array([.38145,1.89249,.02953-1]))]:
+ E=M@F.T-Y; print(name,'curve/rate rmse',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)))
+print('design ranges',np.min(np.c_[hg,z,drift],axis=0),np.max(np.c_[hg,z,drift],axis=0)); print('top temporal residual',np.max(abs(C@F.T-Y),axis=0))

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2fc6446de36149e6b2a251664edfb4f9",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:40.504338+00:00",
+  "ended_at_utc": "2026-11-27T19:40:05.009665+00:00",
+  "request_sha256": "2959208b15f2d5428942ddcac870352d41eaadfe819f9fefa6db813f0cce4f16",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46309,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31584,
+    "cached_tokens": 14976,
+    "completion_tokens": 953
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m99_calibration_transfer.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nsweeps = s['sensor_calibration_sweeps']\\nx, y = sweeps['ref_rosette'], sweeps['raw_rosette']\\nS, _ = m._design(s)\\nw0 = np.asarray(m.solve_batch(s)['weights'])\\nworst_shift = 0.0\\nworst_weight_change = 0.0\\nfor fold, omitted in enumerate(np.array_split(np.random.default_rng(2026).permutation(len(x)), 5)):\\n    keep = np.ones(len(x), dtype=bool)\\n    keep[omitted] = False\\n    t = dict(s, sensor_calibration_sweeps=dict(sweeps, ref_rosette=x[keep], raw_rosette=y[keep]))\\n    w = np.asarray(m.solve_batch(t)['weights'])\\n    delta = np.linalg.norm(w-w0)/np.linalg.norm(w0)\\n    pulse_max = 0.0\\n    for p in item['campaign_diagnostics']:\\n        e = m._calibrate(dict(t, y_obs_raw=p['y_pulse_raw'])) - S@p['w_pulse']\\n        pulse_max = max(pulse_max, np.sqrt(np.mean(e.reshape(len(s['mu_shifts']), -1)**2, axis=1)).max())\\n    worst_shift = max(worst_shift, pulse_max)\\n    worst_weight_change = max(worst_weight_change, delta)\\n    print(f'fold {fold}: worst tracer shift RMSE={pulse_max:.6g}; relative weight change={delta:.6g}')\\nprint(f'worst transfer RMSE={worst_shift:.6g}; worst relative weight change={worst_weight_change:.6g}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m99_calibration_transfer.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 reflecting walls with affine calibration; worst wall-only pulse–shift RMSE is 1.43e-6 and the independent weights relative L2 error is 1.193e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear basis comparison or apply classification and relay diagnostics\",\n      \"rejected_reason\": \"The basis comparison is already settled, and the study has neither labeled cohorts nor relay states. The remaining question is whether sweep-fit uncertainty propagates into tracer predictions or recovered weights.\"\n    }\n  ],\n  \"rationale\": \"Refit calibration on each sweep subset and measure its downstream effect on known-weight pulses and recovered weights. If omitting one subset materially changes either result, inspect which calibration levels or channels drive that sensitivity before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d005e241e07f060ef9297adb0ca2575fa6ab1b384ba3c2aa0c3466c31150b282",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25622.28,
+      "usage_known": true,
+      "prompt_tokens": 31584,
+      "cached_tokens": 14976,
+      "completion_tokens": 953
+    }
+  ]
+}

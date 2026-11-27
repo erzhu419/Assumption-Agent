@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41a1607ac1f143948689845c5523ac79",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:05.393262+00:00",
+  "ended_at_utc": "2026-11-27T19:58:35.434429+00:00",
+  "request_sha256": "7a81ab9c23ab05e871443d395814b71e36d3386f8f29b89bcaf083d2bf468594",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44682,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29506,
+    "cached_tokens": 13696,
+    "completion_tokens": 1188
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nfrom itertools import product\\nimport numpy as np\\nroot = '/holdout_task'\\nsys.path[:0] = [root, '/tmp']\\nfrom _verified_upstream import calibrate_upstream\\nfrom chamber_pulses import forward\\nfrom downstream_solver import _axis_operator\\nwith open(root + '/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nworst, margin, conservation = 0., float('inf'), 0.\\nfolds = 0\\nfor item in items:\\n    s = calibrate_upstream(dict(item['study'], reference_tracer_pulses=item['campaign_diagnostics']))\\n    for a, periodic in [('x', True), ('y', False)]:\\n        A = _axis_operator(s['kappa_'+a], s['vel_'+a], s['L'+a], periodic)\\n        conservation = max(conservation, np.max(np.abs(A @ np.ones(A.shape[0]))))\\n    pulses = s['reference_tracer_pulses']\\n    W = np.column_stack([p['w_pulse'] for p in pulses])\\n    Y = np.column_stack([p['y_pulse_raw'] for p in pulses])\\n    Z = s['Z_nuisance']\\n    banks = np.asarray(s['row_bank_id'])\\n    shifts = np.repeat(np.arange(len(s['mu_shifts'])), len(s['sensor_ij']))\\n    names = [''.join(b) for b in product('RNP', repeat=4)]\\n    errors = np.stack([forward(s, (b[:2], b[2:])) @ W - Y for b in names])\\n    for p in range(W.shape[1]):\\n        for bank in np.unique(banks):\\n            train_rows = banks != bank\\n            train_cols = np.arange(W.shape[1]) != p\\n            R = errors[:, train_rows, :][:, :, train_cols]\\n            z = Z[train_rows]\\n            profile = np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n            T = np.eye(len(z)) - z @ profile\\n            for residual in (R, T @ R):\\n                score = np.sqrt(np.mean(residual**2, axis=(1,2)))\\n                best, second = np.argsort(score)[:2]\\n                assert names[best] == 'PPNN', (p, bank, names[best])\\n                margin = min(margin, score[second] / score[best])\\n                for k in np.unique(shifts):\\n                    held = errors[best, (banks == bank) & (shifts == k), p]\\n                    assert held.size\\n                    worst = max(worst, np.sqrt(np.mean(held**2)))\\n                folds += 1\\nassert conservation < 1e-10 and worst < 1e-4 and margin > 100\\nprint(f'{folds} pulse/bank folds (with and without nuisance profiling); worst held-bank/pulse/shift RMSE={worst:.3g}; minimum training runner-up ratio={margin:.3g}; transport constant-mode residual={conservation:.3g}')\\nsys.argv = [root + '/validate_public_schema.py', root + '/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 uniform Robin walls -> H2 periodic x and reflecting y; worst held-out pulse-by-shift RMSE was 7.03e-7 before the joint sensor-bank holdout.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classification, relay, or Fokker–Planck alternatives\",\n      \"rejected_reason\": \"This task has no class labels or relay states and specifies a steady spatial transport operator. Sensor-bank holdout and constant-mode preservation test the relevant nuisance and algebraic failure modes.\"\n    }\n  ],\n  \"rationale\": \"Check whether a sensor bank or the nuisance projection drives selection of the mixed wall stencil. A fold reversal or small margin would warrant reopening the stencil choice; a constant-mode failure would warrant correcting the transport operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5c6c5dd9c93747dbe5c2569021c7380d11995127a2399e6e9b5638c4ff9a97ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31179.88,
+      "usage_known": true,
+      "prompt_tokens": 29506,
+      "cached_tokens": 13696,
+      "completion_tokens": 1188
+    }
+  ]
+}

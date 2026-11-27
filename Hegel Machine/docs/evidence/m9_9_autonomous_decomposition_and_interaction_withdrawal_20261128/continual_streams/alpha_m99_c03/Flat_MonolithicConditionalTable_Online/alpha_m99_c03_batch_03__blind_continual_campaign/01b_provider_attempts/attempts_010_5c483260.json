@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c483260116e463f9147c083fed2f7dd",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:28.983094+00:00",
+  "ended_at_utc": "2026-11-27T19:53:09.137128+00:00",
+  "request_sha256": "89cfbc6b4b9281bf938ffb8d35800f5570d96e5f91b831181dec54539a5fd218",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39305,
+    "cached_tokens": 14976,
+    "completion_tokens": 1733
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\ns = Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\\ns = s.replace('from scipy.optimize import least_squares', 'from scipy.optimize import least_squares, root')\\nstart = s.index('def _calibration(')\\nend = s.index('def _design(', start)\\ns = s[:start] + '''def _calibration(cal):\\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\\n    norm = np.linalg.norm(raw, axis=1)\\n    median = np.median(norm)\\n    # The offset sweep is separated from ordinary bridge readings in raw norm.\\n    offset_sweep = norm > median + 8.0 * np.median(np.abs(norm - median))\\n    nxt = (np.arange(4) + 1) % 4\\n    cross = loads * loads[:, nxt]\\n    coeff = np.empty((7, 4))\\n    for j in range(4):\\n        basis = np.column_stack((np.ones(len(raw)), loads, loads[:, j]**3,\\n                                 cross[:, j], offset_sweep))\\n        coeff[:, j] = np.linalg.lstsq(basis, raw[:, j], rcond=None)[0][:-1]\\n    return coeff\\n\\n\\ndef _axial(raw, bridge):\\n    raw = np.asarray(raw)\\n    base, linear, cubic, cross = bridge[0], bridge[1:5], bridge[5], bridge[6]\\n    nxt = (np.arange(4) + 1) % 4\\n    idx = np.arange(4)\\n    values = raw.reshape(-1, 4)\\n    seeds = np.linalg.solve(linear.T, (values - base).T).T\\n\\n    def forward(x):\\n        return base + x @ linear + cubic * x**3 + cross * x * x[nxt]\\n\\n    def jac(x):\\n        j = linear.T.copy()\\n        j[idx, idx] += 3 * cubic * x**2 + cross * x[nxt]\\n        j[idx, nxt] += cross * x\\n        return j\\n\\n    axial = np.empty(len(values))\\n    for i, (value, seed) in enumerate(zip(values, seeds)):\\n        residual = lambda x: forward(x) - value\\n        sol = root(residual, seed, jac=jac, options={'xtol': 1e-10})\\n        if np.linalg.norm(residual(sol.x), ord=np.inf) > 1e-8:\\n            sol = least_squares(residual, seed, jac=jac)\\n        axial[i] = sol.x.sum()\\n    return axial.reshape(raw.shape[:-1])\\n\\n\\ndef _coupon_inputs(block, x, bridge):\\n    past = _axial(block['past_channel_raw'], bridge)\\n    hold = _axial(block['hold_channel_raw'], bridge)\\n    return past, hold, np.column_stack((np.ones(len(x)), x))\\n\\n\\n''' + s[end:]\\ns = s.replace('    # The facility-init trace has no labeled chamber response or constitutive map.\\\\n    # Use the identified benchtop law for this blind campaign.', '    # Both apparatus indicators have returned to their facility-init levels.\\\\n    # Transfer the baseline law: retained memory and constant drift.')\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/m99_coupon_cv.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\na, b = d['train'], d['test']; t, dt = d['eval_times'], d['past_dt']; n = len(a['lab_id'])\\ny = a['strain_curves_obs'] - a['strain_0'][:, None]; rate = a['instant_rate_obs']\\nfor label, path in [('affine', '/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py'), ('cyclic', '/holdout_task/batch_solver.py')]:\\n    m = load(path)\\n    x = m._features(a,b)\\n    inputs = m._coupon_inputs(a,x[:n],m._calibration(d['calibration_load_cells']))\\n    p,w = m._fit(inputs,dt,t,y,rate)\\n    print(label,'full tau',p,'weights',w)\\n    for lab in np.unique(a['lab_id']):\\n        valid = a['lab_id']==lab\\n        p,w=m._fit(tuple(v[~valid] for v in inputs),dt,t,y[~valid],rate[~valid]); c,r=m._design(p,tuple(v[valid] for v in inputs),dt,t)\\n        ce=np.abs(c@w-y[valid]); re=np.abs(r@w-rate[valid]);\\n        print(label,'lab',lab,'tau',p.round(5),'curve median/p90',np.nanmedian(ce),np.nanquantile(ce,.9),'rate median/p90',np.nanmedian(re),np.nanquantile(re,.9),'horizon median worst',np.nanmedian(ce,axis=0).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_coupon_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine inverse → H2: cyclic cubic bridge with a fitted sweep offset; held-out axial RMSE is 0.000172 and worst absolute error is 0.000464, with no failed inversions in the coupon range.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the prior chamber’s exponential drift\",\n      \"rejected_reason\": \"The active trace does not reproduce the elevated channel associated with that law. The low–low setting supports baseline transfer, though the blind batch cannot verify it directly.\"\n    }\n  ],\n  \"rationale\": \"The sparse forward bridge improves held-out axial recovery by three orders of magnitude. Write the solver with that calibration and compare leave-one-lab-out curve and rate errors against the inherited affine model to detect material-fit instability or a remaining implementation error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "dd2a54104a0990d85ea7bf539c9c210cebdf0366f85bedf75cd896fa7fb4f9f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41274.11,
+      "usage_known": true,
+      "prompt_tokens": 39305,
+      "cached_tokens": 14976,
+      "completion_tokens": 1733
+    }
+  ]
+}

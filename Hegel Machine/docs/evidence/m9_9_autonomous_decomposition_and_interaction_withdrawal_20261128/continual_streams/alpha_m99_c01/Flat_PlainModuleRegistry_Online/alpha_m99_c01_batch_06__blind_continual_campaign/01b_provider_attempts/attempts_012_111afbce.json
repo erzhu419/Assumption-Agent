@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "111afbce9fb24371a2bd92cdb659254c",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:07:46.661495+00:00",
+  "ended_at_utc": "2026-11-27T20:08:24.395552+00:00",
+  "request_sha256": "c2cddeff82c89f19d320f8915b56804000d26687210dd44bd22c25666be564c3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 65737,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36219,
+    "cached_tokens": 13696,
+    "completion_tokens": 1680
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/audit_m99.py <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as d\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    raw = pickle.load(f)[0]['dataset']\\nout = solve_batch(raw)\\ncal = calibrate_upstream(raw)\\ntr, te = cal['train'], cal['test']\\nt, dt = cal['eval_times'], cal['past_dt']\\nx, xt = d._features(tr, te)\\np, h = tr['past_channel_raw'].sum(-1), tr['hold_channel_raw'].sum(-1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nnp.testing.assert_allclose(out['hereditary_weights'], d.solve_downstream(cal)['hereditary_weights'])\\nassert all(np.isfinite(v).all() for v in out.values())\\nresults = []\\nfor lab in np.unique(tr['lab_id']):\\n    v = tr['lab_id'] == lab\\n    tau, beta = d._fit(x[~v], p[~v], h[~v], dt, t, y[~v], r[~v])\\n    a, b = d._design(tau, x, p, h, dt, t)\\n    z = np.zeros((len(h), 2))\\n    for step, delta in enumerate(dt):\\n        z = np.exp(-delta/tau)*z - np.expm1(-delta/tau)*p[:, step, None]\\n    np.testing.assert_allclose(b[:, :2], (h[:, None]-z)/tau, atol=1e-12)\\n    ey, er = y-a@beta, r-b@beta\\n    diff = h[:, None]-z\\n    # Fixed interaction families. Fit corrections only on the outer training labs.\\n    nl = np.column_stack((diff**2, diff/(1+diff**2), diff[:, 0]*diff[:, 1], x*diff[:, :1], x*diff[:, 1:], x[:, 0]*x[:, 1]*x[:, 2]))\\n    deviations = []\\n    for sl in (slice(0,0), slice(0,5), slice(5,None)):\\n        q = nl[:,sl]\\n        if q.shape[1]:\\n            scale = np.maximum(q[~v].std(0), 1e-10)\\n            q = (q-q[~v].mean(0))/scale\\n            basis = -np.expm1(-t[:,None]/tau)\\n            ay = (basis[None,:,:,None]*q[:,None,None,:]).reshape(len(h),len(t),-1)\\n            ar = (q[:,None,:]/tau[None,:,None]).reshape(len(h),-1)\\n            mat = np.vstack((ay[~v].reshape(-1,ay.shape[-1]),ar[~v]))\\n            res = np.r_[ey[~v].ravel(),er[~v]]\\n            weight = 1/np.hypot(1,res/.03)\\n            aw = mat*weight[:,None]\\n            coef = np.linalg.solve(aw.T@aw+2*np.eye(mat.shape[1]), aw.T@(weight*res))\\n            e, f = ey[v]-ay[v]@coef, er[v]-ar[v]@coef\\n        else:\\n            e, f = ey[v], er[v]\\n        deviations.append([abs(e).mean(),abs(e[:,-3:]).mean(),abs(f).mean()])\\n    results.append(deviations)\\n    print('lab',lab,'mean residual strain/rate',round(ey[v].mean(),5),round(er[v].mean(),5),'MAEs baseline | nonlinear stress | coupon interactions',np.round(deviations,5).tolist())\\nprint('Worst held-out MAEs by model (curve, late curve, rate):',np.round(np.max(results,0),6).tolist())\\n# Both stress-memory boundaries must agree at zero history; nonzero history must affect only the carrying boundary.\\nh = te['hold_channel_raw'].sum(-1)\\ntau,beta = out['estimated_taus'],out['hereditary_weights']\\ntt = np.r_[0., 1e-6, t]\\nreset, slope = d._predict(tau,beta,xt,h,tt)\\ncarry_a,carry_b = d._design(tau,xt,te['past_channel_raw'].sum(-1),h,dt,tt)\\nzero_a,zero_b = d._design(tau,xt,np.zeros((len(h),len(dt))),h,dt,tt)\\ncarry = reset+(carry_a-zero_a)@beta\\ncarry_slope = slope+(carry_b-zero_b)@beta\\nfor curve, rate in ((reset,slope),(carry,carry_slope)):\\n    np.testing.assert_array_equal(curve[:,0],0.)\\n    np.testing.assert_allclose(curve[:,1]/tt[1],rate,rtol=2e-5,atol=5e-6)\\nnp.testing.assert_allclose(out['predicted_strain'], reset[:,2:]+te['strain_0'][:,None])\\nnp.testing.assert_allclose(out['initial_rate_pred'],slope)\\nprint('Reset versus carry max absolute curve/rate difference:',abs(reset-carry).max(),abs(slope-carry_slope).max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m99.py\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dynamically calibrated two-branch benchtop law → H2 archived reset-chamber law; prior worst held-out lab MAEs were 0.01788 for strain, 0.02916 for late strain, and 0.00810 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply balanced accuracy and relay-mode tests\",\n      \"rejected_reason\": \"This task has continuous strain and rate outcomes and no classifier or relay. Held-out lab residuals and the reset versus carry boundary check test the relevant failure modes.\"\n    }\n  ],\n  \"rationale\": \"Verify the closed-form memory against the chronological recurrence and test whether fixed nonlinear stress or coupon interactions reduce worst-lab errors without fitting to held-out responses. Quantify the effect of carrying memory into deployment and check the slope identity for both boundaries; the blind batch cannot establish which boundary fits deployment outcomes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "83d967e93b55ce3a53d0c9a464c760c1be34837041e3a82325afe3a33491c64d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40115.59,
+      "usage_known": true,
+      "prompt_tokens": 36219,
+      "cached_tokens": 13696,
+      "completion_tokens": 1680
+    }
+  ]
+}

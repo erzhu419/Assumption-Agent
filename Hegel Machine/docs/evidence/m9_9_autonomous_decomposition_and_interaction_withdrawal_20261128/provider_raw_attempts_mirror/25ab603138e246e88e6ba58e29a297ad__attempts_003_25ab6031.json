@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "25ab603138e246e88e6ba58e29a297ad",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:54.861048+00:00",
+  "ended_at_utc": "2026-11-27T19:52:24.965250+00:00",
+  "request_sha256": "fdc6536e5376fcc90eb0a77b2c7ef33385ef1576fdae7e181d39c14a61430340",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22055,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23370,
+    "cached_tokens": 13696,
+    "completion_tokens": 1242
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/bridge_cv.py <<'PY'\\nimport itertools as it\\nimport json, pickle\\nimport numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task')\\nd=pickle.loads((p/'public_batch.pkl').read_bytes())[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; axis=(np.count_nonzero(x,axis=1)==1)\\nfor a in json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text()):\\n t=np.asarray(a['facility_telemetry_trace']); print(a['completed_campaign_short_name'],'median',np.median(t,0).round(3),'sd',np.std(t,0).round(3))\\nprint('current auxiliary median',np.median(d['train']['aux_chamber_telemetry'],0).round(3))\\ndef powers(pred):\\n return [ids for k in range(1,5) for ids in it.combinations_with_replacement(range(4),k) if pred(ids)]\\ndef features(x, terms):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,ids],axis=1) for ids in terms])\\ndef fit(A,Y):\\n b=np.linalg.lstsq(A,Y,rcond=None)[0]\\n for _ in range(15):\\n  r=np.linalg.norm(Y-A@b,axis=1); s=max(np.median(r)*2,.00001); w=1/(1+(r/s)**2)**.5\\n  b=np.linalg.lstsq(A*w[:,None],Y*w[:,None],rcond=None)[0]\\n return b\\nbase=features(x,powers(lambda s:len(s)==1)); e=np.linalg.norm(y-base@fit(base,y),axis=1); print('gross rows',[(int(i),round(e[i],3)) for i in np.flatnonzero(e>4)])\\nrng=np.random.default_rng(834); cats=[]\\nfor named, keep in [('affine',lambda s:len(s)==1),('own poly 2',lambda s:len(s)<=2 and len(set(s))==1),('quadratic',lambda s:len(s)<=2),('quadratic + own cubic',lambda s:len(s)<=2 or (len(s)==3 and len(set(s))==1)),('quad + own cubic quartic',lambda s:len(s)<=2 or len(set(s))==1),('cubic',lambda s:len(s)<=3),('cubic + own quartic',lambda s:len(s)<=3 or len(set(s))==1)]:\\n terms=powers(keep); A=features(x,terms); ef=[]\\n for rep in range(6):\\n  order=np.r_[rng.permutation(np.flatnonzero(~axis)),rng.permutation(np.flatnonzero(axis))]; fold=np.empty(len(x),int); fold[order]=np.arange(len(x))%5\\n  er=np.zeros_like(y)\\n  for k in range(5):\\n   i=fold!=k; er[~i]=A[~i]@fit(A[i],y[i])-y[~i]\\n  ef.append(er)\\n rng=np.random.default_rng(834)\\n ef=np.array(ef); power=np.max(np.abs(x),axis=1); mask=e<4\\n print(named,'clean / axis / mixed edge RMS',*[round(float(np.sqrt(np.mean(ef[:,m]**2))),5) for m in [mask,mask & axis,mask & ~axis & (power>1.3)]], 'sum RMS',round(float(np.sqrt(np.mean(ef[:,mask].sum(-1)**2))),5))\\n if named in ('quadratic + own cubic','cubic'):\\n  B=fit(A,y); print('terms',[(s,np.round(b,3).tolist()) for s,b in zip([()]+terms,B)]); print('inlier quantiles',np.quantile(np.linalg.norm(y-A@B,axis=1)[mask],[0,.5,.9,1]).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine mixing) → H2 (structured nonlinear forward response); the affine fit has median in-sample row error 0.373 and gross residuals near 27, with out-of-fold metrics pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a full quartic response surface\",\n      \"rejected_reason\": \"Its coefficient count approaches the calibration design size; test whether structured lower-order terms suffice on held-out rows first.\"\n    }\n  ],\n  \"rationale\": \"Compare identical held-out folds for affine and nonlinear bases, scoring single-channel probes, high-load mixtures, and downstream-relevant total load separately. The fitted terms will show whether cross-channel curvature needs a more structured basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "d552b016a422c29cf3080a3ae7cbfe128026092c19a28326121b005ce39597aa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31230.11,
+      "usage_known": true,
+      "prompt_tokens": 23370,
+      "cached_tokens": 13696,
+      "completion_tokens": 1242
+    }
+  ]
+}

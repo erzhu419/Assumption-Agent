@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "52f6787f89cd4f95a1a97b9e2c56ca73",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:08:21.676626+00:00",
+  "ended_at_utc": "2026-11-27T20:08:53.499207+00:00",
+  "request_sha256": "70405fcfff761b0a1c71442a446e56c9c2a2600da3024b31efba4a6815989955",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54708,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35780,
+    "cached_tokens": 13696,
+    "completion_tokens": 1326
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_slow.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split(\\\"for name,xc\\\")[0])\\nfrom scipy.optimize import least_squares\\nY=np.c_[c['instant_rate_obs'], c['strain_curves_obs']-c['strain_0'][:,None]]\\nS=c['past_channel_raw'].sum(-1); h=c['hold_channel_raw'].sum(-1); age=np.r_[np.cumsum(dt[::-1])[::-1][1:],0.]\\nH=lambda ts: -np.expm1(-dt/ts)*np.exp(-age/ts)\\nA=lambda ts: np.r_[1/ts,-np.expm1(-t/ts)]\\nlabs=c['lab_id']; strata=c['stratum']; raw=c['coupon_features_raw']\\n# Profile exact temporal contrasts without assuming a feature or history law.\\nfor linear in [False,True]:\\n def res(p, ret=False):\\n  f=p[2]*h[:,None]*A(p[0]); B=np.stack([A(p[1]),np.r_[1,t]],axis=0) if linear else A(p[1])[None,:]\\n  coef=np.linalg.lstsq(B.T,(Y-f).T,rcond=None)[0].T\\n  return (p,coef) if ret else (f+coef@B-Y).ravel()\\n p=least_squares(res,[tau[0],tau[1],theta[0]],bounds=([.2,1,.4],[1,12,1])).x\\n p,C=res(p,True); print('fast-reset projection, linear',linear,'parameters',p,'RMSE',np.sqrt(np.mean(res(p)**2)))\\n if not linear: continue\\n print('linear drift amplitudes',np.round(C[:,1],4)); print('amplitudes minus intrinsic held slow branch',np.round(C[:,0]-theta[1]*h,4))\\n for name,xx in [('train+diag',_features(a,c)[1]),('test+diag',_features(b,c)[1]),('diag+diag',_features(c,c)[1])]:\\n  dr=np.c_[np.ones(len(xx)),xx]@theta[2:]; E=C[:,0]-theta[1]*h\\n  print(name,'[lab,stratum,drift, slow correction]',np.round(np.c_[labs,strata,dr,E],3).tolist())\\n  V=np.c_[np.ones(len(xx)),dr]; coef=np.linalg.lstsq(V,E,rcond=None)[0]; e=E-V@coef\\n  print('linear drift fit',coef,'residual',np.round(e,3),'missing rows',np.where(np.any(np.isnan(raw),axis=1))[0])\\n  Fs={'h':h,'dr':dr,'dr2':dr**2,'dr3':dr**3,'h*dr':h*dr,'sin_dr':np.sin(dr),'tanh_dr':np.tanh(dr),'intr_mem':S@H(tau[1]),'past_mean':S.mean(axis=1),'past_sq':(S*S).mean(axis=1),'past_abs':abs(S).mean(axis=1),'history_square':(S@H(tau[1]))**2}\\n  for j in range(S.shape[1]):\\n   Fs[f'p{j}']=S[:,j]; Fs[f'p{j}^2']=S[:,j]**2; Fs[f'p{j}*dr']=S[:,j]*dr\\n   for k in range(j): Fs[f'p{j}*p{k}']=S[:,j]*S[:,k]; Fs[f'(p{j}-p{k})^2']=(S[:,j]-S[:,k])**2\\n  corr=sorted([(abs(np.corrcoef(v,e)[0,1]),k) for k,v in Fs.items()],reverse=True); print('residual correlations',corr[:12])\\n print('obs singular values after subtracting fast',np.linalg.svd(Y-p[2]*h[:,None]*A(p[0]),compute_uv=False)[:5])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_slow.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 free linear stress and feature kernels → H2 fast-branch reset with a structured slow response; the free linear model's worst held-out lab RMSE is 0.1141 for strain and 0.0734 for rate with the linear time term.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the free linear kernels for deployment.\",\"rejected_reason\":\"Their held-out strain error is far above the diagnostic temporal fit error, and the fast kernel coefficients already support a simpler reset.\"}],\"rationale\":\"Test whether the fast branch is proportional to hold stress alone, then isolate the slow amplitude and linear term. Their dependence on drift, history contrasts, and missingness will determine which mechanism to validate across labs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5a5f377ae9c084423757660a90a76d2a53da5f305321ecbd4713f9ffafaad8b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32983.01,
+      "usage_known": true,
+      "prompt_tokens": 35780,
+      "cached_tokens": 13696,
+      "completion_tokens": 1326
+    }
+  ]
+}

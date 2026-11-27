@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f0b739d551e47d7a7329bf416d9673f",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:34.670803+00:00",
+  "ended_at_utc": "2026-11-27T19:41:54.632155+00:00",
+  "request_sha256": "716f95de2d32e53ac4db306e012b235b647a6554407b3c4d7f4ac220486b639c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32479,
+    "cached_tokens": 14976,
+    "completion_tokens": 700
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; A=np.c_[np.ones(len(x)),x]; B=np.linalg.lstsq(A,y,rcond=None)[0]; print('rosette fit',B,'shape',x.shape,sep='\\\\n'); print('single-bank keys and data:')\\nfor k,v in c['single_bank_sweeps'].items():\\n print(k,np.shape(v),repr(v)[:1200])\\nS,_=m._responses(s); T=np.concatenate([(S@p['w_pulse']).reshape(-1,4) for p in a['campaign_diagnostics']]); R=np.concatenate([p['y_pulse_raw'].reshape(-1,4) for p in a['campaign_diagnostics']]); print('pulse-vs-sweep residual mean, std', (R-np.c_[np.ones(len(T)),T]@B).mean(0),(R-np.c_[np.ones(len(T)),T]@B).std(0)); print('pulse-vs-sweep affine coefficients',np.linalg.lstsq(np.c_[np.ones(len(T)),T],R,rcond=None)[0]-B,sep='\\\\n')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with full affine calibration → H2 a better-constrained sweep fit if supported by the single-bank data; current worst tracer slice RMS is 1.35e-6 and the host reports a 1.82e-5 KKT gap.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retest nonlinear calibration terms or rerun the same KKT stress cases\",\n      \"rejected_reason\": \"Those checks already passed or rejected the challengers. They would not explain the difference between the public reconstruction gap and the host-reported gap.\"\n    }\n  ],\n  \"rationale\": \"Check whether the single-bank sweeps independently constrain the small calibration bias visible in the tracer measurements. If they do, compare a sweep-only constrained fit on the tracer slices before changing the artifact; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "055741f8e492dd55c4e58198883f1e0987b7a438a4ab8cc172696c15c59a1788",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19910.12,
+      "usage_known": true,
+      "prompt_tokens": 32479,
+      "cached_tokens": 14976,
+      "completion_tokens": 700
+    }
+  ]
+}

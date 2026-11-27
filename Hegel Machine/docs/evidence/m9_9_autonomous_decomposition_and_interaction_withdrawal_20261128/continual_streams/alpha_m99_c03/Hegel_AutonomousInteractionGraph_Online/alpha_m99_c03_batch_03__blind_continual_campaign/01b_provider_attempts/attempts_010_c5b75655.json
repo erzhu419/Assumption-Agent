@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c5b7565560f8402d92704a6621bc5d40",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:33.107533+00:00",
+  "ended_at_utc": "2026-11-27T19:56:57.975039+00:00",
+  "request_sha256": "f39c54f6bba313c34792b68b3d5f2566e8fea7bc18b1f7734cd90b3ec5cdf1ae",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50984,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30721,
+    "cached_tokens": 13696,
+    "completion_tokens": 925
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _features, _fit_forward, _invert, _jacobian\\nwith open('public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x, y = c['true_channel_loads'], c['bridge_raw']\\nt, b = _fit_forward(x, y)\\nerr = np.linalg.norm(_features(x,t) @ b - y, axis=1)\\nspike = err > 1000 * np.median(err)\\nassert spike.any() and (~spike).any()\\nt0,b0 = _fit_forward(x[~spike], y[~spike])\\nprint('gross spike rows:', np.flatnonzero(spike).tolist())\\nworst_change = 0.; min_sv = np.inf\\nfor name in ('train','test','chamber_verification_trials'):\\n    block = d.get(name)\\n    if block is None: continue\\n    for field in ('past_channel_raw','hold_channel_raw'):\\n        raw = block[field]; z = _invert(raw,t,b); z0 = _invert(raw,t0,b0)\\n        z = z.reshape(len(raw),-1,4); z0 = z0.reshape(z.shape)\\n        diff = np.max(abs(z-z0), axis=(1,2))\\n        sv = np.linalg.svd(_jacobian(z.reshape(-1,4),t,b),compute_uv=False)[:,-1].reshape(z.shape[:2]).min(axis=1)\\n        worst_change = max(worst_change, diff.max()); min_sv = min(min_sv,sv.min())\\n        if 'lab_id' in block:\\n            print(name, field, 'per lab (max spike-deletion shift, min Jacobian singular value):', {int(lab):(float(diff[block['lab_id']==lab].max()),float(sv[block['lab_id']==lab].min())) for lab in np.unique(block['lab_id'])})\\nprint('worst absolute trial load shift after spike deletion:',worst_change,'min trial Jacobian singular value:',min_sv)\\nassert worst_change < 0.0001483, 'Spike influence exceeds the observed worst held-out RMSE'\\nassert min_sv > 0.1, 'Revisit inverse branch or sensitivity on real trial histories'\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic bridge response → H2 sparse cubic response with cyclic coupling; worst held-out per-channel inverse RMSE is 0.0001483, and the remaining audit checks spike influence and inverse conditioning on real trials.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and interaction model comparison\",\n      \"rejected_reason\": \"Those alternatives already lost on held-out real measurements; repeating the comparison would not test whether spike rows materially shift trial loads.\"\n    }\n  ],\n  \"rationale\": \"A small forward residual can hide an ill-conditioned inverse. Measure inverse sensitivity and the effect of deleting gross calibration spikes on actual histories, grouped by lab to expose a localized failure. Material shifts would warrant changing the robust fit; a nearly singular Jacobian would warrant revisiting the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2ec60fea923348a72a3488cedcc37fdfad919f27ff1c1057a4fb13ab0001647f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24826.98,
+      "usage_known": true,
+      "prompt_tokens": 30721,
+      "cached_tokens": 13696,
+      "completion_tokens": 925
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "514923870ad44599b889ba9d36ca401b",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:30.786805+00:00",
+  "ended_at_utc": "2026-11-27T20:01:53.919648+00:00",
+  "request_sha256": "3b24b9c326a20822d88d6df86c8670b571b08bd657c27bb061649b1c40d81ff2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33767,
+    "cached_tokens": 14976,
+    "completion_tokens": 868
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport glob, pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\np = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\ns = p['study']; pulses = p['campaign_diagnostics']\\nw = np.stack([a['w_pulse'] for a in pulses]); y = np.stack([m['_calibrate'](dict(s, y_obs_raw=a['y_pulse_raw'])) for a in pulses])\\nns = len(s['sensor_ij']); nm = len(s['mu_shifts'])\\npositions = np.tile(np.asarray(s['sensor_ij']), (nm, 1))\\n_, groups = np.unique(positions, axis=0, return_inverse=True)\\nmodels = {'mixed': w @ m['_design'](s)[0].T}\\nfor path in sorted(glob.glob('/tmp/hegel_continual_archive/*solver.py')):\\n    models[path.rsplit('/', 1)[-1]] = w @ runpy.run_path(path)['_design'](s)[0].T\\nworst = 0.; margin = np.inf\\nfor held in np.unique(groups):\\n    test = groups == held\\n    # Center paired pulse contrasts separately at each channel to remove any common offset.\\n    errors = {k: np.diff(a-y, axis=0) for k,a in models.items()}\\n    rank = sorted((np.sqrt(np.mean(e[:, ~test]**2)), k) for k,e in errors.items())\\n    assert rank[0][1] == 'mixed', (held, rank)\\n    margin = min(margin, rank[1][0] / rank[0][0])\\n    worst = max(worst, float(np.sqrt(np.mean(errors['mixed'][:, test]**2, axis=1)).max()))\\nassert worst < 3e-6, worst\\nprint(f'{len(np.unique(groups))} held-out locations; worst pulse-contrast RMSE={worst:.3g}; smallest training error ratio for runner-up={margin:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared wall setting -> H2 periodic x and sealed y; worst leave-one-pulse-out shift RMSE is 9.02e-7, with sensor-location holdout pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the calibration-basis and nuisance audits\",\n      \"rejected_reason\": \"Those checks already found no material benefit from extra algebraic terms and confirmed that the supplied nuisance projection reduces residuals at every shift.\"\n    }\n  ],\n  \"rationale\": \"Hold out each physical sensor location across every shift and compare pulse contrasts, which cancel shared offsets. This tests whether the boundary choice depends on one sensor location or on an offset common to the pulses. If it does, revisit the boundary and calibration separation before changing the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "904a8e5f69883dd3ade50b4f01be876998742fa34d985cb7bf26114ade469c6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24332.23,
+      "usage_known": true,
+      "prompt_tokens": 33767,
+      "cached_tokens": 14976,
+      "completion_tokens": 868
+    }
+  ]
+}

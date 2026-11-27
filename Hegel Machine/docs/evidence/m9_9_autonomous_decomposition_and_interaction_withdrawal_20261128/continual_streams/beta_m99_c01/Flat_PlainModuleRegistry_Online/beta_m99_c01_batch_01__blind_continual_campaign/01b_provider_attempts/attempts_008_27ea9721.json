@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "27ea9721b9634236bd0a287f45812297",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:54.110253+00:00",
+  "ended_at_utc": "2026-11-27T19:39:12.604089+00:00",
+  "request_sha256": "5d17e10fef332644ac43e019ba716069b2be1de1d3a3422ec6a833f9b3f39131",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32143,
+    "cached_tokens": 14976,
+    "completion_tokens": 619
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat /holdout_task/public_asset_index.json\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; a=s['sensor_calibration_sweeps']; x=a['ref_rosette']; y=a['raw_rosette']; D=np.c_[np.ones(len(x)),x]; C=np.linalg.lstsq(D,y,rcond=None)[0]; print('cal shape',x.shape,'coeff',C.tolist(),'sweep reference range',x.min(axis=0),x.max(axis=0))\\nfor k,v in a['single_bank_sweeps'].items():\\n v=np.asarray(v); print('single bank',k,v.shape,'first',v[:12].tolist())\\nS,U=m['_forward'](s); raw=np.stack([q['y_pulse_raw'].reshape(-1,4) for q in item['campaign_diagnostics']]); truth=np.stack([(S@q['w_pulse']).reshape(-1,4) for q in item['campaign_diagnostics']]); drift=raw-(truth@C[1:]+C[0]); print('pulse range',truth.min(axis=(0,1)),truth.max(axis=(0,1)),'raw residual means',drift.mean(axis=1),'raw residual centered RMS',np.std(drift,axis=1)); print('row-bank ordering',s['row_bank_id'][:16])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall Robin → H2 zero wall loss with affine rosette calibration; worst bank–pulse–shift RMSE is 4.91×10⁻⁶ and the independent KKT gap is 3.27×10⁻⁵.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add quadratic rosette terms\",\"rejected_reason\":\"They worsened held-out sweep error; first check whether single-bank sweeps can resolve the bank-specific residual.\"}],\"rationale\":\"The larger bank 1 residual could reflect an offset or gain error. Inspect single-bank sweep structure and tracer residual means; change calibration only if the independent sweeps support the correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f264a680984493349b2cca2a6cde1e388d8e983e6b491cbb64e600d3eb0641f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18460.94,
+      "usage_known": true,
+      "prompt_tokens": 32143,
+      "cached_tokens": 14976,
+      "completion_tokens": 619
+    }
+  ]
+}

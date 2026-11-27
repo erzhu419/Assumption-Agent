@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77452e8a61aa432da2afd9e73a69ba6f",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:36:45.207384+00:00",
+  "ended_at_utc": "2026-11-27T19:37:05.904432+00:00",
+  "request_sha256": "d085353f5cbd717c490ba97392157df1abbc7e555ec89d655dfea57b76bf77fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23123,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23045,
+    "cached_tokens": 5504,
+    "completion_tokens": 799
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; tail -39 /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py; python3 - <<'PY'\\nimport json,numpy as np\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n for k,v in r.items():\\n  print(k, np.shape(v), str(v)[-300:] if isinstance(v,list) else v)\\na=json.load(open('public_asset_index.json')); print('asset keys:',list(a))\\nfor k,v in a.items(): print(k,str(v)[:330])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import alpha_m99_c02_s00_solver as s\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te,di=d['train'],d['test'],i['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; print('dt/t',dt,t); x,xt=s._features(tr,te); _,xd=s._features(tr,di); b=s._bridge(d['calibration_load_cells']); print('bridge',b); taus,w=s._material(tr,b,x,dt,t); print('taus/w',taus,w)\\nfor split,z in [(tr,x),(di,xd)]:\\n p,h=s._loads(split,b); A,R=s._basis(taus,p,h,z,dt,t); y=split['strain_curves_obs']-split['strain_0'][:,None]; r=split['instant_rate_obs']; print('curve/rate RMSE',np.sqrt(np.mean((y-A@w)**2)),np.sqrt(np.mean((r-R@w)**2))); B=np.c_[-np.expm1(-t[:,None]/taus),t]; C=np.linalg.lstsq(B,y.T,rcond=None)[0].T; rate=C@np.r_[1/taus,1]; print('component scale/baseline',np.quantile(C,[0,.5,1],axis=0),np.quantile(C-np.c_[R[:,:2]*taus*w[:2],R[:,2:]@w[2:]],[0,.5,1],axis=0)); print('free 2 exp residual, rate residual',np.sqrt(np.mean((y-C@B.T)**2)),np.sqrt(np.mean((r-rate)**2))); print('rate residual quantiles',np.quantile(r-rate,[0,.25,.5,.75,1])); print('curve-only mean residual by time',(y-C@B.T).mean(axis=0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared intrinsic spectrum → H2 independently test chamber amplitudes, drift, and relaxation shape; no quantitative validation yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure the archived law’s curve and rate errors, then allow free amplitudes and drift at the fitted intrinsic time constants. If substantial residual shape remains, the chamber needs a different temporal basis rather than just a different history or drift mapping.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8c7f1b038bd21954f6761aaf5b3ced9d2842c2a9074f36e331d448b054d6e0e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21844.6,
+      "usage_known": true,
+      "prompt_tokens": 23045,
+      "cached_tokens": 5504,
+      "completion_tokens": 799
+    }
+  ]
+}

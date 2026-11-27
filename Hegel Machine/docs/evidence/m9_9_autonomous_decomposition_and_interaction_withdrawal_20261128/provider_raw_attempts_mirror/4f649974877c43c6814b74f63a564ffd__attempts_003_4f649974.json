@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f649974877c43c6814b74f63a564ffd",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:36:46.120148+00:00",
+  "ended_at_utc": "2026-11-27T19:37:14.980614+00:00",
+  "request_sha256": "e93dd937c6313b5925f8e6b44d1177b5a4be705fb57024b819e78df0d7797191",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24703,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24884,
+    "cached_tokens": 14976,
+    "completion_tokens": 769
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport importlib.util as iu,json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/'\\nfor f in ('archive_manifest.json','archive_apparatus_log.json'):\\n d=json.load(open(p+f)); print(f)\\n def brief(v):\\n  if isinstance(v,dict): return {k:brief(w) for k,w in v.items()}\\n  if isinstance(v,list): return [brief(w) for w in v] if len(v)<8 else {'len':len(v),'first':str(v[0])[:120],'last':str(v[-1])[:120]}\\n  return v\\n print(str(brief(d))[:4000])\\nsp=iu.spec_from_file_location('prior',p+'beta_m99_c04_s00_solver.py'); m=iu.module_from_spec(sp); sp.loader.exec_module(m)\\nit=pickle.load(open('public_batch.pkl','rb'))[0]; s=it['study']; S,U=m._design(s)\\nfor pulse in it['campaign_diagnostics']:\\n t=dict(s,y_obs_raw=pulse['y_pulse_raw']); y=m._calibrate(t); pred=S@pulse['w_pulse']; e=y-pred\\n print('pulse y range',y.min(),y.max(),'prediction range',pred.min(),pred.max(),'rmse by shift',np.sqrt(np.mean(e.reshape(len(s['mu_shifts']),-1)**2,axis=1)), 'detrended rmse', np.std(e-s['Z_nuisance']@np.linalg.lstsq(s['Z_nuisance'],e,rcond=None)[0]))\\nprint('cal sweeps',[(k,np.shape(v)) for k,v in s['sensor_calibration_sweeps']['single_bank_sweeps'].items()]); print('sensor bounds',s['sensor_ij'].min(axis=0),s['sensor_ij'].max(axis=0)); print('axis inputs',[(k,s[k][[0,-1]].tolist()) for k in ('kappa_x','kappa_y','vel_x','vel_y')])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall physics with affine calibration → H2 pulse-identified wall correction if needed; calibration RMSE is at most 1.07e-5 per channel, and wall error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a general boundary correction immediately\",\n      \"rejected_reason\": \"First measure the baseline error and read a compact apparatus summary; either could make a free boundary fit unnecessary.\"\n    }\n  ],\n  \"rationale\": \"Known-weight pulses isolate forward-model error from source estimation. Compare residuals by shift and after nuisance removal; if they materially exceed calibration noise, use the apparatus summary and pulse structure to identify the missing boundary terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "9f6f8d66a8ade2e32eeb4ac21a7f5d31d4fc0eb0a1a978b64b40ab83514585be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30006.42,
+      "usage_known": true,
+      "prompt_tokens": 24884,
+      "cached_tokens": 14976,
+      "completion_tokens": 769
+    }
+  ]
+}

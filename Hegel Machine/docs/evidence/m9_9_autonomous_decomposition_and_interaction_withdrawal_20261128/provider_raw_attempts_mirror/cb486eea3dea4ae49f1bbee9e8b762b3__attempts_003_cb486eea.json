@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb486eea3dea4ae49f1bbee9e8b762b3",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:14.418828+00:00",
+  "ended_at_utc": "2026-11-27T19:54:34.386179+00:00",
+  "request_sha256": "2697a83f103fcfeead31add83814f963641759843eba243a3d4e14e53925d000",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22613,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23085,
+    "cached_tokens": 13696,
+    "completion_tokens": 751
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; np.set_printoptions(precision=4,suppress=True)\\nl=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log type',type(l));\\nfor a in (l if isinstance(l,list) else l.values()):\\n if isinstance(a,dict): print({k:(v if np.isscalar(v) or v is None else (list(v)[:24] if isinstance(v,dict) else str(type(v)))) for k,v in a.items()})\\n else: print(str(a)[:550])\\nprint('axis loads and raw'); print(np.c_[x,y][:16]); print('big mixed raw'); idx=np.argsort(np.max(np.abs(y),axis=1))[-10:];print(np.c_[idx,x[idx],y[idx]])\\nkeys=[()] + [j for p in range(1,5) for j in combinations_with_replacement(range(4),p)]; A=np.column_stack([np.prod(x[:,j],axis=1) for j in keys]);\\nfor n in (5,15,35,70):\\n b=np.linalg.lstsq(A[:,:n],y,rcond=None)[0]\\n for i in range(30):\\n  e=np.linalg.norm(A[:,:n]@b-y,axis=1); w=(1+(e/max(.0003,np.median(e)*1.5))**2)**-.5; b=np.linalg.lstsq(A[:,:n]*w[:,None],y*w[:,None],rcond=None)[0]\\n print('terms',n,'rank',np.linalg.matrix_rank(A[:,:n]),'error splits',np.percentile(e[:16],[50,90,100]),np.percentile(e[16:],[50,80,90,95,100]));\\n if n in (35,70):\\n  for k in range(4):\\n   ids=np.argsort(abs(b[:,k]))[-13:][::-1]; print(k,[(keys[j],round(b[j,k],4)) for j in ids]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: test affine against coupled polynomial bridge terms; worst-slice inverse error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare robust forward residuals on axis and mixed-load rows. If higher-degree terms fail to explain the mixed-load residuals, inspect the residual structure before choosing an inverse; a dense polynomial fit alone is not evidence of a stable calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "4bdb0e1eeaa54d7d1060b30e503e12e0ff20b669ee57be5d5d705803e6128504",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21095.52,
+      "usage_known": true,
+      "prompt_tokens": 23085,
+      "cached_tokens": 13696,
+      "completion_tokens": 751
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64953cb2e6b44acfb569e3a8d8feffbc",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:15.464473+00:00",
+  "ended_at_utc": "2026-11-27T19:45:47.493750+00:00",
+  "request_sha256": "b174f2cd15066cf1c8ab0afb567c858e7ba4c899cf0061f01f8f1784ec22b0f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42508,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31772,
+    "cached_tokens": 14976,
+    "completion_tokens": 1333
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/print(.*taus, theta:/,$d' /tmp/chamber_probe.py > /tmp/chamber_struct.py\\ncat >> /tmp/chamber_struct.py <<'PY'\\nfrom itertools import product\\nr=theta[2]+X['diag']@theta[3:]; scales=np.r_[np.full(len(t),.004),.006]; gap=h[:,None]-z\\nprint('test keys',[(k,np.shape(w)) for k,w in E.items()]); print('bridge error',np.std(np.c_[np.ones(len(D['calibration_load_cells']['bridge_raw'])),D['calibration_load_cells']['bridge_raw']]@s-D['calibration_load_cells']['true_channel_loads'].sum(1)))\\n\\ndef fit(m, time, memory, intercept):\\n def design(lu):\\n  u=np.exp(lu) if time else tau\\n  b=basis(u); f=np.c_[r,np.ones(n)] if intercept else r[:,None]\\n  if memory=='fixed':\\n   prior=(gap*theta[:2])@b[:,:2].T\\n  elif memory=='zero':\\n   prior=(h[:,None]*theta[:2])@b[:,:2].T\\n  else:\\n   prior=(h[:,None]*theta[:2])@b[:,:2].T\\n   if memory=='scale': pass\\n   if memory=='cross': pass\\n  C=(f[:,None,:,None]*b[None,:,None,:]).reshape(n,len(b),-1)\\n  if memory=='scale': C=np.concatenate([C,-z[:,None,:]*b[None,:,:2]*theta[:2]],axis=2)\\n  if memory=='cross': C=np.concatenate([C,(-z[:,None,:,None]*b[None,:,None,:2]).reshape(n,len(b),4)],axis=2)\\n  return C,prior\\n def evaluate(lu):\\n  C,prior=design(lu); cw=C/scales[None,:,None]; a=np.linalg.lstsq(cw[m].reshape(-1,C.shape[-1]),((v-prior)/scales)[m].ravel(),rcond=None)[0]; return (C@a+prior-v),a\\n lu=np.log(tau)\\n if time: lu=least_squares(lambda lu:(evaluate(lu)[0][m]/scales).ravel(),lu,bounds=(np.log([.1,.8]),np.log([.8,15])),max_nfev=150).x\\n er,a=evaluate(lu); return er,np.exp(lu),a\\nfor time,memory,intercept in product([False,True],['fixed','zero','scale','cross'],[False,True]):\\n if memory=='zero' and (time or intercept):continue\\n er,u,a=fit(np.ones(n,bool),time,memory,intercept); q=np.empty_like(v)\\n for lab in np.unique(groups):\\n  mask=groups!=lab; q[~mask]=fit(mask,time,memory,intercept)[0][~mask]\\n rms=lambda q:np.sqrt(np.mean(q*q,axis=0)); worst=max(np.sqrt(np.mean(q[groups==l,:-1]**2)) for l in np.unique(groups)); print(time,memory,intercept,'in',np.round([np.sqrt(np.mean(er[:,:-1]**2)),rms(er)[-1]],4),'CV',np.round([worst,rms(q)[-1]],4),'u',u.round(5),'a',a.round(5))\\nprint('diag normalization medians/stds')\\nfor gg in [T,E,G,base]:\\n print([(l,round(np.median(gg['ref_coupons'][gg['lab_id']==l].mean(0)),3),round(np.median(gg['ref_coupons'][gg['lab_id']==l].std(0)),3)) for l in np.unique(gg['lab_id'])])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_struct.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: memory-free chamber response → H2: retained hereditary state with redistributed drift; worst held-out lab strain RMSE falls from 0.690 to 0.0176 with the shared material time basis.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The previous campaign's withdrawal of inherited chamber stress still applies.\",\"empirical_witness\":\"Adding hereditary state to the diagnostic predictor lowers worst leave-one-lab-out strain RMSE from 0.690 to 0.0176 and pooled rate RMSE from 1.219 to 0.0175.\",\"causal_blanket_diagnosis\":\"The prior chamber predictor omitted a state determined by pre-hold load history.\",\"sublated_pivot\":\"Retain the benchtop material fit, then test unit memory, branch-specific retention, and drift redistribution against both diagnostic outputs.\",\"risk_kind\":\"cross-campaign constitutive shift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select free chamber time constants from per-coupon fits\",\"rejected_reason\":\"The unconstrained amplitudes confound time scales with drift; test free time constants in a constitutively constrained model instead.\"}],\"rationale\":\"Compare nested physical chamber models on held-out labs. If free chamber time constants or cross-branch memory do not improve both independent outputs, keep the simpler shared-spectrum law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "604af4c544087729ef28f056c39d21fad3d8fbdaa8f622973fa57ab23a6d47be",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33186.33,
+      "usage_known": true,
+      "prompt_tokens": 31772,
+      "cached_tokens": 14976,
+      "completion_tokens": 1333
+    }
+  ]
+}

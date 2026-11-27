@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cfe2175c6534f839cfc75b173b01f58",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:33.326379+00:00",
+  "ended_at_utc": "2026-11-27T19:50:07.659752+00:00",
+  "request_sha256": "ca2f340487c38e3d92562ee9a0a4e62b4ed210d6e509f719d95bb6a50352cd25",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 66582,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40251,
+    "cached_tokens": 13696,
+    "completion_tokens": 1437
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,160p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py; cat /holdout_task/validate_public_schema.py; cat >/tmp/chamber_nominal.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for block,features')[0])\\nP,H,_=inp(diag,xd); T,Y=obs(diag); Q=np.c_[T,Y]; X=q._features(diag,diag)[:len(P)]; D=theta[2]+X@theta[3:]; labs=diag['lab_id']; complete=np.isfinite(diag['coupon_features_raw']).all(1); age=np.cumsum(dt[::-1])[::-1]-dt\\nK=np.r_[-np.expm1(-t[:,None]/taus),[1/taus]]; W=-np.expm1(-dt[:,None]/taus)*np.exp(-age[:,None]/taus); G=(H[:,None]-P@W)*theta[:2]; B=G@K.T; k=np.r_[-np.expm1(-t),1.]; E=Q-B-D[:,None]*k; print('nominal residual strain/rate RMS',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2))); print('by lab',[(int(l),np.sqrt(np.mean(E[labs==l,:-1]**2)),np.sqrt(np.mean(E[labs==l,-1]**2))) for l in np.unique(labs)]); print('complete/missing',[(np.sqrt(np.mean(E[m,:-1]**2)),np.sqrt(np.mean(E[m,-1]**2))) for m in [complete,~complete]]); print('row drift error',np.round(E@k/(k@k),5));\\nJ=np.eye(len(k))-np.outer(k,k)/(k@k); print('orthogonal error',np.sqrt(np.mean((E@J)**2)),np.linalg.svd(E@J,compute_uv=False)[:4]);\\nfor mode in ['nominal','history_scale','history_tau','history_tau_scale','free_history']:\\n def err(p,ptrain,full=False):\\n  drift=p[-1]*(-np.expm1(-t/p[-1])); k=np.r_[drift,1.]; J=np.eye(len(k))-np.outer(k,k)/(k@k); Ht=B; A=None\\n  if mode in ['history_tau','history_tau_scale']:\\n   mt=np.array(p[:2]); wt=-np.expm1(-dt[:,None]/mt)*np.exp(-age[:,None]/mt); Z=(P@wt)*theta[:2]; Ht=(H[:,None]*theta[:2]-Z)@K.T\\n  else: Z=(P@W)*theta[:2]\\n  if mode in ['history_scale','history_tau_scale']: A=np.stack([np.outer(Z[:,i],K[:,i]) for i in range(2)],-1)\\n  if mode=='free_history': A=np.stack([np.outer(z,h) for h in K.T for z in P.T],-1)\\n  if A is not None:\\n   Aj=np.einsum('ntl,tu->nul',A,J); c=np.linalg.lstsq(Aj[ptrain].reshape(-1,A.shape[-1]),((Q-Ht)@J)[ptrain].ravel(),rcond=None)[0]; Ht=Ht+A@c\\n  r=(Q-Ht)@J\\n  return (r,(Q-Ht)@k/(k@k)-D,c if A is not None else []) if full else r[ptrain].ravel()\\n use_tau='history_tau' in mode; p0=np.r_[taus,1.] if use_tau else [1.]\\n def fit(m): return least_squares(lambda p:err(p,m),p0,bounds=([.2,.4,.5],[2.,10.,2.]) if use_tau else (.5,2.)).x\\n p=fit(np.ones(len(Q),bool)); r,de,c=err(p,None,True); cv=[]\\n for l in np.unique(labs):\\n  m=labs==l; rr,_,_=err(fit(~m),None,True); cv.append(np.sqrt(np.mean(rr[m]**2)))\\n print(mode,'p',p.round(5),'c',np.round(c,5),'orth rmse',np.sqrt(np.mean(r*r)),'worst lab orth',max(cv),'drift complete/missing RMS',[np.sqrt(np.mean(de[m]**2)) for m in [complete,~complete]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_nominal.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: the chamber uses an independent saturating drift mode → H2: deployment-local reference alignment restores the intrinsic mechanical recurrence; diagnostic-only alignment reduced worst-lab RMSE to 0.01644 for strain and 0.02036 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry the fitted chamber memory coefficients into production\",\n      \"rejected_reason\": \"Once the chamber panel is aligned separately, the fast history and amplitude are close to the intrinsic values. Projecting out the chamber drift will test whether any memory correction transfers across labs.\"\n    }\n  ],\n  \"rationale\": \"Test the exact chronological recurrence with a one-second saturating drift. A residual orthogonal to the drift kernel would justify changing the mechanical history; a residual confined to the drift direction would instead point to reference alignment or imputation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d4a9d3bfbf25a78d6d64c6a38a5a662d63f2d310e3cd6034ce10da7cfb179e3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35463.86,
+      "usage_known": true,
+      "prompt_tokens": 40251,
+      "cached_tokens": 13696,
+      "completion_tokens": 1437
+    }
+  ]
+}

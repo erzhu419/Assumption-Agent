@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb2f559a5b864f52812b119f07d027a7",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:43:01.509922+00:00",
+  "ended_at_utc": "2026-11-27T19:43:34.387032+00:00",
+  "request_sha256": "560d792a4bf1c480730dfa7ff3fbe02fcadc48309548a98265a134d3fa8f7f3f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23410,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23918,
+    "cached_tokens": 14976,
+    "completion_tokens": 1420
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '50,105p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | grep -Ei 'viscoelastic|hereditary' | head -8; cat >/tmp/probe_m99.py <<'PY'\\nimport pickle, importlib.util, numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\ns=importlib.util.spec_from_file_location('old','/tmp/hegel_continual_archive/alpha_m99_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=a['dataset']; tr=ds['train']; te=ds['test']; d=a['campaign_diagnostics']; dt=ds['past_dt']; t=ds['eval_times']; cal=ds['calibration_load_cells']; n=len(tr['lab_id']); x=m._features(tr,te); ny=len(x); joint={k:np.concatenate([tr[k],te[k]]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; xd=m._features(joint,d)[ny:]; xd2=m._features(tr,d)[n:]; bridge=m._calibration(cal); raw=cal['bridge_raw']; truth=cal['true_channel_loads']; pr=np.c_[np.ones(len(raw)),raw]@bridge; print('cal ranges',raw.min(0),raw.max(0),'residual rms and max',np.sqrt(np.mean((pr-truth)**2,axis=0)),np.max(abs(pr-truth),axis=0),'axial rms',np.std((pr-truth).sum(1))); print('sweeps',[(k,type(v).__name__,list(v) if isinstance(v,dict) else np.shape(v)) for k,v in cal['single_channel_sweeps'].items()]); print('dt,t',dt,t,'diagnostic feature method difference',np.max(abs(xd-xd2),axis=0)); print('ref moment',[(g,[(int(np.sum(b['lab_id']==g)),np.mean(b['ref_coupons'][b['lab_id']==g]) if np.any(b['lab_id']==g) else None) for b in (tr,te,d)]) for g in np.unique(joint['lab_id'])]);\\nYtr=tr['strain_curves_obs']-tr['strain_0'][:,None]; Rtr=tr['instant_rate_obs']; train=m._coupon_inputs(tr,x[:n],bridge); taus,th=m._fit(train,dt,t,Ytr,Rtr); print('tau theta',taus,th); C,R=m._design(taus,train,dt,t); print('train errors [mad rmse max]',[(np.median(abs(e)),np.sqrt(np.mean(e**2)),np.max(abs(e))) for e in (C@th-Ytr,R@th-Rtr)]);\\np,h,Z=m._coupon_inputs(d,xd,bridge); F=Z@th[2:]; Y=d['strain_curves_obs']-d['strain_0'][:,None]; r=d['instant_rate_obs']; C,R=m._design(taus,(p,h,Z),dt,t); P0,Q0=m._chamber(taus,th,h,xd,t); B=-np.expm1(-t[:,None]/taus); z=h[:,None]-R[:,:2]*taus; print('reference ranks/svs',np.linalg.svd(Y,compute_uv=False)); print('bench / reset residual [median abs, rms, max]',[(np.median(abs(e)),np.sqrt(np.mean(e**2)),np.max(abs(e))) for e in (C@th-Ytr if False else C@th-Y,R@th-r,P0-Y,Q0-r)]); print('lab stratum',list(zip(d['lab_id'],d['stratum']))); print('rates [truth bench reset hold drift z0 z1]',np.c_[r,R@th,Q0,h,F,z]);\\nfor name,U in [('linear',t),('log',np.log1p(t)),('sqrt',np.sqrt(1+t)-1),('saturated',t/(1+t))]:\\n V=np.c_[B,U]; coeff=np.linalg.lstsq(V,Y.T,rcond=None)[0].T; E=coeff@V.T-Y; print(name,'curve residual median per coupon and rmse',np.median(abs(E),axis=1),np.std(E)); print('coeff regress on [1, hold,z0,z1,F]',np.linalg.lstsq(np.c_[np.ones(len(h)),h,z,F],coeff,rcond=None)[0]);\\nprint('diag raw curve/rate abs max',np.max(abs(Y)),np.max(abs(r))); print('test raw and diagnostic raw ranges',[(k,np.min(b[k]),np.max(b[k])) for b in (te,d) for k in ('hold_channel_raw','past_channel_raw')]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_m99.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop material → H2 chamber memory and drift separable on 24 measured diagnostic coupons; numerical residuals pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the previous reset-and-log chamber law\",\n      \"rejected_reason\": \"The current diagnostic curves and initial rates can test whether either component still holds.\"\n    }\n  ],\n  \"rationale\": \"Calibration residuals will reveal whether the affine bridge needs revision. Comparing curve and rate residuals against both archived laws will show whether the next fit should change the chamber memory, the drift basis, or both.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "92f5854807a0c29ac3c2a2b38b9e89d1b790d9758e7b08e279519b634a7f0de8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35126.79,
+      "usage_known": true,
+      "prompt_tokens": 23918,
+      "cached_tokens": 14976,
+      "completion_tokens": 1420
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c649d56209f44baaacd2776d4a1efe84",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:10.850682+00:00",
+  "ended_at_utc": "2026-11-27T19:54:47.864850+00:00",
+  "request_sha256": "fb68f5f2684b3b169aa29cc70cff3f3b657bc78fcfa6e9076ee48e9ebd6746bd",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30702,
+    "cached_tokens": 13696,
+    "completion_tokens": 1581
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import calibrate_upstream, _fit_bridge, _forward, _inverse\\n\\npath = '/holdout_task/public_batch.pkl'\\nitems = pickle.load(open(path, 'rb'))\\nfor item in items:\\n    d = item['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    # Public spikes are separated from all ordinary bridge readings by this gap.\\n    spikes = np.linalg.norm(y, axis=1) > 10\\n    axes = np.count_nonzero(x, axis=1) == 1\\n    rng = np.random.default_rng(30)\\n    folds = rng.permutation(len(x)) % 5\\n    tail = np.max(np.abs(x), axis=1) >= 1.4\\n    masks = [(f'fold {j}', folds == j) for j in range(5)]\\n    masks += [(f'axis {j}', axes & (x[:, j] != 0)) for j in range(4)]\\n    masks.append(('high-load tail', tail))\\n    worst = 0.\\n    for name, held in masks:\\n        b = _fit_bridge(x[~held], y[~held])\\n        clean = held & ~spikes\\n        bridge_err = np.linalg.norm(_forward(x[clean], b) - y[clean], axis=1)\\n        load_err = np.max(np.abs(_inverse(y[clean], b) - x[clean]))\\n        worst = max(worst, load_err)\\n        print(f'{name}: n_clean={clean.sum()}, max bridge L2={max(bridge_err):.6g}, max load component error={load_err:.6g}')\\n        assert load_err < 0.002, name\\n        if (held & spikes).any():\\n            assert np.min(np.linalg.norm(_forward(x[held & spikes], b) - y[held & spikes], axis=1)) > 20\\n    b = _fit_bridge(x, y)\\n    a = calibrate_upstream(d)\\n    ac = a['calibration_load_cells']\\n    np.testing.assert_array_equal(ac['bridge_raw'], x)\\n    assert not np.shares_memory(ac['bridge_raw'], x)\\n    s = ac['single_channel_sweeps']\\n    np.testing.assert_array_equal(s['cmd_stress'], s['true_stress'])\\n    assert not np.shares_memory(s['cmd_stress'], s['true_stress'])\\n    assert a.get('chamber_verification_trials') is d.get('chamber_verification_trials') is None\\n    populated = calibrate_upstream(dict(d, chamber_verification_trials=d['test']))\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        source = d['test'] if name == 'chamber_verification_trials' else d[name]\\n        target = populated[name] if name == 'chamber_verification_trials' else a[name]\\n        for key, v in source.items():\\n            if key not in ('past_channel_raw', 'hold_channel_raw'):\\n                assert target[key] is v\\n                continue\\n            z = target[key]\\n            assert z.shape == v.shape and not np.shares_memory(z, v)\\n            err = np.max(np.abs(_forward(z.reshape(-1, 4), b) - v.reshape(-1, 4)))\\n            print(f'{name}.{key}: max forward closure={err:.6g}')\\n            assert err < 1e-9\\n    original = pickle.load(open(path, 'rb'))[0]['dataset']\\n    np.testing.assert_array_equal(d['calibration_load_cells']['bridge_raw'], original['calibration_load_cells']['bridge_raw'])\\n    np.testing.assert_array_equal(c['single_channel_sweeps']['cmd_stress'], original['calibration_load_cells']['single_channel_sweeps']['cmd_stress'])\\n    for name in ('train', 'test'):\\n        for key in ('past_channel_raw', 'hold_channel_raw'):\\n            np.testing.assert_array_equal(d[name][key], original[name][key])\\n    base = solve_batch(d)\\n    verified = solve_batch(dict(d, chamber_verification_trials=d['test']))\\n    for key, shape in [('estimated_taus', (2,)), ('hereditary_weights', (7,)), ('predicted_strain', (len(d['test']['lab_id']), len(d['eval_times']))), ('initial_rate_pred', (len(d['test']['lab_id']),))]:\\n        assert np.asarray(base[key]).shape == shape and np.isfinite(base[key]).all(), key\\n        np.testing.assert_array_equal(base[key], verified[key])\\n    print(f'worst held-out load component error={worst:.6g}; all four downstream outputs verified')\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/quadratic bridge -> H2 sparse cyclic cubic bridge; the largest clean in-fit bridge residual is 0.000332 and operating forward closure is below 3.64e-11, pending held-out load-space checks.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check and forward closure\",\n      \"rejected_reason\": \"A biased fitted bridge can still round-trip exactly; held-out true loads are needed to check calibration accuracy.\"\n    }\n  ],\n  \"rationale\": \"Withhold entire axis sweeps and the high-load tail to expose weakly constrained terms. If either slice fails, revisit the bridge fit before submission. In the same isolated process, exercise the optional verification branch and all four downstream outputs to catch normalization or composition errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0c0b5cb6fa2c0fd34039a97e01025b5db0dcc77b59ece3c5aa4e5d0f3c26e332",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38149.29,
+      "usage_known": true,
+      "prompt_tokens": 30702,
+      "cached_tokens": 13696,
+      "completion_tokens": 1581
+    }
+  ]
+}

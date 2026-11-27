@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e1ceb3942f9248dca4e005c26e873064",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:14.542483+00:00",
+  "ended_at_utc": "2026-11-27T19:41:50.357050+00:00",
+  "request_sha256": "c36afadd0eb70a989c5377dff0561c5daa27bc577b5b1a60d54a4d467a3d58fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63566,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37078,
+    "cached_tokens": 14976,
+    "completion_tokens": 1512
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m99_sensor_holdout.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    S, U = m._forward(s)\\n    sweeps = s['sensor_calibration_sweeps']\\n    bank = sweeps['single_bank_sweeps']\\n    xf, yf = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    coef = []\\n    for j in range(4):\\n        take = bank['bank_id'] == j\\n        coef.append(np.polyfit(np.r_[xf[:, j], bank['ref_signal'][take]], np.r_[yf[:, j], bank['raw_readout'][take]], 1))\\n    gain, offset = np.array(coef).T\\n    observed = np.array([p['y_pulse_raw'] for p in item['campaign_diagnostics']])\\n    expected = np.array([S @ p['w_pulse'] for p in item['campaign_diagnostics']])\\n    active = np.array([m._calibrated_observations({**s, 'y_obs_raw': raw}) for raw in observed])\\n    pooled = (((observed.reshape(len(observed), -1, 4) - offset) / gain)).reshape(observed.shape)\\n    def worst(v):\\n        e = (v - expected).reshape(len(observed), len(s['mu_shifts']), -1, 4)\\n        return np.sqrt(np.mean(e**2, axis=2)).max()\\n    print('Worst tracer pulse/shift/bank RMS, rosette-only versus pooled bench sweeps:', worst(active), worst(pooled))\\n\\n    y = m._calibrated_observations(s)\\n    n_sensors = len(s['sensor_ij'])\\n    assert n_sensors % 4 == 0\\n    base = m.solve_batch(s)['weights']\\n    gaps, residuals, weight_changes, design_ratios = [], [], [], []\\n    for start in range(0, n_sensors, 4):\\n        keep_sensor = np.ones(n_sensors, dtype=bool)\\n        keep_sensor[start:start+4] = False\\n        keep = np.tile(keep_sensor, len(s['mu_shifts']))\\n        Z = s['Z_nuisance'][keep]\\n        obs = np.column_stack((S[keep], y[keep]))\\n        obs -= Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T @ obs)\\n        D, r = obs[:, :-1], obs[:, -1]\\n        sing = np.linalg.svd(D, compute_uv=False)\\n        design_ratios.append(sing[-1]/sing[0])\\n        h = {**s, 'sensor_ij': s['sensor_ij'][keep_sensor], 'Z_nuisance': Z, 'y_obs_raw': s['y_obs_raw'][keep]}\\n        if 'row_bank_id' in s:\\n            h['row_bank_id'] = s['row_bank_id'][keep]\\n        out = m.solve_batch(h)\\n        w, cert = out['weights'], out['kkt_certificate']\\n        e = D @ w - r\\n        obj = (e @ e + s['source_ridge']*(w @ w))/2\\n        g = D.T @ e + s['source_ridge']*w\\n        err = g - cert['nu_sum'] - np.array(cert['lam_lower']) + np.array(cert['lam_upper'])\\n        gaps.append(abs(obj - cert['dual_lower_bound']))\\n        residuals.append(np.max(np.abs(err)))\\n        weight_changes.append(np.linalg.norm(w-base)/np.linalg.norm(base))\\n        assert abs(w.sum()-s['total_budget']) < 1e-10 and min(w) >= -1e-12 and max(w) <= s['u_box']+1e-12\\n        assert gaps[-1] < 1e-9 and residuals[-1] < 1e-9\\n    print('Held-out rosettes:', len(gaps), 'worst KKT gap:', max(gaps), 'worst stationarity residual:', max(residuals), 'minimum projected singular ratio:', min(design_ratios), 'maximum relative weight change:', max(weight_changes))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_sensor_holdout.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with rosette-only bank calibration → H2 retain that model unless pooling independent sweeps improves tracer prediction; current worst calibrated pulse/shift/bank RMS is 2.00e-6, with a public KKT gap of 7.52e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear calibration and classifier audits\",\n      \"rejected_reason\": \"Held-out sweeps and independent tracers already tested the nonlinear terms. The continuous chamber measurements have no classification labels or relay modes.\"\n    }\n  ],\n  \"rationale\": \"Pooling the independent bench sweeps could reduce calibration variance or introduce bias; the known-input tracers distinguish those outcomes. Holding out one measured rosette at a time and refitting the nuisance projection tests whether a single sensor group masks weak source identifiability or a certificate failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "687428dd406b41a4b2596640d027faffba018ccbea789226413c6395c6fbade5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36900.57,
+      "usage_known": true,
+      "prompt_tokens": 37078,
+      "cached_tokens": 14976,
+      "completion_tokens": 1512
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45952034e9c045f6a876b35bdd719ccb",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:02.783570+00:00",
+  "ended_at_utc": "2026-11-27T19:41:37.754259+00:00",
+  "request_sha256": "d2ae98a82f2af1584cba90144a80c9c3afa3202bc92191986c60c972399014bc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73180,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41192,
+    "cached_tokens": 14976,
+    "completion_tokens": 1450
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m99.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['campaign_diagnostics']\\nt, dt = d['eval_times'], d['past_dt']\\nbridge = m._bridge(d['calibration_load_cells'])\\nout = m.solve_batch(d)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nx = m._features(g, g)[0]\\npast, hold = m._loads(g, bridge)\\nlab = g['lab_id']\\nmissing = np.isnan(g['coupon_features_raw']).any(axis=1)\\ndrift = theta[2] + x @ theta[3:]\\nbase_c, base_r = m._chamber(tau, theta, hold, x, t, route=np.zeros(3))\\ny = np.c_[g['strain_curves_obs'] - g['strain_0'][:, None] - base_c, g['instant_rate_obs'] - base_r]\\nT = np.vstack((np.c_[-np.expm1(-t[:, None] / tau), t], np.r_[1/tau, 1]))\\ndef fit(F, keep):\\n    A = (F[:, None, :, None] * T[None, :, None, :]).reshape(len(lab), len(T), -1)\\n    a, b = A[keep].reshape(-1, A.shape[-1]), y[keep].ravel()\\n    start = np.linalg.lstsq(a, b, rcond=None)[0]\\n    p = least_squares(lambda v: a @ v - b, start, jac=lambda v: a, loss='soft_l1', f_scale=.004).x\\n    return A @ p\\n\\ndef score(e):\\n    return np.array([np.sqrt(np.mean(e[:, :-1]**2)), np.sqrt(np.mean(e[:, -1]**2))])\\n\\ndef grammar(kind, fit_rows):\\n    if kind == 'linear':\\n        return [drift[:, None]]\\n    if kind == 'rational':\\n        qs = [drift, hold-past[:, -1], *(x[:, j] + s*x[:, k] for j in range(4) for k in range(j+1, 4) for s in [-1, 1])]\\n        return [np.column_stack((drift, drift / (1 + a*(q/max(np.std(q[fit_rows]), 1e-10))**2))) for q in qs for a in [.1, 1.]]\\n    qs = [*(x[:, j] + s*x[:, k] for j in range(4) for k in range(j+1, 4) for s in [-1, 1]), *(hold-past[:, j] for j in range(past.shape[1]))]\\n    return [np.c_[drift, f] for q in qs for f in [q**2, q*drift, q*drift*hold]]\\n\\nfor kind in ('linear', 'rational', 'difference_interaction'):\\n    e = np.zeros_like(y)\\n    for outer in np.unique(lab):\\n        keep = lab != outer\\n        candidates = grammar(kind, keep)\\n        if len(candidates) > 1:\\n            scores = []\\n            for j in range(len(candidates)):\\n                inner_errors = []\\n                for inner in np.unique(lab[keep]):\\n                    it, iv = keep & (lab != inner), lab == inner\\n                    pred = fit(grammar(kind, it)[j], it)\\n                    inner_errors.append(score(pred[iv] - y[iv]))\\n                scores.append(np.max(inner_errors))\\n            A = candidates[np.argmin(scores)]\\n        else:\\n            A = candidates[0]\\n        e[~keep] = (fit(A, keep) - y)[~keep]\\n    print(kind, 'worst lab RMSE', np.max([score(e[lab == k]) for k in np.unique(lab)], axis=0), 'complete / imputed RMSE', score(e[~missing]), score(e[missing]))\\nprint('isolated public solution shapes', {k: np.asarray(v).shape for k, v in out.items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m99.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: proportional drift routing is sufficient → H2: retain a nonlinear interaction only if it improves held-out chamber prediction; the incumbent's worst-lab RMSE is 0.00429 strain and 0.00406 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or stochastic-control checks\",\n      \"rejected_reason\": \"This task estimates continuous strain and rate under a deterministic constitutive law. Held-out labs and separate complete/imputed slices test the relevant nuisance variation.\"\n    }\n  ],\n  \"rationale\": \"Fit rational and difference-based terms only within nested lab folds. Promote a challenger only if it materially improves the worst measured chamber slice without degrading the other output. The isolated schema check confirms the unchanged artifact still meets the entrypoint contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f05b205b11bfbb9c3497ae5c80ce035ba8212391aa6b7f1961c5164543cafa76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36062.03,
+      "usage_known": true,
+      "prompt_tokens": 41192,
+      "cached_tokens": 14976,
+      "completion_tokens": 1450
+    }
+  ]
+}

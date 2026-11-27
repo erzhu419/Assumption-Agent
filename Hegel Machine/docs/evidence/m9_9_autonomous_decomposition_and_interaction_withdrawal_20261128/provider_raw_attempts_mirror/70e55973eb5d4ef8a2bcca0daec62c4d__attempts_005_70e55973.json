@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70e55973eb5d4ef8a2bcca0daec62c4d",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__beta_m99_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:43.386438+00:00",
+  "ended_at_utc": "2026-11-27T19:33:26.618553+00:00",
+  "request_sha256": "960f3dc2515b8f17e63ea13aa7a1b12caf7bdf067739876ec22082cb30d3a5fb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40952,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31505,
+    "cached_tokens": 14976,
+    "completion_tokens": 1877
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\npath = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\n\\ndef axis(key):\\n    k, v = s['kappa_'+key], s['vel_'+key]\\n    n = len(k)\\n    h = s['L'+key] / (n - 1)\\n    rob = s['robin_'+key]\\n    a = np.zeros((n, n))\\n    for j in range(1, n-1):\\n        kp, km = (k[j] + k[j+1])/2, (k[j] + k[j-1])/2\\n        a[j, j-1] = -km/h**2 - max(v[j], 0)/h\\n        a[j, j+1] = -kp/h**2 - max(-v[j], 0)/h\\n        a[j, j] = (kp+km)/h**2 + abs(v[j])/h\\n    for j, neighbor in [(0, 1), (n-1, n-2)]:\\n        a[j, j] = k[j]/h**2 + rob/h\\n        a[j, neighbor] = -k[j]/h**2\\n    return a\\n\\nnx, ny = s['nx'], s['ny']\\nA = np.kron(np.eye(ny), axis('x')) + np.kron(axis('y'), np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nB = np.array([m0.ravel(order='F') for m0 in s['source_modes']]).T\\nU = [np.linalg.solve(A + shift*np.eye(nx*ny), B) for shift in s['mu_shifts']]\\ni, j = s['sensor_ij'].T\\nS = np.vstack([u[i + nx*j] for u in U])\\nD, fields = m._design(s)\\nshift_errors = [np.max(np.abs(a-b)) for a, b in zip(np.split(D,len(U)),np.split(S,len(U)))]\\nassert max(shift_errors) < 1e-12, shift_errors\\nresult = m.solve_batch(s)\\nw = result['weights']\\nfield_error = np.max(np.abs(result['terminal_field'] - (U[-1]@w).reshape(nx,ny,order='F')))\\nassert field_error < 1e-12, field_error\\nZ = s['Z_nuisance']\\nP = np.eye(len(Z)) - Z@np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\ny = m._calibrate(s)\\nT, r = P@S, P@y\\nridge, cap, budget = s['source_ridge'], s['u_box'], s['total_budget']\\nobj = lambda a: .5*(np.linalg.norm(T@a-r)**2 + ridge*(a@a))\\ngrad = lambda a: T.T@(T@a-r) + ridge*a\\nref = minimize(obj, np.full(len(w),budget/len(w)),jac=grad,bounds=[(0,cap)]*len(w),constraints={'type':'eq','fun':lambda a:a.sum()-budget,'jac':lambda a:np.ones(len(a))},method='SLSQP',options={'ftol':1e-14})\\nc = result['kkt_certificate']; g = grad(w); nu = c['nu_sum']; lo = np.array(c['lam_lower']); hi = np.array(c['lam_upper']);\\nassert ref.success and abs(ref.fun-obj(w)) < 1e-11\\nassert np.max(np.abs(np.asarray(c['weights'])-w)) == 0\\nassert abs(c['primal_objective']-obj(w)) < 1e-13\\nassert abs(c['dual_lower_bound']-(obj(w)-g@w+nu*budget+cap*np.minimum(g-nu,0).sum())) < 1e-13\\nassert min(lo.min(),hi.min()) >= 0 and np.max(np.abs(g-nu-lo+hi)) < 1e-12\\n\\nrng = np.random.default_rng(42)\\ncal = dict(s)\\nX = s['sensor_calibration_sweeps']['ref_rosette']\\nG = np.eye(4) + rng.normal(0,.08,(4,4)); offset = rng.normal(0,.1,4)\\nY = rng.normal(0,.3,(24,4))\\ncal['sensor_calibration_sweeps'] = {'ref_rosette':X,'raw_rosette':X@G+offset}\\ncal['y_obs_raw'] = (Y@G+offset).ravel()\\ncal_error = np.max(np.abs(m._calibrate(cal)-Y.ravel()))\\nassert cal_error < 1e-12\\nprint('Public max sensor error by shift:',shift_errors,'terminal field max error:',field_error,'objective difference to SLSQP:',abs(ref.fun-obj(w)),'affine inversion error:',cal_error)\\n\\nworst = np.zeros(4)\\ncounts = np.zeros(2,int)\\nfor n in (4,8,16):\\n    for k in range(120):\\n        F = rng.normal(size=(n,n)); H = F.T@F/n + .04*np.eye(n)\\n        b = rng.normal(size=n) * (0.1 if k%2 else 2.)\\n        cap = .42\\n        total = [0.,n*cap,cap,n*cap-cap,cap*1e-6,n*cap-cap*1e-6,cap*(.3+.6*n)][k%7]\\n        w, nu = m._box_simplex(H,b,cap,total)\\n        counts += [np.any(w==0),np.any(w==cap)]\\n        d = H@w-b-nu\\n        gap = d@w-cap*np.minimum(d,0).sum()\\n        worst = np.maximum(worst, [abs(w.sum()-total), max(0.,-w.min(),w.max()-cap), max(np.max(w*np.maximum(d,0)),np.max((cap-w)*np.maximum(-d,0))),abs(gap)])\\nprint('Stress worst budget/bounds/complementarity/dual gap:',worst,'cases with lower/upper active:',counts)\\nassert np.max(worst) < 1e-10 and np.all(counts > 0), worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open-wall Robin and affine calibration) -> H2 (retain the baseline absent discriminating wall evidence); worst held-out shift RMS is 0.0083974 and public dual gap is 1.37e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check\",\n      \"rejected_reason\": \"The schema check cannot detect an incorrect stencil or field ordering, and the public optimum does not exercise active bounds.\"\n    }\n  ],\n  \"rationale\": \"Compare all shifts and the terminal field against an independently assembled operator, verify the certificate against the reconstructed objective, and stress active bounds and nonidentity calibration. A discrepancy would identify which part of the solver to fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "dfd71d98b96860b80bcc2d509d03200d65819c621f3e76a7b13b876618ff0141",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44315.83,
+      "usage_known": true,
+      "prompt_tokens": 31505,
+      "cached_tokens": 14976,
+      "completion_tokens": 1877
+    }
+  ]
+}

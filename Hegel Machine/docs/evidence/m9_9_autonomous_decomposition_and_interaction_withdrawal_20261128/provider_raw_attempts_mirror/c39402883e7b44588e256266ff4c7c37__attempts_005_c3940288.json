@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c39402883e7b44588e256266ff4c7c37",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:51.747379+00:00",
+  "ended_at_utc": "2026-11-27T19:38:34.205712+00:00",
+  "request_sha256": "31c10750316d065e150dd2f629ec9ef46d7e0b2cf459ab9525e6b93cfde7a16d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39524,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30570,
+    "cached_tokens": 14976,
+    "completion_tokens": 1849
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/beta_m99_c01_s00_solver.py').read_text()\\nstart = src.index('def _axis(')\\nend = src.index('\\\\ndef _forward', start)\\nsrc = src[:start] + '''def _axis(kappa, velocity, h):\\n    \\\"\\\"\\\"Row-local upwind interior with zero-leak endpoint rows.\\\"\\\"\\\"\\n    face = (kappa[:-1] + kappa[1:]) / (2 * h**2)\\n    lower = np.r_[-face[:-1] - np.maximum(velocity[1:-1], 0) / h, -kappa[-1] / h**2]\\n    upper = np.r_[-kappa[0] / h**2, -face[1:] - np.maximum(-velocity[1:-1], 0) / h]\\n    main = np.r_[kappa[0] / h**2, -lower[:-1] - upper[1:], kappa[-1] / h**2]\\n    return diags((lower, main, upper), (-1, 0, 1), format='csc')\\n\\n''' + src[end:]\\nsrc = src.replace(\\\", study['robin_x'])\\\", \\\")\\\").replace(\\\", study['robin_y'])\\\", \\\")\\\")\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]; st = item['study']\\nnx, ny = st['nx'], st['ny']\\ndef axis(n, length, k, v):\\n    h = length/(n-1); A = np.zeros((n,n))\\n    for i in range(n):\\n        if i in (0,n-1):\\n            A[i,1 if i==0 else n-2] = -k[i]/h**2\\n        else:\\n            A[i,i-1] = -(k[i]+k[i-1])/(2*h*h)-max(v[i],0)/h\\n            A[i,i+1] = -(k[i]+k[i+1])/(2*h*h)-max(-v[i],0)/h\\n        A[i,i] = -A[i].sum()\\n    return A\\nAx, Ay = [axis(st['n'+q],st['L'+q],st['kappa_'+q],st['vel_'+q]) for q in ('x','y')]\\nL = np.kron(np.eye(ny), Ax)+np.kron(Ay,np.eye(nx))+np.diag(st['V_reaction_2d'].flatten('F'))\\nR = np.stack([mode.flatten('F') for mode in st['source_modes']],axis=1)\\ni,j = st['sensor_ij'].T\\nfields = [np.linalg.solve(L+mu*np.eye(nx*ny), R) for mu in st['mu_shifts']]\\nS = np.concatenate([u[i+nx*j] for u in fields])\\npulse_rmse = []\\nfor pulse in item['campaign_diagnostics']:\\n    r = S@pulse['w_pulse'] - m['_calibrate'](dict(st,y_obs_raw=pulse['y_pulse_raw']))\\n    pulse_rmse.extend(np.sqrt(np.mean(r.reshape(len(fields),-1)**2,axis=1)))\\nassert max(pulse_rmse)<1e-5, pulse_rmse\\nZ = st['Z_nuisance']; P = np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+st['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nT = P@S; y = P@m['_calibrate'](st); ridge=st['source_ridge']; cap=st['u_box']; budget=st['total_budget']; n=S.shape[1]\\nH = T.T@T+ridge*np.eye(n); c = -T.T@y\\nout = m['solve_batch'](st); w = out['weights']; cert = out['kkt_certificate']; nu = cert['nu_sum']; lo,hi = map(np.asarray,(cert['lam_lower'],cert['lam_upper']))\\nr = T@w-y; g=T.T@r+ridge*w; J=(r@r+ridge*(w@w))/2\\nD=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nerrors = [abs(w.sum()-budget),max(0,-w.min(),w.max()-cap),max(0,-lo.min(),-hi.min()),np.max(np.abs(g-nu-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(cap-w))),abs(J-D),abs(J-cert['primal_objective']),abs(D-cert['dual_lower_bound']),np.max(abs(w-cert['weights'])),np.max(abs(out['terminal_field']-(fields[-1]@w).reshape((nx,ny),order='F')))]\\nassert max(errors)<1e-9, errors\\nbest = np.inf\\nfor status in itertools.product((-1,0,1),repeat=n):\\n    status = np.array(status); free = status==0; fixed = ~free; v = cap*(status==1).astype(float); b = budget-v.sum()\\n    if b < -1e-12 or b > cap*free.sum()+1e-12: continue\\n    if free.any():\\n        f = int(free.sum()); e = np.ones((f,1)); A = np.block([[H[np.ix_(free,free)],e],[e.T,np.zeros((1,1))]])\\n        v[free] = np.linalg.solve(A,np.r_[-c[free]-H[np.ix_(free,fixed)]@v[fixed],b])[:-1]\\n    if v.min() < -1e-12 or v.max() > cap+1e-12: continue\\n    best=min(best,float(v@H@v/2+c@v))\\ngap=abs(w@H@w/2+c@w-best); assert gap<1e-10, gap\\nprint({'worst_tracer_shift_rmse':max(pulse_rmse),'max_certificate_or_field_error':max(errors),'objective_difference_from_box_face_enumeration':gap,'weights':w.tolist()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin -> H2 exact zero-leak endpoint rows; worst public pulse-by-shift RMSE fell from 0.17038 to 2.54e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit separate leakage, neighbor, and wrap coefficients at every endpoint\",\n      \"rejected_reason\": \"The exact zero-leak stencil already matches all nine tracer slices within 2.54e-6, while the more flexible fit reaches 2.77e-6 on its worst held-out pulse-by-shift slice.\"\n    }\n  ],\n  \"rationale\": \"Remove only the falsified Robin leakage terms and retain dynamic sweep calibration. An independent dense solve detects stencil or field-ordering errors, and exhaustive box-face comparison detects an incorrect optimizer result that the schema check would miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f5577f95b5df82c76af7272306121c7d1494b2fda76f03b9804ad79a7728cbb8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43554.02,
+      "usage_known": true,
+      "prompt_tokens": 30570,
+      "cached_tokens": 14976,
+      "completion_tokens": 1849
+    }
+  ]
+}

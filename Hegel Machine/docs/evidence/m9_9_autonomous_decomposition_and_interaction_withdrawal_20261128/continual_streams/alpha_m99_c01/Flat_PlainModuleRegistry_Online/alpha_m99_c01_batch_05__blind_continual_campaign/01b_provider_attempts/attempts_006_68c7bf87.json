@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "68c7bf87957a4f6a832290c46d5adb51",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:44.856729+00:00",
+  "ended_at_utc": "2026-11-27T19:59:18.663333+00:00",
+  "request_sha256": "40f7c40049c7edfd96e16da64e94313d9bae78405d62052d2aa153c7291e6257",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50407,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33987,
+    "cached_tokens": 13696,
+    "completion_tokens": 1410
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_law.py <<'PY'\\nexec(open('/tmp/chamber_amplitude.py').read().split('zsets=')[0].replace(\\\"print(np.c_[C,H,G,D,U].round(4))\\\", \\\"pass\\\"))\\n_,qtest=m._features(b,c); _,qself=m._features(c,c)\\nfor label, xx in [('train+test',Q),('train+diag',q),('test+diag',qtest),('diag-only',qself)]:\\n dd=theta[2]+xx@theta[3:]; X=np.c_[H,dd]\\n E=C-X@np.linalg.lstsq(X,C,rcond=None)[0]\\n print(label,'feature ranges',np.round(xx.min(0),2),np.round(xx.max(0),2),'hold + drift projection',np.sqrt(np.mean(E**2,axis=0)).round(4),'rate residual by lab',[(l,round(np.sqrt(np.mean((E[lab==l]@F[-1])**2)),4)) for l in np.unique(lab)])\\n print('fast implied drift deviations',np.c_[lab,(C[:,0]-theta[0]*H)/.18-dd].round(4).tolist())\\n# Use coupon-level held-out labs, measuring both initial rate and complete curves.\\nobs=np.column_stack((Y,R)); basis=F.T; Z0,Z1=Z.T\\nfor label,xx in [('train+test',Q),('diag-only',qself)]:\\n dd=theta[2]+xx@theta[3:]; base=np.c_[theta[0]*H,theta[1]*H,np.zeros(len(H))]@basis\\n hist=[-Z0,-Z1]; terms=[('d0',dd,0),('d1',dd,1),('d2',dd,2)]\\n extras=[('z0',-Z0,0),('z1',-Z1,1),('h1',H,1),('gh1',H*Z1,1),('dabs1',dd*abs(dd),1),('d^3_1',dd**3,1),('hd1',H*dd,1),('z1d1',Z1*dd,1),('z0d1',Z0*dd,1),('z1^2',Z1**2,1),('z1sat',Z1/(1+Z1**2),1)]\\n def assess(ts, report=True):\\n  Dm=np.stack([v[:,None]*basis[j] for _,v,j in ts],axis=-1); target=obs-base\\n  def fit(s): return np.linalg.lstsq(Dm[s].reshape(-1,len(ts)),target[s].ravel(),rcond=None)[0]\\n  E=np.empty_like(obs)\\n  for l in np.unique(lab):\\n   s=lab!=l; E[~s]=Dm[~s]@fit(s)-target[~s]\\n  coef=fit(np.ones(len(H),bool)); e=Dm@coef-target\\n  rms=lambda e: np.sqrt(np.mean(e**2))\\n  vals=[rms(e),rms(E[:,:-1]),rms(E[:,-1]),max(rms(E[lab==l]) for l in np.unique(lab))]\\n  if report: print(label,[t[0] for t in ts],np.round(vals,5),coef.round(5))\\n  return vals\\n assess(terms); assess(terms+extras[:2]); assess(terms+[extras[1], extras[2]])\\n for term in extras[3:]: assess(terms+[extras[1],term])\\n # Check if unexplained signal is restricted to rows with imputed features.\\n Dm=np.stack([v[:,None]*basis[j] for _,v,j in terms],axis=-1); est=np.linalg.lstsq(Dm.reshape(-1,len(terms)),(obs-base).ravel(),rcond=None)[0]; e=obs-base-Dm@est\\n print('row residual RMS and missing:',np.c_[lab,np.isnan(c['coupon_features_raw']).sum(1),np.sqrt(np.mean(e**2,axis=1)),e[:,-1]].round(4).tolist())\\nprint('telemetry mean/std',[(k,np.mean(d[k]['aux_chamber_telemetry'],axis=0).round(4),np.std(d[k]['aux_chamber_telemetry'],axis=0).round(4)) for k in ('train','test')])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_law.py | sed -n '/train+test feature/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared chamber time basis with free amplitudes -> hold-driven reset plus drift coupling; the generic hold/gap/drift model still has leave-one-lab-out rate RMSE 0.122 and worst absolute error 0.736.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit all history steps and coupon interactions freely\",\n      \"rejected_reason\": \"With only 24 diagnostic coupons, these models worsened held-out lab errors.\"\n    }\n  ],\n  \"rationale\": \"The fast amplitude tracks hold load while the slow amplitude and tail track coupon drift. Test whether reference alignment or missing features explain the remaining error before adding chamber terms, and measure full-curve and rate errors separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "45df7caac62986f8d7d4a618d967704d0376ac0d80c86ac74b4a8ac2db89c8db",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34950.48,
+      "usage_known": true,
+      "prompt_tokens": 33987,
+      "cached_tokens": 13696,
+      "completion_tokens": 1410
+    }
+  ]
+}

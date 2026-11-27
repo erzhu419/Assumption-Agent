@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d66b86f6135424caaa3c49fc056391b",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:24.391502+00:00",
+  "ended_at_utc": "2026-11-27T19:55:49.032417+00:00",
+  "request_sha256": "651431d3d73d4e0091df31897493d143d7e876ff07f5aa6c1dcff20807475f9f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 47717,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29662,
+    "cached_tokens": 13696,
+    "completion_tokens": 980
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_upstream_operating_margin.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _invert\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as stream:\\n    ds = pickle.load(stream)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\nbase = _fit_bridge(x, y)\\ncols = np.arange(4)\\naxis_only = np.count_nonzero(x, axis=1) == 1\\naxis_id = np.argmax(np.abs(x), axis=1)\\nclean = np.max(np.abs(y), axis=1) < 10\\ncases = [(name, field, part['lab_id'], part[field], _invert(part[field], base))\\n         for name in ('train', 'test') for part in (ds[name],)\\n         for field in ('past_channel_raw', 'hold_channel_raw')]\\nworst = (0., None)\\nfor j in cols:\\n    withheld = axis_only & (axis_id == j)\\n    fit = _fit_bridge(x[~withheld], y[~withheld])\\n    score = withheld & clean\\n    e = _invert(y[score], fit) - x[score]\\n    summed = np.max(np.abs(e.sum(axis=-1)))\\n    print(f'withheld axis {j}: worst measured summed-load error {summed:.8g}')\\n    assert summed < .001, 'Withholding one axis compromises summed-load accuracy'\\n    for name, field, labs, raw, ref in cases:\\n        est = _invert(raw, fit)\\n        assert np.max(np.abs(_basis(est) @ fit - raw)) < 1e-8\\n        drift = np.abs((est - ref).sum(axis=-1))\\n        for lab in np.unique(labs):\\n            peak = float(drift[labs == lab].max())\\n            if peak > worst[0]:\\n                worst = (peak, (int(j), name, field, int(lab)))\\nprint('Worst operating summed-load sensitivity to a withheld axis sweep:', worst)\\nassert worst[0] < .001, 'A measured operating lab slice is unstable under calibration withdrawal'\\nprint('Verified withheld-axis operating stability on all measured lab/load slices')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_upstream_operating_margin.py\\ncd /holdout_task\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/quadratic bridge → H2 sparse coupled cubic: worst held-out error is 0.000367 per channel and 0.000453 for summed load; the new audit tests summed-load stability by lab after withholding an entire calibration axis sweep.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Center bridge calibration by lab\",\n      \"rejected_reason\": \"The paired calibration rows have no lab labels, and the task has no classification outcome. Lab grouping can assess operating sensitivity without inventing lab-specific calibration coefficients.\"\n    }\n  ],\n  \"rationale\": \"A low held-out calibration error could still conceal instability in simultaneous loads from one operating lab. Withholding each axis sweep tests measured summed-load accuracy and sensitivity on actual train and test inputs separately. If either exceeds the 0.001 validation margin, inspect the responsible slice before retaining the model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5f29dcb40d6413d6cc9adbe89872449f04f373edb4881edc54b257050dac37b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25766.29,
+      "usage_known": true,
+      "prompt_tokens": 29662,
+      "cached_tokens": 13696,
+      "completion_tokens": 980
+    }
+  ]
+}

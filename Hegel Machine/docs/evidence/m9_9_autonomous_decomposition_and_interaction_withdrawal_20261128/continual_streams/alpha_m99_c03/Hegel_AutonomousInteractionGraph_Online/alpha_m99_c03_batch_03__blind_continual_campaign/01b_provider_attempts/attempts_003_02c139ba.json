@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02c139ba3c134a7cb5d18704bc9ffaea",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:10.471639+00:00",
+  "ended_at_utc": "2026-11-27T19:53:37.440569+00:00",
+  "request_sha256": "fd7c1ae43eb1195a31e7ccc64504082761c4c4031b8a15c93ceea75600e09aad",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21321,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22773,
+    "cached_tokens": 13696,
+    "completion_tokens": 1059
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"$f\\\"; grep -inE 'bridge|calib|poly|inverse|stress' \\\"$f\\\"; done\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -30\\ncat >/tmp/bridge_probe.py <<'PY'\\nimport json,pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\nfor r in json.load(open(p)):\\n print('apparatus', {k:v for k,v in r.items() if 'trace' not in k and len(str(v))<400})\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; axis=(x!=0).sum(axis=1)<=1\\nprint('axis',np.where(axis)[0]); print('raw range',[(k, v['past_channel_raw'].min(axis=(0,1)).round(2),v['hold_channel_raw'].max(axis=0).round(2)) for k in ('train','test')]); print('axis sweeps',np.c_[x[axis],y[axis]].round(3))\\n\\ndef terms(kind):\\n return [()]+[(i,) for i in range(4)]+[t for deg in range(2,kind+1) for t in itertools.combinations_with_replacement(range(4),deg)]\\ndef feat(x,ts):\\n return np.column_stack([np.prod(x[:,t],axis=1) for t in ts])\\ndef fit(A,Y):\\n # Remove readings far outside the bridge's observed operating range before fitting.\\n ok=np.max(abs(Y),axis=1)<6.\\n b=np.linalg.lstsq(A[ok],Y[ok],rcond=None)[0]\\n for _ in range(20):\\n  e=np.linalg.norm(Y-A@b,axis=1); s=max(.005,np.median(e[ok])); w=(1+(e/(2*s))**2)**-1 * ok\\n  b=np.linalg.lstsq(A*np.sqrt(w[:,None]),Y*np.sqrt(w[:,None]),rcond=None)[0]\\n return b\\nfor deg in (1,2,3):\\n ts=terms(deg); a=feat(x,ts); b=fit(a,y); e=np.linalg.norm(y-a@b,axis=1)\\n rng=np.random.default_rng(17); groups=np.empty(len(x),int); groups[rng.permutation(len(x))]=np.arange(len(x))%5\\n ep=np.zeros_like(y)\\n for f in range(5):\\n  m=groups!=f; ep[~m]=y[~m]-a[~m]@fit(a[m],y[m])\\n good=np.max(abs(y),axis=1)<6\\n print('degree',deg,'resid quantiles',np.quantile(e,[0,.5,.9,.95,1]).round(4),'oof channel RMSE by slice',[(int(m.sum()),np.sqrt(np.mean(ep[m]**2,axis=0)).round(4)) for m in (good&axis,good&~axis)])\\n for t,v in zip(ts,b):\\n  if max(abs(v))>.025: print(t,v.round(4))\\n print('biggest errors',[(int(i),round(e[i],3)) for i in np.argsort(e)[-12:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge coupling -> H2 robust low-order nonlinear forward response; worst-slice error has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible inverse directly\",\"rejected_reason\":\"Spikes contaminate the inverse predictors, and flexible inverse fits may extrapolate poorly beyond the calibration range.\"}],\"rationale\":\"Inspect prior chamber settings and compare held-out axial and mixed-load residuals. The residual patterns and fitted coefficients will determine whether to retain affine coupling or test a more specific nonlinear basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "fd2adefc8559bb50f176ed5b2e744f035f1b948315fa0f803d8a583e69ba4cb1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28097.85,
+      "usage_known": true,
+      "prompt_tokens": 22773,
+      "cached_tokens": 13696,
+      "completion_tokens": 1059
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2afdec7a7ff44a7e8067a3f97daca3bd",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:45.329766+00:00",
+  "ended_at_utc": "2026-11-27T19:40:09.103083+00:00",
+  "request_sha256": "4ea9521d50fef519a0e432f7b0243286736308e85fa274ca2947288b35ae48c2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61235,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39479,
+    "cached_tokens": 14976,
+    "completion_tokens": 922
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py; cat /tmp/hegel_continual_archive/archive_manifest.json; cat /holdout_task/validate_public_schema.py; cat > /tmp/compact_m99.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from route_m99 import *\\nfrom scipy.optimize import least_squares\\nx=X['diag']; D=th[2]+x@th[3:]; F=np.c_[np.ones(n),D]; truth=Y+(h[:,None]*th[:2])@T[:,:2].T\\nprint('intrinsic times/weights',ta,th)\\nprint('route full intercept and gain',np.linalg.lstsq(F,Z,rcond=None)[0]); print('expected tau-scaled gains',np.linalg.lstsq(F,Z,rcond=None)[0][1]/np.r_[ta,1.])\\nfor labx in [None,*np.unique(lab)]:\\n keep=np.ones(n,bool) if labx is None else lab!=labx; chk=keep if labx is None else ~keep\\n for kind in ('route','intercept','tied','omit drift'):\\n  if kind=='route': A=D[:,None,None]*T[None,:,:]\\n  elif kind=='intercept': A=F[:,None,:,None]*T[None,:,None,:]; A=A.reshape(n,len(T),-1)\\n  elif kind=='tied': A=D[:,None,None]*np.column_stack((T[:,:2]@ta,T[:,2]))[None,:,:]\\n  else: A=D[:,None,None]*T[None,:,:2]\\n  opt=least_squares(lambda v:(A[keep]@v-Y[keep]).ravel(),np.zeros(A.shape[-1]),loss='soft_l1',f_scale=.004)\\n  e=(A@opt.x-Y)[chk]; print(labx,kind,np.round(opt.x,6),np.round(np.sqrt([np.mean(e[:,:-1]**2),np.mean(e[:,-1]**2)]),6))\\nprint('batch entries',[(list(item), item['campaign_diagnostics'] is None) for item in pickle.load(open('/holdout_task/public_batch.pkl','rb'))]); print('top-level dataset keys',list(d)); print('archive metadata',[(r['completed_campaign_short_name'],list(r)) for r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compact_m99.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: retained memory with pooled feature alignment → H2: history withdrawal with a linear drift route and chamber-local alignment; the latter reaches worst-lab RMSE 0.00432 strain and 0.00413 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain nonlinear routing or memory terms\",\n      \"rejected_reason\": \"Neither improved both held-out metrics after chamber-local alignment.\"\n    }\n  ],\n  \"rationale\": \"Compare a proportional route, an additive offset, and a shared gain to determine which coefficients belong in the deliverable. Keep the specified joint preprocessing for the intrinsic train fit; use the chamber-only feature panel to test deployment routing separately.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "67b530a500880b67efff1d533bdde4bb3e049de3b4fa3208509f52f5173db2df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24892.25,
+      "usage_known": true,
+      "prompt_tokens": 39479,
+      "cached_tokens": 14976,
+      "completion_tokens": 922
+    }
+  ]
+}

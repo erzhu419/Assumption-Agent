@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32e97ae647ea49c48d1b626cd8956073",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:05.384334+00:00",
+  "ended_at_utc": "2026-11-27T19:53:32.780690+00:00",
+  "request_sha256": "4690974a19b2b48b7c433ffdbb5890ef4a3513c7e1577293791f8cdb0a32f976",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 37435,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29038,
+    "cached_tokens": 13696,
+    "completion_tokens": 1115
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\na = np.count_nonzero(x, axis=1) == 1\\nb = u._fit(x, y)\\nclean = np.linalg.norm(u._design(x) @ b - y, axis=1) < 0.01\\nedge = np.max(np.abs(x), axis=1) > 1.3\\nrng = np.random.default_rng(834)\\nfold = np.empty(len(x), int); errs = []\\nfor _ in range(6):\\n    order = np.r_[rng.permutation(np.flatnonzero(~a)), rng.permutation(np.flatnonzero(a))]\\n    fold[order] = np.arange(len(x)) % 5\\n    err = np.zeros_like(x)\\n    for k in range(5):\\n        train = fold != k; test = ~train & clean\\n        err[test] = u._invert(y[test], u._fit(x[train], y[train])) - x[test]\\n    errs.append(err)\\nerrs = np.asarray(errs)\\nfor name, mask in [('axis', clean & a), ('mixed-edge', clean & ~a & edge), ('mixed-interior', clean & ~a & ~edge)]:\\n    e = errs[:, mask]; rms = np.sqrt(np.mean(e**2)); total_rms = np.sqrt(np.mean(e.sum(axis=-1)**2))\\n    print(f'{name}: channel RMS {rms:.7g}; total-load RMS {total_rms:.7g}; max channel error {np.max(np.abs(e)):.7g}')\\n    assert rms < 5e-4 and total_rms < 1e-3\\ns = c['single_channel_sweeps']\\ntrial = dict(d['test'])\\nfor trial_value in (None, trial):\\n    ds = dict(d, chamber_verification_trials=trial_value)\\n    out = u.calibrate_upstream(ds)\\n    cc = out['calibration_load_cells']\\n    for got, want in [(cc['bridge_raw'], x), (cc['single_channel_sweeps']['cmd_stress'], s['true_stress'])]:\\n        np.testing.assert_array_equal(got, want)\\n        assert not np.shares_memory(got, want)\\n    if trial_value is None:\\n        assert out['chamber_verification_trials'] is None\\n    for name in ['train', 'test'] + ([] if trial_value is None else ['chamber_verification_trials']):\\n        assert out[name] is not ds[name]\\n        for key in ('past_channel_raw', 'hold_channel_raw'):\\n            original = ds[name][key]; converted = out[name][key]\\n            assert converted.shape == original.shape and not np.shares_memory(converted, original)\\n            reencoded = (u._design(converted.reshape(-1, 4)) @ b).reshape(original.shape)\\n            error = np.max(np.abs(reencoded - original))\\n            print(f'{name} {key}: max forward replay error {error:.3g}')\\n            assert error < 1e-9\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine mixing) → H2 (quadratic coupling plus channel-wise cubics); worst clean forward out-of-fold RMS was 0.00012, with inverse validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema gate\",\n      \"rejected_reason\": \"Finite outputs do not establish accurate channel recovery, correct total loads, or handling of optional verification trials.\"\n    }\n  ],\n  \"rationale\": \"Test held-out inverse accuracy against known calibration loads and replay every operating input to detect Newton convergence failures. Check the identity copies and optional trial path, then rerun the composed schema gate in the same isolated Python process. If inversion fails while the forward fit remains accurate, revise the inverse rather than expanding the basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5dcd4cfca9603bfc67c69b95f7cf55dc2b6aa0c955bb2adee63098c566ffa9cc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28536.34,
+      "usage_known": true,
+      "prompt_tokens": 29038,
+      "cached_tokens": 13696,
+      "completion_tokens": 1115
+    }
+  ]
+}

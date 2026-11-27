@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e5dff9a10e3a43b1bd4ae78a45e2aab9",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:35.304853+00:00",
+  "ended_at_utc": "2026-11-27T19:40:15.234092+00:00",
+  "request_sha256": "41e47307ac26f37f18894d4e31f3421d8318f67e9f06158f2830013f8816e0ed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49608,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33070,
+    "cached_tokens": 14976,
+    "completion_tokens": 1710
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_m99_calibration.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\np = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(p)\\np.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\n\\ndef fit(kind, x, y):\\n    if kind == 'bank-diagonal':\\n        coef = np.array([np.linalg.lstsq(np.c_[np.ones(len(x)), x[:, j]], y[:, j], rcond=None)[0] for j in range(4)])\\n        return lambda v: coef[:, 0] + v * coef[:, 1]\\n    if kind == 'bank-rational':\\n        params = []\\n        for j in range(4):\\n            v, z = x[:, j], y[:, j]\\n            b, a = np.linalg.lstsq(np.c_[np.ones(len(v)), v], z, rcond=None)[0]\\n            q = least_squares(lambda q: q[0] + q[1]*v/(1+q[2]*v*v)-z, [b,a,0.], bounds=([-np.inf,-np.inf,0.],[np.inf,np.inf,np.inf]), gtol=1e-13).x\\n            params.append(q)\\n        b, a, d = np.asarray(params).T\\n        return lambda v: b + a*v/(1+d*v*v)\\n    def features(v):\\n        terms = [np.ones(len(v)), *v.T]\\n        if kind == 'interactions':\\n            terms += [v[:,i]*v[:,j] for i in range(4) for j in range(i,4)]\\n            terms += [v[:,i]*v[:,j]*v[:,k] for i in range(4) for j in range(i+1,4) for k in range(j+1,4)]\\n        return np.array(terms).T\\n    coef = np.linalg.lstsq(features(x), y, rcond=None)[0]\\n    return lambda v: features(v) @ coef\\n\\nfor item in items:\\n    s = item['study']; cal = s['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    S, _ = m._forward(s)\\n    expected = np.stack([(S @ d['w_pulse']).reshape(-1,4) for d in item['campaign_diagnostics']])\\n    observed = np.stack([d['y_pulse_raw'].reshape(-1,4) for d in item['campaign_diagnostics']])\\n    folds = np.array_split(np.arange(len(x)), 8)\\n    for kind in ('bank-diagonal', 'affine', 'interactions', 'bank-rational'):\\n        err = np.empty_like(y)\\n        for hold in folds:\\n            keep = np.setdiff1d(np.arange(len(x)), hold)\\n            err[hold] = fit(kind, x[keep], y[keep])(x[hold])-y[hold]\\n        pred = fit(kind, x, y)(expected.reshape(-1,4)).reshape(expected.shape)\\n        rms = lambda e, axis: np.sqrt(np.mean(e**2,axis=axis))\\n        p = (pred-observed).reshape(len(expected),len(s['mu_shifts']),-1,4)\\n        print(kind, 'sweep worst fold/channel', format(max(rms(err[h],0).max() for h in folds),'.4g'), 'pulse worst pulse/shift/bank', format(rms(p,2).max(),'.4g'), 'pulse bank RMS', rms(p,(0,1,2)))\\n    banks = cal['single_bank_sweeps']; z = s['Z_nuisance']\\n    op = np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\n    ep = np.stack([m._calibrated_observations({**s,'y_obs_raw':d['y_pulse_raw']})-S@d['w_pulse'] for d in item['campaign_diagnostics']])\\n    print('full affine calibrated pulse worst bank RMS before/after nuisance', *(np.sqrt(np.mean(e.reshape(-1,4)**2,axis=0)).max() for e in (ep,ep-(z@(op@ep.T)).T)))\\n    print('response/nuisance spectral fraction', np.linalg.norm(z@(op@S),2)/np.linalg.norm(S,2), 'projected design relative singular spectrum', (lambda t:t/t[0])(np.linalg.svd(S-z@(op@S),compute_uv=False)))\\n    for j in range(4):\\n        i = banks['bank_id']==j\\n        a = np.polyfit(banks['ref_signal'][i], banks['raw_readout'][i], 1)\\n        print('bank', j, 'independent sweep slope/intercept minus rosette', a-np.polyfit(x[:,j],y[:,j],1))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m99_calibration.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with full affine calibration → H2 retain the wall stencil and test bank-diagonal and nonlinear calibration; current worst calibrated pulse-by-shift RMS is 1.31e-6 and worst stressed KKT gap is 4.33e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classifier balance, relay states, or stochastic drift\",\n      \"rejected_reason\": \"The chamber data have continuous signals and a steady-state transport equation, not classification labels or relay states. Bank-wise tracer errors and the projected source spectrum test the applicable nuisance and identifiability risks.\"\n    }\n  ],\n  \"rationale\": \"Use held-out calibration sweeps and independent tracer readings to test whether cross-channel, pairwise, three-way, or rational terms improve the worst measured bank and shift. If a challenger improves both, test it against the end-to-end field and KKT metrics; otherwise retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f62e4f21fa6458f34d3d95069e3f35b173b7382d8337cd327a53ab3f13b27132",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41052.13,
+      "usage_known": true,
+      "prompt_tokens": 33070,
+      "cached_tokens": 14976,
+      "completion_tokens": 1710
+    }
+  ]
+}

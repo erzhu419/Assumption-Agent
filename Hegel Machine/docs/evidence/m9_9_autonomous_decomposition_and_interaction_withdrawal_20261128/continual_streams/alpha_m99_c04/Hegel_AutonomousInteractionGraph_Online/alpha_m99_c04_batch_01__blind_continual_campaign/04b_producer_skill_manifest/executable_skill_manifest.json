@@ -1,0 +1,165 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c04_batch_01_2c4d04a5341b",
+    "source_hash": "2c4d04a5341b844e8a426231ec86c19a083988b16e6898854ac048817f833dce",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c04_batch_01__blind_continual_campaign",
+    "task_id": "alpha_m99_c04_batch_01__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/chamber_alignment.py",
+        "archived_relpath": "producers/tmp__chamber_alignment.py",
+        "bytes": 3246,
+        "sha256": "4dde0a0342e40f1e8a934b60418f7bfb1e22c4cfb02aaac24ba151d47eb12c3a"
+      },
+      {
+        "container_path": "/tmp/chamber_conservation_fit.py",
+        "archived_relpath": "producers/tmp__chamber_conservation_fit.py",
+        "bytes": 974,
+        "sha256": "ab003476b60876d4d37fddbb50c8615aa8ce37b25c191b99ed0b5e9d6a165006"
+      },
+      {
+        "container_path": "/tmp/chamber_probe.py",
+        "archived_relpath": "producers/tmp__chamber_probe.py",
+        "bytes": 2308,
+        "sha256": "3dc0516aa7f550dd3f09554a1ff968e2bb0d8795d4d93f75c027d024ed924293"
+      },
+      {
+        "container_path": "/tmp/chamber_residuals.py",
+        "archived_relpath": "producers/tmp__chamber_residuals.py",
+        "bytes": 1037,
+        "sha256": "4c16ae11008fb008d5b1f259fe3c7cf3b07f929e9c5ec7adf2c09cdca1c5edb5"
+      },
+      {
+        "container_path": "/tmp/chamber_sparse.py",
+        "archived_relpath": "producers/tmp__chamber_sparse.py",
+        "bytes": 3129,
+        "sha256": "32b2eccc9ea6402c42fe2f50940ce2958d66fee8cd1cd9f9d0f4d0ac58e723eb"
+      },
+      {
+        "container_path": "/tmp/chamber_structure.py",
+        "archived_relpath": "producers/tmp__chamber_structure.py",
+        "bytes": 2783,
+        "sha256": "e841be7fd4156361bed53a3e4958191b20d194f8dd3d7bf1f7ef0b3e24f827dc"
+      },
+      {
+        "container_path": "/tmp/chamber_transfer_check.py",
+        "archived_relpath": "producers/tmp__chamber_transfer_check.py",
+        "bytes": 2248,
+        "sha256": "62a920c49a4c8db61cc113a5667162e14a93b0e88d5958628f4a3bf52819dda9"
+      },
+      {
+        "container_path": "/tmp/intrinsic_slices.py",
+        "archived_relpath": "producers/tmp__intrinsic_slices.py",
+        "bytes": 1371,
+        "sha256": "5f18c0c75fd61155f92543087b330593be29aee7b99c99049588ce986fc4422a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m99_c04_s00_solver.py",
+        "bytes": 4205,
+        "sha256": "00a74df9bb3de50e2b52ab8da4a0394956eaa1a8d1be69df2cbcaa9775d8a4b7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat /tmp/hegel_continual_archive/archive_manifest.json; cat /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS'",
+      "python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/'\nfor a in json.load(open(p+'archive_apparatus_log.json')):\n print({k:(np.shape(v) if k=='facility_telemetry_trace' else v) for k,v in a.items()}); print(np.asarray(a['facility_telemetry_trace']))\nprint(open(p+'archive_manifest.json').read())\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; print('item keys',i.keys()); print('diagnostics',None if i.get('campaign_diagnostics') is None else list(i['campaign_diagnostics']))\nfor k,v in i['dataset'].items():\n print(k,{s:(np.shape(t) if not isinstance(t,dic",
+      "python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/'\na=json.load(open(p+'archive_apparatus_log.json')); print('manifest',open(p+'archive_manifest.json').read());\nfor r in a:\n x=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'],'medians',np.round(np.median(x,axis=0),4),'std',np.round(x.std(axis=0),4))\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; print('item keys',list(i)); d=i.get('campaign_diagnostics'); print('diagnostics',None if d is None else list(d));\nfor k,v in i['dataset'].items():\n print(k,{s:(np.shape(t) if",
+      "cat > /tmp/chamber_probe.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=5,suppress=True,linewidth=140)\na=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; xt,xe=a['_features'](tr,te); _,x=a['_features'](tr,d); s=a['_stress_map'](ds['calibration_load_cells']); tau,b=a['_fit'](tr,xt,s,dt,t)\nprint('intrinsic',tau,b,'cal map',s)\nfor na",
+      "cat > /tmp/chamber_structure.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\np=dict(np.load('/tmp/chamber_probe.npz')); globals().update(p)\na=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; cal=ds['calibration_load_cells']; n,k=y.shape\nR=np.c_[np.ones(len(cal['bridge_raw'])),cal['bridge_raw']]; print('linear bridge residual by channel',",
+      "cat > /tmp/chamber_alignment.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom scipy.optimize import least_squares\np='/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py'; a=runpy.run_path(p)\nbatch=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('batch length',len(batch)); i=batch[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; z=np.load('/tmp/chamber_probe.npz'); tau,b,past,hold,y,sc=[z[k] for k in ['tau','b','past','hold','y','sc']]; labs=d['lab_id']; n,k=y.shape\nkeys=['lab_id','stratum','coupon_features_ra",
+      "sed -n '35,115p' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation' | head -12; cat > /tmp/chamber_sparse.py <<'PY'\nimport numpy as np,pickle,runpy\nfrom scipy.optimize import least_squares\nnp.set_printoptions(precision=6,suppress=True)\na=runpy.run_path('/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; s=a['_s",
+      "OPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_sparse.py > /tmp/chamber_sparse.log; grep -E '^intrinsic|^two affine amplitudes|^two hold and drift|^hold drift plus small drift' /tmp/chamber_sparse.log; cat /holdout_task/validate_public_schema.py; sed -n '1,37p' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation' | head -7",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -28; cat > /tmp/chamber_residuals.py <<'PY'\nexec(open('/tmp/chamber_sparse.py').read().split('for name,F in models.items():')[0]); np.set_printoptions(precision=5,suppress=True,linewidth=170)\nfor mode in ['fixed','free']:\n yh,c,qp=fit(models['two affine amplitudes'],ids[~miss],mode); e=yh-y\n print(mode,qp,c,'bias by time',np.mean(e[~miss],axis=0)); print('rms complete/missing',metric(e[~miss]),metric(e[miss])); print('coupon mean early, late, rate and missing flag',np.c",
+      "set -e\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py > /holdout_task/batch_solver.py\ncat >> /holdout_task/batch_solver.py <<'PY'\n# Chamber calibration from the public verification coupons. The pole and\n# hold-amplitude multipliers are relative to the independent benchtop fit.\n_CHAMBER_POLE_SCALE = np.array([0.56128, 3.79555]) / np.array([0.556853, 3.468723])\n_CHAMBER_LOAD_SCALE = np.array([0.64154, 0.43751]) / np.array([0.632263, 0.428237])\n_CHAMBER_DRIFT_FRACTIONS = np.array([0.25526 / 0.56128, 2.06866 / 3.79555])\n\n\ndef _chamber_response(group, x, stress",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 -I /holdout_task/validate_public_schema.py\ncat > /tmp/chamber_transfer_check.py <<'PY'\nimport pickle,runpy,numpy as np\nfrom scipy.optimize import least_squares\nm=runpy.run_path('/holdout_task/batch_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=item['dataset']; tr,te,d=ds['train'],ds['test'],item['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; s=m['_stress_map'](ds['calibration_load_cells']); xt,xe=m['_features'](tr,te); q,b=m['_fit'](tr,xt,s,dt,t)\ndef empty(g): return {k:v[:0] for k,v in g.items()}\nx",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\ncat > /tmp/chamber_conservation_fit.py <<'PY'\nexec(open('/tmp/chamber_transfer_check.py').read().split('for physical in (False,True):')[0])\nfor complete in (False,True):\n use=~miss.any(1) if complete else np.ones(len(h),dtype=bool)\n f=least_squares(lambda p:((model(p,r,True)-y)[use]*w).ravel(),np.r_[np.log(q),.64,.455]); p=f.x\n print('fit',complete,'poles',np.exp(p[:2]),'load amplitude fast',p[2],'drift fast fraction',p[3],'pole scales',np.exp(p[:2])/q,'fast load fraction',(p[2]/np.exp(p[0]))/sum(b[:2]/q),'fit errors',rmse(model(p,r,True)-y))\nfor rule in ('",
+      "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/batch_solver.py')\ns = p.read_text()\na = s.index('# Chamber calibration')\nb = s.index('def solve_batch', a)\ns = s[:a] + '''# The chamber redistributes the hold-stress and drift rates between two\n# relaxation branches. These multipliers and fractions were calibrated on\n# the public chamber verification coupons, with diagnostic-local alignment.\n_CHAMBER_POLE_SCALE = np.array([1.00834495, 1.09990740])\n_FAST_LOAD_FRACTION = 0.90854979\n_FAST_DRIFT_FRACTION = 0.45688165\n\n\ndef _chamber_response(group"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m99_c04_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py",
+      "selected_channels": [
+        "m99_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4928,
+        "sha256": "0cdc430790ef3ba4ef1de025078479b331368dc25519485ee0a27bedae977839",
+        "content_addressed_ref": "content_addressed_blobs/0cdc430790ef3ba4ef1de025078479b331368dc25519485ee0a27bedae977839.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "metric",
+      "empty",
+      "rmse"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2c4d04a5341b844e8a426231ec86c19a083988b16e6898854ac048817f833dce",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\nexport OPENBLAS_NUM_THREADS=1\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/batch_solver.py')\ns = p.read_text()\na = s.index('# Chamber calibration')\nb = s.index('def solve_batch', a)\ns = s[:a] + '''# The chamber r",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2c4d04a5341b844e8a426231ec86c19a083988b16e6898854ac048817f833dce",
+        "expected_candidate_sha256": "2c4d04a5341b844e8a426231ec86c19a083988b16e6898854ac048817f833dce",
+        "computed_candidate_sha256": "2c4d04a5341b844e8a426231ec86c19a083988b16e6898854ac048817f833dce",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4928
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_2c4d04a5"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "metric",
+        "code": "def metric(e):\n    return np.round([np.sqrt(np.mean(e[:, :-1] ** 2)), np.sqrt(np.mean(e[:, -1] ** 2))], 5)"
+      },
+      {
+        "name": "empty",
+        "code": "def empty(g):\n    return {k: v[:0] for (k, v) in g.items()}"
+      },
+      {
+        "name": "rmse",
+        "code": "def rmse(e):\n    return np.array([np.sqrt(np.mean(e[:, :-1] ** 2)), np.sqrt(np.mean(e[:, -1] ** 2))])"
+      }
+    ]
+  }
+}

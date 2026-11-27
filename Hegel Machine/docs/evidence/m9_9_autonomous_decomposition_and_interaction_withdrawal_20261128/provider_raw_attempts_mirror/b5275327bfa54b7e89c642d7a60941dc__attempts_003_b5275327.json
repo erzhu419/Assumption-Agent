@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b5275327bfa54b7e89c642d7a60941dc",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:46.441925+00:00",
+  "ended_at_utc": "2026-11-27T19:53:05.026026+00:00",
+  "request_sha256": "69e763e116259853961105dc97cf1f21e649d48ac0223347a74999b2c9adb5c1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24648,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24703,
+    "cached_tokens": 14976,
+    "completion_tokens": 664
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,165p' /tmp/hegel_continual_archive/beta_m99_c02_batch_03_solver.py; for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; sed -n '1,42p' \\\"$f\\\"; done; cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True,linewidth=140)\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); s=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nfor item in log:\\n t=np.array(item['facility_telemetry_trace']); print(item['completed_campaign_short_name'],t.shape,'mean',t.mean(0),'std',t.std(0),'first',t[:2]); print('singular values',np.linalg.svd(t-t.mean(0),compute_uv=False))\\na=s['aux_manifold_telemetry']; print('current aux',a.shape,'mean',a.mean(0),'std',a.std(0),'first',a[:4]); c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print('cal ranges',x.min(0),x.max(0),y.min(0),y.max(0)); print('single bank',[(k,v.shape) for k,v in c['single_bank_sweeps'].items()]); print('banks first',s['row_bank_id'][:36]); d=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(d[:60],y[:60],rcond=None)[0]; print('affine OOF RMSE per channel',np.mean((d[60:]@b-y[60:])**2,axis=0)**.5,'matrix',b)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived wall and rosette models -> current telemetry-informed wall selection and sweep-fitted calibration; no validation metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the previous campaign solver unchanged\",\n      \"rejected_reason\": \"The previously accepted wall and calibration laws do not establish that either setting carried forward.\"\n    }\n  ],\n  \"rationale\": \"Compare the archived wall formulas with compact telemetry summaries to identify which operators to test. Hold out calibration rows to detect whether an affine model misses rosette interactions before comparing chamber residuals.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "03cb260f035791c14a2b7c5c59d1bf4abc442ed536953b8fce7e6996ba30f3a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19701.55,
+      "usage_known": true,
+      "prompt_tokens": 24703,
+      "cached_tokens": 14976,
+      "completion_tokens": 664
+    }
+  ]
+}

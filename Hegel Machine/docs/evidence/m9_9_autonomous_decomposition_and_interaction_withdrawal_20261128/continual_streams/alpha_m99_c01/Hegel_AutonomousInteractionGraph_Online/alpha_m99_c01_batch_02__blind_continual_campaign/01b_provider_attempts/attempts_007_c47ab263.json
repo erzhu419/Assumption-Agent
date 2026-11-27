@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c47ab26395fe4d879c9a95c15bdbb0fd",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:59.878317+00:00",
+  "ended_at_utc": "2026-11-27T19:48:30.366069+00:00",
+  "request_sha256": "01862c38ff34ade3d68165c92e1e9bb352893b4f43beac4fe8f62daf02d5b5fc",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50462,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34441,
+    "cached_tokens": 13696,
+    "completion_tokens": 1253
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_align.py <<'PY'\\nfrom m99_probe import *\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nO=np.c_[Y,R]; lab=dg['lab_id']; missing=np.isnan(dg['coupon_features_raw']); good=~missing.any(1)\\npt,ht=loads(te)\\n_,b0=_design(tau,xd,pd,hd,dt,t); r0=b0@beta\\nprint('rate residual by row',np.c_[lab,missing.any(1),R-r0].round(4));print('file log keys',[(k,str(v)[:160]) for k,v in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))[-1].items()]);\\ndef normalization(parts):\\n rr=np.vstack([p['ref_coupons'] for p in parts]); labs=np.concatenate([p['lab_id'] for p in parts]); a=dg['coupon_features_raw'].copy()\\n for l in np.unique(lab):\\n  ref=rr[labs==l];a[lab==l]=(a[lab==l]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n a[missing]=np.broadcast_to(np.mean(np.vstack([x,xt]),axis=0),a.shape)[missing]; return a\\nfor ps in [[tr,te],[dg],[tr,dg],[te,dg],[tr,te,dg]]:\\n a=normalization(ps); d=beta[2]+a@beta[3:];gap=b0[:,:2]*tau\\n print('ref lens',[len(p['lab_id']) for p in ps], 'rate err complete/missing',*[np.sqrt(np.mean(e**2)) for e in [(gap@ (beta[:2]/tau)+d-R)[good],(gap@(beta[:2]/tau)+d-R)[~good]]]);\\n # Multichannel regression isolates temporal fingerprints of the known hereditary variables.\\n U=np.c_[np.ones(len(lab)),hd,gap,d]; B=np.linalg.lstsq(U[good],O[good],rcond=None)[0]; E=U@B-O\\n print('max lab strain/rate',np.max([np.sqrt(np.mean(E[good&(lab==l)]**2,axis=0)) for l in np.unique(lab)],axis=0)[[0,5,11,12]].round(5))\\n print('coeff(t,.25,1.95,4,rate)',B[:,[0,5,11,12]].round(5))\\n if len(ps)==1:\\n  print('diag only rate residual', (gap@(beta[:2]/tau)+d-R).round(5))\\n  for idx in [good,np.ones(len(lab),dtype=bool)]:\\n   def proj(logt,out=False):\\n    ts=np.exp(logt); K=np.r_[np.c_[-np.expm1(-t[:,None]/ts),t],np.r_[1/ts,1][None,:]]; M=(U[:,None,:,None]*K[None,:,None,:]).reshape(len(lab),len(t)+1,-1); c=np.linalg.lstsq(M[idx].reshape(-1,M.shape[-1]),O[idx].ravel(),rcond=None)[0]; E=M@c-O; return (ts,c.reshape(len(U.T),3),E) if out else E[idx].ravel()\\n   q=least_squares(proj,np.log([.63,1.15]),max_nfev=80);ts,c,E=proj(q.x,True);print('modal',ts,c.round(5),'rms',np.sqrt(np.mean(E[idx]**2,0))[[0,5,11,12]].round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_align.py; cat /holdout_task/batch_solver.py /holdout_task/_verified_upstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (free chamber amplitudes) -> H2 (structured chamber transfer with diagnostic-specific feature alignment); the best tested sparse model has worst-lab RMSE about 0.048 for strain and 0.061 for initial rate.\",\n  \"nogood_update\": {\"has_new_nogood\": false, \"nogood_rung\": \"NONE\", \"assumption_refuted\": null, \"empirical_witness\": null, \"causal_blanket_diagnosis\": null, \"sublated_pivot\": null, \"risk_kind\": null, \"resolves_nogood_ids\": []},\n  \"considered_alternatives\": [{\"option\": \"Adopt the current unrestricted amplitude regression\", \"rejected_reason\": \"Its worst-lab residual is well above the temporal fit residual; separating diagnostic alignment from chamber physics may explain the gap.\"}],\n  \"rationale\": \"Compare reference populations and split complete from imputed diagnostic rows. If the correct alignment restores the initial-rate law, it becomes an independent constraint on candidate chamber strain operators.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "64202e627d1b4d966b212b0b97590f531cf36a6a6ab513c601c01e91896dc365",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31606.08,
+      "usage_known": true,
+      "prompt_tokens": 34441,
+      "cached_tokens": 13696,
+      "completion_tokens": 1253
+    }
+  ]
+}

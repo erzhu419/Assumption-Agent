@@ -1,0 +1,93 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c04_s00_f93e1e76bb42",
+    "source_hash": "f93e1e76bb423489a8cf90bc8e6b1c313f210daec7371eff44a918e186c4cc86",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c04_s00__blind_continual_campaign",
+    "task_id": "alpha_m99_c04_s00__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/chamber_audit.py",
+        "archived_relpath": "producers/tmp__chamber_audit.py",
+        "bytes": 2250,
+        "sha256": "69ac11f92d3b7b4bc3ec33abba49661ffb7deb69dc0e501468c30f4eb70cf103"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && ls -l /tmp/hegel_continual_archive/ && python3 - <<'PY'\nimport json,pickle,pathlib\np=pathlib.Path('/tmp/hegel_continual_archive');\nfor name in ['archive_manifest.json','archive_apparatus_log.json']:\n f=p/name\n if f.exists():\n  a=json.loads(f.read_text()); print(name, str(a)[-18000:])\nprint('INDEX',pathlib.Path('public_asset_index.json').read_text()[:6500])\na=pickle.load(open('public_batch.pkl','rb'))\nprint(type(a),len(a))\ndef describe(x,d=0):\n if isinstance(x,dict) and d<4:\n  return {k:describe(v,d+1) for k,v in x.items()}\n if hasattr(x,'sha",
+      "cd /holdout_task && python3 - <<'PY'\nimport json,pickle,pathlib,numpy as np\np=pathlib.Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); a=json.loads(p.read_text()); print('ARCHIVE (excluding raw trace):');\nfor r in a: print(json.dumps({k:v for k,v in r.items() if k!='facility_telemetry_trace'}, indent=1)); print('trace dimensions',np.shape(r.get('facility_telemetry_trace')))\nprint('INDEX');print(pathlib.Path('public_asset_index.json').read_text())\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; print('KEYS',i.keys(),d.keys()); np.set_printoptions(precision=5,sup",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport json,pickle,numpy as np\nfrom itertools import combinations_with_replacement\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; print('time',d['past_dt'],d['eval_times']); c=d['calibration_load_cells']; x=c['bridge_raw']; y=c['true_channel_loads']; print('cal bounds',x.min(0),x.max(0),y.min(0),y.max(0)); print('sweeps',[(k,v.shape,v[:5]) for k,v in c['single_channel_sweeps'].items()]);\nfor src,dest in [(x,y),(y,x)]:\n for degree in (1,2,3):\n  A=np.column_stack(",
+      "cd /holdout_task && cat > batch_solver.py <<'PY'\n\"\"\"Estimate coupon relaxation from the calibrated benchtop experiments.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    x = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']])\n    refs = np.vstack([train['ref_coupons'], test['ref_coupons']])\n    labs = np.concatenate([train['lab_id'], test['lab_id']])\n    strata = np.concatenate([train['stratum'], test['stratum']])\n    for lab in np.unique(labs):\n        i = labs == lab\n        ref = refs[i]\n        center = np.median(ref.mean(",
+      "cd /holdout_task && cat > /tmp/chamber_audit.py <<'PY'\nimport sys, pickle, json\nfrom pathlib import Path\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nimport batch_solver as m\nfrom scipy.optimize import least_squares\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; T=D['train']; X,_=m._features(T,D['test']); b=m._stress_map(D['calibration_load_cells']); dt=D['past_dt']; t=D['eval_times']\nA=Path('/tmp/hegel_continual_archive'); print('archive files', sorted(p.name for p in A.iterdir())); p=A/'archive_manifest.json'; print('manifest',p.read_text()[:1800] if p.exists() else No",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport json, pickle\nimport numpy as np\nfrom batch_solver import _stress_map\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['bridge_raw']; y=C['true_channel_loads'].sum(1); A=np.c_[np.ones(len(x)),x]; b=_stress_map(C); P=np.linalg.pinv(A); e=(y-A@b)/(1-np.einsum('ij,ji->i',A,P)); leverage=np.einsum('ij,ji->i',A,P)\nfor label,z in [('all',np.ones(len(x),bool)),('upper leverage quartile',leverage>=np.quantile(leverage,.75)),('upper load quartile',abs(y)>=np.quantile(abs(y),.75))]:\n print(lab"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__chamber_audit.py",
+      "primary_producer_container_path": "/tmp/chamber_audit.py",
+      "selected_channels": [
+        "m99_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4205,
+        "sha256": "00a74df9bb3de50e2b52ab8da4a0394956eaa1a8d1be69df2cbcaa9775d8a4b7",
+        "content_addressed_ref": "content_addressed_blobs/00a74df9bb3de50e2b52ab8da4a0394956eaa1a8d1be69df2cbcaa9775d8a4b7.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f93e1e76bb423489a8cf90bc8e6b1c313f210daec7371eff44a918e186c4cc86",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport json, pickle\nimport numpy as np\nfrom batch_solver import _stress_map\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['bridge_r",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f93e1e76bb423489a8cf90bc8e6b1c313f210daec7371eff44a918e186c4cc86",
+        "expected_candidate_sha256": "f93e1e76bb423489a8cf90bc8e6b1c313f210daec7371eff44a918e186c4cc86",
+        "computed_candidate_sha256": "f93e1e76bb423489a8cf90bc8e6b1c313f210daec7371eff44a918e186c4cc86",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4205
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_f93e1e76"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

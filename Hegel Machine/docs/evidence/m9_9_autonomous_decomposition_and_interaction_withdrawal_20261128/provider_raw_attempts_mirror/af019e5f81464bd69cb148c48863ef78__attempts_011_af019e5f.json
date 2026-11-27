@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "af019e5f81464bd69cb148c48863ef78",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:41.307330+00:00",
+  "ended_at_utc": "2026-11-27T20:05:14.965052+00:00",
+  "request_sha256": "bf3f705e402b2c7da7a0d17bfbba483ee1117a91b09a6f223f5f8f6a6603a21d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32827,
+    "cached_tokens": 13696,
+    "completion_tokens": 1414
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_stress.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _fit, _design\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nd = calibrate_upstream(raw)\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nlab = tr['lab_id']\\nx, xt = _features(tr, te)\\nout = solve_batch(raw)\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nfor key, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(xt), len(t)), 'initial_rate_pred': (len(xt),)}.items():\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\n\\ndef take(mask):\\n    return {k: v[mask] for k, v in tr.items()}\\n\\ndef residual(g, z, tau, theta):\\n    c, r = _design(g, z, dt, t, tau)\\n    return np.column_stack([g['strain_curves_obs'] - g['strain_0'][:, None] - c @ theta, g['instant_rate_obs'] - r @ theta])\\n\\naux = tr['aux_chamber_telemetry']\\n# Candidate correction bases are fixed before cross-validation. Fit only\\n# on other labs; evaluate each horizon and the instantaneous rate separately.\\np, q = aux[:, :2], aux[:, 2:]\\nv = p - q\\nbases = [np.zeros((len(x), 0)), aux, np.c_[aux, v[:, 0]*v[:, 1], p[:, 0]*q[:, 0]*v[:, 1], v/(1+v*v)]]\\nrows = [[] for _ in bases]\\nfor j in np.unique(lab):\\n    keep = lab != j\\n    fit, hold = take(keep), take(~keep)\\n    tau, theta = _fit(fit, x[keep], dt, t)\\n    e_fit = residual(fit, x[keep], tau, theta)\\n    e_hold = residual(hold, x[~keep], tau, theta)\\n    for b, scores in zip(bases, rows):\\n        # Median-scale clipping prevents residual outliers from driving the nuisance fit.\\n        scale = np.maximum(1.4826*np.median(abs(e_fit - np.median(e_fit, axis=0)), axis=0), 1e-8)\\n        bfit = b[keep] - b[keep].mean(axis=0)\\n        bh = b[~keep] - b[keep].mean(axis=0)\\n        w = np.linalg.lstsq(bfit, np.clip(e_fit, -3*scale, 3*scale), rcond=None)[0]\\n        err = e_hold - bh @ w\\n        scores.append([np.quantile(abs(err[:, :-1]), .9), np.max(np.quantile(abs(err[:, :-1]), .9, axis=0)), np.sqrt(np.mean(err[:, -1]**2))])\\nfor name, scores in zip(('material only','linear telemetry','linear + pairwise/product/rational telemetry'), rows):\\n    print(name, 'worst lab [curve p90, worst horizon p90, rate RMSE]:', np.max(scores, axis=0))\\n\\n# Finite differences over the actual coupons catch disagreement between\\n# the reported initial rate and the deployment curve at t=0.\\nh = 1e-5\\na, b = out['estimated_taus'], out['hereditary_weights']\\nc, _ = _design(te, xt, dt, np.array([0., h, 2*h]), a)\\ny = c @ b\\nerr = np.max(abs((-3*y[:,0]+4*y[:,1]-y[:,2])/(2*h) - out['initial_rate_pred']))\\nprint('maximum initial-rate finite-difference error:', err)\\nassert err < 1e-7\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_stress.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop recurrence alone -> H2 add a telemetry correction only if it improves held-out labs; current worst-lab curve p90 absolute error is 0.02310 and worst rate RMSE is 0.00780.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or Fokker–Planck drift\",\n      \"rejected_reason\": \"This dataset has continuous strain and rate responses, no relay or class labels, and a deterministic hereditary recurrence. The relevant nuisance comparison is across labs.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed linear and nonlinear telemetry corrections on held-out labs. A gain would justify investigating a benchtop nuisance correction, not transferring it to the unobserved chamber. Independently test whether the reported initial rate agrees with the deployment curve derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1b723ec8cb334af2bae3abe0ad6d8391db169f4d07729f06df87377a43b48fbe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34815.03,
+      "usage_known": true,
+      "prompt_tokens": 32827,
+      "cached_tokens": 13696,
+      "completion_tokens": 1414
+    }
+  ]
+}

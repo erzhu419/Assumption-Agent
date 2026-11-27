@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "246387f41e1846e08a3e8ec6421462d4",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:11.731534+00:00",
+  "ended_at_utc": "2026-11-27T19:49:32.207556+00:00",
+  "request_sha256": "addca519a7f327b785274b8b2619b833dc3549bccf1383eaabc73880a3b38cd0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30221,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26469,
+    "cached_tokens": 14976,
+    "completion_tokens": 764
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; grep -nE '^#|^_CHAMBER|^_ROUTE' \\\"$f\\\"; done\\nsed -n '1,55p' /tmp/hegel_continual_archive/alpha_m99_c02_batch_02_solver.py\\npython3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/holdout_task/'\\na=json.load(open(p+'public_asset_index.json'));print('asset files:',a['files'])\\ni=pickle.load(open(p+'public_batch.pkl','rb'))[0];d=i['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; design=np.c_[np.ones(len(r)),r]; b=np.linalg.lstsq(design,y,rcond=None)[0]; e=design@b-y; print('bridge residual rms, max by channel, sum rms',np.sqrt(np.mean(e**2,axis=0)),np.max(np.abs(e),axis=0),np.sqrt(np.mean(e.sum(1)**2))); print('sweeps',type(c['single_channel_sweeps']).__name__,getattr(c['single_channel_sweeps'],'shape',None))\\nfor k in ('train','test'):\\n s=d[k]; print(k,'lab/stratum/count',np.unique(np.c_[s['lab_id'],s['stratum']],axis=0,return_counts=True),'ref first',s['ref_coupons'][0]); print('finite obs',[(j,int(np.isfinite(s[j]).sum())) for j in ('strain_curves_obs','instant_rate_obs') if j in s])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop constitutive law -> H2 baseline deployment after both apparatus channels returned to their initialization levels; held-out error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the batch-02 drift correction\",\n      \"rejected_reason\": \"The prefix entering batch 02 had channel 0 at 2.524; the current prefix has it at -0.425, close to the initialization value of -0.375.\"\n    }\n  ],\n  \"rationale\": \"The low-low trace matches the prefix that preceded the archived baseline solver. Check the archived calibration and feature conventions before reusing them: material bridge residuals would warrant changing the calibration basis, and a reference layout mismatch would warrant changing preprocessing rather than the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "001d7e2740e28beb9893b985adbd11bf6a751fe49ef4ce193e89309b211fdcd0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21604.34,
+      "usage_known": true,
+      "prompt_tokens": 26469,
+      "cached_tokens": 14976,
+      "completion_tokens": 764
+    }
+  ]
+}

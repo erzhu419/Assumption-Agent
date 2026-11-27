@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0de035a3f1fc4a589c80636516758836",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:02.960506+00:00",
+  "ended_at_utc": "2026-11-27T19:59:39.223340+00:00",
+  "request_sha256": "0580c73a3369278d310db5ebc468c0706376b4bf87716ea6c2aa776aea3904e5",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43032,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29633,
+    "cached_tokens": 13696,
+    "completion_tokens": 1578
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/bridge_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, calibrate_upstream\\nfrom batch_solver import solve_batch\\n\\nJ = np.arange(4)\\nK = (J + 1) % 4\\n\\ndef basis(x, j, kind, a=0.):\\n    u, v = x[:, j], x[:, K[j]]\\n    cube, pair = u**3, u*v\\n    if kind == 'rational':\\n        den = 1 + a*(u-v)**2\\n        cube, pair = cube/den, pair/den\\n    z = np.column_stack((np.ones(len(x)), x, cube, pair))\\n    if kind == 'difference':\\n        # Along with uv, these span the sum/difference squares of the pair.\\n        z = np.column_stack((z, u**2, v**2))\\n    return z\\n\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    ds = item['dataset']\\n    c = ds['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    m = np.flatnonzero(~axis)\\n    folds = {f'axis-{j}': np.flatnonzero(axis & (x[:, j] != 0)) for j in J}\\n    folds.update({f'mixed-{i}': r for i, r in enumerate(np.array_split(np.random.default_rng(31).permutation(m), 4))})\\n    folds['largest-mixed'] = m[np.argsort(np.linalg.norm(x[m], axis=1))[-12:]]\\n    print('dataset fields:', sorted(ds))\\n    grid = (0., 1e-4, 1e-3, .01, .1, 1.)\\n    maxima = []\\n    for name, idx in folds.items():\\n        t = np.setdiff1d(np.arange(len(x)), idx)\\n        bridge = _fit_bridge(x[t], y[t])\\n        resid = np.linalg.norm(_forward(x[t], bridge)-y[t], axis=1)\\n        t = t[resid < .01]\\n        # Score clean held-out observations; the residual gap separates gross spikes.\\n        idx = idx[np.linalg.norm(_forward(x[idx], bridge)-y[idx], axis=1) < .01]\\n        scores = [np.linalg.norm(_forward(x[idx], bridge)-y[idx], axis=1).max()]\\n        params = [('difference', 0.)] + [('rational', a) for a in grid]\\n        fit_errors, hold_errors = [], []\\n        for kind, a in params:\\n            coefs = [np.linalg.lstsq(basis(x[t], j, kind, a), y[t,j], rcond=None)[0] for j in J]\\n            p = np.column_stack([basis(x[t],j,kind,a)@coefs[j] for j in J])\\n            q = np.column_stack([basis(x[idx],j,kind,a)@coefs[j] for j in J])\\n            fit_errors.append(np.linalg.norm(p-y[t]))\\n            hold_errors.append(np.linalg.norm(q-y[idx], axis=1).max())\\n        selected = np.argmin(fit_errors[1:])+1\\n        scores.extend([hold_errors[0], hold_errors[selected]])\\n        maxima.append(scores)\\n        print(name, 'cyclic / +squared terms / rational:', np.round(scores, 8), 'train-selected a:', params[selected][1])\\n    print('worst forward residual per grammar:', np.max(maxima, axis=0))\\n    coef = _fit_bridge(x, y)\\n    decoded = calibrate_upstream(ds)\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        if ds.get(name) is None:\\n            continue\\n        for key in ('past_channel_raw', 'hold_channel_raw'):\\n            z = decoded[name][key].reshape(-1, 4)\\n            jac = np.broadcast_to(coef[1:5].T, (len(z), 4, 4)).copy()\\n            jac[:, J, J] += 3*coef[5]*z**2 + coef[6]*z[:, K]\\n            jac[:, J, K] += coef[6]*z\\n            s = np.linalg.svd(jac, compute_uv=False)\\n            err = np.max(np.abs(_forward(z, coef)-ds[name][key].reshape(-1,4)))\\n            print(name, key, 'minimum singular value:', s[:,-1].min(), 'maximum inverse residual:', err)\\n            assert s[:,-1].min() > .1 and err < 1e-10\\n    result = solve_batch(ds)\\n    assert all(np.isfinite(result[k]).all() for k in ('estimated_taus', 'hereditary_weights', 'predicted_strain', 'initial_rate_pred'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent cubic responses with affine mixing → H2 cyclic pairwise coupling plus diagonal cubics; worst held-out absolute errors are 0.000363247 per channel and 0.000621720 for total load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, PDE, or within-batch classification diagnostics\",\n      \"rejected_reason\": \"The upstream task is static regression on paired continuous loads and bridge readings, with no relay states, drift PDE, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Check whether pairwise square terms or rational saturation improve the worst measured slices, choosing the rational scale within each training fold. A material improvement would justify changing the basis; a nearly singular Jacobian on actual trial loads would instead call for revisiting the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a6dd52cfdc9e9c1b211a53f54307308adc87b90baafd1ba2b409b385d305dd32",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38525.99,
+      "usage_known": true,
+      "prompt_tokens": 29633,
+      "cached_tokens": 13696,
+      "completion_tokens": 1578
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de0b4e20efaf4ef582297709d06adaa3",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:14.578246+00:00",
+  "ended_at_utc": "2026-11-27T19:39:40.016538+00:00",
+  "request_sha256": "d7bb78a2abe1ec6981198c38aa65720b929ac6f8bad263ec1f4889014adb40e4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54158,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34506,
+    "cached_tokens": 14976,
+    "completion_tokens": 1014
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/m99_cal_compare.py <<'PY'\\nimport pickle,runpy,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; a=s['sensor_calibration_sweeps']; x=a['ref_rosette']; y=a['raw_rosette']; b=a['single_bank_sweeps']; bid=b['bank_id']; p=b['ref_signal']; r=b['raw_readout']; S,_=m['_forward'](s); Xp=np.stack([(S@q['w_pulse']).reshape(-1,4) for q in item['campaign_diagnostics']]); Yp=np.stack([q['y_pulse_raw'].reshape(-1,4) for q in item['campaign_diagnostics']]);\\ndef fit(kind, tr, ts):\\n if kind=='full': return np.linalg.lstsq(np.c_[np.ones(tr.sum()),x[tr]],y[tr],rcond=None)[0]\\n c=np.zeros((5,4))\\n for j in range(4):\\n  u,v=x[tr,j],y[tr,j]; mask=ts&(bid==j)\\n  if kind=='joint': u,v=np.r_[u,p[mask]],np.r_[v,r[mask]]\\n  if kind=='single': u,v=p[mask],r[mask]\\n  c[[0,j+1],j]=np.linalg.lstsq(np.c_[np.ones(len(u)),u],v,rcond=None)[0]\\n return c\\nfor k in ('full','diag','joint','single'):\\n e=np.empty_like(y); es=np.empty_like(r)\\n for i in range(6):\\n  h=np.arange(len(x))%6==i; hs=np.arange(len(r))%6==i\\n  c=fit(k,~h,~hs); e[h]=c[0]+x[h]@c[1:]-y[h]; es[hs]=c[0,bid[hs]]+p[hs]*np.diag(c[1:])[bid[hs]]-r[hs]\\n c=fit(k,np.ones(len(x),bool),np.ones(len(r),bool)); E=np.linalg.solve(c[1:].T,(Yp-c[0]).reshape(-1,4).T).T.reshape(Xp.shape)-Xp; E=E.reshape(len(E),len(s['mu_shifts']),-1,4)\\n print(k,'worst rosette CV',np.sqrt(np.mean(e*e,axis=0)).max(),'single-bank CV',max(np.sqrt(np.mean(es[bid==j]**2)) for j in range(4)),'pulse-shift',np.sqrt(np.mean(E*E,axis=(2,3))).max(),'bank-pulse-shift',np.sqrt(np.mean(E*E,axis=2)).max())\\n print('mean residual per channel',E.mean(axis=(0,1,2)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_cal_compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 zero-loss walls with full affine calibration → H2 zero-loss walls with independent affine channels; the current worst bank–pulse–shift RMSE is 4.91×10⁻⁶ and the independently measured KKT gap is 3.27×10⁻⁵.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Remove the bank 1 offset using diagnostic tracers\",\"rejected_reason\":\"That would tune on the validation pulses. Fit only on calibration sweeps and use the pulses to measure transfer error.\"}],\"rationale\":\"The fitted cross-channel terms are small, while bank 1 shows a consistent residual across three pulses. Compare full and diagonal calibrations, with and without single-bank data. Change the artifact only if sweep-trained calibration improves worst-bank tracer prediction without materially worsening held-out sweep error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "def1182f6fbad618e77be07e02c80d82d034f8b0fd42a6d91f171db1adb76f17",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26529.57,
+      "usage_known": true,
+      "prompt_tokens": 34506,
+      "cached_tokens": 14976,
+      "completion_tokens": 1014
+    }
+  ]
+}

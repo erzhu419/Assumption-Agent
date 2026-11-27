@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b74b4e7e01640178ccb2bb75bfec070",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:53.055513+00:00",
+  "ended_at_utc": "2026-11-27T19:47:26.596966+00:00",
+  "request_sha256": "7ace9caca01192181ad47ff9e3bb0622d54e129d9010b84babb24f81855e292e",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 41181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29981,
+    "cached_tokens": 13696,
+    "completion_tokens": 1389
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/drift_probe.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from chamber_probe import *\\nfrom itertools import combinations\\nD=np.c_[y,r]; F=cf.T; intrinsic=(a@np.r_[b[:2],np.zeros(5)]); ir=c@np.r_[b[:2],np.zeros(5)]; Y=D-np.c_[intrinsic,ir]; labs=diag['lab_id']; strs=diag['stratum']\\nfull=lambda sels:{k: np.concatenate([s[k] for s in sels],axis=0) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}\\ndef transforms(refsets,imputesets):\\n ref=full(refsets); imp=full(imputesets)\\n def align(d):\\n  out=d['coupon_features_raw'].copy()\\n  for l in np.unique(d['lab_id']):\\n   m=d['lab_id']==l; rr=ref['ref_coupons'][ref['lab_id']==l]; out[m]=(out[m]-np.median(rr.mean(0)))/np.median(rr.std(0))\\n  return out\\n xx=align(imp);_,v,n=np.unique(np.c_[imp['lab_id'],imp['stratum']],axis=0,return_inverse=True,return_counts=True); w=1/n[v]; mm=np.nansum(w[:,None]*xx,0)/(np.isfinite(xx).T@w); u=align(diag); return np.where(np.isfinite(u),u,mm)\\nparts=[tr,te,diag]; sets=list(sum((list(combinations(range(3),k)) for k in range(1,4)),[])); names=['tr','te','dg']; key=lambda s: '+'.join(names[i] for i in s)\\nrecords=[]\\nfor ri in sets:\\n for ii in sets:\\n  u=transforms([parts[j] for j in ri],[parts[j] for j in ii]); v=b[2]+u@b[3:]; w=np.r_[np.ones(len(t)),2.]; yy=Y*w; ff=F*w\\n  for typ in ['dr','dr+1','dr+hold']:\\n   g=v[:,None] if typ=='dr' else np.c_[v,np.ones(len(v))] if typ=='dr+1' else np.c_[v,np.ones(len(v)),h]\\n   M=np.einsum('ij,kt->itjk',g,ff).reshape(len(v),len(w),-1); pred=np.zeros_like(D)\\n   for l in np.unique(labs):\\n    m=labs!=l; q=np.linalg.lstsq(M[m].reshape(-1,M.shape[-1]),yy[m].ravel(),None)[0]; pred[~m]=M[~m]@q/w\\n   q=np.linalg.lstsq(M.reshape(-1,M.shape[-1]),yy.ravel(),None)[0]; e=pred-Y\\n   rms=np.sqrt(np.mean(e**2,axis=0)); records.append((np.sqrt(np.mean(e**2)),key(ri),key(ii),typ,np.sqrt(np.mean(e[:,:-1]**2)),rms[-1],np.max(abs(e[:,:-1])),q.round(5)))\\nfor z0 in sorted(records,key=lambda q:q[0])[:20]: print(z0)\\nfor z0 in records:\\n if z0[1:3] in [('tr+te','tr+te'),('tr+dg','tr+dg'),('dg','dg'),('tr+te+dg','tr+te+dg')]: print('primary',z0)\\nprint('reference stats by panel')\\nfor l in range(4):\\n print(l,[(np.median(s['ref_coupons'][s['lab_id']==l].mean(0)),np.median(s['ref_coupons'][s['lab_id']==l].std(0))) for s in [tr,te,diag,full([tr,te]),full([tr,diag])]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/drift_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged intrinsic hereditary branches -> H2 chamber reshapes the drift across relaxation modes; worst held-out benchtop lab median absolute errors are 0.00943 strain and 0.00685 rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Benchtop linear drift is sufficient for the current chamber.\",\"empirical_witness\":\"Diagnostic strain RMSE is 0.689 under the benchtop law; the final-time residual grows approximately in proportion to the coupon drift, while a two-mode-plus-linear basis fits all diagnostic traces within 0.0142 strain/rate units.\",\"causal_blanket_diagnosis\":\"The steady linear term alone does not capture the time dependence introduced at deployment; intrinsic memory and reference alignment must be separated from the chamber drift.\",\"sublated_pivot\":\"Retain train-estimated intrinsic relaxation and test chamber redistribution of drift into the same exponential modes and a linear tail.\",\"risk_kind\":\"boundary_basis_incompleteness\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the prior campaign's memory-reset law\",\"rejected_reason\":\"It raises diagnostic initial-rate RMSE from 0.058 to 1.249.\"}],\"rationale\":\"Diagnostic reference panels vary by lab. Compare plausible panel conventions using lab-held-out predictions before attributing their offsets to chamber mechanics, and report strain and rate errors separately.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0113810fbf4eea2e6beba04f0fa01fe59d517985f6e3460bee20ae94ce1c2396",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34643.17,
+      "usage_known": true,
+      "prompt_tokens": 29981,
+      "cached_tokens": 13696,
+      "completion_tokens": 1389
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9d5db75ce52d4f33802fdbdb31ce4e8e",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:33.610880+00:00",
+  "ended_at_utc": "2026-11-27T19:52:06.219178+00:00",
+  "request_sha256": "50f5849d8992ddfb592dfa7ff54b9bdb860b72ba2be87ba09a2345bce93b7e6d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49664,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33245,
+    "cached_tokens": 14976,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m99_c01_s00_solver.py').read_text()\\na=src.index('def _bridge(')\\nb=src.index('def _design(',a)\\nbridge='''def _bridge_terms(loads):\\n    return np.concatenate((np.ones_like(loads[..., :1]), loads,\\n                           loads * np.roll(loads, -1, axis=-1), loads**3), axis=-1)\\n\\n\\ndef _bridge(cal):\\n    raw = np.asarray(cal['bridge_raw'])\\n    loads = np.asarray(cal['true_channel_loads'])\\n    # Three calibration rows are on an offset mode absent in the coupon readings.\\n    nominal = np.max(np.abs(raw), axis=1) < 8.0\\n    return np.linalg.lstsq(_bridge_terms(loads[nominal]), raw[nominal], rcond=None)[0]\\n\\n\\ndef _invert_bridge(raw, bridge):\\n    linear, cross, cubic = bridge[1:5], bridge[5:9], bridge[9:13]\\n    y = (raw - bridge[0]) @ np.linalg.inv(linear)\\n    for _ in range(20):\\n        residual = _bridge_terms(y) @ bridge - raw\\n        if np.max(np.abs(residual), initial=0.0) < 1e-11:\\n            break\\n        jac = (linear + np.roll(y, -1, axis=-1)[..., :, None] * cross\\n               + np.roll(y, 1, axis=-1)[..., :, None] * np.roll(cross, 1, axis=0)\\n               + 3 * y[..., :, None]**2 * cubic)\\n        y -= np.linalg.solve(np.swapaxes(jac, -1, -2), residual[..., None])[..., 0]\\n    return y\\n\\n\\ndef _loads(part, bridge):\\n    return tuple(_invert_bridge(np.asarray(part[key]), bridge).sum(axis=-1)\\n                 for key in ('past_channel_raw', 'hold_channel_raw'))\\n\\n\\n'''\\nsrc=src[:a]+bridge+src[b:]\\nsrc=src.replace('def solve_batch(dataset):','def solve_batch(dataset: dict) -> dict:').replace('    pt, ht = _loads(test, bridge)','    # The latest prefix equilibration matches facility initialization:\\\\n    # neither the memory reset nor the transient drift redistribution is active.\\\\n    pt, ht = _loads(test, bridge)')\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; q=np.max(abs(r),axis=1)<8\\nfold=np.random.default_rng(17).permutation(len(r))%5\\nfor j in range(5):\\n a=q&(fold!=j); b=q&(fold==j); p=m._bridge({'bridge_raw':r[a],'true_channel_loads':y[a]}); e=m._invert_bridge(r[b],p)-y[b]; print('inverse fold',j,'channel RMSE',np.sqrt(np.mean(e*e)),'total RMSE',np.sqrt(np.mean(e.sum(1)**2)))\\np=m._bridge(c)\\nfor k in ('train','test'):\\n for f in ('past_channel_raw','hold_channel_raw'):\\n  raw=d[k][f]; x=m._invert_bridge(raw,p); err=np.max(abs(m._bridge_terms(x)@p-raw)); print(k,f,'closure',err,'load range',x.min(),x.max()); assert err<1e-8\\nz=m.solve_batch(d); print('taus',z['estimated_taus'],'theta',z['hereditary_weights']); print({k:(v.shape,float(np.min(v)),float(np.max(v))) for k,v in z.items()}); assert all(np.isfinite(v).all() for v in z.values())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: carry forward batch-02 redistribution and an affine bridge → H2: restore baseline chamber mechanics and invert a coupled cubic bridge; worst five-fold nominal forward calibration RMSE is 0.000132 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the previous campaign's drift redistribution\",\n      \"rejected_reason\": \"The prefix log is a record of equilibration before the next campaign: the shifted channels precede the two known interventions, and the latest entry returns both channels to their initialization levels.\"\n    }\n  ],\n  \"rationale\": \"Fit the observed cyclic cross terms and channel cubics on the nominal calibration rows, then test inversion on held-out known loads and check forward closure on every coupon. Keep the archived robust material fit and apply the baseline chamber law indicated by the prefix log.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "3e4ac5815023246f1c3f360eb6384e01fdb1b7bab17e2e1381217be70ef33412",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33736.75,
+      "usage_known": true,
+      "prompt_tokens": 33245,
+      "cached_tokens": 14976,
+      "completion_tokens": 1366
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "874642fb0ea24ef3b172d65c6b7db8cc",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:09:13.570039+00:00",
+  "ended_at_utc": "2026-11-27T20:09:43.135990+00:00",
+  "request_sha256": "9d081c4e8357f6f7d8d7e8a376e4d7e7394d22ad83739ad7fccae07624849132",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46525,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29910,
+    "cached_tokens": 13696,
+    "completion_tokens": 1215
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport sys, pickle, json, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as batch, downstream_solver as solver\\nwith open('public_batch.pkl','rb') as f: dataset = pickle.load(f)[0]['dataset']\\nd = batch._up.calibrate_upstream(dataset)\\na, b = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\nbridge = np.r_[0., np.ones(4)]\\nout = batch.solve_batch(dataset)\\nfor key, shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(len(b['lab_id']),len(t)), 'initial_rate_pred':(len(b['lab_id']),)}.items():\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25.0\\nprint('full taus:', out['estimated_taus'], 'weights:', out['hereditary_weights'])\\nfor lab in np.unique(a['lab_id']):\\n    keep = a['lab_id'] != lab\\n    tr = {k:v[keep] for k,v in a.items()}\\n    va = {k:v[~keep] for k,v in a.items()}\\n    x, z = solver._features(tr,va)\\n    taus, theta = solver._material(tr,bridge,x,dt,t)\\n    c,r = solver._basis(taus,*solver._loads(va,bridge),z,dt,t)\\n    e = np.abs(va['strain_0'][:,None]+c@theta-va['strain_curves_obs'])\\n    q = np.abs(r@theta-va['instant_rate_obs'])\\n    print('held lab',lab,'taus',taus.round(4),'strain median/p90',np.quantile(e,[.5,.9]).round(5),'rate median/p90',np.quantile(q,[.5,.9]).round(5))\\nprobe = solver.solve_downstream(dict(d,eval_times=np.array([0.,1e-6])))\\nassert np.array_equal(probe['predicted_strain'][:,0],b['strain_0']) is False or np.array_equal(probe['predicted_strain'][:,0],b['strain_0'])\\n# Hold the fitted material fixed when probing the chamber boundary.\\n_, x = solver._features(a,b)\\nc,r = solver._predict_chamber(b,out['estimated_taus'],out['hereditary_weights'],x,dt,np.array([0.,1e-6]))\\nassert np.array_equal(c[:,0],b['strain_0'])\\nerr = np.max(np.abs((c[:,1]-c[:,0])*1e6-r))\\nassert err < 1e-4, err\\nprint('max chamber zero-time slope discrepancy',err)\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: log = json.load(f)\\nfor row in log:\\n    arr = np.array(row['facility_telemetry_trace'])\\n    top = np.array(log[-1]['facility_telemetry_trace'])\\n    print(row['completed_campaign_short_name'],'trace RMSE',np.sqrt(np.mean((arr-top)**2)).round(5),'control means',arr.mean(0)[[0,4]].round(4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop response → H2 retained chamber history with saturating drift; the public schema passes, and held-out lab errors are not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema pass alone\",\n      \"rejected_reason\": \"Schema validation does not test fit stability across labs or agreement between the chamber curve and its initial rate.\"\n    }\n  ],\n  \"rationale\": \"Use held-out labs to detect instability in the shared material fit, and check the chamber boundary separately at fixed parameters. Compare the latest trace against the earlier apparatus entries to check that the inherited chamber choice is supported by the log.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0d2151a3f7245e5a2c716819afaaa55e5276143b58d6052db841b7baf524fc20",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30771.03,
+      "usage_known": true,
+      "prompt_tokens": 29910,
+      "cached_tokens": 13696,
+      "completion_tokens": 1215
+    }
+  ]
+}

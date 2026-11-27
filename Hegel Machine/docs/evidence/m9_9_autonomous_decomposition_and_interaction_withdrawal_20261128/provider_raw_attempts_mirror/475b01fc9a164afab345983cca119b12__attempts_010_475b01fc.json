@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "475b01fc9a164afab345983cca119b12",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:55.097618+00:00",
+  "ended_at_utc": "2026-11-27T19:54:23.738157+00:00",
+  "request_sha256": "7b230442426911c2a69fdd76db3748e240367e5a7ab9aed8fb86a7832ed99eb0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49176,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26317,
+    "cached_tokens": 5504,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    st = item['study']\\n    sw = st['sensor_calibration_sweeps']\\n    x, y = sw['ref_rosette'], sw['raw_rosette']\\n    clean = np.max(np.abs(y), axis=1) < 5\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    blocks = [('all axes', axis), ('largest mixed excitations', ~axis & (np.max(np.abs(x),axis=1) >= np.quantile(np.max(np.abs(x[~axis]),axis=1), .8)))]\\n    blocks.extend((f'axis bank {j}', axis & (x[:,j] != 0)) for j in range(4))\\n    for label, held in blocks:\\n        test = held & clean\\n        if not test.any():\\n            continue\\n        a, g, q = u._fit(x[~held], y[~held])\\n        err = u._inverse(y[test], a, g, q) - x[test]\\n        print(label, 'n', test.sum(), 'inverse max', np.max(np.abs(err)), 'RMS', np.sqrt(np.mean(err**2)))\\n        # Check whether structured departures from the compact law recur out of sample.\\n        def extras(z, j):\\n            v = z[:, j]\\n            w = z[:, (j+1)%4]\\n            d = v-w\\n            p = v+w\\n            return np.column_stack((v*v, w*w, d**3, p**3, v/(1+.25*v*v), d/(1+.25*d*d)))\\n        r = y - (a + g*(x+u._terms(x)@q))\\n        good = ~held & (np.max(np.abs(r),axis=1) < 5e-4)\\n        correction = np.column_stack([extras(x[test],j) @ np.linalg.lstsq(extras(x[good],j),r[good,j],rcond=1e-9)[0] for j in range(4)])\\n        print('  forward RMS compact / augmented', np.sqrt(np.mean(r[test]**2)), np.sqrt(np.mean((r[test]-correction)**2)))\\n    a, g, q = u._fit(x, y)\\n    t = u.calibrate_upstream(st)['y_obs_raw'].reshape(-1,4)\\n    j = np.arange(4)\\n    jac = np.zeros((len(t),4,4))\\n    jac[:,j,j] = 1+3*q[2]*t*t+q[3]*t[:,(j+1)%4]\\n    jac[:,j,(j+1)%4] = q[0]+q[3]*t\\n    jac[:,j,(j-1)%4] = q[1]\\n    print('observation inverse minimum singular value', np.linalg.svd(g[None,:,None]*jac, compute_uv=False)[:,-1].min())\\n    print('public study count:', len(pickle.load(open('public_batch.pkl','rb'))), 'diagnostics available:', item.get('campaign_diagnostics') is not None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or odd-only response → H2 shared cyclic bilinear and diagonal cubic response with EMI downweighting; five-fold worst-slice inverse error was 3.12e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, drift-operator, or classification checks\",\n      \"rejected_reason\": \"Those mechanisms and metrics do not apply to this continuous rosette calibration task.\"\n    }\n  ],\n  \"rationale\": \"Hold out complete axis sweeps and the strongest mixed excitations to test transfer across excitation regimes. Reconsider the compact law only if pairwise or rational residual terms consistently improve those held-out groups; revisit the inverse if the observed signals approach a singular Jacobian.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e5f59b5091b8ca6f4a7fb8a31460b2c73ec25f659431603fd5df1f341d5095a6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28596.92,
+      "usage_known": true,
+      "prompt_tokens": 26317,
+      "cached_tokens": 5504,
+      "completion_tokens": 1100
+    }
+  ]
+}

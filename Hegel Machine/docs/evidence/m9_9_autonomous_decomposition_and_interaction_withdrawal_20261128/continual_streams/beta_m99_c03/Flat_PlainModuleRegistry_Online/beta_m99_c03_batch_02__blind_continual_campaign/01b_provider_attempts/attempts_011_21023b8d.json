@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "21023b8de60a45b3a09e9cf57531c335",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:09.901116+00:00",
+  "ended_at_utc": "2026-11-27T19:48:39.290629+00:00",
+  "request_sha256": "36198858437456b03787cae735d3c39dc848f75d3eaa8b71aa8909b5ace4bc84",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60836,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34682,
+    "cached_tokens": 13696,
+    "completion_tokens": 1188
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/transport_margin_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _axis_operator, _forward\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\n\\nsweep_rmse = np.zeros((2, 4))\\npulse_rmse = np.zeros((2, 4))\\nmax_row_error = max_gap = 0.\\nfor item in items:\\n    st = item['study']\\n    for axis in 'xy':\\n        k, v = st['kappa_'+axis], st['vel_'+axis]\\n        h = st['L'+axis] / (len(k)-1)\\n        A = _axis_operator(k, v, st['L'+axis]).toarray()\\n        for i in (0, len(k)-1):\\n            row = np.zeros(len(k))\\n            for d in (-1, 1):\\n                j = (i+d) % len(k)\\n                flux = (k[i]+k[j])/(2*h*h) + max(0, -d*v[i])/h\\n                row[i] += flux\\n                row[j] -= flux\\n            max_row_error = max(max_row_error, abs(A[i]-row).max())\\n    S, _ = _forward(st)\\n    out = solve_batch(st)\\n    cert = out['kkt_certificate']\\n    max_gap = max(max_gap, abs(cert['primal_objective']-cert['dual_lower_bound']))\\n    sw = st['sensor_calibration_sweeps']\\n    x, y = sw['ref_rosette'], sw['raw_rosette']\\n    keep = np.flatnonzero(np.all(abs(y) <= 8.5, axis=1))\\n    for train_drop in np.array_split(keep, 5):\\n        train = np.setdiff1d(keep, train_drop)\\n        diag = np.array([np.linalg.lstsq(np.c_[np.ones(len(train)), x[train,j]], y[train,j], rcond=None)[0] for j in range(4)])\\n        full = np.linalg.lstsq(np.c_[np.ones(len(train)), x[train]], y[train], rcond=None)[0]\\n        def invert(raw, model):\\n            return (raw-diag[:,0])/diag[:,1] if model == 0 else np.linalg.solve(full[1:].T, (raw-full[0]).T).T\\n        for model in range(2):\\n            err = invert(y[train_drop], model) - x[train_drop]\\n            sweep_rmse[model] = np.maximum(sweep_rmse[model], np.sqrt(np.mean(err**2, axis=0)))\\n            for p in item.get('campaign_diagnostics') or []:\\n                raw = p['y_pulse_raw'].reshape(-1, 4)\\n                err = (invert(raw, model).ravel()-S@p['w_pulse']).reshape(len(st['mu_shifts']), -1, 4)\\n                pulse_rmse[model] = np.maximum(pulse_rmse[model], np.sqrt(np.mean(err**2, axis=1)).max(axis=0))\\nprint('worst held-out sweep RMSE by bank [diagonal, cross-bank]:', sweep_rmse.tolist())\\nprint('worst tracer RMSE by bank and shift across sweep folds [diagonal, cross-bank]:', pulse_rmse.tolist())\\nprint('max absolute periodic boundary-row error:', max_row_error, 'max public dual gap:', max_gap)\\nassert max_row_error < 1e-10 and max_gap < 1e-10\\nassert pulse_rmse[0].max() < 3e-6\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/transport_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local Robin or sealed walls → H2 exact periodic upwinding with per-study calibration; worst public tracer RMSE by pulse, shift, and bank was 1.85×10⁻⁶.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check both periodic boundary rows directly and test whether cross-bank calibration improves held-out sweep and tracer errors. A row mismatch would require a stencil fix; a material, consistent cross-bank gain would justify revisiting calibration. Classification metrics and relay modes do not apply to this steady inverse problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "fc077f0146d252c1d5466d7a925cf49fc35f6f2727047f612eacef9890ffe07b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30374.76,
+      "usage_known": true,
+      "prompt_tokens": 34682,
+      "cached_tokens": 13696,
+      "completion_tokens": 1188
+    }
+  ]
+}

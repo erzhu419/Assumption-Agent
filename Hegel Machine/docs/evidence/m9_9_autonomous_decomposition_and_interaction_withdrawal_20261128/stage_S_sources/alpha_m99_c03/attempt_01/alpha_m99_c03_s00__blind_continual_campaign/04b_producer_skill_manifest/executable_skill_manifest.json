@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c03_s00_87bac2b834b3",
+    "source_hash": "87bac2b834b3e625c33d7f5abeb6dabc0af8352e11a6e4014166202aa9b34541",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c03_s00__blind_continual_campaign",
+    "task_id": "alpha_m99_c03_s00__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && ls -lah /tmp/hegel_continual_archive/ && for f in /tmp/hegel_continual_archive/archive_{manifest,apparatus_log}.json; do if [ -f \"$f\" ]; then echo \"--- $f\"; tail -c 14000 \"$f\"; fi; done\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation variable projection robust IRLS reference panel imputation'\ncd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nitem=pickle.load(open('public_batch.pkl','rb'))[0]\ndef visit(v,p='',depth=0):\n if isinstance(v,dict) and depth<3:\n  for k,x",
+      "ls -l /tmp/hegel_continual_archive; python3 - <<'PY'\nimport json\nfrom pathlib import Path\nfor name in ('archive_manifest.json','archive_apparatus_log.json'):\n p=Path('/tmp/hegel_continual_archive')/name\n if p.exists():\n  d=json.loads(p.read_text()); print(name, json.dumps(d,indent=2)[-6500:])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | head -12\npython3 - <<'PY'\nimport pickle,numpy as np\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x,y=(c[k] for k in ('bridge_raw','true_channel_loads')); pri",
+      "python3 - <<'PY'\nimport json,numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; d=json.load(open(p))\nfor e in d:\n print({k:v for k,v in e.items() if k!='facility_telemetry_trace'})\n if 'facility_telemetry_trace' in e:\n  a=np.asarray(e['facility_telemetry_trace']); print('trace shape',a.shape,'means',a.mean(0).round(5),'stds',a.std(0).round(5)); print('endpoints',a[[0,-1]])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | cut -c1-210 | head -8",
+      "set -e\ncat > /holdout_task/batch_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    x = np.vstack((train['coupon_features_raw'], test['coupon_features_raw'])).astype(float)\n    ref = np.vstack((train['ref_coupons'], test['ref_coupons']))\n    lab = np.r_[train['lab_id'], test['lab_id']]\n    stratum = np.r_[train['stratum'], test['stratum']]\n    for group in np.unique(lab):\n        mask = lab == group\n        panel = ref[mask]\n        center = np.median(panel.mean(axis=0))\n        scale = np.median(panel.std(axis=0, ddof=0))\n        x[m",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\np='/holdout_task/'\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\ni=pickle.load(open(p+'public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); dt=np.asarray(d['past_dt']); t=np.asarray(d['eval_times']); x=m._features(tr,te); bridge=m._calibration(d['calibration_load_cells']); c=m._coupon_inputs(tr,x[:n],bridge); ce=m._coupon_inputs(te,x[n:],bridge)\nout=m.solve_batch(",
+      "python3 -I - <<'PY'\nimport json, pickle\nimport numpy as np\np = '/holdout_task/'\nprint('Public asset index:', json.dumps(json.load(open(p+'public_asset_index.json')), separators=(',', ':')))\nitem = pickle.load(open(p+'public_batch.pkl','rb'))[0]\nd = item['dataset']\nprint('Item keys:', list(item), 'dataset keys:', list(d))\nfor k in ('train', 'test'):\n b=d[k]; print(k, 'fields:', list(b))\n if 'aux_chamber_telemetry' in b:\n  a=np.asarray(b['aux_chamber_telemetry']); print(k,'telemetry shape, mean, std, min, max:',a.shape,*[np.round(f(a,axis=0),4).tolist() for f in (np.mean,np.std,np.min,np.max)])\n"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4803,
+        "sha256": "f265086b7e40b42fb7e9e6331eb97c20438baf87746eb3ffdeb06bf376f3526c",
+        "content_addressed_ref": "content_addressed_blobs/f265086b7e40b42fb7e9e6331eb97c20438baf87746eb3ffdeb06bf376f3526c.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "87bac2b834b3e625c33d7f5abeb6dabc0af8352e11a6e4014166202aa9b34541",
+      "verified_post_package": true,
+      "verified_turn": 6,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\np='/holdout_task/'\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.load",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "87bac2b834b3e625c33d7f5abeb6dabc0af8352e11a6e4014166202aa9b34541",
+        "expected_candidate_sha256": "87bac2b834b3e625c33d7f5abeb6dabc0af8352e11a6e4014166202aa9b34541",
+        "computed_candidate_sha256": "87bac2b834b3e625c33d7f5abeb6dabc0af8352e11a6e4014166202aa9b34541",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4803
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_87bac2b8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

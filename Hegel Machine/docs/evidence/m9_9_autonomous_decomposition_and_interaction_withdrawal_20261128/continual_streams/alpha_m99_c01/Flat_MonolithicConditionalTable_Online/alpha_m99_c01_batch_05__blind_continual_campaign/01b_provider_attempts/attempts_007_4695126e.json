@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4695126e41f64408a37784124c3a45b2",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:15.550340+00:00",
+  "ended_at_utc": "2026-11-27T20:02:47.451734+00:00",
+  "request_sha256": "6f5094ef22247223b9a7bc2a298800ea562f627cf3925a7cc77e910a1c99c545",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48107,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33684,
+    "cached_tokens": 14976,
+    "completion_tokens": 1321
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_alignment.py <<'PY'\\nexec(open('/tmp/m99_chamber.py').read().split('for name,A,V in')[0])\\nfrom itertools import combinations\\nnp.set_printoptions(precision=5,suppress=True,linewidth=150)\\nH=np.c_[hg[:,None]*beta[:2],np.zeros(len(hg))]; Q=Y-H@F.T\\nu,s,v=np.linalg.svd(Q,full_matrices=False); print('hold-only residual singular values in measured units',s[:6]); print('leading temporal coefficient',np.linalg.lstsq(F,v[0],rcond=None)[0]); print('leading scores vs derived drift',np.c_[g['lab_id'],np.isnan(g['coupon_features_raw']).sum(1),drift,u[:,0]*s[0],Q[:,-1],g['ref_coupons'].mean(axis=1),g['ref_coupons'].std(axis=1)])\\nlab=g['lab_id']; raw=g['coupon_features_raw']; ids=np.unique(lab); L=(lab[:,None]==ids).astype(float); miss=np.isnan(raw).any(axis=1)\\ndef stack(parts,k): return np.concatenate([p[k] for p in parts]);\\ndef feats(parts,kind):\\n x=raw.copy(); labs=stack(parts,'lab_id'); R=stack(parts,'ref_coupons');\\n for ell in ids:\\n  r=R[labs==ell]; ind=lab==ell\\n  if kind=='column': mu, sd=np.median(r.mean(0)),np.median(r.std(0))\\n  elif kind=='row': mu, sd=np.median(r.mean(1)),np.median(r.std(1))\\n  elif kind=='pooled': mu, sd=r.mean(),r.std()\\n  elif kind=='median': mu, sd=np.median(r),1.4826*np.median(abs(r-np.median(r)))\\n  print('',end=''); x[ind]=(x[ind]-mu)/sd\\n x=np.where(np.isnan(x),xg,x)\\n return beta[2]+x@beta[3:]\\ndef cv(A, base=H@F.T, select=np.ones(len(hg),bool)):\\n yy=Y-base; e=[]\\n for j in np.where(select)[0]:\\n  keep=select.copy(); keep[j]=False\\n  e.append(A[j]@np.linalg.lstsq(A[keep],yy[keep],rcond=None)[0]+base[j]-Y[j]);\\n e=np.array(e); return np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),np.max(abs(e[:,:-1])),np.max(abs(e[:,-1]))\\nfor names,parts in [('diag',[g]),('train',[tr]),('test',[te]),('train+diag',[tr,g]),('train+test',[tr,te]),('all',[tr,te,g])]:\\n for kind in ('column','row','pooled','median'):\\n  dd=feats(parts,kind); print(names,kind,'global',np.round(cv(dd[:,None]),5),'lab',np.round(cv(np.c_[L,dd]),5),'complete',np.round(cv(dd[:,None],select=~miss),5))\\nfor name,A in [('lab offsets',np.c_[L,drift]),('lab scale',L*drift[:,None]),('lab affine',np.c_[L,L*drift[:,None]]),('lab + features',np.c_[L,xg]),('load+lab affine',np.c_[hg,z,L,L*drift[:,None]]),('row refs',np.c_[drift,g['ref_coupons'].mean(1),g['ref_coupons'].std(1)])]:\\n print(name,cv(A),'complete',cv(A,select=~miss)); W=np.linalg.lstsq(A,Q,rcond=None)[0]; print('   coef at onset and at end',W[:,[-1,-2]].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_alignment.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset with a nonlinear drift term → H2 reset with lab-sensitive drift alignment; drift-only leave-one-coupon-out maxima remain 0.507 strain and 0.201 initial rate for the archived reset law in the preceding comparison.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit higher-degree load–drift interactions\",\n      \"rejected_reason\": \"The tested interactions increased held-coupon errors; the residual signs instead suggest a lab-dependent drift mismatch.\"\n    }\n  ],\n  \"rationale\": \"Subtract only the reset load response before testing residual rank. If one temporal mode dominates and reference-panel alignment removes its lab structure, use that alignment rather than adding chamber dynamics. Compare complete coupons separately to distinguish alignment error from imputation error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "263dedaced30f5be3da722a98a130947cade778a0d26a53a4e8f08a644d39a72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33056.35,
+      "usage_known": true,
+      "prompt_tokens": 33684,
+      "cached_tokens": 14976,
+      "completion_tokens": 1321
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99f2996893ee4093bf482425101d0542",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:42.975393+00:00",
+  "ended_at_utc": "2026-11-27T19:42:11.268900+00:00",
+  "request_sha256": "5862de7c8e167919b93cc5c7cb8e3f0967aced96abb9a658a228b7f70eb23738",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 80464,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44848,
+    "cached_tokens": 5504,
+    "completion_tokens": 1139
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '    shares = np.array([0.50, 0.45])\\\\n    drift_kernel = relaxation @ (taus * shares) + (1.0 - shares.sum()) * times'\\nnew = '    # The chamber starts with no preload memory. The drift rate is split\\\\n    # equally between the two relaxing branches, with no persistent term.\\\\n    drift_kernel = 0.5 * (relaxation @ taus)'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    it = pickle.load(f)[0]\\nd, q = it['dataset'], it['campaign_diagnostics']\\nout = m['solve_batch'](d)\\na, w = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < a[0] < a[1] < 25\\nb = m['_calibration'](d['calibration_load_cells'])\\nt = d['eval_times']\\nf = -np.expm1(-t[:, None]/a)\\nfor name, block in [('deployment', d['test']), ('diagnostics', q)]:\\n    if name == 'deployment':\\n        x = m['_features'](d['train'], block)[len(d['train']['lab_id']):]\\n    else:\\n        x = m['_features'](block, {k: block[k][:0] for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')})\\n    _, h, dr = m['_coupon_inputs'](block, x, b)\\n    r = dr @ w[2:]\\n    pred = block['strain_0'][:, None] + (h[:, None]*w[:2] + .5*r[:, None]*a) @ f.T\\n    rate = h*np.sum(w[:2]/a) + r\\n    if name == 'deployment':\\n        np.testing.assert_allclose(out['predicted_strain'], pred, atol=1e-12)\\n        np.testing.assert_allclose(out['initial_rate_pred'], rate, atol=1e-12)\\n        tiny = 1e-6\\n        fd = (h[:, None]*w[:2] + .5*r[:, None]*a) @ (-np.expm1(-tiny/a)) / tiny\\n        np.testing.assert_allclose(fd, rate, atol=1e-5, rtol=0)\\n    else:\\n        e, er = pred-block['strain_curves_obs'], rate-block['instant_rate_obs']\\n        complete = np.isfinite(block['coupon_features_raw']).all(1)\\n        rmse = lambda v: np.sqrt(np.mean(v*v))\\n        print('diagnostic strain/rate RMSE', [(k, float(rmse(e[mask])), float(rmse(er[mask]))) for k, mask in [('complete',complete),('missing',~complete), *((f'lab {i}', block['lab_id']==i) for i in np.unique(block['lab_id']))]])\\n        print('diagnostic max absolute strain/rate', float(np.max(abs(e))), float(np.max(abs(er))))\\n        assert np.max(abs(e)) < .05 and np.max(abs(er)) < .05\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 5% persistent drift -> H2 equal relaxation shares with no persistent drift; across all training-lab omissions, worst diagnostic strain RMSE fell from 0.0256 to 0.0237 while rate predictions were unchanged.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the 5% persistent drift term\",\n      \"rejected_reason\": \"Equal sharing improves the worst diagnostic strain slices without changing the initial derivative or the train-only material fit.\"\n    }\n  ],\n  \"rationale\": \"Promote the equal-share kernel. Verify the edited artifact in a clean process: a schema or derivative failure would block submission, and a diagnostic slice outside the measured error envelope would trigger investigation before promotion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "5910c8c703ee3fa541c38397b60e1604632185b4c293d651afa314c2ee920d0f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29380.5,
+      "usage_known": true,
+      "prompt_tokens": 44848,
+      "cached_tokens": 5504,
+      "completion_tokens": 1139
+    }
+  ]
+}

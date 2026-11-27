@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3a5e32537ef4b57b571fd467d82f19d",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:28.715742+00:00",
+  "ended_at_utc": "2026-11-27T19:50:05.436554+00:00",
+  "request_sha256": "912cc180fcad780737ceac103824788be1e65f4fc7bf2b9836f6808e5dd32c4d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 64058,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38157,
+    "cached_tokens": 13696,
+    "completion_tokens": 1561
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\ns=Path('/tmp/m99_base.py').read_text()\\ns=s[:s.index('def _bridge')] + s[s.index('def _design'):]\\ns=s.replace('def _design(tau, x, p, h, dt, t):','def _gap(tau, p, h, dt):').replace('    gap = h[:, None] - z\\\\n    drift', '    return h[:, None] - z\\\\n\\\\n\\\\ndef _design(tau, x, p, h, dt, t):\\\\n    gap = _gap(tau, p, h, dt)\\\\n    drift')\\ns+='''# Diagnostic coupons identify two effective chamber clocks and an amplitude\\n# transfer over the intrinsic history gaps and feature-dependent drift.\\n_CLOCK_RATIO = np.array([0.9, 0.25])\\n_TO_MODES = np.array([[0.48759, 0.22895],\\n                      [-0.03637, 0.12620],\\n                      [0.10553, 0.94945]])\\n\\n\\ndef _chamber(tau, beta, x, p, h, dt, t, transfer=_TO_MODES):\\n    gap = _gap(tau, p, h, dt)\\n    drift = beta[2] + x @ beta[3:]\\n    chamber_tau = tau * _CLOCK_RATIO\\n    modes = np.column_stack((gap, drift)) @ transfer\\n    rate = gap @ (beta[:2] / tau) + drift\\n    # Write each kernel relative to the initial tangent so the measured\\n    # chamber transfer preserves the intrinsic instantaneous rate.\\n    kernels = -np.expm1(-t[:, None] / chamber_tau) - t[:, None] / chamber_tau\\n    return modes @ kernels.T + rate[:, None] * t, rate\\n\\n\\ndef _loads(part):\\n    return (np.sum(part['past_channel_raw'], axis=-1),\\n            np.sum(part['hold_channel_raw'], axis=-1))\\n\\n\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    t, dt = np.asarray(cal_item['eval_times']), np.asarray(cal_item['past_dt'])\\n    x, xt = _features(train, test)\\n    p, h = _loads(train)\\n    tau, beta = _fit(x, p, h, dt, t,\\n                     train['strain_curves_obs'] - train['strain_0'][:, None],\\n                     train['instant_rate_obs'])\\n    p, h = _loads(test)\\n    strain, rate = _chamber(tau, beta, xt, p, h, dt, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': test['strain_0'][:, None] + strain,\\n            'initial_rate_pred': rate}\\n'''\\nPath('downstream_solver.py').write_text(s)\\nPY\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    # The staged transducer fits this campaign's bridge when no payload is supplied.\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\np=json.load(open('_upstream_param_payload.json')); i=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']\\nfor part in ('train','test'):\\n a=calibrate_upstream(d,p)[part]; b=calibrate_upstream(d)[part]\\n print(part,'dynamic-vs-staged stress max',*[np.max(np.abs(np.sum(a[k]-b[k],axis=-1))) for k in ('past_channel_raw','hold_channel_raw')])\\no=solve_batch(d);print('intrinsic',o['estimated_taus'],o['hereditary_weights']);print('output ranges',[(k,float(v.min()),float(v.max())) for k,v in o.items() if k.startswith(('predicted','initial'))]);print('pickle items and diagnostics presence',len(pickle.load(open('public_batch.pkl','rb'))),i['campaign_diagnostics'] is not None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unconstrained diagnostic transfer) -> H2 (fixed chamber clock ratios and a transfer that preserves initial rate); worst held-out complete lab RMSE is 0.00302 for strain and 0.00355 for rate, with pooled all-row RMSE of 0.01184 and 0.01402.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit free chamber clocks and an independent derivative transfer\",\n      \"rejected_reason\": \"The fixed clocks predict held-out strain about as well; the constrained transfer preserves the independently supported intrinsic rate law and improves pooled all-row rate RMSE.\"\n    }\n  ],\n  \"rationale\": \"Build both artifacts now. The schema check detects composition or shape errors, while comparing dynamic and staged bridge stresses determines whether fitting the bridge per campaign materially changes the chamber coordinates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cdc82aee7874d3a20c144b200df615cc148e6cddd94e74d8e5b23a93eeb43b27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37858.22,
+      "usage_known": true,
+      "prompt_tokens": 38157,
+      "cached_tokens": 13696,
+      "completion_tokens": 1561
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3b92bb587862412f8147f1a96cc338e8",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:57.811546+00:00",
+  "ended_at_utc": "2026-11-27T20:01:32.191710+00:00",
+  "request_sha256": "a1bf0156e86fc240ac3195279681e9c70cc37d258a5143d195d1818083ce321a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 66009,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38508,
+    "cached_tokens": 13696,
+    "completion_tokens": 1409
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as m\\nwith open('public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; diag=item['campaign_diagnostics']; out=solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau=out['estimated_taus']; beta=out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25.\\ncal=calibrate_upstream(dict(d,chamber_verification_trials=diag)); a,b,c=(cal[k] for k in ('train','test','chamber_verification_trials')); t=np.asarray(cal['eval_times']); dt=np.asarray(cal['past_dt'])\\nx,xt=m._features(a,b); h=b['hold_channel_raw'].sum(-1)\\neps=1e-6\\nnear,_=m._predict(tau,beta,xt,h,np.array([0.,eps]))\\nassert np.allclose(near[:,0],0.) and np.allclose(near[:,1]/eps,out['initial_rate_pred'],rtol=3e-6,atol=2e-6)\\np=a['past_channel_raw'].sum(-1); hold=a['hold_channel_raw'].sum(-1); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']\\nbench=[]\\nfor lab in np.unique(a['lab_id']):\\n s=a['lab_id']!=lab; tt,bb=m._fit(x[s],p[s],hold[s],dt,t,y[s],r[s]); ac,ar=m._design(tt,x[~s],p[~s],hold[~s],dt,t)\\n bench.append((np.median(abs(ac@bb-y[~s])),np.median(abs(ar@bb-r[~s]))))\\nprint('Benchtop held-out lab worst median absolute strain/rate error:', np.max(bench,axis=0))\\n# The chamber diagnostics use their own reference panel and an empirical unweighted fill; the deployment preprocessing remains joint and cell-balanced.\\nq=c['coupon_features_raw'].copy(); labs=c['lab_id']; missing=~np.isfinite(q).all(1)\\nfor lab in np.unique(labs):\\n s=labs==lab; ref=c['ref_coupons'][s]; q[s]=(q[s]-np.median(ref.mean(0)))/np.median(ref.std(0))\\nq=np.where(np.isfinite(q),q,np.nanmean(q,axis=0)); H=c['hold_channel_raw'].sum(-1)\\nbasis=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]))\\nbase=np.c_[H[:,None]*beta[:2],np.zeros(len(H))]@basis.T\\nD=(beta[2]+q@beta[3:])[:,None,None]*basis\\nobs=np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]; err=np.empty_like(obs)\\nfor lab in np.unique(labs):\\n s=labs!=lab; fit = s & ~missing; k=np.linalg.lstsq(D[fit].reshape(-1,3),(obs-base)[fit].ravel(),rcond=None)[0]; err[~s]=base[~s]+D[~s]@k-obs[~s]\\nrms=lambda e: np.sqrt(np.mean(e**2))\\nfor label,s in [('all',np.ones(len(q),bool)),('complete',~missing),('missing',missing)]: print(label,'OOF strain and rate RMSE',rms(err[s,:-1]),rms(err[s,-1]))\\nfull_strain,full_rate=m._predict(tau,beta,q,H,t); fixed=np.c_[full_strain,full_rate]-obs\\nprint('OOF worst lab-horizon strain RMSE, worst lab rate RMSE:',max(np.max(np.sqrt(np.mean(err[labs==lab,:-1]**2,axis=0))) for lab in np.unique(labs)),max(rms(err[labs==lab,-1]) for lab in np.unique(labs)))\\nprint('Exact artifact diagnostic strain/rate RMSE:',rms(fixed[:,:-1]),rms(fixed[:,-1]))\\nassert rms(err[:,:-1])<.01 and rms(err[:,-1])<.01\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Benchtop stress memory → chamber hold-boundary reset with three drift modes; complete diagnostic coupons have worst held-out lab–horizon strain RMSE 0.00503 and worst held-out lab rate RMSE 0.00302.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use unweighted imputation in deployment\",\"rejected_reason\":\"It explains the diagnostic-only missing-feature residuals, but the deployment contract specifies cell-balanced imputation and the benchtop fit supports that choice.\"}],\"rationale\":\"Verify the exact solver in an isolated process. Check that the initial rate is the derivative of the predicted curve, and measure held-out lab errors for both observables, including incomplete diagnostic coupons, without changing deployment preprocessing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7ff84165223ed04978084d4a8764b45c18cdb1f30c20c52f31b0616b9adcff91",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35533.59,
+      "usage_known": true,
+      "prompt_tokens": 38508,
+      "cached_tokens": 13696,
+      "completion_tokens": 1409
+    }
+  ]
+}

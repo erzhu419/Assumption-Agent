@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d510bd851f0441db8e2e346b5b62589",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:53.582594+00:00",
+  "ended_at_utc": "2026-11-27T19:52:27.450368+00:00",
+  "request_sha256": "3e9f06c27ec2c7917664de2c4f0c2293750b08a753698e98cf67a3889d356f39",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54852,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36242,
+    "cached_tokens": 14976,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -24 /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; tail -29 /tmp/hegel_continual_archive/alpha_m99_c03_batch_02_solver.py; cat /holdout_task/validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as comb\\nfrom scipy.optimize import root\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; print('diagnostics',p['campaign_diagnostics'] is not None)\\nc=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; n=len(y); norm=np.linalg.norm(r,axis=1); med=np.median(norm); mad=np.median(abs(norm-med)); bad=norm>med+8*mad; print('norm median/MAD/max ordinary/min offset',med,mad,norm[~bad].max(),norm[bad].min(),'offset labels',np.where(bad)[0]); ts=[t for k in range(4) for t in comb(range(4),k)]; a=np.stack([y[:,t].prod(1) for t in ts],axis=1); cf=np.linalg.lstsq(a[~bad],r[~bad],rcond=None)[0]; print('forward retained terms',[(t,cc.round(5).tolist()) for t,cc in zip(ts,cf) if max(abs(cc))>.004]);\\ndef basis(x):\\n return np.column_stack((np.ones(len(x)),x,x**3,x*np.roll(x,-1,axis=1)))\\ndef fit(tr):\\n coeff=np.zeros((13,4)); b=basis(y); offset=np.zeros(4)\\n for i in range(4):\\n  cols=[0,1,2,3,4,5+i,9+i]; q=np.column_stack((b[:,cols],bad)); coef=np.linalg.lstsq(q[tr],r[tr,i],rcond=None)[0]; coeff[cols,i]=coef[:-1]; offset[i]=coef[-1]\\n return coeff,offset\\nfor blocked in (False,True):\\n pred=np.full_like(y,np.nan); raw_err=np.full_like(y,np.nan); fails=0\\n for f in range(5):\\n  tr=(np.arange(n)//16 if blocked else np.arange(n)%5)!=f; te=~tr & (~bad | np.any(tr&bad)); cc,off=fit(tr)\\n  raw_err[te]=(basis(y[te])@cc+bad[te,None]*off)-r[te]\\n  for i in np.flatnonzero(te):\\n   v=r[i]-bad[i]*off; seed=np.linalg.solve(cc[1:5].T,v-cc[0]); sol=root(lambda x:basis(x[None,:])[0]@cc-v,seed); pred[i]=sol.x; fails+=not sol.success\\n e=pred-y; s=e.sum(1); print('blocked',blocked,'raw RMSE',np.nanmean(raw_err**2)**.5,'load RMSE',np.nanmean(e**2)**.5,'axial RMSE/worst',np.nanmean(s**2)**.5,np.nanmax(abs(s)),'quartile axial RMSE',np.sqrt(np.nanmean(s.reshape(4,-1)**2,axis=1)),'root failures',fails)\\ncc,off=fit(np.ones(n,bool)); print('offset fit',off); print('ordinary max residual',np.max(abs((basis(y)@cc+bad[:,None]*off-r)[~bad]))); print('offset max residual',np.max(abs((basis(y)@cc+bad[:,None]*off-r)[bad])));\\nfor k in ('train','test'):\\n print(k, list(d[k]))\\n for name in ('past_channel_raw','hold_channel_raw'):\\n  x=d[k][name].reshape(-1,4); recovered=[]; fails=0\\n  for v in x:\\n   z=root(lambda q:basis(q[None,:])[0]@cc-v,np.linalg.solve(cc[1:5].T,v-cc[0])); recovered.append(z.x); fails+=not z.success\\n  print(name,'max bridge norm',np.linalg.norm(x,axis=1).max(),'max recovered load',np.abs(recovered).max(),'root failures',fails)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine inverse → H2: cyclic cubic forward bridge with an additive sweep offset; unrestricted cubic held-out ordinary-row raw RMSE is 0.000205, and physical-load recovery is being tested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Discard the three offset rows\",\n      \"rejected_reason\": \"Their residual vectors agree to measurement precision, so a fitted common offset can preserve their calibration information.\"\n    },\n    {\n      \"option\": \"Retain all cubic monomials\",\n      \"rejected_reason\": \"The measured coefficients are concentrated in a much smaller basis; held-out inversion will test whether that basis suffices.\"\n    }\n  ],\n  \"rationale\": \"Test whether the sparse bridge recovers axial loads in interleaved and blocked folds and inverts throughout the real coupon range. If it fails, inspect the retained-term list before choosing a broader basis. Read the archived prediction tails to identify the baseline chamber formula independently of calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7b97a76d4411b8c3833b97e8d4c37176e42d98a630e63da4132eaf3d0dc3c5d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34994.16,
+      "usage_known": true,
+      "prompt_tokens": 36242,
+      "cached_tokens": 14976,
+      "completion_tokens": 1418
+    }
+  ]
+}

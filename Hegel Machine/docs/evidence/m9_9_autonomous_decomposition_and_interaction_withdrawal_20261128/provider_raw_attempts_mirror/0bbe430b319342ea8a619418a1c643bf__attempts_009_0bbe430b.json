@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0bbe430b319342ea8a619418a1c643bf",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:51.998893+00:00",
+  "ended_at_utc": "2026-11-27T20:02:36.195514+00:00",
+  "request_sha256": "3f5550a26320bacd75da5de969eac0a748152ecda3e28de2ef63258e72145ec8",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55853,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33981,
+    "cached_tokens": 13696,
+    "completion_tokens": 1923
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as batch\\nimport downstream_solver as solver\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\ncal = calibrate_upstream({**raw, 'chamber_verification_trials': item['campaign_diagnostics']})\\ntr, te, q = (cal[k] for k in ('train', 'test', 'chamber_verification_trials'))\\nt, dt = (np.asarray(cal[k]) for k in ('eval_times', 'past_dt'))\\nout = batch.solve_batch(raw)\\na = out['estimated_taus']; w = out['hereditary_weights']\\nassert 0.05 < a[0] < a[1] < 25.0\\nx = solver._features(tr, te)\\nn = len(tr['lab_id'])\\n_, hte, fte = solver._coupon_inputs(te, x[n:])\\n# Verify the rate actually equals the initial slope at deployment loads and features.\\ny0, rate = solver._chamber(a, w, hte, fte, np.array([0.0, 1e-7]))\\nnp.testing.assert_allclose(y0[:,0], 0, atol=1e-12)\\nnp.testing.assert_allclose(y0[:,1]/1e-7, rate, rtol=2e-7, atol=1e-7)\\nnp.testing.assert_allclose(rate, out['initial_rate_pred'])\\nyte, _ = solver._chamber(a, w, hte, fte, t)\\nnp.testing.assert_allclose(yte + te['strain_0'][:,None], out['predicted_strain'])\\n# Bench labels are withheld by lab; retain the specified joint unlabeled alignment.\\npast, hold, feat = solver._coupon_inputs(tr, x[:n])\\ny = tr['strain_curves_obs'] - tr['strain_0'][:,None]; r = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    k = tr['lab_id'] == lab\\n    aa, ww = solver._fit((past[~k],hold[~k],feat[~k]),dt,t,y[~k],r[~k])\\n    cs, rs = solver._design(aa,(past[k],hold[k],feat[k]),dt,t)\\n    m = np.array([np.nanmedian(np.abs(cs@ww-y[k])), np.nanmedian(np.abs(rs@ww-r[k]))])\\n    print('bench held lab',lab,'median absolute strain/rate',m,'taus',aa)\\n    assert np.all(m < [0.025,0.02])\\n# Diagnostics were prepared as a separate reference panel. Fit only the chamber\\n# mixture weights inside each held-lab fold, using complete coupons.\\nlab = q['lab_id']; ref = q['ref_coupons']; xx = q['coupon_features_raw'].astype(float).copy()\\ncomplete = np.isfinite(xx).all(axis=1)\\nfor g in np.unique(lab):\\n    k = lab == g\\n    xx[k] = (xx[k] - np.median(ref[k].mean(axis=0))) / np.median(ref[k].std(axis=0))\\nxx = np.where(np.isfinite(xx),xx,np.nanmean(xx,axis=0))\\n_, h, fq = solver._coupon_inputs(q, xx)\\nyq = q['strain_curves_obs'] - q['strain_0'][:,None]; rq = q['instant_rate_obs']\\nobs = np.column_stack((yq,rq))\\nE = -np.expm1(-t[:,None]/a)\\nbase = h[:,None]*np.r_[E@w[:2], np.sum(w[:2]/a)]\\ndr = fq@w[2:]\\nD = np.column_stack((np.r_[t,1],np.vstack((E*a,np.ones(2)))))\\nZ = D[:,:2] - D[:,2:]\\npred = np.empty_like(obs); far = np.empty_like(yq[:,8:])\\nfor g in np.unique(lab):\\n    k = lab == g; fit = ~k & complete\\n    def fit_kernel(j):\\n        A = dr[fit,None,None] * Z[j]\\n        b = obs[fit][:,j] - base[fit][:,j] - dr[fit,None]*D[j,2]\\n        c = np.linalg.lstsq(A.reshape(-1,2),b.ravel(),rcond=None)[0]\\n        return D@np.r_[c,1-c.sum()]\\n    pred[k] = base[k] + dr[k,None]*fit_kernel(np.arange(len(t)+1))\\n    far[k] = (base[k] + dr[k,None]*fit_kernel(np.r_[0:8,len(t)]))[:,8:-1]\\n    err = pred[k]-obs[k]\\n    rmse = np.array([np.sqrt(np.mean(err[:,:-1]**2)),np.sqrt(np.mean(err[:,-1]**2))])\\n    print('chamber held lab',g,'RMSE strain/rate',rmse)\\n    assert np.all(rmse < 0.012)\\nlate = np.sqrt(np.mean((far-yq[:,8:])**2)); print('held labs and late times strain RMSE',late); assert late < 0.016\\nfor name,k in [('complete',complete),('missing feature',~complete)]:\\n    err = pred[k]-obs[k]\\n    print('chamber held-lab',name,'RMSE strain/rate',np.sqrt(np.mean(err[:,:-1]**2)),np.sqrt(np.mean(err[:,-1]**2)))\\nfixed = np.column_stack(solver._chamber(a,w,h,fq,t))-obs\\nprint('final artifact fixed-kernel diagnostic RMSE strain/rate',np.sqrt(np.mean(fixed[:,:-1]**2)),np.sqrt(np.mean(fixed[:,-1]**2)))\\nassert np.sqrt(np.mean(fixed[:,:-1]**2)) < 0.012 and np.sqrt(np.mean(fixed[:,-1]**2)) < 0.012\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 equal-weight archived drift -> H2 reset memory with linear and two intrinsic drift components; current complete-coupon diagnostic RMSE is 0.00267 for strain and 0.00215 for initial rate, before held-lab validation.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Run the exact artifacts in an isolated process, verify the initial rate against the strain derivative, and withhold labs and late times to check that the inferred chamber kernel transfers beyond its fitting samples. Keep the joint cell-balanced alignment for deployment; the diagnostic panel is evaluated using its empirically supported stand-alone alignment.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "1238153e82e519e26244446e74da20eb09e1e05ecd76fd829d4997797d764264",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45328.52,
+      "usage_known": true,
+      "prompt_tokens": 33981,
+      "cached_tokens": 13696,
+      "completion_tokens": 1923
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "32f33772b64046a4ae5d0c98d9df045d",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:09:15.383282+00:00",
+  "ended_at_utc": "2026-11-27T20:09:40.312299+00:00",
+  "request_sha256": "c5453d8343cf9c73bbcb6a853b954a3aa955c94685c563073c69658d0fc43625",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 69244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37931,
+    "cached_tokens": 5504,
+    "completion_tokens": 980
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_margin.py <<'PY'\\nfrom chamber_probe import *\\nimport downstream_solver as m\\nimport json\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n A=np.array(a['facility_telemetry_trace']); print(a['completed_campaign_short_name'], 'mean', A.mean(0).round(3), 'tail', A[-4:].mean(0).round(3), 'std', A.std(0).round(3))\\nxd,_=m._features(g,g)\\nobs=np.c_[g['strain_curves_obs'],R]\\nlab=g['lab_id']; complete=np.isfinite(g['coupon_features_raw']).all(1); stratum=g['stratum']\\nfor excluded in [-1,*np.unique(tr['lab_id'])]:\\n sel=tr['lab_id']!=excluded; sub={k:v[sel] for k,v in tr.items()}; a,b=m._fit(sub,x[sel],dt,t)\\n q,r=m._chamber_response(g,xd,t,a,b); e=obs-np.c_[q,r]\\n age=np.r_[np.cumsum(dt[::-1])[::-1][1:],0.]; z=P@(-np.expm1(-dt[:,None]/a)*np.exp(-age[:,None]/a))\\n k=np.r_[-a[None,:]*np.expm1(-t[:,None]/a),[[1.,1.]]]; dk=.2*k[:,0]+.55*k[:,1]+.25*np.r_[t,1.]\\n j=-z[:,1,None]*(b[1]/a[1])*k[None,:,1]\\n proj=lambda v:v-((v@dk)/(dk@dk))[:,None]*dk\\n for name in ('baseline','slow history raw','slow history drift-orthogonal'):\\n  pred=e.copy(); coefficients=[]\\n  for l in np.unique(lab):\\n   learn=(lab!=l)&complete; test=lab==l\\n   J,Q=(j,e) if name.endswith('raw') else (proj(j),proj(e))\\n   alpha=0. if name=='baseline' else np.sum(J[learn]*Q[learn])/np.sum(J[learn]**2)\\n   coefficients.append(alpha); pred[test]-=alpha*j[test]\\n  masks=[lab==l for l in np.unique(lab)]+[complete,~complete]+[stratum==s for s in np.unique(stratum)]\\n  v=np.array([[abs(pred[f,:-1]).mean(),abs(pred[f,-2]).mean(),abs(pred[f,-1]).mean()] for f in masks]);\\n  print('benchtop withheld',excluded,name,'worst',v.max(0).round(5),'complete',v[4].round(5),'coeff',np.round(coefficients,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -c \\\"import sys; sys.path[:0]=['/tmp','/holdout_task']; import chamber_margin\\\"\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 complete chamber history withdrawal -> H2 residual slow history; the drift-orthogonal challenger reduces worst diagnostic strain/final-horizon/rate MAE from 0.01766/0.02891/0.01415 to 0.01276/0.02092/0.01091, but its coefficient varies widely across lab folds.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote a rational load correction\",\"rejected_reason\":\"Its fitted sign and benefit do not persist after removing the nuisance drift direction.\"}],\"rationale\":\"Check whether the slow-history improvement survives withholding benchtop labs as well as diagnostic labs. If its sign or benefit depends on a particular intrinsic-pole fit, keep history withdrawn; if it transfers, promote the single slow-history term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "404c3645e1250496bdbbfc56c216bf55bf12d122641cc40496c77fc9813cf98e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26131.61,
+      "usage_known": true,
+      "prompt_tokens": 37931,
+      "cached_tokens": 5504,
+      "completion_tokens": 980
+    }
+  ]
+}

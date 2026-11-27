@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fe8b4539a6c04bb6b2f2fdc9640ff53c",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:04.442139+00:00",
+  "ended_at_utc": "2026-11-27T19:38:38.898377+00:00",
+  "request_sha256": "14cb7c8a242c696236188092df2da6c15ebb56de23a776db02c22f0eb18f5a5f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44664,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32473,
+    "cached_tokens": 14976,
+    "completion_tokens": 1446
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_memory.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for name,d in')[0])\\nfrom scipy.optimize import least_squares\\nY=dg['strain_curves_obs']-dg['strain_0'][:,None]; R=dg['instant_rate_obs']; y=np.c_[Y,R]; N=len(Y); lab=dg['lab_id']; ix=np.arange(N)\\np,h,d=m._coupon_inputs(dg,m._features(tr,dg)[n:],b)\\ndef basis(q): return np.r_[-np.expm1(-t[:,None]/q),(1/q)[None,:]]\\ndef prof(q):\\n B=basis(q); return (np.linalg.lstsq(B,y.T,rcond=None)[0].T@B.T-y).ravel()\\nf=least_squares(prof,taus,bounds=(.05,25)); q=f.x; B=basis(q); a=np.linalg.lstsq(B,y.T,rcond=None)[0].T\\nprint('zero-drift unrestricted taus',q,'curve/rate rms',np.sqrt(np.mean(prof(q).reshape(N,-1)**2,axis=0)).round(5)); print('per-coupon amplitude in stress units minus hold, alongside hold and history:'); print(np.c_[a/th[:2]-h[:,None],h,p].round(4))\\nrawp=dg['past_channel_raw']; rawh=dg['hold_channel_raw']; loads_p=rawp@b[1:]+b[0]; loads_h=rawh@b[1:]+b[0]; after=np.cumsum(dt[::-1])[::-1]-dt; before=np.cumsum(dt)-dt\\nz=lambda X,s,lag=after: np.einsum('ns...,sb->nb...',X,-np.expm1(-dt[:,None]/s)*np.exp(-lag[:,None]/s))\\nmem=z(p,q); rev=z(p,q,before)\\nprint('branch coefficient y minus benchtop history gap vs stress/past features, Pearson:')\\nnames=['hold','baseline_fast_mem','baseline_slow_mem','reverse_fast_mem','reverse_slow_mem','past_mean','past_min','past_max','past_abs_mean','past_sq_mean']+[f'past{k}' for k in range(len(dt))]+[f'hold_channel{k}' for k in range(4)]\\nM=np.c_[h,mem,rev,p.mean(1),p.min(1),p.max(1),abs(p).mean(1),(p*p).mean(1),p,loads_h]; co=np.corrcoef(np.c_[a/th[:2]-h[:,None],M].T)[:2,2:]; print(sorted(zip(names,*co.round(3)),key=lambda row:-max(abs(row[1]),abs(row[2]))))\\nfor name,g in {'hold only':[h,h], 'baseline gap':[h-mem[:,0],h-mem[:,1]],'reverse gap':[h-rev[:,0],h-rev[:,1]],'plus memory':[h+mem[:,0],h+mem[:,1]],'history independent':[np.c_[h,p],np.c_[h,p]],'clipped stress':[np.c_[h,z(np.maximum(p,0),q)[:,0]],np.c_[h,z(np.maximum(p,0),q)[:,1]]],'weighted nonlinear stress':[np.c_[h,mem[:,0],z(p*p,q)[:,0]],np.c_[h,mem[:,1],z(p*p,q)[:,1]]],'separate hold channels':[loads_h,loads_h],'hold and same mode channel memories':[np.c_[loads_h,z(loads_p,q)[:,0]],np.c_[loads_h,z(loads_p,q)[:,1]]],'hold and powered hold':[np.c_[h,h*h,np.ones(N)],np.c_[h,h*h,np.ones(N)]]}.items():\\n g=[np.reshape(v,(N,-1)) for v in g]; v=np.concatenate([g[k][:,None,:]*B[None,:,k,None] for k in range(2)],axis=-1)\\n def run(j):\\n  return np.linalg.lstsq(v[j].reshape(len(j)*y.shape[1],-1),y[j].ravel(),rcond=None)[0]\\n folds=[]\\n for k in np.unique(lab):\\n  mask=lab==k; e=v[mask]@run(ix[~mask])-y[mask]; folds.append([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]);\\n print(name,'worst LOLO',np.max(folds,0).round(5),'coeff',run(ix).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_memory.py | tail -39\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shifted chamber time constants -> H2 unchanged relaxation modes with altered history and suppressed drift; unrestricted chamber fit has 0.00231 strain RMS and 0.00084 rate RMS, while linear stress-history candidates miss that floor.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted per-coupon amplitudes\",\"rejected_reason\":\"They establish the measurement floor but do not predict unlabeled deployment coupons.\"}],\"rationale\":\"Fit the two modes without drift to sharpen the amplitude estimates, then test whether hold stress, chronological memory, nonlinear stress history, or channel contributions explain them. Leave-one-lab-out errors will distinguish transferable formulas from flexible in-sample fits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "aca57c7206a4cc8dee5478a49e58dce10003826814a8bd4e9ef193fa0f64e2ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35551.08,
+      "usage_known": true,
+      "prompt_tokens": 32473,
+      "cached_tokens": 14976,
+      "completion_tokens": 1446
+    }
+  ]
+}

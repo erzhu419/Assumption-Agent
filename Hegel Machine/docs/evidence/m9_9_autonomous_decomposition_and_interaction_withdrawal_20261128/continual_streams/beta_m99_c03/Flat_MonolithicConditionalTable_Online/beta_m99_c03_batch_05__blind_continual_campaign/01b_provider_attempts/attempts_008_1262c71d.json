@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1262c71d6a134594a51a01c558505038",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:55.724495+00:00",
+  "ended_at_utc": "2026-11-27T20:04:16.765238+00:00",
+  "request_sha256": "9cca91a8a11b028deca99b8d468403ef1f89fc7ed8ed4ed65050533af033aa91",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40904,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29385,
+    "cached_tokens": 14976,
+    "completion_tokens": 807
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/^def _fit_rosette/,/^def _box_simplex/p' /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n s=item['study']; S,_=m._forward(s)\\n # Test the inverse calibration, not just the previously checked raw-space fit.\\n for i,pulse in enumerate(item.get('campaign_diagnostics') or []):\\n  ideal=S@pulse['w_pulse']; obs=m._calibrated_observations(dict(s,y_obs_raw=pulse['y_pulse_raw'])); delta=(obs-ideal).reshape(len(s['mu_shifts']),-1,4)\\n  worst=np.sqrt(np.mean(delta**2,axis=1)).max(); print(f'pulse {i} worst inverse shift/bank RMSE: {worst:.8g}'); assert worst<1e-5\\n # Inject only the measured nuisance design, checking the exact residual action of ridge profiling.\\n z=s['Z_nuisance']; lam=s['nuisance_ridge']; eye=np.eye(z.shape[1]); gram=z.T@z\\n a=np.linalg.solve(gram+lam*eye,z.T); projected=z-z@(a@z); expected=lam*z@np.linalg.solve(gram+lam*eye,eye)\\n np.testing.assert_allclose(projected,expected,atol=1e-12)\\n print('ridge-retained nuisance norm ratio:',np.linalg.norm(projected,2)/np.linalg.norm(z,2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared boundary law -> H2 periodic x and reflecting y; worst forward tracer-slice RMSE is 1.66e-6, with inverse calibration on known-source pulses still to audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the forward stencil and calibration grammar search\",\n      \"rejected_reason\": \"Independent assembly already matched the forward map, and expanded cubic and rational terms worsened held-out calibration. Those tests did not directly exercise the inverse on tracer measurements.\"\n    },\n    {\n      \"option\": \"Compute within-batch classification accuracy\",\n      \"rejected_reason\": \"There are no class labels; the relevant confounding question is how much of the measured nuisance design survives the prescribed ridge projection.\"\n    }\n  ],\n  \"rationale\": \"A small forward calibration residual can hide an ill-conditioned inverse or wrong nonlinear root. Test the inverse directly on known-source pulses; if a shift or bank misses tolerance, fix the inversion before submission. Quantify how much nuisance the prescribed ridge retains without treating it as an exact orthogonal projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a7124455a1992a1ec1611177836c3d06e4347c022b850557b9ad93e098b3e361",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22192.55,
+      "usage_known": true,
+      "prompt_tokens": 29385,
+      "cached_tokens": 14976,
+      "completion_tokens": 807
+    }
+  ]
+}

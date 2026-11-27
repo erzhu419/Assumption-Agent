@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8702154309a742319756640502cdd03c",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:27.630909+00:00",
+  "ended_at_utc": "2026-11-27T20:02:09.092091+00:00",
+  "request_sha256": "619c2312c0669af657d71cff116a34906ef9e80fa8fd4769dfd554568117eac9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46912,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33305,
+    "cached_tokens": 14976,
+    "completion_tokens": 1734
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=it['study']\\nnx,ny=s['nx'],s['ny']\\ndef axis(c,n,periodic):\\n    a=np.zeros((n,n)); k=s['kappa_'+c]; v=s['vel_'+c]; h=s['L'+c]/(n-1)\\n    for i in range(n):\\n        if not periodic and i in (0,n-1):\\n            a[i,i]=k[i]/h**2; a[i,1 if i==0 else n-2]=-a[i,i]\\n        else:\\n            l,r=(i-1)%n,(i+1)%n\\n            a[i,l]=-(k[l]+k[i])/(2*h*h)-max(v[i],0)/h\\n            a[i,r]=-(k[i]+k[r])/(2*h*h)-max(-v[i],0)/h\\n            a[i,i]=-a[i,l]-a[i,r]\\n    return a\\nL=np.kron(np.eye(ny),axis('x',nx,True))+np.kron(axis('y',ny,False),np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nR=np.column_stack([mode.ravel(order='F') for mode in s['source_modes']]); i,j=s['sensor_ij'].T\\nF=[np.linalg.solve(L+mu*np.eye(nx*ny),R) for mu in s['mu_shifts']]; S=np.concatenate([a[i+nx*j] for a in F]); S0,U=m._forward(s)\\nassert np.max(abs(S-S0))<1e-11\\nout=m.solve_batch(s); w=np.asarray(out['weights']); cert=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']\\nf=(F[-1]@w).reshape((nx,ny),order='F'); ferr=np.max(abs(f-out['terminal_field'])); assert ferr<1e-11\\nZ=s['Z_nuisance']; P=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); A=P@S; b=P@m._calibrate(s); rho=s['source_ridge']; g=A.T@(A@w-b)+rho*w\\nJ=(np.linalg.norm(A@w-b)**2+rho*(w@w))/2; nu=cert['nu_sum']; ll=np.asarray(cert['lam_lower']); lu=np.asarray(cert['lam_upper']); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nassert np.max(abs(w-cert['weights']))<1e-12 and np.max(abs(g-nu-ll+lu))<1e-11\\nassert abs(J-cert['primal_objective'])<1e-11 and abs(dual-cert['dual_lower_bound'])<1e-11\\nassert abs(J-dual)<1e-11 and abs(w.sum()-budget)<1e-11 and np.all((w>=0)&(w<=cap))\\nprint('Independent dense forward and certificate: terminal max error',ferr,'duality gap',J-dual)\\nrng=np.random.default_rng(109); worst=0.; counts=np.zeros(2,dtype=int)\\nfor t in range(100):\\n    X=rng.normal(size=(12,8)); H=X.T@X+0.04*np.eye(8); c=15*rng.normal(size=8); B=[0.,0.01,cap,3*cap,1.4,8*cap-0.001,8*cap][t%7]\\n    x,n=m._box_simplex(H,c,cap,B); gg=H@x+c-n; gap=gg@x-cap*np.minimum(0,gg).sum()\\n    counts += [(x<1e-11).sum(),(x>cap-1e-11).sum()]; worst=max(worst,abs(gap))\\n    assert abs(x.sum()-B)<1e-10 and min(x)>=-1e-11 and max(x)<=cap+1e-11 and abs(gap)<1e-9\\nprint('100 box-simplex cases: worst gap',worst,'lower/upper active counts',counts)\\nPY\\npython3 -I - <<'PY'\\nexec(open('/tmp/wall_probe.py').read().split('out=[]')[0])\\nmodels=list(product(['Robin','sealed','periodic'],repeat=4)); prediction=np.array([errors(calc(settings(k))-raw) for k in models]); worst=0\\nfor j in range(len(raw)):\\n    pick=np.argmin(np.max(np.delete(prediction,j,axis=1),axis=1)); print('held-out pulse',j,models[pick],prediction[pick,j]); assert models[pick]==('periodic','periodic','sealed','sealed'); worst=max(worst,prediction[pick,j])\\nassert worst<3e-6\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared wall regime → H2 periodic x and sealed y; exact stencil worst public pulse-by-shift raw RMSE is 2.27e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema pass alone\",\n      \"rejected_reason\": \"The public optimum is interior, so that test does not exercise bound multipliers or tight budgets.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact against an independent field and certificate calculation, stress active bounds, and reselect the wall stencil without each held-out pulse. A failure would distinguish an indexing error, an optimizer defect, or a wall selection that depends on one pulse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "861ea126646eefef62f2860984343b568df9635d1b63c9430e880f0a2fb8a837",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42668.18,
+      "usage_known": true,
+      "prompt_tokens": 33305,
+      "cached_tokens": 14976,
+      "completion_tokens": 1734
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58d108d703d44bf298950239320efe8a",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:44.592324+00:00",
+  "ended_at_utc": "2026-11-27T19:47:09.971937+00:00",
+  "request_sha256": "8a02536d655229252803e385f4048c1cbff5c432cacae92f5d8193fd6848d1d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59551,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38427,
+    "cached_tokens": 18048,
+    "completion_tokens": 948
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\ncp /tmp/material_prefix.py batch_solver.py\\ncat >> batch_solver.py <<'PY'\\n# Calibrated from complete chamber verification coupons. These multipliers\\n# split the intrinsic drift across the two relaxation branches and linear creep.\\n_CHAMBER_DRIFT = np.array([0.333649, 2.490532, -0.256777])\\n\\n\\ndef _deployment_response(group, x, stress, dt, times, taus, theta):\\n    curves, rates = _design(group, x, stress, dt, times, taus)\\n    drift = theta[2] + x @ theta[3:]\\n    time_basis = np.column_stack([-np.expm1(-times[:, None] / taus), times])\\n    rate_basis = np.r_[1 / taus, 1.0]\\n    delta = curves[:, :, :2] @ theta[:2] + drift[:, None] * (time_basis @ _CHAMBER_DRIFT)\\n    rate = rates[:, :2] @ theta[:2] + drift * (rate_basis @ _CHAMBER_DRIFT)\\n    return group['strain_0'][:, None] + delta, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    x_train, x_test = _features(train, test)\\n    stress = _stress_map(dataset['calibration_load_cells'])\\n    taus, theta = _fit(train, x_train, stress, dt, times)\\n    strain, rates = _deployment_response(test, x_test, stress, dt, times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rates}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -n '/^def _chamber_response/,$p' /tmp/hegel_continual_archive/alpha_m99_c04_batch_01_solver.py\\npython3 - <<'PY'\\nimport json\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n print({k:v for k,v in e.items() if not isinstance(v,list)})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: chamber-specific missingness coefficients → H2: shared hereditary state with rank-one drift redistribution and prescribed deployment imputation; complete-coupon calibration with diagnostic imputation offsets gives worst-lab strain/rate RMSE of 0.00725/0.01545.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Embed diagnostic missingness corrections\",\"rejected_reason\":\"Missingness shifts are nearly constant within each affected feature, consistent with a different diagnostic imputation value. Deployment has an explicit cell-balanced imputation rule.\"}],\"rationale\":\"Build the solver with full calibrated load history, train-only material fitting, and three deployment drift multipliers estimated on complete diagnostics. Run the isolated schema check to catch interface or import failures, and inspect the prior chamber law and concise apparatus metadata for evidence that would change the deployment formula.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "ef924aad7ec5b8e050a78448da412a3842150bd9c5c429427abf4f8920045384",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25343.25,
+      "usage_known": true,
+      "prompt_tokens": 38427,
+      "cached_tokens": 18048,
+      "completion_tokens": 948
+    }
+  ]
+}

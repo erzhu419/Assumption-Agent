@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e0baffbfac1c41f4b69f3edea31ac4dd",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:51.488140+00:00",
+  "ended_at_utc": "2026-11-27T19:39:28.619789+00:00",
+  "request_sha256": "2a677b967cccef6e8b6a7a242d989d7d43df1e22e198a1bb95cd11323c8c0113",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41261,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30859,
+    "cached_tokens": 14976,
+    "completion_tokens": 1568
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/m99_margin_audit.py <<'PY'\\nimport itertools\\nimport pickle\\nimport runpy\\nimport numpy as np\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nx, raw = (s['sensor_calibration_sweeps'][k] for k in ('ref_rosette', 'raw_rosette'))\\nS, _ = m['_forward'](s)\\ntruth = [S @ p['w_pulse'] for p in item['campaign_diagnostics']]\\npulses = [p['y_pulse_raw'].reshape(-1, 4) for p in item['campaign_diagnostics']]\\nns = len(s['mu_shifts'])\\n\\n# Fit extra terms only on sweep training rows, never on a tracer or test sweep.\\ndef terms(z, j, model):\\n    cols = [np.ones(len(z)), z[:, j]]\\n    if model == 'full affine':\\n        cols = [np.ones(len(z)), *z.T]\\n    if model == 'quadratic':\\n        cols = [np.ones(len(z)), *z.T]\\n        cols += [z[:, a] * z[:, b] for a, b in itertools.combinations_with_replacement(range(4), 2)]\\n    if model == 'rational pair':\\n        cols += [z[:, j] / (1 + a * (z[:, j] + sign * z[:, b])**2) for b in range(4) if b != j for a in (.25, 1.) for sign in (-1,1)]\\n    return np.column_stack(cols)\\n\\nfor model in ('diagonal affine', 'full affine', 'quadratic', 'rational pair'):\\n    sweep_errors, pulse_errors = [], []\\n    for k in range(5):\\n        test = np.arange(len(x)) % 5 == k\\n        for j in range(4):\\n            fit = np.linalg.lstsq(terms(x[~test], j, model), raw[~test, j], rcond=None)[0]\\n            sweep_errors.append(np.sqrt(np.mean((terms(x[test], j, model) @ fit - raw[test, j])**2)))\\n            for z, y in zip(truth, pulses):\\n                r = (terms(z.reshape(-1,4), j, model) @ fit - y[:, j]).reshape(ns,-1)\\n                pulse_errors.extend(np.sqrt(np.mean(r**2, axis=1)))\\n    print(model, 'worst_fold_bank_rmse', max(sweep_errors), 'worst_fold_pulse_shift_bank_rmse', max(pulse_errors))\\n\\n# Nuisance stress: omit one physical sensor at every shift. A large change in\\n# weights or group-level calibration residual would warrant localization.\\ny = m['_calibrate'](s)\\nZ = s['Z_nuisance']; ridge = s['source_ridge']; cap = s['u_box']; budget = s['total_budget']\\n\\ndef fit_rows(keep, project):\\n    T, r, z = S[keep], y[keep], Z[keep]\\n    if project:\\n        prof = np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n        T, r = T - z @ (prof @ T), r - z @ (prof @ r)\\n    H = T.T @ T + ridge * np.eye(T.shape[1]); c = -T.T @ r\\n    w, nu = m['_box_simplex'](H, c, cap, budget)\\n    g = H @ w + c\\n    gap = g @ w - nu * budget - cap * np.minimum(0, g-nu).sum()\\n    gamma = np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ (y[keep] - S[keep] @ w)) if project else np.zeros(z.shape[1])\\n    return w, gamma, gap\\n\\nall_rows = np.ones(len(y), dtype=bool)\\nw0, _, _ = fit_rows(all_rows, True)\\nfor project in (True, False):\\n    residual = np.zeros_like(y); drift, gaps = [], []\\n    for j in range(len(s['sensor_ij'])):\\n        held = np.arange(len(y)) % len(s['sensor_ij']) == j\\n        w, gamma, gap = fit_rows(~held, project)\\n        residual[held] = S[held] @ w + Z[held] @ gamma - y[held]\\n        drift.append(np.linalg.norm(w-w0)); gaps.append(abs(gap))\\n    print('nuisance_projection', project, 'RMSE by shift', np.sqrt(np.mean(residual.reshape(ns,-1)**2, axis=1)), 'RMSE by bank', np.sqrt(np.mean(residual.reshape(-1,4)**2, axis=0)), 'max_weight_drift_l2', max(drift), 'max_abs_dual_gap', max(gaps))\\nPY\\npython3 -I /tmp/m99_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin -> H2 zero-leak endpoints with sweep-fitted affine readout; worst public pulse-by-shift RMSE is 2.54e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift-control operators, or classification balance\",\n      \"rejected_reason\": \"This is a steady continuous inverse problem with none of those inputs or outputs. Held-out sensor residuals by shift and bank test the nuisance effect on the actual task.\"\n    }\n  ],\n  \"rationale\": \"The stencil and certificate already passed independent verification. This audit tests the remaining plausible failures: a missed calibration interaction that improves held-out tracer prediction, or nuisance sensitivity concentrated at a particular sensor, bank, or shift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "79269c0c30f31b7dabfa5508c0a093617f6e8a86c977bf54dad3b7cbab9ba427",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38233.02,
+      "usage_known": true,
+      "prompt_tokens": 30859,
+      "cached_tokens": 14976,
+      "completion_tokens": 1568
+    }
+  ]
+}

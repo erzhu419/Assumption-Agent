@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a7ef55d5d0a40a988d2274e7c7e66af",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:29.408763+00:00",
+  "ended_at_utc": "2026-11-27T20:04:50.663936+00:00",
+  "request_sha256": "aa5bd4e68bc7c2894f2714754c26be917ec8c5d0b2d1e50a327775e511a96566",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70307,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38325,
+    "cached_tokens": 14976,
+    "completion_tokens": 813
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: ds=pickle.load(f)[0]['dataset']\\ncal=ds['calibration_load_cells']; raw=cal['bridge_raw']; loads=cal['true_channel_loads']; b=m._calibration(cal)\\nj=np.arange(4); forward=b[0]+loads@b[1:5]+b[5]*loads**3+b[6]*loads*loads[:,(j+1)%4]; e=raw-forward; axial=m._axial(raw,b)-loads.sum(axis=1)\\namplitude=np.max(abs(loads),axis=1); low=np.argsort(amplitude,kind='stable')[:20]; high=np.argsort(amplitude,kind='stable')[20:]; k=np.argsort(abs(axial[low]))[-6:]; ii=low[k]\\nprint('low quartile axial absolute quantiles',np.quantile(abs(axial[low]),[0,.5,.75,.85,.9,1])); print('other quartiles axial absolute quantiles',np.quantile(abs(axial[high]),[.5,.9,1])); print('largest low-quartile errors: row, true load amplitude, axial error, four raw residuals'); print(np.round(np.c_[ii,amplitude[ii],axial[ii],e[ii]],6)); print('low-quartile signed raw median',np.round(np.median(e[low],axis=0),6)); print('other quartiles signed raw median',np.round(np.median(e[high],axis=0),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 systematic low-load bridge bias -> H2 isolated anomalous calibration rows; withholding any load quartile shifted either fitted relaxation time by at most 0.0062%, with worst diagnostic RMSE of 0.02579 for strain and 0.01691 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the bridge solely because the lowest quartile has a higher p90\",\n      \"rejected_reason\": \"Withholding that quartile barely changes deployment errors. A calibration change would require evidence of a systematic mismatch rather than a few anomalous rows.\"\n    }\n  ],\n  \"rationale\": \"The lowest calibration quartile is the only unresolved anomaly: its axial error p90 is 0.0882 versus at most 0.00027 elsewhere. Compare forward bridge residuals with inverse axial errors to distinguish systematic low-load bias from isolated measurement anomalies; change the calibration model only if the residuals support it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e4e35b2765a0b53447bddc779cb71b37e0985257de2b2f143817d5e1df85b8d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22409.22,
+      "usage_known": true,
+      "prompt_tokens": 38325,
+      "cached_tokens": 14976,
+      "completion_tokens": 813
+    }
+  ]
+}

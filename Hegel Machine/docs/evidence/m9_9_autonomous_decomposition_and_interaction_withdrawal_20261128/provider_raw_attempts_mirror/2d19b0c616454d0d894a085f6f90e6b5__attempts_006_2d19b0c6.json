@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2d19b0c616454d0d894a085f6f90e6b5",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:25.695639+00:00",
+  "ended_at_utc": "2026-11-27T19:50:52.829403+00:00",
+  "request_sha256": "76a9ee9cb61c205def29218805d32446c0d8a67195715518048a53a08884cbe2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43820,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31296,
+    "cached_tokens": 14976,
+    "completion_tokens": 1097
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement as cwr\\nnp.set_printoptions(precision=5,suppress=True,linewidth=155)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; n=len(y); a=np.c_[np.ones(n),y]; fit=np.linalg.lstsq(a,r,rcond=None)[0]; e=r-a@fit; u,s,v=np.linalg.svd(e,full_matrices=False); q=e@v[0]; print('affine forward coeffs',fit,'residual singular values',s,'residual directions',v,sep='\\\\n'); print('row, true loads, projected residual, orthogonal residual norm'); ids=np.unique(np.r_[np.arange(0,n,5),np.argsort(abs(q))[-10:]]);print(np.c_[ids,y,q,np.linalg.norm(e-q[:,None]*v[0],axis=1)][ids]); print('unique per true channel',[np.unique(y[:,j]).size for j in range(4)]); print('single sweep',np.c_[c['single_channel_sweeps']['lab_id'],c['single_channel_sweeps']['true_stress'],c['single_channel_sweeps']['cmd_stress']]);\\nmodels={k:np.empty(n) for k in ('affine','quadratic','projected affine','trimmed forward','trimmed inverse')}\\nfor f in range(5):\\n te=np.arange(n)%5==f; tr=~te\\n def terms(x,deg): return np.column_stack([np.ones(len(x))]+[x[:,idx].prod(1) for j in range(1,deg+1) for idx in cwr(range(4),j)])\\n def pred(name,x,keep): models[name][te]=x[te]@np.linalg.lstsq(x[keep],y[keep].sum(1),rcond=None)[0]\\n pred('affine',terms(r,1),tr);pred('quadratic',terms(r,2),tr)\\n m=np.linalg.lstsq(a[tr],r[tr],rcond=None)[0]; resid=r[tr]-a[tr]@m; _,_,v=np.linalg.svd(resid,full_matrices=False); pred('projected affine',terms(r@v[1:].T,1),tr)\\n keep=tr.copy()\\n for _ in range(5):\\n  m=np.linalg.lstsq(a[keep],r[keep],rcond=None)[0]; norm=np.linalg.norm(r-a@m,axis=1); order=np.flatnonzero(tr); keep=np.zeros(n,bool); keep[order[np.argsort(norm[tr])[:int(.75*tr.sum())]]]=True\\n m=np.linalg.lstsq(a[keep],r[keep],rcond=None)[0]; models['trimmed forward'][te]=np.linalg.solve(m[1:].T,(r[te]-m[0]).T).sum(0);pred('trimmed inverse',terms(r,1),keep)\\nfor k,v in models.items():\\n err=v-y.sum(1);print(k,'RMSE',np.sqrt(np.mean(err**2)),'max',max(abs(err)),'last-20 RMSE',np.sqrt(np.mean(err[-20:]**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: generic forward polynomials → H2: structured bridge distortion; the best validated axial calibration still has RMSE 0.2211 and worst absolute error 0.6214.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use forward quadratic inversion\",\n      \"rejected_reason\": \"It worsened held-out axial RMSE to 0.788 and failed to converge on 15 of 80 calibration rows.\"\n    }\n  ],\n  \"rationale\": \"The forward quadratic coefficients point in nearly the same direction across channels. Residual directions and held-out errors will distinguish a shared bridge distortion from a few atypical rows and determine whether projection, trimming, or neither improves axial calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1fe04cd303c1155f5d17b11cda5429bbc98009a292761bb35b6effb1d27969ca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28283.71,
+      "usage_known": true,
+      "prompt_tokens": 31296,
+      "cached_tokens": 14976,
+      "completion_tokens": 1097
+    }
+  ]
+}

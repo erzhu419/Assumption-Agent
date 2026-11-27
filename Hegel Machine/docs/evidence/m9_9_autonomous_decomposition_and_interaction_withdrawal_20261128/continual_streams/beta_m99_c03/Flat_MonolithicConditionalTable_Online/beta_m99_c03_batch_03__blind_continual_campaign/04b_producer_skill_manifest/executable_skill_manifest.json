@@ -1,0 +1,129 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m99_c03_batch_03_198682ce225b",
+    "source_hash": "198682ce225b3c8ba4257c5f547df41c0158bf8c2be2a3b159471971e02867e4",
+    "parent_ids": [],
+    "source_episode_id": "beta_m99_c03_batch_03__blind_continual_campaign",
+    "task_id": "beta_m99_c03_batch_03__blind_continual_campaign",
+    "wormhole_family": "m99_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/m99_clean_cal.py",
+        "archived_relpath": "producers/tmp__m99_clean_cal.py",
+        "bytes": 1701,
+        "sha256": "41be932363a111e3b32a3a4cfdcf643ff887c7243ddbfaffe03f22d2886d96f4"
+      },
+      {
+        "container_path": "/tmp/m99_probe_cal.py",
+        "archived_relpath": "producers/tmp__m99_probe_cal.py",
+        "bytes": 1698,
+        "sha256": "e3f3875f7ccefbb6b29fa47308c7c2b81d4e4ae637c795232815aa8649d66009"
+      },
+      {
+        "container_path": "/tmp/m99_rosette.py",
+        "archived_relpath": "producers/tmp__m99_rosette.py",
+        "bytes": 1625,
+        "sha256": "8b09531f6f7c8f2f6e8da1bdd7e7ce344cec3a8065297d964808c266b5bf8db0"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m99_c03_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m99_c03_batch_01_solver.py",
+        "bytes": 5360,
+        "sha256": "a81a2ced511fcda63bec3dd5567dc5765740085b1838bdc240c938fa3b7175a2"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m99_c03_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m99_c03_batch_02_solver.py",
+        "bytes": 5328,
+        "sha256": "96776e9321e45c0a5c8fcf17bf6cb30993f8bd2e5e36a6fe04839eb2f5b05f6a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m99_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m99_c03_s00_solver.py",
+        "bytes": 5062,
+        "sha256": "14b056b0f8c66d8ca5fae130830f7068fad5182134b383ddb4b40cdfde7c01aa"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "set -e; cat /holdout_task/public_asset_index.json /holdout_task/validate_public_schema.py; ls -l /tmp/hegel_continual_archive; cat /tmp/hegel_continual_archive/archive_apparatus_log.json; python3 -I - <<'PY'\nimport pickle\nwith open('/holdout_task/public_batch.pkl','rb') as f: b=pickle.load(f)\nprint('items:',len(b)); i=b[0]; print('item keys:',list(i)); print('diagnostics:',type(i.get('campaign_diagnostics')).__name__)\nfor k,v in i['study'].items():\n print(k,type(v).__name__,getattr(v,'shape',None), (list(v) if isinstance(v,dict) else v if isinstance(v,(float,int,str,type(None))) else ''))\nPY",
+      "set -e; cat /holdout_task/validate_public_schema.py; ls -lh /tmp/hegel_continual_archive; python3 - <<'PY'\nimport json\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\nx=json.load(open(p))\ndef brief(v):\n if isinstance(v,dict): return {k:brief(a) for k,a in v.items()}\n if isinstance(v,list): return [brief(a) for a in v] if len(v)<=10 else f'list of {len(v)}'\n return v\nprint(json.dumps(brief(x),indent=2)[:5500])\nPY\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \"=== $f\"; grep -nE '^def |wall|apparatus|monolithic' \"$f\" | head -65; done; PYTHONPATH=/tmp python3 -m hegel_wormh",
+      "set -e; diff -u /tmp/hegel_continual_archive/beta_m99_c03_batch_01_solver.py /tmp/hegel_continual_archive/beta_m99_c03_batch_02_solver.py || test $? -eq 1; sed -n '1,155p' /tmp/hegel_continual_archive/beta_m99_c03_batch_02_solver.py; python3 -I - <<'PY'\nimport json,pickle,numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); np.set_printoptions(precision=5,suppress=True)\nfor e in a+[dict(completed_campaign_short_name='public',facility_telemetry_trace=s['aux_manifold_telemetry'])]:\n t=np.",
+      "for f in /tmp/hegel_continual_archive/*solver.py; do echo \"=== $f\"; sed -n '/^def _calibrated_observations/,/^def _box_simplex/p' \"$f\"; done; cat /tmp/hegel_continual_archive/archive_manifest.json; python3 -I - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=4,suppress=True)\nprint('rosette ranges',x.min(0),x.max(0),y.min(0),y.max(0)); print('rosette examples',np.c_[x,y][:8]); d=c['single_bank_sweeps'];\nfor b in range(4):\n m=d['bank_id'",
+      "cat > /tmp/m99_probe_cal.py <<'PY'\nimport pickle,itertools,numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=5,suppress=True)\nprint('active coordinates:',np.count_nonzero(x,axis=1).tolist()); print('large raw cells:',np.argwhere(abs(y)>4).tolist())\nterms=[t for d in range(4) for t in itertools.combinations_with_replacement(range(4),d)]\nD=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); fold=np.arange(len(x))%",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=4,suppress=True)\nfor j in range(4):\n m=(np.count_nonzero(x,axis=1)==1)&(x[:,j]!=0); print('axis',j,np.c_[x[m,j],y[m]]); b=c['single_bank_sweeps']; t=b['bank_id']==j; z=b['ref_signal'][t]; a=np.polynomial.polynomial.polyvander(z,3); fit=np.linalg.lstsq(a[np.abs(b['raw_readout'][t])<4],b['raw_readout'][t][np.abs(b[",
+      "cat > /tmp/m99_clean_cal.py <<'PY'\nimport itertools, json, pickle\nimport numpy as np\n\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; n=len(x)\nxb=np.zeros((len(b['bank_id']),4)); xb[np.arange(len(xb)),b['bank_id']]=b['ref_signal']\nyb=np.full_like(xb,np.nan); yb[np.arange(len(xb)),b['bank_id']]=b['raw_readout']; xx=np.vstack((x,xb)); yy=np.vstack((y,yb)); good=np.isfinite(yy)&(abs(yy)<8)\nfold=np.r_[np.arange(n)%5,np.arange(len(xb))%5]; dense=np.count_nonzero(xx,axis=1)>1\n",
+      "set -e; cat > /tmp/m99_rosette.py <<'PY'\nimport numpy as np\n\n\ndef _rosette_design(ref, j):\n    own, nxt, prev = ref[:, j], ref[:, (j + 1) % 4], ref[:, (j - 1) % 4]\n    return np.column_stack((np.ones(len(ref)), own, nxt, prev, own*nxt, own**3))\n\n\ndef _fit_rosette(sweeps):\n    ref, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\n    banks = sweeps['single_bank_sweeps']\n    coef = []\n    for j in range(4):\n        take = banks['bank_id'] == j\n        axes = np.zeros((np.count_nonzero(take), 4))\n        axes[:, j] = banks['ref_signal'][take]\n        design = _rosette_design(np.vstack((ref, axe",
+      "set -e; for f in /tmp/hegel_continual_archive/*solver.py; do echo \"=== $f\"; sed -n '/^def _axis_operator/,/^def _forward/p' \"$f\"; done; python3 -I - <<'PY'\nimport json\np='/tmp/hegel_continual_archive/archive_manifest.json'; a=json.load(open(p)); print(str(a)[:2200]); a=json.load(open('/holdout_task/public_asset_index.json')); print('asset keys',list(a)); print({k:v for k,v in a.items() if k!='files'})\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport glob,importlib.util,sys,pickle,numpy as np\nsys.path.insert(0,'/tmp'); from m99_rosette import _calibrated_observations,_fit_rosette,_rosette_d",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\narchive = Path('/tmp/hegel_continual_archive/beta_m99_c03_s00_solver.py').read_text()\nrosette = Path('/tmp/m99_rosette.py').read_text()\nstart = archive.index('def _calibrated_observations(')\nend = archive.index('def _box_simplex(', start)\ncalibration = rosette[rosette.index('def _rosette_design('):].rstrip()\ncalibration = calibration.replace('        clean = np.abs(target) < 8.0', '        # Clean sweep readings and gross readout excursions are separated by a magnitude gap.\\n        clean = np.abs(target) < 8.0')\nPath('/holdout_task/batch_sol",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\nS, U = m._forward(s)\ny = m._calibrated_observations(s)\nZ = s['Z_nuisance']; P = np.eye(len(y)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\nA, b = P @ S, P @ y\nri",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle\nimport numpy as np\np='/holdout_task/batch_solver.py'\nsp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; banks=sw['single_bank_sweeps']; rms={k:[] for k in ('cyclic','pairwise','rational')}\nfor j in range(4):\n    take=banks['bank_id']==j; extra=np.zeros((take.sum(),4)); extra[:,j]=banks['ref_"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__beta_m99_c03_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/beta_m99_c03_batch_01_solver.py",
+      "selected_channels": [
+        "m99_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 6403,
+        "sha256": "edff0b15a39c4fa49992acf77e32823f7bb4d43fdc1c8f15ec0482433ae05402",
+        "content_addressed_ref": "content_addressed_blobs/edff0b15a39c4fa49992acf77e32823f7bb4d43fdc1c8f15ec0482433ae05402.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m99_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "198682ce225b3c8ba4257c5f547df41c0158bf8c2be2a3b159471971e02867e4",
+      "verified_post_package": true,
+      "verified_turn": 13,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, pickle\nimport numpy as np\np='/holdout_task/batch_solver.py'\nsp=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(sp); sp",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "198682ce225b3c8ba4257c5f547df41c0158bf8c2be2a3b159471971e02867e4",
+        "expected_candidate_sha256": "198682ce225b3c8ba4257c5f547df41c0158bf8c2be2a3b159471971e02867e4",
+        "computed_candidate_sha256": "198682ce225b3c8ba4257c5f547df41c0158bf8c2be2a3b159471971e02867e4",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 6403
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_198682ce"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "63808bcda96e43fe9555bd7bda8b26e3",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:53.907109+00:00",
+  "ended_at_utc": "2026-11-27T20:06:16.722193+00:00",
+  "request_sha256": "05755798dcacacec722b13636057e1d30ddb39939b2a4f18d4bb3e26e0ae4657",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46443,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30604,
+    "cached_tokens": 13696,
+    "completion_tokens": 845
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,46p' downstream_solver.py\\ncat _verified_upstream.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,json,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as batch, downstream_solver as mod\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl','rb') as f: raw=pickle.load(f)[0]['dataset']\\ncal=calibrate_upstream(raw,batch._PAY)\\ntr,te=cal['train'],cal['test']; x,xt=mod._features(tr,te)\\np,h=tr['past_channel_raw'].sum(-1),tr['hold_channel_raw'].sum(-1)\\nt,dt=cal['eval_times'],cal['past_dt']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']\\nprint('leave-one-lab-out: lab n tau curve_mae per-time_mae rate_mae')\\nfor lab in np.unique(tr['lab_id']):\\n mask=tr['lab_id']!=lab\\n tau,beta=mod._fit(x[mask],p[mask],h[mask],dt,t,y[mask],rate[mask]); a,b=mod._design(tau,x[~mask],p[~mask],h[~mask],dt,t)\\n err=np.abs(a@beta-y[~mask]); print(lab,sum(~mask),tau.round(4),round(err.mean(),5),err.mean(0).round(4),round(np.abs(b@beta-rate[~mask]).mean(),5))\\nout=batch.solve_batch(raw); direct=mod.solve_downstream(cal)\\nassert set(out)=={'estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'}\\nassert [out[k].shape for k in ('estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred')]==[(2,),(7,),(36,12),(36,)]\\nfor k in out: assert np.array_equal(out[k],direct[k]) and np.isfinite(out[k]).all(), k\\ntau,beta=out['estimated_taus'],out['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\nhold=te['hold_channel_raw'].sum(-1); eps=1e-6\\nv,r=mod._chamber(tau,beta,xt,hold,np.array([0.,eps])); print('chamber zero-time and tangent errors',np.max(np.abs(v[:,0])),np.max(np.abs(v[:,1]/eps-r)))\\nassert np.all(v[:,0]==0) and np.max(np.abs(v[:,1]/eps-r))<1e-5\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sustained channel-7 marker → hold-driven chamber transfer; public schema passed, with held-out lab errors pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Hold out each lab’s response measurements to detect a fit that relies on lab-specific residuals. Independently check in an isolated process that the deployed rate matches the zero-time strain derivative; a mismatch would require correcting the boundary equation, not refitting the material.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "4e01bce89496fa578686bb72f9e3068075bac1283cf9289c9a0c8e40ef65e8b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22769.13,
+      "usage_known": true,
+      "prompt_tokens": 30604,
+      "cached_tokens": 13696,
+      "completion_tokens": 845
+    }
+  ]
+}

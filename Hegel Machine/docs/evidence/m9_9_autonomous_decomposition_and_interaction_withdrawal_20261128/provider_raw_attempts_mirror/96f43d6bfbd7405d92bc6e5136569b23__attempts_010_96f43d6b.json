@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96f43d6bfbd7405d92bc6e5136569b23",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:44.263027+00:00",
+  "ended_at_utc": "2026-11-27T19:55:05.745756+00:00",
+  "request_sha256": "9774764c228477aca027d3634094fb7d8f3692a9af41b251a4f102df1a97b00c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 47762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30164,
+    "cached_tokens": 13696,
+    "completion_tokens": 822
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_rosette, _invert_rosette\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\nclean = np.max(np.abs(y), axis=1) < 8\\ninteraction = np.max(np.abs(x * np.roll(x, -1, axis=1)), axis=1)\\nfold = np.random.default_rng(192).permutation(len(x)) % 5\\nsparse, ablated = [], []\\nfor k in range(5):\\n    train = fold != k\\n    test = (~train) & clean & (interaction >= np.quantile(interaction[train & clean], .75))\\n    if not np.any(test):\\n        continue\\n    h2 = _fit_rosette(x[train], y[train])\\n    h1 = np.zeros_like(h2)\\n    for j in range(4):\\n        a = np.column_stack((np.ones(len(x)), x, x[:, j] ** 3))\\n        tr = train & clean\\n        h1[j, :6] = np.linalg.lstsq(a[tr], y[tr, j], rcond=None)[0]\\n    for coef, errors in ((h2, sparse), (h1, ablated)):\\n        errors.extend(np.max(np.abs(_invert_rosette(y[test], coef) - x[test]), axis=1))\\nprint(f'ng_t05: {len(sparse)} measured high-interaction holdouts; shipped inverse max={max(sparse):.6g}; refitted no-pair inverse max={max(ablated):.6g}')\\nassert max(sparse) < 1e-4 and max(ablated) > 100 * max(sparse)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing with self-cubics -> H2 affine mixing with self-cubics and cyclic pair products; worst held-out inverse error is 3.49e-5, and the high-interaction inverse ablation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and unrestricted cubic comparisons\",\n      \"rejected_reason\": \"The prior audit already found no improvement. A direct inverse ablation tests whether the saved pair terms resolve the outstanding structural issue.\"\n    }\n  ],\n  \"rationale\": \"Compare the shipped inverse with a refitted no-pair model on real held-out rows with strong joint excitation. If the shipped model misses the 1e-4 audit target or the ablation does not materially worsen inversion, revisit the interaction fit before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0aa550477fb1e01919d3904be21c443221936f0203faa70d17b7a9e6badf17f3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22574.81,
+      "usage_known": true,
+      "prompt_tokens": 30164,
+      "cached_tokens": 13696,
+      "completion_tokens": 822
+    }
+  ]
+}

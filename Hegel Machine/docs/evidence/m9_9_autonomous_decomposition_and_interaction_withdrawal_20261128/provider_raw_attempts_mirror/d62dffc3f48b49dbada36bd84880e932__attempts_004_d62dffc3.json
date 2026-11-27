@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d62dffc3f48b49dbada36bd84880e932",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:31.388809+00:00",
+  "ended_at_utc": "2026-11-27T19:46:49.768971+00:00",
+  "request_sha256": "73b45e5c2b29a9fca3ace56d8084c3b5a1f5f7ca2ce408d03c96f8f5cef73515",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 32245,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25711,
+    "cached_tokens": 13696,
+    "completion_tokens": 652
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed -n '40,120p' /tmp/hegel_continual_archive/alpha_m99_c01_batch_01_solver.py && tail -42 /tmp/hegel_continual_archive/alpha_m99_c01_s00_solver.py && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nprint('payload',open('_upstream_param_payload.json').read())\\na=json.load(open('public_asset_index.json'));print('asset keys',list(a) if isinstance(a,dict) else len(a)); print(str(a)[:1000]);\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; c=d['calibration_load_cells']; R=c['bridge_raw']; L=c['true_channel_loads']; m=(abs(R)<=8.5).all(1); A=np.c_[np.ones(sum(m)),L[m]]; B=np.linalg.lstsq(A,R[m],rcond=None)[0]; print('calibration',m.sum(), B.round(6),'rmse',np.sqrt(np.mean((R[m]-A@B)**2,axis=0))); print('diagnostics NaNs',np.isnan(i['campaign_diagnostics']['coupon_features_raw']).sum(0)); print('diagnostics labs',np.unique(i['campaign_diagnostics']['lab_id'],return_counts=True)); n=i['campaign_diagnostics']; print('diag response ranges',np.quantile(n['strain_curves_obs']-n['strain_0'][:,None],[0,.1,.5,.9,1]),np.quantile(n['instant_rate_obs'],[0,.1,.5,.9,1]));\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (intrinsic two-branch relaxation) -> H2 (diagnostic-identified chamber operator in calibrated coordinates); no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit a total-stress bridge on already calibrated data\",\"rejected_reason\":\"If the upstream mapping is verified, the downstream contract calls for summing the calibrated channels; a second fit can reintroduce sweep outliers.\"}],\"rationale\":\"Compare prior chamber structures and quantify sweep cross-talk before fitting. This distinguishes a constitutive change from a calibration mismatch and determines whether diagnostic feature imputation will affect model selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "da3ef25c3b353656d00b001c091bee3172af6e10f881642c436e9e884b46d190",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19507.0,
+      "usage_known": true,
+      "prompt_tokens": 25711,
+      "cached_tokens": 13696,
+      "completion_tokens": 652
+    }
+  ]
+}

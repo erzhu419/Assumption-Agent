@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1b6e7b5fa2d9420495b74cc425bd09bb",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:45.536957+00:00",
+  "ended_at_utc": "2026-11-27T19:38:23.493830+00:00",
+  "request_sha256": "8c51e27b0fafc7fbd118ce74982a62d3d0af9ec727f9ef6c3b06dbfd9abac8d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41013,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31307,
+    "cached_tokens": 14976,
+    "completion_tokens": 1671
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/beta_m99_c02_s00_solver.py').read_text()\\nstart = src.index('    if axes is None:')\\nend = src.index('    ax, ay = axes', start)\\nsrc = src[:start] + '''    if axes is None:\\n        # Known-weight tracer pulses identify reflecting walls on both axes:\\n        # retain the boundary diffusion pair and remove Robin leakage.\\n        axes = [_axis(study['kappa_' + a], study['vel_' + a],\\n                      study['L' + a] / (n - 1), 0.0)\\n                for a, n in (('x', nx), ('y', ny))]\\n''' + src[end:]\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nsed -n '48,150p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=item['study']; nx,ny=s['nx'],s['ny']\\naxes=[]\\nfor a,n in [('x',nx),('y',ny)]:\\n h=s['L'+a]/(n-1); k=s['kappa_'+a]; v=s['vel_'+a]; A=np.zeros((n,n))\\n for i in range(1,n-1):\\n  A[i,i-1]=-(k[i]+k[i-1])/(2*h*h)-max(v[i],0)/h\\n  A[i,i+1]=-(k[i]+k[i+1])/(2*h*h)-max(-v[i],0)/h\\n  A[i,i]=-A[i,i-1]-A[i,i+1]\\n for i,j in [(0,1),(n-1,n-2)]: A[i,i]=k[i]/h**2; A[i,j]=-A[i,i]\\n axes.append(A)\\nL=np.kron(np.eye(ny),axes[0])+np.kron(axes[1],np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\nB=np.stack([a.ravel(order='F') for a in s['source_modes']],axis=1); ij=s['sensor_ij']; ii=ij[:,0]+nx*ij[:,1]\\nallU=[np.linalg.solve(L+mu*np.eye(nx*ny),B) for mu in s['mu_shifts']]; S=np.concatenate([U[ii] for U in allU]); candS,_=m._responses(s)\\nassert np.allclose(candS,S,atol=1e-12,rtol=0)\\nc=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; D=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(D,y,rcond=None)[0]\\nerrs=[]\\nfor pulse in item['campaign_diagnostics']:\\n sig=(S@pulse['w_pulse']).reshape(-1,4); res=((sig@b[1:]+b[0]).ravel()-pulse['y_pulse_raw']).reshape(len(allU),-1)\\n errs.extend(np.sqrt(np.mean(res**2,axis=1)))\\nprint('worst pulse-by-shift raw RMS',max(errs)); assert max(errs)<1e-5\\nZ=s['Z_nuisance']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nraw=s['y_obs_raw'].reshape(-1,4); yy=np.linalg.solve(b[1:].T,(raw-b[0]).T).T.ravel(); X=P@S; y=P@yy\\nfor total in [0., s['u_box']*2, s['total_budget'], s['u_box']*len(B.T)-1e-8, s['u_box']*len(B.T)]:\\n out=m.solve_batch(dict(s,total_budget=total)); w=out['weights']; c=out['kkt_certificate']; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); cap=s['u_box']; r=X@w-y\\n g=X.T@r+s['source_ridge']*w; J=.5*(r@r+s['source_ridge']*(w@w)); dual=J-g@w+nu*total+cap*np.minimum(g-nu,0).sum()\\n field_error=np.max(np.abs(out['terminal_field']-(allU[-1]@w).reshape((nx,ny),order='F')))\\n stationarity=np.max(np.abs(g-nu-lo+hi)); gap=J-dual\\n print('budget',total,'stationarity',stationarity,'gap',gap,'field error',field_error)\\n assert np.array_equal(w,c['weights']) and abs(w.sum()-total)<1e-10 and np.min(w)>=-1e-12 and np.max(w)<=cap+1e-12\\n assert np.min(lo)>=0 and np.min(hi)>=0 and np.max(np.abs(lo*w))<1e-10 and np.max(np.abs(hi*(cap-w)))<1e-10\\n assert stationarity<1e-10 and abs(gap)<1e-10 and field_error<1e-12\\n assert abs(c['primal_objective']-J)<1e-10 and abs(c['dual_lower_bound']-dual)<1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin leakage → H2 reflecting walls on both axes; worst calibrated pulse RMS drops from 0.105167 to approximately 1e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry fitted wall coefficients into the solver\",\n      \"rejected_reason\": \"Exact reflecting rows already match all three pulses at the calibration error scale; additional parameters do not improve held-out predictions.\"\n    }\n  ],\n  \"rationale\": \"Change only the wall mechanism and retain dynamic affine calibration. Check the shipped solver against an independently assembled dense operator to catch stencil or ordering errors, and verify the certificate at the public budget and at binding budget extremes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "75fc3aa73ff8e236f6b61ac399e901b291074036be14d50caf79b5517001ac31",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40172.29,
+      "usage_known": true,
+      "prompt_tokens": 31307,
+      "cached_tokens": 14976,
+      "completion_tokens": 1671
+    }
+  ]
+}

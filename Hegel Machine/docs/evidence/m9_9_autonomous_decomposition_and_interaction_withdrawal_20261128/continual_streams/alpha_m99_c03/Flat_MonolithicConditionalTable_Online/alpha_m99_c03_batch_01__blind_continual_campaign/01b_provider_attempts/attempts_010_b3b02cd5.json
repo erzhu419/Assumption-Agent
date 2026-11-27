@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3b02cd5f4d1466785914bf8cc860df7",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:51.212123+00:00",
+  "ended_at_utc": "2026-11-27T19:40:24.336932+00:00",
+  "request_sha256": "17e5859f155f783ed58bd237a1ff0cfaabc9b7d9a5871c116e59c18deb3df6fa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58703,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38118,
+    "cached_tokens": 14976,
+    "completion_tokens": 1364
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc=Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\\nsrc=src[:src.index('def solve_batch')]+'''# Chamber response inferred from the public verification coupons.\\n_CHAMBER_OFFSET = np.array([0.1004, 0.5463, 0.0072])\\n_CHAMBER_SCORE = np.array([0.3471, 1.6744, 0.0460])\\n\\n\\ndef _chamber(taus, theta, hold, x, times):\\n    score = x @ theta[3:]\\n    amplitudes = _CHAMBER_OFFSET + score[:, None] * _CHAMBER_SCORE\\n    amplitudes[:, :2] += hold[:, None] * theta[:2]\\n    basis = np.column_stack((-np.expm1(-times[:, None] / taus), times))\\n    return amplitudes @ basis.T, amplitudes @ np.r_[1.0 / taus, 1.0]\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    x = _features(train, test)\\n    n = len(train['lab_id'])\\n    bridge = _calibration(dataset['calibration_load_cells'])\\n    inputs = _coupon_inputs(train, x[:n], bridge)\\n    taus, theta = _fit(inputs, dt, t,\\n                       train['strain_curves_obs'] - train['strain_0'][:, None],\\n                       train['instant_rate_obs'])\\n    _, hold, _ = _coupon_inputs(test, x[n:], bridge)\\n    curve, rate = _chamber(taus, theta, hold, x[n:], t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/m99_axes.py <<'PY'\\nfrom m99_inputs import *\\nfrom scipy.optimize import least_squares\\nD=np.vstack((E,er)); O=np.c_[y,yr]; n=len(O); p,h,_=cg; labs=g['lab_id'];\\nxx=m._features(g,g)[-n:]; sc=xx@th[3:]; off=np.c_[h[:,None]*th[:2],np.zeros(n)]\\nR=O-off@D.T\\nfor j in [0,5,11,12]:\\n F=np.c_[np.ones(n),xx]; A=np.linalg.lstsq(F,R[:,j],rcond=None)[0]; k=np.linalg.lstsq(np.c_[np.ones(n),sc],R[:,j],rcond=None)[0]; e=R[:,j]-k[0]-k[1]*sc\\n print('time',j,'score multiplier',k.round(5),'full feature multipliers', (A[1:]/th[3:]).round(4),'mean residual by lab',[round(e[labs==l].mean(),5) for l in np.unique(labs)])\\nprint('reference scaling: lab, diag mean/std, test mean/std')\\nfor l in np.unique(labs):\\n print(l,*[(round(np.median(b['ref_coupons'][b['lab_id']==l].mean(0)),4),round(np.median(b['ref_coupons'][b['lab_id']==l].std(0)),4)) for b in (g,te)])\\nprint('raw feature sample: missing counts train test diag',*[np.isnan(b['coupon_features_raw']).sum(0).tolist() for b in (tr,te,g)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_axes.py | tail -10\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unchanged benchtop chamber law → H2: shared relaxation times with hold-proportional amplitudes and a single feature-score correction; worst held-out diagnostic coupon RMSE is 0.0346 for strain and 0.0314 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Add free hold slopes or history coefficients\",\"rejected_reason\":\"Free hold slopes helped the missing-feature slice but did not materially improve the lab and coupon slices; history terms worsened transfer.\"}],\"rationale\":\"Save and schema-check the compact correction. Check whether its remaining errors follow the reference panel or a reproducible feature direction; that determines whether to change deployment preprocessing or keep the scalar law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "dd05cbb3567b029d85d8300904230fa60a02f5ac6f5bc8079db5c0366b70a974",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34241.42,
+      "usage_known": true,
+      "prompt_tokens": 38118,
+      "cached_tokens": 14976,
+      "completion_tokens": 1364
+    }
+  ]
+}

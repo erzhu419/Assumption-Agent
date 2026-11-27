@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "887375e50d93463fa2d3ae2401f67f67",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:50.067443+00:00",
+  "ended_at_utc": "2026-11-27T19:49:25.092865+00:00",
+  "request_sha256": "daefcd0b0b41cd143b371cb2bf571ee65e03e1893361b8254718d2a40cdce73a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59805,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35876,
+    "cached_tokens": 13696,
+    "completion_tokens": 1467
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream, _features, _fit, _predict\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nwith open('/holdout_task/_upstream_param_payload.json') as f: pay=json.load(f)\\nraw=item['dataset']; cal=calibrate_upstream(raw); out=solve_batch(raw); direct=solve_downstream(cal)\\nfor k, shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(len(raw['test']['lab_id']),len(raw['eval_times'])), 'initial_rate_pred':(len(raw['test']['lab_id']),)}.items():\\n assert out[k].shape==shape and np.isfinite(out[k]).all()\\n np.testing.assert_array_equal(out[k],direct[k])\\ntau,b=out['estimated_taus'],out['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\nprint('public batch and calibrated entrypoints agree; taus',tau,'weights',b)\\ntr,te=cal['train'],cal['test']; dt,t=cal['past_dt'],cal['eval_times']; x,xt=_features(tr,te)\\nloads=lambda d:(d['past_channel_raw'].sum(-1),d['hold_channel_raw'].sum(-1))\\nz0,r0=_predict(tau,b,xt,*loads(te),dt,np.array([0.,1.e-6])); np.testing.assert_allclose(z0[:,0],0,atol=1.e-12); np.testing.assert_allclose(z0[:,1]/1.e-6,r0,rtol=0,atol=1.e-5)\\np,h=loads(tr); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nfrom downstream_solver import _design\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']!=lab; a,c=_fit(x[m],p[m],h[m],dt,t,y[m],r[m]); f,g=_design(a,x[~m],p[~m],h[~m],dt,t); print('benchtop held-out lab',lab,'strain/rate median absolute errors',np.median(abs(f@c-y[~m])),np.median(abs(g@c-r[~m])))\\ndiag=calibrate_upstream({**raw,'test':item['campaign_diagnostics']},pay)['test']; labs=diag['lab_id']\\n# Verification coupons have their own reference panel; express the deployment imputation pool on that same scale.\\ndef align(s):\\n a=s['coupon_features_raw'].copy()\\n for l in np.unique(s['lab_id']):\\n  ref=diag['ref_coupons'][labs==l]; m=s['lab_id']==l; a[m]=(a[m]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n return a\\npool=align(te); _,inv,n=np.unique(np.c_[te['lab_id'],te['stratum']],axis=0,return_inverse=True,return_counts=True); w=1/n[inv]; mu=np.nansum(pool*w[:,None],axis=0)/(np.isfinite(pool).T@w)\\nu=align(diag); missing=np.isnan(u).any(1); u=np.where(np.isnan(u),mu,u)\\nq,s=_predict(tau,b,u,*loads(diag),dt,t); e=q+diag['strain_0'][:,None]-diag['strain_curves_obs']; er=s-diag['instant_rate_obs']; rms=lambda v:np.sqrt(np.mean(v**2)); scores=[]\\nfor l in np.unique(labs):\\n m=labs==l; scores.append((rms(e[m]),rms(er[m]))); print('chamber lab',l,'strain/rate RMSE',*scores[-1])\\nfor name,m in [('complete',~missing),('imputed',missing)]: print('chamber',name,'strain/rate RMSE',rms(e[m]),rms(er[m]))\\nprint('chamber worst horizon RMSE',np.max(np.sqrt(np.mean(e**2,axis=0))))\\nassert np.max(scores)<.025 and np.max(np.sqrt(np.mean(e**2,axis=0)))<.025\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 train-only two-mode relaxation -> H2 chamber drift redistribution; prior worst diagnostic-lab RMSE was 0.00697 strain and 0.00596 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema has passed. Verify the exact artifacts in an isolated process: a mismatch between entrypoints would change batch composition, a derivative mismatch would change the rate formula, and a large error by lab, horizon, or missingness would warrant revisiting the chamber or alignment model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0b972ec92fd2b629d7397da34f616737d9bb64047c65c379a5d09728cc549817",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36159.51,
+      "usage_known": true,
+      "prompt_tokens": 35876,
+      "cached_tokens": 13696,
+      "completion_tokens": 1467
+    }
+  ]
+}

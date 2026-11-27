@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "038bf37d604649acb40e5bf1ef043186",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:53.235738+00:00",
+  "ended_at_utc": "2026-11-27T20:04:30.513565+00:00",
+  "request_sha256": "1993fdf142c87ecd95593259d8c01aa9490cf8a586df94bd92077ed49188372b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67569,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40957,
+    "cached_tokens": 14976,
+    "completion_tokens": 1560
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m99_c01_batch_04_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _chamber_features(part):\\n    x = np.asarray(part['coupon_features_raw'], dtype=float).copy()\\n    labs, refs = part['lab_id'], part['ref_coupons']\\n    for lab in np.unique(labs):\\n        rows = labs == lab\\n        panel = refs[rows]\\n        x[rows] = (x[rows] - np.median(panel.mean(axis=0))) / np.median(panel.std(axis=0, ddof=0))\\n    return np.where(np.isnan(x), np.nanmean(x, axis=0), x)\\n\\n\\ndef _chamber_response(tau, beta, x, hold, times):\\n    # The chamber resets pre-hold memory and redistributes drift into the two\\n    # relaxing branches while preserving the total drift rate at onset.\\n    fractions = np.array([0.25, 0.50])\\n    drift = beta[2] + x @ beta[3:]\\n    amplitudes = hold[:, None] * beta[:2] + drift[:, None] * (fractions * tau)\\n    relaxation = -np.expm1(-times[None, :] / tau[:, None])\\n    return (amplitudes @ relaxation + ((1.0 - fractions.sum()) * drift)[:, None] * times,\\n            hold * np.sum(beta[:2] / tau) + drift)\\n\\n\\ndef solve_batch(dataset):\\n    train, test = dataset['train'], dataset['test']\\n    times, dt = np.asarray(dataset['eval_times']), np.asarray(dataset['past_dt'])\\n    x, _ = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    past, hold = _loads(train, bridge)\\n    tau, beta = _fit(x, past, hold, dt, times,\\n                     train['strain_curves_obs'] - train['strain_0'][:, None],\\n                     train['instant_rate_obs'])\\n    chamber_hold = _invert_bridge(np.asarray(test['hold_channel_raw']), bridge).sum(axis=-1)\\n    curves, rate = _chamber_response(tau, beta, _chamber_features(test), chamber_hold, times)\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rate}\\nPY\\ncat > /tmp/m99_check_candidate.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nds, g = item['dataset'], item['campaign_diagnostics']\\nout = m.solve_batch(ds)\\ntau, beta, t = out['estimated_taus'], out['hereditary_weights'], ds['eval_times']\\nbridge = m._bridge(ds['calibration_load_cells'])\\nhold = m._invert_bridge(g['hold_channel_raw'], bridge).sum(axis=-1)\\nx = m._chamber_features(g)\\ny, r = m._chamber_response(tau, beta, x, hold, t)\\ne = y + g['strain_0'][:, None] - g['strain_curves_obs']\\ner = r - g['instant_rate_obs']\\nmissing = np.isnan(g['coupon_features_raw']).any(axis=1)\\nfor name, rows in [('all',np.ones(len(r),bool)),('complete',~missing),('missing',missing)]+[(f'lab {i}',g['lab_id']==i) for i in np.unique(g['lab_id'])]:\\n    print(name, 'n', rows.sum(), 'curve/rate rmse', np.sqrt(np.mean(e[rows]**2)), np.sqrt(np.mean(er[rows]**2)), 'max', np.max(abs(e[rows])), np.max(abs(er[rows])))\\nprint('late/early max', np.max(abs(e[:,-1])), np.max(abs(e[:,0])))\\nprint('fit', tau, beta)\\ns = 1e-6\\nsmall, r0 = m._chamber_response(tau, beta, x, hold, np.array([0.,s]))\\nassert np.all(small[:,0] == 0) and np.max(abs(small[:,1]/s-r0)) < 1e-5\\nassert 0.05 < tau[0] < tau[1] < 25\\nassert all(np.isfinite(v).all() for v in out.values())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_check_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cell-balanced chamber imputation → H2 chamber-local column-mean imputation with onset-preserving quarter/half drift redistribution; the previous missing-coupon maxima were 0.139 strain and 0.0543 rate.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The chamber uses the same cell-balanced missing-feature rule as the benchtop fit.\",\"empirical_witness\":\"The three missing verification coupons imply fills of 0.543, 0.400, and 0.414. Unweighted chamber means are 0.553, 0.400, and 0.400; cell-balanced chamber fills are 0.926, 0.566, and 0.566.\",\"causal_blanket_diagnosis\":\"Reference alignment and missing-value handling differ between chamber and benchtop, even though both share the same material parameters.\",\"sublated_pivot\":\"Keep the specified joint cell-balanced preprocessing for material estimation and use chamber-local reference alignment and ordinary column means for deployment.\",\"risk_kind\":\"chamber preprocessing mismatch\",\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use freely fitted chamber coefficients\",\"rejected_reason\":\"The conserved fit gives 0.251 and 0.507, close to quarter and half; the candidate tests whether the exact fractions preserve accuracy on every observed slice.\"}],\"rationale\":\"Build the dataset-only solver and test exact conservation, output structure, and errors by lab and missingness. If the exact fractions or chamber-only fill leave a systematic residual, revise that component without changing the validated benchtop law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4819371044ec4f6c1401150d5329433d243d184a804e904871cd6f1415460bee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38419.39,
+      "usage_known": true,
+      "prompt_tokens": 40957,
+      "cached_tokens": 14976,
+      "completion_tokens": 1560
+    }
+  ]
+}

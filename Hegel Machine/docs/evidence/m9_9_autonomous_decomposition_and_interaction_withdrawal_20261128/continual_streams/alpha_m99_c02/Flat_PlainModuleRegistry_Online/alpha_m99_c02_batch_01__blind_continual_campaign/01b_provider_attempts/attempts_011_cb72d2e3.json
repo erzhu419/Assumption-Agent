@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb72d2e356b0456db071901b8dcf54a9",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:35.035069+00:00",
+  "ended_at_utc": "2026-11-27T19:41:08.682124+00:00",
+  "request_sha256": "669cd3b9c3634b26227ede975afd2aea9308f72fea7fe4b0bd2dc670bd376a25",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38607,
+    "cached_tokens": 14976,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom scipy.optimize import least_squares\\ns = runpy.run_path('/holdout_task/batch_solver.py')\\ni = pickle.load(open('public_batch.pkl','rb'))[0]\\nd, g = i['dataset'], i['campaign_diagnostics']\\ntr, te = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\nb = s['_bridge'](d['calibration_load_cells']); x, _ = s['_features'](tr,te)\\nq,w = s['_material'](tr,b,x,dt,t); u,_ = s['_features'](g,g); p,h = s['_loads'](g,b)\\ny = np.column_stack((g['strain_curves_obs']-g['strain_0'][:,None], g['instant_rate_obs']))\\nlab = g['lab_id']; drift = w[2]+u@w[3:]; a,c = s['_chamber'](q,w,h,u,t); base = np.c_[a,c]\\nF = np.vstack((-np.expm1(-t[:,None]/q),1/q)); z = np.zeros((len(h),2))\\nfor dd, pp in zip(dt,p.T): z += -np.expm1(-dd/q)*(pp[:,None]-z)\\nf=s['_DRIFT_FAST_FRACTION']; v=s['_DRIFT_SLOW_TAU']; sat=lambda z: np.r_[-z*np.expm1(-t/z),1.]; k=f*sat(q[0])+(1-f)*sat(v)\\nrm=lambda v: np.sqrt(np.mean(v*v))\\ndef report(name,e):\\n print(name,'worst_lab_curve_rate',np.round(np.max([[rm(e[lab==l,:-1]),rm(e[lab==l,-1])] for l in np.unique(lab)],0),6),'early/late',np.round([rm(e[:,:3]),rm(e[:,-4:-1])],6),'lab_bias',np.round([np.mean(e[lab==l,:-1]) for l in np.unique(lab)],6))\\nreport('current',base-y)\\ncontrast=p[:,-1]-p[:,0]\\nvariants={'restore hereditary history': (z,F), 'drift saturation': ((drift**3/(1+drift**2))[:,None],k[:,None]), 'load contrast': (contrast[:,None],k[:,None]), 'hold x drift': ((h*drift)[:,None],k[:,None]), 'refit unit-slope kernel': None}\\nfor name, variant in variants.items():\\n pred=base.copy()\\n for l in np.unique(lab):\\n  m=lab!=l\\n  if variant is None:\\n   def delta(a): return drift[:,None]*(a[0]*sat(q[0])+(1-a[0])*sat(a[1])-k)\\n   a=least_squares(lambda a:(base[m]+delta(a)[m]-y[m]).ravel(),[f,v],bounds=([0,q[0]],[1,25])).x\\n   pred[~m]+=delta(a)[~m]\\n  else:\\n   A,K=variant; M=(A[:,None,:,None]*K[None,:,None,:]).reshape(len(h),len(t)+1,-1)\\n   beta=np.linalg.lstsq(M[m].reshape(-1,M.shape[-1]),(y-base)[m].ravel(),rcond=None)[0]; pred[~m]+=M[~m]@beta\\n report(name,pred-y)\\nraw=d['calibration_load_cells']['bridge_raw']; target=d['calibration_load_cells']['true_channel_loads'].sum(1); D=np.c_[np.ones(len(raw)),raw]\\nfor degree in (1,2):\\n M=D if degree==1 else np.c_[D,*[raw[:,j]*raw[:,k] for j in range(4) for k in range(j,4)]]\\n err=np.empty(len(M)); folds=np.arange(len(M))%5\\n for fold in range(5):\\n  m=folds!=fold; err[~m]=M[~m]@np.linalg.lstsq(M[m],target[m],rcond=None)[0]-target[~m]\\n print('bridge degree',degree,'worst fold RMSE',max(rm(err[folds==fold]) for fold in range(5)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 zero chamber prehistory with unit-slope two-decay drift → H2 an additional constitutive term only if it improves held-out labs; current worst late-strain and lab-rate RMSEs are 0.00883 and 0.00422, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or Fokker–Planck operators\",\n      \"rejected_reason\": \"The task has continuous strain and rate targets, no relay or class labels, and a specified hereditary recurrence. Lab-sliced residuals address the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Use real diagnostic coupons to test whether omitted history, load contrasts, rational drift saturation, or kernel settings explain the remaining late-time error. Fit each correction without the evaluated lab. Compare affine and quadratic bridges on held-out sweeps; change the solver only if a challenger meaningfully improves the measured bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "89a8aef2db099e62f3ce4edbefaa5e6df93a775a0b790b7ef3be5a7c9979d874",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34821.44,
+      "usage_known": true,
+      "prompt_tokens": 38607,
+      "cached_tokens": 14976,
+      "completion_tokens": 1411
+    }
+  ]
+}

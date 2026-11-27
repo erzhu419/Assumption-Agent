@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f995f0f57784b06b6469b36fad5d315",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:42.771101+00:00",
+  "ended_at_utc": "2026-11-27T19:38:12.731943+00:00",
+  "request_sha256": "0d5f60229c7e0d4fabbda542ee250abbf1c78af5a3043f21534f37a0a7a8e26c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40573,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31717,
+    "cached_tokens": 14976,
+    "completion_tokens": 1230
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cat > /tmp/m99_structure.py <<'PY'\\nfrom m99_inputs import *\\nD=np.vstack((E,er)); obs=np.c_[y,yr]; B=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\\np,h,x=cg; dr=x@th[2:]; z=h[:,None]-R0[:,:2]*tau; lab=g['lab_id']; s=g['stratum']; n=len(h)\\nprint('diagnostic ranges from train/test reference scaling vs joint scaling')\\nfor l in np.unique(lab):\\n print(l,[(np.median(k['ref_coupons'][k['lab_id']==l].mean(0)),np.median(k['ref_coupons'][k['lab_id']==l].std(0))) for k in (tr,te,g)],'missing',np.isnan(g['coupon_features_raw'][lab==l]).sum())\\nprint('corr B, nominal drift, hold, features, memory'); print(np.corrcoef(np.c_[B,dr,h,x[:,1:],z].T)[:3].round(3))\\nprint('single channel sweep correlations'); sc=cal['single_channel_sweeps']; print({k:np.shape(v) for k,v in sc.items()}); print(np.c_[sc['lab_id'],sc['cmd_stress'],sc['true_stress']][:12].round(5))\\nmodels={'nominal':np.c_[h,z,dr], 'nominal+delta':np.c_[h,z,p[:,-1]-p[:,0],dr], 'hold+drift':np.c_[h,dr], 'hold+early/late+drift':np.c_[h,p[:,:3].mean(1),p[:,3:].mean(1),dr], 'history+drift':np.c_[h,p,dr], 'hold+memory+features':np.c_[h,z,x[:,1:]],'history+features':np.c_[h,p,x[:,1:]],'history+drift+nonlinear':np.c_[h,p,dr,dr**2,h*dr], 'hold+lab+stratum+drift':np.c_[h,lab,s,dr]}\\nfor name,F in models.items():\\n F=np.c_[np.ones(n),F]; co=np.linalg.lstsq(F,B,rcond=None)[0]; pred=np.zeros_like(B)\\n for l in np.unique(lab):\\n  v=lab==l; pred[v]=F[v]@np.linalg.lstsq(F[~v],B[~v],rcond=None)[0]\\n res=pred@D.T-obs; print(name,'fit coef rmse',np.mean((F@co-B)**2,0)**.5,'worst lab curve/rate RMSE',max(np.mean(res[lab==l,:-1]**2)**.5 for l in np.unique(lab)),max(np.mean(res[lab==l,-1]**2)**.5 for l in np.unique(lab))); print(co.round(4).T)\\nprint('coef residual after hold+past+drift per sample'); F=np.c_[np.ones(n),h,p,dr]; print(np.c_[lab,s,np.isnan(g['coupon_features_raw']).sum(1),h,dr,B-F@np.linalg.lstsq(F,B,rcond=None)[0]].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_structure.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unchanged benchtop deployment law -> H2: shared time constants with chamber-specific amplitudes and drift; fixed-time diagnostic residual RMSE is 0.00223 versus baseline curve/rate RMSE of 0.849/1.526.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The benchtop constitutive law transfers unchanged to the deployment chamber.\",\"empirical_witness\":\"Diagnostic curve/rate RMSE is 0.849/1.526 under the baseline law, while freeing only the amplitudes and drift on the same time basis yields joint RMSE 0.00223; held-out affine bridge error is only 0.00023 in total load.\",\"causal_blanket_diagnosis\":\"The error is in the mapping from coupon history and features to branch amplitudes and drift, not in the bridge or in the need for a new time basis.\",\"sublated_pivot\":\"Retain the calibrated bridge and shared taus; identify a compact transferable chamber amplitude and drift mapping.\",\"risk_kind\":\"deployment constitutive shift\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a nonlinear bridge or fit new chamber time constants\",\"rejected_reason\":\"Quadratic bridge terms did not improve held-out total-load error, and the existing time basis already fits measured chamber traces closely.\"}],\"rationale\":\"Compare measured amplitudes against nominal drift, memory, and low-order interactions. Held-out lab errors and residuals on missing-feature coupons will distinguish a shared chamber correction from a flexible fit that fails on deployment coupons.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "25f4ef48628fb28424869eb273bdeede132c4d3518c0f5f79397eadf793b2a6d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31044.78,
+      "usage_known": true,
+      "prompt_tokens": 31717,
+      "cached_tokens": 14976,
+      "completion_tokens": 1230
+    }
+  ]
+}

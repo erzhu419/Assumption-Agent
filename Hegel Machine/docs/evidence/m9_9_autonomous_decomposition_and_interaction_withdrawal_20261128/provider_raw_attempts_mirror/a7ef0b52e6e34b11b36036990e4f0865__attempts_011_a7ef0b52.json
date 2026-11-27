@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7ef0b52e6e34b11b36036990e4f0865",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:00.647131+00:00",
+  "ended_at_utc": "2026-11-27T19:57:27.785273+00:00",
+  "request_sha256": "6de5057d30fb91039877e73e8a730c1472b3692d565cb3a302c78d495bcdf4ca",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56360,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32455,
+    "cached_tokens": 13696,
+    "completion_tokens": 1022
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_basis_resolution.py <<'PY'\\nimport itertools\\nimport pickle\\nimport sys\\nimport numpy as np\\n\\nroot = '/holdout_task'\\nsys.path.insert(0, root)\\nfrom upstream_transducer import _features, _fit_forward, _invert, _robust\\n\\nwith open(root + '/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\n\\ndef gross_clean(raw, reference):\\n    center = np.median(reference, axis=0)\\n    scale = np.median(np.linalg.norm(reference - center, axis=1))\\n    return np.linalg.norm(raw - center, axis=1) <= 6 * scale\\n\\naxis = np.count_nonzero(x, axis=1) == 1\\nextreme = ~axis & (np.max(abs(x), axis=1) >= np.quantile(np.max(abs(x[~axis]), axis=1), .75))\\nlinear = [()] + [(j,) for j in range(4)]\\nquadratic = linear + list(itertools.combinations_with_replacement(range(4), 2))\\nfor name, train, target in [('axial series withheld', ~axis, axis), ('outer quartile mixed withheld', ~extreme, extreme)]:\\n    test = target & gross_clean(y, y[train])\\n    results = {}\\n    for model, terms in [('affine', linear), ('quadratic', quadratic), ('delivered cubic', None)]:\\n        if terms is None:\\n            terms, b = _fit_forward(x[train], y[train])\\n        else:\\n            a = _features(x[train], terms)\\n            b = _robust(a, y[train], np.ones((a.shape[1], 4), dtype=bool), gross_clean(y[train], y[train]))\\n        bridge = _features(x[test], terms) @ b - y[test]\\n        results[model] = float(np.sqrt(np.mean(bridge**2, axis=0)).max())\\n    inverse_error = _invert(y[test], terms, b) - x[test]\\n    inverse_rmse = float(np.sqrt(np.mean(inverse_error**2, axis=0)).max())\\n    print(name, 'n=', int(test.sum()), 'held-out worst-channel bridge RMSE:', results, 'delivered inverse RMSE:', inverse_rmse)\\n    assert results['delivered cubic'] * 10 < min(results['affine'], results['quadratic'])\\n    assert np.max(abs(inverse_error)) < 0.001\\nprint('ng_t05: matched, spike-screened outer splits directly validate the delivered structural replacement.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_basis_resolution.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic bridge response → H2 robust sparse cubic response with cyclic coupling; worst held-out inverse RMSE is 0.0001483, and deleting the gross spikes shifts public trial loads by at most 1.78e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the spike-deletion and inverse-conditioning audit\",\n      \"rejected_reason\": \"The prior audit found no material spike influence and no nearly singular trial Jacobians. It did not directly compare the refuted bases with the delivered basis on identical stress splits.\"\n    }\n  ],\n  \"rationale\": \"Compare the affine, quadratic, and delivered cubic fits with the same robust weighting on two matched held-out stress slices. If the cubic advantage disappears, revisit the structural claim; if it holds, this directly supports closing ng_t05 without changing the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b44efbefcac4d2489290829a48f3d85ca29a1433ee2368d1c801f86d71ab8641",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27089.69,
+      "usage_known": true,
+      "prompt_tokens": 32455,
+      "cached_tokens": 13696,
+      "completion_tokens": 1022
+    }
+  ]
+}

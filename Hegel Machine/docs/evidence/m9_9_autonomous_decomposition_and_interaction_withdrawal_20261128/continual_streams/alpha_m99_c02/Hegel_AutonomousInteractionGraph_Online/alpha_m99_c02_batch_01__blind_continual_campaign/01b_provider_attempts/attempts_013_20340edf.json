@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20340edfda7243ebae7776a110e80c77",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:39.007423+00:00",
+  "ended_at_utc": "2026-11-27T19:42:09.610456+00:00",
+  "request_sha256": "cf54363754a9e5a6070c7f689244ff79938acb409edcead1bb5dd3ea8693ddb3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68785,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38306,
+    "cached_tokens": 5504,
+    "completion_tokens": 1266
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nstart = s.index('# Chamber verification coupons')\\ns = s[:start] + '''# Verification coupons support a history reset, drift-coupled relaxation,\\n# and a small steady drift that also contributes to the initial rate.\\n_CHAMBER_DRIFT_GAIN = np.array([0.38400645, 1.86850418])\\n_CHAMBER_STEADY_GAIN = 0.02827006\\n\\n\\ndef _predict_chamber(coupons, bridge, taus, theta, t):\\n    _, x = _features({k: v[:0] for k, v in coupons.items()}, coupons)\\n    _, hold = _loads(coupons, bridge)\\n    drift = theta[2] + x @ theta[3:]\\n    amplitude = hold[:, None] * theta[:2] + drift[:, None] * _CHAMBER_DRIFT_GAIN\\n    steady = _CHAMBER_STEADY_GAIN * drift\\n    kernel = -np.expm1(-t[:, None] / taus)\\n    strain = coupons['strain_0'][:, None] + amplitude @ kernel.T + steady[:, None] * t\\n    return strain, amplitude @ (1 / taus) + steady\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = dataset['past_dt'], dataset['eval_times']\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    x_train, _ = _features(train, test)\\n    taus, theta = _material(train, bridge, x_train, dt, t)\\n    strain, rate = _predict_chamber(test, bridge, taus, theta, t)\\n    return {\\n        'estimated_taus': taus,\\n        'hereditary_weights': theta,\\n        'predicted_strain': strain,\\n        'initial_rate_pred': rate,\\n    }\\n'''\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, diag = item['dataset'], item['campaign_diagnostics']\\no = s.solve_batch(d)\\ntau, w = o['estimated_taus'], o['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25 and all(np.isfinite(v).all() for v in o.values())\\nb = s._bridge(d['calibration_load_cells'])\\nt = d['eval_times']\\ny, r = s._predict_chamber(diag, b, tau, w, t)\\ne = y - diag['strain_curves_obs']; er = r - diag['instant_rate_obs']\\nfor l in np.unique(diag['lab_id']):\\n    m = diag['lab_id'] == l\\n    print('fixed chamber lab', l, 'curve/rate RMSE', np.mean(e[m]**2)**.5, np.mean(er[m]**2)**.5)\\nassert np.mean(e**2)**.5 < .004 and np.mean(er**2)**.5 < .004\\nz, _ = s._predict_chamber(d['test'], b, tau, w, np.array([0., 1e-6]))\\nnp.testing.assert_allclose(z[:, 0], d['test']['strain_0'], rtol=0, atol=1e-12)\\nnp.testing.assert_allclose((z[:, 1] - z[:, 0])/1e-6, o['initial_rate_pred'], rtol=2e-6, atol=2e-8)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 two chamber relaxation modes → H2 add steady drift; worst held-out lab rate RMSE improved from 0.00624 to 0.00420, while worst lab-by-horizon RMSE stayed at 0.00664.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the two-mode-only correction\",\n      \"rejected_reason\": \"Initial-rate error was higher in every held-out lab; its small strain advantage on imputed coupons did not improve the worst-horizon margin.\"\n    }\n  ],\n  \"rationale\": \"Promote the steady term because its rate improvement transfers across all held-out labs without materially worsening the hardest strain horizon. Verify the saved implementation in isolation and check that the reported initial rate is the derivative of the predicted strain at zero.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "ff30af86bdf9524e6ebb1787fb74d51cd327d19c86257a80e26d1f1b3cd5b610",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31686.15,
+      "usage_known": true,
+      "prompt_tokens": 38306,
+      "cached_tokens": 5504,
+      "completion_tokens": 1266
+    }
+  ]
+}

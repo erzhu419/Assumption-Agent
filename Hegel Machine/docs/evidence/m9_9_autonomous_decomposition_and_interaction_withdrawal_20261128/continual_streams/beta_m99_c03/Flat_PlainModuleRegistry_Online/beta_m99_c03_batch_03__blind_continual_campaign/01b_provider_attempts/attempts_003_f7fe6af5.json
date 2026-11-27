@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7fe6af56eeb4dddaad7d654d01e3ad9",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:15.035314+00:00",
+  "ended_at_utc": "2026-11-27T19:50:32.246817+00:00",
+  "request_sha256": "ed93e5366026ec6f7a1653b1ed452cae016caadadfd400dc1291437dc968afd8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 20967,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22965,
+    "cached_tokens": 5504,
+    "completion_tokens": 628
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle,json,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print('study keys',list(s)); print('sweeps',[(k,type(v).__name__,getattr(v,'shape',None)) for k,v in c.items()]); print('bank sweep structure',[(k,getattr(v,'shape',type(v).__name__)) for k,v in c.get('single_bank_sweeps',{}).items()] if isinstance(c.get('single_bank_sweeps'),dict) else str(c.get('single_bank_sweeps'))[:400]); p=s.get('reference_tracer_pulses'); print('pulses',None if p is None else [(list(q),np.shape(q['y_pulse_raw'])) for q in p]); print('rosette',x.shape,y.shape); print(np.round(np.c_[x[:16],y[:16]],5)); print('mixed ranges',x[16:].min(0),x[16:].max(0)); a=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus fields',list(a) if isinstance(a,dict) else list(a[0])); rows=a if isinstance(a,list) else next(v for v in a.values() if isinstance(v,list));\\nfor row in rows:\\n t=np.array(row['facility_telemetry_trace']); print(row.get('completed_campaign_short_name'), np.round(t.mean(0),3),np.round(t.std(0),3))\\nPY\\nsed -n '65,170p' /holdout_task/_verified_downstream.py; grep -nEi 'calib|rosette|pulse|tanh|archive' /tmp/hegel_continual_archive/*solver.py | cut -c1-200 | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine mixing → H2 structured nonlinear calibration; no out-of-fold metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous output was truncated. Axis-sweep responses distinguish saturation before mixing from saturation after mixing; compact apparatus summaries and pulse shapes recover the information needed to choose and test the mapping.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "89d0be373632739693d225ef3c9d3da96c8a616869c7550d9f840bb7692323b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18340.8,
+      "usage_known": true,
+      "prompt_tokens": 22965,
+      "cached_tokens": 5504,
+      "completion_tokens": 628
+    }
+  ]
+}

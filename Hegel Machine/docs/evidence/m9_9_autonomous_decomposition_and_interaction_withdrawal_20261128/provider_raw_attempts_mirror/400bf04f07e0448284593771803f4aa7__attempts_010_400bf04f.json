@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "400bf04f07e0448284593771803f4aa7",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:41.758371+00:00",
+  "ended_at_utc": "2026-11-27T19:40:24.130427+00:00",
+  "request_sha256": "d606ab7cfdc37ed4cb64d0b11f231af5cac882ff298978b606ac9acde4cdff34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59119,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36202,
+    "cached_tokens": 14976,
+    "completion_tokens": 1807
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    coeff = np.linalg.lstsq', s.index('def _calibrate'))\\nb = s.index('\\\\n\\\\ndef _box_simplex', a)\\ns = s[:a] + '''    # Fit an independent gain and offset for each rosette channel.\\n    xc = x - x.mean(axis=0)\\n    yc = y - y.mean(axis=0)\\n    gain = (xc * yc).sum(axis=0) / (xc * xc).sum(axis=0)\\n    offset = y.mean(axis=0) - gain * x.mean(axis=0)\\n    raw = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return ((raw - offset) / gain).ravel()\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nnx, ny = s['nx'], s['ny']\\ndef axis(k, v, h):\\n    n = len(k)\\n    A = np.zeros((n, n))\\n    for i in range(n):\\n        if i in (0, n-1):\\n            A[i, 1 if i == 0 else n-2] = -k[i]/h**2\\n        else:\\n            A[i, i-1] = -(k[i]+k[i-1])/(2*h*h) - max(v[i], 0)/h\\n            A[i, i+1] = -(k[i]+k[i+1])/(2*h*h) - max(-v[i], 0)/h\\n        A[i, i] = -A[i].sum()\\n    return A\\nax = axis(s['kappa_x'], s['vel_x'], s['Lx']/(nx-1))\\nay = axis(s['kappa_y'], s['vel_y'], s['Ly']/(ny-1))\\nL = np.kron(np.eye(ny), ax) + np.kron(ay, np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nrhs = np.column_stack([m_.ravel(order='F') for m_ in s['source_modes']])\\nii, jj = s['sensor_ij'].T\\nblocks = []\\nfor mu in s['mu_shifts']:\\n    U = np.linalg.solve(L + mu*np.eye(len(L)), rhs)\\n    blocks.append(U[ii+nx*jj])\\nS = np.vstack(blocks)\\nx = s['sensor_calibration_sweeps']['ref_rosette']; y = s['sensor_calibration_sweeps']['raw_rosette']\\nco = np.array([np.linalg.lstsq(np.c_[np.ones(len(x)), x[:, j]], y[:, j], rcond=None)[0] for j in range(4)])\\ndef cal(raw):\\n    return ((raw.reshape(-1,4) - co[:,0])/co[:,1]).ravel()\\nerr = np.array([cal(p['y_pulse_raw']) - S@p['w_pulse'] for p in item['campaign_diagnostics']]).reshape(-1,len(blocks),len(ii)//4,4)\\nworst_bank = np.sqrt(np.mean(err**2, axis=2)).max()\\nworst_shift = np.sqrt(np.mean(err**2, axis=(2,3))).max()\\nassert worst_bank < 4.91e-6 and worst_shift < 2.54e-6\\nprint('Worst bank–pulse–shift RMS:', worst_bank, 'worst pulse–shift RMS:', worst_shift)\\nZ = s['Z_nuisance']; R = np.eye(len(Z)) - Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nT, y = R@S, R@cal(s['y_obs_raw']); ridge = s['source_ridge']; n = rhs.shape[1]; cap = s['u_box']\\nfor budget in [s['total_budget'], 0.2*cap, (n-0.2)*cap]:\\n    out = m['solve_batch'](dict(s,total_budget=budget)); w = out['weights']; c = out['kkt_certificate']\\n    nu = c['nu_sum']; lo = np.asarray(c['lam_lower']); hi = np.asarray(c['lam_upper'])\\n    e = T@w-y; g = T.T@e+ridge*w; J = (e@e+ridge*(w@w))/2\\n    gap = g@w - nu*budget - cap*np.minimum(g-nu,0).sum()\\n    field_error = np.linalg.norm(out['terminal_field'].ravel(order='F')-U@w)\\n    assert abs(w.sum()-budget)<1e-12 and w.min()>=-1e-12 and w.max()<=cap+1e-12\\n    assert np.allclose(c['weights'],w,rtol=0,atol=1e-12)\\n    assert min(lo.min(),hi.min())>=0 and np.max(np.abs(g-nu-lo+hi))<1e-12\\n    assert max(np.max(np.abs(w*lo)),np.max(np.abs((cap-w)*hi)),abs(gap))<1e-12\\n    assert abs(c['primal_objective']-J)<1e-12 and abs(c['dual_lower_bound']-(J-gap))<1e-12 and field_error<1e-12\\n    print('budget',budget,'at lower/upper',np.count_nonzero(w<1e-12),np.count_nonzero(w>cap-1e-12),'independent KKT gap',gap,'field error',field_error)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full affine rosette → H2 independent affine channels: worst bank–pulse–shift RMSE improved from 4.91×10⁻⁶ to 4.67×10⁻⁶, and worst held-out sweep RMSE improved from 1.10×10⁻⁵ to 1.08×10⁻⁵.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Combine rosette and single-bank sweeps\",\n      \"rejected_reason\": \"Joint fitting slightly improves pooled tracer error but worsens the worst bank–pulse–shift and held-out rosette errors relative to the independent-channel rosette fit.\"\n    }\n  ],\n  \"rationale\": \"Promote the simpler calibration supported by both held-out sweeps and known-source tracers. Verify the edited artifact in isolation against a separately assembled dense operator, and use lower- and upper-bound budget slices to detect certificate errors the interior public solution would miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "af31cdc7686e9d5b5953df93a2778d128e1729d72f2e0e4a64a2d6bb4780a3a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43488.12,
+      "usage_known": true,
+      "prompt_tokens": 36202,
+      "cached_tokens": 14976,
+      "completion_tokens": 1807
+    }
+  ]
+}

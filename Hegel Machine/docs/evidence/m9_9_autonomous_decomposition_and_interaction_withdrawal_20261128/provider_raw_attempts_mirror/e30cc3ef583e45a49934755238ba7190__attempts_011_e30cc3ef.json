@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e30cc3ef583e45a49934755238ba7190",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:59.010310+00:00",
+  "ended_at_utc": "2026-11-27T19:57:32.285146+00:00",
+  "request_sha256": "19a7810f6c70a2ed42d0ab60f62860f3c1dd6fb3d171eb19bf6394d3991a171a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57770,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36023,
+    "cached_tokens": 14976,
+    "completion_tokens": 1440
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/hegel_margin_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nA = m['_bridge_basis'](x)\\nterms = [()] + m['_TERMS']\\nbad = np.zeros(len(x), dtype=bool)\\nerr = {name: np.empty_like(y) for name in ('full cubic', 'sparse cubic', 'rational difference')}\\n# Compare extrapolation at the largest labeled load magnitude with interleaved folds.\\nouter = np.argsort(np.linalg.norm(x, axis=1))[-12:]\\nfolds = [outer] + [np.setdiff1d(np.arange(i, len(x), 5), outer) for i in range(5)]\\nfor held in folds:\\n    train = np.ones(len(x), dtype=bool); train[held] = False\\n    b = m['_calibration']({'true_channel_loads': x[train], 'bridge_raw': y[train]})\\n    err['full cubic'][held] = A[held] @ b - y[held]\\n    clean = train & (np.linalg.norm(A @ b - y, axis=1) < 0.01)\\n    bad[held] = np.linalg.norm(err['full cubic'][held], axis=1) > 1.\\n    for j in range(4):\\n        selected = (np.abs(b[:, j]) > 0.01); selected[0] = True\\n        a = A[:, selected]; z = y[:, j]\\n        p = np.linalg.lstsq(a[clean], z[clean], rcond=None)[0]\\n        err['sparse cubic'][held, j] = a[held] @ p - z[held]\\n        # A quotient with a pairwise difference requires mixed fifth-order terms\\n        # beyond the identified cubic. Compare the concrete coupled quotient.\\n        q = x[:, j] - x[:, (j + 1) % 4]\\n        q2 = q * q\\n        from scipy.optimize import least_squares\\n        def residual(v):\\n            return ((a[clean] @ v[:-1]) / (1 + v[-1] * q2[clean])) - z[clean]\\n        v = least_squares(residual, np.r_[p, 0.001], bounds=(np.r_[np.full(len(p), -np.inf), 0], np.inf), gtol=1e-12).x\\n        err['rational difference'][held, j] = (a[held] @ v[:-1]) / (1 + v[-1] * q2[held]) - z[held]\\nprint('gross corruption excluded only from clean metrics:', np.flatnonzero(bad))\\ntail = np.isin(np.arange(len(x)), outer)\\nfor name, e in err.items():\\n    for label, use in [('all', ~bad), ('high-load', tail & ~bad)]:\\n        a=e[use]; print(name, label, 'channel RMSE', np.sqrt(np.mean(a*a)), 'axial raw-sum RMSE', np.sqrt(np.mean(a.sum(1)**2)), 'worst row', np.linalg.norm(a,axis=1).max())\\n# Diagnose lab nuisance in physical units using response labels excluded from fit.\\ntr=d['train']; te=d['test']; labs=tr['lab_id']; t=d['eval_times']; dt=d['past_dt']\\nu=m['_coupon_inputs'](tr, m['_features'](tr,te)[:len(labs)], m['_calibration'](c))\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nfor lab in np.unique(labs):\\n    h=labs==lab\\n    ts,w=m['_fit'](tuple(a[~h] for a in u),dt,t,y[~h],r[~h]); a,b=m['_design'](ts,tuple(a[h] for a in u),dt,t)\\n    re=b@w-r[h]; le=(a@w-y[h])[:,-3:]\\n    print('held lab',lab,'signed rate/late curve median',np.nanmedian(re),np.nanmedian(le),'absolute medians',np.nanmedian(abs(re)),np.nanmedian(abs(le)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/hegel_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (full cubic bridge) -> H2 (sparse coupled cubic bridge if it improves calibration at high loads); current worst held-lab median absolute errors are 0.01036 for early strain, 0.00922 for late strain, and 0.00556 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test classifier balance, relay modes, or stochastic control operators\",\"rejected_reason\":\"The dataset contains continuous strain and rate measurements and specifies a hereditary recurrence, not classification, switching, or stochastic control. Signed held-lab residuals test the applicable nuisance risk.\"}],\"rationale\":\"Test whether unsupported cubic terms or a missing rational coupling increase forward error on the highest-load calibration slice. A clear improvement would justify checking inverse axial stress and material predictions before replacing the verified solver. Signed held-lab residuals test for offsets that pooled absolute errors can hide.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d8b286b9966c959e51319fe0934b0ecc9527174fd581d16aea56d14256cfd8b3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35660.28,
+      "usage_known": true,
+      "prompt_tokens": 36023,
+      "cached_tokens": 14976,
+      "completion_tokens": 1440
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ffff97c8de3146ad91031db7a9880d26",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:42.256366+00:00",
+  "ended_at_utc": "2026-11-27T19:48:09.405650+00:00",
+  "request_sha256": "117a2dea74e91adf932cde8e3d1d0d9e24c0218e7d69fdd1965b38f355d56474",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33399,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28642,
+    "cached_tokens": 14976,
+    "completion_tokens": 1045
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,55p' /tmp/hegel_continual_archive/beta_m99_c01_s00_solver.py; sed -n '50,110p' /tmp/hegel_continual_archive/beta_m99_c01_batch_02_solver.py; cat > /tmp/m99_cal_probe.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom itertools import combinations\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; n=len(x)\\nnp.set_printoptions(precision=5,suppress=True,linewidth=125)\\nprint('sweep nonzero count',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('raw observations range',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0))\\ndef design(x,kind):\\n a=[np.ones(len(x)),*x.T]\\n if kind in ('self23','pair2','all3'): a.extend([*(x*x).T,*(x**3).T])\\n if kind in ('pair2','all3'): a.extend(x[:,i]*x[:,j] for i,j in combinations(range(4),2))\\n if kind=='all3':\\n  a.extend(x[:,i]**2*x[:,j] for i in range(4) for j in range(4) if i!=j)\\n  a.extend(x[:,i]*x[:,j]*x[:,k] for i,j,k in combinations(range(4),3))\\n return np.array(a).T\\ndef fit(a,y):\\n b=np.linalg.lstsq(a,y,rcond=None)[0]\\n for _ in range(35):\\n  r=y-a@b; r=r-np.median(r,axis=0); sc=np.maximum(1.4826*np.median(abs(r),axis=0),1e-7)\\n  for j in range(4):\\n   w=(1+(r[:,j]/(2.5*sc[j]))**2)**-.5\\n   b[:,j]=np.linalg.lstsq(a*w[:,None],y[:,j]*w,rcond=None)[0]\\n return b\\nif __name__=='__main__':\\n for kind in ['affine','self23','pair2','all3']:\\n  a=design(x,kind); b=fit(a,y); e=np.empty_like(y)\\n  for f in range(5):\\n   test=(np.arange(n)%5==f); e[test]=y[test]-a[test]@fit(a[~test],y[~test])\\n  print(kind,'rank',np.linalg.matrix_rank(a),'OOF abs error median and p90 by channel',np.quantile(abs(e),[.5,.9],axis=0),'large residual indices',np.where(np.max(abs(e),axis=1)>.3)[0]); print('coefficients',b if kind!='all3' else np.linalg.norm(b,axis=1))\\n print('pure sweeps:'); print(np.column_stack((x[:16],y[:16])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_cal_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal affine rosette and periodic walls -> H2 cross-channel nonlinear rosette and an independently selected wall stencil; held-out calibration errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived diagonal gain correction\",\n      \"rejected_reason\": \"Single-channel reference sweeps visibly move other raw channels, so the fit must test cross-channel terms.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out sweep errors for affine mixing, channel-wise curvature, and mixed polynomial terms. This determines which terms to retain before using chamber observations to distinguish wall stencils.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "a020eebc0e73b1f299f54e107eb49abb263a876957314640ca66a4acd4eb379a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27108.0,
+      "usage_known": true,
+      "prompt_tokens": 28642,
+      "cached_tokens": 14976,
+      "completion_tokens": 1045
+    }
+  ]
+}

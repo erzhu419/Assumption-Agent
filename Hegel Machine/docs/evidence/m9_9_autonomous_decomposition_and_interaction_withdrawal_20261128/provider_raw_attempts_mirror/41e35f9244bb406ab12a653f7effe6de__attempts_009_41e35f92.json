@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41e35f9244bb406ab12a653f7effe6de",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:29.312208+00:00",
+  "ended_at_utc": "2026-11-27T19:39:56.723006+00:00",
+  "request_sha256": "3ae5b19dc20c2ca86c95d84f958ce9bcde01aa49b4530050918de4f53c6f2dbc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49178,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32533,
+    "cached_tokens": 14976,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\na = c['single_bank_sweeps']\\nS, U = m._responses(s)\\npulses = item['campaign_diagnostics']\\nrefs = np.stack([(S @ d['w_pulse']).reshape(-1, 4) for d in pulses])\\nraw = np.stack([d['y_pulse_raw'].reshape(-1, 4) for d in pulses])\\nfull = np.linalg.lstsq(np.c_[np.ones(len(x)), x], y, rcond=None)[0]\\nbank = np.array([np.linalg.lstsq(np.c_[np.ones(np.sum(a['bank_id'] == j)), a['ref_signal'][a['bank_id'] == j]], a['raw_readout'][a['bank_id'] == j], rcond=None)[0] for j in range(4)])\\nprint('single-bank minus full-affine offsets and same-channel gains:', bank - np.c_[full[0], full[1:].diagonal()])\\nblocks = np.arange(len(x)) // 8\\nfor name in ('full affine', 'standalone bank affine', 'pooled diagonal affine'):\\n    sweep_max = 0.\\n    pulse_max = 0.\\n    for b in np.unique(blocks):\\n        train = blocks != b\\n        if name == 'full affine':\\n            f = np.linalg.lstsq(np.c_[np.ones(train.sum()), x[train]], y[train], rcond=None)[0]\\n            pred = lambda z: z @ f[1:] + f[0]\\n        else:\\n            coef = bank.copy()\\n            if name == 'pooled diagonal affine':\\n                for j in range(4):\\n                    mask = a['bank_id'] == j\\n                    xx = np.r_[x[train, j], a['ref_signal'][mask]]\\n                    yy = np.r_[y[train, j], a['raw_readout'][mask]]\\n                    coef[j] = np.linalg.lstsq(np.c_[np.ones(len(xx)), xx], yy, rcond=None)[0]\\n            pred = lambda z: z * coef[:, 1] + coef[:, 0]\\n        sweep_max = max(sweep_max, np.sqrt(np.mean((pred(x[~train]) - y[~train])**2, axis=0)).max())\\n        r = (pred(refs) - raw).reshape(len(pulses), len(s['mu_shifts']), -1)\\n        pulse_max = max(pulse_max, np.sqrt(np.mean(r*r, axis=-1)).max())\\n    print(name, 'worst sweep RMS', sweep_max, 'worst pulse/shift RMS', pulse_max)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting walls with full affine calibration → H2 independently calibrated bank gains if supported; current worst held-out pulse-by-shift RMS is 1.71e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational, pairwise, and nuisance projection checks\",\n      \"rejected_reason\": \"Those checks already passed on this artifact. The separate single-bank sweeps offer a new test of whether the full affine fit is picking up calibration noise as cross-talk.\"\n    }\n  ],\n  \"rationale\": \"Compare standalone and pooled bank calibration against the shipped model on held-out rosette blocks and each tracer shift. If the independent bank measurements reveal a material, repeatable calibration improvement, revise the calibration; otherwise keep the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d4ad0fc3caa83fa41294e92255b8e4582d203e538629eb019c2d880b515661c9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28524.34,
+      "usage_known": true,
+      "prompt_tokens": 32533,
+      "cached_tokens": 14976,
+      "completion_tokens": 1071
+    }
+  ]
+}

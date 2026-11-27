@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d69a985bc2c44f55aadef33422e58af3",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:08:47.354932+00:00",
+  "ended_at_utc": "2026-11-27T20:09:23.303017+00:00",
+  "request_sha256": "542829a89b5f2f46638c9030c5af7ea421b84f0c41ac1892af68231401de3752",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49369,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33160,
+    "cached_tokens": 14976,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m99_c01_batch_04_solver.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\n# The blind campaign's two setting channels match the archived redistribution\\n# regime: chronological memory stays active, and coupon drift is redistributed.\\n_REDISTRIBUTION = np.array([0.680, 0.582])\\n\\n\\ndef _deployment(tau, theta, x, past, hold, dt, t):\\n    curves, rate = _design(tau, x, past, hold, dt, t)\\n    drift = theta[2] + x @ theta[3:]\\n    correction = (-np.expm1(-t[:, None] / tau) * tau - t[:, None]) @ _REDISTRIBUTION\\n    return curves @ theta + drift[:, None] * correction, rate @ theta\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, t = np.asarray(dataset['past_dt']), np.asarray(dataset['eval_times'])\\n    x, xt = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    past, hold = _loads(train, bridge)\\n    tau, theta = _fit(x, past, hold, dt, t,\\n                      train['strain_curves_obs'] - train['strain_0'][:, None],\\n                      train['instant_rate_obs'])\\n    past, hold = _loads(test, bridge)\\n    curves, rate = _deployment(tau, theta, xt, past, hold, dt, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rate}\\nPY\\npython3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy, pickle, numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; c=d['calibration_load_cells']; bridge=m['_bridge'](c); cal=np.max(np.abs(c['bridge_raw']),axis=1)<8\\nerr=m['_invert_bridge'](c['bridge_raw'][cal],bridge)-c['true_channel_loads'][cal]\\nprint('nominal calibration inverse max error by channel',np.max(np.abs(err),axis=0))\\nfor name,part in [('train',tr),('test',te)]:\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  raw=part[key]; v=m['_invert_bridge'](raw,bridge); err=np.max(np.abs(m['_bridge_terms'](v)@bridge-raw)); print(name,key,'max equation residual',err); assert err<1e-8\\nx,xt=m['_features'](tr,te); p,h=m['_loads'](tr,bridge); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m['solve_batch'](d); tau=out['estimated_taus']; theta=out['hereditary_weights']; print('full-fit tau',tau,'theta',theta); assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values())\\nfor lab in np.unique(tr['lab_id']):\\n v=tr['lab_id']==lab; u=~v; ta,th=m['_fit'](x[u],p[u],h[u],dt,t,y[u],r[u]); a,b=m['_design'](ta,x[v],p[v],h[v],dt,t); e=a@th-y[v]; er=b@th-r[v]; print('held lab',lab,'n',sum(v),'tau',ta,'theta L2 shift',np.linalg.norm(th-theta),'curve median absolute error by horizon',np.median(np.abs(e),axis=0).round(6),'rate median abs error',np.median(np.abs(er)))\\npt,ht=m['_loads'](te,bridge); eps=1e-6\\ncurves,rate=m['_deployment'](tau,theta,xt,pt,ht,dt,np.array([0.,eps])); assert np.max(np.abs(curves[:,0]))<1e-12 and np.max(np.abs(curves[:,1]/eps-rate))<2e-5\\nbase,_=m['_design'](tau,xt,pt,ht,dt,t); delta=out['predicted_strain']-te['strain_0'][:,None]-base@theta; print('transferred chamber correction max by horizon',np.max(np.abs(delta),axis=0).round(6)); print('onset derivative max error',np.max(np.abs(curves[:,1]/eps-rate)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge with an unchanged prior solver → H2 dynamically fitted cyclic-cubic bridge with chronological memory and archived drift redistribution; worst held-out bridge RMS 1.17×10⁻⁴ versus 0.312 for affine.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Use the full quadratic-plus-cubic bridge\",\"rejected_reason\":\"Its worst held-out raw RMS was 1.33×10⁻⁴, higher than the cyclic basis at 1.17×10⁻⁴.\"},{\"option\":\"Reuse the memory-reset deployment law\",\"rejected_reason\":\"The current setting-channel pattern matches the redistribution regime rather than the reset regime.\"}],\"rationale\":\"Build the solver and check the failures that would change it: unstable load inversion, material estimates that fail on a held-out lab, or disagreement between the deployment curve and its onset rate. The blind public batch has no chamber outcomes, so these checks cannot directly validate transfer of the archived redistribution coefficients.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b01b24446ccca2442609bde7f3487a77fa88a2d83df4bbd6c171845cc11666c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37147.39,
+      "usage_known": true,
+      "prompt_tokens": 33160,
+      "cached_tokens": 14976,
+      "completion_tokens": 1511
+    }
+  ]
+}

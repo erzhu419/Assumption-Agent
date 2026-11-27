@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31390211a2d94f09adf98e73ee599fa8",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:45.893296+00:00",
+  "ended_at_utc": "2026-11-27T20:01:12.977535+00:00",
+  "request_sha256": "e4161620f9739cb1525f287bf5b8692b043279464a6e7785e96b6b3c39e3409d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47318,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32501,
+    "cached_tokens": 14976,
+    "completion_tokens": 1057
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=p['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; bank=np.arange(4)\\n# Test omitted calibration terms on sweeps never used to estimate them.\\ndef basis(x,j,kind):\\n a=m['_rosette_basis'](x,j); t=x[:,j]; u=x[:,(j+1)%4]; v=x[:,(j-1)%4]\\n if kind=='interactions':\\n  return np.column_stack((a,x[:,(j+2)%4],x**2,t*v,u*v,t*u*v))\\n if kind.startswith('quotient'):\\n  q=t-u if kind.endswith('difference') else t+u\\n  return np.column_stack((a,a[:,1:]/(1+q[:,None]**2)))\\n return a\\nnames=['cyclic','interactions','quotient_difference','quotient_sum']; e={name:np.empty_like(y) for name in names}\\nfor fold in range(5):\\n test=np.arange(len(x))%5==fold; train=~test\\n coef=m['_fit_rosette'](x[train],y[train]); baseline=np.column_stack([m['_rosette_basis'](x[train],j)@coef[j] for j in bank]); r=y[train]-baseline\\n for name in names:\\n  for j in bank:\\n   if name=='cyclic': b=coef[j]\\n   else:\\n    d=abs(r[:,j]); keep=d<=max(6*np.median(d),5e-5); A=basis(x[train],j,name); b=np.linalg.lstsq(A[keep],y[train,j][keep],rcond=None)[0]\\n   e[name][test,j]=y[test,j]-basis(x[test],j,name)@b\\nfor name in names:\\n q=np.quantile(abs(e[name]),[.5,.9,.95,1],axis=0)\\n print(name,'channel p90',q[1],'worst channel p95',q[2].max(),'max',q[3].max())\\n# Measure the actual effect of the nuisance adjustment, not classification metrics.\\nS,_=m['_design'](s); ycal=m['_calibrate'](s); Z=s['Z_nuisance']; w=m['solve_batch'](s)['weights']; rho=s['nuisance_ridge']; R=Z@np.linalg.solve(Z.T@Z+rho*np.eye(Z.shape[1]),Z.T)\\nr=ycal-S@w; rr=r-R@r\\nprint('observed residual RMS by shift before/after nuisance projection',np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)),np.sqrt(np.mean(rr.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\nprint('nuisance projection spectrum',np.linalg.eigvalsh(R)[-Z.shape[1]:], 'budget',w.sum(),'box extrema',w.min(),w.max())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 common wall setting -> H2 periodic x and sealed y; worst held-out shift RMSE is 9.02e-7 and worst-channel out-of-fold calibration p90 is 2.56e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, drift generators, or classification accuracy\",\"rejected_reason\":\"The documented problem is a steady-state continuous inverse problem with neither relay modes, stochastic dynamics, nor class labels.\"}],\"rationale\":\"Test whether omitted interactions or rational terms improve held-out calibration and quantify the nuisance correction by shift. Only reconsider the solver if an expansion improves the calibration tail enough to matter for tracer predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "61778deb8148b0f61656132cd06f88fa6ce52b8d858865cae5368911ca76b25c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28245.34,
+      "usage_known": true,
+      "prompt_tokens": 32501,
+      "cached_tokens": 14976,
+      "completion_tokens": 1057
+    }
+  ]
+}

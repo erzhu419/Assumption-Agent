@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9dbb361b94864eafbf9f3564a7e525da",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:48.268777+00:00",
+  "ended_at_utc": "2026-11-27T19:40:24.664402+00:00",
+  "request_sha256": "3691b72b6edf5e515a6e41c03d0c6e7c0358a5568e2754978b284fc48841cbcd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61756,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39802,
+    "cached_tokens": 14976,
+    "completion_tokens": 1518
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/hegel_continual_archive/alpha_m99_c01_s00_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); before=s.index('\\\\ndef solve_batch(')\\ns=s[:before]+'''\\n# Campaign diagnostics identify a reset chamber: no pre-hold memory survives,\\n# and the coupon drift predictor enters the two relaxation amplitudes.\\n_CHAMBER_DRIFT = np.array([0.358, 2.122])\\n\\n\\ndef _chamber_response(tau, beta, features, hold, t):\\n    drift = beta[2] + features @ beta[3:]\\n    amplitude = hold[:, None] * beta[:2] + drift[:, None] * _CHAMBER_DRIFT\\n    return amplitude @ -np.expm1(-t[None, :] / tau[:, None]), amplitude @ (1 / tau)\\n\\n\\ndef solve_batch(dataset):\\n    train, test = dataset['train'], dataset['test']\\n    t, dt = np.asarray(dataset['eval_times']), np.asarray(dataset['past_dt'])\\n    x, xt = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    p, h = _loads(train, bridge)\\n    tau, beta = _fit(x, p, h, dt, t, train['strain_curves_obs'] - train['strain_0'][:, None],\\n                     train['instant_rate_obs'])\\n    ht = test['hold_channel_raw'] @ bridge[1:] + bridge[0]\\n    curves, rate = _chamber_response(tau, beta, xt, ht, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rate}\\n'''; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed '/for name,g,X,P,H /,$d' /tmp/probe_m99.py >/tmp/complete_m99.py\\ncat >>/tmp/complete_m99.py <<'PY'\\nX=m._features(c,c)[1]; D=beta[2]+X@beta[3:]; H=hc; P=pc; y=np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]; complete=~np.isnan(c['coupon_features_raw']).any(1)\\nlab=c['lab_id']; st=c['stratum']; age=np.cumsum(dt[::-1])[::-1]-dt; z=P@(np.exp(-age[:,None]/tau)*-np.expm1(-dt[:,None]/tau))\\ndef errors(e):return np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))\\ndef project(kind, use, ta):\\n F=np.vstack((np.column_stack((-np.expm1(-t[:,None]/ta),t)),np.r_[1/ta,1.])); base=(H[:,None]*beta[:2])@F[:,:2].T; cols=[D[:,None]*F[None,:,j] for j in (0,1)];\\n if kind=='retain': cols+=[z[:,j,None]*F[None,:,j] for j in (0,1)]\\n if kind=='drift': cols+=[D[:,None]*F[None,:,2]]\\n if kind=='offset': cols+=[np.broadcast_to(F[:,j],y.shape) for j in (0,1,2)]\\n A=np.stack(cols,axis=-1); AA=A[use].reshape(-1,A.shape[-1]); yy=(y-base)[use].ravel(); coef=np.linalg.lstsq(AA,yy,rcond=None)[0]; return A@coef+base-y,coef\\nfolds=[lab==k for k in np.unique(lab)]+[st==k for k in np.unique(st)]\\nfor kind in ('reset','retain','drift','offset'):\\n for free in (False,True):\\n  def fit(use):\\n   ta=np.exp(least_squares(lambda u:project(kind,use,np.exp(u))[0][use].ravel(),np.log(tau),bounds=(np.log([.58,3]),np.log([.83,7]))).x) if free else tau\\n   return (*project(kind,use,ta),ta)\\n  e,q,ta=fit(complete); out=np.max([errors(fit(complete&~f)[0][f&complete]) for f in folds if np.any(f&complete)],axis=0); print(kind,free,np.round(ta,5),np.round(q,5),'complete/missing',np.round([errors(e[complete]),errors(e[~complete])],5),'worst complete',out.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/complete_m99.py | tail -8\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 retained history → H2 reset memory with feature-driven branch amplitudes; the fixed-spectrum reset model has worst held-out strain/rate RMSE 0.0176/0.0140 across labs and strata.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Standardize deployment features separately\",\"rejected_reason\":\"The deployment contract specifies joint train/test reference statistics; standalone alignment is used only to interpret the separate diagnostic panel.\"}],\"rationale\":\"Write and schema-check the reset solver using the required joint train/test alignment. Then compare complete-feature holdouts to determine whether residuals support a retained-memory or linear-drift term, rather than mistaking missing-feature error for chamber physics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "388b1d833ca56e12c6cc3f5ca02870b9b3b1de11af17bca6d8f1ec6eba6ae988",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37513.51,
+      "usage_known": true,
+      "prompt_tokens": 39802,
+      "cached_tokens": 14976,
+      "completion_tokens": 1518
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2fcefee9fad4ec09576b40c8c328c19",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:26.666700+00:00",
+  "ended_at_utc": "2026-11-27T20:02:59.287584+00:00",
+  "request_sha256": "f14302b5bd15b7c59a57259cc471eb3c054e4067092c9386177b6e6659e49d46",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47471,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32602,
+    "cached_tokens": 14976,
+    "completion_tokens": 1347
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\nsed -n '/^_PAIRS/,/^def _box_simplex/p' /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=it['study']; sw=s['sensor_calibration_sweeps']; x=np.asarray(sw['ref_rosette']); y=np.asarray(sw['raw_rosette']); S,_=m._forward(s); xp=np.vstack([S@d['w_pulse'] for d in it['campaign_diagnostics']]).reshape(-1,4); yp=np.vstack([d['y_pulse_raw'] for d in it['campaign_diagnostics']]).reshape(-1,4)\\nD=m._rosette_design; pairs=list(combinations(range(4),2)); triples=list(combinations(range(4),3))\\ndef features(z,kind):\\n    d=D(z)\\n    if kind=='base': return d\\n    if kind=='quadratic_cubic': return np.column_stack([d,z*z,*[z[:,i]**2*z[:,j] for i in range(4) for j in range(4) if i!=j],*[np.prod(z[:,ids],axis=1) for ids in triples]])\\n    v=[z[:,i]+sign*z[:,j] for i,j in pairs for sign in [-1,1]]\\n    return np.column_stack([d,*[q/(1+a*q*q)-q for q in [*z.T,*v] for a in [.15,1.]]])\\ndef rmse(r): return np.sqrt(np.mean(r*r))\\nprint('sweep and pulse shapes', x.shape,xp.shape,'study fields',sorted(s)); print('bank labels/counts',np.unique(s['row_bank_id'],return_counts=True)); print('single-bank type',type(sw['single_bank_sweeps']).__name__)\\nfor kind in ['base','quadratic_cubic','rational_contrasts']:\\n    near=[]; overall=[]; pulses=[]; scores=[]\\n    for hold in np.array_split(np.random.default_rng(471).permutation(len(x)),5):\\n        train=np.setdiff1d(np.arange(len(x)),hold); b=m._fit_rosette(x[train],y[train]); err=y[train]-D(x[train])@b\\n        cutoff=max(1e-4,10*np.median(np.abs(err))); cols=[]\\n        for j in range(4):\\n            keep=train[np.abs(err[:,j])<cutoff]; A=features(x[keep],kind)\\n            cols.append(np.linalg.lstsq(A,y[keep,j],rcond=1e-9)[0])\\n        c=np.column_stack(cols); r=y[hold]-features(x[hold],kind)@c; good=np.abs(r)<cutoff; local=np.linalg.norm(x[hold],axis=1)<np.quantile(np.linalg.norm(x[train],axis=1),.4)\\n        overall.append(rmse(r[good])); near.append(rmse(r[good & local[:,None]])); pr=(features(xp,kind)@c-yp).reshape(len(it['campaign_diagnostics']),-1,4); pulses.append(float(np.max(np.sqrt(np.mean(pr**2,axis=(1,2))))))\\n    print(kind,'masked sweep RMSE by fold',overall,'near-origin',near,'external worst pulse by fold',pulses)\\nc=m._fit_rosette(x,y); pr=(D(xp)@c-yp).reshape(len(it['campaign_diagnostics']),len(s['mu_shifts']),-1); groups=np.asarray(s['row_bank_id']).ravel(); print('production calibration residual by shift',np.sqrt(np.mean(pr**2,axis=(0,2)))); print('production signed residual per channel',np.mean(pr.reshape(-1,4),axis=0)); flat=pr.reshape(len(pr),-1)\\nif groups.size in (flat.shape[1],flat.shape[1]//4):\\n    if groups.size!=flat.shape[1]: groups=np.repeat(groups,4)\\n    for g in np.unique(groups):\\n        z=flat[:,groups==g]; print('bank',g,'bias',z.mean(),'RMSE',rmse(z))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared wall regime → H2 periodic x and sealed y; worst held-out tracer RMSE is 1.89e-6, with a focused calibration audit pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, HJB drift, or classification balance\",\"rejected_reason\":\"The task is a steady transport inverse problem with continuous observations and no relay, time evolution, or class labels. Bank-stratified residuals are the relevant nuisance check.\"}],\"rationale\":\"The independent host comparison shows a small nonzero KKT gap, so test whether missing sensor interactions or saturation contribute to it. Fit calibration alternatives on real sweep folds and compare their transfer to independent tracers; only revisit the production fit if the improvement is consistent.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "61b2ad54d0894040a2e59f32ed1589a73516412737dda433130d84c982f543db",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33772.64,
+      "usage_known": true,
+      "prompt_tokens": 32602,
+      "cached_tokens": 14976,
+      "completion_tokens": 1347
+    }
+  ]
+}

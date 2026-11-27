@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3dee4ccff98647c3b4b6b8e2d4f2b2e0",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:14.995854+00:00",
+  "ended_at_utc": "2026-11-27T19:46:55.023038+00:00",
+  "request_sha256": "34b7d5feca430d8d0f713868fff33ad265a7d4c0c5ec63cd5810eafc6f7783be",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48189,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30953,
+    "cached_tokens": 13696,
+    "completion_tokens": 1680
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, json, pickle, sys\\nfrom pathlib import Path\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\np = Path('/holdout_task')\\nitem = pickle.loads((p/'public_batch.pkl').read_bytes())[0]\\ns = item['study']; nx, ny = s['nx'], s['ny']; n = nx*ny\\nassert all((p/name).is_file() for name in ('batch_solver.py','downstream_solver.py'))\\n\\ndef dense_axis(k,v,h):\\n    m=len(k); A=np.zeros((m,m))\\n    for i in range(m):\\n        for j,adv in (((i-1)%m,max(v[i],0)),((i+1)%m,max(-v[i],0))):\\n            q=(k[i]+k[j])/(2*h*h)+adv/h\\n            A[i,j]-=q; A[i,i]+=q\\n    return A\\nax,ay=[dense_axis(s['kappa_'+a],s['vel_'+a],s['L'+a]/(s['n'+a]-1)) for a in 'xy']\\nA=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].flatten(order='F'))\\nB=np.column_stack([b.flatten(order='F') for b in s['source_modes']]); m=B.shape[1]\\nfields=[np.linalg.solve(A+mu*np.eye(n),B) for mu in s['mu_shifts']]\\nii,jj=s['sensor_ij'].T\\nS=np.concatenate([f[ii+nx*jj] for f in fields]); Z=s['Z_nuisance']; P=np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nX=P@S; ridge=s['source_ridge']; H=X.T@X+ridge*np.eye(m); cap=s['u_box']; total=s['total_budget']\\nerrors=[]\\nfor pulse in item['campaign_diagnostics']:\\n    measured=calibrate_upstream(dict(s,y_obs_raw=pulse['y_pulse_raw']))['y_obs_raw']\\n    errors.append((S@pulse['w_pulse']-measured).reshape(len(fields),-1,4))\\ne=np.stack(errors)\\nworst=max(np.sqrt(np.mean(e**2,axis=axes)).max() for axes in ((1,2,3),(0,2,3),(0,1,2)))\\nprint('Worst tracer RMSE across pulse, shift, or rosette-channel slices:',worst)\\nassert worst < 1e-5\\n\\ndef exhaustive(y):\\n    c=-X.T@y; best=None\\n    for state in itertools.product((-1,0,1),repeat=m):\\n        st=np.array(state); free=st==0; w=(st==1)*float(cap)\\n        available=total-w.sum(); k=int(free.sum())\\n        if available < -1e-12 or available > k*cap+1e-12: continue\\n        if k:\\n            mat=np.block([[H[np.ix_(free,free)],-np.ones((k,1))],[np.ones((1,k)),np.zeros((1,1))]])\\n            w[free]=np.linalg.solve(mat,np.r_[-c[free]-H[free]@w,available])[:-1]\\n        if w.min() < -1e-10 or w.max() > cap+1e-10: continue\\n        val=0.5*w@H@w+c@w\\n        if best is None or val<best[0]: best=(val,w)\\n    return best[1]\\n\\ndef verify(out,cal):\\n    w=out['weights']; cert=out['kkt_certificate']; lo=np.array(cert['lam_lower']); hi=np.array(cert['lam_upper']); nu=cert['nu_sum']\\n    y=P@cal['y_obs_raw']; r=X@w-y; g=X.T@r+ridge*w\\n    J=0.5*(r@r+ridge*(w@w)); dual=J-g@w+nu*total+cap*np.minimum(0,g-nu).sum()\\n    f=out['terminal_field']; target=(fields[-1]@w).reshape((nx,ny),order='F')\\n    assert np.array_equal(cert['weights'],w) and min(lo.min(),hi.min())>=0\\n    metrics=np.array([abs(w.sum()-total),max(0,-w.min(),w.max()-cap),np.max(abs(g-nu-lo+hi)),max(np.max(abs(w*lo)),np.max(abs((cap-w)*hi))),abs(cert['primal_objective']-J),abs(cert['dual_lower_bound']-dual),abs(cert['primal_objective']-cert['dual_lower_bound']),np.max(abs(f-target)),np.max(abs((A+s['mu_shifts'][-1]*np.eye(n))@f.ravel(order='F')-B@w)),np.max(abs(w-exhaustive(y)))])\\n    assert metrics.max()<2e-9, metrics\\n    return metrics, (int(sum(w<1e-10)),int(sum(w>cap-1e-10)))\\ncal=calibrate_upstream(s); staged=calibrate_upstream(s,json.loads((p/'_upstream_param_payload.json').read_text()))\\ncases=[verify(solve_batch(s),cal),verify(solve_downstream(staged),staged)]\\n# Stress simultaneous lower/upper activity by reversing and scaling the observed signal.\\nfor factor in (-12, 12):\\n    stressed=dict(cal,y_obs_raw=factor*cal['y_obs_raw']); cases.append(verify(solve_downstream(stressed),stressed))\\nprint('Active (lower, upper) by case:',[c[1] for c in cases])\\nprint('Worst errors [sum, box, stationarity, complementarity, objective, dual, gap, field, PDE, exhaustive weights]:',np.max([c[0] for c in cases],axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nonperiodic walls -> H2 periodic upwind transport on both axes; pooled tracer RMSE is 2.94×10⁻⁶ and the public schema passes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate cannot detect a transposed terminal field, a bad wall stencil, or an incorrect KKT certificate. Compare the exact artifacts against a dense forward solve and exhaustive face minimization, including observations that stress both box bounds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "418262dc162c2c8786442e3bb1a7af84fec508855a843779acbf60bf33621928",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41149.42,
+      "usage_known": true,
+      "prompt_tokens": 30953,
+      "cached_tokens": 13696,
+      "completion_tokens": 1680
+    }
+  ]
+}

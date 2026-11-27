@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "68abb8d3dc584c95aca98b79b8f15482",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:21.977440+00:00",
+  "ended_at_utc": "2026-11-27T19:44:58.410217+00:00",
+  "request_sha256": "c7475820aa3d231465d812d17745f69ccf694f8609bef6952d32efc86f022c85",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40543,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29316,
+    "cached_tokens": 13696,
+    "completion_tokens": 1509
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_structure.py <<'PY'\\nimport contextlib,io,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): v=runpy.run_path('/tmp/chamber_probe.py')\\ng,tr,te,t,dt,a,h,b,Y,p,l=(v[k] for k in ('g','tr','te','t','dt','a','h','b','Y','p','l'))\\ns=v['s']; np.set_printoptions(precision=5,suppress=True,linewidth=140)\\ndef align(parts):\\n z={k:np.concatenate([q[k] for q in parts]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; lab=z['lab_id']; X=z['coupon_features_raw']; _,ix,n=np.unique(np.c_[lab,z['stratum']],axis=0,return_inverse=True,return_counts=True); w=1/n[ix];\\n for j in np.unique(lab):\\n  sel=lab==j; R=z['ref_coupons'][sel]; X[sel]=(X[sel]-np.median(R.mean(0)))/np.median(R.std(0))\\n for c in X.T:\\n  ok=np.isfinite(c); c[~ok]=np.average(c[ok],weights=w[ok])\\n return X\\nG=np.c_[np.ones(len(l)),l,p]\\ndef gap(taus):\\n z=np.zeros((len(l),len(taus)))\\n for width,ps in zip(dt,p.T):z+=-np.expm1(-width/taus)*(ps[:,None]-z)\\n return l[:,None]-z\\n\\ndef score(D):\\n coeff=np.linalg.lstsq(D,Y,rcond=None)[0]; E=Y-D@coeff; loo=E/(1-np.sum(np.linalg.svd(D,full_matrices=False)[0]**2,axis=1))[:,None]; return np.sqrt(np.mean(E**2)), np.sqrt(np.mean(loo**2)), np.max(abs(loo)), coeff\\nfor tag,X in [('train_diag',v['X']),('diag',align([g])),('joint',align([tr,te,g])[-len(l):]),('train_test',None)]:\\n if X is None:\\n  D={k:np.concatenate([q[k] for q in (tr,te)]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; Z=align([tr,te]); X=g['coupon_features_raw'].copy(); _,ix,n=np.unique(np.c_[D['lab_id'],D['stratum']],axis=0,return_inverse=True,return_counts=True)\\n  for j in np.unique(g['lab_id']):\\n   R=D['ref_coupons'][D['lab_id']==j]; sel=g['lab_id']==j; X[sel]=(X[sel]-np.median(R.mean(0)))/np.median(R.std(0))\\n  for k,c in enumerate(X.T):\\n   ok=np.isfinite(D['coupon_features_raw'][:,k]); c[~np.isfinite(c)]=np.average(Z[ok,k],weights=1/n[ix[ok]])\\n r=h[2]+X@h[3:]; H=gap(a); print('\\\\n',tag)\\n designs={'all-linear':np.c_[G,X], 'memory-drift':np.c_[np.ones(len(l)),l,H,r], 'memory-features':np.c_[np.ones(len(l)),l,H,X], 'stress-drift':np.c_[G,r], 'stress-drift-interact':np.c_[G,r,l*r,r*r], 'memory-smooth':np.c_[np.ones(len(l)),l,H,r,r*r,l*r,np.tanh(r),l*l]}\\n for name,D in designs.items():\\n  e,f,m,C=score(D); print(name, np.round([e,f,m],6))\\n  if name in ('all-linear','memory-drift','stress-drift'):print('coeff early/last/rate',C[:,[0,-2,-1]].T,'singular',np.linalg.svd(C,compute_uv=False))\\n if tag in ('joint','train_test'):\\n  E=Y-designs['memory-drift']@score(designs['memory-drift'])[-1]; U,S,V=np.linalg.svd(E,full_matrices=False); print('memory residual row rms',np.sqrt(np.mean(E**2,axis=1))); print('resid singular',S,'mode',V[:2]); print('r',r)\\n  np.savez('/tmp/chamber_'+tag+'.npz',Y=Y,t=t,dt=dt,a=a,h=h,b=b,p=p,l=l,X=X,r=r,lab=g['lab_id'],H=H)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop dynamics → H2 chamber-specific response; free-amplitude chamber fits have worst-horizon in-sample RMSE 0.00282, but coupon-level transfer is not yet validated.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Deploy the chamber fit with free coupon amplitudes\",\n      \"rejected_reason\": \"That fit uses measured responses to infer each coupon's amplitudes; deployment supplies no such responses.\"\n    }\n  ],\n  \"rationale\": \"Compare load-history, drift, and interaction bases on left-out chamber coupons. Compare reference-panel conventions separately so alignment error is not mistaken for nonlinear chamber mechanics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "60c3bd4c7d2ef350beee96f9a17bf11a9e553e08ed8d4de8b438f9464989bd2c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37558.25,
+      "usage_known": true,
+      "prompt_tokens": 29316,
+      "cached_tokens": 13696,
+      "completion_tokens": 1509
+    }
+  ]
+}

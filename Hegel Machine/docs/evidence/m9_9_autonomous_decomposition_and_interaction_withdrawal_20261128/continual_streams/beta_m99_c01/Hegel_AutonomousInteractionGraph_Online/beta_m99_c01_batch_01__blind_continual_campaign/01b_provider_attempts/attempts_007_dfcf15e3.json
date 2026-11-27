@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dfcf15e3aed04728bc610c174d5ebd31",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:53.414871+00:00",
+  "ended_at_utc": "2026-11-27T19:39:31.863140+00:00",
+  "request_sha256": "d6a6831b74b2fe4543f5f5e1d7b72fd6abb1517d666e4e9aaba885b859da10a9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44598,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32277,
+    "cached_tokens": 14976,
+    "completion_tokens": 1598
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'batch_solver.py')\\nsolver = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(solver)\\nfor item in pickle.load(open(root + 'public_batch.pkl', 'rb')):\\n    d = item['study']\\n    cal = d['sensor_calibration_sweeps']\\n    x, y = cal['ref_rosette'], cal['raw_rosette']\\n    single = cal['single_bank_sweeps']\\n    b, sx, sy = (np.asarray(single[k]) for k in ['bank_id', 'ref_signal', 'raw_readout'])\\n    S, _ = solver._forward(d)\\n    z = d['Z_nuisance']\\n    P = np.eye(len(z)) - z @ np.linalg.solve(z.T @ z + d['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n    pairs = list(itertools.combinations(range(4), 2))\\n    triples = list(itertools.combinations(range(4), 3))\\n    def design(a, family):\\n        a = np.atleast_2d(a)\\n        cols = [np.ones(len(a)), *a.T]\\n        if family == 'interactions':\\n            cols += [*(a**2).T, *[a[:, i]*a[:, j] for i,j in pairs], *[a[:, i]*a[:,j]*a[:,k] for i,j,k in triples]]\\n        if family == 'rational':\\n            cols += [a[:, i]/(1+(a[:,j]+sign*a[:,k])**2) for i in range(4) for j,k in pairs for sign in (-1,1)]\\n        return np.column_stack(cols)\\n    def fit(train, family):\\n        if family in ('diagonal', 'pooled'):\\n            coeff = []\\n            for i in range(4):\\n                xx, yy = x[train, i], y[train, i]\\n                if family == 'pooled':\\n                    xx, yy = np.r_[xx, sx[b==i]], np.r_[yy, sy[b==i]]\\n                coeff.append(np.linalg.lstsq(np.column_stack([np.ones(len(xx)),xx]),yy,rcond=None)[0])\\n            coeff = np.asarray(coeff)\\n            return lambda a: coeff[:,0] + a*coeff[:,1]\\n        D = design(x[train], family)\\n        if D.shape[1] >= D.shape[0] or np.linalg.matrix_rank(D) < D.shape[1]:\\n            return None\\n        c = np.linalg.lstsq(D,y[train],rcond=None)[0]\\n        return lambda a: design(a, family) @ c\\n    for name in ['diagonal','pooled','affine','interactions','rational']:\\n        errs = []\\n        for fold in range(5):\\n            test = np.arange(len(x))%5==fold\\n            model = fit(~test,name)\\n            if model is not None:\\n                errs.append(np.sqrt(np.mean((model(x[test])-y[test])**2,axis=0)).max())\\n        if len(errs)!=5:\\n            print(name,'not identifiable across folds'); continue\\n        model = fit(np.ones(len(x),dtype=bool),name)\\n        structural, projected, means = [], [], []\\n        for pulse in item.get('campaign_diagnostics') or []:\\n            expected = (S @ pulse['w_pulse']).reshape(-1,4)\\n            raw = pulse['y_pulse_raw'].reshape(-1,4)\\n            raw_error = (model(expected)-raw).reshape(len(d['mu_shifts']),-1,4)\\n            structural.extend(np.sqrt(np.mean(raw_error**2,axis=1)).ravel())\\n            means.extend(raw_error.mean(axis=1).ravel())\\n            inverse = np.array([least_squares(lambda q: (model(q)-r).ravel(),p,gtol=1e-13).x for p,r in zip(expected,raw)])\\n            e = (inverse-expected).ravel()\\n            projected.append(np.sqrt(np.mean((P@e)**2)))\\n        print(name, 'worst held-out raw sweep fold/bank',max(errs),'worst raw pulse shift/bank',max(structural,default=0),'worst projected pulse RMSE',max(projected,default=0),'max raw pulse shift/bank bias',max(np.abs(means),default=0))\\n    base = fit(np.ones(len(x),dtype=bool),'diagonal')\\n    single_err = base(np.eye(4)[b] * sx[:,None])[np.arange(len(b)),b] - sy\\n    print('independent single-bank RMSE', [float(np.sqrt(np.mean(single_err[b==i]**2))) for i in range(4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Exact reflecting walls with diagonal affine calibration → test whether bank-sweep pooling or rosette interactions improve projected tracer residuals; current worst calibrated pulse-by-shift RMSE is 2.46e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode or within-cohort classification tests\",\n      \"rejected_reason\": \"This is a steady continuous inverse problem with neither relay states nor class labels; the relevant nuisance check is tracer error after the specified ridge projection.\"\n    }\n  ],\n  \"rationale\": \"A pooled score could conceal bank-specific calibration bias. Compare worst held-out sweep errors and tracer errors by shift and bank, then check what remains after nuisance projection. Change the solver only if a challenger improves the tracer residuals without sacrificing sweep generalization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0443c7b7c9f3535a29f25adb027d73ea837a454dd2a9b757225f8f84236e0653",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39543.94,
+      "usage_known": true,
+      "prompt_tokens": 32277,
+      "cached_tokens": 14976,
+      "completion_tokens": 1598
+    }
+  ]
+}

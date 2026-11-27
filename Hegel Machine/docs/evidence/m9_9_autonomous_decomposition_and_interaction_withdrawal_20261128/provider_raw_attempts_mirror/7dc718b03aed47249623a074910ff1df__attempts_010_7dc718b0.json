@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7dc718b03aed47249623a074910ff1df",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:05:25.830596+00:00",
+  "ended_at_utc": "2026-11-27T20:05:53.083385+00:00",
+  "request_sha256": "d571491bbb89a4dffa76a499d76297197a82b8aa86b509141f88a25557641360",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 62840,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39246,
+    "cached_tokens": 13696,
+    "completion_tokens": 1103
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/for split, xx/,$d' /tmp/m99_inspect.py > /tmp/m99_kernel.py; cat >> /tmp/m99_kernel.py <<'PY'\\nP,H=loads(d); Y=np.c_[d['instant_rate_obs'],d['strain_curves_obs']-d['strain_0'][:,None]]; L=d['lab_id']; Q=np.vstack((1/taus,-np.expm1(-t[:,None]/taus))); V=np.r_[1,t]; E=Y-H[:,None]*(Q@theta[:2]); K=.25*V+Q@(taus*np.array([.25,.5])); implied=E@K/(K@K); missing=np.isnan(d['coupon_features_raw']).any(axis=1)\\nprint('fixed reset/drift kernel with free coupon amplitudes, rate and curve rms',np.sqrt(np.mean((E-implied[:,None]*K)**2,axis=0)).round(5)); u,s,v=np.linalg.svd(E,full_matrices=False); print('sv',s[:5]); print('rank1 normalized', (v[0]/v[0,0]).round(5)); print('fixed kernel',K.round(5)); print('rate projected vs actual',np.c_[implied,E[:,0]].round(5).T)\\ncomb=lambda *ss:{k:np.concatenate([z[k] for z in ss]) for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}\\nopts={'train/test':xd,'diag':features(d,d)[0],'train/diag':features(tr,d)[1],'test/diag':features(te,d)[1],'all':features(comb(tr,te),d)[1],'test':features(te,te,d)[2],'train':features(tr,tr,d)[2]}\\nfor n,xq in opts.items():\\n D=theta[2]+xq@theta[3:]; er=implied-D; print(n,'rmse',np.sqrt(np.mean(er**2)).round(5),'by lab',[(i, np.round(er[(L==i)&~missing],4).tolist()) for i in np.unique(L)],'missing',er[missing].round(4))\\nprint('cal keys',list(ds)); print('test lab sizes',np.unique(te['lab_id'],return_counts=True)); print('past range diag/test',[(np.min(loads(z)[0]),np.max(loads(z)[0])) for z in (d,te)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_kernel.py; cd /holdout_task && cat batch_solver.py && tail -22 _verified_upstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Independent chamber mode amplitudes → full memory reset plus one filtered coupon drift; diagnostic-only alignment lowers worst-lab strain RMSE to 0.04554, but the correct drift coordinates remain unverified.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep the six fitted history coefficients\",\"rejected_reason\":\"With diagnostic-only reference alignment the history coefficients nearly vanish, suggesting they were compensating for a coordinate mismatch.\"}],\"rationale\":\"The fitted modal coefficients suggest a full memory reset and a drift split of one-quarter linear, one-quarter fast, and one-half slow. Test that shared kernel independently of coupon alignment, then compare plausible reference panels to see which reproduces the implied drift.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c5203f447305e89a413cdad2895968d70f765586698f3731aa4271d6bc1c93b8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28458.14,
+      "usage_known": true,
+      "prompt_tokens": 39246,
+      "cached_tokens": 13696,
+      "completion_tokens": 1103
+    }
+  ]
+}

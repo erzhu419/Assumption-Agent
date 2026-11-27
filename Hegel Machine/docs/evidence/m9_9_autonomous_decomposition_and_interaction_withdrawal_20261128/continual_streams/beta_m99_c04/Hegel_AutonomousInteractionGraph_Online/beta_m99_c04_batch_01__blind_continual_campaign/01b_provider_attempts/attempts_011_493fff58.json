@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "493fff585b75495ea40ed923d9c394fd",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:42.435454+00:00",
+  "ended_at_utc": "2026-11-27T19:41:20.510130+00:00",
+  "request_sha256": "62ebd51434f10ca8722d4613ad9ca843dffc68f60106cc42fbd3816a0f9f7016",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58419,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35653,
+    "cached_tokens": 14976,
+    "completion_tokens": 1619
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\nsrc = p.read_text()\\nstart = src.index('def _calibrate(')\\nend = src.index('\\\\ndef ', start + 1)\\ncal = '''def _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    bank = sweeps['single_bank_sweeps']\\n    bank_id = np.asarray(bank['bank_id'])\\n    signals = np.asarray(bank['ref_signal'])\\n    readouts = np.asarray(bank['raw_readout'])\\n    coeff = np.empty((5, 4))\\n    # In a single-bank sweep, only that bank's reference channel is driven.\\n    for j in range(4):\\n        take = bank_id == j\\n        single_ref = np.zeros((np.count_nonzero(take), 4))\\n        single_ref[:, j] = signals[take]\\n        x = np.vstack((ref, single_ref))\\n        y = np.concatenate((raw[:, j], readouts[take]))\\n        coeff[:, j] = np.linalg.lstsq(np.column_stack((np.ones(len(x)), x)), y, rcond=None)[0]\\n    obs = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return np.linalg.solve(coeff[1:].T, (obs - coeff[0]).T).T.ravel()\\n\\n'''\\nPath('/tmp/pooled_batch_solver.py').write_text(src[:start] + cal + src[end:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('/tmp/pooled_batch_solver.py')\\nbase = load('/holdout_task/batch_solver.py')\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nS, U = m._design(s)\\nn = S.shape[1]\\nZ = s['Z_nuisance']\\nP = np.eye(len(S)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nA = P @ S\\nr = P @ m._calibrate(s)\\ncap = s['u_box']\\nridge = s['source_ridge']\\nJ = lambda w: ((A @ w-r) @ (A @ w-r) + ridge*(w @ w))/2\\nG = lambda w: A.T @ (A @ w-r) + ridge*w\\nreference = base.solve_batch(s)\\nfor budget in (0., cap, s['total_budget'], cap*(n-.1), n*cap):\\n    out = m.solve_batch(dict(s, total_budget=budget))\\n    w = out['weights']; c = out['kkt_certificate']; nu = c['nu_sum']\\n    lo = np.asarray(c['lam_lower']); hi = np.asarray(c['lam_upper']); g = G(w)\\n    lb = J(w) - g @ w + nu*budget + cap*np.minimum(0, g-nu).sum()\\n    assert abs(w.sum()-budget)<1e-11 and w.min()>=0 and w.max()<=cap\\n    assert np.max(abs(w-c['weights']))<1e-12 and min(lo.min(),hi.min())>=0\\n    assert np.max(abs(g-nu-lo+hi))<1e-11 and max(np.max(lo*w),np.max(hi*(cap-w)))<1e-11\\n    assert max(abs(J(w)-c['primal_objective']),abs(lb-c['dual_lower_bound']),abs(J(w)-lb))<1e-11\\n    assert np.max(abs(out['terminal_field']-np.tensordot(w,U,axes=1)))<1e-11\\n    print('budget',budget,'absolute duality gap',abs(J(w)-lb))\\n    if budget == s['total_budget']:\\n        fit = minimize(J, np.full(n,budget/n), jac=G, method='SLSQP', bounds=[(0,cap)]*n, constraints=[{'type':'eq','fun':lambda w:w.sum()-budget,'jac':lambda w:np.ones(n)}], options={'ftol':1e-14})\\n        assert fit.success and np.max(abs(fit.x-w))<1e-6\\n        print('independent optimizer max weight difference',np.max(abs(fit.x-w)))\\n        for k in ('weights', 'terminal_field'):\\n            delta = np.linalg.norm(out[k]-reference[k])/np.linalg.norm(reference[k])\\n            print(k,'relative change versus verified baseline',delta)\\n            assert delta < 1e-5\\nPY\\ncp /tmp/pooled_batch_solver.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 rosette-only affine calibration -> H2 pooled affine calibration: worst tracer-propagated relative weight perturbation fell from 1.13e-5 to 9.50e-6, while the field proxy moved from 1.97e-6 to 2.01e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool sweeps with a diagonal model\",\n      \"rejected_reason\": \"It slightly improves the worst weight proxy over pooled affine, but worsens the field proxy more and removes support for cross-channel mixing.\"\n    }\n  ],\n  \"rationale\": \"Pooled affine calibration improves the weight proxy on all three tracer pulses and retains cross-channel terms, with only a 3.5e-8 increase in the worst field proxy. Test the revised candidate against an independent optimizer and both budget endpoints before replacing the verified baseline; a certificate failure or larger-than-expected output change will stop promotion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1769b21d3747df577bc84662fcf01cc95f132324db534b5ce96bd87a0c181709",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39132.88,
+      "usage_known": true,
+      "prompt_tokens": 35653,
+      "cached_tokens": 14976,
+      "completion_tokens": 1619
+    }
+  ]
+}

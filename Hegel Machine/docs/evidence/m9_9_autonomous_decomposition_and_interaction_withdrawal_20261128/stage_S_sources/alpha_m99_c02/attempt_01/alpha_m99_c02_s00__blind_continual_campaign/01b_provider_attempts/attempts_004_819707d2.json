@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "819707d2fd2348078ae77787ca6d9987",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:31:51.130911+00:00",
+  "ended_at_utc": "2026-11-27T19:32:16.157997+00:00",
+  "request_sha256": "c01360ffa415e75f280110741c439f79a6a3436305c5349139568f535a55cfd3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32497,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27680,
+    "cached_tokens": 14976,
+    "completion_tokens": 999
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, json\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,b=d['train'],d['test']; x,z=m._features(a,b); dt,t=d['past_dt'],d['eval_times']; w=m._bridge(d['calibration_load_cells']); out=m.solve_batch(d)\\nprint('taus:',out['estimated_taus'],'theta:',out['hereditary_weights'])\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nfor lab in np.unique(a['lab_id']):\\n    valid=a['lab_id']==lab\\n    tr={k:v[~valid] for k,v in a.items()}; va={k:v[valid] for k,v in a.items()}\\n    tau,theta=m._material(tr,w,x[~valid],dt,t)\\n    c,r=m._basis(tau,*m._loads(va,w),x[valid],dt,t)\\n    ce=np.abs(va['strain_0'][:,None]+c@theta-va['strain_curves_obs']); re=np.abs(r@theta-va['instant_rate_obs'])\\n    print('held-out lab',lab,'taus',tau.round(5),'curve abs p50/p90',np.quantile(ce,[.5,.9]).round(6),'rate abs p50/p90',np.quantile(re,[.5,.9]).round(6),'curve p90 by time',np.quantile(ce,.9,axis=0).round(4))\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f: log=json.load(f)\\nfor e in log:\\n    v=np.asarray(e['facility_telemetry_trace']); print('log entry:',e['completed_campaign_short_name'],'nontrace keys:',[k for k in e if k!='facility_telemetry_trace'],'DC:',v.mean(axis=0).round(3),'dominant harmonic:',(np.argmax(np.abs(np.fft.rfft(v-v.mean(0),axis=0)[1:]),axis=0)+1))\\nfor name,s in [('train',a),('test',b)]:\\n    aux=s['aux_chamber_telemetry']; print(name,'telemetry mean/std',aux.mean(0).round(3),aux.std(0).round(3))\\nPY\\nif [ -d /tmp/hegel_wormhole_skills ]; then PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | head -8; fi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and robust two-branch fit -> H2 chamber adjustment only if the log identifies a constitutive change; calibration RMS is 9.50e-5 load units and held-out predictive errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the two telemetry offsets as chamber-law coefficients\",\n      \"rejected_reason\": \"The sole facility-init entry establishes offsets but does not label their units or map them to stress memory or drift.\"\n    }\n  ],\n  \"rationale\": \"Verify the output contract in an isolated interpreter and test material-fit transfer across labs, scoring the strain curves and initial rates separately. Summarize the log without downloading the trace; adjust deployment only if the available evidence links telemetry to a measurable constitutive change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "60fbf37d899d2bff7a1a2683717e1f3552d7b407fda1add2f84d6ad781961d50",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26100.81,
+      "usage_known": true,
+      "prompt_tokens": 27680,
+      "cached_tokens": 14976,
+      "completion_tokens": 999
+    }
+  ]
+}

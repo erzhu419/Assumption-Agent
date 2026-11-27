@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dae3119d3dc4439993dda2eaf153b4f8",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:14:20.645322+00:00",
+  "ended_at_utc": "2026-11-27T20:14:51.713347+00:00",
+  "request_sha256": "1707f8a9ca7f518785aea4dcbe72f5a7e4f47ff9751578616b1bddfd29d4b71f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47542,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30637,
+    "cached_tokens": 13696,
+    "completion_tokens": 1288
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _fit, _design, _predict_chamber\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nraw = item['dataset']; cal = calibrate_upstream(raw)\\ntr, te = cal['train'], cal['test']; dt, t = cal['past_dt'], cal['eval_times']\\nx, xt = _features(tr, te)\\nout = solve_batch(raw)\\nfor key, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(xt),len(t)), 'initial_rate_pred': (len(xt),)}.items():\\n    assert out[key].shape == shape and np.all(np.isfinite(out[key])), key\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nerrors_c = np.empty_like(tr['strain_curves_obs']); errors_r = np.empty_like(tr['instant_rate_obs'])\\nfor lab in np.unique(tr['lab_id']):\\n    mask = tr['lab_id'] == lab\\n    fit = {k: v[~mask] for k,v in tr.items()}; val = {k: v[mask] for k,v in tr.items()}\\n    tl, wl = _fit(fit,x[~mask],dt,t)\\n    c,r = _design(val,x[mask],dt,t,tl)\\n    ec = c@wl+val['strain_0'][:,None]-val['strain_curves_obs']; er=r@wl-val['instant_rate_obs']\\n    errors_c[mask] = ec; errors_r[mask] = er\\n    print('held-out lab',lab,'taus',tl.round(5),'curve q90',np.quantile(abs(ec),.9),'rate q90',np.quantile(abs(er),.9))\\nprint('worst horizon curve q90:', np.max(np.quantile(abs(errors_c), .9, axis=0)))\\nfor s in np.unique(tr['stratum']):\\n    m = tr['stratum'] == s\\n    print('stratum',s,'OOF curve q90',np.quantile(abs(errors_c[m]),.9),'rate q90',np.quantile(abs(errors_r[m]),.9))\\n# Independent chronological recurrence tests the benchtop gap convention.\\npast = tr['past_channel_raw'].sum(-1); hold = tr['hold_channel_raw'].sum(-1)\\nz = np.zeros((len(x), 2))\\nfor step, h in enumerate(dt):\\n    a = np.exp(-h/tau)\\n    z = a*z + (1-a)*past[:,step,None]\\nc, r = _design(tr,x,dt,t,tau)\\nnp.testing.assert_allclose(r[:,:2], (hold[:,None]-z)/tau, atol=1e-12)\\n# Chamber derivative, zero-time strain, and independence from stress history.\\nh = 1e-5\\ns0, r0 = _predict_chamber(te,xt,np.array([0.,h,2*h]),tau,theta)\\nnp.testing.assert_allclose(s0[:,0],te['strain_0'],atol=1e-12)\\nderivative=(-3*s0[:,0]+4*s0[:,1]-s0[:,2])/(2*h)\\nnp.testing.assert_allclose(derivative,r0,atol=1e-7,rtol=0)\\nchanged = dict(te, past_channel_raw=-te['past_channel_raw'])\\nsc, rc = _predict_chamber(changed,xt,t,tau,theta)\\nnp.testing.assert_array_equal(sc,out['predicted_strain']); np.testing.assert_array_equal(rc,out['initial_rate_pred'])\\nprint('clean-process checks passed; max chamber derivative error:', max(abs(derivative-r0)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic spectrum → H2 archived reset-and-square-root creep law; current strain and rate q90 errors are 0.02067 and 0.01239 in sample, pending held-out lab results.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch chamber law because the raw telemetry waveform shifted\",\n      \"rejected_reason\": \"The dominant differences shrink after aligning the traces in time, while the sustained setting channels match batch 05. No labeled chamber data support a replacement law.\"\n    }\n  ],\n  \"rationale\": \"Re-fit material parameters with each lab’s outcomes withheld to detect a lab-specific fit failure. In an isolated process, verify each output and independently check the chronological stress recurrence, chamber history reset, and initial-rate derivative. These checks can identify equation or composition errors without treating the blind deployment predictions as labeled validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0393d19014affff743d8cb87705d247b9300d5110f4e9464478ce737b54fc211",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32278.06,
+      "usage_known": true,
+      "prompt_tokens": 30637,
+      "cached_tokens": 13696,
+      "completion_tokens": 1288
+    }
+  ]
+}

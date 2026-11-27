@@ -1,0 +1,154 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m99_c03_batch_01_8b648c9edc6f",
+    "source_hash": "8b648c9edc6f1a2cf7deb3af2da59018f08e781a158b5e86c54a6788f71f7406",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m99_c03_batch_01__blind_continual_campaign",
+    "task_id": "alpha_m99_c03_batch_01__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/explore_m99.py",
+        "archived_relpath": "producers/tmp__explore_m99.py",
+        "bytes": 2056,
+        "sha256": "3ed9eb0114a578379dcbf07517aea914265c8e99baf495c0bec104bd5a17b949"
+      },
+      {
+        "container_path": "/tmp/m99_axes.py",
+        "archived_relpath": "producers/tmp__m99_axes.py",
+        "bytes": 955,
+        "sha256": "46f7e1f8e5d99777ecefa8cf2a462539c7efdd1ad72799823b9864519399ebd0"
+      },
+      {
+        "container_path": "/tmp/m99_chamber.py",
+        "archived_relpath": "producers/tmp__m99_chamber.py",
+        "bytes": 1965,
+        "sha256": "4daed758bd0ea2b3242fd8be816efbcba805283c4e6f5c4f49880d5c5c00cdda"
+      },
+      {
+        "container_path": "/tmp/m99_inputs.py",
+        "archived_relpath": "producers/tmp__m99_inputs.py",
+        "bytes": 1352,
+        "sha256": "b4245c99aadb9f3fa0c2699a31b5764af0730bc649ee88beb84aaa69ed35cbbd"
+      },
+      {
+        "container_path": "/tmp/m99_kernel.py",
+        "archived_relpath": "producers/tmp__m99_kernel.py",
+        "bytes": 1752,
+        "sha256": "6d7d0a17db34a0297c448c5b8b550fb97e16d8e9494582ea0b537604e8e598de"
+      },
+      {
+        "container_path": "/tmp/m99_probe.py",
+        "archived_relpath": "producers/tmp__m99_probe.py",
+        "bytes": 1825,
+        "sha256": "6f00f451dd09f617b5438a3457b3e6d8d16af7470dc34e9acd2c361397bb553c"
+      },
+      {
+        "container_path": "/tmp/m99_rank.py",
+        "archived_relpath": "producers/tmp__m99_rank.py",
+        "bytes": 1535,
+        "sha256": "8a782fd3eeed924c820d5865399b5bd578d784b925a6687c5215930e4bc23088"
+      },
+      {
+        "container_path": "/tmp/m99_structure.py",
+        "archived_relpath": "producers/tmp__m99_structure.py",
+        "bytes": 1844,
+        "sha256": "c285096cc73594d29581e1854f8d784f3550d689ec9a79f3f5f4dd1fecd977d2"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m99_c03_s00_solver.py",
+        "bytes": 4803,
+        "sha256": "f265086b7e40b42fb7e9e6331eb97c20438baf87746eb3ffdeb06bf376f3526c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; for f in /tmp/hegel_continual_archive/*.json; do echo \"=== $f\"; head -c 10000 \"$f\"; echo; done; echo '=== Prior solver'; if [ -f /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py ]; then wc -l /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; sed -n '1,260p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; fi; cd /tmp; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation' || true; python3 - <<'PY'\ni",
+      "cat /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; python3 - <<'PY'\nimport json,numpy as np\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\nfor d in json.load(open(p)):\n for k,v in d.items():\n  if k=='facility_telemetry_trace':\n   a=np.array(v); print(k,a.shape,'first',a[0],'last',a[-1])\n  else: print(k,str(v)[:1400])\nprint('asset index'); d=json.load(open('/holdout_task/public_asset_index.json')); print(str(d)[:2000])\nPY\ncd /tmp; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic' | head -15",
+      "set -e; sed -n '46,150p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; cat > /tmp/explore_m99.py <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; tr=d['train']; te=d['test']; g=item['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']; cal=d['calibration_load_cells']; bridge=m._calibration(cal)\na=cal['bridge_raw']; b=cal['t",
+      "set -e; sed '/for label,h,c0 /,$d' /tmp/explore_m99.py > /tmp/m99_inputs.py; cat >> /tmp/m99_inputs.py <<'PY'\nE=np.c_[-np.expm1(-t[:,None]/tau),t]; er=np.r_[1/tau,1]\ny=g['strain_curves_obs']-g['strain_0'][:,None]; yr=g['instant_rate_obs']; A0,R0=m._design(tau,cg,dt,t)\nPY\ncat > /tmp/m99_probe.py <<'PY'\nfrom m99_inputs import *\nfrom scipy.optimize import least_squares\nfor label,h,ci in [('train',tr,c),('diag',g,cg)]:\n a,r=m._design(tau,ci,dt,t); ec=h['strain_curves_obs']-h['strain_0'][:,None]-a@th; eR=h['instant_rate_obs']-r@th\n print(label,'curve/rate RMSE',np.sqrt(np.mean(ec**2)),np.sqrt(np.me",
+      "set -e; cat > /tmp/m99_structure.py <<'PY'\nfrom m99_inputs import *\nD=np.vstack((E,er)); obs=np.c_[y,yr]; B=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\np,h,x=cg; dr=x@th[2:]; z=h[:,None]-R0[:,:2]*tau; lab=g['lab_id']; s=g['stratum']; n=len(h)\nprint('diagnostic ranges from train/test reference scaling vs joint scaling')\nfor l in np.unique(lab):\n print(l,[(np.median(k['ref_coupons'][k['lab_id']==l].mean(0)),np.median(k['ref_coupons'][k['lab_id']==l].std(0))) for k in (tr,te,g)],'missing',np.isnan(g['coupon_features_raw'][lab==l]).sum())\nprint('corr B, nominal drift, hold, features, memory'); print(",
+      "set -e; cat > /tmp/m99_chamber.py <<'PY'\nfrom m99_inputs import *\nD=np.vstack((E,er)); obs=np.c_[y,yr]; B=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\np,h,_=cg; lab=g['lab_id']; n=len(h); hist=h[:,None]-R0[:,:2]*tau\nkeys=('lab_id','stratum','coupon_features_raw','ref_coupons')\nmerge=lambda *blocks:{k:np.concatenate([b[k] for b in blocks]) for k in keys}\nfeat={'all':m._features(tr,merge(te,g))[-n:], 'train_diag':m._features(tr,g)[-n:], 'diag':m._features(g,g)[-n:]}\ndef ref_transform(refset):\n    xx=g['coupon_features_raw'].copy()\n    for l in np.unique(lab):\n        panel=refset['ref_coupons'][refs",
+      "set -e\nsed -n '1,46p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\npython3 - <<'PY'\nimport json\nv=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\nfor e in v:\n print({k:v for k,v in e.items() if k!='facility_telemetry_trace'})\nPY\ncat > /tmp/m99_rank.py <<'PY'\nfrom m99_inputs import *\nD=np.vstack((E,er)); obs=np.c_[y,yr]; lab=g['lab_id']; strat=g['stratum']; n=len(lab); p,h,_=cg\nmiss=np.isnan(g['coupon_features_raw']).any(1)\nB=np.linalg.lstsq(D,obs.T,rcond=None)[0].T\nmodels={}\nfor label,xx in [('diag',m._features(g,g)[-n:]),('joint',m._features(tr,g)[-n:])]",
+      "set -e; sed -i 's/xx\\[:,1:\\]@th\\[3:\\]/xx@th[3:]/g; s/(\\x27features\\x27,xx,False)/(\\x27features\\x27,np.c_[np.ones(n),xx],False)/' /tmp/m99_rank.py; OPENBLAS_NUM_THREADS=1 python3 /tmp/m99_rank.py | tail -39; python3 - <<'PY'\nimport json,numpy as np\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\n a=np.asarray(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],a.shape,'mean',a.mean(0).round(4),'sd',a.std(0).round(4),'first',a[0],'last',a[-1])\nPY",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_rank.py | grep 'RMSE'\nsed -n '46,180p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\npython3 - <<'PY'\nimport json\nv=json.load(open('/holdout_task/public_asset_index.json')); print('asset metadata:',list(v) if isinstance(v,dict) else type(v)); print(str(v)[:1100])\nPY",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\nsrc=Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\nsrc=src[:src.index('def solve_batch')]+'''# Chamber response inferred from the public verification coupons.\n_CHAMBER_OFFSET = np.array([0.1004, 0.5463, 0.0072])\n_CHAMBER_SCORE = np.array([0.3471, 1.6744, 0.0460])\n\n\ndef _chamber(taus, theta, hold, x, times):\n    score = x @ theta[3:]\n    amplitudes = _CHAMBER_OFFSET + score[:, None] * _CHAMBER_SCORE\n    amplitudes[:, :2] += hold[:, None] * theta[:2]\n    basis = np.column_stack((-np.expm1(-times[:, None] / taus), time",
+      "set -e\ncat > /tmp/m99_kernel.py <<'PY'\nfrom m99_inputs import *\nfrom scipy.optimize import least_squares\nlab=g['lab_id']; st=g['stratum']; X=m._features(g,g)[-len(lab):]; a=th[2]+X@th[3:]; p,h,_=cg\nT=np.r_[t,0.]; D=np.vstack((E,er)); obs=np.c_[y,yr]; hold=h[:,None]*(D[:,:2]@th[:2]); R=obs-hold\nk=(a@R)/(a@a); print('times',t.round(4)); print('empirical kernel',k.round(5)); print('kernel residual by horizon',np.sqrt(np.mean((R-a[:,None]*k)**2,0)).round(5)); print('time slopes relative to hold', np.linalg.lstsq(np.c_[h,a],obs,rcond=None)[0][0].round(5)); print('nominal hold kernels',(D[:,:2]@th[:",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=p.read_text(); a=s.index('# Chamber response'); b=s.index('def solve_batch',a)\ns=s[:a]+'''def _chamber(taus, theta, hold, x, times):\n    # Chamber equilibration resets the branch memory. The drift rate\n    # starts at its intrinsic value and decays as 1 / (1 + t).\n    drift = theta[2] + x @ theta[3:]\n    branch = hold[:, None] * theta[:2]\n    basis = -np.expm1(-times[:, None] / taus)\n    return (branch @ basis.T + drift[:, None] * np.log1p(times),\n            branch @ (1.0 / taus) + drift)\n\n\n'''+s[b:]; p"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m99_c03_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py",
+      "selected_channels": [
+        "m99_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5069,
+        "sha256": "c8d99b1c46e674b1c008902a102fbe54957f537697e4e9001faf0be09049be91",
+        "content_addressed_ref": "content_addressed_blobs/c8d99b1c46e674b1c008902a102fbe54957f537697e4e9001faf0be09049be91.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "fmt"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "8b648c9edc6f1a2cf7deb3af2da59018f08e781a158b5e86c54a6788f71f7406",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np=Path('/holdout_task/batch_solver.py')\ns=p.read_text(); a=s.index('# Chamber response'); b=s.index('def solve_batch',a)\ns=s[:a]+'''def _chamber(taus, theta, hold, x, times):\n    # Chamber eq",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8b648c9edc6f1a2cf7deb3af2da59018f08e781a158b5e86c54a6788f71f7406",
+        "expected_candidate_sha256": "8b648c9edc6f1a2cf7deb3af2da59018f08e781a158b5e86c54a6788f71f7406",
+        "computed_candidate_sha256": "8b648c9edc6f1a2cf7deb3af2da59018f08e781a158b5e86c54a6788f71f7406",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5069
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_8b648c9e"
+    }
+  },
+  "structure": {
+    "full_producer_count": 9,
+    "reusable_ast_function_closures": [
+      {
+        "name": "fmt",
+        "code": "def fmt(x):\n    return np.round(x, 6).tolist()"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54e5cd43a2d04c74b84f9f44eb4179d7",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:30.916988+00:00",
+  "ended_at_utc": "2026-11-27T19:59:52.433257+00:00",
+  "request_sha256": "062097d08bb89e59541e2912c6f7feb9fba22bcef29e8b730a4c1c5eb88dcc1f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52004,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31684,
+    "cached_tokens": 13696,
+    "completion_tokens": 825
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _basis, _deployment_features, _predict_chamber\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ndataset = item['dataset']\\nfit = solve_batch(dataset)\\ncal = calibrate_upstream({**dataset, 'chamber_verification_trials': item['campaign_diagnostics']})\\nq = cal['chamber_verification_trials']\\ntaus, theta = fit['estimated_taus'], fit['hereditary_weights']\\nfeatures = _deployment_features(q)\\n_, full = _basis(taus, q['past_channel_raw'].sum(-1), q['hold_channel_raw'].sum(-1), features, cal['past_dt'], cal['eval_times'])\\ncurve, reset = _predict_chamber(q, taus, theta, cal['eval_times'])\\nobs = q['instant_rate_obs']\\nfull_p90, reset_p90 = [float(np.quantile(np.abs(p-obs), .9)) for p in (full @ theta, reset)]\\nlate_p90 = float(np.quantile(np.abs(curve[:, -3:] - q['strain_curves_obs'][:, -3:]), .9))\\nprint(f'ng_t06 boundary evidence: full-history initial-rate p90={full_p90:.6f}, reset initial-rate p90={reset_p90:.6f}, reset late-strain p90={late_p90:.6f}')\\nassert reset_p90 < .012 and full_p90 > 10 * reset_p90 and late_p90 < .015\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber retains benchtop stress history -> H2 chamber resets both branches; leave-one-coupon-out late-strain p90 was 0.00581, and the boundary intervention gave reset rate p90 of 0.01156 versus 1.45504 for full history.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the combined validator and intervention command\",\n      \"rejected_reason\": \"The schema already passed; the unresolved issue is whether the host accepts the boundary evidence from a standalone read-only probe.\"\n    }\n  ],\n  \"rationale\": \"Compare reset and full-history predictions on untouched chamber measurements using the same intrinsic fit from the actual batch entry point. If the reset loses its measured advantage, revisit the boundary law; otherwise keep the verified artifacts unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b9c9cebb670b76f13b0a6ef6f6bf82982fe105a22e91ef4d3f68abd5cb8d8925",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22666.22,
+      "usage_known": true,
+      "prompt_tokens": 31684,
+      "cached_tokens": 13696,
+      "completion_tokens": 825
+    }
+  ]
+}

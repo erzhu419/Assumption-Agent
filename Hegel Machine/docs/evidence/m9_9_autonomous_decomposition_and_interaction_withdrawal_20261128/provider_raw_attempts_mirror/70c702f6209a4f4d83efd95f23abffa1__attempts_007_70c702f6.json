@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70c702f6209a4f4d83efd95f23abffa1",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:06:46.697459+00:00",
+  "ended_at_utc": "2026-11-27T20:07:09.730996+00:00",
+  "request_sha256": "6fbde8adb7e8ca3c625881fef6c5fc9fac6319c2f97fa9a2f9a92c703578310a",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44879,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29355,
+    "cached_tokens": 13696,
+    "completion_tokens": 871
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /holdout_task/batch_solver.py <<'PY'\\nfrom importlib.util import module_from_spec, spec_from_file_location\\nfrom pathlib import Path\\n\\n\\ndef _load_sibling(name):\\n    spec = spec_from_file_location(name, Path(__file__).with_name(name + '.py'))\\n    module = module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\n\\n_up = _load_sibling('_verified_upstream')\\n_dn = _load_sibling('downstream_solver')\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return _dn.solve_downstream(_up.calibrate_upstream(dataset))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('batch',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; pay=json.load(open(p+'_upstream_param_payload.json'))\\na=m.solve_batch(d); b=m._dn.solve_downstream(m._up.calibrate_upstream(d,pay))\\nfor k in a:\\n assert np.isfinite(a[k]).all(),k\\n print(k, 'shape',np.shape(a[k]),'max dynamic-vs-staged calibration difference',np.max(np.abs(a[k]-b[k])))\\nprint('taus',a['estimated_taus'],'weights',a['hereditary_weights'])\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print(e['completed_campaign_short_name'], {k:v for k,v in e.items() if k!='completed_campaign_short_name' and k!='facility_telemetry_trace' and not isinstance(v,(list,dict))}, 'other structured fields',[k for k,v in e.items() if isinstance(v,(list,dict)) and k!='facility_telemetry_trace'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust benchtop fit → H2 preload reset with mixed drift; standard schema passed, but isolated loading failed before predictions and blind chamber error remains unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adjust the validator’s import path\",\n      \"rejected_reason\": \"That would leave the submitted entrypoint dependent on the caller’s import path.\"\n    }\n  ],\n  \"rationale\": \"Load the two sibling modules relative to the entrypoint to repair isolated execution, and invoke the verified upstream’s dynamic bridge fit as requested. Compare predictions against the staged calibration to detect any material discrepancy before testing the benchtop fit across labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6add6e423f05a1d8f77e136d6679202daef850e80a515e31cc33e1883e807969",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24180.69,
+      "usage_known": true,
+      "prompt_tokens": 29355,
+      "cached_tokens": 13696,
+      "completion_tokens": 871
+    }
+  ]
+}

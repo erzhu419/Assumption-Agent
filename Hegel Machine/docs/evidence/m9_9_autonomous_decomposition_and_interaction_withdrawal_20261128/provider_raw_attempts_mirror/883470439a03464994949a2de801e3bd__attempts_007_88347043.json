@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "883470439a03464994949a2de801e3bd",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:35.489051+00:00",
+  "ended_at_utc": "2026-11-27T19:46:54.735109+00:00",
+  "request_sha256": "555bd10ca503f0985f109c8c70f82fd89e45c0e625f1b654d6b32e2e4089e454",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48527,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31990,
+    "cached_tokens": 13696,
+    "completion_tokens": 685
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward\\n\\nwith open('public_batch.pkl', 'rb') as stream:\\n    cases = pickle.load(stream)\\nerrors = []\\nfor case in cases:\\n    study = case['study']\\n    response, _ = _forward(study)\\n    for pulse in case['campaign_diagnostics'] or []:\\n        calibrated = calibrate_upstream({**study, 'y_obs_raw': pulse['y_pulse_raw']}, None)\\n        residual = response @ pulse['w_pulse'] - calibrated['y_obs_raw']\\n        by_shift = residual.reshape(len(study['mu_shifts']), -1)\\n        errors.extend(np.sqrt(np.mean(by_shift**2, axis=1)))\\nassert errors, 'No tracer pulse slices tested'\\nworst = max(errors)\\nprint(f'Periodic boundary: {len(errors)} public pulse-by-shift slices, worst RMSE={worst:.6e}')\\nassert worst < 2e-6, 'Saved periodic operator does not match calibrated tracer pulses'\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (uncoupled walls) -> H2 (periodic upwind seams on both axes); independent verification measured worst pulse-by-shift RMSE 6.697e-7 and worst KKT gap 3.443e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and independent numerical checks passed, but the host did not accept the combined check as evidence for the boundary correction. Run a separate read-only tracer test against the saved forward operator without invoking the validator. A failure would reopen the boundary or calibration diagnosis; a pass needs no artifact edits.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "087d8065bd2d450ad0167115cf59c78194392eaa64c34a7e343044253d0fe829",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20369.3,
+      "usage_known": true,
+      "prompt_tokens": 31990,
+      "cached_tokens": 13696,
+      "completion_tokens": 685
+    }
+  ]
+}

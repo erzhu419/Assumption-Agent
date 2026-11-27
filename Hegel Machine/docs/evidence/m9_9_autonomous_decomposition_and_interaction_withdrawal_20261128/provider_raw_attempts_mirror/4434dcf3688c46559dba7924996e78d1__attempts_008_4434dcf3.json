@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4434dcf3688c46559dba7924996e78d1",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:55.139081+00:00",
+  "ended_at_utc": "2026-11-27T19:59:26.705655+00:00",
+  "request_sha256": "471493e1801739ef47ea9e82d606990b74e1837dbbdb8ded3dd6b3ee68833f46",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 43082,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29261,
+    "cached_tokens": 13696,
+    "completion_tokens": 1298
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, sys\\nimport numpy as np\\nfrom scipy.sparse import csc_matrix\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom chamber_probe import axis, response, data\\nfrom downstream_solver import _responses, solve_downstream\\ns, W, Y = data()\\n# Allow independent endpoint choices, including a diffusive seam without upwind advection.\\nlibs = []\\nfor a in ('x', 'y'):\\n    rows = {k: axis(s,a,k).toarray() for k in ('open','reflect','periodic')}\\n    d = dict(s); d['vel_'+a] = np.zeros_like(s['vel_'+a]); rows['seam_diffusion'] = axis(d,a,'periodic').toarray()\\n    choices = []\\n    for l, r in itertools.product(rows, repeat=2):\\n        A = rows['reflect'].copy(); A[0] = rows[l][0]; A[-1] = rows[r][-1]\\n        choices.append(((l,r),csc_matrix(A)))\\n    libs.append(choices)\\nlabels, errors = [], []\\nfor (lx, ax), (ly, ay) in itertools.product(*libs):\\n    labels.append(lx+ly); errors.append(response(s,ax,ay)@W-Y)\\nE = np.asarray(errors)\\nexpected = labels.index(('periodic','periodic','reflect','reflect'))\\nS, _ = _responses(s)\\nnp.testing.assert_allclose(S@W-Y,E[expected],atol=1e-11,rtol=0)\\nZ = s['Z_nuisance']\\nns = len(s['sensor_ij']); nm = len(s['mu_shifts']); nobs = len(Y)\\nassert nobs == ns*nm and ns%4==0\\nfor name, groups in [('rosette', [np.concatenate([np.arange(j,j+4)+ns*k for k in range(nm)]) for j in range(0,ns,4)]), ('shift', [np.arange(ns)+ns*k for k in range(nm)])]:\\n    worst, margin = 0., np.inf\\n    for hold in groups:\\n        keep = np.setdiff1d(np.arange(nobs),hold); z = Z[keep]\\n        P = np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\n        train = E[:,keep,:]\\n        gamma = P@train\\n        for t, e in ((train,E[:,hold,:]),(train-z@gamma,E[:,hold,:]-Z[hold]@gamma)):\\n            scores = np.sqrt(np.mean(t*t,axis=(1,2))); winner = scores.argmin()\\n            assert winner == expected,(name,labels[winner])\\n            worst = max(worst,np.sqrt(np.mean(e[winner]**2)))\\n            margin = min(margin,np.partition(scores,1)[1]/scores[winner])\\n    print(f'{name}: {len(groups)} folds x 2 nuisance treatments; worst held-out RMSE {worst:.4g}; smallest runner-up/training RMSE ratio {margin:.4g}')\\n# Audit omission or double application of the specified ridge residualizer on measured data.\\ny = s['y_obs_raw']; P = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nX = S-Z@(P@S); r = y-Z@(P@y)\\nout = solve_downstream(s); w = out['weights']; e = X@w-r\\ncert = out['kkt_certificate']; J = .5*(e@e+s['source_ridge']*(w@w))\\nassert abs(J-cert['primal_objective']) < 1e-11\\nprint('measured objective:', J, 'dual gap:', J-cert['dual_lower_bound'], 'unprofiled residual norm:', np.linalg.norm(S@w-y), 'profiled residual norm:', np.linalg.norm(e))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 common wall law → H2 periodic x and reflecting y; worst held-out pulse RMSE is 1.98e-6, with endpoint-level and nuisance-conditioned holdouts pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test classifier balance, relay modes, or stochastic drift operators\",\n      \"rejected_reason\": \"The documented task is a steady transport inversion with no class labels, relay state, or stochastic drift equation. The relevant checks are endpoint stencil completeness and nuisance-conditioned boundary selection.\"\n    }\n  ],\n  \"rationale\": \"Allow all four endpoints to vary independently and select the boundary law without each rosette or shift in turn, both before and after nuisance fitting. A change in the selected law would reveal an unresolved boundary ambiguity and warrant revisiting the stencil; agreement with clear margins supports retaining the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "607f86a113f3b556d0ea6f4591c0543864c4b708c685bf60a895fdf12833f3f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32705.24,
+      "usage_known": true,
+      "prompt_tokens": 29261,
+      "cached_tokens": 13696,
+      "completion_tokens": 1298
+    }
+  ]
+}

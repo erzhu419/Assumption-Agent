@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f197b41d0fdd44189ac7208d7e6df967",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:52.813266+00:00",
+  "ended_at_utc": "2026-11-27T20:03:30.368474+00:00",
+  "request_sha256": "644a21c715db951e8d91e603131c08525b3883b277682927cfd6b0fdebfe76fd",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61651,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36045,
+    "cached_tokens": 14976,
+    "completion_tokens": 1599
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ns = s.replace('def _fit_calibration(', 'def _fit_calibration_robust(', 1)\\nmarker = '\\\\ndef _sensor('\\nassert marker in s and 'def _fit_calibration_robust(' in s\\np.write_text(s.replace(marker, '''\\ndef _fit_calibration(ref, raw):\\n    \\\"\\\"\\\"Find the sensor terms from the current sweeps, then refit the inliers.\\\"\\\"\\\"\\n    robust = _fit_calibration_robust(ref, raw)\\n    coefficients = np.zeros_like(robust)\\n    for j, f in enumerate(robust):\\n        design = np.column_stack((np.ones(len(ref)), ref, ref[:, j]**3,\\n                                  *[ref[:, a] * ref[:, b] for a, b in _PAIRS]))\\n        residual = design @ f - raw[:, j]\\n        center = np.median(residual)\\n        scale = max(1e-10, 1.4826 * np.median(np.abs(residual - center)))\\n        inliers = np.abs(residual - center) < 6 * scale\\n        active = np.abs(f) > 10 * scale\\n        coefficients[j, active] = np.linalg.lstsq(\\n            design[inliers][:, active], raw[inliers, j], rcond=None)[0]\\n    return coefficients\\n\\n\\ndef _sensor(''', 1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nfor item in batch:\\n    s = item['study']; result = m.solve_batch(s); w = result['weights']; c = result['kkt_certificate']\\n    S, U = m._responses(s); y = m._calibrate(s); Z = s['Z_nuisance']; cap = s['u_box']; budget = s['total_budget']; ridge = s['source_ridge']\\n    sweep = s['sensor_calibration_sweeps']; fit = m._fit_calibration(sweep['ref_rosette'], sweep['raw_rosette'])\\n    raw_hat = np.stack([m._sensor(q, fit)[0] for q in y.reshape(-1, 4)]).ravel()\\n    assert np.max(abs(raw_hat-s['y_obs_raw'])) < 1e-8\\n    pulse_errors = []\\n    for p in item.get('campaign_diagnostics') or []:\\n        raw = np.stack([m._sensor(q, fit)[0] for q in (S @ p['w_pulse']).reshape(-1, 4)]).ravel()\\n        pulse_errors.append(np.sqrt(np.mean((raw-p['y_pulse_raw'])**2)))\\n    assert max(pulse_errors, default=0) < 3e-6\\n    assert np.max(abs(result['terminal_field'] - np.tensordot(w, U, axes=1))) < 1e-11\\n    assert np.allclose(c['weights'], w, rtol=0, atol=1e-12)\\n    worst = 0.\\n    for omit in [-1, *range(len(s['mu_shifts']))]:\\n        keep = np.repeat(np.arange(len(s['mu_shifts'])) != omit, len(s['sensor_ij']))\\n        z = Z[keep]; P = np.eye(len(z)) - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n        X, r = P @ S[keep], P @ y[keep]\\n        H = X.T @ X + ridge * np.eye(len(w)); b = -X.T @ r\\n        for total in ((budget,) if omit == -1 else (budget, 0., cap, len(w)*cap)):\\n            q, nu = (w, c['nu_sum']) if omit == -1 else m._box_simplex(H, b, cap, total)\\n            g = X.T @ (X @ q - r) + ridge*q; low = np.maximum(g-nu, 0); up = np.maximum(nu-g, 0)\\n            assert abs(q.sum()-total)<1e-10 and min(q)>-1e-10 and max(q)<cap+1e-10\\n            worst = max(worst, np.max(abs(q*low)), np.max(abs((cap-q)*up)))\\n            if omit == -1:\\n                J = .5*(np.linalg.norm(X@q-r)**2 + ridge*(q@q)); D = J-g@q+nu*total+cap*np.minimum(g-nu,0).sum()\\n                assert max(abs(J-D),abs(J-c['primal_objective']),abs(D-c['dual_lower_bound'])) < 1e-10\\n                assert np.max(abs(low-c['lam_lower']))<1e-10 and np.max(abs(up-c['lam_upper']))<1e-10\\n    assert worst < 1e-10\\n    print('worst tracer RMSE', max(pulse_errors, default=0), 'public dual gap', J-D, 'worst stress-slice complementarity', worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 full robust polynomial → H2 sparse inlier refit with unchanged periodic-x/reflecting-y transport; worst fold-and-shift tracer-induced relative error fell from 2.73e-5 to 2.48e-5 for weights and from 1.00e-5 to 9.29e-6 for fields.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the full polynomial fit\",\"rejected_reason\":\"The sparse refit lowered worst-case error in both downstream quantities, not just raw tracer RMSE, while retaining the supported sensor terms.\"}],\"rationale\":\"Fit the sparse calibration from each study’s sweeps without changing the verified transport or optimizer. Check the edited artifact in isolation for inversion failures and verify that the changed observations still yield valid weights, terminal fields, and KKT certificates across shift omissions and active bounds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "e787b88947dd1879ed64ba16beee14356e93b9e36608e9d655a862222d95cf52",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38702.47,
+      "usage_known": true,
+      "prompt_tokens": 36045,
+      "cached_tokens": 14976,
+      "completion_tokens": 1599
+    }
+  ]
+}

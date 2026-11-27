@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e0563171783428181982324ce69caff",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:46.092532+00:00",
+  "ended_at_utc": "2026-11-27T19:51:14.504539+00:00",
+  "request_sha256": "d13ccf0dc5903c4bc87d6fa22f5a36c4b4ce9ef8cb1f3f609cef00d74e4ad737",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 28688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24584,
+    "cached_tokens": 5504,
+    "completion_tokens": 1170
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom pathlib import Path\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']\\nprint('axis rows\\\\n',np.round(np.c_[x,y][:16],7)); print('bank fields',[(k,np.shape(v)) for k,v in c['single_bank_sweeps'].items()]); print('observation shape',s['y_obs_raw'].shape)\\nlog=json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text())\\nfor r in log:\\n print('apparatus', {k: ('list',len(v)) if isinstance(v,list) else str(v)[:900] for k,v in r.items()})\\nPY\\ncat >/tmp/rosette_compare.py <<'PY'\\nimport pickle,itertools,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; n=len(x)\\ndef design(x,powers):\\n return np.column_stack([np.prod(x[:,p],axis=1) for p in powers])\\ndef robust(a,b):\\n w=np.ones(len(a))\\n for _ in range(30):\\n  fit=np.linalg.lstsq(a*w[:,None], b*w[:,None],rcond=None)[0]\\n  e=np.linalg.norm(a@fit-b,axis=1)\\n  w=1/np.sqrt(1+(e/max(2.5*np.median(e),1e-9))**2)\\n return fit\\nrng=np.random.default_rng(34)\\nfolds=np.array_split(rng.permutation(n),5)\\nfor degree in range(1,5):\\n for sep in ([False,True] if degree>1 else [False]):\\n  powers=[p for d in range(degree+1) for p in itertools.combinations_with_replacement(range(4),d) if not sep or len(set(p))<=1]\\n  a=design(x,powers)\\n  if len(powers)>50:continue\\n  pred=np.empty_like(y)\\n  for val in folds:\\n   train=np.setdiff1d(np.arange(n),val)\\n   pred[val]=a[val]@robust(a[train],y[train])\\n  e=np.linalg.norm(pred-y,axis=1)\\n  f=robust(a,y); ef=np.linalg.norm(a@f-y,axis=1)\\n  print('degree, separable',degree,sep,'oof percentiles',np.round(np.percentile(e,[25,50,75,85,90,95,100]),7),'fit percentiles',np.round(np.percentile(ef,[50,85,90,95]),7),'spike rows',np.where(ef>2)[0])\\n  if degree==3 and not sep:\\n   print('cubic coefficients',[(p,np.round(v,5).tolist()) for p,v in zip(powers,f)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_compare.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (independent channels) → H2 (coupled nonlinear forward response); measured off-axis changes reach 0.98 raw units, with held-out model error pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"A channel's raw response depends only on its own reference signal.\",\n    \"empirical_witness\": \"Varying only reference channel 0 from -1.2 to 1.3 shifts raw channel 3 from approximately -0.392 to 0.591.\",\n    \"causal_blanket_diagnosis\": \"An independent response omits off-diagonal dependence visible under single-axis excitation.\",\n    \"sublated_pivot\": \"Fit a coupled forward response and compare separable nonlinear basis terms with mixed terms under rowwise robust fitting.\",\n    \"risk_kind\": \"systematic cross-channel calibration bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a coupled affine model without testing nonlinear terms\",\n      \"rejected_reason\": \"The axis sweeps show curvature; held-out residuals will show whether it matters and whether mixed nonlinear terms are needed.\"\n    }\n  ],\n  \"rationale\": \"Repair the failed apparatus-log inspection and use held-out sweep predictions to distinguish missing nonlinear terms from EMI spikes. The residual distribution and coefficient pattern will guide the choice of a compact invertible response.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "ea6e0ede3030f4711eebf4eea95d164611678f151ddbdf1d432ddc4e7a24bea8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29561.14,
+      "usage_known": true,
+      "prompt_tokens": 24584,
+      "cached_tokens": 5504,
+      "completion_tokens": 1170
+    }
+  ]
+}

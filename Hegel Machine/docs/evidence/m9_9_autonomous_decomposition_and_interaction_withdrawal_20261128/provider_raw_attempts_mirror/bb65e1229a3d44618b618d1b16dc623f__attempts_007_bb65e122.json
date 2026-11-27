@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb65e1229a3d44618b618d1b16dc623f",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:26:41.847827+00:00",
+  "ended_at_utc": "2026-11-27T20:27:13.202924+00:00",
+  "request_sha256": "5b86d489b257dde234e708d74387e8ffff247d98f1326f73a6b2b1bcc927c877",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39630,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29131,
+    "cached_tokens": 14976,
+    "completion_tokens": 1207
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; raw=c['bridge_raw']; true=c['true_channel_loads']; a=m._bridge_basis(true); ids=np.arange(len(raw)); variants=('linear','quadratic','sparse cubic','full cubic','cubic plus rational probes'); scores={k:[] for k in variants};\\n# Add bounded pair gains and signed sums/differences to test for bridge response that the cubic misses.\\nextra=[]\\nfor j in range(4):\\n for k in range(j+1,4):\\n  for sign in (-1,1):\\n   q=true[:,j]+sign*true[:,k]; g=1/(1+q*q)\\n   extra.extend((g-1,true[:,j]*g,true[:,k]*g))\\naz=np.column_stack([a,*extra]);\\nfor fold in range(4):\\n fit=ids%4!=fold; val=~fit\\n sparse=m._calibration({'bridge_raw':raw[fit],'true_channel_loads':true[fit]}); rf=np.linalg.norm(a[fit]@sparse-raw[fit],axis=1); good=np.flatnonzero(fit)[rf<0.01]; ref=np.linalg.norm(a[val]@sparse-raw[val],axis=1); clean=ref<0.01\\n for name,basis,n in [('linear',a,5),('quadratic',a,15),('sparse cubic',a,a.shape[1]),('full cubic',a,a.shape[1]),('cubic plus rational probes',az,az.shape[1])]:\\n  basis=basis[:,:n]; coef=sparse if name=='sparse cubic' else np.linalg.lstsq(basis[good],raw[good],rcond=None)[0]; e=np.linalg.norm((basis[val]@coef-raw[val])[clean],axis=1); scores[name].append(np.quantile(e,.9))\\nprint('worst-fold p90 clean held-sweep raw residual', {k:round(max(v),7) for k,v in scores.items()}); print('bench fields',list(tr),'blind diagnostics',i.get('campaign_diagnostics') is None)\\nb=m._calibration(c); n=len(tr['lab_id']); x=m._features(tr,te); co=m._coupon_inputs(tr,x[:n],b); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs'];\\nfor lab in np.unique(tr['lab_id']):\\n q=tr['lab_id']==lab; f,w=m._fit(tuple(v[~q] for v in co),dt,t,y[~q],r[~q]); a,z=m._design(f,tuple(v[q] for v in co),dt,t); e=a@w-y[q]; late=e[:,-1]; order=np.argsort(np.nan_to_num(abs(late),nan=-1))[-3:]; print('lab',lab,'signed median strain/rate',round(np.nanmedian(e),6),round(np.nanmedian(z@w-r[q]),6),'late median',round(np.nanmedian(late),6),'largest late residuals',late[order].round(5),'same coupon prior residuals',e[order,-2].round(5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained chamber memory -> H2 archived chamber reset with a calibrated cubic bridge; worst held-lab p90 errors were 0.0216 for strain and 0.0164 for initial rate, with final-time strain p90 at 0.0983.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, Fokker–Planck/HJB, or classification checks\",\n      \"rejected_reason\": \"The specified system is a continuous hereditary regression with no relay state, policy equation, or class labels. Signed residuals within each held-out lab are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Compare bridge equations on held-out measured sweeps; promote an omitted term only if it improves the clean-sweep error materially. Check whether the worst final-time error reflects a lab-wide signed bias or isolated measurement spikes, since only the former would motivate changing the bench fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2cba9e7a06cc573dcaf7bb087003d849c7edec1b44b84e025a4c193abbb1ee9d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32567.28,
+      "usage_known": true,
+      "prompt_tokens": 29131,
+      "cached_tokens": 14976,
+      "completion_tokens": 1207
+    }
+  ]
+}

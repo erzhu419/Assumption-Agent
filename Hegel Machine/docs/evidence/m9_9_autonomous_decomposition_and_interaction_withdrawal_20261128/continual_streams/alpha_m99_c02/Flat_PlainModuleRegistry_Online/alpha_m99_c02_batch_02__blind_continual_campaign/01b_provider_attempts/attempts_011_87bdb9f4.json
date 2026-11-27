@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "87bdb9f4c9a8447ab5d5a8451172aa74",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:33.681856+00:00",
+  "ended_at_utc": "2026-11-27T19:50:09.317018+00:00",
+  "request_sha256": "7d82d328f377082a47f123b5502075f3c1088a77317b41a94638e66ccec84f67",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 62124,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35550,
+    "cached_tokens": 13696,
+    "completion_tokens": 1504
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_margin_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch, _PAY\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _basis, _chamber_features, _features, _loads, _predict_chamber\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\ncal = calibrate_upstream(raw, _PAY)\\ndi = calibrate_upstream({**raw, 'test':item['campaign_diagnostics']}, _PAY)['test']\\nout = solve_batch(raw)\\ntaus, w = out['estimated_taus'], out['hereditary_weights']\\nt, dt = cal['eval_times'], cal['past_dt']\\nx = _chamber_features(di)\\n_, xjoint = _features(cal['train'], di)\\npast, hold = _loads(di, np.r_[0.,np.ones(4)])\\nb, r = _basis(taus, past, hold, x, dt, t)\\nbase = di['strain_0'][:,None] + b[:,:,:2]@w[:2]\\nbr = r[:,:2]@w[:2]\\nd = w[2] + x@w[3:]\\ny, q = di['strain_curves_obs'], di['instant_rate_obs']\\nlab = di['lab_id']; missing = np.isnan(di['coupon_features_raw']).any(1)\\nK = -np.expm1(-t)\\nactual, actual_r = _predict_chamber(di, taus,w,dt,t)\\nnp.testing.assert_allclose(actual,base+d[:,None]*K,atol=1e-12)\\nnp.testing.assert_allclose(actual_r,br+d,atol=1e-12)\\n# Fit any challenger parameters exclusively on other diagnostic labs. Local\\n# reference normalization and imputation use the label-free deployment panel.\\npred = {k:[np.empty_like(y),np.empty_like(q)] for k in ('linear_joint','exp_joint','unit_exp','fitted_exp','rational_time','stress_pair','rational_drift')}\\ngap = hold-past[:,-1]\\nfor j in np.unique(lab):\\n    tr = lab != j; te = ~tr\\n    dj = w[2]+xjoint@w[3:]\\n    def put(k, amp, kernel):\\n        pred[k][0][te] = base[te] + amp[te,None]*kernel\\n        pred[k][1][te] = br[te] + amp[te]\\n    put('linear_joint', dj, t)\\n    put('exp_joint', dj, K)\\n    put('unit_exp', d, K)\\n    for k, make in [('fitted_exp', lambda a: -a*np.expm1(-t/a)), ('rational_time',lambda a:t/(1+a*t*t))]:\\n        a = least_squares(lambda z: (base[tr]+d[tr,None]*make(z[0])-y[tr]).ravel(),[1.],bounds=(.001,20.),loss='soft_l1',f_scale=.003).x[0]\\n        put(k, d, make(a))\\n    # Test an omitted pairwise stress contribution to the drift amplitude,\\n    # and a nonlinear stress-dependent attenuation of the drift itself.\\n    for k, make, bounds in [('stress_pair', lambda a:d+a*gap,(-1.,1.)),('rational_drift',lambda a:d/(1+a*gap*gap),(0.,20.))]:\\n        def res(z):\\n            a=make(z[0])[tr]\\n            return np.r_[(base[tr]+a[:,None]*K-y[tr]).ravel(),br[tr]+a-q[tr]]\\n        a=least_squares(res,[0.],bounds=bounds,loss='soft_l1',f_scale=.003).x[0]\\n        put(k,make(a),K)\\nrmse=lambda a: float(np.sqrt(np.mean(a*a)))\\nfor k,(c,rp) in pred.items():\\n    e, er = c-y,rp-q\\n    groups = [('lab'+str(j),lab==j) for j in np.unique(lab)]+[('complete',~missing),('missing',missing)]\\n    print(k, 'pooled',round(rmse(e),6),round(rmse(er),6),'worst coupon',round(max(map(rmse,e)),6),round(np.max(abs(er)),6),'slices',[(n,round(rmse(e[m]),6),round(rmse(er[m]),6)) for n,m in groups])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop drift → H2 chamber-local exponential drift with retained stress memory; verified worst-coupon strain RMSE is 0.00368 and maximum absolute initial-rate error is 0.00444.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification, relay-mode, or Fokker–Planck/HJB tests\",\n      \"rejected_reason\": \"The supplied observations are continuous strain and rate under a specified hereditary recurrence; there are no class labels, relay states, or stochastic-control variables.\"\n    }\n  ],\n  \"rationale\": \"The audit tests whether a rational kernel or omitted stress-pair term improves worst-slice errors when fitted outside the held-out diagnostic lab. It also compares joint and chamber-local alignment within each lab to see whether the pooled improvement hides a cohort failure. Change the solver only if a challenger materially improves the limiting error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "2f99f21b8da128aa6b2973f63a8aa617409015bce6f794a77c3b97f1f9f04529",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36751.51,
+      "usage_known": true,
+      "prompt_tokens": 35550,
+      "cached_tokens": 13696,
+      "completion_tokens": 1504
+    }
+  ]
+}

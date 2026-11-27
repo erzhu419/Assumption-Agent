@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "90a15e4511d640f1810253e71866bdbf",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:01.520186+00:00",
+  "ended_at_utc": "2026-11-27T19:55:32.519173+00:00",
+  "request_sha256": "b53ff90bc10603619ad75bdedf6acaebd8cea7190b54b1fdad0a3f0c0e714570",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42278,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29850,
+    "cached_tokens": 13696,
+    "completion_tokens": 1256
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_basis_audit.py <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations, product\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _inverse\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n    d=item['dataset']; c=d['calibration_load_cells']\\n    x=c['true_channel_loads']; y=c['bridge_raw']\\n    print('calibration fields:', sorted(c))\\n    axes=np.count_nonzero(x,axis=1)==1\\n    tail=np.max(np.abs(x),axis=1)>=1.4\\n    folds=np.random.default_rng(30).permutation(len(x))%5\\n    splits=[(f'fold {j}',folds==j) for j in range(5)] + [(f'axis {j}',axes & (x[:,j]!=0)) for j in range(4)] + [('high-load tail',tail)]\\n    # Explicit pairwise sums/differences: powers up to cubic are already\\n    # included in the full polynomial comparison. Here test rational curvature.\\n    pairs=[x[:,i]+s*x[:,j] for (i,j),s in product(combinations(range(4),2),(-1,1))]\\n    q=np.column_stack([x,*pairs]); rational=q/(1+0.5*q*q)\\n    nxt=(np.arange(4)+1)%4\\n    stats=[]\\n    for name,held in splits:\\n        train=~held; b=_fit_bridge(x[train],y[train]); yp=_forward(x,b)\\n        residual=np.linalg.norm(yp-y,axis=1)\\n        keep=train & (residual<=max(1e-6,8*np.median(residual[train])))\\n        # The independent observation-scale gap labels held-out spike rows.\\n        clean=held & (np.linalg.norm(y,axis=1)<10)\\n        err0=[]; err1=[]; scale=[]\\n        for j in range(4):\\n            a=np.column_stack((np.ones(len(x)),x,x[:,j]**3,x[:,j]*x[:,nxt[j]]))\\n            # Test small identifiable alternatives one at a time, choosing a\\n            # challenger inside each training fold by leave-one-out residual.\\n            base=np.linalg.lstsq(a[keep],y[keep,j],rcond=None)[0]\\n            options=[(np.inf,0,a,base)]\\n            for k,term in enumerate(rational.T):\\n                z=np.column_stack((a,term)); u=z[keep]\\n                beta=np.linalg.lstsq(u,y[keep,j],rcond=None)[0]\\n                h=np.einsum('ij,ji->i',u,np.linalg.pinv(u))\\n                cv=np.mean(((y[keep,j]-u@beta)/np.maximum(1-h,1e-9))**2)\\n                options.append((cv,k+1,z,beta))\\n            _,_,z,beta=min(options,key=lambda v:v[0]); err0.append(a[clean]@base-y[clean,j]); err1.append(z[clean]@beta-y[clean,j]); scale.append(beta[-1])\\n        r0=np.linalg.norm(np.array(err0),axis=0); r1=np.linalg.norm(np.array(err1),axis=0)\\n        le=np.max(np.abs(_inverse(y[clean],b)-x[clean])); stats.append((r0.max(),r1.max(),le))\\n        print(name,'bridge max baseline / rational:',*(f'{v:.6g}' for v in (r0.max(),r1.max())),'load max:',f'{le:.6g}')\\n    print('worst:', np.max(stats,axis=0))\\n    b=_fit_bridge(x,y); r=np.linalg.norm(_forward(x,b)-y,axis=1)\\n    print('spikes:',np.flatnonzero(r>1).tolist(),'largest ordinary residual:',r[r<=1].max())\\n    print('calibration nuisance fields:', [k for k in c if any(s in k.lower() for s in ('batch','cohort','lab','label'))])\\nPY\\npython3 -I /tmp/bridge_basis_audit.py && cd /holdout_task && python3 validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine/quadratic bridge → H2 sparse cyclic cubic bridge; worst held-out load-component error is 0.000380039, with a rational-basis challenge pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes or within-batch classification accuracy\",\"rejected_reason\":\"The upstream task is static load regression, not relay simulation or classification; inspect calibration metadata for an actual nuisance grouping instead.\"}],\"rationale\":\"A rational correction could reveal omitted bridge curvature despite excellent inverse closure. Select rational terms inside each training split, then compare on real held-out axis sweeps and high-load rows. Revisit the artifact only if the challenger provides a material improvement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3b1a4e0b1ac8c4f9a55b0413618dee04cbbaffa5d210b54bb046fac08a975684",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32128.36,
+      "usage_known": true,
+      "prompt_tokens": 29850,
+      "cached_tokens": 13696,
+      "completion_tokens": 1256
+    }
+  ]
+}

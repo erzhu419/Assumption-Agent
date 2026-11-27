@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3cb513ab9db84c3da34263036a331675",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:25:56.707389+00:00",
+  "ended_at_utc": "2026-11-27T20:26:25.870771+00:00",
+  "request_sha256": "08d3b7b6625065d3c76c78c4fa2fcfee269ad0848102945185a94dd5ef029764",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41041,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29750,
+    "cached_tokens": 14976,
+    "completion_tokens": 1189
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/hegel_continual_archive/alpha_m99_c03_batch_05_solver.py /holdout_task/batch_solver.py\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; c=d['calibration_load_cells']; b=m._calibration(c); x=m._features(tr,te); co=m._coupon_inputs(tr,x[:len(tr['lab_id'])],b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n q=tr['lab_id']==lab; f,w=m._fit(tuple(v[~q] for v in co),dt,t,y[~q],r[~q]); a,z=m._design(f,tuple(v[q] for v in co),dt,t); e=a@w-y[q]; er=z@w-r[q]; print('held lab',lab,'taus',f.round(5),'absolute strain median/p90',np.nanquantile(abs(e),[.5,.9]).round(6),'rate median/p90',np.nanquantile(abs(er),[.5,.9]).round(6),'strain p90 first/last',np.nanquantile(abs(e[:,[0,-1]]),.9,axis=0).round(6))\\nraw=c['bridge_raw']; true=c['true_channel_loads']; residual=np.linalg.norm(m._bridge_basis(true)@b-raw,axis=1); good=residual<.01; bh=m._calibration({'bridge_raw':raw[::2],'true_channel_loads':true[::2]}); val=np.arange(len(raw))%2==1; pred=m._recover_loads(raw[val & good],bh); print('held bridge clean rows',np.sum(val & good),'rejected full sweeps',np.sum(~good),'sum error q50/q90/max',np.quantile(abs((pred-true[val & good]).sum(-1)),[.5,.9,1])); print('bridge coefficient terms',[(j,[(m._TERMS[k-1],round(b[k,j],5)) for k in np.flatnonzero(b[:,j]) if k]) for j in range(4)])\\nout=m.solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25; hold=m._recover_loads(te['hold_channel_raw'],b).sum(-1); drift=np.column_stack((np.ones(len(hold)),x[len(tr['lab_id']):])); e=1e-6; curve0,_=m._deployment(tau,theta,(None,hold,drift),np.array([0.,e])); print('deployment zero offset',abs(curve0[:,0]).max(),'max rate finite-difference error',abs((curve0[:,1]-curve0[:,0])/e-out['initial_rate_pred']).max()); raw_deployment=np.concatenate([te['hold_channel_raw'],te['past_channel_raw'].reshape(-1,4)]); loads=m._recover_loads(raw_deployment,b); print('deployment inversion residual max',abs(m._bridge_basis(loads)@b-raw_deployment).max())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber retains loading history -> H2 use the archived reset law supported by the exact trace match; calibration inverse absolute channel error is 2.53e-4 at p95, and held-lab error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the archived chamber profile on the public batch\",\n      \"rejected_reason\": \"The deployment coupons have no strain or rate labels; refitting would substitute bench behavior for a different chamber regime.\"\n    }\n  ],\n  \"rationale\": \"Stage the solver for the matching apparatus regime. Held-lab and held-sweep errors will show whether to change the bench fit or calibration; the zero-time derivative check will catch a mismatch between the strain and initial-rate equations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "795159d0f483166c31bdb878e89cd59cc01b700bbe7e965089440603b0a98b18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30378.41,
+      "usage_known": true,
+      "prompt_tokens": 29750,
+      "cached_tokens": 14976,
+      "completion_tokens": 1189
+    }
+  ]
+}

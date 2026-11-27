@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "65eb871ace6043a4b8cb35260e107636",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:09:54.838571+00:00",
+  "ended_at_utc": "2026-11-27T20:10:21.710271+00:00",
+  "request_sha256": "6d5c04351f0984996838667c178c2f64e7d6201dbcade5645a0eb4bdca066de6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27087,
+    "cached_tokens": 14976,
+    "completion_tokens": 1065
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '68,145p' /tmp/hegel_continual_archive/alpha_m99_c03_batch_03_solver.py; cat >/tmp/chamber_probe.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/alpha_m99_c03_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=item['dataset']; d=item['campaign_diagnostics']; tr=ds['train']; te=ds['test']; t=ds['eval_times']; dt=ds['past_dt']; n=len(tr['lab_id']); p=len(te['lab_id'])\\nkeys=('lab_id','stratum','coupon_features_raw','ref_coupons'); both={k:np.concatenate((te[k],d[k])) for k in keys}\\nx=m._features(tr,te); xd=m._features(tr,both)[n+p:]; xd2=m._features(tr,d)[n:]; co=m._calibration(ds['calibration_load_cells']); inp=m._coupon_inputs(tr,x[:n],co); inp_d=m._coupon_inputs(d,xd,co)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; yd=d['strain_curves_obs']-d['strain_0'][:,None]; rd=d['instant_rate_obs']; tau,th=m._fit(inp,dt,t,y,r)\\ndef score(e): return np.round([np.median(abs(e)),np.sqrt(np.mean(e**2)),np.max(abs(e))],6).tolist()\\nif __name__=='__main__':\\n print('material',tau,th,'diagnostic feature delta',np.max(abs(xd-xd2)),'missing',np.isnan(d['coupon_features_raw']).sum(axis=0))\\n for label,b,xx,obs,rate in [('train',inp,x[:n],y,r),('diagnostics',inp_d,xd,yd,rd)]:\\n  a,g=m._design(tau,b,dt,t); e=obs-a@th; er=rate-g@th\\n  print(label,'inputs',[(v.shape,np.round(np.percentile(v,[0,50,100]),4).tolist()) for v in b], 'curve',score(e),'rate',score(er)); print('curve median by horizon',np.median(e,axis=0).round(5),'rate median',np.median(er).round(5))\\n  if label=='diagnostics':\\n   print('lab/stratum',np.unique(np.c_[d['lab_id'],d['stratum']],axis=0,return_counts=True)); print('first 10 rate residuals and curve residuals at endpoints',np.c_[er,e[:,0],e[:,-1]][:10].round(5)); print('implied OLS weights',np.linalg.lstsq(np.vstack([a.reshape(-1,7),g]),np.r_[obs.ravel(),rate],rcond=None)[0]); print('aux train/test percentiles',*(np.percentile(v['aux_chamber_telemetry'],[0,50,100],axis=0).round(4).tolist() for v in (tr,te)))\\n print('nonzero bridge terms',[(j,[('bias' if i==0 else m._TERMS[i-1],round(v,4)) for i,v in enumerate(co[:,j]) if v]) for j in range(4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop law transfers unchanged -> H2 diagnostic coupons identify a separate chamber law; out-of-fold metrics pending on the 24 observed coupons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the latest apparatus trace as decisive\",\"rejected_reason\":\"The observed diagnostics provide a direct test of the archive-based interpretation.\"}],\"rationale\":\"Compare strain and initial-rate residuals before adding terms. A coherent residual would reject the baseline and guide the choice between altered memory and drift; the feature and calibration checks guard against attributing preprocessing errors to chamber physics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "daa1bde59649c0808b94eeef52ac90435091d3fa9f592566121a43b6482b946c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28056.71,
+      "usage_known": true,
+      "prompt_tokens": 27087,
+      "cached_tokens": 14976,
+      "completion_tokens": 1065
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e44dcdf5238454a80718fb141d136c9",
+  "call_seq": 14,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:42:11.218749+00:00",
+  "ended_at_utc": "2026-11-27T19:42:31.762425+00:00",
+  "request_sha256": "f9a7c9091d396150267ad0952b3b04fcf09a134020a43ace6ea12ba0facd5838",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73290,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40548,
+    "cached_tokens": 14976,
+    "completion_tokens": 752
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']; g = item['campaign_diagnostics']; t = d['eval_times']; labs = g['lab_id']; complete = np.isfinite(g['coupon_features_raw']).all(1)\\nfor tag, path in [('v01','/tmp/batch_solver_v01.py'),('v02','/holdout_task/batch_solver.py')]:\\n    spec = importlib.util.spec_from_file_location(tag,path)\\n    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n    out = m.solve_batch(d); tau = out['estimated_taus']; th = out['hereditary_weights']\\n    x, _ = m._features(g,g)\\n    st = m._stress_map(d['calibration_load_cells']); h = st[0] + g['hold_channel_raw'] @ st[1:]\\n    c,r = m._chamber_response(h,th[2]+x@th[3:],t,tau,th)\\n    e = c + g['strain_0'][:,None] - g['strain_curves_obs']; f = r - g['instant_rate_obs']; mid = len(t)//2\\n    def score(a):\\n        return np.sqrt([np.mean(e[a,:mid]**2),np.mean(e[a,mid:]**2),np.mean(f[a]**2)])\\n    print(tag,'early/late/rate worst lab',np.max([score(labs==l) for l in np.unique(labs)],axis=0),'complete',score(complete),'missing',score(~complete))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 one strain noise scale → H2 bounded horizon-specific scales; worst held-out chamber-lab early/late/rate RMSE fell from 0.008057/0.013739/0.010003 to 0.007871/0.013304/0.009793.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The challenger passed isolated schema validation and improved every worst held-out chamber-lab metric. Compare both exact artifacts on the measured chamber coupons using their full benchtop fits to detect a regression that only appears at full training size. Revert only if the comparison shows a material regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "3327f65399f556677b5460d878025d5205a1e34f4d30fd22d91c821f23d71dc5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21661.06,
+      "usage_known": true,
+      "prompt_tokens": 40548,
+      "cached_tokens": 14976,
+      "completion_tokens": 752
+    }
+  ]
+}

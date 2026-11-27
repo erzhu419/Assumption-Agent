@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee65d2f3ea9d4cb88fa380099db44c0a",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:59:32.661958+00:00",
+  "ended_at_utc": "2026-11-27T20:00:10.044429+00:00",
+  "request_sha256": "661c554427ffd2ad82faa35f0006b1adbfd896101d9f626459e4b4cc9451afae",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46413,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31236,
+    "cached_tokens": 13696,
+    "completion_tokens": 1635
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"export OPENBLAS_NUM_THREADS=1; cd /holdout_task; cat batch_solver.py; tail -9 /tmp/hegel_continual_archive/alpha_m99_c01_batch_02_solver.py; cat > /tmp/chamber_cv.py <<'PY'\\nfrom chamber_probe import *\\nfrom scipy.optimize import least_squares\\n\\ndef feat(mode):\\n if mode=='joint': return xq\\n if mode=='diag': return prior._features(tr,q)[1]\\n if mode=='frozen':\\n  pool=[tr,te]; lab=np.concatenate([g['lab_id'] for g in pool]); strata=np.concatenate([g['stratum'] for g in pool]); ref=np.concatenate([g['ref_coupons'] for g in pool]); raw=np.concatenate([g['coupon_features_raw'] for g in pool]).copy(); z=q['coupon_features_raw'].copy()\\n  for l in np.unique(lab):\\n   a=lab==l; b=q['lab_id']==l; mu=np.median(ref[a].mean(0)); sig=np.median(ref[a].std(0)); raw[a]=(raw[a]-mu)/sig; z[b]=(z[b]-mu)/sig\\n  _,ix,n=np.unique(np.c_[lab,strata],axis=0,return_counts=True,return_inverse=True); w=1/n[ix]; mu=np.nansum(raw*w[:,None],axis=0)/(np.isfinite(raw).T@w)\\n  return np.where(np.isfinite(z),z,mu)\\n if mode=='self': return prior._features(q,q)[1]\\n\\n# Physically motivated amplitude maps, followed by a wider linear alternative.\\npatterns=['hold+drift','all-drift','hold+X','history','interaction']\\ndef basis(z,pattern):\\n dr=beta[2]+z@beta[3:]; o=np.ones(len(z)); h=hq\\n if pattern=='hold+drift': return [np.c_[o,h],np.c_[o,h,dr],np.c_[o,dr]]\\n if pattern=='all-drift': return [np.c_[o,h,dr]]*3\\n if pattern=='hold+X': return [np.c_[o,h,z]]*3\\n if pattern=='history': return [np.c_[o,h,dr,prior._gap(tau,pq,hq,dt)]]*3\\n if pattern=='interaction': return [np.c_[o,h,dr,h*dr]]*3\\n\\ndef fit(B,rows,clock):\\n bs=[b.shape[1] for b in B]\\n def unpack(l): return tau if clock=='bench' else [tau[0],np.exp(l[0])] if clock=='slow' else np.exp(l)\\n def mat(l):\\n  K=modes(np.asarray(unpack(l))); return np.concatenate([b[:,None,:]*K[None,:,j,None] for j,b in enumerate(B)],axis=2)\\n def project(l):\\n  X=mat(l); A=X[rows].reshape(-1,sum(bs)); yy=Y[rows].ravel(); c=np.linalg.lstsq(A,yy,rcond=None)[0]; return (A@c-yy),c,X\\n lo,hi=([np.log(1.2)],[np.log(20)]) if clock=='slow' else (np.log([.3,1.2]),np.log([1.1,20])); start=np.log([tau[1]]) if clock=='slow' else np.log(tau)\\n l=start if clock=='bench' else least_squares(lambda l:project(l)[0],start,bounds=(lo,hi),diff_step=1e-4,max_nfev=45).x\\n _,c,X=project(l); return X@c,unpack(l),np.split(c,np.cumsum(bs)[:-1])\\nif __name__=='__main__':\\n for fm in ['frozen','diag','joint','self']:\\n  z=feat(fm)\\n  for pat in patterns:\\n   for clock in ['bench','slow','free']:\\n    B=basis(z,pat); pred=np.zeros_like(Y); worst=[]\\n    for lab in np.unique(q['lab_id']):\\n     test=q['lab_id']==lab; a,_,_=fit(B,~test,clock); pred[test]=a[test]; worst.append(np.sqrt(np.mean((a[test]-Y[test])**2,axis=0)))\\n    e=pred-Y; a,ts,co=fit(B,np.ones(len(Y),dtype=bool),clock); print(fm,pat,clock,'worst lab curve/rate',np.round([np.max(np.sqrt(np.mean(np.array(worst)[:,:-1]**2,axis=1))),np.max(np.array(worst)[:,-1])],5),'oof',np.round([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))],5),'train',np.round(np.sqrt(np.mean((a-Y)**2)),5),'ts',np.round(ts,4));\\n    if fm=='frozen' and pat=='hold+drift': print('coef', [np.round(v,5) for v in co])\\nPY\\npython3 /tmp/chamber_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Replace the inherited benchtop-history law with a hold-driven chamber response and fit its amplitudes; calibrated chamber rate p95 error is 1.7565 for the benchtop law versus 0.1327 for the archived hold-driven law, before cross-validation.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"Either the benchtop chamber history law or the Batch 02 history transfer remains valid for the current deployment chamber.\",\"empirical_witness\":\"On calibrated diagnostic coupons, both laws have initial-rate p95 absolute error 1.7565; the archived hold-driven law reduces it to 0.1327. The free two-mode diagnostic fit has curve p95 error 0.00407 and rate p95 error 0.00131 in sample.\",\"causal_blanket_diagnosis\":\"Shared material relaxation does not imply that pre-hold stress drives the deployment chamber in the same way; the leading chamber amplitude correlates 0.99 with hold stress.\",\"sublated_pivot\":\"Preserve intrinsic parameter estimation; compare hold, drift, and history amplitude maps using leave-one-lab-out diagnostics.\",\"risk_kind\":\"chamber constitutive transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a third independent chamber clock\",\"rejected_reason\":\"The free three-clock fit sends both slow clocks to the upper bound, so its small in-sample improvement does not establish a third mode.\"}],\"rationale\":\"Leave-one-lab-out errors will distinguish an identifiable chamber transfer from a temporal fit that only explains observed coupons. Compare reference-normalization conventions because scaling mismatches could masquerade as missing chamber terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1b771c24b081bbe6b656f0e149ca365cd774ce1e7d46d9091e9b303e87ff5907",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39711.12,
+      "usage_known": true,
+      "prompt_tokens": 31236,
+      "cached_tokens": 13696,
+      "completion_tokens": 1635
+    }
+  ]
+}

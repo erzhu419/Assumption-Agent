@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac054834415c4f6e920cbce9b7b71e62",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:36:44.355927+00:00",
+  "ended_at_utc": "2026-11-27T19:37:10.754012+00:00",
+  "request_sha256": "3c8c00e6c5a331eb437ecc9cae3451877ea5f673e7157654a1675b36e0b25340",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24358,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24994,
+    "cached_tokens": 14976,
+    "completion_tokens": 1026
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '49,170p' /tmp/hegel_continual_archive/beta_m99_c02_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -22; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,json,numpy as np,itertools,importlib.util\\np='/tmp/hegel_continual_archive/beta_m99_c02_s00_solver.py'; sp=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];s=a['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; np.set_printoptions(precision=5,suppress=True)\\nprint('sweep range',x.min(0),x.max(0),'support counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); i=np.count_nonzero(x,axis=1)==1\\nF=lambda q: np.column_stack([np.prod(x[:,t],axis=1) for t in q]); q=[()]+[(j,) for j in range(4)]; b=np.linalg.lstsq(F(q)[i],y[i],rcond=None)[0]; print('single channel affine',b,'worst residuals single/multiple',np.max(abs((y-F(q)@b)[i]),0),np.max(abs((y-F(q)@b)[~i]),0));\\nfor deg in (1,2,3,4):\\n terms=[t for d in range(deg+1) for t in itertools.combinations_with_replacement(range(4),d)]; X=F(terms); coef=np.linalg.lstsq(X,y,rcond=None)[0]; err=y-X@coef; print('degree',deg,'rank',np.linalg.matrix_rank(X),'rmse',np.sqrt(np.mean(err**2,0)),'nonnegligible terms',[(t,np.round(v,5).tolist()) for t,v in zip(terms,coef) if max(abs(v))>0.001]);\\n if deg==3: print('example joint signals and residual',x[-5:],err[-5:])\\nfor k in range(4):\\n u=c['single_bank_sweeps']; v=u['bank_id']==k;print('bank',k,np.c_[u['ref_signal'][v],u['raw_readout'][v]])\\nS,U=m._responses(s)\\nfor d in a['campaign_diagnostics']:\\n pred=(S@d['w_pulse']).reshape(-1,4); raw=d['y_pulse_raw'].reshape(-1,4); print('pulse baseline per-shift raw rms',np.sqrt(np.mean(((np.c_[np.ones(len(pred)),pred]@b-raw)**2).reshape(3,-1),axis=1)), 'signal range',pred.min(),pred.max())\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n t=np.array(e['facility_telemetry_trace']); print('log',e['completed_campaign_short_name'],t.shape,'mean',t.mean(0),'std',t.std(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived affine rosette and Robin walls -> isolate rosette interactions on calibration sweeps before estimating wall changes from pulses; no residual measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit wall and sensor parameters jointly to the three pulses\",\n      \"rejected_reason\": \"The calibration sweeps can identify sensor interactions independently, so wall changes need not absorb calibration error.\"\n    }\n  ],\n  \"rationale\": \"Compare single-channel and joint-sweep residuals to detect missing interaction terms. Then use the shift-wise baseline pulse residuals to decide whether the wall model needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8ab78911143c5e59c6aceab4d1c5ceb297cc1055dcf434c5c06ae0d3492b886d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27541.3,
+      "usage_known": true,
+      "prompt_tokens": 24994,
+      "cached_tokens": 14976,
+      "completion_tokens": 1026
+    }
+  ]
+}

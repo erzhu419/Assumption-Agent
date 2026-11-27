@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06995940558d431abba1747eba07bf33",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:11.824281+00:00",
+  "ended_at_utc": "2026-11-27T19:57:40.408751+00:00",
+  "request_sha256": "ab20bfd341545c7503f0592bc7094ace86ff5f8f3689b22671b6b85f1af31648",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45128,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29381,
+    "cached_tokens": 13696,
+    "completion_tokens": 1156
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette_sharing.py <<'PY'\\nimport pickle\\nimport sys\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _forward, _inverse\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nb = c['single_bank_sweeps']\\naxis = np.count_nonzero(x, axis=1) == 1\\nhigh = np.max(abs(x), axis=1) >= 1\\n\\ndef expand(p):\\n    return np.column_stack((p[:4], p[4:8], p[4:8, None] * p[None, 8:]))\\n\\ndef pooled(train, base):\\n    xr, yr = x[train], y[train]\\n    solo = np.zeros((len(b['bank_id']), 4))\\n    bank = np.asarray(b['bank_id'])\\n    idx = np.arange(len(bank))\\n    solo[idx, bank] = b['ref_signal']\\n    seed = np.r_[base[:, 0], base[:, 1], np.mean(base[:, 2:] / base[:, 1, None], axis=0)]\\n    # Estimate noise scale on training data only. Mask individual readings\\n    # so an EMI spike need not discard the other three channel readings.\\n    rr = abs(_forward(xr, base) - yr)\\n    sr = abs(_forward(solo, base)[idx, bank] - b['raw_readout'])\\n    gate = max(8 * np.median(np.r_[rr.ravel(), sr]), 1e-9)\\n    rm, sm = rr < gate, sr < gate\\n    def residual(p):\\n        co = expand(p)\\n        return np.r_[(_forward(xr, co) - yr)[rm], (_forward(solo, co)[idx, bank] - b['raw_readout'])[sm]]\\n    return expand(least_squares(residual, seed, gtol=1e-12).x)\\n\\nfolds = [('axis', axis), ('mixed-low', ~axis & ~high), ('mixed-high', ~axis & high)]\\nfor i, ids in enumerate(np.array_split(np.random.default_rng(120).permutation(len(x)), 5)):\\n    folds.append((f'random-{i}', np.isin(np.arange(len(x)), ids)))\\nworst = np.zeros(2)\\nfor name, test in folds:\\n    train = ~test\\n    base = _fit(dict(c, ref_rosette=x[train], raw_rosette=y[train]))\\n    co = pooled(train, base)\\n    clean = test & (np.max(abs(_forward(x, base) - y), axis=1) < 1e-3)\\n    errors = np.array([np.max(abs(_inverse(y[clean], p) - x[clean])) for p in (base, co)])\\n    worst = np.maximum(worst, errors)\\n    print(name, 'n', clean.sum(), 'inverse max independent/shared', *errors)\\nprint('worst independent/shared', *worst)\\nprint('full-fit shared normalized coefficients', (co[:, 2:]/co[:, 1, None]).mean(axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_sharing.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separately fitted cyclic coefficients -> H2 coefficients shared after bank-gain normalization; the verified baseline's worst held-out inverse error is 7.06e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis and downstream checks\",\n      \"rejected_reason\": \"Those checks already passed for the unchanged artifact; the untested question is whether sharing gain-normalized coefficients improves the high-amplitude slice.\"\n    }\n  ],\n  \"rationale\": \"The fitted coupling and curvature coefficients agree after dividing by each bank's gain. Test whether pooling that structure reduces the worst inverse error without worsening other measured slices; keep the verified fit if pooling offers no meaningful benefit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d24cb104999032418f117249cf22da46f3e95c5b936096a1c3f07f7bb44697d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29787.47,
+      "usage_known": true,
+      "prompt_tokens": 29381,
+      "cached_tokens": 13696,
+      "completion_tokens": 1156
+    }
+  ]
+}

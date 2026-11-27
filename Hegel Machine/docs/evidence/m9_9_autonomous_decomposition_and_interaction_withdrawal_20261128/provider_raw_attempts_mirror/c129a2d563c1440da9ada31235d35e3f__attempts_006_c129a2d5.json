@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c129a2d563c1440da9ada31235d35e3f",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:49:23.317110+00:00",
+  "ended_at_utc": "2026-11-27T19:50:08.368938+00:00",
+  "request_sha256": "8cc7242548224d6780185727459fdfd07e389d96d5d96a65752960b404e8bf76",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48125,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31530,
+    "cached_tokens": 13696,
+    "completion_tokens": 1943
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat _verified_upstream.py _upstream_param_payload.json\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, json\\nimport numpy as np\\nfrom scipy.optimize import minimize\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nwith open('_upstream_param_payload.json') as f:\\n    pay = json.load(f)\\ns = item['study']; nx, ny = s['nx'], s['ny']\\n\\ndef axis(a, n, wall):\\n    h = s['L'+a]/(n-1); k = s['kappa_'+a]; v = s['vel_'+a]\\n    A = np.zeros((n,n))\\n    for i in range(n):\\n        if wall != 'periodic' and i in (0,n-1):\\n            j = 1 if i == 0 else n-2\\n            A[i,j] = -k[i]/h**2\\n            A[i,i] = -A[i,j] + (s['robin_'+a]/h if wall == 'robin' else 0)\\n        else:\\n            j, l = (i-1)%n, (i+1)%n\\n            km, kp = (k[i]+k[j])/2, (k[i]+k[l])/2\\n            A[i,j] -= km/h**2+max(v[i],0)/h\\n            A[i,l] -= kp/h**2+max(-v[i],0)/h\\n            A[i,i] = (km+kp)/h**2+abs(v[i])/h\\n    return A\\n\\ndef reference(wall):\\n    L = np.kron(np.eye(ny),axis('x',nx,wall))+np.kron(axis('y',ny,wall),np.eye(nx))+np.diag(s['V_reaction_2d'].flatten(order='F'))\\n    rhs = np.array([mode.flatten(order='F') for mode in s['source_modes']]).T\\n    sample = [int(i+nx*j) for i,j in s['sensor_ij']]\\n    fields = [np.linalg.solve(L+mu*np.eye(nx*ny),rhs) for mu in s['mu_shifts']]\\n    return np.concatenate([f[sample] for f in fields]), fields[-1]\\n\\nrefs = [reference(wall) for wall in ('periodic','reflecting','robin')]\\nS,F = refs[0]; z=s['Z_nuisance']; P=np.eye(len(z))-z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); X=P@S\\ncap,total,ridge=s['u_box'],s['total_budget'],s['source_ridge']; n=S.shape[1]\\npulses = item['campaign_diagnostics']\\nW=np.array([p['w_pulse'] for p in pulses]); preds=np.array([W@r[0].T for r in refs]); cal=[]\\nfor label, payload in [('staged',pay),('dynamic',None)]:\\n    Y=np.array([calibrate_upstream(dict(s,y_obs_raw=p['y_pulse_raw']),payload)['y_obs_raw'] for p in pulses])\\n    err=np.sqrt(np.mean((preds-Y).reshape(3,len(pulses),len(s['mu_shifts']),-1)**2,axis=-1)); loo=[]\\n    for i in range(len(pulses)):\\n        chosen=np.argmin(np.mean(err[:,np.arange(len(pulses))!=i]**2,axis=(1,2)))\\n        assert chosen == 0\\n        loo.append(float(err[chosen,i].max()))\\n    print(label, 'worst held-out pulse/shift RMSE',max(loo),'baseline worst slices',np.max(err[1:],axis=(1,2)))\\n    assert max(loo)<2e-5\\n    cal.append(calibrate_upstream(s,payload))\\n\\ndef verify(label, st, out):\\n    w=out['weights']; k=out['kkt_certificate']; y=P@st['y_obs_raw']\\n    def f(v):\\n        r=X@v-y\\n        return .5*(r@r+ridge*(v@v))\\n    def g(v): return X.T@(X@v-y)+ridge*v\\n    lo=np.array(k['lam_lower']); hi=np.array(k['lam_upper']); nu=k['nu_sum']\\n    station=np.max(abs(g(w)-nu-lo+hi)); comp=max(np.max(abs(w*lo)),np.max(abs((cap-w)*hi))); gap=k['primal_objective']-k['dual_lower_bound']\\n    assert np.all(w>=-1e-12) and np.all(w<=cap+1e-12) and abs(sum(w)-st['total_budget'])<1e-12\\n    assert np.all(lo>=0) and np.all(hi>=0) and np.array_equal(k['weights'],w)\\n    assert max(station,comp,abs(gap),abs(f(w)-k['primal_objective']))<1e-9\\n    field=(F@w).reshape((nx,ny),order='F'); field_err=np.max(abs(field-out['terminal_field']))\\n    assert field_err<1e-10\\n    if 0<st['total_budget']<n*cap:\\n        opt=minimize(f,np.full(n,st['total_budget']/n),jac=g,bounds=[(0,cap)]*n,constraints=[{'type':'eq','fun':lambda v:v.sum()-st['total_budget'],'jac':lambda v:np.ones(n)}],method='SLSQP',options={'ftol':1e-12})\\n        assert opt.success and abs(opt.fun-f(w))<1e-9, opt.message\\n    print(label, 'stationarity',station,'complementarity',comp,'gap',gap,'field max error',field_err,'active bounds',sum(w<1e-10),sum(w>cap-1e-10))\\n\\nverify('public staged',cal[0],solve_downstream(cal[0]))\\nverify('public wrapper',cal[1],solve_batch(s))\\nfor label,budget,obs in [('active faces',total,S@np.linspace(-1,2,n)),('all lower',0,cal[0]['y_obs_raw']),('all upper',n*cap,cal[0]['y_obs_raw'])]:\\n    st=dict(cal[0],total_budget=budget,y_obs_raw=obs); out=solve_downstream(st)\\n    verify(label,st,out)\\n    if label=='active faces': assert np.any(out['weights']<1e-10) and np.any(out['weights']>cap-1e-10)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin or reflecting walls → H2 periodic upwind transport; worst held-out pulse-by-shift RMSE is 3.41e-6 with staged calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema check\",\n      \"rejected_reason\": \"The schema check cannot detect incorrect field ordering or invalid multipliers, and the public solution has no active bounds.\"\n    }\n  ],\n  \"rationale\": \"Use an independent dense stencil in isolated Python to check field ordering and gradient calculations. Exercise both active bounds and endpoint budgets, and compare staged and dynamic calibration on withheld pulses without modifying the public fixtures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2fcad0753002c09253a0eea4b247d2d6ea04677bc498b66ac53b3e7514898507",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46185.71,
+      "usage_known": true,
+      "prompt_tokens": 31530,
+      "cached_tokens": 13696,
+      "completion_tokens": 1943
+    }
+  ]
+}

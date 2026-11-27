@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac3fd07ca61d4c2c842e849040a1dc0e",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:57.168404+00:00",
+  "ended_at_utc": "2026-11-27T19:45:22.489873+00:00",
+  "request_sha256": "ea798527d45386193bc1ff71b83fd69c5517fd4a5bb1a8d3652eee93e0f9dcb9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33715,
+    "cached_tokens": 14976,
+    "completion_tokens": 997
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('batch_solver',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\ns=item['study']; sweep=s['sensor_calibration_sweeps']; x=sweep['ref_rosette']; y=sweep['raw_rosette']\\n# Test saturation along individual channels and along pairwise sums/differences.\\nq=np.column_stack([*x.T]+[(x[:,i]+sgn*x[:,j])/np.sqrt(2) for i in range(4) for j in range(i+1,4) for sgn in (-1,1)])\\nA=np.column_stack([np.ones(len(x)),x]); forms={0:A}\\nfor a in (0.1,0.5,2.):\\n    forms[a]=np.column_stack([A,q**2/(1+a*q**2),q**3/(1+a*q**2)])\\nforms={a:F for a,F in forms.items() if F.shape[1]+2 < len(x)-int(np.ceil(len(x)/5))}\\nrng=np.random.default_rng(204); folds=np.array_split(rng.permutation(len(x)),5)\\nerrors={k:np.empty_like(y) for k in ('affine','nested_rational')}; selected=[]\\nfor test in folds:\\n    train=np.setdiff1d(np.arange(len(x)),test)\\n    def fit(F):\\n        N=F[train]; coef=np.linalg.lstsq(N,y[train],rcond=None)[0]\\n        U,svals,_=np.linalg.svd(N,full_matrices=False); U=U[:,svals>svals[0]*max(N.shape)*np.finfo(float).eps]\\n        loo=(y[train]-N@coef)/(1-(U**2).sum(axis=1))[:,None]\\n        return np.sqrt(np.mean(loo**2,axis=0)).max(), F[test]@coef\\n    scores={a:fit(F) for a,F in forms.items()}; a=min(scores,key=lambda a:scores[a][0]); selected.append(a)\\n    errors['affine'][test]=scores[0][1]-y[test]; errors['nested_rational'][test]=scores[a][1]-y[test]\\nfor label,e in errors.items():\\n    print(label,'worst-channel OOF RMS',np.sqrt(np.mean(e**2,axis=0)).max(),'worst-fold/channel RMS',max(np.sqrt(np.mean(e[f]**2,axis=0)).max() for f in folds))\\nprint('selected saturation parameters (0 = affine):',selected,'tested:',list(forms))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 local walls → H2 periodic upwind walls with affine rosette calibration; worst held-out pulse RMS is 1.75e-6 and worst pulse/shift/bank RMS is 3.40e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the clean-process schema and certificate checks\",\"rejected_reason\":\"The unchanged artifact already passed both checks; repeating them would not test whether the calibration is missing saturation or pairwise terms.\"}],\"rationale\":\"Test the remaining applicable algebraic alternative on real calibration sweeps, selecting the saturation parameter only within each training fold. Revisit calibration only if the challenger materially improves held-out error and can also improve tracer predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "283248551b22fb771893e5ceded367e8754387c138e5ea55f2cd7ffaf2002e39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26482.14,
+      "usage_known": true,
+      "prompt_tokens": 33715,
+      "cached_tokens": 14976,
+      "completion_tokens": 997
+    }
+  ]
+}

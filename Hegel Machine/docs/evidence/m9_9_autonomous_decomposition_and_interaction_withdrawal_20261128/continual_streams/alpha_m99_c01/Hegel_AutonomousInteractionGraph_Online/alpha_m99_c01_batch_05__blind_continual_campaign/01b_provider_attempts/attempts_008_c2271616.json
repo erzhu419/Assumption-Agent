@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2271616ea6f4ef58a61e74218d1bdc7",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:39.571554+00:00",
+  "ended_at_utc": "2026-11-27T20:01:07.213689+00:00",
+  "request_sha256": "4c42a8fa0e79343817982c7d2666306daddcdfb4efe863b75fd9b7a95066b5df",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60673,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37052,
+    "cached_tokens": 13696,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"export OPENBLAS_NUM_THREADS=1; cd /holdout_task; python3 - <<'PY'\\nimport json\\np=json.load(open('public_asset_index.json')); print(list(p)); print(str(p)[:1000])\\nPY\\ncat > /tmp/chamber_sparse.py <<'PY'\\nfrom chamber_cv import *\\nnp.set_printoptions(precision=5,suppress=True)\\nz=feat('self'); d=beta[2]+z@beta[3:]; h=hq; o=np.ones(len(h)); g=prior._gap(tau,pq,h,dt); M=np.isnan(q['coupon_features_raw']).any(1)\\nprint('range drift and hold',d.min(),d.max(),h.min(),h.max())\\n# Use the exact fast hold amplitude implied by the intrinsic material, and test\\n# additional terms against independent lab folds rather than fitting noisy free amplitudes.\\nfor ratio in [1.,1.15,1.18,1.2]:\\n ts=tau*np.array([1,ratio]); K=modes(ts); base=h[:,None]*beta[0]*K[None,:,0]; yy=Y-base\\n for name,b in [('core',[np.c_[d],np.c_[h,d],np.c_[d]]),('affine',[np.c_[o,d],np.c_[o,h,d],np.c_[o,d]]),('interaction',[np.c_[o,d],np.c_[o,h,d,h*d],np.c_[o,d]]),('drift2',[np.c_[o,d,d*d],np.c_[o,h,d,d*d],np.c_[o,d,d*d]]),('memory',[np.c_[o,d],np.c_[o,h,d,g],np.c_[o,d]])]:\\n  A=np.concatenate([v[:,None,:]*K[None,:,j,None] for j,v in enumerate(b)],axis=2); n=A.shape[-1]\\n  def solve(rows):\\n   a=A[rows].reshape(-1,n); y=yy[rows].ravel(); c=np.linalg.lstsq(a,y,rcond=None)[0]; return A@c+base,c\\n  pred=Y.copy(); worst=[]\\n  for lab in np.unique(q['lab_id']):\\n   v=q['lab_id']==lab; p,_=solve(~v); pred[v]=p[v]; e=p[v]-Y[v]; worst.append([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\n  p,c=solve(np.ones(len(Y),bool)); e=pred-Y; print(ratio,name,np.round(np.max(worst,axis=0),5),'complete/missing rms',np.round([np.sqrt(np.mean(e[~M]**2)),np.sqrt(np.mean(e[M]**2))],5),'coef',c)\\n  if ratio==1.18 and name=='affine':\\n   print('row residuals: lab hold drift miss curve_end rate'); print(np.c_[q['lab_id'],h,d,M,(p-Y)[:,-2:]])\\nPY\\npython3 /tmp/chamber_sparse.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Use the intrinsic fast response to constrain the chamber law and test whether drift and slow-mode terms explain the remainder; current worst leave-one-lab-out RMSE is 0.03859 for strain and 0.02311 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep separate unconstrained amplitude regressions\",\n      \"rejected_reason\": \"The fast hold coefficient is already close to the independently fitted material weight; constraining it may improve generalization and make the remaining chamber terms easier to identify.\"\n    }\n  ],\n  \"rationale\": \"Compare the constrained affine law with interaction, nonlinear drift, and residual memory terms on held-out labs. Separate errors on complete and imputed coupons to distinguish a missing physical term from feature alignment error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "60a861d43bda47a2739532ffa35ca9eead5ed8702d555f4f6828aab2bf99687b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27592.52,
+      "usage_known": true,
+      "prompt_tokens": 37052,
+      "cached_tokens": 13696,
+      "completion_tokens": 1072
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e9de28c8b6c4739abec4ffaf05c8ede",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:02:45.271212+00:00",
+  "ended_at_utc": "2026-11-27T20:03:13.852368+00:00",
+  "request_sha256": "1f4b67cd3016d39c86ff4926a1216f43c9a088af4ede7b732eaad2d7f663cc46",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51171,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31670,
+    "cached_tokens": 13696,
+    "completion_tokens": 1179
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\n# Identify only the three gross excursions, independently of any fitted model.\\nspike = np.max(np.abs(y), axis=1) > 8\\nassert np.flatnonzero(spike).tolist() == [13, 14, 15]\\na = m._design(x)\\nbase = m._fit_bridge(x, y)\\naxis = np.count_nonzero(x, axis=1) == 1\\nmixed = np.flatnonzero(~axis)\\nhi = mixed[np.argsort(np.max(np.abs(x[mixed]), axis=1))[-12:]]\\nworst = np.zeros(3)\\nworst_channel = worst_sum = 0.\\nfolds = [(f'axis{i}', np.flatnonzero(axis & (x[:, i] != 0))) for i in range(4)] + [('high mixed', hi)]\\noperational_shift = {}\\nfor label, val in folds:\\n    tr = ~np.isin(np.arange(len(x)), val)\\n    b = m._fit_bridge(x[tr], y[tr])\\n    clean_tr = tr & ~spike\\n    q = np.array([np.linalg.lstsq(a[clean_tr,i,:-1], y[clean_tr,i], rcond=None)[0] for i in range(4)])\\n    keep = val[~spike[val]]\\n    pred = lambda z, coef: np.einsum('nif,if->ni', z, coef)\\n    errors = [np.max(np.abs(p-y[keep])) for p in (x[keep], pred(a[keep,:,:-1], q), pred(a[keep],b))]\\n    worst = np.maximum(worst, errors)\\n    err = m._inverse(y[keep],b)-x[keep]\\n    worst_channel = max(worst_channel, np.max(np.abs(err)))\\n    worst_sum = max(worst_sum, np.max(np.abs(err.sum(axis=-1))))\\n    for group in ('train','test'):\\n        for field in ('past_channel_raw','hold_channel_raw'):\\n            r = d[group][field]\\n            delta = np.abs((m._inverse(r,b)-m._inverse(r,base)).sum(axis=-1))\\n            for lab in np.unique(d[group]['lab_id']):\\n                key = (group, field, int(lab))\\n                operational_shift[key] = max(operational_shift.get(key, 0.), float(np.max(delta[d[group]['lab_id']==lab])))\\nprint('Worst held-out bridge forward error, identity/quadratic/cubic:', worst.tolist())\\nprint('Worst held-out cubic inverse error, individual/summed:', worst_channel, worst_sum)\\nprint('Worst calibration-induced summed-load shift by operational lab/field:', max(operational_shift.items(), key=lambda p:p[1]))\\nassert worst[2] < .001 and worst_channel < .001 and worst_sum < .001\\nassert max(operational_shift.values()) < .001\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: identity or quadratic-only bridge → H2: robust coupled cubic bridge; prior worst clean held-out errors were 0.00027724 per channel and 0.00041140 for summed load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and pairwise feature search or add lab-specific centering\",\n      \"rejected_reason\": \"The prior blocked audit already tested those features. Lab IDs occur on operational histories, not on the paired bridge calibration rows, so a lab-specific correction is not identifiable from those measurements.\"\n    }\n  ],\n  \"rationale\": \"Compare identity, quadratic, and cubic bridge fits on the same held-out rows, with the gross spikes identified independently of model residuals. Propagate each calibration refit through real histories by laboratory and field; a large summed-load shift would warrant reopening the calibration even if held-out raw error stayed small.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e4a4348726dd073d11f6dcec9805c7d58647dc68926bdd14a78e44e3824fceef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29730.18,
+      "usage_known": true,
+      "prompt_tokens": 31670,
+      "cached_tokens": 13696,
+      "completion_tokens": 1179
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "190a355fb2b1442b9b63d625e94ddd0e",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:50.162128+00:00",
+  "ended_at_utc": "2026-11-27T19:57:16.701757+00:00",
+  "request_sha256": "62a19f2bb4d075b2bc9715cd22783a255b4f0c6871d7aa113e9feeeaaf55f787",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43777,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29947,
+    "cached_tokens": 14976,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, json, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nmed=[]\\nfor e in log:\\n a=np.asarray(e['facility_telemetry_trace']); med.append(np.median(a,axis=0)); print(e['completed_campaign_short_name'],'median',np.round(med[-1],3),'IQR',np.round(np.ptp(np.percentile(a,[25,75],axis=0),axis=0),3))\\nprint('latest trace distances to earlier entries',np.round(np.linalg.norm(np.asarray(med[:-1])-med[-1],axis=1),4))\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; l=c['true_channel_loads']; raw=c['bridge_raw']; a=m._bridge_basis(l); rng=np.random.default_rng(704)\\nquad=np.column_stack([l[:,i]*l[:,j] for i,j in itertools.combinations_with_replacement(range(4),2) if (i,j) not in m.PAIRS]); inter=np.column_stack([l[:,i]*l[:,j]*l[:,k] for i,j,k in itertools.combinations_with_replacement(range(4),3) if i!=k]); q=np.column_stack([l,*[l[:,i]+s*l[:,j] for i,j in itertools.combinations(range(4),2) for s in (-1,1)]]); rational=np.column_stack([q/(1+.25*q*q),q/(1+q*q)])\\nscores={k:[] for k in ('current','extra quadratic','extra mixed cubic','rational')}\\nfor va in np.array_split(rng.permutation(len(l)),5):\\n tr=np.setdiff1d(np.arange(len(l)),va); b=m._fit_bridge(l[tr],raw[tr]); clean=np.linalg.norm(a[tr]@b-raw[tr],axis=1)<.0015; check=np.linalg.norm(a[va]@b-raw[va],axis=1)<.0015\\n for key,xx in [('current',a),('extra quadratic',np.column_stack([a,quad])),('extra mixed cubic',np.column_stack([a,inter])),('rational',np.column_stack([a,rational]))]:\\n  coef=np.linalg.lstsq(xx[tr][clean],raw[tr][clean],rcond=1e-9)[0]; err=np.linalg.norm(xx[va][check]@coef-raw[va][check],axis=1); scores[key].append((np.median(err),np.max(err)))\\nfor k,s in scores.items(): print(k,'median of fold medians / worst fold median / worst point',*[round(v,8) for v in (np.median(np.asarray(s)[:,0]),*np.max(s,axis=0))])\\nprint('train/test fields',list(d['train']),list(d['test']))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (missing bridge nonlinearities or wrong chamber regime) → H2 (pair-product/cubic bridge and archived reset-and-routing law); previous worst held-out errors were 0.000423 in total load, 0.01396 in strain, and 0.00839 in rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply classification, relay-mode, or controlled-diffusion audits\",\"rejected_reason\":\"This task predicts continuous strain and rate under a constitutive law; it has no class labels, relay states, or controlled diffusion. Lab effects are addressed by reference standardization and the completed leave-one-lab-out test.\"}],\"rationale\":\"Use held-out calibration sweeps to test whether extra interactions or rational saturation improve prediction, and compare complete telemetry traces to catch a wrong chamber match. Pairwise sums and differences are already in the linear span; their squares are covered by the quadratic challenger, and their rational transforms are tested explicitly.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a15be792fc22bb1a2311d3815ba27c97387f90da31d78aa46dee6515328661a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27692.73,
+      "usage_known": true,
+      "prompt_tokens": 29947,
+      "cached_tokens": 14976,
+      "completion_tokens": 1069
+    }
+  ]
+}

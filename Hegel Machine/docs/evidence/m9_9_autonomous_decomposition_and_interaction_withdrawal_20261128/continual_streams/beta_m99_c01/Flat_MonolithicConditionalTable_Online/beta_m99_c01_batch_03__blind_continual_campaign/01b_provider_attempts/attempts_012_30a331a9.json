@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30a331a9c2784d7aac5e21be58759539",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:47.105621+00:00",
+  "ended_at_utc": "2026-11-27T19:52:21.013712+00:00",
+  "request_sha256": "2a1d8f3794cfa2ea9674e0b8dd269e7232d78c83fc67c92e945d430ec68cc4de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67426,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38600,
+    "cached_tokens": 14976,
+    "completion_tokens": 1432
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_downstream_audit.py <<'PY'\\nimport pickle\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import root\\n\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\ndesign = m['_rosette_design']\\nD = design(x)\\nS, fields = m['_forward'](s)\\nZ = s['Z_nuisance']\\nrho, ridge, cap, budget = (s[k] for k in ('nuisance_ridge','source_ridge','u_box','total_budget'))\\ntargets = s['y_obs_raw'].reshape(-1,4)\\nbase = m['solve_batch'](s)\\nrows = np.arange(len(targets)*4)\\nrosette = (rows % len(s['sensor_ij'])) // 4\\nshift = rows // len(s['sensor_ij'])\\n\\ndef invert(B):\\n    out = []\\n    for target in targets:\\n        start = np.linalg.solve(B[1:5].T, target-B[0])\\n        res = root(lambda v: design(v[None])[0] @ B - target, start, tol=1e-10)\\n        assert np.max(np.abs(res.fun)) < 1e-9\\n        out.append(res.x)\\n    return np.ravel(out)\\n\\ndef estimate(y,tr):\\n    z, a, b = Z[tr], S[tr], y[tr]\\n    p = np.linalg.solve(z.T@z+rho*np.eye(z.shape[1]),z.T)\\n    T, r = a-z@(p@a), b-z@(p@b)\\n    w,_ = m['_box_simplex'](T.T@T+ridge*np.eye(T.shape[1]),-T.T@r,cap,budget)\\n    return w,p@(b-a@w)\\n\\ndef errors(y):\\n    w,_ = estimate(y,rows>=0)\\n    field = np.tensordot(w,fields,axes=1)\\n    rel = lambda a,b: np.linalg.norm(a-b)/np.linalg.norm(b)\\n    result = [rel(w,base['weights']),rel(field,base['terminal_field'])]\\n    for group in (rosette,shift):\\n        errs = []\\n        for g in np.unique(group):\\n            te = group==g\\n            wt,gt = estimate(y,~te)\\n            errs.append(np.sqrt(np.mean((S[te]@wt+Z[te]@gt-y[te])**2)))\\n        result.append(max(errs))\\n    return np.array(result)\\n\\nrecords = {name:[] for name in ('current','sparse')}\\nfor fold in range(5):\\n    train = np.arange(len(x))%5!=fold\\n    B = m['_fit_rosette'](x[train],raw[train])\\n    E = raw[train]-D[train]@B\\n    center = np.median(E,axis=0)\\n    scale = np.maximum(1.4826*np.median(abs(E-center),axis=0),1e-7)\\n    good = np.flatnonzero(train)[np.all(abs(E-center)<=8*scale,axis=1)]\\n    A = D[good]\\n    se = np.sqrt(np.diag(np.linalg.pinv(A.T@A)))[:,None]*scale\\n    C = np.zeros_like(B)\\n    for j in range(4):\\n        keep = abs(B[:,j])>8*se[:,j]\\n        C[keep,j] = np.linalg.lstsq(A[:,keep],raw[good,j],rcond=None)[0]\\n    for name,coef in (('current',B),('sparse',C)):\\n        records[name].append(errors(invert(coef)))\\nprint('columns: relative weight change, relative field change, worst rosette RMSE, worst shift RMSE')\\nprint('production', errors(m['_calibrate'](s)))\\nfor name,r in records.items():\\n    print(name,'worst over withheld calibration sweeps',np.max(r,axis=0))\\nprint('maximum paired change in held-out chamber RMSE:',np.max(abs(np.array(records['current'])[:,2:]-np.array(records['sparse'])[:,2:]),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_downstream_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 weak calibration terms fit noise → H2 retain only simplifications that improve downstream outputs; current worst held-out rosette RMSE is 0.01418 and worst budget-slice KKT error is 4.44e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat rational-basis selection or classification and relay checks\",\n      \"rejected_reason\": \"All five nested folds already rejected a denominator; the study has no classification labels or relay states.\"\n    }\n  ],\n  \"rationale\": \"The earlier audit found that sparsity modestly improved sweep prediction but did not test whether that improvement propagates. Withhold calibration sweeps, refit each model, and measure changes to weights, terminal field, and held-out chamber predictions. Promote sparsity only if it addresses a downstream failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d86c04f684e86d93bd3523ee2b656fdc164be31a2929c18ce465634a271e9863",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35044.67,
+      "usage_known": true,
+      "prompt_tokens": 38600,
+      "cached_tokens": 14976,
+      "completion_tokens": 1432
+    }
+  ]
+}

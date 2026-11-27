@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8c14a06108a84649b3a143b207f0c1ec",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:08.309011+00:00",
+  "ended_at_utc": "2026-11-27T19:50:44.895531+00:00",
+  "request_sha256": "00c71e969ddba510bcae7bc1ec5d3ea18504326cfb38a83a71540b0170d04821",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 71016,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40318,
+    "cached_tokens": 13696,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream, _features, _fit, _loads, _gap, _chamber, _CLOCK_RATIO\\nfrom _verified_upstream import calibrate_upstream\\nroot='/holdout_task/'\\nwith open(root+'public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\nraw=item['dataset']; cal=calibrate_upstream(raw); tr,te=cal['train'],cal['test']; t,dt=map(np.asarray,(cal['eval_times'],cal['past_dt']))\\nout=solve_batch(raw); direct=solve_downstream(cal)\\nn=len(te['lab_id']); shapes={'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(n,len(t)), 'initial_rate_pred':(n,)}\\nassert out.keys()==shapes.keys()\\nfor k,s in shapes.items():\\n    assert out[k].shape==s and np.isfinite(out[k]).all()\\n    np.testing.assert_array_equal(out[k],direct[k])\\ntau,beta=out['estimated_taus'],out['hereditary_weights']\\nassert .05<tau[0]<tau[1]<25\\nx,xt=_features(tr,te); p,h=_loads(tr); pt,ht=_loads(te)\\ninc,rate=_chamber(tau,beta,xt,pt,ht,dt,np.array([0.,1.e-7]))\\nnp.testing.assert_allclose(inc[:,0],0.,atol=1.e-14)\\nnp.testing.assert_allclose(inc[:,1]/1.e-7,rate,rtol=5.e-7,atol=1.e-8)\\n# Fit intrinsic parameters with each benchtop laboratory excluded in turn.\\nY0=tr['strain_curves_obs']-tr['strain_0'][:,None]; R0=tr['instant_rate_obs']; labs=tr['lab_id']; intrinsic=[]\\nfor l in np.unique(labs):\\n    keep=labs!=l; a,b=_fit(x[keep],p[keep],h[keep],dt,t,Y0[keep],R0[keep]); g=_gap(a,p[~keep],h[~keep],dt)\\n    drift=b[2]+x[~keep]@b[3:]; y=(g*b[:2])@(-np.expm1(-t[:,None]/a)).T+drift[:,None]*t; r=g@(b[:2]/a)+drift\\n    intrinsic.append([int(l),*a,np.median(abs(y-Y0[~keep])),np.sqrt(np.mean((r-R0[~keep])**2))])\\nprint('intrinsic holdout lab, taus, strain median abs error, rate RMSE:',np.round(intrinsic,6).tolist())\\nassert np.max(np.abs(np.array(intrinsic)[:,1:3]/tau-1))<.12\\n# Treat the diagnostic reference measurements as an unlabeled cohort; fit the\\n# transfer without any response from the held-out diagnostic lab.\\ndg=calibrate_upstream(dict(raw,test=item['campaign_diagnostics']))['test']; xd,_=_features(dg,dg); pd,hd=_loads(dg)\\ng=_gap(tau,pd,hd,dt); d=beta[2]+xd@beta[3:]; v=np.c_[g,d]; r=g@(beta[:2]/tau)+d\\nK=-np.expm1(-t[:,None]/(tau*_CLOCK_RATIO))-t[:,None]/(tau*_CLOCK_RATIO)\\nA=(v[:,None,:,None]*K[None,:,None,:]).reshape(len(v),len(t),6)\\nY=dg['strain_curves_obs']-dg['strain_0'][:,None]; R=dg['instant_rate_obs']; lab=dg['lab_id']; good=~np.isnan(dg['coupon_features_raw']).any(1)\\ncv=np.empty_like(Y)\\nfor l in np.unique(lab):\\n    keep=good&(lab!=l); b=np.linalg.lstsq(A[keep].reshape(-1,6),(Y-r[:,None]*t)[keep].ravel(),rcond=None)[0]; cv[lab==l]=A[lab==l]@b+r[lab==l,None]*t\\npred,rate=_chamber(tau,beta,xd,pd,hd,dt,t)\\ndef score(y,m): return np.array([np.sqrt(np.mean((y[m]-Y[m])**2)),np.sqrt(np.mean((rate[m]-R[m])**2))])\\nfor label,y in [('held-out transfer',cv),('exact artifact transfer',pred)]:\\n    worst=np.max([score(y,good&(lab==l)) for l in np.unique(lab)],axis=0); missing=score(y,~good)\\n    print(label,'worst complete lab, missing pooled, all pooled:',worst,missing,score(y,np.ones(len(lab),bool)))\\n    assert np.all(worst<.005) and np.all(missing<.04)\\nprint('isolated contract, composition, derivative and stress checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unchanged deployment law) -> H2 (chamber-specific clocks and transfer preserving initial rate); prior complete-coupon worst-lab RMSE was 0.00302 for strain and 0.00355 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check alone\",\n      \"rejected_reason\": \"The schema check cannot detect an incorrect chamber derivative or an intrinsic fit driven by a single lab.\"\n    }\n  ],\n  \"rationale\": \"Verify the saved artifacts in an isolated process. A derivative or composition failure would require a code fix; instability across benchtop labs or excess error on held-out chamber labs would require revisiting the estimator or transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "39923505e2e61b5eb9650566b364c1b47d14df58295803e049ffb05be8b9cee8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37713.26,
+      "usage_known": true,
+      "prompt_tokens": 40318,
+      "cached_tokens": 13696,
+      "completion_tokens": 1552
+    }
+  ]
+}

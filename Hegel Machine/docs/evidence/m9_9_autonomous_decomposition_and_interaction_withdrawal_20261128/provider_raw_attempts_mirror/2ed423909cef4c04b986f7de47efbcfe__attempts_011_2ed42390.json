@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2ed423909cef4c04b986f7de47efbcfe",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:18.976259+00:00",
+  "ended_at_utc": "2026-11-27T19:58:46.710893+00:00",
+  "request_sha256": "409ab209a6152bdcf945c38e0353fa390d94b9bf18b777bafae389c2b02569a2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56142,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33724,
+    "cached_tokens": 14976,
+    "completion_tokens": 1116
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '/^def _bridge_terms/,/^def solve_batch/p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; nominal=np.max(abs(y),axis=1)<8; x,y=x[nominal],y[nominal]\\na=m._bridge_terms(x); u=x[:,0]-x[:,2]; v=x[:,1]-x[:,3]; q=(u*u+v*v)/np.max(u*u+v*v); high=np.max(abs(x),axis=1)>=np.quantile(np.max(abs(x),axis=1),.75)\\nfor name,b in [('current',a),('difference-quadratic',np.column_stack((a,u*u,v*v,u*v))),('rational 0.1',a/(1+.1*q[:,None])),('rational 1',a/(1+q[:,None]))]:\\n    e=[]\\n    for i in range(len(y)):\\n        k=np.arange(len(y))!=i; e.append(np.max(abs(y[i]-b[i]@np.linalg.lstsq(b[k],y[k],rcond=None)[0])))\\n    e=np.array(e); print('bridge LOO',name,'overall/high-load p90',np.quantile(e,.9),np.quantile(e[high],.9))\\ntr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; z,_=m._features(tr,te); p,h=m._loads(tr,m._bridge(c)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; lab=tr['lab_id']; ht=np.median(h)\\nfor l in np.unique(lab):\\n    k=lab!=l; tau,b=m._fit(z[k],p[k],h[k],dt,t,y[k],r[k]); a,g=m._design(tau,z[~k],p[~k],h[~k],dt,t); ec=abs(a@b-y[~k]); er=abs(g@b-r[~k]); print('lab',l,'tau',tau.round(5),'curve p90 low/high hold',*[round(np.quantile(ec[f],.9),6) if f.any() else None for f in (h[~k]<ht,h[~k]>=ht)],'rate p90',round(np.quantile(er,.9),6),'last sample above 0.1',int(np.sum(ec[:,-1]>.1)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 omitted bridge terms or lab-dependent material fit → H2 retained nonlinear bridge and shared material fit unless held-out high-load or lab errors support a change; host strain/rate MAE is 0.005569/0.006453, and worst lab curve/rate p90 is 0.0242/0.0183.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, classification balance, or stochastic control drift\",\"rejected_reason\":\"The documented inputs and outputs describe static calibration and continuous constitutive regression; they have no relay modes, class labels, or control dynamics. Lab and hold load are the relevant measured slices.\"}],\"rationale\":\"Check whether the current bridge misses difference-squared or rational saturation terms on held-out high-load sweeps; revise the basis only if one materially improves that slice. Split held-out lab residuals by hold load and count large endpoint errors to distinguish a persistent fit problem from isolated sensor outliers. Run the audit in an isolated Python process without editing the verified artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d77f3507e1071f25fb1cf8b4450a6ccffaec814dc45b83183eaf55021e7299d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28868.48,
+      "usage_known": true,
+      "prompt_tokens": 33724,
+      "cached_tokens": 14976,
+      "completion_tokens": 1116
+    }
+  ]
+}

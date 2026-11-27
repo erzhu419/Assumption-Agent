@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1c4d49400ac5495dbfdbeb4439fcb071",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:34.635150+00:00",
+  "ended_at_utc": "2026-11-27T19:47:10.864940+00:00",
+  "request_sha256": "b142a74ac85738b62ec4f5b0cafe5a9285c50aae6c1386ef8645936a92cd7c9e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44391,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32409,
+    "cached_tokens": 14976,
+    "completion_tokens": 1567
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,120p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py; cat > /tmp/m99_residual.py <<'PY'\\nfrom m99_probe import *\\nfrom scipy.optimize import least_squares, minimize_scalar\\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs'])\\nY=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; print('fields',[(k,np.shape(v)) for k,v in g.items()]); print('test fields',list(te)); print('lab counts',np.unique(g['lab_id'],return_counts=True))\\ndef G_using(blocks):\\n lab=np.concatenate([b['lab_id'] for b in blocks]); strata=np.concatenate([b['stratum'] for b in blocks]); ref=np.vstack([b['ref_coupons'] for b in blocks]); X=np.vstack([b['coupon_features_raw'] for b in blocks]).copy(); G=g['coupon_features_raw'].copy();\\n for l in np.unique(lab):\\n  p=ref[lab==l]; c=np.median(p.mean(0)); s=np.median(p.std(0)); X[lab==l]=(X[lab==l]-c)/s; G[g['lab_id']==l]=(G[g['lab_id']==l]-c)/s\\n _,ix,k=np.unique(np.c_[lab,strata],axis=0,return_inverse=True,return_counts=True); w=1/k[ix]; col=np.nansum(X*w[:,None],0)/np.sum(np.isfinite(X)*w[:,None],0); return np.where(np.isnan(G),col,G)\\ndef rms(a): return np.sqrt(np.mean(a*a))\\nfor desc,G in [('tr+g',m._features(tr,g)[n:]),('tr+te',G_using([tr,te])),('tr+te+g',G_using([tr,te,g]))]:\\n cg=m._coupon_inputs(g,G,bridge); P,H,D=cg; F,R=m._design(taus,cg,dt,t); E=Y-np.c_[F@theta,R@theta]; drift=D@theta[2:]; U,S,V=np.linalg.svd(E,full_matrices=False); print('\\\\nnormalization',desc,'svd',S.round(4),'shape1',V[0].round(4),'shape2',V[1].round(4)); print('missing',np.argwhere(np.isnan(g['coupon_features_raw'])).tolist());\\n aux=g.get('aux_chamber_telemetry',np.empty((len(G),0))); Zs={'r':drift[:,None],'1+r':np.c_[np.ones(len(G)),drift],'X':D,'X+stress':np.c_[D,H,P], 'X+aux':np.c_[D,aux], 'X+aux+stress':np.c_[D,aux,H,P]}; A=np.c_[D[:,1:],H,P,aux]; print('aux example',aux[:3]); print('corr with shapes',np.corrcoef(np.c_[A,U[:,:3]].T)[-3:,:-3].round(2));\\n T=np.r_[t,1.];\\n def exp(u): return np.r_[-np.expm1(-t/u),1/u]\\n def shape(u,mode):\\n  if mode=='exp+linear': return np.array([exp(u),T]);\\n  if mode=='exp-drift': return np.array([u*exp(u)-T]);\\n  if mode=='two-time': return np.array([exp(taus[0]),exp(u),T]);\\n for mode in ('exp+linear','exp-drift','two-time'):\\n  for name in ('r','1+r','X','X+aux'):\\n   Z=Zs[name]; Q=np.linalg.svd(Z,full_matrices=False)[0][:,:np.linalg.matrix_rank(Z)]; C=Q.T@E\\n   def fit(u):\\n    B=shape(u,mode); coef=np.linalg.lstsq(B.T,C.T,rcond=None)[0].T; return Q@coef@B, np.linalg.norm(C-coef@B)**2\\n   fitu=minimize_scalar(lambda u:fit(u)[1],bounds=(.15,5),method='bounded').x; pred=fit(fitu)[0]; r=E-pred; print(mode,name,round(fitu,5),'rmse',[round(rms(r[:,:-1]),5),round(rms(r[:,-1]),5)],'unit r e.g.',np.linalg.lstsq(Z,pred,rcond=None)[0][-1,[0,4,-2,-1]].round(4))\\n if desc=='tr+te':\\n  print('row first,late,rate residual & drift'); print(np.c_[E[:,[0,-2,-1]],drift].round(4));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_residual.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed intrinsic time basis with free coupon amplitudes -> H2 a shared chamber transient driven by coupon drift; fixed-basis fit has 0.00456 initial-rate RMSE versus 0.00110 with free times, both in sample.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the two free effective times as chamber branch constants\",\n      \"rejected_reason\": \"The free fit uses three amplitudes per coupon, and its fitted times change with rate weighting. It does not establish a transferable prediction law.\"\n    }\n  ],\n  \"rationale\": \"Test whether chamber residuals share a common transient, and whether diagnostic reference-panel normalization accounts for the remaining coupon variation. A low-rank correction would preserve the train-only material spectrum and provide a compact law to test on held-out coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d8d63c1ffea4ad7dee06e86d5f895e7cc711dff6f412db1d13b89bc995f712ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38510.04,
+      "usage_known": true,
+      "prompt_tokens": 32409,
+      "cached_tokens": 14976,
+      "completion_tokens": 1567
+    }
+  ]
+}

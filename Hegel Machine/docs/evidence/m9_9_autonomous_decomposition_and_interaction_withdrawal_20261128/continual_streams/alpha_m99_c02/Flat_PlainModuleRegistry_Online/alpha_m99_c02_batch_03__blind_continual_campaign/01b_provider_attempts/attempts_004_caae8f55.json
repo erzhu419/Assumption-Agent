@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "caae8f5574c744778bb3936176267176",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:26.749334+00:00",
+  "ended_at_utc": "2026-11-27T19:53:02.913250+00:00",
+  "request_sha256": "68d23e5d77180070fc3e1f270005aa6d9471945aa7e0841771134f4d92359023",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 29982,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26910,
+    "cached_tokens": 13696,
+    "completion_tokens": 1493
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Recover channel loads from a coupled nonlinear bridge calibration.\\\"\\\"\\\"\\n\\nimport numpy as np\\n\\n\\n_PAIRS = tuple((i, j) for i in range(4) for j in range(i, 4))\\n_CHANNEL_FIELDS = ('past_channel_raw', 'hold_channel_raw')\\n\\n\\ndef _design(x):\\n    return np.column_stack((np.ones(len(x)), x,\\n                            *[x[:, i] * x[:, j] for i, j in _PAIRS], x**3))\\n\\n\\ndef _fit(loads, raw):\\n    design = _design(loads)\\n    coef = np.linalg.lstsq(design, raw, rcond=None)[0]\\n    for _ in range(15):\\n        residual = np.linalg.norm(raw - design @ coef, axis=1)\\n        scale = max(2 * np.median(residual), 1e-5)\\n        weight = 1 / np.hypot(1, residual / scale)\\n        coef = np.linalg.lstsq(design * weight[:, None], raw * weight[:, None],\\n                               rcond=None)[0]\\n    return coef\\n\\n\\ndef _jacobian(x, coef):\\n    # Axes are sample, raw output, and true-load input, as in J dx = residual.\\n    jac = np.broadcast_to(coef[1:5].T, (len(x), 4, 4)).copy()\\n    for b, (i, j) in zip(coef[5:-4], _PAIRS):\\n        jac[:, :, i] += x[:, j, None] * b\\n        jac[:, :, j] += x[:, i, None] * b\\n    jac += 3 * x[:, None, :]**2 * coef[-4:].T\\n    return jac\\n\\n\\ndef _invert(raw, coef):\\n    raw = np.asarray(raw, dtype=float)\\n    y = raw.reshape(-1, 4)\\n    if not len(y):\\n        return raw.copy()\\n    x = np.linalg.solve(coef[1:5].T, (y - coef[0]).T).T\\n    for _ in range(20):\\n        error = _design(x) @ coef - y\\n        if np.max(np.abs(error)) < 1e-11:\\n            break\\n        step = np.linalg.solve(_jacobian(x, coef), error[..., None])[..., 0]\\n        proposal = x - step\\n        loss = np.sum(error**2, axis=1)\\n        # Set each row's step independently so one difficult load cannot slow the rest.\\n        for _ in range(12):\\n            worse = np.sum((_design(proposal) @ coef - y)**2, axis=1) > loss\\n            if not np.any(worse):\\n                break\\n            step[worse] *= 0.5\\n            proposal[worse] = x[worse] - step[worse]\\n        x = proposal\\n    return x.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a dataset with bridge readings replaced by canonical loads.\\\"\\\"\\\"\\n    calibration = dataset['calibration_load_cells']\\n    loads = np.asarray(calibration['true_channel_loads'], dtype=float)\\n    coef = _fit(loads, np.asarray(calibration['bridge_raw'], dtype=float))\\n    output = dict(dataset)\\n    output['calibration_load_cells'] = dict(calibration, bridge_raw=loads.copy())\\n    sweeps = calibration['single_channel_sweeps']\\n    output['calibration_load_cells']['single_channel_sweeps'] = dict(\\n        sweeps, cmd_stress=np.asarray(sweeps['true_stress']).copy())\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        if dataset.get(name) is not None:\\n            split = dict(dataset[name])\\n            for field in _CHANNEL_FIELDS:\\n                split[field] = _invert(split[field], coef)\\n            output[name] = split\\n    return output\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine mixing) → H2 (quadratic cross-channel response plus channel-wise cubics); worst clean forward slice RMS fell from 0.28212 to 0.00012 out of fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or purely quadratic basis can represent the clean bridge readings.\",\n    \"empirical_witness\": \"Held-out mixed-edge RMS was 0.28212 for affine, 0.16223 for quadratic, and 0.00012 after adding channel-wise cubes; three spike rows had affine residual norms near 27.\",\n    \"causal_blanket_diagnosis\": \"The bridge has cross-channel curvature and channel-wise saturation curvature; spike rejection alone cannot explain the systematic affine residual.\",\n    \"sublated_pivot\": \"Retain linear mixing and quadratic products, add channel-wise cubes, and downweight spike rows in the forward fit before inversion.\",\n    \"risk_kind\": \"basis misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit unrestricted cubic or quartic terms\",\n      \"rejected_reason\": \"Both increased out-of-fold error on the mixed-edge slice.\"\n    },\n    {\n      \"option\": \"Hard-code the apparent ring coupling\",\n      \"rejected_reason\": \"The broader quadratic basis already reaches the noise floor without assuming that all calibration sets share the same coupling pattern.\"\n    }\n  ],\n  \"rationale\": \"The composed schema gate detects interface failures. Once it passes, held-out inverse accuracy and operating-range round trips will test the numerical behavior that the schema gate cannot see.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b424612b7fb3a52d0886f229033795b083f19e26b9a4b2477d02f576d816dc3c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37279.29,
+      "usage_known": true,
+      "prompt_tokens": 26910,
+      "cached_tokens": 13696,
+      "completion_tokens": 1493
+    }
+  ]
+}

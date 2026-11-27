@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d0d7336359e5477f87fec181e3662dac",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:53.829165+00:00",
+  "ended_at_utc": "2026-11-27T19:39:21.129924+00:00",
+  "request_sha256": "dd80298d8af3f20e675fb00c8b0390cbce194c9c152e2e37feef05ff56af8d26",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42409,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31100,
+    "cached_tokens": 14976,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom collections import Counter\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    items=pickle.load(f)\\nfor i,item in enumerate(items):\\n    s=item['study']; c=s['sensor_calibration_sweeps']\\n    x=np.asarray(c['ref_rosette']); y=np.asarray(c['raw_rosette']); n=len(x)\\n    print('item',i,'calibration rows',n,'regime-related study keys',[k for k in s if any(t in k for t in ('bank','batch','telemetry','relay'))])\\n    b=c.get('single_bank_sweeps')\\n    print('bank sweeps',type(b).__name__, [(str(k), list(v) if isinstance(v,dict) else type(v).__name__) for k,v in b.items()] if isinstance(b,dict) else [(list(v) if isinstance(v,dict) else type(v).__name__) for v in b] if b is not None else None)\\n    groups=Counter(map(tuple,np.asarray(s['row_bank_id']).reshape(-1,4))) if 'row_bank_id' in s else None\\n    print('observation bank patterns',groups)\\n    for label in ('diagonal','affine','quadratic'):\\n        preds=[]; ses=[]\\n        for j in range(4):\\n            X=np.c_[np.ones(n),x[:,j]] if label=='diagonal' else np.c_[np.ones(n),x]\\n            if label=='quadratic':\\n                X=np.column_stack([X]+[x[:,a]*x[:,b] for a in range(4) for b in range(a,4)])\\n            err=np.empty(n)\\n            for k in range(n):\\n                train=np.arange(n)!=k\\n                beta=np.linalg.lstsq(X[train],y[train,j],rcond=None)[0]\\n                err[k]=y[k,j]-X[k]@beta\\n            preds.append(err)\\n            if label=='affine':\\n                inv=np.linalg.inv(X.T@X); coef=np.linalg.lstsq(X,y[:,j],rcond=None)[0]; sd=np.linalg.norm(y[:,j]-X@coef)/np.sqrt(n-X.shape[1]); ses.extend(abs(coef[a+1])/(sd*np.sqrt(inv[a+1,a+1])) for a in range(4) if a!=j)\\n        E=np.array(preds).T\\n        print(label,'LOO RMS by channel',np.sqrt(np.mean(E**2,axis=0)),'max abs',abs(E).max(),'max off-diag t',max(ses,default=0.))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sealed walls with full affine calibration -> H2 retain sealed walls and test whether cross-bank calibration terms predict held-out sweeps; current worst pulse-by-shift RMS is 1.13e-6 and the independent weight error is 1.193e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or drift terms to the transport model\",\n      \"rejected_reason\": \"The steady chamber has no relay state or classification outcome, and the sealed stencil already predicts held-out pulses at calibration precision. Test calibration cross-products where they could change the result.\"\n    }\n  ],\n  \"rationale\": \"Leave one measured rosette out at a time to test whether cross-bank and pairwise terms improve calibration or merely fit noise. Read bank patterns to distinguish channel identity from an actual calibration stratum. Change the solver only if the evidence supports a calibration improvement; the verified transport stencil and KKT solve remain unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ff5aec605bc8c3cc72fc5319e403fe2ccd7e55ef6e455b5f71920caca6c4df06",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27266.39,
+      "usage_known": true,
+      "prompt_tokens": 31100,
+      "cached_tokens": 14976,
+      "completion_tokens": 1021
+    }
+  ]
+}

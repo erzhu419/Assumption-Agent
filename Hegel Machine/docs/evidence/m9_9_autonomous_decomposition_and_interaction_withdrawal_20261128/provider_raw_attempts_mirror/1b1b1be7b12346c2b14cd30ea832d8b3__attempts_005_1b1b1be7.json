@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1b1b1be7b12346c2b14cd30ea832d8b3",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:42.125886+00:00",
+  "ended_at_utc": "2026-11-27T19:38:21.800268+00:00",
+  "request_sha256": "64b1caf4927557a6a6830f7cefd9d2314a1a9b7e350b8a8204ebb13ab67abd99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36276,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29308,
+    "cached_tokens": 14976,
+    "completion_tokens": 1759
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_cv.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/chamber_probe.py').read().split('for g,x')[0])\\nfrom itertools import combinations\\ng=dg; y=g['strain_curves_obs']-g['strain_0'][:,None]; v=g['instant_rate_obs']; labs=g['lab_id']; past=st[0]+g['past_channel_raw']@st[1:]; hold=st[0]+g['hold_channel_raw']@st[1:]; age=np.r_[np.cumsum(dt[::-1])[::-1][1:],0]; z=past@(-np.expm1(-dt[:,None]/tau)*np.exp(-age[:,None]/tau))\\nstds={}\\nfor name,ref in [('diag',dg),('train+diag',None),('train+test',te),('train',tr)]:\\n if name=='train+diag':\\n  stds[name]=xd; continue\\n if name=='train+test':\\n  ref={k:np.concatenate([tr[k],te[k]]) for k in ('ref_coupons','lab_id')}\\n x=g['coupon_features_raw'].copy()\\n for l in np.unique(labs):\\n  b=ref['ref_coupons'][ref['lab_id']==l]; center=np.median(b.mean(0)); scale=np.median(b.std(0)); x[labs==l]=(x[labs==l]-center)/scale\\n _,cell,ct=np.unique(np.c_[labs,g['stratum']],axis=0,return_inverse=True,return_counts=True); w=1/ct[cell,None]; mu=np.nansum(w*x,axis=0)/np.sum(w*np.isfinite(x),axis=0); stds[name]=np.where(np.isfinite(x),x,mu)\\nE=-np.expm1(-t[:,None]/tau); B=np.column_stack([E,t]); R=np.r_[1/tau,1.]; N=len(y); ys=np.c_[y,v]; weights=np.r_[np.ones(len(t)),.6];\\nfor name,x in stds.items():\\n drift=th[2]+x@th[3:]; F=np.c_[np.ones(N),x]; base=hold[:,None]*th[:2]; init=np.c_[base,np.zeros(N)]; off=init@np.vstack([B,R]).T\\n print('\\\\n',name,'nans',np.isnan(g['coupon_features_raw']).sum(axis=0)); print('fixed tau coeff on [hold,1,x0,x1,x2,x3,z0,z1] rows fast/slow/drift:',np.round(np.linalg.lstsq(np.c_[hold,F,z],np.linalg.lstsq(np.vstack([B,R])*weights[:,None],(ys*weights).T,rcond=None)[0].T,rcond=None)[0].T,4));\\n for typ in ('drift_redistributed','drift_plus_intercept','drift_free_features','drift_history','drift_full_channels','features_interactions'):\\n  if typ=='drift_redistributed': A=[drift[:,None]]*3\\n  if typ=='drift_plus_intercept': A=[np.c_[np.ones(N),drift]]*3\\n  if typ=='drift_free_features': A=[F]*3\\n  if typ=='drift_history': A=[np.c_[F,z[:,j]] for j in range(2)]+[F]\\n  if typ=='drift_full_channels': A=[np.c_[F,hold,z]]*3\\n  if typ=='features_interactions': A=[np.c_[F,drift**2,hold*drift,z]]*3\\n  D=np.concatenate([A[j][:,None,:]*np.r_[B[:,j],R[j]][None,:,None] for j in range(3)],axis=2)\\n  err=[]\\n  for l in np.unique(labs):\\n   a=labs!=l; b=~a; p=np.linalg.lstsq((D[a]*weights[None,:,None]).reshape(-1,D.shape[-1]),((ys[a]-off[a])*weights).ravel(),rcond=None)[0]; e=ys[b]-off[b]-D[b]@p; err.append(np.sqrt(np.mean(e[:,:-1]**2)),) if False else err.append([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))]);\\n  p=np.linalg.lstsq((D*weights[None,:,None]).reshape(-1,D.shape[-1]),((ys-off)*weights).ravel(),rcond=None)[0]; print(typ,'worst',np.round(np.max(err,axis=0),5),'mean',np.round(np.mean(err,axis=0),5),'coef',np.round(p,4) if typ in ('drift_redistributed','drift_plus_intercept','drift_history') else '')\\nfor k in ('train','test','diag'):\\n q={'train':tr,'test':te,'diag':g}[k]; raw=q['hold_channel_raw']; p=q['past_channel_raw']; print(k,'total hold range',np.min(st[0]+raw@st[1:]),np.max(st[0]+raw@st[1:]),'history means',np.round((st[0]+p@st[1:]).mean(0),3),'history std',np.round((p@st[1:]).std(0),3));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop memory and drift -> H2 shared intrinsic decay with altered chamber memory and drift allocation; baseline worst diagnostic lab rate RMSE is 1.630.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The calibrated benchtop memory and drift law transfers unchanged into the current chamber.\",\n    \"empirical_witness\": \"The chamber baseline has 0.600 curve RMSE and 1.461 rate RMSE, with positive rate bias in every lab. The same intrinsic exponential basis with free coupon amplitudes yields 0.00228 weighted residual RMS.\",\n    \"causal_blanket_diagnosis\": \"Accurate bridge calibration and the successful fixed-time response basis localize the transfer failure to how chamber inputs determine transient amplitudes and drift, rather than to sensor calibration or a wholly new decay spectrum.\",\n    \"sublated_pivot\": \"Retain train-estimated material properties and compare physically constrained chamber amplitude and drift laws by held-out lab.\",\n    \"risk_kind\": \"chamber constitutive transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit independent chamber relaxation times immediately\",\n      \"rejected_reason\": \"Free coupon amplitudes already fit nearly as well at the intrinsic times, so test the amplitude and drift grammar first.\"\n    }\n  ],\n  \"rationale\": \"The baseline misses both outputs despite accurate calibration. A lab-held-out comparison will test whether history withdrawal and drift redistribution explain the discrepancy without an unrestricted chamber regression.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d265521ad3ab80d4ee0c5de5a27b7dba3cb9590ccd5413c364193e04fb4b8cc1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41884.8,
+      "usage_known": true,
+      "prompt_tokens": 29308,
+      "cached_tokens": 14976,
+      "completion_tokens": 1759
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b60f203a2534ed7851c35b43c566a05",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:33:19.951279+00:00",
+  "ended_at_utc": "2026-11-27T19:33:42.099499+00:00",
+  "request_sha256": "08ef47248815edd36e8e31c0152dddecee15cf04593ee56d9cb86e6d70ca2574",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39760,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28795,
+    "cached_tokens": 14976,
+    "completion_tokens": 850
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json, pickle\\nimport numpy as np\\nfrom batch_solver import _stress_map\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['bridge_raw']; y=C['true_channel_loads'].sum(1); A=np.c_[np.ones(len(x)),x]; b=_stress_map(C); P=np.linalg.pinv(A); e=(y-A@b)/(1-np.einsum('ij,ji->i',A,P)); leverage=np.einsum('ij,ji->i',A,P)\\nfor label,z in [('all',np.ones(len(x),bool)),('upper leverage quartile',leverage>=np.quantile(leverage,.75)),('upper load quartile',abs(y)>=np.quantile(abs(y),.75))]:\\n print(label,'calibration max / RMSE',np.max(abs(e[z])),np.sqrt(np.mean(e[z]**2)))\\nfor name in ['train','test']:\\n G=D[name]; R=np.vstack([G['hold_channel_raw'],G['past_channel_raw'].reshape(-1,4)]); U=G['aux_chamber_telemetry']; print(name,'outside calibration coordinate ranges',np.any((R<x.min(0))|(R>x.max(0)),axis=1).sum(),'of',len(R),'max bridge leverage',np.max(np.sum((np.c_[np.ones(len(R)),R]@P)**2,axis=1)),'telemetry median and MAD',np.median(U,0),np.median(abs(U-np.median(U,0)),0))\\nL=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); F=np.array(L[-1]['facility_telemetry_trace']); print('archive telemetry rounded first and last 3 rows',np.round(np.r_[F[:3],F[-3:]],4)); print('archive telemetry min/max',F.min(0),F.max(0)); print('singular values centered',np.linalg.svd(F-F.mean(0),compute_uv=False))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine bridge and robust hereditary fit → verify calibration support at deployment loads; current worst audited p90 errors are 0.0252 for early strain and 0.0133 for initial rate on missing-feature slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the strain and rate audits\",\n      \"rejected_reason\": \"The verified candidate is unchanged and already passed those checks; calibration at high-leverage deployment inputs has not been assessed separately.\"\n    }\n  ],\n  \"rationale\": \"Check whether pooled calibration error hides failure at large loads or whether deployment requires substantial extrapolation. If so, use the high-leverage sweep results to choose a bridge model. Inspect a compact trace summary for an overt setting transition without treating unlabeled telemetry as chamber-response evidence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0f414376c6a3dfe03e503930223d5e109d19e94f8312adca7e491b8ebe860021",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23252.0,
+      "usage_known": true,
+      "prompt_tokens": 28795,
+      "cached_tokens": 14976,
+      "completion_tokens": 850
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e6e7d5b14094ff6972e58fdc4001ebc",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:38:40.406588+00:00",
+  "ended_at_utc": "2026-11-27T19:39:15.161436+00:00",
+  "request_sha256": "2c3ded68d231693f7c0b3804e4378c0e7698de29ad8a003e3c104ccce7874f39",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47859,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33844,
+    "cached_tokens": 14976,
+    "completion_tokens": 1458
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_interaction.py <<'PY'\\nexec(open('/tmp/chamber_memory.py').read().split(\\\"print('zero-drift\\\")[0])\\nprint('zero-drift q, RMS each output',q,np.sqrt(np.mean(prof(q).reshape(N,-1)**2,axis=0)))\\nprint('a minus intrinsic hold RMS and correlation',np.std(a-th[:2]*h[:,None],0),np.corrcoef((a-th[:2]*h[:,None]).T)[0,1])\\nprint('drift index and per-coupon stress corrections\\\\n',np.c_[d@th[2:],a/th[:2]-h[:,None]].round(4))\\nfrom itertools import combinations\\nfrom scipy.stats import spearmanr\\nafter=np.cumsum(dt[::-1])[::-1]-dt\\nmem=lambda s:p@(-np.expm1(-dt[:,None]/s)*np.exp(-after[:,None]/s))\\nz=mem(q); v=a/th[:2]-h[:,None]; v1=v[:,1]; C={}\\ndef add(names,x): C.update(zip(names,np.asarray(x).reshape(N,-1).T))\\nadd(['hold','zfast','zslow','strain0','lab','stratum','drift'],np.c_[h,z,dg['strain_0'],lab,dg['stratum'],d@th[2:]])\\nfor prefix,mat in [('x',d[:,1:]),('x_impute_raw',np.nan_to_num(dg['coupon_features_raw'])),('ref',dg['ref_coupons']),('p',p),('pc',dg['past_channel_raw'].reshape(N,-1)),('hc',dg['hold_channel_raw'])]: add([prefix+str(j) for j in range(mat.shape[1])],mat)\\nkeys=['hold','zfast','zslow','strain0','drift']+[f'x{k}' for k in range(4)]+[f'p{k}' for k in range(6)]\\nfor i,j in combinations(keys,2):\\n x,w=C[i],C[j]; C[i+'*'+j]=x*w; C[i+'-'+j]=x-w; C[i+'+'+j]=x+w\\nfor i in keys:\\n x=C[i]; C[i+'^2']=x*x; C['abs('+i+')']=abs(x); C['pos('+i+')']=np.maximum(x,0)\\nfor k in range(4): C[f'lab{k}']=(lab==k).astype(float)\\nfor k in range(3): C[f'stratum{k}']=(dg['stratum']==k).astype(float)\\nprint('top Pearson',sorted([(k,*np.corrcoef(np.c_[x,v].T)[0,1:].round(3)) for k,x in C.items()],key=lambda w:-abs(w[-1]))[:25]); print('top rank',sorted([(k,round(spearmanr(x,v1).statistic,3)) for k,x in C.items()],key=lambda w:-abs(w[-1]))[:15]);\\nfor l in np.unique(lab): print('lab',l,'mean/std',v[lab==l].mean(0),v[lab==l].std(0))\\nfor label,F in [('hold',np.c_[h]),('drift',np.c_[h,d]),('stress',np.c_[h,z,p,np.ones(N)]),('all main',np.c_[h,z,p,d,dg['strain_0']]),('ref',np.c_[h,dg['ref_coupons'],np.ones(N)])]:\\n E=[]\\n for l in np.unique(lab):\\n  msk=lab!=l; coef=np.linalg.lstsq(F[msk],v[msk],rcond=None)[0]; E.append(np.sqrt(np.mean((F[~msk]@coef-v[~msk])**2,0)))\\n print(label,'worst branch stress RMS',np.max(E,0).round(5),'coefs',np.linalg.lstsq(F,v,rcond=None)[0].round(4).T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_interaction.py | tail -39\\nsed -n '45,115p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear chamber history -> H2 feature-dependent chamber amplitudes or drift; hold-only has worst leave-one-lab-out RMS of 0.3861 for strain and 0.3383 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the best stress-only fit\",\n      \"rejected_reason\": \"Its held-out errors remain far above the chamber measurement floor, and the two apparent amplitude corrections move together.\"\n    }\n  ],\n  \"rationale\": \"Check whether the shared correction tracks coupon drift, an interaction, or a lab effect, and whether it survives lab holdout. Also quantify the no-drift residual before treating the apparent amplitude corrections as physical.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2c9290ec1ff5c49f45c5b8bb6bda510e018de7bdbf0bbd1eb6ce1e164b5b2232",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35857.48,
+      "usage_known": true,
+      "prompt_tokens": 33844,
+      "cached_tokens": 14976,
+      "completion_tokens": 1458
+    }
+  ]
+}

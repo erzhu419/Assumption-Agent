@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ffb166d680a4571b6218f6c79f8fc4c",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:06:19.845043+00:00",
+  "ended_at_utc": "2026-11-27T20:06:48.165818+00:00",
+  "request_sha256": "f292ddccc89152a7d2f8d24f2b7af9cb8a7d63b1ba5a67818dceb70ea6c7d989",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47730,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29986,
+    "cached_tokens": 13696,
+    "completion_tokens": 1126
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport json,pickle,sys,numpy as np\\nfrom pathlib import Path\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver as batch, downstream_solver as dn\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; cal=calibrate_upstream(raw); tr,te=cal['train'],cal['test']; x,xt=dn._features(tr,te); t,dt=cal['eval_times'],cal['past_dt']; p,h=tr['past_channel_raw'].sum(-1),tr['hold_channel_raw'].sum(-1); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nout=batch.solve_batch(raw); tau,b=out['estimated_taus'],out['hereditary_weights']; assert .05<tau[0]<tau[1]<25; assert all(np.isfinite(a).all() for a in out.values()); scores=[]\\nfor lab in np.unique(tr['lab_id']):\\n m=tr['lab_id']==lab; u,w=dn._fit(x[~m],p[~m],h[~m],dt,t,y[~m],r[~m]); a,g=dn._design(u,x[m],p[m],h[m],dt,t); e=abs(a@w-y[m]); scores.append([e.mean(),e[:,-max(1,len(t)//4):].mean(),abs(g@w-r[m]).mean()])\\nprint('Worst held-out lab MAE (strain, late strain, rate):',np.max(scores,axis=0))\\nv,s=dn._predict(tau,b,xt,te['hold_channel_raw'].sum(-1),np.array([0,1e-6])); np.testing.assert_array_equal(v[:,0],0.); np.testing.assert_allclose(s,out['initial_rate_pred']); np.testing.assert_allclose(v[:,1]/1e-6,s,rtol=2e-5); print('Maximum initial derivative discrepancy:',abs(v[:,1]/1e-6-s).max())\\np=Path('/tmp/hegel_continual_archive/archive_manifest.json'); print('Manifest:',p.read_text()[:3000] if p.exists() else 'not mounted'); a=json.load(open('public_asset_index.json')); print('Asset index summary:', str(a)[:2300])\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); traces=np.array([r['facility_telemetry_trace'] for r in rows]); print('Trace column means:',np.round(traces.mean(1),3)); print('Trace relative column RMS to latest:',np.round(((traces-traces[-1])**2).mean(1)**.5,3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fixed bridge payload → H2 dynamically fitted bridge and archived reset law; prior worst held-out lab MAEs were 0.01788 for strain, 0.02915 for late strain, and 0.00810 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the staged fixed calibration payload\",\n      \"rejected_reason\": \"It bypasses the required fit to the supplied calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"The prior command stopped before writing the wrapper because its archive inspection failed. Write and validate the dynamic wrapper first, then inspect whether the log associates each trace with the named campaign or with its successor; that distinction could change the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f7c2b3ed2f8a152611b3aa43383931d7c57ea70f3362e091d8e9cc65f377ee5e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29468.11,
+      "usage_known": true,
+      "prompt_tokens": 29986,
+      "cached_tokens": 13696,
+      "completion_tokens": 1126
+    }
+  ]
+}

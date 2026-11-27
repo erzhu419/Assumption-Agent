@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc0f2e7f56594d3f8d13441a718f8b5a",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:06.888734+00:00",
+  "ended_at_utc": "2026-11-27T19:40:40.371367+00:00",
+  "request_sha256": "e82deb398c734a87f4ad2d3db5706edcd69fd16485ca8cff850fa1012b455007",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33563,
+    "cached_tokens": 14976,
+    "completion_tokens": 1284
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_calibration_impact.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nbank = c['single_bank_sweeps']\\nS, U = m._design(s)\\nZ = s['Z_nuisance']\\nPz = np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nP = np.eye(len(S)) - Z @ Pz\\nA = P @ S\\nn = A.shape[1]\\nB = np.eye(n)[:, :-1] - np.eye(n)[:, [-1]]\\nH = A.T @ A + s['source_ridge'] * np.eye(n)\\nD = B @ np.linalg.solve(B.T @ H @ B, B.T @ A.T)\\nw = m.solve_batch(s)['weights']\\nfield_norm = np.linalg.norm(np.tensordot(w, U, axes=1))\\n\\nfor name in ('current', 'rosette_diagonal', 'pooled_diagonal', 'pooled_affine'):\\n    offset = np.zeros(4)\\n    mix = np.zeros((4, 4))\\n    if name != 'current':\\n        for j in range(4):\\n            cols = np.arange(4) if name == 'pooled_affine' else [j]\\n            X = x[:, cols]\\n            Y = y[:, j]\\n            if name.startswith('pooled'):\\n                take = bank['bank_id'] == j\\n                xs = np.zeros((np.count_nonzero(take), 4))\\n                xs[:, j] = bank['ref_signal'][take]\\n                X = np.concatenate((X, xs[:, cols]))\\n                Y = np.r_[Y, bank['raw_readout'][take]]\\n            beta = np.linalg.lstsq(np.c_[np.ones(len(X)), X], Y, rcond=None)[0]\\n            offset[j], mix[cols, j] = beta[0], beta[1:]\\n    scores = []\\n    for pulse in item['campaign_diagnostics']:\\n        raw = pulse['y_pulse_raw']\\n        cal = (m._calibrate(dict(s, y_obs_raw=raw)) if name == 'current' else\\n               np.linalg.solve(mix.T, (raw.reshape(-1, 4) - offset).T).T.ravel())\\n        err = P @ (cal - S @ pulse['w_pulse'])\\n        dw = D @ err\\n        df = np.tensordot(dw, U, axes=1)\\n        scores.append([np.sqrt(np.mean(err.reshape(len(s['mu_shifts']), -1)**2, axis=1)).max(),\\n                       np.linalg.norm(dw) / np.linalg.norm(w), np.linalg.norm(df) / field_norm])\\n    print(name, 'pulse rows [worst shift RMS, relative weight perturbation, relative field perturbation]', np.asarray(scores).tolist(), 'worst', np.max(scores, axis=0).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_calibration_impact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sealed walls with rosette-only affine calibration -> H2 pooled sweeps only if they improve weight and field accuracy; pooled diagonal calibration lowered worst tracer RMS from 1.13e-6 to 1.08e-6, but its effect on the deliverables is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select calibration by tracer RMS alone\",\n      \"rejected_reason\": \"A smaller observation residual can still produce larger errors in weights or field if it aligns with a sensitive source direction.\"\n    }\n  ],\n  \"rationale\": \"Use measured pulses not used to fit calibration to test whether the residual improvement survives nuisance projection and helps the required outputs. Propagate errors through the budget-constrained quadratic and terminal field; consider changing the solver only if pooling improves those output-level metrics consistently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "00f314aee1efa473f65ec98263bd84695de6c84385b0616828c2ad8602d5b78a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34640.35,
+      "usage_known": true,
+      "prompt_tokens": 33563,
+      "cached_tokens": 14976,
+      "completion_tokens": 1284
+    }
+  ]
+}

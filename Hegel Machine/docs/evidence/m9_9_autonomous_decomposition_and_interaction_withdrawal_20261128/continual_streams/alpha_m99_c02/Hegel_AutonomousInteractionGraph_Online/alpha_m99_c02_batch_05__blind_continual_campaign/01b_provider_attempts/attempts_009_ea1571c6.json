@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea1571c661c1431db9609c650d5a8690",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:04:57.652946+00:00",
+  "ended_at_utc": "2026-11-27T20:05:24.407166+00:00",
+  "request_sha256": "6166f4bd8fa2126c9bdd8fa40b031751d6cb57a3675a2a77ab55cb335c467b15",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 57157,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37052,
+    "cached_tokens": 13696,
+    "completion_tokens": 1054
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/for split, xx/,$d' /tmp/m99_inspect.py > /tmp/m99_compare.py; cat >> /tmp/m99_compare.py <<'PY'\\nY=np.c_[d['instant_rate_obs'],d['strain_curves_obs']-d['strain_0'][:,None]]\\nP,H=loads(d); L=d['lab_id']; V=np.r_[1,t]; A=np.c_[np.vstack((1/taus,-np.expm1(-t[:,None]/taus))),V]; amp=Y@np.linalg.pinv(A.T)\\nxopts={'aligned':xd,'diagnostics_only':features(d,d)[0],'train_plus_diagnostics':features(tr,d)[1]}\\nZ=H[:,None]-gap_for(taus,P,H,dt)\\nfor name,xx in xopts.items():\\n D=theta[2]+xx@theta[3:]; print(name,'feature diffs',np.max(abs(xx-xd),axis=0).round(4));\\n for name2,inputs in [('reset',[np.c_[H,D],np.c_[H,D],D[:,None]]),('hist',[np.c_[H,D],np.c_[H,D,Z],D[:,None]]),('slow_quad',[np.c_[H,D],np.c_[H,D,Z,H*D,D**2,H**2,Z*D[:,None],Z*H[:,None]],D[:,None]])]:\\n  B=np.concatenate([a[None,:,None]*J[:,None,:] for a,J in zip(A.T,inputs)],axis=-1)\\n  def fit(ix):\\n   b=np.linalg.lstsq(B[ix].reshape(-1,B.shape[-1]),Y[ix].ravel(),rcond=None)[0]; return b,B@b-Y\\n  rms=lambda e:np.array([np.sqrt(np.mean(e[:,0]**2)),np.sqrt(np.mean(e[:,1:]**2))]); b,e=fit(L==L)\\n  print(name2,b.round(4),rms(e).round(5),'LOLO worst',np.max([rms(fit(L!=l)[1][L==l]) for l in np.unique(L)],axis=0).round(5))\\n if name=='aligned': print('slow residual by lab; hold, slow state, D, missing count:',np.c_[L,H,Z[:,1],D,np.isnan(d['coupon_features_raw']).sum(1),amp[:,1]-(.40*H+2.38*D+.036*Z[:,0]+.27*Z[:,1])].round(4))\\nprint('telemetry',np.round(te['aux_chamber_telemetry'][:8],4)); print('diagnostic keys',list(d));print('timing',t)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_compare.py; grep -A43 '^def solve_batch' /tmp/hegel_continual_archive/alpha_m99_c02_batch_02_solver.py; grep -A25 '^def solve_batch' /tmp/hegel_continual_archive/alpha_m99_c02_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Stress-only memory → chamber hold and drift drive the relaxation amplitudes; the best tested model has worst-lab RMSE 0.04489 for initial rate and 0.07175 for strain.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Change intrinsic relaxation times\",\"rejected_reason\":\"Freeing chamber time constants made almost no difference to held-out strain error.\"}],\"rationale\":\"The fast mode is nearly proportional to hold plus intrinsic drift, while the slow mode remains unexplained. Compare reference-panel coordinates and low-order slow-mode interactions; their held-out errors will distinguish a feature-coordinate mismatch from missing chamber mechanics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "60f4a4de52e3f5c314089dd9d4ab55a662b7593630f73cc2365bfe181a5ab23c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27585.59,
+      "usage_known": true,
+      "prompt_tokens": 37052,
+      "cached_tokens": 13696,
+      "completion_tokens": 1054
+    }
+  ]
+}

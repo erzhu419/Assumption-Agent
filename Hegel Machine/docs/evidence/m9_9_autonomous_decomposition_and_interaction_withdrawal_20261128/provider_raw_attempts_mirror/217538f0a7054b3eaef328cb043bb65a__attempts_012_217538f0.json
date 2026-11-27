@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "217538f0a7054b3eaef328cb043bb65a",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:34.578800+00:00",
+  "ended_at_utc": "2026-11-27T19:42:08.849690+00:00",
+  "request_sha256": "e1908892431c4064bcc91e5465419287e74c3ee0ea761df0c6e9bd5037d7f057",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77681,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 44610,
+    "cached_tokens": 14976,
+    "completion_tokens": 1402
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; dg=i['campaign_diagnostics']; tr=ds['train']; te=ds['test']; out=m.solve_batch(ds); q=out['estimated_taus']; w=out['hereditary_weights']; t=ds['eval_times']; dt=ds['past_dt']; b=m._calibration(ds['calibration_load_cells']); assert .05<q[0]<q[1]<25 and all(np.isfinite(v).all() for v in out.values())\\ny=np.c_[dg['strain_curves_obs']-dg['strain_0'][:,None],dg['instant_rate_obs']]; lab=dg['lab_id']; raw=dg['coupon_features_raw']; miss=np.isnan(raw).any(1); x=m._features(dg); inp=m._coupon_inputs(dg,x,b); h=inp[1]; T=np.r_[t,1.]; B=np.r_[-np.expm1(-t[:,None]/q),(1/q)[None,:]]; basis=np.c_[B,T]; base=h[:,None]*(B@w[:2]); drift=w[2]+x@w[3:]; F=drift[:,None,None]*basis[None,:,:]; pred=np.empty_like(y)\\nfor l in np.unique(lab):\\n k=(lab!=l)&~miss; held=lab==l; c=np.linalg.lstsq(F[k].reshape(-1,3),(y-base)[k].ravel(),rcond=None)[0]; pc,pr=m._chamber(q,w,h[held],x[held],t,c); pred[held]=np.c_[pc,pr]; print('held lab',l,'routing',c.round(5))\\ndef rms(e): return np.array([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\npc,pr=m._chamber(q,w,h,x,t); e=np.c_[pc,pr]-y; a,r=m._design(q,inp,dt,t); baseline=np.c_[a@w,r@w]-y; ev=pred-y\\nfor name,sel in [('all',np.ones(len(y),bool)),('complete',~miss),('missing',miss)]+[(f'lab {l}',lab==l) for l in np.unique(lab)]+[(f'stratum {j}',dg['stratum']==j) for j in np.unique(dg['stratum'])]:\\n print(name,'fixed',rms(e[sel]).round(5),'OOF',rms(ev[sel]).round(5),'unchanged',rms(baseline[sel]).round(5)); assert np.all(rms(ev[sel])<rms(baseline[sel]))\\nprint('OOF worst horizon RMS',max(np.sqrt(np.mean(ev[:,:-1]**2,axis=0))))\\n# Infer missing drift from the independent measured response to diagnose panel imputation.\\nunit=basis@m._CHAMBER_ROUTING; inferred=(y-base)@unit/(unit@unit)\\nfor j in np.flatnonzero(miss):\\n cols=np.flatnonzero(np.isnan(raw[j])); print('missing inference',j,cols.tolist(),'actual impute',x[j,cols].round(4),'drift error',round(drift[j]-inferred[j],5),'zero drift error',round(drift[j]-x[j,cols]@w[3:][cols]-inferred[j],5))\\nfor label,z in [('deploy local',m._features(te)),('deploy pooled',m._features(tr,te)[len(tr['lab_id']):])]: print(label,'mean drift',np.mean(w[2]+z@w[3:]))\\n# The reported rate is the derivative of the reported deployment curve.\\nxt=m._features(te); _,ht,_=m._coupon_inputs(te,xt,b); f,d=m._chamber(q,w,ht,xt,np.array([0.,1e-7])); assert np.max(abs(f[:,0]))<1e-12; assert np.max(abs(f[:,1]/1e-7-d))<1e-6; np.testing.assert_allclose(d,out['initial_rate_pred']); f,_=m._chamber(q,w,ht,xt,t); np.testing.assert_allclose(f+te['strain_0'][:,None],out['predicted_strain'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop transfer → H2 chamber-local drift routing with reset history; prior worst leave-one-lab-out RMS is 0.02184 strain and 0.01986 rate, pending a scientific check on the saved artifact.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema check\",\n      \"rejected_reason\": \"The schema receipt does not establish that the saved law improves both observables on held-out coupons or that the returned rate matches the curve derivative.\"\n    }\n  ],\n  \"rationale\": \"Use the saved artifact to refit only chamber routing inside each lab holdout and compare against unchanged transfer across labs, strata, and missing-feature slices. If residuals concentrate on imputed coupons, diagnose the imputation before adding constitutive terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "26fbf8a8589e1eb1c4b3efeebfc6abce0a46f572d2ba78b52e2ba63e332eaaa2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35363.74,
+      "usage_known": true,
+      "prompt_tokens": 44610,
+      "cached_tokens": 14976,
+      "completion_tokens": 1402
+    }
+  ]
+}

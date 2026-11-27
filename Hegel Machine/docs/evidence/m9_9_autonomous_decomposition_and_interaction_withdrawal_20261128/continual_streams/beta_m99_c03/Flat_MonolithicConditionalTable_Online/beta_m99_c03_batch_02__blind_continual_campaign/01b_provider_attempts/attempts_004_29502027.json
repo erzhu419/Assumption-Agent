@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "29502027199d41c199f38c286a47668f",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:44:20.111783+00:00",
+  "ended_at_utc": "2026-11-27T19:44:50.767279+00:00",
+  "request_sha256": "4afe8094990d18f1fa0e0ad25551cbad56d0a8bc1f302413c6e23eb8e9b09eea",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33567,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28590,
+    "cached_tokens": 14976,
+    "completion_tokens": 1272
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_probe.py <<'PY'\\nimport pickle, importlib.util, numpy as np\\nfrom scipy import sparse\\nfrom scipy.sparse.linalg import splu\\nfrom scipy.optimize import least_squares\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; w=np.array([p['w_pulse'] for p in item['campaign_diagnostics']]).T\\nraw=np.array([p['y_pulse_raw'] for p in item['campaign_diagnostics']]).T\\nfrom itertools import combinations_with_replacement\\nfor d in (1,2,3):\\n terms=[np.ones(len(x))]+[np.prod(x[:,ix],axis=1) for k in range(1,d+1) for ix in combinations_with_replacement(range(4),k)]; X=np.array(terms).T\\n pred=X@np.linalg.lstsq(X,y,rcond=None)[0]; errs=[]\\n for i in range(len(x)):\\n  t=np.arange(len(x))!=i; errs.append(X[i]@np.linalg.lstsq(X[t],y[t],rcond=None)[0]-y[i])\\n print('cal degree',d,'LOO RMSE',np.mean(np.square(errs),axis=0)**.5,'max',np.max(np.abs(errs)))\\n if d==1: B=np.linalg.lstsq(X,y,rcond=None)[0]; print('affine',B)\\ncal=np.linalg.solve(B[1:].T,(raw.T.reshape(-1,4)-B[0]).T).T.reshape(raw.shape[1],-1).T\\nnx,ny=s['nx'],s['ny']; ix,iy=s['sensor_ij'].T; inds=ix+nx*iy\\nrhs=np.column_stack([a.ravel(order='F') for a in s['source_modes']])@w\\nI=sparse.eye(nx*ny,format='csc'); V=sparse.diags(s['V_reaction_2d'].ravel(order='F'))\\ndef axis(a,p):\\n k,v=s['kappa_'+a],s['vel_'+a]; h=s['L'+a]/(len(k)-1); rob=s['robin_'+a]; f=(k[1:]+k[:-1])/(2*h*h)\\n lo=np.r_[-f[:-1]-np.maximum(v[1:-1],0)/h,-p[1]*k[-1]/h**2]; hi=np.r_[-p[0]*k[0]/h**2,-f[1:]-np.maximum(-v[1:-1],0)/h]; diag=np.r_[-hi[0]+p[2]*rob/h,-lo[:-1]-hi[1:],-lo[-1]+p[3]*rob/h]\\n return sparse.diags([lo,diag,hi],[-1,0,1],format='csc')\\ndef forward(p):\\n A=sparse.kron(sparse.eye(ny),axis('x',p[:4]),format='csc')+sparse.kron(axis('y',p[4:]),sparse.eye(nx),format='csc')+V\\n return np.concatenate([splu(A+I*t).solve(rhs)[inds] for t in s['mu_shifts']])\\nfor name,p in [('open',[1,1,1,1]*2),('reflect',[1,1,0,0]*2),('twice',[2,2,0,0]*2),('double open',[2,2,2,2]*2)]:\\n E=forward(p)-cal; print(name,'pulse RMSE',np.mean(E*E,axis=0)**.5)\\nfor hold in (None,0,1,2):\\n sel=np.arange(3)!=hold if hold is not None else np.ones(3,dtype=bool)\\n r=least_squares(lambda p:(forward(p)-cal)[:,sel].ravel(),[1,1,1,1]*2,bounds=(np.full(8,.01)*[1,1,0,0]*2, np.full(8,15.)),ftol=1e-12,gtol=1e-13,xtol=1e-12)\\n E=forward(r.x)-cal; print('fit minus',hold,'params',r.x.round(6),'RMSE',np.mean(E*E,axis=0)**.5)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived wall laws -> pulse-tested boundary face coefficients using sweep-fitted calibration; worst-pulse RMSE pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Assume Robin leakage is the only changing coefficient\",\"rejected_reason\":\"The pulses can test leakage and inward diffusion separately before fixing the wall formula.\"}],\"rationale\":\"Use held-out sweep rows to detect calibration interactions, then compare inherited boundary laws and fit face coefficients with each tracer pulse held out in turn. This tests whether the wall change generalizes beyond the pulses used to infer it.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "04ac3889fc35d448b773a046d426e7f49a32552d1a8b13e3518ae603305971e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31787.02,
+      "usage_known": true,
+      "prompt_tokens": 28590,
+      "cached_tokens": 14976,
+      "completion_tokens": 1272
+    }
+  ]
+}

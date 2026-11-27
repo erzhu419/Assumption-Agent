@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d3e6ca85ddb482eb793f1332eee1bae",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:15.288313+00:00",
+  "ended_at_utc": "2026-11-27T19:41:40.709385+00:00",
+  "request_sha256": "a74c300c5186e6be002054e90863c220ef12ef2753a153e2c57dd7ab9c42c525",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79625,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 45307,
+    "cached_tokens": 13696,
+    "completion_tokens": 973
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_stress.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; q=it['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; n=len(tr['lab_id']); x=m._features(tr,te); b=m._calibration(d['calibration_load_cells']); ai=m._coupon_inputs(tr,x[:n],b); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; full=m.solve_batch(d)\\nqx=m._features(q,{k:q[k][:0] for k in ('coupon_features_raw','ref_coupons','lab_id','stratum')}); _,h,dx=m._coupon_inputs(q,qx,b); complete=np.isfinite(q['coupon_features_raw']).all(1); target=q['strain_curves_obs']-q['strain_0'][:,None]; rate=q['instant_rate_obs']\\nfor lab in [None,*np.unique(tr['lab_id'])]:\\n mask=np.ones(n,bool) if lab is None else tr['lab_id']!=lab\\n a,w=(full['estimated_taus'],full['hereditary_weights']) if lab is None else m._fit(tuple(z[mask] for z in ai),dt,t,yc[mask],yr[mask]); f=-np.expm1(-t[:,None]/a); r=dx@w[2:]; er=h*np.sum(w[:2]/a)+r-rate; base=h[:,None]*(f@w[:2]);\\n print('omitted train lab',lab,'taus',np.round(a,5),'rate RMSE complete/missing',*[round(np.sqrt(np.mean(er[j]**2)),5) for j in (complete,~complete)])\\n for shares in ([.5,.45],[.5,.475],[.5,.5]):\\n  k=f@(a*shares)+(1-sum(shares))*t; e=base+r[:,None]*k-target\\n  print(shares,'RMSE complete/missing',*[round(np.sqrt(np.mean(e[j]**2)),5) for j in (complete,~complete)],'max',round(abs(e).max(),5),'worst lab RMSE',round(max(np.sqrt(np.mean(e[q['lab_id']==i]**2)) for i in np.unique(q['lab_id'])),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_stress.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 a 5% persistent drift share -> H2 equal branch sharing with no persistent drift; the verified candidate has strain MAE 0.008588 and rate MAE 0.001815, but the equal-share kernel fits complete diagnostic coupons better at late times.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the equal-share kernel immediately\",\"rejected_reason\":\"Its complete-coupon advantage is clear, but the candidate should also be compared on missing-feature coupons and under leave-one-training-lab-out material fits.\"}],\"rationale\":\"Each kernel preserves the same initial derivative. Compare their strain errors by missingness and lab while refitting material parameters without each training lab; retain the verified kernel if the challenger does not improve the worst slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "979ba49e3b65113cff8a1387d3307443d95d44a96de00026902c5b36b1c4bddd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26507.92,
+      "usage_known": true,
+      "prompt_tokens": 45307,
+      "cached_tokens": 13696,
+      "completion_tokens": 973
+    }
+  ]
+}

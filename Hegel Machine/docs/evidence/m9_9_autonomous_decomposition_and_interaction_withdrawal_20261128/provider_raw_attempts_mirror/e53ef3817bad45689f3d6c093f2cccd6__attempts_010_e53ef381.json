@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e53ef3817bad45689f3d6c093f2cccd6",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:24.163221+00:00",
+  "ended_at_utc": "2026-11-27T19:45:49.742583+00:00",
+  "request_sha256": "daed372629a3a23c1c59a88b222995f54dd012bff197d7a463c902db4bcaeb53",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34926,
+    "cached_tokens": 14976,
+    "completion_tokens": 969
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p+'batch_solver.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl', 'rb') as f: item = pickle.load(f)[0]\\ns = item['study']; sw = s['sensor_calibration_sweeps']; x = np.asarray(sw['ref_rosette']); y = np.asarray(sw['raw_rosette'])\\ndesign = np.column_stack((np.ones(len(x)), x)); coef = np.linalg.lstsq(design, y, rcond=None)[0]; r = y-design@coef\\nse = np.sqrt(np.diag(np.linalg.inv(design.T@design))[:,None] * (r*r).sum(0)/(len(x)-design.shape[1]))\\nz = coef[1:]/se[1:]; z[np.eye(4,dtype=bool)] = 0\\nprint('max off-diagonal calibration coefficient / standard error:', np.max(abs(z)))\\nprint('single-bank sweep fields and shapes:', [(k,np.shape(v)) for k,v in sw['single_bank_sweeps'].items()])\\nS,_ = m._forward(s); Z = np.asarray(s['Z_nuisance']); P = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nI = np.eye(S.shape[1]); D = I[:,:-1]-I[:,[-1]]; D,_ = np.linalg.qr(D); C=S@D; T=C-Z@(P@C)\\na,b = np.linalg.svd(C,compute_uv=False),np.linalg.svd(T,compute_uv=False)\\nprint('simplex tangent singular-value range before and after nuisance projection:',(a[-1],a[0]),(b[-1],b[0]))\\nassert b[-1] > np.finfo(float).eps * max(T.shape) * b[0], 'A source contrast is numerically unidentifiable after nuisance projection'\\nfor pulse in item['campaign_diagnostics']:\\n    e = S@pulse['w_pulse'] - m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))\\n    print('pulse per-calibrated-channel RMSE after projection:', np.sqrt(np.mean((e-Z@(P@e)).reshape(-1,4)**2,axis=0)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (full affine calibration) → H2 (per-channel gains and offsets): worst nuisance-projected wall tracer RMSE improved from 6.53×10⁻⁷ to 4.90×10⁻⁷; the current audit checks source identifiability after nuisance projection.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the schema and nonlinear calibration checks\",\n      \"rejected_reason\": \"The current artifact already passed isolated schema and KKT checks, and nested validation already compared the nonlinear terms. Those checks would not detect a source contrast lost to nuisance projection.\"\n    }\n  ],\n  \"rationale\": \"Check whether nuisance removal obscures any fixed-budget source contrast or leaves a poorly calibrated channel hidden by aggregate pulse RMSE. A near-null contrast would limit weight identifiability; a channel-specific residual would warrant revisiting that channel’s calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f6dc82ddcd428a0bbd3d89431d08f2535b486300d5f3f7db1a28d752536700c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26726.41,
+      "usage_known": true,
+      "prompt_tokens": 34926,
+      "cached_tokens": 14976,
+      "completion_tokens": 969
+    }
+  ]
+}

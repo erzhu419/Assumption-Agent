@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c342fea259e4a3ba8276b85eeaef62f",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:13:16.826707+00:00",
+  "ended_at_utc": "2026-11-27T20:13:50.662653+00:00",
+  "request_sha256": "3f54b2501ecac59a84fa6c3e28e4cc9c3ebc25b643e62971dd460bf80f3745c7",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40105,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29482,
+    "cached_tokens": 13696,
+    "completion_tokens": 1383
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) == 1\\nforward_error = np.empty(len(x))\\ninverse_error = np.full_like(x, np.nan)\\nfor fold in range(5):\\n    test = np.arange(len(x)) % 5 == fold\\n    coeff = up._fit_bridge(x[~test], y[~test])\\n    forward_error[test] = np.linalg.norm(up._forward(x[test], coeff) - y[test], axis=1)\\n    good = test & (forward_error < 1.)\\n    inverse_error[good] = up._invert(y[good], coeff) - x[good]\\ngood = forward_error < 1.\\nprint('held-out forward p90 (all):', np.quantile(forward_error, .9))\\nprint('gross spike rows and norms:', np.flatnonzero(~good).tolist(), forward_error[~good].tolist())\\nfor name, mask in [('axis', axis), ('mixed', ~axis)]:\\n    idx = good & mask\\n    err = inverse_error[idx]\\n    print(name, 'n', len(err), 'forward max', forward_error[idx].max(), 'inverse per-channel max', np.abs(err).max(axis=0), 'load sum max', np.abs(err.sum(axis=1)).max())\\nassert np.max(np.abs(inverse_error[good])) < .002\\nassert np.max(np.abs(inverse_error[good].sum(axis=1))) < .003\\ncoeff = up._fit_bridge(x, y)\\nfield_names = ('past_channel_raw', 'hold_channel_raw')\\nbase = {name: {k: ds[name][k].copy() for k in field_names} for name in ('train', 'test')}\\nfull_y = y.copy()\\nreduced = up.calibrate_upstream(ds)\\nnew_cal = reduced['calibration_load_cells']\\nassert np.array_equal(new_cal['bridge_raw'], x) and not np.shares_memory(new_cal['bridge_raw'], x)\\nsweeps = new_cal['single_channel_sweeps']\\nassert np.array_equal(sweeps['cmd_stress'], sweeps['true_stress']) and not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\nassert np.array_equal(cal['bridge_raw'], full_y)\\nfor name, fields in base.items():\\n    for k, raw in fields.items():\\n        recovered = reduced[name][k]\\n        flat = recovered.reshape(-1, 4)\\n        residual = np.max(np.abs(up._forward(flat, coeff) - raw.reshape(-1, 4)))\\n        print(name, k, 'round-trip max', residual, 'load range', (flat.min(), flat.max()))\\n        assert recovered.shape == raw.shape and residual < 1e-9\\n        assert np.array_equal(raw, ds[name][k])\\nidx = np.flatnonzero(good)[:12]\\ntrial = dict(ds, chamber_verification_trials={'past_channel_raw': y[idx].reshape(2,6,4), 'hold_channel_raw': y[idx[:2]]})\\noptional = up.calibrate_upstream(trial)['chamber_verification_trials']\\nassert np.max(np.abs(optional['past_channel_raw'] - x[idx].reshape(2,6,4))) < .002\\nassert np.max(np.abs(optional['hold_channel_raw'] - x[idx[:2]])) < .002\\nassert up.calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nout = solve_batch(ds)\\nfor k, shape in [('estimated_taus', (2,)), ('hereditary_weights', (7,)), ('predicted_strain', (len(ds['test']['lab_id']), len(ds['eval_times']))), ('initial_rate_pred', (len(ds['test']['lab_id']),))]:\\n    a = np.asarray(out[k]); assert a.shape == shape and np.isfinite(a).all(), k\\nprint('isolated composition: all four outputs verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 diagonal cubics → H2 diagonal cubics with cyclic pair interactions; the broader interaction model reached 0.00050 held-out forward p90, and the final sparse model's inverse error is being tested by slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Rely on the public schema gate alone\",\n      \"rejected_reason\": \"It confirms shapes and finiteness but cannot detect incorrect inverse loads, incomplete conversion, or mutation of the input.\"\n    }\n  ],\n  \"rationale\": \"Held-out axis and mixed-load errors test calibration accuracy independently of the downstream fit; excessive errors would reopen model selection. Round-trip errors on real train/test inputs would instead point to the numerical inverse. The isolated run also checks the optional chamber path and all four composed outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "8ef9d10f32c5e4dc61b266c39e37035e207e8ede7b3562b1aa6974d11c58154f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35002.74,
+      "usage_known": true,
+      "prompt_tokens": 29482,
+      "cached_tokens": 13696,
+      "completion_tokens": 1383
+    }
+  ]
+}

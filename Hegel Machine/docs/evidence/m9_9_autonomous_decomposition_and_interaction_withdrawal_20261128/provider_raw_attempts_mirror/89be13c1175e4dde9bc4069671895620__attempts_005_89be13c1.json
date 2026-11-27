@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89be13c1175e4dde9bc4069671895620",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:43.510701+00:00",
+  "ended_at_utc": "2026-11-27T20:04:10.708667+00:00",
+  "request_sha256": "c9708182d38ebfb00e03635122eb35893819946d61d53de18a06bbdbc873b8bb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42586,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30756,
+    "cached_tokens": 14976,
+    "completion_tokens": 1100
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nprintf '%s\\\\n' '--- Available task documentation ---'\\nls -ld /pretrain_task /app /workspace /holdout_task /tmp/hegel_continual_archive 2>/dev/null || true\\nif [ -d /pretrain_task ]; then find /pretrain_task -maxdepth 2 -type f -printf '%P\\\\n' | head -35; fi\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nimport batch_solver as m\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; tr,te=D['train'],D['test']; dt,t=D['past_dt'],D['eval_times']; n=len(tr['lab_id']); x=m._features(tr,te); c=m._calibration(D['calibration_load_cells']); u=m._coupon_inputs(tr,x[:n],c)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; v=tr['instant_rate_obs']; aux=tr['aux_chamber_telemetry']; all_c=[]; all_r=[]; all_a=[]\\nfor lab in np.unique(tr['lab_id']):\\n  o=tr['lab_id']!=lab; j=~o\\n  tau,theta=m._fit(tuple(a[o] for a in u),dt,t,y[o],v[o]); a,b=m._design(tau,tuple(a[j] for a in u),dt,t); rc=y[j]-a@theta; rr=v[j]-b@theta\\n  print('held-out lab',lab,'taus',np.round(tau,5),'curve MAE/p50/p90 abs',np.round([np.mean(abs(rc)),*np.percentile(abs(rc),[50,90])],5),'rate MAE/p90 abs',np.round([np.mean(abs(rr)),np.percentile(abs(rr),90)],5)); all_c.extend(np.median(rc,axis=1)); all_r.extend(rr); all_a.extend(aux[j])\\nprint('held-out residual vs telemetry rank corr [curve, instant]'); from scipy.stats import spearmanr\\nprint(np.round(spearmanr(np.column_stack((all_c,all_r,all_a))).statistic[:2,2:],3))\\ns=D['calibration_load_cells']['single_channel_sweeps']; print('single-channel command-to-true affine fits by lab:');\\nfor l in np.unique(s['lab_id']):\\n j=s['lab_id']==l; q=s['cmd_stress'][j]; z=s['true_stress'][j]; a=np.polyfit(q,z,1); print(l,a.round(5),np.max(np.abs(z-np.polyval(a,q))))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor entry in log:\\n a=np.asarray(entry['facility_telemetry_trace']); print(entry['completed_campaign_short_name'],'setting levels',np.round(a[:,[3,6]].mean(0),4),'other-channel abs max mean',np.max(np.abs(a[:,[0,1,2,4,5,7]].mean(0))).round(4),'other fields',sorted(set(entry)-{'facility_telemetry_trace','completed_campaign_index','completed_campaign_short_name'}))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Benchtop deployment law → separately identified chamber response; bridge inversion residual is below 6×10⁻¹⁴, and held-out constitutive errors have not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer a numerical drift or memory correction from the setting level alone\",\n      \"rejected_reason\": \"The log distinguishes settings but does not yet connect them to a response equation.\"\n    }\n  ],\n  \"rationale\": \"Leave one lab out to detect a train-side failure that the schema check cannot show. A lab-specific error or a residual association with telemetry would motivate a targeted diagnostic; otherwise, look for a documented mapping from the archived settings to the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7a6629428c06dcc4032cfd630e4995d4504b4d94b20a0ff7873ba4dffe96dd9e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28366.32,
+      "usage_known": true,
+      "prompt_tokens": 30756,
+      "cached_tokens": 14976,
+      "completion_tokens": 1100
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ef06fb66d53e4c8b98a68865c24881c4",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:47:10.626488+00:00",
+  "ended_at_utc": "2026-11-27T19:47:37.337149+00:00",
+  "request_sha256": "1d327d2578db60ee8f2bd095eb502c6a91b4e05181bbcc2c52d86b687966e7c7",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46901,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30040,
+    "cached_tokens": 13696,
+    "completion_tokens": 1055
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys\\nsys.path[:0] = ['/tmp', '/holdout_task']\\nimport numpy as np\\nfrom itertools import product\\nfrom probe_wall import it, s, W, pred\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _responses\\nfrom batch_solver import solve_batch\\nraw = s['sensor_calibration_sweeps']['raw_rosette']\\nref = s['sensor_calibration_sweeps']['ref_rosette']\\nassert raw.shape == ref.shape\\nn = len(raw)\\nfolds = np.array_split(np.random.default_rng(43).permutation(n), 5)\\ncal_errors = []\\nfor hold in folds:\\n    train = np.setdiff1d(np.arange(n), hold)\\n    gain, offset = np.array([np.linalg.lstsq(np.column_stack((ref[train,j], np.ones(len(train)))), raw[train,j], rcond=None)[0] for j in range(4)]).T\\n    cal_errors.append(np.sqrt(np.mean(((raw[hold] - offset)/gain - ref[hold])**2, axis=0)))\\nprint('Worst held-out sweep fold/channel RMSE:', np.max(cal_errors))\\nmeasured = np.column_stack([calibrate_upstream(dict(s, y_obs_raw=d['y_pulse_raw']))['y_obs_raw'] for d in it['campaign_diagnostics']])\\nZ = s['Z_nuisance']\\nP = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nmodes = ['open','reflect','reflect2','face','face2','period','dirichlet','short','wrap']\\nerrors = {xy: pred(*xy)-measured for xy in product(modes, repeat=2)}\\nfor label, projection in [('unprofiled', np.eye(len(Z))), ('nuisance profiled', P)]:\\n    e = {xy: projection @ error for xy,error in errors.items()}\\n    for j in range(W.shape[1]):\\n        train = np.arange(W.shape[1]) != j\\n        ranked = sorted(e, key=lambda xy: np.linalg.norm(e[xy][:,train]))\\n        best, runner = ranked[:2]\\n        r = lambda xy: np.sqrt(np.mean(e[xy][:,j]**2))\\n        print(label, 'held pulse', j, 'selected', best, 'RMSE', r(best), 'runner', runner, 'RMSE', r(runner))\\n        assert best == ('period','period') and r(best) < 1e-5 and r(runner) > 10*r(best)\\nS, _ = _responses(s)\\nassert np.max(abs(S@W - pred('period','period'))) < 1e-12\\nout = solve_batch(s)\\nassert np.isfinite(out['terminal_field']).all()\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local endpoint rows -> H2 cyclic upwind rows on both axes; the prior isolated audit found a worst tracer-slice RMSE of 2.74×10⁻⁶.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"The study is a steady linear inverse problem with no relay state or class labels; the applicable confound check is whether nuisance projection changes wall selection.\"\n    }\n  ],\n  \"rationale\": \"Select the boundary stencil without each held tracer pulse, both with and without nuisance projection. If the periodic advantage disappears, revisit the wall or calibration model; if it persists, retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6ea08d429eaea350c16403e244938714af19f16aa9142bc16956073ae962a84f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27822.67,
+      "usage_known": true,
+      "prompt_tokens": 30040,
+      "cached_tokens": 13696,
+      "completion_tokens": 1055
+    }
+  ]
+}

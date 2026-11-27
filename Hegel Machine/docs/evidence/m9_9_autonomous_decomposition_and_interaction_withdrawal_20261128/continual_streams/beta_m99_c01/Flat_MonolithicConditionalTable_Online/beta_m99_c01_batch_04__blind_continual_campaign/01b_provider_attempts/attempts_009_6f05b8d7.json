@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f05b8d713384884916a0ff71be67420",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:56:46.331980+00:00",
+  "ended_at_utc": "2026-11-27T19:57:27.030844+00:00",
+  "request_sha256": "618a1f29673a017c62f99a02ee720976ae7d68e1a54bdde1da9b29353907030f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50304,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33202,
+    "cached_tokens": 14976,
+    "completion_tokens": 1741
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\nsed -n '10,23p;85,180p' /holdout_task/batch_solver.py\\ncat > /tmp/m99_final_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\ncal = s['sensor_calibration_sweeps']\\nx, raw = cal['ref_rosette'], cal['raw_rosette']\\nD = m._rosette_design(x)\\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\nQ = np.column_stack([x*x] + [(x[:,i]-x[:,j])**2 for i,j in pairs] + [(x[:,i]+x[:,j])**2 for i,j in pairs])\\nT = np.column_stack([D, x*x] + [x[:,i]**2*x[:,j] for i in range(4) for j in range(4) if i!=j] + [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i+1,4) for k in range(j+1,4)])\\nerrors = {k: [] for k in ('baseline','expanded_poly','rational')}\\nfor held in np.array_split(np.random.default_rng(24).permutation(len(x)), 5):\\n    tr = np.setdiff1d(np.arange(len(x)),held)\\n    c = m._fit_rosette(x[tr],raw[tr])\\n    e = raw[tr]-D[tr]@c\\n    med = np.median(e,axis=0)\\n    scale = np.maximum(1.4826*np.median(abs(e-med),axis=0),1e-7)\\n    fit = tr[np.all(abs(e-med)<8*scale,axis=1)]\\n    pred = D[held]@c\\n    poly = T[held]@np.linalg.lstsq(T[fit],raw[fit],rcond=None)[0]\\n    rat = np.empty_like(pred)\\n    for j in range(4):\\n        # Fit P/(1+Q a) by linearization; choose denominator on training sweeps only.\\n        best = (np.inf, pred[:,j])\\n        for q in Q.T:\\n            z = np.column_stack((D[fit],-raw[fit,j]*q[fit]))\\n            b = np.linalg.lstsq(z,raw[fit,j],rcond=None)[0]\\n            den = 1+q*b[-1]\\n            if np.min(den[fit])<0.5 or np.min(den[held])<0.5:\\n                continue\\n            loss = np.mean((D[fit]@b[:-1]/den[fit]-raw[fit,j])**2)\\n            if loss < best[0]:\\n                best = loss, D[held]@b[:-1]/den[held]\\n        rat[:,j] = best[1]\\n    # Calibration gross outliers stay in the all-row score; robust median also measures nominal fit.\\n    for name, pred_ in [('baseline',pred),('expanded_poly',poly),('rational',rat)]:\\n        e = raw[held]-pred_\\n        errors[name].append((np.median(abs(e),axis=0),np.sqrt(np.mean(e**2,axis=0))))\\nfor name, values in errors.items():\\n    print(name, 'worst fold/channel median abs:', np.max(np.array(values)[:,0]), 'worst fold/channel RMS:', np.max(np.array(values)[:,1]))\\n\\nout = m.solve_batch(s)\\nS,U = m._forward(s)\\ny = m._calibrate(s)\\nZ = s['Z_nuisance']\\nP = np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA, b = S-Z@(P@S), y-Z@(P@y)\\nw = np.asarray(out['weights']); c = out['kkt_certificate']; nu = c['nu_sum']\\nlo,hi = np.asarray(c['lam_lower']),np.asarray(c['lam_upper'])\\ncap,budget,ridge = (s[k] for k in ('u_box','total_budget','source_ridge'))\\ne = A@w-b; g = A.T@e+ridge*w\\nJ = (e@e+ridge*(w@w))/2\\nlb = J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nmetrics = {'equality':abs(w.sum()-budget),'box':max(0,-w.min(),w.max()-cap),'stationarity':max(abs(g-nu-lo+hi)),'complementarity':max(max(abs(lo*w)),max(abs(hi*(cap-w)))),'duality_gap':J-lb,'certificate_mismatch':max(abs(c['primal_objective']-J),abs(c['dual_lower_bound']-lb),max(abs(np.asarray(c['weights'])-w))),'field_contraction':np.max(abs(out['terminal_field']-np.tensordot(w,U,axes=1)))}\\nprint('KKT and field audit:',metrics)\\nassert min(lo.min(),hi.min())>=0 and max(abs(v) for v in metrics.values())<1e-8\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_final_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Mixed walls → sealed walls on both axes; worst held-shift RMSE is 0.010252 and the independently measured terminal-field relative error is 4.14e-06.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes or within-batch balanced accuracy\",\n      \"rejected_reason\": \"The task is a continuous inverse problem with no relay states or class labels. The relevant nuisance check is the specified ridge projection in the KKT calculation.\"\n    }\n  ],\n  \"rationale\": \"Use held-out calibration sweeps to test whether missing polynomial or rational terms improve nominal prediction, and recompute each KKT component in isolation. A reproducible calibration improvement would justify a challenger; a certificate mismatch would trigger a targeted numerical fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f2adb270ca23b7821cabdc080972c238eeb58192c5cbd7cf299623aa0398e131",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41853.73,
+      "usage_known": true,
+      "prompt_tokens": 33202,
+      "cached_tokens": 14976,
+      "completion_tokens": 1741
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5fd84dd0e741484a991433079ed8a983",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:12.017593+00:00",
+  "ended_at_utc": "2026-11-27T19:51:35.462619+00:00",
+  "request_sha256": "1cd1c45d3d14fece4785099cfde8027647a7f7a4d88280d7498415c13fb19a77",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43976,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32810,
+    "cached_tokens": 14976,
+    "completion_tokens": 900
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=5,suppress=True,linewidth=145)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('N',len(x));\\nfor order in (1,2,3):\\n terms=[()] + [j for p in range(1,order+1) for j in combinations_with_replacement(range(4),p)]\\n A=np.column_stack([x[:,j].prod(1) for j in terms]); B=np.linalg.lstsq(A,y,rcond=None)[0]; e=y-A@B; u,s,v=np.linalg.svd(e,full_matrices=False); print('order',order,'residual singular values',s,'first direction',v[0]); print('largest rows', sorted(enumerate(np.linalg.norm(e,axis=1)),key=lambda t:-t[1])[:18]);\\n weights=np.ones(len(x));\\n for scale in (.5,.1,.02,.004,.001,.0004):\\n  for _ in range(30):\\n   B=np.linalg.lstsq(A*weights[:,None],y*weights[:,None],rcond=None)[0]; e=y-A@B; weights=(1+(np.linalg.norm(e,axis=1)/scale)**2)**-.5\\n print('robust error norm quantiles',np.quantile(np.linalg.norm(e,axis=1),[0,.25,.5,.65,.75,.8,.9,1])); print('non-negligible coeffs',[(j,np.round(b,5).tolist()) for j,b in zip(terms,B) if max(abs(b))>.002]);\\n if order==3:\\n  for i,(xx,yy,ee) in enumerate(zip(x,y,e)):\\n   if np.linalg.norm(ee)>.005: print('suspect',i,xx,yy,ee,ee.sum())\\nPY\\nls -l /pretrain_task; grep -nE 'def _fit|CHAMBER|calibrat' /tmp/hegel_continual_archive/*solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine decoder → cubic forward bridge with a candidate common corruption mode; cubic leave-one-out raw-sum error is 0.00106 at worst, but individual errors still exceed 12 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Invert the fitted sum of raw channels\",\n      \"rejected_reason\": \"A precise raw sum does not by itself establish a one-to-one relationship with total true load.\"\n    }\n  ],\n  \"rationale\": \"The cubic fit recovers the raw sum but not the individual channels. The residual spectrum and robust coefficient estimates will determine whether to discard corrupted calibration rows or fit and remove a shared bridge mode before inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "96e324afe2366eb3d406f0bb4b4e6307e370a76dcfc18eabfde6c9055407da3d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24558.31,
+      "usage_known": true,
+      "prompt_tokens": 32810,
+      "cached_tokens": 14976,
+      "completion_tokens": 900
+    }
+  ]
+}

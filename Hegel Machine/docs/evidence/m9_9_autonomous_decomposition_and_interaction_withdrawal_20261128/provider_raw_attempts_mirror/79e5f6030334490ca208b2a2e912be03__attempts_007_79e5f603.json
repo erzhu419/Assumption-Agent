@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79e5f6030334490ca208b2a2e912be03",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:06:28.686139+00:00",
+  "ended_at_utc": "2026-11-27T20:06:53.837514+00:00",
+  "request_sha256": "13f669786c8c61f2b66f5d848a7a222ea20e8a3428d59e071d6be8deb76b6546",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51958,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35379,
+    "cached_tokens": 13696,
+    "completion_tokens": 994
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; cat batch_solver.py _upstream_param_payload.json validate_public_schema.py; grep -nE 'POLE|FRACTION|chamber' /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport pickle,json\\np=pickle.load(open('public_batch.pkl','rb')); print('public cases',[(len(i['dataset']['train']['lab_id']),len(i['dataset']['test']['lab_id']),None if i['campaign_diagnostics'] is None else len(i['campaign_diagnostics']['lab_id'])) for i in p]); print('schema',str(json.load(open('public_asset_index.json'))['schema'])[:900]); print('manifest',str(json.load(open('/tmp/hegel_continual_archive/archive_manifest.json')))[:1700]);\\nPY\\ncat >/tmp/chamber_exact.py <<'PY'\\nfrom chamber_probe import *\\nfrom scipy.optimize import least_squares\\nL=H*np.sum(theta[:2]/taus); _,xd=prior._features(g,g); D=theta[2]+xd@theta[3:]; labs=g['lab_id']; valid=np.isfinite(g['coupon_features_raw']).all(1)\\ndef response(p, L, D):\\n a,b,u,v,w,offset=p; k0=-a*np.expm1(-t/a); k1=-b*np.expm1(-t/b);\\n return L[:,None]*(u*k0+(1-u)*k1) + (D+offset)[:,None]*(v*k0+w*k1+(1-v-w)*t)\\np0=np.r_[taus,.9,.2,.55,0.]\\nfor name,ds in [('diag',D),('rate implied',R-L)]:\\n for mode in ['fixed','free','rounded']:\\n  def fit(m):\\n   if mode=='rounded': return p0\\n   def pack(x): return np.r_[taus,x] if mode=='fixed' else x\\n   return pack(least_squares(lambda x:(response(pack(x),L[m],ds[m])-Y[m]).ravel(),p0[2:] if mode=='fixed' else p0, max_nfev=250).x)\\n  for subset in [valid,np.ones(n,bool)]:\\n   p=fit(subset); tables=[]\\n   for lab in np.unique(labs):\\n    b=fit(subset&(labs!=lab)); m=labs==lab; e=abs(response(b,L[m],ds[m])-Y[m]); tables.append([e.mean(),e[:,-1].mean(),abs((L+ds+b[-1]-R)[m]).mean()]);\\n   print(name,mode,subset.sum(),'params',p.round(6),'worst lab curve/late/rate',np.max(tables,axis=0).round(6))\\n# Direct estimate of dynamic hold and drift kernels using observed initial rate as a nuisance proxy.\\nf=least_squares(lambda x:(response(x,L,R-L)-Y).ravel(),p0,max_nfev=500); print('implied fit slice mean error',np.round((response(f.x,L,R-L)-Y).mean(0),5));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_exact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 jointly aligned diagnostics -> H2 separate diagnostic reference panel plus conserved hold-load and drift rates; worst-lab initial-rate MAE falls from 0.0432 to 0.0090.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Recalibrate deployment features on diagnostics\",\"rejected_reason\":\"Deployment must use the specified joint train/test panel; separate alignment is only for identifying the chamber law from diagnostic coupons.\"}],\"rationale\":\"Compare fixed intrinsic poles and simple conserved fractions against free poles on held-out labs and at the final horizon. This determines whether separate chamber poles are needed or merely absorb reference-panel error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "84fbe112b5cf2e0feed5eb17f76ed5fb2e4a23873def70bb5a60a5a3d63fb41c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26298.49,
+      "usage_known": true,
+      "prompt_tokens": 35379,
+      "cached_tokens": 13696,
+      "completion_tokens": 994
+    }
+  ]
+}

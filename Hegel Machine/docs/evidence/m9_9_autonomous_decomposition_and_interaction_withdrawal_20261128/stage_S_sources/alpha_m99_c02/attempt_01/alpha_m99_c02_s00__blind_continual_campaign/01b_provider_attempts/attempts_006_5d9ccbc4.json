@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d9ccbc4ebfb481ca1460d90f6189c55",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:32:32.747057+00:00",
+  "ended_at_utc": "2026-11-27T19:33:06.615586+00:00",
+  "request_sha256": "36a60c6627f5ee99bf7440292a3ca6dbe47a287808a6d88247e8d6e183224f0c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36132,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28490,
+    "cached_tokens": 14976,
+    "completion_tokens": 1414
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,b=d['train'],d['test']; x,z=m._features(a,b); dt,t=d['past_dt'],d['eval_times']; w=m._bridge(d['calibration_load_cells']); labs=a['lab_id']; n=len(labs)\\ncal=d['calibration_load_cells']; raw=cal['bridge_raw']; M=np.c_[np.ones(len(raw)),raw]; L=cal['true_channel_loads']; errs=[]\\nfor ix in np.array_split(np.random.default_rng(0).permutation(len(raw)),5):\\n keep=np.ones(len(raw),bool); keep[ix]=False\\n q=np.linalg.lstsq(M[keep],L[keep],rcond=None)[0]\\n errs.append(np.sqrt(np.mean(((M[ix]@q-L[ix]).sum(1))**2)))\\nprint('Worst held-out bridge total-load RMS',max(errs),'condition',np.linalg.cond(M))\\nfor l in list(np.unique(labs))+[None]:\\n va=labs==l if l is not None else np.ones(n,bool); tr=~va if l is not None else va\\n train={k:v[tr] for k,v in a.items()}; test={k:v[va] for k,v in a.items()}; tau,theta=m._material(train,w,x[tr],dt,t); p0=np.r_[np.log(tau),theta]\\n def err(q,split,features):\\n  c,r=m._basis(np.exp(q[:2]),*m._loads(split,w),features,dt,t)\\n  return c@q[2:]+split['strain_0'][:,None]-split['strain_curves_obs'],r@q[2:]-split['instant_rate_obs']\\n def scale(v): return max(.0005,1.4826*np.median(abs(v-np.median(v))))\\n noise=[scale(v) for v in err(p0,train,x[tr])]\\n def residual(q): return np.concatenate([z.ravel()/u for z,u in zip(err(q,train,x[tr]),noise)])\\n q=least_squares(residual,p0,bounds=(np.r_[np.log([.050001]*2),[-np.inf]*7],np.r_[np.log([24.99999]*2),[np.inf]*7]),loss='cauchy',f_scale=2.5).x\\n for name,coef in [('soft_l1',p0),('cauchy',q)]:\\n  c,r=err(coef,test,x[va]); bytime=np.quantile(abs(c),.9,axis=0); j=np.argmax(bytime)\\n  print(l,name,'tau',np.exp(coef[:2]).round(5),'curve/rate med,p90',np.round([np.quantile(abs(c),[.5,.9]),np.quantile(abs(r),[.5,.9])],5).tolist(),'worst horizon',t[j],round(bytime[j],5),'horizon big-noise count',np.sum(abs(c[:,j])>8*noise[0]),'of',len(c))\\nout=m.solve_batch(d); tau=out['estimated_taus']; theta=out['hereditary_weights']; past,hold=m._loads(b,w); c,r=m._basis(tau,past,hold,z,dt,np.array([0.,1e-7])); gain=-np.expm1(-dt[:,None]/tau); lag=np.cumsum(dt[::-1])[::-1]-dt; gap=hold[:,None]-past@ (gain*np.exp(-lag[:,None]/tau)); rate=gap@(theta[:2]/tau)+theta[2]+z@theta[3:]; print('independent convolution rate max error',max(abs(rate-out['initial_rate_pred'])),'zero offset',np.max(abs(c[:,0]@theta)),'finite-difference rate max delta',np.max(abs((c[:,1]@theta)/1e-7-r@theta)))\\nassert np.allclose(rate,out['initial_rate_pred'],rtol=1e-12,atol=1e-12)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated two-branch law -> H2 test whether the worst horizon reflects outliers rather than a missing term; held-out lab p90 errors are 0.02289 for strain and 0.01136 for rate, with one lab-time strain p90 of 0.267.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear drift or relay terms\",\n      \"rejected_reason\": \"The supplied mechanics has continuous hereditary states and no relay or classification labels. The independent convolution check targets the relevant algebra; the loss comparison tests whether the worst horizon warrants changing the estimator.\"\n    }\n  ],\n  \"rationale\": \"Check whether the affine calibration transfers to held-out sweeps, verify initial rates against an independent history convolution, and compare robust losses on held-out labs. Change the candidate only if these checks reveal a material improvement or an implementation error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3dd0512d57e4b59dfcb6d677432e2606f2be2014de907ea02a046896e5383d72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34961.86,
+      "usage_known": true,
+      "prompt_tokens": 28490,
+      "cached_tokens": 14976,
+      "completion_tokens": 1414
+    }
+  ]
+}

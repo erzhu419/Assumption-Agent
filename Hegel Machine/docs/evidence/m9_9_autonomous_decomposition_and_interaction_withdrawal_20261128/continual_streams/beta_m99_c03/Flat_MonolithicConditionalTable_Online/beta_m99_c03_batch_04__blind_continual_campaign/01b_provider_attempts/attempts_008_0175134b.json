@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0175134b5f3b47e991f171e9c641aeec",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:12.839932+00:00",
+  "ended_at_utc": "2026-11-27T19:58:52.249423+00:00",
+  "request_sha256": "f364b766f38f8b2d3ddc428f2b53133e323fa5342e1de093fb75597b42955208",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47986,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32369,
+    "cached_tokens": 14976,
+    "completion_tokens": 1672
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '30,180p' /holdout_task/batch_solver.py\\ncat > /tmp/audit04.py <<'PY'\\nimport importlib.util as iu\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\np='/holdout_task/'\\ndef load(name,path):\\n    spec=iu.spec_from_file_location(name,path)\\n    m=iu.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load('candidate',p+'batch_solver.py')\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\nb=s['sensor_calibration_sweeps']; R=b['ref_rosette']; Y=b['raw_rosette']; single=b['single_bank_sweeps']\\nfor j in range(4):\\n    same=single['bank_id']==j; alone=np.zeros((same.sum(),4)); alone[:,j]=single['ref_signal'][same]\\n    r=np.r_[R,alone]; t=np.r_[Y[:,j],single['raw_readout'][same]]\\n    x,n,q,o=r[:,j],r[:,(j+1)%4],r[:,(j-1)%4],r[:,(j+2)%4]\\n    D=np.c_[np.ones(len(t)),x,n,q,x*n,x**3]; Q=np.c_[x*x,n*n,(x-n)**2,(x+q)**2]\\n    err=[]\\n    for f in range(5):\\n        test=np.arange(len(t))%5==f; train=~test\\n        clean=train & (np.abs(t)<8); valid=test & (np.abs(t)<8)\\n        c=np.linalg.lstsq(D[clean],t[clean],rcond=None)[0]; base=D[valid]@c-t[valid]\\n        def pred(h, mask): return (D[mask]@h[:6])/(1+Q[mask]@h[6:])\\n        h=least_squares(lambda h:pred(h,clean)-t[clean],np.r_[c,np.full(4,1e-8)],bounds=(np.r_[np.full(6,-np.inf),np.zeros(4)],np.full(10,np.inf)),gtol=1e-13,ftol=1e-12,xtol=1e-12).x\\n        err.append([np.mean(base**2)**.5,np.mean((pred(h,valid)-t[valid])**2)**.5,max(h[6:])])\\n    print('calibration bank',j,'worst held-out polynomial/rational RMSE, max quotient coefficient:',np.max(err,axis=0))\\nS,U=m._forward(s); y=m._calibrated_observations(s); Z=s['Z_nuisance']; ridge=s['source_ridge']; eta=s['nuisance_ridge']; cap=s['u_box']; budget=s['total_budget']; I=np.eye(S.shape[1]); IZ=np.eye(Z.shape[1]); ns=len(s['sensor_ij']); nk=len(s['mu_shifts'])\\ndef fit(A,B,t,nuisance):\\n    joined=np.c_[A,t]; C=np.linalg.solve(B.T@B+eta*IZ,B.T@joined) if nuisance else np.zeros((B.shape[1],joined.shape[1])); d=joined-B@C; D,r=d[:,:-1],d[:,-1]\\n    w,nu=m._box_simplex(D.T@D+ridge*I,-D.T@r,cap,budget)\\n    return w,nu,C[:,-1]-C[:,:-1]@w,D,r\\nfor grouping in [np.tile(np.arange(ns),nk),np.repeat(np.arange(nk),ns)]:\\n    scores=[]\\n    for f in np.unique(grouping):\\n        te=grouping==f; tr=~te; r=[]\\n        for nuisance in [True,False]:\\n            w,_,g,_,_=fit(S[tr],Z[tr],y[tr],nuisance)\\n            e=S[te]@w+Z[te]@g-y[te]; r.append(np.mean(e*e)**.5)\\n        scores.append(r)\\n    print('worst sensor/shift held-out RMSE with/without nuisance:',np.max(scores,axis=0))\\na=m.solve_batch(s); w=np.asarray(a['weights']); c=a['kkt_certificate']; nu=c['nu_sum']; _,_,_,D,r=fit(S,Z,y,True); e=D@w-r; g=D.T@e+ridge*w\\nJ=(e@e+ridge*(w@w))/2; lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum(); field=np.tensordot(w,U,axes=(0,0))\\nprint('budget error; box violation; stationarity infinity norm; complementarity infinity norm; duality gap:',abs(w.sum()-budget),max(0,-w.min(),w.max()-cap),np.max(abs(g-nu-lo+hi)),max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))),J-dual)\\nnp.testing.assert_allclose(c['weights'],w,rtol=0,atol=1e-12)\\nnp.testing.assert_allclose([c['primal_objective'],c['dual_lower_bound']],[J,dual],rtol=1e-10,atol=1e-12)\\nnp.testing.assert_allclose(a['terminal_field'],field,rtol=1e-12,atol=1e-12)\\nassert abs(w.sum()-budget)<1e-8 and min(w.min(),cap-w.max())>=-1e-8\\nassert min(lo.min(),hi.min())>=0 and np.max(abs(g-nu-lo+hi))<1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit04.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open Robin walls → reflecting walls with sweep-fitted nonlinear calibration; the prior worst held-out sensor/shift RMSEs were 0.00978/0.01259.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or relay-mode tests\",\n      \"rejected_reason\": \"The study is a steady inverse problem with neither class labels nor a relay state. Held-out sensor and shift predictions test the actual nuisance model.\"\n    }\n  ],\n  \"rationale\": \"Test whether a rational calibration term improves held-out sweep predictions and whether nuisance projection improves held-out transport predictions. Recompute the objective, dual bound, and field from the saved solver's output in an isolated process; a mismatch would identify which deliverable needs repair.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "21f53637764b1cf06b44b00a23f7cba9f1692ecaf635dbae40c64619c8563512",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40403.8,
+      "usage_known": true,
+      "prompt_tokens": 32369,
+      "cached_tokens": 14976,
+      "completion_tokens": 1672
+    }
+  ]
+}

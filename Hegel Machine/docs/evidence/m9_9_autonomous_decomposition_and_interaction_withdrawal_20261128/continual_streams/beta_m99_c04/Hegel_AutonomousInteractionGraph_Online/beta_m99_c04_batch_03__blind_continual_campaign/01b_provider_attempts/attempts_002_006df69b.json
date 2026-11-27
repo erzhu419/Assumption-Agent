@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "006df69be8bb4820a60ac5587eab58c5",
+  "call_seq": 2,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:02.100361+00:00",
+  "ended_at_utc": "2026-11-27T19:50:21.769084+00:00",
+  "request_sha256": "1553f55be96e77cbb9469ae8cc6edfe1128ea92710b207c41c19d26fc80ccd95",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12456,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19047,
+    "cached_tokens": 13696,
+    "completion_tokens": 672
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && sed -n '1,220p' _verified_downstream.py && for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"===== $f\\\"; grep -nE 'rosette|satur|calibr|pulse|apparatus|tanh|emi' \\\"$f\\\"; done && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nitems=pickle.load(open('public_batch.pkl','rb')); print('items',len(items))\\nfor item in items:\\n s=item['study']; c=s['sensor_calibration_sweeps']; print('item keys',list(item),'study keys',list(s)); print('diag',item.get('campaign_diagnostics')); print('calibration:')\\n for k in ['ref_rosette','raw_rosette']:\\n  a=c[k];print(k,a.shape,np.quantile(a,[0,.05,.5,.95,1],axis=0)); print(a[:6]);\\n p=s.get('reference_tracer_pulses');print('pulses',None if p is None else [(list(t),np.shape(t.get('y_pulse_raw'))) for t in p]);print('obs',np.quantile(np.asarray(s['y_obs_raw']).reshape(-1,4),[0,.5,1],axis=0));print('single banks',[(k,np.shape(v)) for k,v in c['single_bank_sweeps'].items()]);\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log layout',type(log),list(log) if isinstance(log,dict) else len(log));\\nif isinstance(log,dict):\\n for k,v in log.items():\\n  print(k, (str(v[-1]) if isinstance(v,list) and v else str(v))[:4300])\\nelse:\\n for x in log[-3:]:print(str(x)[:3800])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: inspect archived transducer structure and compare the calibration and observation ranges before fitting a coupled nonlinear response; worst-slice error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible inverse directly to raw readings\",\"rejected_reason\":\"First check whether archived response structure and sweep coverage support a more stable forward fit and inversion.\"}],\"rationale\":\"Check grouping, pulse shapes, and chamber history to determine which calibration terms and extrapolation tests are needed without copying the dataset out of the container.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "20ad330762a932b69054b0ec239d59bd9558bf2ce98409e55f02b7e800500329",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20797.43,
+      "usage_known": true,
+      "prompt_tokens": 19047,
+      "cached_tokens": 13696,
+      "completion_tokens": 672
+    }
+  ]
+}

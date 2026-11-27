@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3107f5b70a074748849107e9783b353c",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:57:35.393275+00:00",
+  "ended_at_utc": "2026-11-27T19:57:58.781889+00:00",
+  "request_sha256": "a2aca6f3dae4469370bcee06074174ebd61a0cb1a3513a92bc22db91b7e628d0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55378,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32610,
+    "cached_tokens": 13696,
+    "completion_tokens": 798
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as solver\\nimport upstream_transducer as up\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx = cal['true_channel_loads']\\naxis = np.count_nonzero(x, axis=1) == 1\\nbaseline = solver.solve_batch(ds)\\nfolds = {f'axis_{j}': np.flatnonzero(axis & (x[:,j] != 0)) for j in range(4)}\\nfolds['high_load'] = np.argsort(np.linalg.norm(x, axis=1))[-12:]\\nfolds['mixed_only'] = np.flatnonzero(axis)\\nfor name, withheld in folds.items():\\n    keep = np.ones(len(x), dtype=bool)\\n    keep[withheld] = False\\n    trial = {**ds, 'calibration_load_cells': {**cal, **{k: cal[k][keep] for k in ('true_channel_loads', 'bridge_raw')}}}\\n    out = solver.solve_batch(trial)\\n    assert out.keys() == baseline.keys()\\n    for k, v in out.items():\\n        assert v.shape == baseline[k].shape and np.isfinite(v).all(), (name, k)\\n    print(name, 'maximum absolute change:', {k: float(np.max(np.abs(v-baseline[k]))) for k,v in out.items()})\\n    for lab in np.unique(ds['test']['lab_id']):\\n        mask = ds['test']['lab_id'] == lab\\n        print('  lab', int(lab), 'curve/rate shifts:', *(float(np.max(np.abs(out[k][mask]-baseline[k][mask]))) for k in ('predicted_strain','initial_rate_pred')))\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the cyclic cubic bridge limits held-out error to 3.58e-4 per channel and 5.56e-4 for summed loads; test whether omitting calibration strata materially changes downstream outputs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the pair-difference and rational saturation comparison\",\n      \"rejected_reason\": \"The prior audit already tested both on held-out measurements. It did not measure how calibration uncertainty propagates into the composed solver.\"\n    }\n  ],\n  \"rationale\": \"Refit on real calibration rows after withholding each axis, the highest-load rows, and all single-axis rows. Check whether any omission disproportionately shifts a downstream output or a particular lab’s predictions; a material shift would justify investigating calibration leverage before changing the verified bridge law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "60aa10f9bbedb4008facf9955fc25eafc99b81b161febdb01b2111527abadfe0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23346.17,
+      "usage_known": true,
+      "prompt_tokens": 32610,
+      "cached_tokens": 13696,
+      "completion_tokens": 798
+    }
+  ]
+}

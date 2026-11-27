@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b77df6c13734d55a4599455f4d3a55a",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:45:29.697678+00:00",
+  "ended_at_utc": "2026-11-27T19:46:04.222570+00:00",
+  "request_sha256": "48c6487152d4a916060b9d96f2a345743825079f74cd96971e52d17192e0da8b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43052,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32373,
+    "cached_tokens": 14976,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_chamber.py <<'PY'\\nfrom m99_probe import *\\nfrom scipy.optimize import least_squares\\nn=len(tr['lab_id']); bridge=m._calibration(cal); X=m._features(tr,te); ct=m._coupon_inputs(tr,X[:n],bridge); taus,theta=m._fit(ct,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']);\\nG=m._features(tr,g)[n:]; cg=m._coupon_inputs(g,G,bridge); F,R=m._design(taus,cg,dt,t); obs=g['strain_curves_obs']-g['strain_0'][:,None]; rate=g['instant_rate_obs']; Y=np.c_[obs,rate]; base=np.c_[F@theta,R@theta]; P,H,D=cg; drift=D@theta[2:]; gap=R[:,:2]*taus; AB=gap*theta[:2]; n=len(H);\\ndef basis(u): return np.vstack((np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1.]))\\ndef report(name,e): print(name,'rms',np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),'max_lab',max(np.sqrt(np.mean(e[g['lab_id']==lab,:-1]**2)) for lab in np.unique(g['lab_id'])))\\nreport('baseline',Y-base)\\nfor ratescale in (0.3,1.,3.):\\n w=np.r_[np.ones(len(t)),ratescale]; y=Y*w\\n def project(u):\\n  b=basis(u)*w[:,None]; q=np.linalg.lstsq(b,y.T,rcond=None)[0].T; return q,(y-q@b.T)\\n for start in (taus,[.3,1.5],[1.,8.]):\\n  f=least_squares(lambda u:project(u)[1].ravel(),start,bounds=(.05,25),max_nfev=150); q,e=project(f.x); report(('free',f.x),e/w)\\n q,e=project(taus); report('fixed',e/w)\\n if ratescale==1.:\\n  print('effective amplitudes and errors by coupon: drift hold fast slow dA dB dD');print(np.c_[drift,H,AB,q-np.c_[AB,drift]])\\n  Z=np.c_[H,P,G,drift,drift**2,drift**3,AB,H*drift]\\n  for k in range(3): print('correlation parameter',k,np.array([np.corrcoef(z,(q-np.c_[AB,drift])[:,k])[0,1] for z in Z.T]).round(3))\\nprint('direct residual decompositions [early late rate]')\\nE=(Y-base)[:,[0,-2,-1]]\\nfor label,Z in [('drift',np.c_[drift]],['drift poly',np.c_[drift,drift**2,drift**3]],['features',G],['stress',np.c_[H,P]],['stress + drift',np.c_[H,P,drift]],['gap + drift',np.c_[AB,drift]],['gap + drift poly',np.c_[AB,drift,drift**2,drift**3]],['gap + drift + pair',np.c_[AB,drift,AB*drift[:,None],np.prod(AB,axis=1)]],['gap + features',np.c_[AB,G]]):\\n Z=np.c_[np.ones(n),Z]; c=np.linalg.lstsq(Z,E,rcond=None)[0]; r=E-Z@c; h=np.sum(np.linalg.qr(Z)[0]**2,axis=1); print(label,'LOO',np.sqrt(np.mean((r/(1-h[:,None]))**2,axis=0)).round(5),'coef',c.round(4).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared chamber and benchtop response -> H2 chamber-specific relaxation amplitudes or drift; baseline diagnostic RMSE is 1.0562 at the final horizon and 0.1562 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The calibrated benchtop response transfers unchanged to chamber deployment.\",\n    \"empirical_witness\": \"Bridge affine held-out raw-channel RMSE is about 0.00012, yet median chamber strain residual grows to −0.5600 at the final horizon and chamber initial-rate RMSE is 0.1562 versus 0.00836 on training coupons.\",\n    \"causal_blanket_diagnosis\": \"The observed calibration error is too small to explain the time-dependent chamber discrepancy; the chamber constitutive response must be tested separately from the intrinsic fit.\",\n    \"sublated_pivot\": \"Preserve calibrated stress and train-only intrinsic parameters; use independent chamber rates and diagnostic trajectories to distinguish branch, drift, and transient corrections.\",\n    \"risk_kind\": \"constitutive_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase bridge polynomial degree\",\n      \"rejected_reason\": \"Quadratic and cubic bridge terms worsen held-out calibration RMSE without evidence of physical cross-channel effects.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed and free chamber time bases using both observed curves and initial rates. If the fixed basis fits, test sparse exact corrections against held-out coupons before considering new kinetics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5c90359ff7c553b86027b6278a0e0c17977dc0692c5389b1034fc34f787babc6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35678.11,
+      "usage_known": true,
+      "prompt_tokens": 32373,
+      "cached_tokens": 14976,
+      "completion_tokens": 1422
+    }
+  ]
+}

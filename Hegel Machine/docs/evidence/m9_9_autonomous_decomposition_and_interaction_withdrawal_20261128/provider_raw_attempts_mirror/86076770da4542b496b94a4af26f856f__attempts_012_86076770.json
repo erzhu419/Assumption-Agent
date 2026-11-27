@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86076770da4542b496b94a4af26f856f",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:07.169060+00:00",
+  "ended_at_utc": "2026-11-27T19:41:37.975393+00:00",
+  "request_sha256": "f7ec4b2c9d8c795a14f937b5906007299ab176c87a349b726762b9843fc38bdc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65318,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38008,
+    "cached_tokens": 14976,
+    "completion_tokens": 1275
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_transfer_audit.py <<'PY'\\nimport contextlib, io\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    exec(open('/tmp/chamber_cv.py').read().split('for name,x in stds.items():')[0])\\ntr_y = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\ntr_v = tr['instant_rate_obs']\\ncomplete = np.isfinite(g['coupon_features_raw']).all(axis=1)\\nprint('diagnostic complete/missing counts:', [(int(l),int(sum((labs==l)&complete)),int(sum((labs==l)&~complete))) for l in np.unique(labs)])\\nerrors = {key: np.zeros_like(ys) for key in ('current','trimmed','horizon_scaled')}\\nfor l in np.unique(labs):\\n    a = tr['lab_id'] != l\\n    b = labs == l\\n    ta, tt = m._fit({k:z[a] for k,z in tr.items()},xt[a],st,dt,t)\\n    def res(p):\\n        C,R = m._design(tr,xt,st,dt,t,np.exp(p[:2]))\\n        return (C@p[2:]-tr_y)[a], (R@p[2:]-tr_v)[a]\\n    p0=np.r_[np.log(ta),tt]; ec,er=res(p0)\\n    sc=m._mad(ec); sr=m._mad(er); keep=np.abs(ec-np.median(ec))<4*sc\\n    horizon_sc=np.clip(np.array([m._mad(z) for z in ec.T]),.75*sc,1.5*sc)\\n    for key in errors:\\n        pp=p0\\n        if key!='current':\\n            def objective(p):\\n                c,r=res(p)\\n                return np.r_[c[keep]/sc if key=='trimmed' else (c/horizon_sc).ravel(),r/sr]\\n            pp=least_squares(objective,p0,bounds=(np.r_[np.log([.05000001]*2),[-np.inf]*7],np.r_[np.log([24.999999]*2),[np.inf]*7]),loss='linear' if key=='trimmed' else 'cauchy',f_scale=2.5,x_scale='jac').x\\n        taus=np.exp(pp[:2]); theta=pp[2:]; drift=theta[2]+stds['diag'][b]@theta[3:]; amp=hold[b,None]*theta[:2]+drift[:,None]*[.25,1.8]; tail=.03*drift\\n        errors[key][b] = np.c_[y[b]-amp@(-np.expm1(-t[:,None]/taus)).T-tail[:,None]*t,v[b]-amp@(1/taus)-tail]\\nfor key,e in errors.items():\\n    def score(a):\\n        return [np.sqrt(np.mean(e[a,:len(t)//2]**2)),np.sqrt(np.mean(e[a,len(t)//2:-1]**2)),np.sqrt(np.mean(e[a,-1]**2))]\\n    print(key,'worst lab early/late/rate',np.max([score(labs==l) for l in np.unique(labs)],0).round(6),'complete/missing',np.round([score(complete),score(~complete)],6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_transfer_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop transfer → H2 withdrawn chamber history and redistributed drift; current worst diagnostic-lab RMSE is 0.010785 for strain and 0.008269 for rate, with host relative spectrum error of 4.41%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber grammar and bridge calibration audits\",\n      \"rejected_reason\": \"The previous audit already tested the relevant interactions and stress extremes. It did not test whether the material outlier treatment improves independent chamber predictions.\"\n    }\n  ],\n  \"rationale\": \"Compare material estimators on independent chamber measurements while excluding the corresponding benchtop lab from each fit. A material improvement in late strain without worsening early strain or rate would justify changing the estimator; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f066103c1d35bfe88f50b094c4b3cd172b7d6f278bcd2e338c297bc1e15d81b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31894.78,
+      "usage_known": true,
+      "prompt_tokens": 38008,
+      "cached_tokens": 14976,
+      "completion_tokens": 1275
+    }
+  ]
+}

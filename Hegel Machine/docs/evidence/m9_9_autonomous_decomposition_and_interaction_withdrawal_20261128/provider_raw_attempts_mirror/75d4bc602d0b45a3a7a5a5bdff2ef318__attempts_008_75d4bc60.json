@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "75d4bc602d0b45a3a7a5a5bdff2ef318",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:16.619381+00:00",
+  "ended_at_utc": "2026-11-27T19:52:47.432141+00:00",
+  "request_sha256": "b952a1d60cb13f65547f36925ab5507aff80710dc4aee8462fe1c9de23b8971b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55171,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35829,
+    "cached_tokens": 14976,
+    "completion_tokens": 1265
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\narchive=Path('/tmp/hegel_continual_archive/alpha_m99_c04_batch_02_solver.py').read_text()\\nbridge=Path('/tmp/m99_bridge.py').read_text()\\ncore=archive[archive.index('def _features'):archive.index('_CHAMBER_DRIFT =')]\\na=core.index('def _stress_map'); b=core.index('def _design',a)\\ncore=core[:a]+core[b:]\\ncore=core.replace('group, x, stress, dt, t, taus','group, x, dt, t, taus').replace(\\\"stress[0] + group['past_channel_raw'] @ stress[1:]\\\", \\\"group['past_stress']\\\").replace(\\\"stress[0] + group['hold_channel_raw'] @ stress[1:]\\\", \\\"group['hold_stress']\\\").replace('train, x, stress, dt, times','train, x, dt, times')\\nend='''def _calibrate(group, bridge):\\n    return dict(group, past_stress=_decode(group['past_channel_raw'], bridge).sum(axis=-1),\\n                hold_stress=_decode(group['hold_channel_raw'], bridge).sum(axis=-1))\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Fit the shared material law and predict deployment curves and rates.\\\"\\\"\\\"\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    xt, xe = _features(train, test)\\n    bridge = _fit_bridge(dataset['calibration_load_cells'])\\n    train, test = _calibrate(train, bridge), _calibrate(test, bridge)\\n    taus, theta = _fit(train, xt, dt, times)\\n    # The latest prefix equilibration trace matches the facility-initial\\n    # setting on both switching channels, not either intervening setting.\\n    curves, rates = _design(test, xe, dt, times, taus)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves @ theta,\\n            'initial_rate_pred': rates @ theta}\\n'''\\nPath('/holdout_task/batch_solver.py').write_text('\\\"\\\"\\\"Calibrated viscoelastic relaxation for the equilibrated chamber.\\\"\\\"\\\"\\\\n\\\\nfrom scipy.optimize import least_squares\\\\n'+bridge+'\\\\n\\\\n'+core+end)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('m',p+'batch_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; a,b=d['train'],d['test']; x,_=m._features(a,b); bridge=m._fit_bridge(d['calibration_load_cells']);a=m._calibrate(a,bridge); dt,t=d['past_dt'],d['eval_times']; tau,theta=m._fit(a,x,dt,t);print('material',tau,theta)\\nfor key in ('lab_id','stratum'):\\n for k in np.unique(a[key]):\\n  sel=a[key]==k\\n  g,h=[{kk:vv[q] for kk,vv in a.items()} for q in (~sel,sel)]\\n  u,v=m._fit(g,x[~sel],dt,t); C,R=m._design(h,x[sel],dt,t,u)\\n  ec=C@v+h['strain_0'][:,None]-h['strain_curves_obs']; er=R@v-h['instant_rate_obs']\\n  print(key,k,'n',sel.sum(),'tau',u,'worst-horizon median abs',np.max(np.median(abs(ec),axis=0)),'rate median abs',np.median(abs(er)),'curve/rate p90',np.quantile(abs(ec),.9),np.quantile(abs(er),.9))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Sparse cyclic bridge → shared relaxation law at the facility-initial setting; the bridge pilot separated three corrupted rows near 27.3 raw units from clean residual norms below 0.0003.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Transfer the batch 02 drift coefficients\",\"rejected_reason\":\"Batch 02 followed the logged channel-1 plateau; the current batch follows a trace with neither channel elevated, matching the facility-initial setting.\"}],\"rationale\":\"Build the solver with the empirically supported nonlinear bridge. Held-out lab and stratum fits will reveal whether the material estimate is stable and whether any curve horizon or initial-rate slice needs a different robust fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ad6c6a5080fcbb7d49aef8801c00896f9fb0edaeb90715b31d664c61965b4be8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31940.63,
+      "usage_known": true,
+      "prompt_tokens": 35829,
+      "cached_tokens": 14976,
+      "completion_tokens": 1265
+    }
+  ]
+}

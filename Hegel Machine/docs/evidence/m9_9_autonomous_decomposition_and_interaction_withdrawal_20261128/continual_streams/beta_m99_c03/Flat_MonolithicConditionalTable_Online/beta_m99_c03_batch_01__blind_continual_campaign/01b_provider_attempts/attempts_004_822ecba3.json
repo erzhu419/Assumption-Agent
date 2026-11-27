@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "822ecba317e74a43b915ae0c5e561247",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:11.881152+00:00",
+  "ended_at_utc": "2026-11-27T19:37:37.813223+00:00",
+  "request_sha256": "a7a5928e95d19b8256009a869c01463d1e074c7072e8f0b842e59789db70514d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30961,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27084,
+    "cached_tokens": 14976,
+    "completion_tokens": 974
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe_m99.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nnp.set_printoptions(precision=6,suppress=True)\\np='/tmp/hegel_continual_archive/beta_m99_c03_s00_solver.py'\\nsp=importlib.util.spec_from_file_location('prior',p); prior=importlib.util.module_from_spec(sp);sp.loader.exec_module(prior)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; pulses=item['campaign_diagnostics']; cal=s['sensor_calibration_sweeps']; ref=cal['ref_rosette']; raw=cal['raw_rosette']; C=np.c_[np.ones(len(ref)),ref]; coef=np.linalg.lstsq(C,raw,rcond=None)[0]; dr=raw-C@coef\\nprint('affine coef',coef,'cal rms',np.sqrt(np.mean(dr**2,axis=0)), 'max',np.max(abs(dr),axis=0))\\nfeatures=[ref[:,i]*ref[:,j] for i in range(4) for j in range(i,4)]; C2=np.column_stack([C]+features); print('quadratic coefficients',np.linalg.lstsq(C2,raw,rcond=None)[0][5:].T); print('LOO rms linear/quadratic',*[np.sqrt(np.mean(((raw-X@np.linalg.lstsq(X,raw,rcond=None)[0])/(1-np.sum(np.linalg.qr(X)[0]**2,axis=1))[:,None])**2,axis=0)) for X in [C,C2]])\\nbank=cal['single_bank_sweeps']; print('single-bank keys',list(bank));\\nfor i in range(4):\\n ix=bank['bank_id']==i; print('bank',i,np.polynomial.polynomial.polyfit(bank['ref_signal'][ix],bank['raw_readout'][ix],2))\\nprint('row ordering',s['row_bank_id'][:32], 'sensor_ij',s['sensor_ij']); S,U=prior._forward(s); W=np.column_stack([p['w_pulse'] for p in pulses]); R=np.column_stack([p['y_pulse_raw'] for p in pulses]); Y=np.column_stack([prior._calibrated_observations({**s,'y_obs_raw':r}) for r in R.T]); E=Y-S@W\\nprint('pulses',W.T); print('pulse RMS',np.sqrt(np.mean(E**2,axis=0)),'raw calibrated ranges',Y.min(),Y.max(),'forward ranges', (S@W).min(),(S@W).max());print('error by row',E[:32]); print('pulse affinity with nuisance',np.sqrt(np.mean((E-s['Z_nuisance']@np.linalg.lstsq(s['Z_nuisance'],E,rcond=None)[0])**2,axis=0)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_m99.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin operator and affine calibration -> H2 changes localized by independent bench sweeps and tracer pulses; no residual measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit wall and sensor parameters jointly to the main observation\",\n      \"rejected_reason\": \"Known-input calibration sweeps and tracer pulses can identify these components separately without confounding them with unknown source weights.\"\n    }\n  ],\n  \"rationale\": \"Calibration cross-validation tests whether a nonlinear sensor inverse is needed. Baseline tracer residuals before and after nuisance removal test whether the remaining discrepancy calls for a changed wall operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "2a5f2f1bf46ba5fabe059f22fc4439d62afd4a88815a544674e1538b961ecd96",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27070.41,
+      "usage_known": true,
+      "prompt_tokens": 27084,
+      "cached_tokens": 14976,
+      "completion_tokens": 974
+    }
+  ]
+}

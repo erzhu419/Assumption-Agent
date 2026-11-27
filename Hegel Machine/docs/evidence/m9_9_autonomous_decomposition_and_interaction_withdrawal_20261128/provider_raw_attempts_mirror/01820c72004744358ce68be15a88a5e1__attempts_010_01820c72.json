@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "01820c72004744358ce68be15a88a5e1",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:48.070351+00:00",
+  "ended_at_utc": "2026-11-27T19:56:19.863797+00:00",
+  "request_sha256": "0ebdd0ede88540963113738113c570db2ef8d2f6a0d234630ee73e27677637ff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 55094,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33905,
+    "cached_tokens": 14976,
+    "completion_tokens": 1312
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nsw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; raw=sw['raw_rosette']; fit=m._fit_rosette\\nbase=m.solve_batch(s); c=fit(x,raw)\\nb=sw['single_bank_sweeps']; ids=b['bank_id']; rows=np.arange(len(ids)); v=np.zeros((len(rows),4)); v[rows,ids]=b['ref_signal']; rb=b['raw_readout']\\nerr=rb-np.column_stack([m._rosette_basis(v,j)@c[j] for j in range(4)])[rows,ids]\\nprint('single-bank largest absolute residuals',np.sort(abs(err))[-5:])\\n# Fit the same physical basis with and without independent clean single-bank\\n# observations inside each outer fold; test both on unseen paired sweeps.\\nD=[m._rosette_basis(x,j) for j in range(4)]; B=[m._rosette_basis(v,j) for j in range(4)]\\ndef fits(train):\\n c=fit(x[train],raw[train]); e=np.linalg.norm(raw-np.column_stack([d@a for d,a in zip(D,c)]),axis=1); cut=8*np.median(e[train]); good=train[e[train]<cut]\\n return c,np.array([np.linalg.lstsq(np.concatenate((d[good],bj[k])),np.r_[raw[good,j],rb[k]],rcond=None)[0] for j,(d,bj) in enumerate(zip(D,B)) for k in [(ids==j)&(abs(rb-bj@c[j])<cut)]]),e,cut\\nY=[[],[]]\\nfor test in np.array_split(np.random.default_rng(47).permutation(len(x)),5):\\n c,pooled,e,cut=fits(np.setdiff1d(np.arange(len(x)),test)); use=test[e[test]<cut]\\n for yy,a in zip(Y,(c,pooled)): yy.extend((np.column_stack([d@aj for d,aj in zip(D,a)])-raw)[use])\\nprint('paired-sweep OOF RMSE, original and bank-pooled:',[np.sqrt(np.mean(np.square(y),axis=0)) for y in Y])\\n_,pooled,_,_=fits(np.arange(len(x))); m._fit_rosette=lambda *_:pooled\\nalt=m.solve_batch(s); m._fit_rosette=fit\\nfor k in ('weights','terminal_field'):\\n print('bank pooling relative change',k,np.linalg.norm(alt[k]-base[k])/np.linalg.norm(base[k]))\\n# Force distinct active faces while keeping the measured design and readings.\\nn=len(base['weights']); budget=s['total_budget']; cap=s['u_box']\\nfor a,t in ((cap,budget),(cap,0.15*cap),(budget/n*1.01,budget),(cap,0.95*n*cap)):\\n q=m.solve_batch(dict(s,u_box=a,total_budget=t)); w=q['weights']; k=q['kkt_certificate']; lo=np.asarray(k['lam_lower']); hi=np.asarray(k['lam_upper'])\\n e=max(abs(w.sum()-t),max(0,-w.min(),w.max()-a),np.max(abs(lo*w)),np.max(abs(hi*(a-w))),abs(k['primal_objective']-k['dual_lower_bound']))\\n print('KKT stress budget/cap',t/a,'active lower/upper',np.sum(w<1e-9),np.sum(w>a-1e-9),'max error',e); assert e<1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin walls → H2 sealed walls with cyclic calibration; worst held-out shift RMSE is 0.01058 versus 0.17644, and the public-study certificate gap independently recomputes to 9.57e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the grammar and nuisance audits\",\n      \"rejected_reason\": \"The previous audit already tested expanded calibration terms on held-out sweeps, and the held-out chamber test refit nuisance coefficients within each fold. Classification and relay checks do not apply.\"\n    }\n  ],\n  \"rationale\": \"Check whether clean single-bank sweeps improve held-out calibration enough to change the recovered field or weights. Separately exercise lower- and upper-active box faces on the measured design, because an interior solution cannot expose multiplier sign or active-set errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "937880abff3bc4822d9e2d24957bc274ff04081fd120b5f3fd1c01cf36428d08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32903.65,
+      "usage_known": true,
+      "prompt_tokens": 33905,
+      "cached_tokens": 14976,
+      "completion_tokens": 1312
+    }
+  ]
+}

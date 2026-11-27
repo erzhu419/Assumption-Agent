@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbe713ca06f64e16a9697bd0eebfdbc9",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:40.078061+00:00",
+  "ended_at_utc": "2026-11-27T19:55:11.167931+00:00",
+  "request_sha256": "3a8b8c5a1175879a788baf62488263f60a8cce6a8ed297e9ebd4e66f77e8159b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44931,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29157,
+    "cached_tokens": 13696,
+    "completion_tokens": 1291
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit, _invert\\nfrom batch_solver import solve_batch\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\ntry:\\n    runpy.run_path(sys.argv[0], run_name='__main__')\\nexcept SystemExit as exc:\\n    if exc.code:\\n        raise\\nwith open('public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nworst = np.zeros(4)\\nfor item in batch:\\n    st = item['study']; sw = st['sensor_calibration_sweeps']; bank = sw['single_bank_sweeps']\\n    x, y = sw['ref_rosette'], sw['raw_rosette']\\n    clean = np.linalg.norm(y, axis=1) < 10\\n    j = bank['bank_id']; bx = np.eye(4)[j]*bank['ref_signal'][:,None]; by = bank['raw_readout']\\n    bg = np.abs(by) < 10\\n    baseline = solve_batch(st)\\n    max_affine = max_nonlinear = 0.\\n    for k in range(4):\\n        # Hold out both tails of the measured adjacent-channel difference.\\n        h = (k+1)%4; direction = x[:,k]-x[:,h]\\n        order = np.flatnonzero(clean)[np.argsort(direction[clean])]\\n        for test in (order[:8], order[-8:]):\\n            train = ~np.isin(np.arange(len(x)), test)\\n            fit_sw = dict(ref_rosette=x[train], raw_rosette=y[train])\\n            c = _fit(fit_sw)\\n            bank_err = np.abs(np.einsum('nck,ck->nc', _basis(bx), c)[np.arange(len(j)),j]-by)\\n            inv_err = np.max(np.abs(_invert(y[test],c)-x[test]))\\n            A = np.c_[np.ones(len(x)), x]; good = train & clean\\n            ac = np.linalg.lstsq(A[good], y[good], rcond=None)[0]\\n            max_affine = max(max_affine, np.max(np.abs((A[test]@ac-y[test])[:,k])))\\n            max_nonlinear = max(max_nonlinear, np.max(np.abs((np.einsum('nck,ck->nc',_basis(x[test]),c)-y[test])[:,k])))\\n            out = solve_batch(dict(st, sensor_calibration_sweeps=fit_sw))\\n            w = out['weights']; cert = out['kkt_certificate']\\n            assert abs(w.sum()-st['total_budget']) < 1e-9 and w.min() >= -1e-9 and w.max() <= st['u_box']+1e-9\\n            assert abs(cert['primal_objective']-cert['dual_lower_bound']) < 1e-8\\n            worst = np.maximum(worst, [inv_err, bank_err[bg].max(), np.max(np.abs(w-baseline['weights'])), np.max(np.abs(out['terminal_field']-baseline['terminal_field']))])\\n    print(f'Pairwise-tail worst forward error, affine={max_affine:.6g}, nonlinear={max_nonlinear:.6g}')\\n    assert max_affine > 1e-2 and max_nonlinear < 1e-4\\nassert worst[0] < 1e-4 and worst[1] < 1e-4, worst\\nprint('PASS ng_t03: nonlinear response resolves the affine failure on held-out pairwise tails and independent bank traces')\\nprint('Worst [inverse error, independent bank error, weight drift, terminal-field drift]:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 cyclic bilinear and own-channel cubic response; previous worst held-out inverse error was 3.30×10⁻⁵.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational extension or add relay and cohort tests\",\n      \"rejected_reason\": \"The rational extension already failed to improve held-out error; the upstream contract has neither relay states nor class labels.\"\n    }\n  ],\n  \"rationale\": \"Earlier folds split by row order or overall amplitude, not by signed adjacent-channel contrast. Holding out both contrast tails tests whether the interaction is identified when one channel dominates its neighbor; the independent bank traces test whether that fit preserves the single-channel response. If either slice fails, revisit the missing response terms before changing the verified downstream solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c3e57bbf98673613083e2d61197e36751b7541e6ef6f22e1b63420812b8045ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32215.79,
+      "usage_known": true,
+      "prompt_tokens": 29157,
+      "cached_tokens": 13696,
+      "completion_tokens": 1291
+    }
+  ]
+}

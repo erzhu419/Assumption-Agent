@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "463bb48c6bc9454e8535aeba462e3ba0",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:21.544504+00:00",
+  "ended_at_utc": "2026-11-27T19:53:48.507995+00:00",
+  "request_sha256": "6797b8175da7cf6262a0842dae1d1e4a9c6792440de80ce854503ff7c2f3b844",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46160,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29985,
+    "cached_tokens": 13696,
+    "completion_tokens": 1057
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _forward, _inverse, _features\\nwith open('public_batch.pkl','rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, y, b = (c[k] for k in ('ref_rosette','raw_rosette','single_bank_sweeps'))\\n    ids = b['bank_id']\\n    bx = np.eye(4)[ids] * b['ref_signal'][:, None]\\n    # Score the known gross-spike-free measurement slice; keep spikes in the\\n    # deployed model's training input to exercise its own outlier rejection.\\n    clean = np.max(np.abs(y),axis=1) < 5\\n    mixed = np.count_nonzero(x,axis=1) > 1\\n    for direction in (-1,1):\\n        # Channel 0/1 sum vs difference selects different excitation regimes.\\n        level = np.abs(x[:,0] + direction*x[:,1])\\n        test = mixed & (level >= np.quantile(level[mixed & clean], .75))\\n        tr, te = clean & ~test, clean & test\\n        p = _fit(x[~test],y[~test],b)\\n        full = _forward(x[te],p)\\n        ablated = []\\n        for j in range(4):\\n            cols = [0,1,2,3,5]\\n            a = np.vstack((_features(x[tr],j)[:,cols],_features(bx[ids==j],j)[:,cols]))\\n            target = np.r_[y[tr,j],b['raw_readout'][ids==j]]\\n            w = np.linalg.lstsq(a,target,rcond=None)[0]\\n            ablated.append(_features(x[te],j)[:,cols] @ w)\\n        corrected = float(np.max(np.abs(full-y[te])))\\n        omitted = float(np.max(np.abs(np.column_stack(ablated)-y[te])))\\n        inverse = float(np.max(np.abs(_inverse(y[te],p)-x[te])))\\n        print(f'ng_t05 direction={direction:+d} held_out={te.sum()} ablated_forward_max={omitted:.8g} corrected_forward_max={corrected:.8g} corrected_inverse_max={inverse:.8g}')\\n        assert corrected < 1e-4 and inverse < 1e-4 and omitted > 100*corrected\\nprint('ng_t05: held-out ablation confirms the deployed cross-channel term resolves the measured failure')\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable curvature → H2 sparse cyclic cubic; worst measured held-out inverse error is 3.12e-5, with a direct interaction ablation pending on blocked sum and difference excitations.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat rational saturation selection or run classifier and relay checks\",\n      \"rejected_reason\": \"The blocked folds already selected zero rational saturation, and the study has no classification cohorts or relay states.\"\n    }\n  ],\n  \"rationale\": \"The remaining open issue is whether the deployed interaction term itself repairs the measured failure. Ablate just that term on identical blocked training and test slices. If the corrected model fails or the ablation matches it, reopen the interaction basis; otherwise retain the verified bundle.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7cb6d77560f6b6c84118a4dc33f145d35194948da7980cc1aa321e71ed290256",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28111.87,
+      "usage_known": true,
+      "prompt_tokens": 29985,
+      "cached_tokens": 13696,
+      "completion_tokens": 1057
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb85d8f703214b578d16be2dc992e9ab",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:29.380432+00:00",
+  "ended_at_utc": "2026-11-27T20:02:02.592115+00:00",
+  "request_sha256": "cf3d5d9fc85170fb3a6a88a0da7e8c1f81c8e4a9fe1ce5da92f48d9ea4c3b77a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50871,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33109,
+    "cached_tokens": 14976,
+    "completion_tokens": 1356
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; S,_=m._responses(s)\\nb=c['single_bank_sweeps']; bank=b['bank_id']; rows=np.zeros((len(bank),4)); rows[np.arange(len(bank)),bank]=b['ref_signal']\\ndef design(x,j):\\n    return np.column_stack((np.ones(len(x)),x,x[:,j]**3,*[x[:,a]*x[:,b] for a,b in m._PAIRS]))\\ndef predict(x,F):\\n    return np.column_stack([design(x,j)@f for j,f in enumerate(F)])\\ndef candidates(x,y):\\n    base=m._fit_calibration(x,y); sparse=base.copy(); extended=[]\\n    for j,f in enumerate(base):\\n        D=design(x,j); e=D@f-y[:,j]; med=np.median(e); scale=max(1e-10,1.4826*np.median(abs(e-med))); good=abs(e-med)<6*scale\\n        keep=abs(f)>10*scale; sparse[j]=0; sparse[j,keep]=np.linalg.lstsq(D[good][:,keep],y[good,j],rcond=None)[0]\\n        q=x[:,j]-x[:,(j+1)%4]; z=x[:,j]+x[:,(j+1)%4]\\n        E=np.column_stack((x**2,x[:,0]*x[:,1]*x[:,2],x[:,0]*x[:,1]*x[:,3],x[:,0]*x[:,2]*x[:,3],x[:,1]*x[:,2]*x[:,3],q/(1+q*q),z/(1+z*z)))\\n        ext=np.column_stack((D,E)); extended.append(np.linalg.lstsq(ext[good],y[good,j],rcond=None)[0])\\n    return base,sparse,extended\\nerrs=np.empty((3,*y.shape))\\nfor k in range(5):\\n    test=np.arange(len(x))%5==k; base,sparse,extended=candidates(x[~test],y[~test]); h=x[test]\\n    errs[0,test]=predict(h,base)-y[test]; errs[1,test]=predict(h,sparse)-y[test]\\n    for j,f in enumerate(extended):\\n        q=h[:,j]-h[:,(j+1)%4]; z=h[:,j]+h[:,(j+1)%4]\\n        E=np.column_stack((h**2,h[:,0]*h[:,1]*h[:,2],h[:,0]*h[:,1]*h[:,3],h[:,0]*h[:,2]*h[:,3],h[:,1]*h[:,2]*h[:,3],q/(1+q*q),z/(1+z*z)))\\n        errs[2,test,j]=np.column_stack((design(h,j),E))@f-y[test,j]\\nbase,sparse,_=candidates(x,y)\\nfor name,e in zip(('baseline','sparse','expanded'),errs):\\n    print(name,'OOF p90 by bank',np.quantile(abs(e),.90,axis=0),'median',np.median(abs(e),axis=0))\\nfor name,F in [('baseline',base),('sparse',sparse)]:\\n    audit=abs(predict(rows,F)[np.arange(len(bank)),bank]-b['raw_readout']); print(name,'single-bank max inlier by bank',[float(max(audit[(bank==j)&(audit<.001)])) for j in range(4)],'gross residuals',audit[audit>.001].tolist()); print(name,'tracer RMSE',[float(np.sqrt(np.mean((predict((S@p['w_pulse']).reshape(-1,4),F).ravel()-p['y_pulse_raw'])**2))) for p in item['campaign_diagnostics']])\\nprint('study has classification, cohort or relay keys:',[k for k in s if any(t in k for t in ('label','cohort','relay','technical_batch'))])\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared reflecting closure → H2 periodic x and reflecting y; worst tracer RMSE is 1.99e-6, with a focused calibration-basis comparison pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, classification, or Fokker–Planck tests\",\n      \"rejected_reason\": \"Those checks do not apply to this steady transport inverse problem. The prior independent stencil and KKT tests directly cover its governing equations and nuisance projection.\"\n    }\n  ],\n  \"rationale\": \"Compare the current basis with a sparse refit and an expansion containing rational pair-sum and pair-difference terms, using fold-local fits and independent single-bank and tracer measurements. Revise calibration only if the comparison reveals a material error or an improvement in operating-range tracer prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8ea954edaf18fd1f798fd7ce78eec5551be459de1c1010ca8f33a6764ed7285c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34247.72,
+      "usage_known": true,
+      "prompt_tokens": 33109,
+      "cached_tokens": 14976,
+      "completion_tokens": 1356
+    }
+  ]
+}

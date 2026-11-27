@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88d929a8a022426b860a42cb7b18b26d",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:48.909217+00:00",
+  "ended_at_utc": "2026-11-27T19:51:28.422461+00:00",
+  "request_sha256": "80967888689ae49a70061fd9113258ddab76d6f278bde41ff38825620451693d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59148,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34258,
+    "cached_tokens": 13696,
+    "completion_tokens": 1653
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _fit, _design, _chamber_response\\nfrom batch_solver import solve_batch\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nd = calibrate_upstream(raw)\\ng = calibrate_upstream(dict(raw, test=item['campaign_diagnostics']))['test']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nX, _ = _features(tr, te)\\nF, _ = _features(g, {k:v[:0] for k,v in g.items()})\\nlabs = g['lab_id']\\ncomplete = np.isfinite(g['coupon_features_raw']).all(axis=1)\\ny, r = g['strain_curves_obs'], g['instant_rate_obs']\\nmodels = ['retained', 'no_history', 'linear_drift', 'pairwise', 'interaction', 'rational']\\nC = {m:np.empty_like(y) for m in models}\\nR = {m:np.empty_like(r) for m in models}\\nrmse = lambda x: float(np.sqrt(np.mean(x*x)))\\nphi = -np.expm1(-t)\\nfor lab in np.unique(labs):\\n    train = tr['lab_id'] != lab\\n    tau, w = _fit({k:v[train] for k,v in tr.items()}, X[train], dt, t)\\n    c, rate = _chamber_response(g, F, dt, t, tau, w)\\n    c0, r0 = _chamber_response(dict(g, past_channel_raw=np.zeros_like(g['past_channel_raw'])), F, dt, t, tau, w)\\n    _, D = _design(g, F, dt, t, tau)\\n    b0, b1 = (D[:, :2] * w[:2]).T\\n    drift = D[:, 2:] @ w[2:]\\n    predictions = {'retained':(c,rate), 'no_history':(c0,r0), 'linear_drift':(c+drift[:,None]*(t-phi),rate)}\\n    # Perturb the drift-rate amplitude with a branch contrast, an interaction,\\n    # or rational suppression; apply the same amplitude to the initial rate.\\n    use = (labs != lab) & complete\\n    q = b0-b1\\n    q = q / np.sqrt(np.mean(q[use]**2))\\n    for name in ('pairwise', 'interaction', 'rational'):\\n        def delta(p):\\n            if name == 'pairwise': return p[0]*q\\n            if name == 'interaction': return p[0]*q*drift\\n            return drift/(1+p[0]*q*q)-drift\\n        def residual(p):\\n            a = delta(p)[use]\\n            return np.r_[((c[use]-y[use]+a[:,None]*phi)/.004).ravel(), (rate[use]-r[use]+a)/.002]\\n        fit = least_squares(residual, [0.], bounds=(0.,np.inf) if name == 'rational' else (-np.inf,np.inf), loss='soft_l1')\\n        a = delta(fit.x)\\n        predictions[name] = (c+a[:,None]*phi, rate+a)\\n    ix = labs == lab\\n    for name,(pc,pr) in predictions.items():\\n        C[name][ix], R[name][ix] = pc[ix],pr[ix]\\nfor name in models:\\n    ec, er = C[name]-y, R[name]-r\\n    print(name, 'pooled', tuple(round(v,6) for v in (rmse(ec),rmse(er))), 'complete', tuple(round(v,6) for v in (rmse(ec[complete]),rmse(er[complete]))), 'worst lab', tuple(round(max(rmse(a[labs==lab]) for lab in np.unique(labs)),6) for a in (ec,er)), 'worst horizon', round(max(rmse(ec[:,j]) for j in range(len(t))),6))\\n    if name == 'retained':\\n        print('retained lab mean rate residual, complete vs all', [(int(lab), round(float(er[(labs==lab)&complete].mean()),6), round(float(er[labs==lab].mean()),6)) for lab in np.unique(labs)])\\n        print('retained missing-feature RMSE', rmse(ec[~complete]),rmse(er[~complete]))\\nassert all(rmse((R['retained']-r)[labs==lab]) < rmse((R['no_history']-r)[labs==lab]) for lab in np.unique(labs))\\noutput = solve_batch(raw)\\nfor k, shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(len(te['lab_id']),len(t)), 'initial_rate_pred':(len(te['lab_id']),)}.items():\\n    assert output[k].shape == shape and np.isfinite(output[k]).all(), k\\nassert .05 < output['estimated_taus'][0] < output['estimated_taus'][1] < 25\\nprint('Isolated entry point passed; no task files changed.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 retained branch memory with saturating drift → H2 additional contrast, interaction, or rational drift coupling only if held-lab errors improve; current worst slice is missing-feature coupons at 0.0244 strain and 0.0285 rate RMSE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Center residuals by diagnostic lab label\",\"rejected_reason\":\"Calibration for a held-out lab cannot use its response labels; first compare signed lab residuals on complete and missing-feature coupons.\"},{\"option\":\"Test relay states or Fokker–Planck drift\",\"rejected_reason\":\"The measured system is deterministic hereditary creep with no relay state, diffusion operator, or classification outcome.\"}],\"rationale\":\"Fit each added coupling without the evaluation lab. Keep it only if it improves held-lab errors without sacrificing rate or strain accuracy. Inspect lab bias separately from missingness, and verify the unchanged entry point in isolated Python.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "29e911a9b8fb16351578c2b2bc74c524ecebe36fad8fe09d5b25840581932ca3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40616.07,
+      "usage_known": true,
+      "prompt_tokens": 34258,
+      "cached_tokens": 13696,
+      "completion_tokens": 1653
+    }
+  ]
+}

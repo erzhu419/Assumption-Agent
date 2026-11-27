@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19aea61b6f37487aa89e2476448b0ac5",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:10.250198+00:00",
+  "ended_at_utc": "2026-11-27T20:01:36.257894+00:00",
+  "request_sha256": "bb8ba397e8a8729d23d2e8810bc76aab0cabc4f9d879f8498662269e98ce6c43",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44010,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30886,
+    "cached_tokens": 13696,
+    "completion_tokens": 1031
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, runpy, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as m\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nforward = lambda z, b: np.einsum('nif,if->ni', m._design(z), b)\\nworst_channel = worst_sum = 0.\\nfor channel in range(4):\\n    axis = (np.count_nonzero(x, axis=1) == 1) & (x[:, channel] != 0)\\n    b = m._fit_bridge(x[~axis], y[~axis])\\n    clean = axis & (np.linalg.norm(forward(x, b) - y, axis=1) < .01)\\n    assert clean.sum() == (1 if channel == 3 else 4)\\n    err = m._inverse(y[clean], b) - x[clean]\\n    worst_channel = max(worst_channel, np.max(np.abs(err)))\\n    worst_sum = max(worst_sum, np.max(np.abs(err.sum(axis=1))))\\nassert worst_channel < .001 and worst_sum < .001\\nprint(f'Blocked-axis held-out maximum: channel={worst_channel:.6g}, summed load={worst_sum:.6g}')\\nkeys = ('past_channel_raw', 'hold_channel_raw')\\ntrial = {k: d['test'][k][:8].copy() for k in keys}\\nwith_trial = m.calibrate_upstream(dict(d, chamber_verification_trials=trial))\\nassert m.calibrate_upstream(dict(d, chamber_verification_trials=None))['chamber_verification_trials'] is None\\ncal = with_trial['calibration_load_cells']\\nfor normalized, truth, original in [(cal['bridge_raw'], x, y), (cal['single_channel_sweeps']['cmd_stress'], c['single_channel_sweeps']['true_stress'], c['single_channel_sweeps']['cmd_stress'])]:\\n    np.testing.assert_array_equal(normalized, truth)\\n    assert not np.shares_memory(normalized, truth) and not np.array_equal(original, truth)\\nfor k in keys:\\n    np.testing.assert_array_equal(with_trial['chamber_verification_trials'][k], with_trial['test'][k][:8])\\n    np.testing.assert_array_equal(trial[k], d['test'][k][:8])\\nprint('Identity calibration metadata and optional trial paths verified.')\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unrestricted polynomial bridge → H2: compact cyclic cubic bridge; clean leave-one-out maximum errors were 0.000270 per channel and 0.000406 for summed load, with operational round-trip residual below 2.5e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\", \"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave-one-out results support the compact model; withholding each entire axis sweep checks whether it still recovers clean loads without same-axis anchors. A failure would reopen the calibration fit. The isolated run also checks the optional trial and identity-metadata paths, which the public schema test alone does not cover.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7c44a6463fbd2bedd82ea2d87a162e4622ff1e0418c945c52f15ccbbe1e63c72",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27164.67,
+      "usage_known": true,
+      "prompt_tokens": 30886,
+      "cached_tokens": 13696,
+      "completion_tokens": 1031
+    }
+  ]
+}

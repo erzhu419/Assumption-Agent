@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d3575bf1b4734dbc9c7e37636cb25679",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:28.524601+00:00",
+  "ended_at_utc": "2026-11-27T19:47:04.211624+00:00",
+  "request_sha256": "37c83fbcb37fb42a62f5aa7d31bc93dcdb933cd93f31750d39e1c6db557b2a83",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62383,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37046,
+    "cached_tokens": 14976,
+    "completion_tokens": 1467
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '47,100p' /holdout_task/batch_solver.py\\ncat >/tmp/m99_focused_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations, combinations_with_replacement\\nimport numpy as np\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nds, d = item['dataset'], item['campaign_diagnostics']\\no = m.solve_batch(ds)\\ntau, th = o['estimated_taus'], o['hereditary_weights']\\nprint('material taus and weights:', tau, th)\\ncal = ds['calibration_load_cells']\\nraw, true = cal['bridge_raw'], cal['true_channel_loads']\\nA = np.c_[np.ones(len(raw)), raw]\\nv = true.sum(1)\\norder = np.argsort(v)\\nfor label, held in [('low-load tail', order[:len(v)//5]), ('high-load tail', order[-(len(v)//5):])]:\\n    keep = np.ones(len(v), bool); keep[held] = False\\n    e = A[held] @ np.linalg.lstsq(A[keep], v[keep], rcond=None)[0] - v[held]\\n    print(label, 'axial RMS', np.sqrt(np.mean(e**2)))\\n\\nbr = m._calibration(cal)\\ndt, t = ds['past_dt'], ds['eval_times']\\nx = m._features(d,d)[:len(d['lab_id'])]\\ncoupons = m._coupon_inputs(d,x,br)\\npast, hold, X = coupons\\nC,R = m._design(tau,coupons,dt,t)\\ncurve, rate = m._chamber(tau,th,coupons,dt,t)\\ne = d['strain_curves_obs'] - d['strain_0'][:,None] - curve\\ner = d['instant_rate_obs'] - rate\\nG = -np.expm1(-t)\\ny = (e@G + er)/(G@G+1)\\nmissing = np.isnan(d['coupon_features_raw']).any(1)\\nlab = d['lab_id']\\naxes = np.column_stack((X@th[2:],x,hold,hold[:,None]-R[:,:2]*tau))\\ncols = [*axes.T]\\ncols += [axes[:,i]+s*axes[:,j] for i,j in combinations(range(axes.shape[1]),2) for s in (-1,1)]\\ncols += [axes[:,i]*axes[:,j] for i,j in combinations_with_replacement(range(axes.shape[1]),2)]\\ncols += [axes[:,0]*axes[:,i]*axes[:,j] for i,j in combinations_with_replacement(range(1,axes.shape[1]),2)]\\ncols += [axes[:,0]/(1+a*q*q) for a in (.1,1.,10.) for q in axes[:,1:].T]\\n# Fit one correction at a time; restrict selection to inner leave-lab-out folds.\\nW = np.column_stack(cols)\\ndef fit(a,b):\\n    V = W[a]\\n    denom = np.sum(V*V,axis=0)\\n    return W[b]*np.divide(V.T@y[a],denom,out=np.zeros_like(denom),where=denom>0)\\npred = np.zeros(len(y))\\nfor group in np.unique(lab):\\n    outer = lab != group\\n    folds = [lab == g for g in np.unique(lab[outer])]\\n    score = np.vstack([np.mean((fit(outer & ~val,val)-y[val,None])**2,axis=0) for val in folds]).mean(0)\\n    zero = np.mean([np.mean(y[val]**2) for val in folds])\\n    j = int(np.argmin(score))\\n    if score[j] < zero:\\n        pred[~outer] = fit(outer,~outer)[:,j]\\n    print('outer lab',group,'selected correction', j if score[j]<zero else 'none')\\n\\ndef rms(a): return np.sqrt(np.mean(a*a))\\nfor label, group in [('pooled',np.ones(len(y),bool)),('complete',~missing),('missing',missing),*[(f'lab {g}',lab==g) for g in np.unique(lab)]]:\\n    print(label, 'n', group.sum(), 'fixed curve/rate RMS', rms(e[group]), rms(er[group]), 'nested challenger', rms((e-pred[:,None]*G)[group]), rms((er-pred)[group]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_focused_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained hereditary memory → H2 unit-timescale exponential drift with intrinsic amplitude; the verified candidate has worst diagnostic lab curve/rate RMS of 0.016153/0.021675.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB operators, or classification accuracy\",\n      \"rejected_reason\": \"The supplied task is continuous constitutive regression with no relay state, stochastic control operator, or class labels. Held-out laboratory errors are the relevant confounding check.\"\n    }\n  ],\n  \"rationale\": \"Test whether a paired, product, or rational amplitude correction improves the weak laboratory slice when selected without that lab's measurements. Separately hold out the calibration load tails: a substantial extrapolation error would justify revisiting the affine bridge. Neither check edits the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "b14037160488c667912fa38b621499cba95204b7b592e7c6ae7362826b1d4560",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36815.97,
+      "usage_known": true,
+      "prompt_tokens": 37046,
+      "cached_tokens": 14976,
+      "completion_tokens": 1467
+    }
+  ]
+}

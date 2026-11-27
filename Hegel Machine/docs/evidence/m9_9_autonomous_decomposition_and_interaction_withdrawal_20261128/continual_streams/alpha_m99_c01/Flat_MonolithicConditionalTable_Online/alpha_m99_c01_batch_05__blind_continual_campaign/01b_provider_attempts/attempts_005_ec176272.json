@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ec176272c72b4f46ac17d1f3042d31a9",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:21.347118+00:00",
+  "ended_at_utc": "2026-11-27T20:01:51.594020+00:00",
+  "request_sha256": "951c860be8a0f706de7c23952e8cb2e207fffe386f91549398c69c0fa5b4bb3f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31278,
+    "cached_tokens": 14976,
+    "completion_tokens": 1222
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '/^def _chamber_response/,/^def solve_batch/p' /tmp/hegel_continual_archive/alpha_m99_c01_batch_01_solver.py; cat > /tmp/m99_chamber.py <<'PY'\\nexec(open('/tmp/m99_probe.py').read().split('for name,part,xx,pp,hh in')[0])\\ny=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']; Y=np.column_stack((y,r)); f=-np.expm1(-t[:,None]/tau); F=np.vstack((np.column_stack((f,t)),np.r_[1/tau,1])); C=Y@np.linalg.pinv(F.T); print('fixed temporal basis residual rms/max',np.sqrt(np.mean((C@F.T-Y)**2)),np.max(abs(C@F.T-Y)))\\nage=np.cumsum(dt[::-1])[::-1]-dt; z=pg@(np.exp(-age[:,None]/tau)*-np.expm1(-dt[:,None]/tau)); drift=beta[2]+xg@beta[3:]; base=np.column_stack(((hg[:,None]-z)*beta[:2],drift)); reset=np.column_stack((hg[:,None]*beta[:2],drift)); R=C-base; np.set_printoptions(precision=5,suppress=True,linewidth=130)\\nfor name,A,V in [('total h, z0, z1, drift',np.c_[hg,z,drift],C),('offset, total h, z0, z1, drift',np.c_[np.ones(len(hg)),hg,z,drift],C),('reset residual from drift',drift[:,None],C-reset),('base residual from drift',drift[:,None],R),('full linear histories, drift',np.c_[hg,pg,drift],C),('drift features',np.c_[np.ones(len(hg)),xg],C-reset)]:\\n W=np.linalg.lstsq(A,V,rcond=None)[0]; E=(A@W-V)@F.T; lev=np.sum(A*np.linalg.pinv(A).T,axis=1); print(name,'coef',W,'rmse curve/rate',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),'max loo',np.max(abs(E/(1-lev[:,None])),axis=0)[[0,5,11,12]])\\nfor name,M in [('bench',base),('reset only',reset),('redistribution only',base+drift[:,None]*np.r_[.680*tau[0],.582*tau[1],1-.680-.582-1]),('reset & archived drift',reset+drift[:,None]*np.array([.38145,1.89249,.02953-1]))]:\\n E=M@F.T-Y; print(name,'curve/rate rmse',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)))\\nprint('design ranges',np.min(np.c_[hg,z,drift],axis=0),np.max(np.c_[hg,z,drift],axis=0)); print('top temporal residual',np.max(abs(C@F.T-Y),axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop law transfers unchanged → H2 chamber modifies memory and/or drift; maximum verification errors under H1 are 1.772 strain and 2.053 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The calibrated benchtop law transfers unchanged to the current chamber.\",\n    \"empirical_witness\": \"Median absolute error rises from 0.00790 strain and 0.00636 initial rate on train to 0.466 strain and 1.183 initial rate on verification coupons. The chamber strain residual has two dominant singular values, 10.57 and 2.33, followed by 0.051.\",\n    \"causal_blanket_diagnosis\": \"The calibration fits nominal sweeps and the material fit reproduces benchtop observations, but the chamber introduces a structured departure rather than isolated sensor outliers.\",\n    \"sublated_pivot\": \"Retain the calibrated loads and bench-only material fit; test archived reset and redistribution laws, and recover chamber coefficients in the shared temporal basis.\",\n    \"risk_kind\": \"deployment mechanism shift\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained curve predictor\",\n      \"rejected_reason\": \"The residual is low-rank and the archived chamber mechanisms give testable alternatives that also constrain the initial derivative.\"\n    }\n  ],\n  \"rationale\": \"Project verification strain and rate onto the two fitted exponentials and linear drift. A large projection residual would indicate missing temporal dynamics; a small one allows held-coupon comparisons of the archived laws and their memory and drift terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "47eec7ef2a2ffebee0a6aef4fa8f9540ec349be10b1ac03d091e2ae02850a612",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31448.61,
+      "usage_known": true,
+      "prompt_tokens": 31278,
+      "cached_tokens": 14976,
+      "completion_tokens": 1222
+    }
+  ]
+}

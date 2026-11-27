@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "49b0f525ff8e4a1292a922702359fe28",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:01:33.446502+00:00",
+  "ended_at_utc": "2026-11-27T20:02:07.251788+00:00",
+  "request_sha256": "5df4846ea0715a0b03e83c7cb42900f0c233b974c79bcc5ae70a2d351fbda3a4",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 67187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37326,
+    "cached_tokens": 13696,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, runpy, pickle\\nsys.path.insert(0, '/holdout_task')\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle\\nsys.path.insert(0,'/holdout_task')\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as m\\nwith open('public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; out=solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau=out['estimated_taus']; beta=out['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\ncal=calibrate_upstream(dict(d,chamber_verification_trials=item['campaign_diagnostics']))\\na,b,c=(cal[k] for k in ('train','test','chamber_verification_trials')); t=cal['eval_times']; dt=cal['past_dt']; x,xt=m._features(a,b)\\neps=1e-6; near,_=m._predict(tau,beta,xt,b['hold_channel_raw'].sum(-1),np.array([0.,eps]))\\nassert np.allclose(near[:,0],0) and np.allclose(near[:,1]/eps,out['initial_rate_pred'],rtol=3e-6,atol=2e-6)\\np=a['past_channel_raw'].sum(-1); h=a['hold_channel_raw'].sum(-1); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; errors=[]\\nfor l in np.unique(a['lab_id']):\\n s=a['lab_id']!=l; tt,bb=m._fit(x[s],p[s],h[s],dt,t,y[s],r[s]); ac,ar=m._design(tt,x[~s],p[~s],h[~s],dt,t); errors.append([np.median(abs(ac@bb-y[~s])),np.median(abs(ar@bb-r[~s]))])\\nprint('Benchtop worst held-out lab median absolute strain/rate error:',np.max(errors,axis=0))\\nq=c['coupon_features_raw'].copy(); labs=c['lab_id']; missing=~np.isfinite(q).all(1)\\nfor l in np.unique(labs):\\n s=labs==l; ref=c['ref_coupons'][s]; q[s]=(q[s]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n# The verification coupons use their own panel and the empirically supported diagnostic-only mean fill.\\nq=np.where(np.isfinite(q),q,np.nanmean(q,axis=0)); H=c['hold_channel_raw'].sum(-1)\\nB=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1.]))\\nbase=np.c_[H[:,None]*beta[:2],np.zeros(len(H))]@B.T\\nD=(beta[2]+q@beta[3:])[:,None,None]*B\\nobs=np.c_[c['strain_curves_obs']-c['strain_0'][:,None],c['instant_rate_obs']]; e=np.empty_like(obs)\\nfor l in np.unique(labs):\\n s=labs==l; fit=~s & ~missing; k=np.linalg.lstsq(D[fit].reshape(-1,3),(obs-base)[fit].ravel(),rcond=None)[0]; e[s]=base[s]+D[s]@k-obs[s]\\nrms=lambda z:np.sqrt(np.mean(z**2))\\nfor label,s in [('all',np.ones(len(q),bool)),('complete',~missing),('missing',missing)]: print(label,'held-out strain/rate RMSE:',rms(e[s,:-1]),rms(e[s,-1]))\\nprint('Chamber worst held-out lab-horizon strain RMSE and worst lab rate RMSE:',max(np.max(np.sqrt(np.mean(e[labs==l,:-1]**2,axis=0))) for l in np.unique(labs)),max(rms(e[labs==l,-1]) for l in np.unique(labs)))\\nstrain,rate=m._predict(tau,beta,q,H,t); fixed=np.c_[strain,rate]-obs\\nprint('Exact artifact chamber strain/rate RMSE:',rms(fixed[:,:-1]),rms(fixed[:,-1]))\\nassert max(rms(e[:,:-1]),rms(e[:,-1]),rms(fixed[:,:-1]),rms(fixed[:,-1]))<.01\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Benchtop stress memory → chamber hold-boundary reset with three drift modes; complete diagnostic coupons previously gave worst held-out lab–horizon strain RMSE 0.00503 and worst held-out lab rate RMSE 0.00302.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the staged batch wrapper to handle isolated-mode imports\",\n      \"rejected_reason\": \"The documented validator already passes. Isolated mode removes the sibling-module directory from the import path, so the test harness should explicitly add that directory.\"\n    }\n  ],\n  \"rationale\": \"Restore the documented sibling-module import path inside the isolated verifier without changing either deliverable. Then check the exact solver’s boundary derivative and both chamber observables, reporting held-out errors separately for complete and incomplete coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "dcce24f2aeb55129cc7ef89bd1317793d6db0a8fa2f85fcc6f05538baeb2ca7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35009.0,
+      "usage_known": true,
+      "prompt_tokens": 37326,
+      "cached_tokens": 13696,
+      "completion_tokens": 1422
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6dfea28ab6474c9c8fae0896953ceaf5",
+  "call_seq": 2,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__stageS__alpha_m99_c01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:30:42.083191+00:00",
+  "ended_at_utc": "2026-11-27T19:31:01.650502+00:00",
+  "request_sha256": "7f0a10d773669f24d02b69151cece837dc9e80f6cac8001bde23df1ef576bed9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 14342,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21044,
+    "cached_tokens": 14976,
+    "completion_tokens": 658
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"ls -la /tmp/hegel_continual_archive; python3 - <<'PY'\\nimport pathlib,json,pickle,numpy as np\\np=pathlib.Path('/tmp/hegel_continual_archive')\\nfor f in sorted(p.glob('*.json')):\\n d=json.loads(f.read_text()); print('\\\\n',f.name,f.stat().st_size)\\n if f.stat().st_size<4500: print(json.dumps(d))\\n elif isinstance(d,list): print('entries',len(d)); print(json.dumps(d[-3:])[-3400:])\\n elif isinstance(d,dict):\\n  print('keys',list(d));\\n  for k,v in d.items():\\n   if isinstance(v,list): print(k,len(v),json.dumps(v[-2:])[-2400:])\\n   elif not isinstance(v,dict): print(k,str(v)[:300])\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; print('times',d['eval_times'],'dt',d['past_dt']); c=d['calibration_load_cells']; a=c['bridge_raw']; y=c['true_channel_loads']; A=np.c_[np.ones(len(a)),a]; r=A@np.linalg.lstsq(A,y,rcond=None)[0]-y; print('linear bridge rms/max',np.sqrt(np.mean(r*r,axis=0)),np.max(abs(r),axis=0)); print('sweep');\\nfor k,v in c['single_channel_sweeps'].items(): print(k,np.shape(v),v[:4]);\\nfor k in ['train','test']:\\n z=d[k]; print(k,'ref by lab',[(l,np.round(z['ref_coupons'][z['lab_id']==l].mean(0),2),np.round(z['ref_coupons'][z['lab_id']==l].std(0),2)) for l in np.unique(z['lab_id'])]); print('aux correlation',np.round(np.corrcoef(z['aux_chamber_telemetry'].T),2))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel 2>&1 | head -30\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 two-branch benchtop law -> H2 chamber correction only if supported by the archive; no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The first output was truncated before the apparatus log. Read that log directly to determine the deployment law, and measure affine calibration residuals to see whether the bridge needs a richer model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "b4acce331cabd8002693070a7b76ba25b664d89c2656f6b1474eaac741fab575",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19533.65,
+      "usage_known": true,
+      "prompt_tokens": 21044,
+      "cached_tokens": 14976,
+      "completion_tokens": 658
+    }
+  ]
+}

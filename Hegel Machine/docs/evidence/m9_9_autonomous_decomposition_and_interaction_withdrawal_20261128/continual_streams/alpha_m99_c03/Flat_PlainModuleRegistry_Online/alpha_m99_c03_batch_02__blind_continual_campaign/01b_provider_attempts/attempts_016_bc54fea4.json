@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc54fea4f22442568e94f8896e2bd59a",
+  "call_seq": 16,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:52:04.896403+00:00",
+  "ended_at_utc": "2026-11-27T19:52:42.032818+00:00",
+  "request_sha256": "c33f43a555003cf026628017f6e8aa13dcda36ec7662bf14213ee3cf04e09698",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 98875,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 50472,
+    "cached_tokens": 14976,
+    "completion_tokens": 1526
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=Path('/tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py').read_text()\\ns=s[:s.index('    # The facility-init')]+'''    # The chamber reference population is the deployment block, not the\\n    # pooled benchtop/deployment reference used to identify the material.\\n    chamber_x = _features(test, test)[:len(test['lab_id'])]\\n    curve, rate = _chamber_response(taus, theta, _coupon_inputs(test, chamber_x, bridge), dt, t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\ns=s.replace('def solve_batch(dataset: dict) -> dict:', '''_CHAMBER_TIME = 1.0\\n\\n\\ndef _chamber_response(taus, theta, coupons, dt, t):\\n    curve, rate = _design(taus, coupons, dt, t)\\n    amplitude = coupons[2] @ theta[2:]\\n    transient = -np.expm1(-t / _CHAMBER_TIME)\\n    return (curve[..., :2] @ theta[:2] + amplitude[:, None] * transient,\\n            rate[:, :2] @ theta[:2] + amplitude / _CHAMBER_TIME)\\n\\n\\ndef solve_batch(dataset: dict) -> dict:''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/m99_verify.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m99_rank2 import *\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); q=s.loader.load_module()\\nY=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; missing=np.isnan(g['coupon_features_raw']).any(1); labs=g['lab_id']; st=g['stratum']; ls=np.unique(labs)\\ndef report(name,e):\\n print(name,'worst horizon, all rate, complete rate, missing rate, worst lab curve/rate, worst stratum curve/rate:',*[round(float(v),6) for v in (np.sqrt(np.mean(e[:,:-1]**2,axis=0)).max(),np.sqrt(np.mean(e[:,-1]**2)),np.sqrt(np.mean(e[~missing,-1]**2)),np.sqrt(np.mean(e[missing,-1]**2)),*(max(np.sqrt(np.mean(e[ids==k,sl]**2)) for k in np.unique(ids)) for ids in (labs,st) for sl in (slice(None,-1),-1)))])\\nreport('unchanged', E)\\nfor name,Z in [('pooled',G),('chamber-only',q._features(g,g)[:len(labs)])]:\\n c=q._coupon_inputs(g,Z,bridge); cu,ra=q._chamber_response(taus,theta,c,dt,t); e=Y-np.c_[cu,ra]; report(name,e); print(name,'missing rate errors',e[missing,-1].round(6))\\n B=np.r_[-np.expm1(-t),1.]; score=c[2]@theta[2:]; I=labs[:,None]==ls; print(name,'amplitude residuals by lab',[(int(l),float(np.mean((e@B/(B@B))[(labs==l)&~missing]))) for l in ls]);\\n for n,A in [('offset',I),('offset+gain',np.c_[I,I*(score-theta[2])[:,None]])]:\\n  res=e.copy(); a=e@B/(B@B)\\n  for j in range(len(e)):\\n   keep=(np.arange(len(e))!=j)&~missing; res[j]-=(A[j]@np.linalg.lstsq(A[keep],a[keep],rcond=None)[0])*B\\n  report(name+' LOO '+n,res)\\nout=q.solve_batch(d); print('all finite', all(np.isfinite(a).all() for a in out.values())); assert all(np.isfinite(a).all() for a in out.values()); assert .05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_verify.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 hardcoded lab gains → H2 chamber-only reference normalization plus 1 s saturating creep; diagnostic-only reference scales match inferred scales within 0.004, and held-out slice errors are being measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Store eight fitted chamber coefficients\",\"rejected_reason\":\"The diagnostic-only reference scales reproduce the fitted lab gains closely, so recomputing scales from the deployment reference panel is more transferable. Held-out diagnostic errors will show whether any residual lab correction is warranted.\"}],\"rationale\":\"Write the chamber law without changing the train-only intrinsic fit. Verify the exact artifact in isolated Python, then compare pooled and chamber-only normalization on complete, missing, lab, and stratum slices; fit any proposed lab correction without the coupon being scored.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_016_att0.json",
+      "response_sha256": "c9ed9186e4077d06fe61550f9f885ba8862cdda5bf95a6e11cc5660bba325167",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38259.14,
+      "usage_known": true,
+      "prompt_tokens": 50472,
+      "cached_tokens": 14976,
+      "completion_tokens": 1526
+    }
+  ]
+}

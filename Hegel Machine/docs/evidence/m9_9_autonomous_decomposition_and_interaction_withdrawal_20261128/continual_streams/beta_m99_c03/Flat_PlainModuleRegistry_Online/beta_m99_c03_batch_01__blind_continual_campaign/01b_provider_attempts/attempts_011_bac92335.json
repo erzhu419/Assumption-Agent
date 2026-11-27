@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bac9233583794ede9a6c2cbabca87e14",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:10.827033+00:00",
+  "ended_at_utc": "2026-11-27T19:40:44.597786+00:00",
+  "request_sha256": "bada6bc8a008f07488dfe62b15bb9f8bde5b84969254f28fc05894784c448c4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53655,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33946,
+    "cached_tokens": 14976,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    ref = sweep[', s.index('def _calibrated_observations'))\\nb = s.index('\\\\n\\\\ndef _box_simplex', a)\\ns = s[:a] + '''    ref, raw_ref = sweep['ref_rosette'], sweep['raw_rosette']\\n    bank_sweeps = sweep['single_bank_sweeps']\\n    offsets, gains = np.empty(4), np.empty(4)\\n    # Simultaneous and isolated sweeps measure the same independent bank gains.\\n    for j in range(4):\\n        bank = bank_sweeps['bank_id'] == j\\n        x = np.r_[ref[:, j], bank_sweeps['ref_signal'][bank]]\\n        y = np.r_[raw_ref[:, j], bank_sweeps['raw_readout'][bank]]\\n        offsets[j], gains[j] = np.linalg.lstsq(\\n            np.column_stack((np.ones(len(x)), x)), y, rcond=None)[0]\\n    raw = study['y_obs_raw'].reshape(-1, 4)\\n    return ((raw - offsets) / gains).ravel()\\n''' + s[b:]\\nPath('/tmp/pooled_candidate.py').write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py /tmp/pooled_candidate.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate',path)\\n    m = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(m)\\n    return m\\np='/holdout_task/'\\nbaseline=load(p+'batch_solver.py'); candidate=load('/tmp/pooled_candidate.py')\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; S,U=candidate._forward(s); nsh=len(s['mu_shifts']); b_err=[]; c_err=[]\\nfor pulse in item['campaign_diagnostics']:\\n    st=dict(s,y_obs_raw=pulse['y_pulse_raw']); truth=S@pulse['w_pulse']\\n    for m,errors in ((baseline,b_err),(candidate,c_err)):\\n        r=(m._calibrated_observations(st)-truth).reshape(nsh,-1,4)\\n        errors.extend(np.sqrt(np.mean(r*r,axis=1)).ravel())\\nprint('worst calibrated pulse/shift/bank RMSE:',max(b_err),'->',max(c_err))\\nassert max(c_err)<max(b_err)\\no=candidate.solve_batch(s); w=o['weights']; cert=o['kkt_certificate']; Z=s['Z_nuisance']; y=candidate._calibrated_observations(s)\\nP=np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nD=P@S; r=D@w-P@y; g=D.T@r+s['source_ridge']*w; nu=cert['nu_sum']; red=g-nu; cap=s['u_box']; budget=s['total_budget']; J=.5*(r@r+s['source_ridge']*(w@w)); lb=J-g@w+nu*budget+cap*np.minimum(red,0).sum()\\nassert abs(w.sum()-budget)<1e-10 and w.min()>=-1e-12 and w.max()<=cap+1e-12\\nnp.testing.assert_allclose(cert['weights'],w,atol=0,rtol=0)\\nnp.testing.assert_allclose(cert['lam_lower'],np.maximum(red,0),atol=1e-10)\\nnp.testing.assert_allclose(cert['lam_upper'],np.maximum(-red,0),atol=1e-10)\\nassert max(abs(J-lb),abs(J-cert['primal_objective']),abs(lb-cert['dual_lower_bound']))<1e-9\\nnp.testing.assert_allclose(o['terminal_field'],np.einsum('k,kij->ij',w,U),atol=1e-12,rtol=0)\\nprint('public KKT gap',J-lb,'weight delta from baseline',np.linalg.norm(w-baseline.solve_batch(s)['weights']))\\nPY\\ncp /tmp/pooled_candidate.py /holdout_task/batch_solver.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (zero leakage with full affine calibration) → H2 (zero leakage with pooled independent-bank calibration); worst raw pulse-by-shift-by-bank RMSE was 1.26e-6 pooled versus 1.56e-6 for diagonal rosette-only calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the full affine map\",\n      \"rejected_reason\": \"The extra cross-bank terms did not improve held-out calibration or tracer prediction, and pooling the two sweep types improves the worst bank slice.\"\n    }\n  ],\n  \"rationale\": \"Compare the pooled fit directly against the saved solver in calibrated measurement units. Promote it only if the worst tracer slice improves and the full output contract and KKT checks pass; the verified transport stencil and optimizer remain unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3a49678b7269b9c218179025a960f106ce177c25e92f1d2c55b58edf8590735c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34928.26,
+      "usage_known": true,
+      "prompt_tokens": 33946,
+      "cached_tokens": 14976,
+      "completion_tokens": 1387
+    }
+  ]
+}

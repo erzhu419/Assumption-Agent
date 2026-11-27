@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e8ae8b7fc898413fa1f22e2af303ad98",
+  "call_seq": 7,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:54:30.731720+00:00",
+  "ended_at_utc": "2026-11-27T19:55:05.602515+00:00",
+  "request_sha256": "84b9a1baeedfa36cbde4277a7037a2c13e8913268384cf71346bc3e781b77000",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44559,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30144,
+    "cached_tokens": 13696,
+    "completion_tokens": 1461
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_upstream_basis.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nfrom scipy.optimize import root\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _invert\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\n# Gross spikes are excluded from scoring, not removed from the candidate's training folds.\\nclean = (np.abs(y).max(axis=1) < 10)\\naxis_only = (np.count_nonzero(x, axis=1) == 1)\\nlarge = (np.abs(x).max(axis=1) >= 1.4)\\n\\n# Shifting polynomial variables to pair sums/differences adds no cubic basis terms.\\n# The fixed rational challengers test saturation outside that polynomial span.\\ndef feature(z, a, kind):\\n    q = z if kind == 'axis' else (z - np.roll(z, -1, axis=-1)) / np.sqrt(2.)\\n    return q**3 / (1. + a*q*q)\\n\\nvariants = [('axis', .25), ('axis', 1.), ('pair difference', .25), ('pair difference', 1.)]\\nfns = [lambda z, k=k, a=a: feature(z, a, k) for k, a in variants]\\npred = np.empty((1+len(fns), len(x), 4)) * np.nan\\nfor i in np.flatnonzero(clean):\\n    keep = np.arange(len(x)) != i\\n    c = _fit_bridge(x[keep], y[keep])\\n    pred[0, i] = _invert(y[i], c)\\n    # Classify spikes by the training fit only. Keep the candidate's supported\\n    # polynomial columns and refit them jointly with the rational additions.\\n    err = np.linalg.norm(_basis(x[keep]) @ c - y[keep], axis=1)\\n    good = keep.copy()\\n    good[keep] = err <= max(8*np.median(err), 1e-9)\\n    for v, phi in enumerate(fns, 1):\\n        design = np.c_[_basis(x[good]), phi(x[good])]\\n        b = np.zeros((design.shape[1], 4))\\n        for j in range(4):\\n            use = np.r_[np.arange(35) < 5, np.ones(4, dtype=bool)]\\n            use[:35] |= c[:, j] != 0\\n            b[use, j] = np.linalg.lstsq(design[:, use], y[good, j], rcond=None)[0]\\n        def resid(z):\\n            return np.r_[_basis(z), phi(z)] @ b - y[i]\\n        fit = root(resid, pred[0, i], options={'xtol': 1e-10})\\n        if np.max(np.abs(fit.fun)) > 1e-8:\\n            raise AssertionError(('challenger inversion', v, i))\\n        pred[v, i] = fit.x\\nfor v, name in enumerate(['sparse cubic'] + [str(t) for t in variants]):\\n    e = pred[v]-x\\n    print(name, 'worst inverse error by slice (axis, mixed, extreme):',\\n          [float(np.max(np.abs(e[clean & a]))) for a in (axis_only, ~axis_only, large)],\\n          'RMSE', np.sqrt(np.mean(e[clean]**2)),\\n          'worst total-load error', np.max(np.abs(e[clean].sum(axis=1))))\\nprint('Dataset keys:', sorted(ds))\\nprint('Calibration fields:', sorted(cal))\\nprint('Train/test lab groups:', [dict(zip(*np.unique(ds[k]['lab_id'], return_counts=True))) for k in ('train','test')])\\nassert np.max(np.abs(pred[0, clean]-x[clean])) < .001\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_upstream_basis.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 lower-degree bridge → H2 sparse coupled cubic: worst held-out load error is 0.000367; test whether nonpolynomial saturation improves the worst slice or the downstream-relevant total load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add pairwise sums and differences as polynomial regressors\",\n      \"rejected_reason\": \"Their products and powers through degree three are already in the full cubic span; the audit instead tests rational terms outside that span.\"\n    },\n    {\n      \"option\": \"Run relay, HJB, or within-batch classification tests\",\n      \"rejected_reason\": \"The public task is continuous load calibration with no relay state, HJB drift operator, or classification target.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed saturation alternatives on the same held-out calibration rows, including high-amplitude and single-axis cases. Score both individual loads and their sum, which drives the verified downstream solver. Change the candidate only if the evidence shows a meaningful improvement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "80470732d71f7470889ad196a46b825d4f9f4c205fe0e9b044fce9a9f8568bb6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35988.29,
+      "usage_known": true,
+      "prompt_tokens": 30144,
+      "cached_tokens": 13696,
+      "completion_tokens": 1461
+    }
+  ]
+}

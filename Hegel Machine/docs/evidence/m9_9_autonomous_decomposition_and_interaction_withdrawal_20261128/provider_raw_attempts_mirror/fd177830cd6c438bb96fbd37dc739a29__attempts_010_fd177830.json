@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd177830cd6c438bb96fbd37dc739a29",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:06:30.567892+00:00",
+  "ended_at_utc": "2026-11-27T20:07:00.807589+00:00",
+  "request_sha256": "f1e7747b0b76b2f1e54651da91d6b27343a9b04e4dfa263be67293d1c7b7b7b0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62941,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37065,
+    "cached_tokens": 14976,
+    "completion_tokens": 1245
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('batch_solver.py')\\ns=p.read_text(); old='    # The latest apparatus trace returns both setting channels to facility-init levels.'\\nassert old in s\\np.write_text(s.replace(old,'    # The archive distinguishes chamber settings but does not supply a\\\\n    # response law for the active setting. Use the calibrated benchtop law.'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; L=c['true_channel_loads']; R=c['bridge_raw']; fit=m['_calibration']; recover=m['_recover_loads']; basis=m['_bridge_basis']\\ne=[]; contaminated=[]\\nfor fold in np.array_split(np.random.default_rng(230).permutation(len(L)),5):\\n    keep=np.ones(len(L),dtype=bool); keep[fold]=False\\n    coef=fit({'bridge_raw':R[keep],'true_channel_loads':L[keep]})\\n    r=np.linalg.norm(basis(L[fold])@coef-R[fold],axis=1); good=r<0.01\\n    contaminated.extend(fold[~good]); e.extend(abs(recover(R[fold][good],coef).sum(1)-L[fold][good].sum(1)))\\nprint('Bridge OOF clean rows:',len(e),'excluded indices:',contaminated,'axial error p95/max:',np.percentile(e,[95,100]))\\nassert max(e)<0.002\\nout=m['solve_batch'](d); assert all(np.isfinite(z).all() for z in out.values()); assert 0.05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nte=d['test']; n=len(d['train']['lab_id']); x=m['_features'](d['train'],te); u=m['_coupon_inputs'](te,x[n:],fit(c)); eps=1e-6\\nA,B=m['_design'](out['estimated_taus'],u,d['past_dt'],np.array([0.,eps])); a=A@out['hereditary_weights']; rate=out['initial_rate_pred']; err=abs((a[:,1]-a[:,0])/eps-rate)\\nfor l in np.unique(te['lab_id']):\\n    j=te['lab_id']==l; print('Deployment lab',l,'zero-strain increment max',abs(a[j,0]).max(),'rate derivative max error',err[j].max())\\nassert np.max(abs(a[:,0]))<1e-12 and np.max(err)<1e-5\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archive-indicated setting change → calibrated benchtop fallback because the chamber response is not identified; worst leave-one-lab-out MAE is 0.02101 for strain and 0.00683 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add a chamber correction from deployment telemetry alone\",\"rejected_reason\":\"Neither the unlabeled deployment inputs nor the archived setting traces establish the correction's magnitude or form.\"}],\"rationale\":\"Correct the inherited setting claim. Validate axial calibration against held-out known loads, since a small inverse residual alone does not show that the recovered loads are right. Check that the two deployment outputs agree at the initial boundary; failures would call for a calibration or rate-design repair, respectively.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c051cae78180e9d76bb0b48bb5fd9dd794d3c7b0e75ce845dab680fbbc944ca5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31384.98,
+      "usage_known": true,
+      "prompt_tokens": 37065,
+      "cached_tokens": 14976,
+      "completion_tokens": 1245
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2771a17636d24b33860931d6d5ad9927",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c01__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:48:23.582761+00:00",
+  "ended_at_utc": "2026-11-27T19:48:55.180018+00:00",
+  "request_sha256": "ef9b24d9fe321c619d0377a3d1ca9a0355f2184cb0cd8e1be997ccafe1e652f9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55607,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32692,
+    "cached_tokens": 13696,
+    "completion_tokens": 1293
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_rosette_transfer.py <<'PY'\\nimport json\\nimport pickle\\nimport sys\\nfrom pathlib import Path\\n\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward\\n\\nwith (root / 'public_batch.pkl').open('rb') as stream:\\n    items = pickle.load(stream)\\npayload = json.loads((root / '_upstream_param_payload.json').read_text())\\nfold_errors, frozen_errors = [], []\\nfor item in items:\\n    study = item['study']\\n    sweeps = study['sensor_calibration_sweeps']\\n    n = len(sweeps['ref_rosette'])\\n    nshift = len(study['mu_shifts'])\\n    s, _ = _forward(study)\\n    for pulse in item['campaign_diagnostics'] or []:\\n        probe = {**study, 'y_obs_raw': pulse['y_pulse_raw']}\\n        expected = s @ pulse['w_pulse']\\n        def rmse(x):\\n            return np.sqrt(np.mean((x-expected).reshape(nshift, -1)**2, axis=1))\\n        frozen_errors.extend(rmse(calibrate_upstream(probe, payload)['y_obs_raw']))\\n        for fold in range(4):\\n            keep = np.arange(n) % 4 != fold\\n            train = {**sweeps, 'ref_rosette': np.asarray(sweeps['ref_rosette'])[keep], 'raw_rosette': np.asarray(sweeps['raw_rosette'])[keep]}\\n            observed = calibrate_upstream({**probe, 'sensor_calibration_sweeps': train}, None)['y_obs_raw']\\n            fold_errors.extend(rmse(observed))\\nassert fold_errors and frozen_errors\\nworst = max(fold_errors)\\nprint(f'Sweep subsampling: {len(fold_errors)} pulse-by-shift calibration-fold slices, worst RMSE={worst:.6e}; frozen payload worst RMSE={max(frozen_errors):.6e}')\\nassert worst < 2e-6, 'Sweep-fit calibration exceeds the established pulse residual margin when calibration rows are withheld'\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/audit_rosette_transfer.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (uncoupled walls with frozen calibration) -> H2 (two periodic upwind seams with campaign-fit calibration); the saved model's worst tracer RMSE is 6.697e-7, versus 0.06340 and 0.07503 for the individual seam ablations.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the seam and schema checks\",\n      \"rejected_reason\": \"They already passed on the saved bundle and cannot detect sensitivity to individual calibration sweep rows.\"\n    }\n  ],\n  \"rationale\": \"Hold the periodic operator fixed and withhold calibration rows before predicting the real tracer pulses. If the worst fold exceeds the established residual margin, investigate sweep conditioning rather than changing the verified wall law. The continuous inverse problem has no relay states or within-batch classification metric.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "55115c775d4cbbd3397f2d5a5cbbd022f642ebbf511b180b6ae178ec3c5ea881",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32711.55,
+      "usage_known": true,
+      "prompt_tokens": 32692,
+      "cached_tokens": 13696,
+      "completion_tokens": 1293
+    }
+  ]
+}

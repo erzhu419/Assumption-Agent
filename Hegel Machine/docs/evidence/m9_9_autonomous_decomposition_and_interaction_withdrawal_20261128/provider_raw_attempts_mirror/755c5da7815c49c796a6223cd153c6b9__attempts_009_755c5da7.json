@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "755c5da7815c49c796a6223cd153c6b9",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:27.142036+00:00",
+  "ended_at_utc": "2026-11-27T19:55:58.010148+00:00",
+  "request_sha256": "26490508269914b010f145b0f87598932d9c9de515d655897f64dba903c03b86",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 43588,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28619,
+    "cached_tokens": 13696,
+    "completion_tokens": 1234
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _forward, _inverse, calibrate_upstream\\nfrom _verified_downstream import solve_downstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    d = item['dataset']; c = d['calibration_load_cells']; x, y = c['true_channel_loads'], c['bridge_raw']\\n    clean = abs(y).max(1) < 8\\n    dominant = abs(x).argmax(1)\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    n = np.arange(4); nxt = (n+1)%4; prv = (n-1)%4\\n    basis = np.stack((np.ones_like(x), x, x[:,nxt], x[:,prv], x*x[:,nxt], x**3), axis=-1)\\n    base = calibrate_upstream(d); baseline = solve_downstream(base)\\n    print('downstream outputs:', list(baseline))\\n    print('test laboratory and stratum counts:', [(k,np.unique(d['test'][k],return_counts=True)) for k in ('lab_id','stratum')])\\n    for j in range(4):\\n        # Withhold the entire axis sweep of channel j and the largest mixed-load rows dominated by j.\\n        mixed = np.flatnonzero((~axis) & (dominant==j))\\n        top = mixed[np.argsort(np.linalg.norm(x[mixed], axis=1))[-4:]]\\n        held = (axis & (dominant==j)) | np.isin(np.arange(len(x)), top)\\n        tr = ~held; te = clean & held\\n        m = _fit(x[tr], y[tr]); e = _inverse(y[te],m)-x[te]\\n        worst = np.max(abs(e)); total = np.max(abs(e.sum(axis=1)))\\n        print('withheld axis',j,'clean rows',int(te.sum()),'max inverse channel/total',worst,total)\\n        assert worst < .001 and total < .002\\n        for label, col in [('no neighbor product',4), ('no cubic self response',5)]:\\n            bb = np.delete(basis,col,axis=-1)\\n            pred = np.column_stack([bb[te,k] @ np.linalg.lstsq(bb[tr & clean,k],y[tr & clean,k],rcond=None)[0] for k in n])\\n            print(' ',label,'max bridge error',np.max(abs(pred-y[te])))\\n        variant = dict(base)\\n        for name in ('train','test','chamber_verification_trials'):\\n            s = d.get(name)\\n            if s is not None:\\n                variant[name] = dict(base[name], **{k:_inverse(s[k],m) for k in ('past_channel_raw','hold_channel_raw')})\\n        out = solve_downstream(variant)\\n        for k,v in baseline.items():\\n            a,b = np.asarray(v),np.asarray(out[k])\\n            if a.dtype.kind in 'fiu' and a.size:\\n                assert np.all(np.isfinite(b))\\n                err = abs(a-b)\\n                if a.ndim and a.shape[0] == len(d['test']['lab_id']):\\n                    labs = np.asarray(d['test']['lab_id'])\\n                    print(' ',k,'max delta by lab',[(str(l),float(err[labs==l].max())) for l in np.unique(labs)])\\n                else:\\n                    print(' ',k,'max delta',float(err.max()))\\nsys.argv = ['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 ring-coupled bridge with cubic self-response; blocked CV measured maximum errors of 2.81e-4 per channel and 6.29e-4 in total load.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the rational and squared-term comparison\",\"rejected_reason\":\"That audit already found no material improvement; complete withheld sweeps and downstream sensitivity test different failure modes.\"}],\"rationale\":\"Withhold entire measured channel sweeps and nearby extreme mixed loads to detect dependence on particular calibration rows. Ablate each proposed nonlinear term on the same splits, then propagate the fold calibrations through the composed pipeline to check whether small load errors produce concentrated downstream shifts by lab.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "f36bbfc49d7a88b54003aa1b657b82ebfd394b173dccf58a7f8e184add93e5c2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31996.82,
+      "usage_known": true,
+      "prompt_tokens": 28619,
+      "cached_tokens": 13696,
+      "completion_tokens": 1234
+    }
+  ]
+}

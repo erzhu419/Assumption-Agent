@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "21fddc6635234e19858ccae3c515bf52",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:46:21.080800+00:00",
+  "ended_at_utc": "2026-11-27T19:46:59.307417+00:00",
+  "request_sha256": "1436e8014f89f90be48764c778b44ce84785ffac769f10ff480a1dbefad8685b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46959,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32556,
+    "cached_tokens": 14976,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.linalg import solve\\nfrom scipy import sparse\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n s=item['study']; S,U=m._forward(s); n=len(U); Z=s['Z_nuisance']; cap=s['u_box']; ridge=s['source_ridge']; I=np.eye(Z.shape[1]); P=lambda a:a-Z@solve(Z.T@Z+s['nuisance_ridge']*I,Z.T@a,assume_a='pos'); X=P(S); y=P(m._calibrated_observations(s)); nx,ny=s['nx'],s['ny']; ix,iy=s['sensor_ij'].T\\n def axis(a):\\n  k,v=s['kappa_'+a],s['vel_'+a]; d=s['L'+a]/(len(k)-1); A=np.zeros((len(k),len(k)))\\n  for i in range(len(k)):\\n   j,l=(i-1)%len(k),(i+1)%len(k)\\n   A[i,j]+=-(k[i]+k[j])/(2*d*d)-max(v[i],0)/d\\n   A[i,l]+=-(k[i]+k[l])/(2*d*d)-max(-v[i],0)/d\\n   A[i,i]=-A[i].sum()\\n  return sparse.csr_matrix(A)\\n L=sparse.kron(sparse.eye(ny),axis('x'))+sparse.kron(axis('y'),sparse.eye(nx))+sparse.diags(s['V_reaction_2d'].ravel(order='F')+s['mu_shifts'][-1]); M=s['source_modes']; wx=[]\\n for budget in sorted(set([0., 0.05*cap, cap, s['total_budget'], (n-1)*cap, (n-0.05)*cap, n*cap])):\\n  out=m.solve_batch(dict(s,total_budget=budget)); w=out['weights']; C=out['kkt_certificate']; f=out['terminal_field']; g=X.T@(X@w-y)+ridge*w; nu=C['nu_sum']; lo=np.asarray(C['lam_lower']); hi=np.asarray(C['lam_upper']); J=.5*((X@w-y)@(X@w-y)+ridge*(w@w)); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n  feasibility=max(abs(w.sum()-budget),max(-w),max(w-cap),0); stat=np.max(np.abs(g-nu-lo+hi)); comp=max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w)))); gap=abs(J-dual); field=np.max(np.abs(L@f.ravel(order='F')-np.tensordot(w,M,axes=1).ravel(order='F')))\\n  print('budget %.5f active %d/%d feasibility %.2e stationarity %.2e complementarity %.2e gap %.2e field residual %.2e'%(budget,np.count_nonzero(w<1e-9),np.count_nonzero(w>cap-1e-9),feasibility,stat,comp,gap,field)); assert min(lo.min(),hi.min())>=0 and max(feasibility,stat,comp,gap,field,np.max(np.abs(C['weights']-w)),abs(C['primal_objective']-J),abs(C['dual_lower_bound']-dual))<1e-8\\n # Select the calibration grammar with sweep samples held out; score predictions by shift and channel on independent tracer pulses.\\n sw=s['sensor_calibration_sweeps']; a,b=sw['ref_rosette'],sw['raw_rosette']; E={key:np.empty_like(b) for key in ('diagonal','full')}\\n for i in range(len(a)):\\n  t=np.arange(len(a))!=i; A=np.column_stack((np.ones(len(a)),a)); E['full'][i]=A[i]@np.linalg.lstsq(A[t],b[t],rcond=None)[0]-b[i]\\n  for j in range(4): E['diagonal'][i,j]=A[i,[0,j+1]]@np.linalg.lstsq(A[t][:,[0,j+1]],b[t,j],rcond=None)[0]-b[i,j]\\n for key,e in E.items(): print(key,'sweep LOO RMSE by channel',np.sqrt(np.mean(e**2,axis=0)))\\n errors=[]; projections=[]\\n for pulse in item.get('campaign_diagnostics') or []:\\n  obs=m._calibrated_observations(dict(s,y_obs_raw=pulse['y_pulse_raw'])); e=S@pulse['w_pulse']-obs; projections.append(np.linalg.norm(e-P(e))/np.linalg.norm(e)); errors.append(e.reshape(len(s['mu_shifts']),-1,4))\\n if errors: print('worst pulse/shift/channel RMSE',np.sqrt(np.mean(np.array(errors)**2,axis=2)).max(),'largest pulse residual fraction removed by nuisance projection',max(projections))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Local wall stencils -> two-axis periodic upwind transport; worst measured pulse-by-shift RMSE is 9.23e-7 and independent verifier KKT gap is 1.30e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit unrelated drift operators or audit relay modes and classification cohorts\",\"rejected_reason\":\"This study has a steady linear transport operator, no relay, and no classification outcome; the relevant nuisance risk is whether projection hides transport error.\"}],\"rationale\":\"Keep the pulse-identified stencil and test margins not covered by the original interior solution. If active bounds break KKT conditions, repair the optimizer; if terminal residuals fail, repair field assembly; if held-out sweep errors favor channel interactions, check whether they improve tracer predictions before changing calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "35c27fb19c84edaf400fe043a15e257c411483cca1461aab6d865af191e7d8b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39355.31,
+      "usage_known": true,
+      "prompt_tokens": 32556,
+      "cached_tokens": 14976,
+      "completion_tokens": 1575
+    }
+  ]
+}

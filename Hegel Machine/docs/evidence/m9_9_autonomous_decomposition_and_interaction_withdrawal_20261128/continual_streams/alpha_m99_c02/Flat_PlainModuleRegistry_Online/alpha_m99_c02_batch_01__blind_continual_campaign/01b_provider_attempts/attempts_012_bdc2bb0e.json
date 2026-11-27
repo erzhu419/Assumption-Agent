@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bdc2bb0e7049435bbce7cf7a848f4e83",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:41:11.151575+00:00",
+  "ended_at_utc": "2026-11-27T19:41:39.393337+00:00",
+  "request_sha256": "eef42d473f51dea513eaa7d64db122bf8a99bfbdbdfcbaaca2c2275372981743",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68187,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39372,
+    "cached_tokens": 14976,
+    "completion_tokens": 1102
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_kernel_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=runpy.run_path('/holdout_task/batch_solver.py')\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd,g=i['dataset'],i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']\\nb=s['_bridge'](d['calibration_load_cells']); x,_=s['_features'](tr,te); u,_=s['_features'](g,g)\\nq,w=s['_material'](tr,b,x,dt,t); _,h=s['_loads'](g,b); lab=g['lab_id']; drift=w[2]+u@w[3:]\\ny=g['strain_curves_obs']-g['strain_0'][:,None]; load=(h[:,None]*w[:2])@(-np.expm1(-t[:,None]/q)).T\\nsat=lambda a:-a*np.expm1(-t/a)\\ndef prediction(f,v): return load+drift[:,None]*(f*sat(q[0])+(1-f)*sat(v))\\ndef solve(mode,m):\\n if mode=='free':\\n  return least_squares(lambda a:(prediction(*a)[m]-y[m]).ravel(),[.55,5],bounds=([0,q[0]],[1,25])).x\\n if mode=='fraction':\\n  return [least_squares(lambda a:(prediction(a[0],5)[m]-y[m]).ravel(),[.55],bounds=([0],[1])).x[0],5]\\n if mode=='slow':\\n  return [.55,least_squares(lambda a:(prediction(.55,a[0])[m]-y[m]).ravel(),[5],bounds=([q[0]],[25])).x[0]]\\n if mode=='intrinsic':\\n  return [least_squares(lambda a:(prediction(a[0],q[1])[m]-y[m]).ravel(),[.55],bounds=([0],[1])).x[0],q[1]]\\n return [.55,5]\\nrm=lambda a:np.sqrt(np.mean(a*a))\\nfor mode in ['old','fraction','slow','intrinsic','free']:\\n e=np.empty_like(y); params=[]\\n for l in np.unique(lab):\\n  m=lab!=l; a=solve(mode,m); params.append(a); e[~m]=prediction(*a)[~m]-y[~m]\\n complete=np.isfinite(g['coupon_features_raw']).all(1)\\n print(mode,'full',np.round(solve(mode,np.ones(len(lab),bool)),7),'fold params',np.round(params,5).tolist(),'worst lab',round(max(rm(e[lab==l]) for l in np.unique(lab)),7),'late',round(rm(e[:,-3:]),7),'complete/missing',np.round([rm(e[complete]),rm(e[~complete])],7))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_kernel_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal chamber decay constants → H2 diagnostic-estimated unit-slope kernel; worst held-out-lab strain RMSE fell from 0.00705 to 0.00432, with rate unchanged at 0.00422.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a hold-by-drift interaction or rational saturation\",\n      \"rejected_reason\": \"Both reduced strain error but worsened held-out initial-rate RMSE to more than 0.0064.\"\n    },\n    {\n      \"option\": \"Upgrade the affine bridge to a quadratic bridge\",\n      \"rejected_reason\": \"The quadratic bridge worsened held-out calibration error.\"\n    }\n  ],\n  \"rationale\": \"The refitted kernel cut late-time strain RMSE roughly in half without changing the initial rate. Check whether adjusting one constant captures that gain across labs and missing-feature slices; if it does, use the simpler correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5702712200edc80accfbb4ce95efc3b710bd8b2237740eb1c1b2e2cf06f4af7e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29325.28,
+      "usage_known": true,
+      "prompt_tokens": 39372,
+      "cached_tokens": 14976,
+      "completion_tokens": 1102
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eca5d4b862754baeb6acc2f16dd5f77c",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:55:40.439690+00:00",
+  "ended_at_utc": "2026-11-27T19:56:16.647699+00:00",
+  "request_sha256": "1cb7421c31fc2de2564aa75d90fcb497d71d5bb2d89ac60a8ba5354531a426b4",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44373,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29712,
+    "cached_tokens": 13696,
+    "completion_tokens": 1530
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _RING, _features, _fit_forward, _invert\\n\\nd = pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nm = np.linalg.norm(y - np.median(y,axis=0),axis=1); clean = m <= 6*np.median(m)\\naxis = np.count_nonzero(x,axis=1)==1\\nprint('calibration metadata and task keys:', list(c), list(d))\\nprint('train/test grouping fields:', [[k for k in d[b] if 'batch' in k or 'lab' in k or 'stratum' in k or 'mode' in k] for b in ('train','test')])\\na = _features(x,_RING)\\nqs = [(f'x{i}',x[:,i]) for i in range(4)]\\nfor i,j in itertools.combinations(range(4),2):\\n    for sign in (-1,1):\\n        for scale in (0.5,1.,2.):\\n            qs.append((f'x{i}{sign*scale:+g}x{j}',x[:,i]+sign*scale*x[:,j]))\\nq2 = np.column_stack([q*q for _,q in qs])\\nextra = np.column_stack([x[:,i]*x[:,j]*x[:,k] for i,j,k in itertools.combinations(range(4),3)] + [q*q for _,q in qs])\\n# Choose quotient terms and coefficients using training rows only. An output's\\n# sparse numerator includes its local pair and its own cubic.\\ndef compare(tr,te):\\n    terms,b = _fit_forward(x[tr],y[tr]); assert terms == _RING\\n    base = _features(x[te],terms) @ b\\n    quot = np.empty_like(base); diff = np.empty_like(base)\\n    selected = []\\n    use = tr & clean\\n    for j in range(4):\\n        col = [0,1,2,3,4,5+j,9+j]; p = a[:,col]; yt = y[use,j]\\n        best = (np.inf,None,None)\\n        for k in range(q2.shape[1]):\\n            q = q2[:,k]; z = np.column_stack((p[use],-yt*q[use]))\\n            fit = np.linalg.lstsq(z,yt,rcond=None)[0]; alpha = max(0.,fit[-1]); den = 1+alpha*q\\n            coef = np.linalg.lstsq(p[use]/den[use,None],yt,rcond=None)[0]\\n            loss = np.mean((yt-p[use]@coef/den[use])**2)\\n            if loss < best[0]: best = loss,k,(alpha,coef)\\n        _,k,(alpha,coef) = best; quot[:,j] = p[te]@coef/(1+alpha*q2[te,k]); selected.append((qs[k][0],round(alpha,8)))\\n        # The span of squared pairwise differences is all degree-two monomials.\\n        z = np.column_stack((p,extra)); coeff = np.linalg.lstsq(z[use],yt,rcond=None)[0]; diff[:,j] = z[te]@coeff\\n    return [y[te]-pred for pred in (base,quot,diff)], _invert(y[te],terms,b)-x[te], selected\\n\\nrng=np.random.default_rng(17); fold=np.empty(len(x),int); fold[rng.permutation(len(x))]=np.arange(len(x))%5\\nerrs=np.zeros((3,len(x),4)); inv=np.zeros_like(x)\\nfor f in range(5):\\n    te=(fold==f)&clean; e,iv,_=compare(fold!=f,te); errs[:,te]=e; inv[te]=iv\\nrmse=lambda e: np.round(np.sqrt(np.mean(e*e,axis=-2)).max(axis=-1),8).tolist()\\nfor label,s in [('axial',axis&clean),('mixed',~axis&clean)]:\\n    print(label,'worst-channel OOF bridge RMSE [ring, rational, quadratic differences plus triple products]',rmse(errs[:,s]),'ring inverse channel biases',inv[s].mean(0).round(8).tolist())\\nfor label,te,tr in [('entire axial series',axis&clean,~axis),('outer quartile mixed',(np.max(abs(x),axis=1)>=np.quantile(np.max(abs(x[clean&~axis]),axis=1),.75))&clean&~axis,None)]:\\n    e,iv,q=compare(~te if tr is None else tr,te); print(label,'worst-channel bridge RMSE',rmse(np.asarray(e)),'ring inverse RMSE',rmse(iv),'quotient parameters',q)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic bridge response → H2 robust sparse cubic response with cyclic pair coupling; worst held-out per-channel inverse RMSE is 0.0001483 with all axial rows withheld.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, drift-operator, or balanced-accuracy tests\",\n      \"rejected_reason\": \"The transducer fits continuous paired measurements from a single calibration panel. Downstream lab and stratum labels are not calibration batches, relay states, or classification outcomes.\"\n    }\n  ],\n  \"rationale\": \"Use real held-out measurements to test whether the sparse cubic leaves systematic error that rational coupling, pairwise differences, or triple interactions can remove. Revisit the model only if a challenger improves the stressed slices materially.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "968745277e8949a681fc2bc37237deb903892b387e5be8e08967dc568fa70b8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37323.78,
+      "usage_known": true,
+      "prompt_tokens": 29712,
+      "cached_tokens": 13696,
+      "completion_tokens": 1530
+    }
+  ]
+}

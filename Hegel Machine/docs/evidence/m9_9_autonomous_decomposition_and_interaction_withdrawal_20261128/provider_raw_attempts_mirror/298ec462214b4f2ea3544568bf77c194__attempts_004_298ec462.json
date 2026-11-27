@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "298ec462214b4f2ea3544568bf77c194",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:56.916061+00:00",
+  "ended_at_utc": "2026-11-27T19:51:18.875441+00:00",
+  "request_sha256": "ecd81680aadd9a91244449be4a2fc400dbb01b09310960e813ba76b636ba12e7",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 28697,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25344,
+    "cached_tokens": 5504,
+    "completion_tokens": 773
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rosette_probe.py <<'PY'\\nimport itertools,json,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; b=s['sensor_calibration_sweeps']; x=b['ref_rosette']; y=b['raw_rosette']; n=len(x)\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nif isinstance(a,dict): a=next(v for v in a.values() if isinstance(v,list))\\nfor e in a:\\n t=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],'mean',np.round(t.mean(0),3),'last',np.round(t[-1],3))\\nprint('bad rows (gross raw)',np.flatnonzero(np.max(abs(y),axis=1)>5)); print('axis sweeps',np.round(np.c_[x,y][:16],6))\\ndef basis(x,p): return np.prod(x[:,None,:]**p[None,:,:],axis=2)\\nfor name,deg,odd in [('affine',1,False),('quadratic',2,False),('odd cubic',3,True),('full cubic',3,False),('odd quintic',5,True)]:\\n p=np.array([i for i in itertools.product(range(deg+1),repeat=4) if sum(i)<=deg and (not odd or sum(i)%2 or not sum(i))]); z=basis(x,p); clean=np.max(abs(y),axis=1)<5\\n if len(p)>=clean.sum()-15: continue\\n errors=np.full((n,4),np.nan)\\n for f in range(5):\\n  tr=clean&(np.arange(n)%5!=f); te=clean&~tr\\n  co=np.linalg.lstsq(z[tr],y[tr],rcond=None)[0]; errors[te]=z[te]@co-y[te]\\n c=np.linalg.lstsq(z[clean],y[clean],rcond=None)[0]\\n print(name,'OOF rms',np.sqrt(np.nanmean(errors**2,axis=0)),'max',np.nanmax(abs(errors),axis=0))\\n for j in range(4): print(j,[(tuple(p[i]),round(c[i,j],6)) for i in np.argsort(-abs(c[:,j]))[:10]])\\nPY\\npython3 /tmp/rosette_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine mixing → H2 sparse nonlinear transfer; axis sweeps show curvature, but held-out error has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived affine calibration unchanged\",\"rejected_reason\":\"The current axis sweeps show changing slopes; held-out comparison will establish the size of the error.\"}],\"rationale\":\"Compare polynomial symmetry and interaction terms on held-out measurements. The residual and coefficient patterns will show whether a sparse cubic law is sufficient or whether a separate smooth saturation term is needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "64370fa28d38f59301322a2e4cbd0261395fb9c1418528b245c2509c18e7d92c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21913.65,
+      "usage_known": true,
+      "prompt_tokens": 25344,
+      "cached_tokens": 5504,
+      "completion_tokens": 773
+    }
+  ]
+}

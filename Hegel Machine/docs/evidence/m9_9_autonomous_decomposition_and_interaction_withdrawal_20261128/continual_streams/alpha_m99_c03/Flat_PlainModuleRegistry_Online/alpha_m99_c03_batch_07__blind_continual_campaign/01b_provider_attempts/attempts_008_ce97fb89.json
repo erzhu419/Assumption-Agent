@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce97fb896b274f2192c4b17e75e62b8b",
+  "call_seq": 8,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:27:15.209418+00:00",
+  "ended_at_utc": "2026-11-27T20:27:37.434093+00:00",
+  "request_sha256": "2590d02fe099afc39b714d77d0bff15eff331a474282b383d55750a9542576de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40660,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29239,
+    "cached_tokens": 14976,
+    "completion_tokens": 849
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '/^def _deployment/,$p' batch_solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; c=d['calibration_load_cells']; b=m._calibration(c); print('single-channel sweep structure', [(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()] if isinstance(c['single_channel_sweeps'],dict) else type(c['single_channel_sweeps']).__name__)\\nfor name in ('train','test'):\\n v=d[name]; raw=np.concatenate((v['hold_channel_raw'],v['past_channel_raw'].reshape(-1,4))); x=m._recover_loads(raw,b); sv=np.linalg.svd(m._bridge_jacobian(x,b),compute_uv=False); print(name,'load range',x.min(axis=0).round(4),x.max(axis=0).round(4),'minimum bridge Jacobian singular value',sv[:,-1].min())\\nprint('calibration load range',np.min(c['true_channel_loads'],axis=0).round(4),np.max(c['true_channel_loads'],axis=0).round(4))\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus log fields',list(rows[-1])); print('last two non-trace fields',[{k:v for k,v in row.items() if k!='facility_telemetry_trace'} for row in rows[-2:]])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained chamber history -> H2 archived chamber reset with a sparse cubic bridge; worst held-lab p90 absolute errors were 0.0216 for strain and 0.0164 for rate, and worst held-sweep p90 bridge residual was 0.0003109.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational bridge terms or lab-specific drift offsets\",\n      \"rejected_reason\": \"Rational terms worsened held-sweep error; the high final-time strain error came from isolated spikes rather than a lab-wide offset.\"\n    }\n  ],\n  \"rationale\": \"A near-zero inversion residual does not establish that the inverse is well-conditioned at operating loads. Check actual train and test loads against calibration coverage and local conditioning; revise the bridge only if this exposes a material weakness. Check the compact apparatus metadata for a setting change that would invalidate reuse of the archived chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "395b406673737a305b2aba1dacf1f001784d47a8fe5417c87cca177e0ac021e3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23472.51,
+      "usage_known": true,
+      "prompt_tokens": 29239,
+      "cached_tokens": 14976,
+      "completion_tokens": 849
+    }
+  ]
+}

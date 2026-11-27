@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e19dbb214a74fa0a5bd9ce5eafdb945",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:37:46.137880+00:00",
+  "ended_at_utc": "2026-11-27T19:38:26.463150+00:00",
+  "request_sha256": "e9f6b711f36157c9516a10881726adfa8db3eddccdd9fe02847abee97e453485",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42966,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32781,
+    "cached_tokens": 14976,
+    "completion_tokens": 1784
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/beta_m99_c04_s00_solver.py').read_text()\\nold = \\\"    ax = _axis(study['kappa_x'], study['vel_x'], study['Lx'] / (nx - 1), study['robin_x'])\\\\n    ay = _axis(study['kappa_y'], study['vel_y'], study['Ly'] / (ny - 1), study['robin_y'])\\\"\\nassert src.count(old) == 1\\nnew = \\\"    # Tracer pulses identify sealed walls on both axes: retain the inward\\\\n    # diffusive coupling and remove the Robin leakage term.\\\\n    ax = _axis(study['kappa_x'], study['vel_x'], study['Lx'] / (nx - 1), 0.0)\\\\n    ay = _axis(study['kappa_y'], study['vel_y'], study['Ly'] / (ny - 1), 0.0)\\\"\\nPath('/holdout_task/batch_solver.py').write_text(src.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns = item['study']; m = runpy.run_path('/holdout_task/batch_solver.py'); out = m['solve_batch'](s)\\nnx, ny = s['nx'], s['ny']; modes = s['source_modes']; n = len(modes)\\naxes = []\\nfor axis, size in zip('xy',(nx,ny)):\\n    k, v = s['kappa_'+axis], s['vel_'+axis]; h = s['L'+axis]/(size-1)\\n    a = np.zeros((size,size))\\n    for i,j in ((0,1),(size-1,size-2)):\\n        a[i,i] = k[i]/h**2; a[i,j] = -a[i,i]\\n    for i in range(1,size-1):\\n        km, kp = (k[i]+k[i-1])/2, (k[i]+k[i+1])/2\\n        a[i,i-1] = -km/h**2-max(0,v[i])/h\\n        a[i,i+1] = -kp/h**2-max(0,-v[i])/h\\n        a[i,i] = (km+kp)/h**2+abs(v[i])/h\\n    axes.append(a)\\nL = np.kron(np.eye(ny),axes[0])+np.kron(axes[1],np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F'))\\ni,j = s['sensor_ij'].T; rhs = np.column_stack([a.ravel(order='F') for a in modes]); blocks = []\\nfor mu in s['mu_shifts']:\\n    U = np.linalg.solve(L+mu*np.eye(nx*ny),rhs); blocks.append(U[i+nx*j])\\nS = np.vstack(blocks)\\npulse_max = max(np.sqrt(np.mean((m['_calibrate'](dict(s,y_obs_raw=p['y_pulse_raw']))-S@p['w_pulse']).reshape(len(blocks),-1)**2,axis=1)).max() for p in item['campaign_diagnostics'])\\nassert pulse_max < 3e-6\\nZ = s['Z_nuisance']; C = np.eye(len(S))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA = C@S; b = C@m['_calibrate'](s); ridge = s['source_ridge']; H = A.T@A+ridge*np.eye(n); c = A.T@b\\nobjective = lambda w: .5*(np.linalg.norm(A@w-b)**2+ridge*np.dot(w,w))\\ncap, budget = s['u_box'], s['total_budget']; best = (np.inf,None)\\nfor pattern in itertools.product((-1,0,1),repeat=n):\\n    p = np.array(pattern); f = p == 0; x = cap*(p == 1).astype(float)\\n    if f.any():\\n        hf = H[np.ix_(f,f)]; e = np.ones(f.sum()); z = np.linalg.solve(hf,np.column_stack(((c-H@x)[f],e)))\\n        x[f] = z[:,0]+z[:,1]*(budget-x.sum()-z[:,0].sum())/z[:,1].sum()\\n    if abs(x.sum()-budget)<1e-10 and x.min()>=-1e-10 and x.max()<=cap+1e-10 and objective(x)<best[0]:\\n        best = objective(x),x\\nw = out['weights']; cert = out['kkt_certificate']; g = H@w-c; lo = np.asarray(cert['lam_lower']); hi = np.asarray(cert['lam_upper']); nu = cert['nu_sum']; gap = cert['primal_objective']-cert['dual_lower_bound']; field_error = np.max(np.abs(out['terminal_field']-(U@w).reshape((nx,ny),order='F'))); weight_error = np.max(np.abs(w-best[1]))\\nassert abs(w.sum()-budget)<1e-10 and w.min()>=0 and w.max()<=cap\\nassert np.array_equal(w,cert['weights']) and lo.min()>=0 and hi.min()>=0\\nassert max(np.max(np.abs(g-nu-lo+hi)),np.max(np.abs(w*lo)),np.max(np.abs((cap-w)*hi)),abs(cert['primal_objective']-objective(w)),abs(gap),weight_error,field_error)<1e-10\\nprint(f'worst pulse-by-shift RMSE={pulse_max:.3g}; independent QP weight error={weight_error:.3g}; terminal max error={field_error:.3g}; certified gap={gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls -> H2 sealed diffusion-only wall rows on both axes; worst public pulse-by-shift RMSE falls from 0.19185 to 1.17e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit continuous wall coefficients from the pulses\",\n      \"rejected_reason\": \"The sealed operator predicts every pulse at about 1e-6 without fitted coefficients; the unrestricted fit reaches 1.13e-5 on an omitted pulse slice.\"\n    }\n  ],\n  \"rationale\": \"Remove only the wall leakage term and retain the validated affine calibration. An independent dense solve checks wall assembly and field ordering, and enumeration of box-simplex faces checks the weights and certificate against a separate optimizer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f3e5485138e17bb90702199db15d8efc18c763eb792244b9203576f692d9e7ae",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42539.0,
+      "usage_known": true,
+      "prompt_tokens": 32781,
+      "cached_tokens": 14976,
+      "completion_tokens": 1784
+    }
+  ]
+}

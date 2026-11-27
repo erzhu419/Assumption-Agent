@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "22c1c01031a84c5ea46ee8601c927c62",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:11:17.725560+00:00",
+  "ended_at_utc": "2026-11-27T20:11:36.248740+00:00",
+  "request_sha256": "a7c784e91041ca433bdbbb58d408ee34ef30234b1422dde04e98a863671d0b8a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62085,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36311,
+    "cached_tokens": 14976,
+    "completion_tokens": 684
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nimport ast, json\\nfrom pathlib import Path\\nimport numpy as np\\nroot=Path('/tmp/hegel_continual_archive')\\nlog=json.loads((root/'archive_apparatus_log.json').read_text())\\nfor prev,cur in zip(log,log[1:]):\\n name=cur['completed_campaign_short_name']; file=root/(name+'_solver.py')\\n trace=np.asarray(prev['facility_telemetry_trace'])\\n print(f'{prev[\\\"completed_campaign_short_name\\\"]} -> {name}: prefix setting means {np.round(trace[:,[2,7]].mean(0),3)}')\\n if file.exists():\\n  tree=ast.parse(file.read_text()); funcs=[n for n in tree.body if isinstance(n,ast.FunctionDef)]\\n  for n in funcs:\\n   if n.name not in ('solve_batch','_chamber_response','_deployment'): continue\\n   lines=ast.unparse(n).splitlines()\\n   for line in lines[1:]:\\n    if any(k in line.lower() for k in ('test','hold','reset','chamber','rate @','redistrib','fraction','drift','gap','memory','tanh')): print(' ',line.strip())\\nprint('current prefix setting means:',np.round(np.asarray(log[-1]['facility_telemetry_trace'])[:,[2,7]].mean(0),3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 same-row telemetry identifies the chamber law -> H2 align each archived law with the prefix available before its campaign; worst held-out total-load RMS is 0.000256 versus 0.510 for affine calibration.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer a new chamber interaction from shifted telemetry phases\",\n      \"rejected_reason\": \"Phase differences distinguish traces but do not identify a constitutive term without an archived law or chamber outcomes.\"\n    }\n  ],\n  \"rationale\": \"Check for an off-by-one mapping between each archived chamber law and the last telemetry entry visible before that campaign. If correctly aligned verified solvers contradict the current redistribution mapping, revise deployment only; the calibration and material fits already passed their held-out checks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "b2b5c4b2c75bcc92437360c76ee7f4c23a82a3e41379ea8aa72e8a08a5f63dce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19698.6,
+      "usage_known": true,
+      "prompt_tokens": 36311,
+      "cached_tokens": 14976,
+      "completion_tokens": 684
+    }
+  ]
+}

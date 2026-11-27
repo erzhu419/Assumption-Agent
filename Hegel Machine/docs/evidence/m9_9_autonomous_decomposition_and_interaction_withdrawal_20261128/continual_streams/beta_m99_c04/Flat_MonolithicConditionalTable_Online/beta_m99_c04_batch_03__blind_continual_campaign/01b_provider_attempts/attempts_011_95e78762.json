@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95e78762e68c4c42a5bf21d62181fc70",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:48.536428+00:00",
+  "ended_at_utc": "2026-11-27T19:51:13.825496+00:00",
+  "request_sha256": "ca60500b78479687eb2f3076e41ed26fa7055d1efb5e07f64b6e0d774a776f6f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57808,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34877,
+    "cached_tokens": 14976,
+    "completion_tokens": 942
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/batch_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, raw = c['ref_rosette'], c['raw_rosette']\\n    rows = np.arange(len(x))\\n    single = np.count_nonzero(x, axis=1) == 1\\n    blocks = [rows[single & (x[:, j] != 0)] for j in range(4)]\\n    blocks += list(np.array_split(np.random.default_rng(481).permutation(rows[~single]), 5))\\n    out = m.solve_batch(s)\\n    w, field = out['weights'], out['terminal_field']\\n    D, U = m._design(s)\\n    Z = s['Z_nuisance']\\n    P = np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\n    S = D - Z @ (P @ D)\\n    H = S.T @ S + s['source_ridge'] * np.eye(len(w))\\n    y_full = m._calibrate(s)\\n    worst = np.zeros(3)\\n    for block in filter(len, blocks):\\n        train = np.setdiff1d(rows, block)\\n        b = m._fit_rosette(x[train], raw[train])\\n        y = m._invert_rosette(s['y_obs_raw'].reshape(-1, 4), b).ravel()\\n        wx, _ = m._box_simplex(H, S.T @ (y - Z @ (P @ y)), s['u_box'], s['total_budget'])\\n        fieldx = np.tensordot(wx, U, axes=1)\\n        worst = np.maximum(worst, [np.max(abs(y-y_full)), np.linalg.norm(wx-w)/np.linalg.norm(w), np.linalg.norm(fieldx-field)/np.linalg.norm(field)])\\n    print('Worst calibration-block deletion: calibrated observation absolute change, weights relative L2, terminal-field relative L2:', worst)\\n    assert np.all(np.isfinite(worst))\\n    assert max(worst[1:]) < 1e-3, 'Calibration-block deletion amplified into the deliverables'\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette → H2 robust cyclic cubic calibration with open Robin walls; worst leave-sensor-out RMSE fell from 0.24946 to 0.01521 after nuisance profiling.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebraic and nuisance audits\",\n      \"rejected_reason\": \"The existing held-out results already distinguish these alternatives; they do not quantify propagation of calibration uncertainty into the weights and terminal field.\"\n    }\n  ],\n  \"rationale\": \"Refit after deleting each real calibration block and measure the change in both primary outputs. If small sweep errors are amplified downstream, identify the block driving that sensitivity before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "61bccad32a8d6663b3700c7bdfad3128becde49bbb2fefc80db981bd472f2b87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25240.9,
+      "usage_known": true,
+      "prompt_tokens": 34877,
+      "cached_tokens": 14976,
+      "completion_tokens": 942
+    }
+  ]
+}

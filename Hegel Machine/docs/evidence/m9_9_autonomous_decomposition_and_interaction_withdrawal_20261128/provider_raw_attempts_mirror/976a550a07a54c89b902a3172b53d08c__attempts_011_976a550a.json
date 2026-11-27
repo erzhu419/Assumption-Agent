@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "976a550a07a54c89b902a3172b53d08c",
+  "call_seq": 11,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c01__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:38.544445+00:00",
+  "ended_at_utc": "2026-11-27T19:41:20.594210+00:00",
+  "request_sha256": "9c1707f0d9c3ba233afea2ebb8040e6694806a32ca231528042bd56fa0fe8d99",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40533,
+    "cached_tokens": 13696,
+    "completion_tokens": 1795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '''    pt, ht = _loads(test, bridge)\\n    a, b = _design(tau, xt, pt, ht, dt, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': test['strain_0'][:, None] + a @ beta,\\n            'initial_rate_pred': b @ beta}\\n'''\\nnew = '''    _, hold = _loads(test, bridge)\\n    strain_delta, rate = _chamber(tau, beta, xt, hold, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': beta,\\n            'predicted_strain': test['strain_0'][:, None] + strain_delta,\\n            'initial_rate_pred': rate}\\n'''\\nassert old in s\\nchamber = '''def _chamber(tau, beta, x, hold, t):\\n    # Verification coupons show a history reset and affine transfer of the\\n    # intrinsic drift into the two relaxation amplitudes and linear drift.\\n    drift = beta[2] + x @ beta[3:]\\n    offset = np.array([-0.005718918, 0.048043863, -0.004934461])\\n    gain = np.array([0.391080014, 1.804301785, 0.039087689])\\n    modes = offset + drift[:, None] * gain\\n    modes[:, :2] += hold[:, None] * beta[:2]\\n    kernel = np.column_stack((-np.expm1(-t[:, None] / tau), t))\\n    return modes @ kernel.T, modes @ np.r_[1. / tau, 1.]\\n\\n\\n'''\\np.write_text(s.replace(old, new).replace('def solve_batch(dataset):', chamber + 'def solve_batch(dataset):'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/chverify.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, di = item['dataset'], item['campaign_diagnostics']\\ntr, te = d['train'], d['test']\\nt, dt = d['eval_times'], d['past_dt']\\nout = s.solve_batch(d)\\ntau, beta = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25\\nbridge = s._bridge(d['calibration_load_cells'])\\np, h = s._loads(tr, bridge)\\nx, xt = s._features(tr, te)\\nstrain = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrate = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    k = tr['lab_id'] == lab\\n    tj, bj = s._fit(x[~k], p[~k], h[~k], dt, t, strain[~k], rate[~k])\\n    a, b = s._design(tj, x[k], p[k], h[k], dt, t)\\n    print('intrinsic held-out lab', lab, 'taus', tj.round(4), 'strain/rate p90', np.quantile(abs(strain[k] - a@bj), .9), np.quantile(abs(rate[k] - b@bj), .9))\\n\\nxd = di['coupon_features_raw'].copy()\\ncomplete = np.isfinite(xd).all(1)\\nfor lab in np.unique(di['lab_id']):\\n    k = di['lab_id'] == lab\\n    r = di['ref_coupons'][k]\\n    xd[k] = (xd[k] - np.median(r.mean(0))) / np.median(r.std(0))\\nxd = np.where(np.isfinite(xd), xd, np.nanmean(xd, 0))\\n_, hd = s._loads(di, bridge)\\ny = di['strain_curves_obs'] - di['strain_0'][:, None]\\nv = di['instant_rate_obs']\\nz, w = s._chamber(tau, beta, xd, hd, t)\\nfor label,k in [('complete',complete),('missing',~complete)]:\\n    print('artifact diagnostic replay', label, 'strain/rate max', np.max(abs(y[k] - z[k])), np.max(abs(v[k] - w[k])))\\nassert max(np.max(abs(y-z)), np.max(abs(v-w))) < 0.01\\n\\n# Verify strain and rate stay coupled, including at deployment drift extremes.\\n_, ht = s._loads(te, bridge)\\neps = 1e-6\\ndelta, rate = s._chamber(tau, beta, xt, ht, np.array([0., eps]))\\nnp.testing.assert_array_equal(delta[:,0], 0.)\\nnp.testing.assert_allclose(delta[:,1]/eps, rate, atol=3e-6)\\nnp.testing.assert_allclose(rate, out['initial_rate_pred'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chverify.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retain benchtop memory in deployment → H2 reset chamber memory and transfer drift affinely through the shared modes; leave-one-lab-out maxima are 0.00776 strain and 0.00689 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use proportional drift transfer with no offset\",\n      \"rejected_reason\": \"The affine model reduced both grouped worst-case errors, from 0.00959 to 0.00776 strain and from 0.00819 to 0.00689 initial rate.\"\n    }\n  ],\n  \"rationale\": \"Implement the chamber correction without changing the train-only material fit or the prescribed deployment preprocessing. Verify the exact artifact in an isolated process, check intrinsic errors on each held-out lab, replay the chamber law on complete and missing-feature coupons, and verify that its reported rate is the derivative of its predicted strain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "81a2b7c78a9929025aa2fc1d88dec43d422b80172f4c0be02d11d3804b454b6e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43225.59,
+      "usage_known": true,
+      "prompt_tokens": 40533,
+      "cached_tokens": 13696,
+      "completion_tokens": 1795
+    }
+  ]
+}

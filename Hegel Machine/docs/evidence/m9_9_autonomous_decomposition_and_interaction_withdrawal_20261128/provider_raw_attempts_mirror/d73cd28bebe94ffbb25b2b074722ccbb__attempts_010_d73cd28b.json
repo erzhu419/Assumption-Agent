@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d73cd28bebe94ffbb25b2b074722ccbb",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:40:22.900370+00:00",
+  "ended_at_utc": "2026-11-27T19:40:58.519772+00:00",
+  "request_sha256": "477aca393633663312a1ccd7531fe0b736a8a25f19b63568b3157393d891e3f0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70301,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40794,
+    "cached_tokens": 13696,
+    "completion_tokens": 1575
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^def solve_batch/,$d' /tmp/hegel_continual_archive/alpha_m99_c04_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\n# Chamber calibration from the public verification coupons. The pole and\\n# hold-amplitude multipliers are relative to the independent benchtop fit.\\n_CHAMBER_POLE_SCALE = np.array([0.56128, 3.79555]) / np.array([0.556853, 3.468723])\\n_CHAMBER_LOAD_SCALE = np.array([0.64154, 0.43751]) / np.array([0.632263, 0.428237])\\n_CHAMBER_DRIFT_FRACTIONS = np.array([0.25526 / 0.56128, 2.06866 / 3.79555])\\n\\n\\ndef _chamber_response(group, x, stress, times, taus, theta):\\n    hold = stress[0] + group['hold_channel_raw'] @ stress[1:]\\n    drift = theta[2] + x @ theta[3:]\\n    poles = taus * _CHAMBER_POLE_SCALE\\n    amplitudes = (hold[:, None] * (theta[:2] * _CHAMBER_LOAD_SCALE)\\n                  + drift[:, None] * (_CHAMBER_DRIFT_FRACTIONS * poles))\\n    return amplitudes @ -np.expm1(-times[None, :] / poles[:, None]), amplitudes @ (1.0 / poles)\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = dataset['past_dt'], dataset['eval_times']\\n    x_train, x_test = _features(train, test)\\n    stress = _stress_map(dataset['calibration_load_cells'])\\n    taus, theta = _fit(train, x_train, stress, dt, times)\\n    curves, rates = _chamber_response(test, x_test, stress, times, taus, theta)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rates}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat > /tmp/intrinsic_slices.py <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py'); i=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=i['dataset']; tr,te,d=ds['train'],ds['test'],i['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; s=m['_stress_map'](ds['calibration_load_cells']); x,xt=m['_features'](tr,te)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; q,b=m['_fit'](tr,x,s,dt,t); print('intrinsic',q,b)\\nmask=np.isfinite(tr['coupon_features_raw']).all(1)\\nfor loss in ['soft_l1','cauchy']:\\n for scale in [.8,1.5,2.5,6]:\\n  for complete in (False,True):\\n   use=mask if complete else np.ones(len(x),bool)\\n   def res(p):\\n    A,R=m['_design'](tr,x,s,dt,t,np.exp(p[:2])); return np.r_[((A@p[2:]-y)[use]/.012).ravel(),(R@p[2:]-yr)[use]/.007]\\n   f=least_squares(res,np.r_[np.log(q),b],loss=loss,f_scale=scale,x_scale='jac'); print(loss,scale,complete,np.round(np.r_[np.exp(f.x[:2]),f.x[2:]],5))\\nxd=m['_features'](d,{k:v[:0] for k,v in d.items()})[0]; u,v=m['_chamber_response'](d,xd,s,t,q,b); err=u-(d['strain_curves_obs']-d['strain_0'][:,None]); rr=v-d['instant_rate_obs']; print('complete/missing chamber absolute RMSE',[(np.sqrt(np.mean(err[z]**2)),np.sqrt(np.mean(rr[z]**2))) for z in [np.isfinite(d['coupon_features_raw']).all(1),np.isnan(d['coupon_features_raw']).any(1)]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/intrinsic_slices.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber history correction → H2 hold-stress amplitudes with drift split between two relaxation branches; the compact free-pole fit has worst held-out lab strain/rate RMSE of 0.00892/0.00842.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use absolute chamber poles and amplitudes\",\n      \"rejected_reason\": \"Relative calibration lets the deployment law follow the material estimated from the supplied benchtop coupons.\"\n    }\n  ],\n  \"rationale\": \"Build the solver with separate intrinsic and chamber fits and run the public schema gate. Check sensitivity to robust-loss scale and missing features because an unstable intrinsic pole would affect both the reported spectrum and the deployment prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f4a7737e9926608f828d1b879fafe1ebfef1e516487b4d9fd65b3018b1c3c4ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37960.75,
+      "usage_known": true,
+      "prompt_tokens": 40794,
+      "cached_tokens": 13696,
+      "completion_tokens": 1575
+    }
+  ]
+}

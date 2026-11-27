@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb8d06e5e05a45088075f5f2cf6a9977",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Hegel_AutonomousInteractionGraph_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:12:11.636986+00:00",
+  "ended_at_utc": "2026-11-27T20:12:34.732039+00:00",
+  "request_sha256": "4b9fea56050988ad263cef7221bc7a56106bdf064d1a388c0e09870000da7514",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21858,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22264,
+    "cached_tokens": 16256,
+    "completion_tokens": 851
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > /tmp/bridge_probe.py <<'PY'\\nimport json,pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\nfor e in json.load(open(p)):\\n print('log',e.get('completed_campaign_index'),[(k, str(v)[:420]) for k,v in e.items() if any(s in k.lower() for s in ('bridge','transduc','setting','campaign_id'))], list(e))\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; np.set_printoptions(precision=5,suppress=True)\\nprint('axis rows raw',y[:16]); print('axis loads', x[:16])\\nfor name,terms in [('affine',[()]+[(i,) for i in range(4)]),('diagonal cubic',[()]+[(i,) for i in range(4)]+[(i,i,i) for i in range(4)]),('diagonal cube plus quadratic',[()]+[(i,) for i in range(4)]+[(i,i,i) for i in range(4)]+list(itertools.combinations_with_replacement(range(4),2))),('full cubic',[()]+[t for k in (1,2,3) for t in itertools.combinations_with_replacement(range(4),k)])]:\\n A=np.column_stack([x[:,t].prod(1) for t in terms]); err=np.zeros_like(y); B=[]\\n for fold in range(5):\\n  tr=np.arange(len(y))%5!=fold; U=A[tr]; V=y[tr]; b=np.linalg.lstsq(U,V,rcond=None)[0]\\n  for eps in (1., .12, .02, .004, .001):\\n   for _ in range(25):\\n    w=1/np.maximum(np.linalg.norm(U@b-V,axis=1),eps); b=np.linalg.lstsq(U*np.sqrt(w[:,None]),V*np.sqrt(w[:,None]),rcond=None)[0]\\n  B.append(b); err[~tr]=A[~tr]@b-y[~tr]\\n r=np.linalg.norm(err,axis=1); order=np.argsort(r)\\n print(name,'norm quantiles',np.quantile(r,[.5,.8,.9,.95,1]),'largest',list(zip(order[-9:],r[order[-9:]].round(5)))); print('terms',list(zip(terms,np.median(B,axis=0).round(5).tolist())))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled affine bridge → H2 sparse nonlinear forward map; held-out calibration error has not yet been measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a direct inverse polynomial\",\"rejected_reason\":\"Extreme raw spike values would have high predictor leverage; fitting the forward map puts those spikes in the residual instead.\"}],\"rationale\":\"Compare robust held-out errors and coefficient patterns across nested polynomial bases. If cubic or interaction terms do not explain the clean residuals, use the axis sweeps and apparatus log to choose a different nonlinear basis before implementing inversion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "219f5286d90736b5079ac5c611100c3ab8dec36d17e423ac2244e02be97a56ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24303.79,
+      "usage_known": true,
+      "prompt_tokens": 22264,
+      "cached_tokens": 16256,
+      "completion_tokens": 851
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "04b20dc7956345d1b29ee31f64e94481",
+  "call_seq": 3,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:51:44.781919+00:00",
+  "ended_at_utc": "2026-11-27T19:52:11.846165+00:00",
+  "request_sha256": "884ed430e67e87465f3a84e3be5272ab412c8e1116b964dce79627ac0a878c58",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22408,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23631,
+    "cached_tokens": 0,
+    "completion_tokens": 1066
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat /tmp/hegel_continual_archive/archive_manifest.json && sed -n '1,150p' /tmp/hegel_continual_archive/beta_m99_c04_batch_02_solver.py && python3 - <<'PY'\\nimport json,pickle,numpy as np,itertools as it\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor ent in log:\\n print({k:v for k,v in ent.items() if k!='facility_telemetry_trace'}); t=np.array(ent['facility_telemetry_trace']);print('telemetry mean/std',t.mean(0).round(3),t.std(0).round(3))\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; bank=sw['single_bank_sweeps']; bx=np.eye(4)[bank['bank_id']]*bank['ref_signal'][:,None]; by=bank['raw_readout']; good=np.linalg.norm(y,axis=1)<10\\nprint('inferred EMI rows',np.flatnonzero(~good)); print('reference channel extrema',x.min(0),x.max(0)); print('obs channel extrema',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0))\\ndef features(x,terms):return np.column_stack([x[:,t].prod(1) for t in terms])\\nfor name,terms in [(f'full-{d}',[t for a in range(d+1) for t in it.combinations_with_replacement(range(4),a)]) for d in range(1,5)]+[('diagonal-cubic+quadratic',[()]+[(i,) for i in range(4)]+list(it.combinations_with_replacement(range(4),2))+[(i,)*3 for i in range(4)])]:\\n A=features(x,terms); fold=np.empty_like(y[good]); inds=np.flatnonzero(good)\\n for tr in np.array_split(np.random.default_rng(42).permutation(len(inds)),7):\\n  keep=np.delete(inds,tr); coef=np.linalg.lstsq(A[keep],y[keep],rcond=None)[0]; fold[tr]=y[inds[tr]]-A[inds[tr]]@coef\\n B=np.linalg.lstsq(A[good],y[good],rcond=None)[0]; e=y[good]-A[good]@B; be=by-(features(bx,terms)@B)[np.arange(len(by)),bank['bank_id']]; print(name,'train RMSE %.7g CV RMSE %.7g CV max %.7g bank median/max %.7g %.7g'%(np.sqrt(np.mean(e**2)),np.sqrt(np.mean(fold**2)),np.max(np.abs(fold)),np.median(np.abs(be)),np.max(np.abs(be[by<10]))));\\n if name=='full-3':\\n  print('all degree <=3 coefficients'); print('\\\\n'.join(f'{t}: {b.round(5)}' for t,b in zip(terms,B))); print('bank residuals',be.reshape(4,6).round(5))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled affine response → H2 coupled nonlinear response; retained sweep rows show affine residual norms up to 1.034, while three separate EMI rows exceed 25.9.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A coupled affine calibration is sufficient after discarding gross EMI rows.\",\"empirical_witness\":\"Clean single-bank traces have visibly unequal increments at equally spaced reference levels; the trimmed affine rosette fit still has residual norms above 0.9 on several rows.\",\"causal_blanket_diagnosis\":\"Cross-channel mixing and repeatable within-bank curvature are distinct from isolated EMI spikes.\",\"sublated_pivot\":\"Compare diagonal cubic, full interaction, and higher-order bases using held-out rosette rows and independent single-bank predictions.\",\"risk_kind\":\"calibration_model_bias\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the prior affine calibrator unchanged\",\"rejected_reason\":\"The current bank sweeps show curvature even without cross-channel inputs.\"}],\"rationale\":\"Held-out rosette errors will expose unsupported polynomial terms; independent axis sweeps will distinguish a good interpolation from a model that recovers the transducer response.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "5bcf1cec3ff79c8bf9df275abef0486a79254eed8c022d6ded4cc50888dec616",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28196.11,
+      "usage_known": true,
+      "prompt_tokens": 23631,
+      "cached_tokens": 0,
+      "completion_tokens": 1066
+    }
+  ]
+}

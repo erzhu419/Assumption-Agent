@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc4a1c6a28ce4e3e8f54a3416fa58082",
+  "call_seq": 4,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:03:16.499517+00:00",
+  "ended_at_utc": "2026-11-27T20:03:40.800834+00:00",
+  "request_sha256": "e20753afd63ad467a99b102eaa2de6bc5d21aa744ac2ea8b49b8e6aa1878f6aa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33161,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27377,
+    "cached_tokens": 14976,
+    "completion_tokens": 902
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp /tmp/hegel_continual_archive/alpha_m99_c03_batch_03_solver.py batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport batch_solver as m\\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; L=c['true_channel_loads']; R=c['bridge_raw']; B=m._calibration(c); A=m._bridge_basis(L); e=np.linalg.norm(A@B-R,axis=1)\\nprint('bridge residual percentiles',np.percentile(e,[0,25,50,75,90,95,100]).round(6),'load calibration range',L.min(0).round(3),L.max(0).round(3))\\nfor j in range(4): print('channel',j,[(q,round(a,5)) for q,a in zip([()]+m._TERMS,B[:,j]) if a])\\nfor name in ('train','test'):\\n d=D[name]; print(name,{k:(list(v) if isinstance(v,dict) else np.shape(v)) for k,v in d.items()}); print('labs',np.unique(d['lab_id'],return_counts=True));\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  raw=d[k]; z=m._recover_loads(raw,B).reshape(-1,4); r=np.linalg.norm(m._bridge_basis(z)@B-raw.reshape(-1,4),axis=1); print(k,'inv worst',r.max(),'range',z.min(0).round(3),z.max(0).round(3))\\n if 'aux_chamber_telemetry' in d:\\n  x=d['aux_chamber_telemetry']; print('aux mean/std',x.mean(0).round(3),x.std(0).round(3),'first rows',x[:4].round(3))\\nprint('times',D['eval_times'],'dt',D['past_dt']); o=m.solve_batch(D); print('taus and weights',o['estimated_taus'],o['hereditary_weights']); print('sweep keys',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]); print('ref types',[(k,type(v).__name__,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in D.items() if k not in ('train','test','calibration_load_cells')])\\nPY\\nsed -n '1,38p;100,130p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived benchtop predictor → recalibrated bridge and chamber law selected from the latest channel-6 shift; worst-slice validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the channel-6 shift as a known numerical correction\",\n      \"rejected_reason\": \"The log identifies a setting change but does not yet establish which equation or coefficient it changes.\"\n    }\n  ],\n  \"rationale\": \"Establish an executable baseline. Large bridge residuals or poor inversion would trigger a calibration repair; clean calibration would focus the next step on identifying what the changed chamber setting affects.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f770f668bb89789c88f561ca5d975f290cf2c03ade069d30fca712ba007cd9fa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24261.81,
+      "usage_known": true,
+      "prompt_tokens": 27377,
+      "cached_tokens": 14976,
+      "completion_tokens": 902
+    }
+  ]
+}

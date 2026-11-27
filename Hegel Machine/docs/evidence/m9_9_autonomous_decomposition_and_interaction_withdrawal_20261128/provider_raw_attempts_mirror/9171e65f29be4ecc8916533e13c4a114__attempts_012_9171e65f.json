@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9171e65f29be4ecc8916533e13c4a114",
+  "call_seq": 12,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c02__Hegel_AutonomousInteractionGraph_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:35.569598+00:00",
+  "ended_at_utc": "2026-11-27T20:01:05.526540+00:00",
+  "request_sha256": "6cf8c2a0ca24a6f5fa36d0eb762f2f8f36082c13ad172c0bfc54af6fdb4c175e",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58501,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32905,
+    "cached_tokens": 13696,
+    "completion_tokens": 1221
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_chamber.py <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _material, _basis, _loads, _gap\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = calibrate_upstream(item['dataset'])\\ntr, te = d['train'], d['test']\\nx, _ = _features(tr, te)\\np, h = _loads(tr)\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:,None]\\nr = tr['instant_rate_obs']\\nlab = tr['lab_id']\\naux = tr['aux_chamber_telemetry']\\nresults = {k: [] for k in ('intrinsic', 'telemetry', 'nonlinear_gap')}\\nfor label in np.unique(lab):\\n    train = lab != label\\n    val = ~train\\n    tau, theta = _material({k:v[train] for k,v in tr.items()}, x[train], dt, t)\\n    c, q = _basis(tau,p,h,x,dt,t)\\n    ec, er = y - c@theta, r - q@theta\\n    g = _gap(tau,p,h,dt)\\n    # Added terms preserve zero strain increment at t=0 and differentiate to the rate basis.\\n    a = -np.expm1(-t[:,None]/tau)\\n    gap_delta = g[:,0]-g[:,1]\\n    terms = np.column_stack((h*p[:,-1]*gap_delta, gap_delta/(1+gap_delta**2)))\\n    variants = {'intrinsic': (None,None), 'telemetry': (aux[:,None,:]*t[None,:,None],aux), 'nonlinear_gap': (a[None,:,:]*terms[:,None,:],terms/tau)}\\n    for name, (u,v) in variants.items():\\n        cp, rp = ec[val], er[val]\\n        if u is not None:\\n            from scipy.optimize import least_squares\\n            mat = np.concatenate((u[train].reshape(-1,u.shape[-1]),v[train]))\\n            target = np.r_[ec[train].ravel(),er[train]]\\n            b = least_squares(lambda b: mat@b-target,np.zeros(mat.shape[1]),loss='soft_l1',f_scale=.013).x\\n            cp, rp = cp-u[val]@b, rp-v[val]@b\\n        results[name].append((np.max(np.median(abs(cp),axis=0)),np.median(abs(rp))))\\nfor name, scores in results.items():\\n    print(name, 'per-lab [worst horizon strain MedAE, rate MedAE]', np.round(scores,6), 'worst', np.round(np.max(scores,axis=0),6))\\nlog = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in log:\\n    print(e['completed_campaign_short_name'], np.round(np.median(e['facility_telemetry_trace'],axis=0),3))\\nout = solve_batch(item['dataset'])\\nfor key, shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(len(te['lab_id']),len(t)), 'initial_rate_pred':(len(te['lab_id']),)}.items():\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared two-branch material law) -> H2 (benchtop fallback for the unmapped chamber setting); worst held-lab horizon strain MedAE was 0.0140 and worst initial-rate MedAE was 0.00838.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay and balanced-accuracy tests\",\n      \"rejected_reason\": \"The provided measurements are continuous strain and rate, with no relay state or class label. Held-lab residual tests address the relevant confounding and constitutive questions.\"\n    }\n  ],\n  \"rationale\": \"Test whether telemetry or omitted nonlinear stress-gap terms reduce worst-lab errors when fitted inside each fold. If either improves both outputs, investigate the benchtop specification before promoting it. Inspect all facility channels for a co-occurring state indicator; this cannot validate a deployment correction without chamber response data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "f6210fc9c71753850ad2aaa00f71ff677d89f8fde15a62c1c59ed2d07eac6b37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31115.84,
+      "usage_known": true,
+      "prompt_tokens": 32905,
+      "cached_tokens": 13696,
+      "completion_tokens": 1221
+    }
+  ]
+}

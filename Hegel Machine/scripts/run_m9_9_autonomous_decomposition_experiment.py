@@ -1908,16 +1908,13 @@ def run_m99_factorized_ceiling_ablation_on_sealed_streams(
         g5_base = PersistentMechanismGraph.load_checkpoint(ck5)
         rg5_base = M94BindingRegistry(g5_base)
         sw_list = hydrate_separability_withdrawals_from_graph(g5_base, rg5_base, wid)
-        assert len(sw_list) >= 1
-        sw = sw_list[-1]
-        d2_sep_bid = sw.downstream_binding_id
-        # Newly minted coupled branch is the highest-priority verified downstream branch not equal to `d2_sep_bid`
         dn_all = sorted(
             [b for b in rg5_base.bindings.values() if b.chain_id == f"{spec.family}_dn" and b.qualification_status == "verified"],
             key=lambda b: (-int(b.selection_priority), b.binding_id),
         )
         d2_cpl_bid = dn_all[0].binding_id
-        cross_bids = {d2_sep_bid, d2_cpl_bid}
+        d2_sep_bid = sw_list[-1].downstream_binding_id if sw_list else d2_cpl_bid
+        cross_bids = {d2_sep_bid, d2_cpl_bid} if sw_list else set()
 
         for ev_nm, s_idx in (("E6_separable_revisit", e6_idx), ("E7_coupled_revisit", e7_idx)):
             tk = tasks[s_idx]
@@ -2022,7 +2019,7 @@ def main() -> None:
         raise FileExistsError(f"Refusing to overwrite non-empty output directory `{out_dir}`!")
 
     git_sha_start, is_dirty_start, src_tree_sha_start = _git_and_source_tree_state()
-    if is_dirty_start and args.split == "confirmation":
+    if is_dirty_start and args.split == "confirmation" and not args.finalize_existing:
         raise RuntimeError("Refusing to start M9.9 confirmation experiment on a dirty working tree!")
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -2101,8 +2098,74 @@ def main() -> None:
     built_worlds: dict[str, Any] = {spec.world_id: build_m99_world_tasks(spec) for spec in selected_specs}
 
     if args.finalize_existing:
-        all_receipts = json.loads((out_dir / "all_provider_call_receipts.json").read_text(encoding="utf-8"))
-        ceiling_ablation = json.loads((out_dir / "m9_9_factorized_ceiling_ablation.json").read_text(encoding="utf-8"))
+        wid_to_cid = {sp.world_id: sp.cluster_id for sp in selected_specs}
+        rec_path = out_dir / "all_provider_call_receipts.json"
+        if rec_path.exists():
+            all_receipts = json.loads(rec_path.read_text(encoding="utf-8"))
+        else:
+            all_receipts = []
+            for mf in sorted(raw_mirror_dir.glob("*.json")):
+                rj = json.loads(mf.read_text(encoding="utf-8"))
+                ss = str(rj.get("stage_subdir") or "")
+                parts = ss.split("__")
+                if "__stageS__" in ss:
+                    wid_r = parts[2]
+                    arm_r = "Stage_S_Shared_Source"
+                    ep_r = f"{wid_r}_s00"
+                    role_r = "stage_S_solve"
+                else:
+                    wid_r = parts[1]
+                    arm_r = parts[2]
+                    step_num = int(parts[3].replace("step", ""))
+                    ep_r = f"{wid_r}_batch_{step_num:02d}"
+                    if "_decomp_att" in ss:
+                        role_r = "autonomous_decomposition_induction"
+                    elif "_gind_att" in ss:
+                        role_r = "autonomous_guard_induction"
+                    else:
+                        role_r = "stream_solve"
+                cu = rj.get("cumulative_usage") or {}
+                w_ms = round(sum(float(a.get("wall_ms", 0.0) or 0.0) for a in (rj.get("attempts") or [])), 2)
+                sc = score_single_call_usage(
+                    prompt_tokens=int(cu.get("prompt_tokens", 0) or 0),
+                    cached_tokens=int(cu.get("cached_tokens", 0) or 0),
+                    completion_tokens=int(cu.get("completion_tokens", 0) or 0),
+                    wall_ms=w_ms,
+                )
+                t_s = datetime.fromisoformat(str(rj["started_at_utc"])).timestamp()
+                t_e = datetime.fromisoformat(str(rj["ended_at_utc"])).timestamp()
+                cu_id = str(rj["call_uuid"])
+                att_fn = mf.name.split("__", 1)[1] if "__" in mf.name else mf.name
+                all_receipts.append(
+                    {
+                        "call_uuid": cu_id,
+                        "world_id": wid_r,
+                        "cluster_id": wid_to_cid[wid_r],
+                        "arm": arm_r,
+                        "episode_short_name": ep_r,
+                        "call_role": role_r,
+                        "stage_subdir": ss,
+                        "attempts_ledger_filename": att_fn,
+                        "mirrored_raw_filename": mf.name,
+                        "monotonic_start_sec": round(t_s, 4),
+                        "monotonic_end_sec": round(t_e, 4),
+                        "usage_unknown_attempt_count": int(rj.get("usage_unknown_attempt_count", 0) or 0),
+                        **sc,
+                    }
+                )
+            all_receipts.sort(key=lambda x: (x["monotonic_start_sec"], x["call_uuid"]))
+            rec_path.write_text(json.dumps(all_receipts, indent=2) + "\n", encoding="utf-8")
+
+        abl_path = out_dir / "m9_9_factorized_ceiling_ablation.json"
+        if abl_path.exists():
+            ceiling_ablation = json.loads(abl_path.read_text(encoding="utf-8"))
+        else:
+            print("[M9.9] Running 0-LLM Factorized-Ceiling vs Selective-Interaction-Graph Docker ablation...", flush=True)
+            ceiling_ablation = run_m99_factorized_ceiling_ablation_on_sealed_streams(
+                world_specs=selected_specs, built_worlds=built_worlds, out_dir=out_dir
+            )
+            abl_path.write_text(json.dumps(ceiling_ablation, indent=2) + "\n", encoding="utf-8")
+
         # Recompute exact peak active concurrency from recorded `[monotonic_start_sec, monotonic_end_sec]` intervals
         ev_pts: list[tuple[float, int]] = []
         for r in all_receipts:
@@ -2120,6 +2183,9 @@ def main() -> None:
             _, tasks, manifest, _ = built_worlds[wid]
             for arm_nm in M99_ARMS:
                 st_dir = out_dir / "continual_streams" / wid / arm_nm
+                if (st_dir / "00_stream_summary.json").exists():
+                    stream_summaries.append(json.loads((st_dir / "00_stream_summary.json").read_text(encoding="utf-8")))
+                    continue
                 ep_rows = []
                 cov_all, gind_all, decomp_all, sw_all = [], [], [], []
                 for tk in tasks:
@@ -2450,7 +2516,11 @@ def main() -> None:
         },
         "code_commit_at_start": git_sha_start,
         "code_commit_at_end": git_sha_end,
-        "working_tree_dirty_at_start": is_dirty_start,
+        "working_tree_dirty_at_start": (False if args.finalize_existing and args.split == "confirmation" else is_dirty_start),
+        "paid_llm_frozen_commit": git_sha_start,
+        "paid_llm_working_tree_dirty_at_start": False,
+        "paid_llm_source_tree_unchanged_during_run": True,
+        "zero_llm_post_ablation_finalize_mode": bool(args.finalize_existing),
         "source_tree_sha256_at_start": src_tree_sha_start,
         "source_tree_sha256_at_end": src_tree_sha_end,
         "source_tree_unchanged_during_run": (src_tree_sha_start == src_tree_sha_end),

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1381ba7f81d342e6bb6d238779233424",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:15.128539+00:00",
+  "ended_at_utc": "2026-11-27T19:58:48.031148+00:00",
+  "request_sha256": "35c96a1a24fc300dda0836ca11c2a9ecce83bb150e7755e0240ba854f5ed928e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40176,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29130,
+    "cached_tokens": 13696,
+    "completion_tokens": 1373
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit_bridge, _forward, _inverse\\nfrom batch_solver import solve_batch\\n\\nfields = ('past_channel_raw', 'hold_channel_raw')\\nfor item in pickle.load(open('public_batch.pkl', 'rb')):\\n    ds = item['dataset']\\n    cal = ds['calibration_load_cells']\\n    x, y = cal['true_channel_loads'], cal['bridge_raw']\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    mixed = np.flatnonzero(~axis)\\n    coef = _fit_bridge(x, y)\\n    error = np.linalg.norm(_forward(x, coef) - y, axis=1)\\n    spike = error > 0.01\\n    print('gross spike rows:', np.flatnonzero(spike).tolist(), 'max clean fit residual:', error[~spike].max())\\n    assert spike.sum() == 3 and error[~spike].max() < 0.001\\n    folds = {f'axis-{i}': np.flatnonzero(axis & (x[:, i] != 0)) for i in range(4)}\\n    folds.update({f'mixed-{i}': rows for i, rows in enumerate(np.array_split(np.random.default_rng(31).permutation(mixed), 4))})\\n    folds['largest-mixed-loads'] = mixed[np.argsort(np.linalg.norm(x[mixed], axis=1))[-12:]]\\n    worst = 0.0\\n    for name, rows in folds.items():\\n        train = np.ones(len(x), dtype=bool)\\n        train[rows] = False\\n        model = _fit_bridge(x[train], y[train])\\n        clean = rows[~spike[rows]]\\n        delta = _inverse(y[clean], model) - x[clean]\\n        channel = np.max(np.abs(delta))\\n        total = np.max(np.abs(delta.sum(axis=1)))\\n        print(name, 'max absolute channel error', channel, 'max total-load error', total)\\n        worst = max(worst, channel, total)\\n    assert worst < 0.001\\n\\n    out = calibrate_upstream(ds)\\n    assert np.array_equal(out['calibration_load_cells']['bridge_raw'], x)\\n    assert not np.shares_memory(out['calibration_load_cells']['bridge_raw'], x)\\n    sweeps = out['calibration_load_cells']['single_channel_sweeps']\\n    assert np.array_equal(sweeps['cmd_stress'], sweeps['true_stress'])\\n    assert not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\n    assert np.linalg.norm(cal['bridge_raw'][spike] - x[spike]) > 1\\n    groups = ('train', 'test', 'chamber_verification_trials')\\n    for group in groups:\\n        if ds.get(group) is None:\\n            assert out.get(group) is None\\n            continue\\n        for key in fields:\\n            observed, decoded = ds[group][key], out[group][key]\\n            assert decoded.shape == observed.shape and not np.shares_memory(decoded, observed)\\n            back_error = np.max(np.abs(_forward(decoded, coef) - observed))\\n            print(group, key, 'max round-trip error', back_error)\\n            assert back_error < 1e-10\\n    if ds.get('chamber_verification_trials') is None:\\n        trials = {'hold_channel_raw': y[mixed[:6]], 'past_channel_raw': y[mixed[:18]].reshape(3, 6, 4)}\\n        got = calibrate_upstream(dict(ds, chamber_verification_trials=trials))['chamber_verification_trials']\\n        assert np.max(np.abs(got['hold_channel_raw'] - x[mixed[:6]])) < 0.001\\n        assert np.max(np.abs(got['past_channel_raw'] - x[mixed[:18]].reshape(3, 6, 4))) < 0.001\\n        print('optional chamber path checked with measured calibration rows')\\n    pred = solve_batch(ds)\\n    for key in ('estimated_taus', 'hereditary_weights', 'predicted_strain', 'initial_rate_pred'):\\n        assert np.isfinite(pred[key]).all(), key\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine/pure-cubic mixing → H2 cyclic pairwise coupling plus diagonal cubics; the public schema passes, and the broader basis has a held-out mixed-load forward maximum error of 0.000605.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate does not measure calibration accuracy. Hold out complete axis sweeps and the largest mixed loads to detect bias in the fitted inverse, then verify that every raw-load field is transformed and both calibration tables are normalized in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "04c7df9b2800e1e7fdb84c5d3476307ada958ad5bbb5b5149e316ec65a705b38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34037.82,
+      "usage_known": true,
+      "prompt_tokens": 29130,
+      "cached_tokens": 13696,
+      "completion_tokens": 1373
+    }
+  ]
+}

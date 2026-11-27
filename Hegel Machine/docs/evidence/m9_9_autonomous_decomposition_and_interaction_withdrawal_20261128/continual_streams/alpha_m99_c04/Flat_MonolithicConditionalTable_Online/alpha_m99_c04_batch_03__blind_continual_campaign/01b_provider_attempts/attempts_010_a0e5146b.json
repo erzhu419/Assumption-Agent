@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a0e5146bf6d5490d9d83a1ded400217f",
+  "call_seq": 10,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c04__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c04_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:53:13.931096+00:00",
+  "ended_at_utc": "2026-11-27T19:53:34.620729+00:00",
+  "request_sha256": "50d305786ac7cf613ffba136b6af4dc5f240097beb5f3a86279c8d472752dac3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62386,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37262,
+    "cached_tokens": 14976,
+    "completion_tokens": 786
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', p + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\no = m.solve_batch(d)\\ntaus, theta = o['estimated_taus'], o['hereditary_weights']\\nassert all(np.isfinite(v).all() for v in o.values())\\nassert .05 < taus[0] < taus[1] < 25\\n_, x = m._features(d['train'], d['test'])\\ntest = m._calibrate(d['test'], m._fit_bridge(d['calibration_load_cells']))\\nh = 1e-5\\n# Add probe times only to the deployment design, not to the observed training grid.\\ntimes = np.r_[d['eval_times'], 0., h, 2*h]\\ncurves, _ = m._design(test, x, d['past_dt'], times, taus)\\nstrain = test['strain_0'][:, None] + curves @ theta\\nnp.testing.assert_allclose(strain[:, :-3], o['predicted_strain'], rtol=0, atol=1e-12)\\nnp.testing.assert_allclose(strain[:, -3], test['strain_0'], rtol=0, atol=1e-12)\\na, b, c = strain[:, -3:].T\\nerr = np.max(np.abs((4*(b-a) - (c-a))/(2*h) - o['initial_rate_pred']))\\nprint(f'All deployment outputs finite; maximum initial-rate consistency error: {err:.3g}')\\nassert err < 1e-7\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sparse cyclic bridge → facility-initial deployment law; worst held-out median absolute errors were 0.01428 for strain and 0.01006 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the solver to accept the modified training grid\",\n      \"rejected_reason\": \"The probe replaced 12 observation times with 3 while retaining all 12 observed columns, violating the input contract.\"\n    }\n  ],\n  \"rationale\": \"Preserve the verified candidate and the actual training grid. Probe the fitted deployment design at zero and two nearby times, first confirming it reproduces the solver's returned curves; a derivative mismatch would then indicate a real strain-to-rate inconsistency.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "e89d8de6b68097f0a40eef136623b6ce27c62711421ca2dd2c20b52e8c75dcf1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21829.33,
+      "usage_known": true,
+      "prompt_tokens": 37262,
+      "cached_tokens": 14976,
+      "completion_tokens": 786
+    }
+  ]
+}

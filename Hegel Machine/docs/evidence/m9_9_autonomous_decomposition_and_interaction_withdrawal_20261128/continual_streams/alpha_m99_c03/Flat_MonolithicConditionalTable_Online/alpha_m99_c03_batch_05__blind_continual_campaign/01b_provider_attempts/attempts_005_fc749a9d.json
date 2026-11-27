@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fc749a9d864a4241959bbe1ba09a9d7b",
+  "call_seq": 5,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T20:00:57.425357+00:00",
+  "ended_at_utc": "2026-11-27T20:01:26.565850+00:00",
+  "request_sha256": "57bc665dfe840a2a0c31ecb2f1e28b2af143a4d38fbeaf128caf01a49812f8e9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40495,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30039,
+    "cached_tokens": 14976,
+    "completion_tokens": 1168
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/m99_drift.py <<'PY'\\nfrom m99_probe import *\\nimport json\\nfrom scipy.optimize import least_squares\\nlogs=json.load(open(p/'archive_apparatus_log.json')); traces=np.array([v['facility_telemetry_trace'] for v in logs]); print('trace distances:',np.round(np.sqrt(np.mean((traces-traces[-1])**2,axis=(1,2))),3))\\n# Apply deployment reference statistics to the diagnostic features as a second alignment hypothesis.\\nrefs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); labs=np.r_[tr['lab_id'],te['lab_id']]; alt=d['coupon_features_raw'].copy()\\nfor lab in np.unique(labs):\\n panel=refs[labs==lab]; i=d['lab_id']==lab\\n alt[i]=(alt[i]-np.median(panel.mean(0)))/np.median(panel.std(0))\\n_,cell,count=np.unique(np.column_stack((labs,np.r_[tr['stratum'],te['stratum']])),axis=0,return_inverse=True,return_counts=True); fill=np.average(xt,axis=0,weights=1/count[cell]); alt=np.where(np.isfinite(alt),alt,fill)\\nB=hold[:,None]*th[:2]; branch=B@bas.T; rr=r-B@(1/tau); resid=y-branch\\nprint('med residual-time',np.round(np.median(resid,axis=0),4)); print('diag rate and final residual:',np.round(np.column_stack([d['lab_id'],hold,drift,th[2]+alt@th[3:],rr,resid[:,-1]]),4))\\nfor name,u in [('train_diag',drift),('deploy_ref',th[2]+alt@th[3:]),('observed_rate',rr)]:\\n for gn,g in [('lin',t),('log',np.log1p(t)),('exp',-np.expm1(-t)),('sqrt',2*(np.sqrt(1+t)-1)),('rational',t/(1+t)),('lin+log',(t+np.log1p(t))/2)]:\\n  e=resid-u[:,None]*g\\n  print(name,gn,np.round([np.median(abs(e)),np.quantile(abs(e),.9),np.median(abs(rr-u))],5))\\n# Estimate time-dependent coefficients independently, with robust loss against curve outliers.\\nM=np.c_[np.ones(len(hold)),hold,rr,rr**2,hold*rr,mem]\\nfor j in [0,3,7,11]:\\n v=resid[:,j]; z=least_squares(lambda a:M@a-v,np.zeros(M.shape[1]),loss='soft_l1',f_scale=.025).x\\n print('coefs at',round(t[j],3),np.round(z,4),'median residual',round(np.median(abs(M@z-v)),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_drift.py | sed -n '/trace distances:/,$p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 retained benchtop memory -> H2 reset memory with an unresolved drift law; worst-lab rate RMSE falls from 1.61550 to 0.15832, while the archived reset/log law still has worst-lab strain RMSE 0.47985.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The chamber retains the full benchtop hereditary state.\",\n    \"empirical_witness\": \"With the same intrinsic fit and calibrated stresses, resetting the state reduces worst-lab initial rate RMSE from 1.61550 to 0.15832; changing the time-integrated drift law among the archived full-memory models does not remove the rate error.\",\n    \"causal_blanket_diagnosis\": \"Prior stress is a large direct predictor of initial rate under full retention, but the observed initial rates are much closer to the prediction from hold stress and coupon drift alone.\",\n    \"sublated_pivot\": \"Retain the measured intrinsic spectrum and test reset memory with reference alignment and drift-operator alternatives.\",\n    \"risk_kind\": \"deployment_constitutive_mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Adopt the archived reset/log law unchanged\",\n      \"rejected_reason\": \"It explains most of the rate improvement, but its strain error remains substantial and its worst-lab strain RMSE is worse than reset/linear.\"\n    }\n  ],\n  \"rationale\": \"Use the measured initial rate to separate diagnostic feature-alignment error from a wrong drift time basis. The robust coefficient probe tests whether hold stress, drift interactions, or a smaller residual memory term explain what remains.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "bd4faf2e580c91203524107da8476d7297f9f369ae434c28d97116e5e44a82d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30312.7,
+      "usage_known": true,
+      "prompt_tokens": 30039,
+      "cached_tokens": 14976,
+      "completion_tokens": 1168
+    }
+  ]
+}

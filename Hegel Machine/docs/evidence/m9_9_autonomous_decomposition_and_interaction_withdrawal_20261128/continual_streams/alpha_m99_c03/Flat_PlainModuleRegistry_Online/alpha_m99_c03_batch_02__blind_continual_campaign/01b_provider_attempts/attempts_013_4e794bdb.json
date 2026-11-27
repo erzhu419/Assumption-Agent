@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e794bdb841d4f7ca532952a020a0961",
+  "call_seq": 13,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__alpha_m99_c03__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m99_c03_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:50:08.194371+00:00",
+  "ended_at_utc": "2026-11-27T19:50:43.621704+00:00",
+  "request_sha256": "4765621171d6428818a97a32ca8ece496d412e3e7f6ea6f44a87d6523e973f1e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82217,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46968,
+    "cached_tokens": 14976,
+    "completion_tokens": 1451
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_lab.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from m99_rank2 import *\\nfrom scipy.optimize import least_squares\\nlab=g['lab_id']; st=g['stratum']; missing=np.isnan(g['coupon_features_raw']); print('missing locations',np.argwhere(missing).tolist()); print('eval ranges by lab in test',[(l,int(sum(te['lab_id']==l))) for l in np.unique(te['lab_id'])]);\\nfor name,blocks in [('tr+g',[tr,g]),('tr+te+g',[tr,te,g]),('tr+te',[tr,te]),('g',[g])]:\\n ref=np.vstack([v['ref_coupons'] for v in blocks]); labs=np.concatenate([v['lab_id'] for v in blocks]); strata=np.concatenate([v['stratum'] for v in blocks]); x=np.vstack([v['coupon_features_raw'] for v in blocks]); G0=g['coupon_features_raw'].copy();\\n for l in np.unique(labs):\\n  p=ref[labs==l]; c=np.median(p.mean(0)); scale=np.median(p.std(0)); x[labs==l]=(x[labs==l]-c)/scale; G0[lab==l]=(G0[lab==l]-c)/scale\\n _,i,k=np.unique(np.c_[labs,strata],axis=0,return_inverse=True,return_counts=True); w=1/k[i]; imp=np.nansum(x*w[:,None],0)/np.sum(np.isfinite(x)*w[:,None],0); X0=np.where(missing,imp,G0)\\n P0,H0,D0=m._coupon_inputs(g,X0,bridge); r=D0@theta[2:]; z=r-theta[2]; Y=E+drift[:,None]*T; amp=Y@b/(b@b) if 'b' in globals() else Y@basis(1.)[:,0]/(basis(1.)[:,0]@basis(1.)[:,0]); I=np.eye(4)[lab]; c=~missing.any(1); print('\\\\n',name,'impute',imp.round(4));\\n for l in range(4):\\n  j=(lab==l); jj=j&c; A=np.c_[np.ones(len(z)),z]; d=np.linalg.lstsq(A[jj],amp[jj],rcond=None)[0]; print('lab',l,'affine on complete',d.round(5),'rows [stratum centered_drift eff_gain hold_diff error missing]',np.c_[st,z,(amp-theta[2])/np.where(abs(z)>.001,z,np.nan),hc[:,0]-hc[:,3],amp-A@d,~c][j].round(4).tolist())\\n if name=='tr+g':\\n  A=np.c_[np.ones(len(z)),I*z[:,None]]; B=np.c_[A,(hc[:,0]-hc[:,3])*z**2]; C=np.c_[np.ones(len(z)),z,z**2,z**3,(hc[:,0]-hc[:,3])*z**2]; D=np.c_[I,I*z[:,None]]; F=np.c_[np.ones(len(z)),z];\\n  for label,M in [('gain',A),('gain+contrast',B),('contrast',C),('gain+offset',D),('global',F)]:\\n   print('model',label,'coef on complete',np.linalg.lstsq(M[c],amp[c],rcond=None)[0].round(5));\\n   for fit_complete in (False,True):\\n    j=c if fit_complete else np.ones(len(z),bool); err=np.empty(len(z)); es=np.empty(len(z));\\n    for k in range(len(z)):\\n     mask=j&(np.arange(len(z))!=k); err[k]=amp[k]-M[k]@np.linalg.lstsq(M[mask],amp[mask],rcond=None)[0]; mask=j&(st!=st[k]); es[k]=amp[k]-M[k]@np.linalg.lstsq(M[mask],amp[mask],rcond=None)[0]\\n    print('complete fit',fit_complete,'loo all/complete/missing, strata worst',*[round(np.sqrt(np.mean(err[q]**2)),5) for q in (slice(None),c,~c)],round(max(np.sqrt(np.mean(es[st==k]**2)) for k in np.unique(st)),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_lab.py | head -30; sed -n '85,135p' /tmp/hegel_continual_archive/alpha_m99_c03_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 global stress-contrast correction → H2 lab-dependent gain on centered drift; the contrast model has worst grouped amplitude RMSE 0.0521, while lab gains fit complete coupons to 0.00465 in sample.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Discard lab gains based only on leave-one-lab-out error\",\"rejected_reason\":\"Deployment contains known lab IDs; holding out coupons or strata within known labs directly tests this supported prediction case, while an unseen lab still warrants a pooled fallback.\"}],\"rationale\":\"Separate missing-feature errors from the apparent lab-dependent gain. If complete coupons retain low held-out error, recover the gain law; if not, retain the validated stress-contrast correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "2a409331ada6adda890584df8963d31b1d468eed6f983d8a85c8bb3ff63dbc0e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36557.49,
+      "usage_known": true,
+      "prompt_tokens": 46968,
+      "cached_tokens": 14976,
+      "completion_tokens": 1451
+    }
+  ]
+}

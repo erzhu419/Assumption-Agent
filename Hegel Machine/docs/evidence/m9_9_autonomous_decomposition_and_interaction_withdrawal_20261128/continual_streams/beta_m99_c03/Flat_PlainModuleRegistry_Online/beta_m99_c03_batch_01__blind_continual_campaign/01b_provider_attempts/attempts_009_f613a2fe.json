@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f613a2fe79d743958c7e15b66e9f9e1e",
+  "call_seq": 9,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c03__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c03_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:39:15.593002+00:00",
+  "ended_at_utc": "2026-11-27T19:39:44.605773+00:00",
+  "request_sha256": "c7c496764b7fe94318b89a9b0bb027a9307961c2f8dd6e1498f399247b4b2df0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44583,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31172,
+    "cached_tokens": 14976,
+    "completion_tokens": 1150
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, json, numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; S,_=m._forward(s)\\nZ=s['Z_nuisance']; print('public study keys',sorted(s)); print('single-bank keys',list(c['single_bank_sweeps'])); print('nuisance shape/rank',Z.shape,np.linalg.matrix_rank(Z)); print('rosette observations',x.shape)\\na,b=np.triu_indices(4,1)\\nmodels={\\n'diagonal affine':lambda x,j:np.c_[np.ones(len(x)),x[:,j]],\\n'full affine':lambda x,j:np.c_[np.ones(len(x)),x],\\n'pairwise contrasts and quadratics':lambda x,j:np.c_[np.ones(len(x)),x,x*x,(x[:,a]+x[:,b])**2-(x[:,a]-x[:,b])**2],\\n'rational contrast corrections':lambda x,j:np.c_[np.ones(len(x)),x,*[x[:,j,None]/(1+alpha*(x[:,a]-x[:,b])**2) for alpha in (.25,1.)]],\\n}\\nfor name,feat in models.items():\\n    B=[]; loo=np.empty_like(y)\\n    for j in range(4):\\n        X=feat(x,j); B.append(np.linalg.lstsq(X,y[:,j],rcond=None)[0]);\\n        for k in range(len(x)):\\n            keep=np.arange(len(x))!=k; loo[k,j]=X[k]@np.linalg.lstsq(X[keep],y[keep,j],rcond=None)[0]-y[k,j]\\n    errs=[]\\n    for d in item['campaign_diagnostics']:\\n        z=(S@d['w_pulse']).reshape(-1,4); res=(np.column_stack([feat(z,j)@B[j] for j in range(4)])-d['y_pulse_raw'].reshape(-1,4)).reshape(len(s['mu_shifts']),-1,4)\\n        errs.extend(np.sqrt(np.mean(res**2,axis=(1,2))))\\n    print(name,'LOO worst-channel RMSE',np.sqrt(np.mean(loo**2,axis=0)).max(),'worst pulse-by-shift RMSE',max(errs))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (open-wall Robin loss) → H2 (zero leakage with unchanged wall diffusion): worst exact-stencil pulse RMSE was 1.01e-6; the independent host reported field relative L2 error of 1.61e-6 and KKT gap of 1.12e-5.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit classification balance, relay states, or stochastic drift\",\"rejected_reason\":\"This study specifies continuous observations and a steady upwind operator, with no classification labels, relay state, or stochastic-control dynamics.\"}],\"rationale\":\"Compare diagonal, affine, pairwise, and rational rosette models on held-out sweep rows and independent pulse-by-shift slices. A consistent improvement would justify changing calibration; otherwise retain the verified stencil and readout. Inspect the nuisance design and public schema for actual cohort structure rather than treating regularized nuisance covariates as batch labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3f177a973bbf8bc54f1e026a8b16333db86155e8d75c8b65c9f80976e9cc0653",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30107.07,
+      "usage_known": true,
+      "prompt_tokens": 31172,
+      "cached_tokens": 14976,
+      "completion_tokens": 1150
+    }
+  ]
+}

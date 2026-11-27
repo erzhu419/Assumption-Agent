@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d81436b86db84b5b9b2f11bfce3dbbcd",
+  "call_seq": 6,
+  "stage_subdir": "m99_confirmation_20261127T193020Z__beta_m99_c02__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m99_c02_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:58:03.896536+00:00",
+  "ended_at_utc": "2026-11-27T19:58:39.213952+00:00",
+  "request_sha256": "cc1dba60a3cc889c93cc157d50b85330d5551c98f617c45d7e519a9cd4408569",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44502,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30071,
+    "cached_tokens": 13696,
+    "completion_tokens": 1481
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nfrom scipy.linalg import solve\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\nraw = item['study']\\ns = calibrate_upstream(raw)\\nnx, ny = s['nx'], s['ny']\\n\\ndef dense_axis(a, cyclic):\\n    k, v = s['kappa_'+a], s['vel_'+a]\\n    n = len(k)\\n    h = s['L'+a]/(n-1)\\n    A = np.zeros((n,n))\\n    for i in range(n):\\n        if not cyclic and i in (0,n-1):\\n            A[i,1 if i == 0 else n-2] = -k[i]/h**2\\n        else:\\n            j, l = (i-1)%n, (i+1)%n\\n            A[i,j] = -(k[i]+k[j])/(2*h*h)-max(v[i],0)/h\\n            A[i,l] = -(k[i]+k[l])/(2*h*h)-max(-v[i],0)/h\\n        A[i,i] = -A[i].sum()\\n    return A\\n\\nL = np.kron(np.eye(ny), dense_axis('x', True)) + np.kron(dense_axis('y', False), np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nI = np.eye(nx*ny)\\nB = np.stack([mode.ravel(order='F') for mode in s['source_modes']], axis=1)\\ni,j = s['sensor_ij'].T\\nblocks = []\\nfor mu in s['mu_shifts']:\\n    A = L + mu*I\\n    F = solve(A, B)\\n    blocks.append(F[i+nx*j])\\nS = np.vstack(blocks)\\nZ = s['Z_nuisance']\\nR = np.eye(len(S)) - Z @ np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nX = R@S\\nridge, cap, total = s['source_ridge'], s['u_box'], s['total_budget']\\nn = B.shape[1]\\nworst = np.zeros(7)\\npatterns = set()\\n\\ndef verify(out, y, budget):\\n    w, field, c = out['weights'], out['terminal_field'], out['kkt_certificate']\\n    assert w.shape == (n,) and field.shape == (nx, ny)\\n    np.testing.assert_array_equal(c['weights'], w)\\n    lo, hi, nu = np.asarray(c['lam_lower']), np.asarray(c['lam_upper']), c['nu_sum']\\n    assert lo.shape == hi.shape == w.shape and np.all(lo >= 0) and np.all(hi >= 0)\\n    e = X@w - R@y\\n    g = X.T@e+ridge*w\\n    obj = .5*(e@e+ridge*(w@w))\\n    lower = obj-g@w+nu*budget-cap*hi.sum()\\n    err = np.array([max(abs(w.sum()-budget), -w.min(), w.max()-cap), np.max(np.abs(g-nu-lo+hi)), max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))), abs(c['primal_objective']-obj), abs(c['dual_lower_bound']-lower), abs(obj-lower), np.max(abs(A@field.ravel(order='F')-B@w))])\\n    np.testing.assert_array_less(err, np.array([1e-12,1e-10,1e-10,1e-10,1e-10,1e-10,1e-11]))\\n    np.maximum(worst,err,out=worst)\\n    patterns.add((int((w < 1e-10).sum()), int((w > cap-1e-10).sum())))\\n\\nverify(solve_batch(raw), s['y_obs_raw'], total)\\nrng = np.random.default_rng(44)\\nfor budget in (0.0, cap*1e-7, cap, total, (n-1)*cap, (n-1e-7)*cap, n*cap):\\n    for gain in (0, 1, 8):\\n        for _ in range(6):\\n            y = s['y_obs_raw'] + gain*(S@rng.normal(size=n))\\n            verify(solve_downstream(dict(s, y_obs_raw=y, total_budget=budget)),y,budget)\\nprint('cases=127, active-bound count patterns=', len(patterns))\\nprint('max errors [feasibility, stationarity, complementarity, objective, dual formula, dual gap, terminal PDE]:', worst)\\nsys.argv = ['validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path('/holdout_task/validate_public_schema.py', run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 common wall law → H2 periodic x and reflecting y; worst held-out pulse RMSE is 1.98e-6 and worst rosette RMSE is 2.12e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The held-out pulses verify the mixed boundary law, but the schema gate does not verify the terminal PDE or certificate. Use an independent dense reference to distinguish assembly errors from optimizer errors, and stress bound activation and extreme budgets before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1008df880a95b5546a8ca30e3f556a833e7e456a2ceb138b2cdc119bb5a1c910",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36457.12,
+      "usage_known": true,
+      "prompt_tokens": 30071,
+      "cached_tokens": 13696,
+      "completion_tokens": 1481
+    }
+  ]
+}
