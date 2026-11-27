@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1f771915dedd4667b59befc60f52e7b3",
+  "call_seq": 15,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:54:02.789171+00:00",
+  "ended_at_utc": "2026-11-27T06:54:20.456001+00:00",
+  "request_sha256": "678d02dddbd3818a32a357bac35eb7c508570147fe63fca95c8920a58e5ea8a3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 84529,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39398,
+    "cached_tokens": 6784,
+    "completion_tokens": 588
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('alpha_m97_c01_batch_01_solver.py')\\nwith open('public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\n(past, hold, _), n = m['_prepare'](d)\\nfor lab in np.unique(d['test']['lab_id']):\\n    mask = d['test']['lab_id'] == lab\\n    history_error = np.max(np.abs(past[n:][mask] - g['te_hist_true'][mask]))\\n    hold_error = np.max(np.abs(hold[n:][mask] - g['te_hold_true'][mask]))\\n    print(f'lab {lab}: maximum history/hold stress error {history_error:.6g}/{hold_error:.6g}')\\n    assert max(history_error, hold_error) < 1e-3, f'lab {lab}: calibration handoff exceeds the public audit margin'\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Retain Cauchy-profiled two-branch plateau fitting; independent strain and rate reconstruction agrees within 8.9e-16, and the worst public slice remains missing-feature coupons at 0.229 strain RMSE and 0.174 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the calibration or plateau fit now\",\n      \"rejected_reason\": \"The last audit stopped because it did not select the known reference field, not because it measured a solver error.\"\n    }\n  ],\n  \"rationale\": \"Use the confirmed te_hist_true field to finish the interrupted per-lab calibration audit. A threshold failure would identify the channel whose gain, bias, or indexing needs inspection. If all channels pass, verify the unchanged artifact in an isolated process and submit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "c73308cb7a72c3ff06e8cf11b4d926d3df2cd57aea0f65a15673a2133d8e8a27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20001.82,
+      "usage_known": true,
+      "prompt_tokens": 39398,
+      "cached_tokens": 6784,
+      "completion_tokens": 588
+    }
+  ]
+}

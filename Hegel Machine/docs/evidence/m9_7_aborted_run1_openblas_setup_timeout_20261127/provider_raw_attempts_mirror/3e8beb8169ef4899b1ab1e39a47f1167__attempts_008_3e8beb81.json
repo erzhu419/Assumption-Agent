@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e8beb8169ef4899b1ab1e39a47f1167",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:50:52.466146+00:00",
+  "ended_at_utc": "2026-11-27T06:51:24.039205+00:00",
+  "request_sha256": "6acff2615d4089a96ab1bf24f8977af6022041d933763ce8d22c75755d669611",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39658,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25202,
+    "cached_tokens": 0,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nbase = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', base + 'beta_m97_c02_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(base + 'public_beta_m97_c02_batch_01.pkl', 'rb') as f:\\n    episodes = pickle.load(f)\\nworst_loo = worst_projected = worst_boundary = 0.0\\nfor item in episodes:\\n    s, gt = item['study'], item['gt']\\n    c = s['sensor_calibration_sweeps']\\n    b, x, y = (np.asarray(c[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    rowbank = np.asarray(s['row_bank_id'])\\n    z = np.asarray(s['Z_nuisance'])\\n    calibrated = m._calibration(s)\\n    ry = calibrated - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ calibrated)\\n    for bank in range(4):\\n        xx, yy = x[b == bank], y[b == bank]\\n        errors = []\\n        for j in range(len(xx)):\\n            keep = np.arange(len(xx)) != j\\n            gain, offset = m._bank_affine(bank, xx[keep], yy[keep])\\n            errors.append(abs(gain * xx[j] + offset - yy[j]))\\n        loo = max(errors)\\n        projected = np.max(np.abs((ry - gt['r_y'])[rowbank == bank]))\\n        worst_loo, worst_projected = max(worst_loo, loo), max(worst_projected, projected)\\n        print(f'bank {bank}: sweep LOO max {loo:.3e}; projected target max error {projected:.3e}')\\n    for axis in ('x', 'y'):\\n        k = np.asarray(s['kappa_' + axis])\\n        n = len(k)\\n        length = s['L' + axis]\\n        h = length / (n - 1)\\n        a = m._axis(k, s['vel_' + axis], 0.0, length).toarray()\\n        expected = np.zeros((2, n))\\n        expected[0, :2] = np.array([1.0, -1.0]) * k[0] / h**2\\n        expected[1, -2:] = np.array([-1.0, 1.0]) * k[-1] / h**2\\n        worst_boundary = max(worst_boundary, np.max(np.abs(a[[0, -1]] - expected)))\\n        np.testing.assert_allclose(a[[0, -1]], expected, atol=1e-12, rtol=1e-13)\\nprint(f'worst bank LOO {worst_loo:.3e}; worst bank projected target {worst_projected:.3e}; worst sealed boundary stencil {worst_boundary:.3e}')\\nassert worst_loo < 1e-5 and worst_projected < 1e-6\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin outflow → H2 excursion-triggered sealing on both axes plus wall sorption; known public errors are 1.18e-16 for the projected forward matrix and 6.27e-7 for weights, with a worst KKT stress gap of 1.14e-12.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification or generic operator searches\",\n      \"rejected_reason\": \"The study has continuous sensor measurements, an explicit boundary stencil, and no class labels or relay state. Bank-stratified residuals and the two specified loop modes are the relevant checks.\"\n    }\n  ],\n  \"rationale\": \"Both loop modes and KKT corner cases already passed. This audit checks whether pooled agreement hides a bad sensor bank or a boundary-row mismatch: a bank-specific failure would reopen calibration or nuisance projection, and a stencil failure would reopen the forward assembly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "627d02e0b4a0c1ad0ed2231acd4743f6095a0a74a57f7df8cbabeca9136a2a8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33888.7,
+      "usage_known": true,
+      "prompt_tokens": 25202,
+      "cached_tokens": 0,
+      "completion_tokens": 1192
+    }
+  ]
+}

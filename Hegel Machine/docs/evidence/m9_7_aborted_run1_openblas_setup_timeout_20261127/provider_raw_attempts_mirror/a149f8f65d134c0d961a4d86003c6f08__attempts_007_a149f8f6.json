@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a149f8f65d134c0d961a4d86003c6f08",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:03:37.096928+00:00",
+  "ended_at_utc": "2026-11-27T07:04:19.696730+00:00",
+  "request_sha256": "6ab54ad05fc7890728d21c38f763a4f36265710863a252b0c2a596886b79f1c3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48868,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29272,
+    "cached_tokens": 11136,
+    "completion_tokens": 1848
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -c 1700; echo\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('alpha_m97_c03_batch_03_solver.py')\\ns=p.read_text(); i=s.index('def _fit('); j=s.index('def solve_',i)\\ns=s[:i]+'''def _fit(inputs, dt, times, y):\\n    lo = np.log(max(min(np.min(dt), np.min(times[times > 0])) / 20, 1e-5))\\n    hi = np.log(max(np.sum(dt), np.max(times)) * 20)\\n    bounds = (np.r_[lo, lo, np.full(9, -np.inf)],\\n              np.r_[hi, hi, np.full(9, np.inf)])\\n    valid = np.isfinite(y)\\n    yobs = y[valid]\\n\\n    # Interpolation in the terminal-flow coordinate removes coupon drift.\\n    # The resulting local differences are a robust initial noise estimate.\\n    flow = times / (1 + 0.85 * times)\\n    alpha = (flow[1:-1] - flow[:-2]) / (flow[2:] - flow[:-2])\\n    curve = y[:, :-1]\\n    local = (curve[:, 1:-1] - (1-alpha) * curve[:, :-2] - alpha * curve[:, 2:])\\n    local /= np.sqrt(1 + (1-alpha)**2 + alpha**2)\\n    local -= np.nanmedian(local, axis=0)\\n    width = max(1.4826 * np.nanmedian(np.abs(local)), 1e-7)\\n    widths = np.full(y.shape[1], width)\\n\\n    def run(p, loss, multiplier):\\n        scale = np.broadcast_to(widths, y.shape)[valid]\\n\\n        def residual(p):\\n            a = _design(p[:2], inputs, dt, times)[valid]\\n            return (np.einsum('ij,j->i', a, p[2:]) - yobs) / scale\\n\\n        return least_squares(residual, p, bounds=bounds, loss=loss,\\n                             f_scale=multiplier, x_scale='jac', max_nfev=150)\\n\\n    fastest = min(np.median(dt), np.min(times[times > 0]))\\n    horizon = np.max(times)\\n    trials = []\\n    for start in ((fastest, horizon / 2), (2*fastest, horizon),\\n                  (fastest / 2, 2*horizon), (horizon / 4, horizon)):\\n        lt = np.log(start)\\n        a = _design(lt, inputs, dt, times)\\n        rate = valid[:, -1]\\n        beta = np.linalg.lstsq(a[rate, -1], y[rate, -1], rcond=None)[0]\\n        warm = run(np.r_[lt, beta], 'soft_l1', 6.)\\n        trial = run(warm.x, 'cauchy', 2.5)\\n        if trial.x[0] < trial.x[1]:\\n            trials.append(trial)\\n    if not trials:\\n        raise ValueError('Could not fit ordered relaxation times')\\n    p = min(trials, key=lambda result: result.cost).x\\n    res = _design(p[:2], inputs, dt, times) @ p[2:] - y\\n    mad = 1.4826 * np.nanmedian(np.abs(res - np.nanmedian(res, axis=0)), axis=0)\\n    widths[:-1] = max(np.nanmedian(mad[:-1]), width * 0.35)\\n    widths[-1] = max(mad[-1], width * 0.35) if np.isfinite(mad[-1]) else width\\n    refined = run(p, 'cauchy', 2.5).x\\n    if refined[0] < refined[1]:\\n        p = refined\\n    return p[:2], p[2:]\\n\\n\\n'''+s[j:]\\ns=s.replace('    logtau, beta = _fit(inputs, dt, times, y)', '''    # Missing measured descriptors introduce a coupon-specific flow error.\\n    # Estimate the shared material law on the directly observed coupons.\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    logtau, beta = _fit(tuple(a[complete] for a in inputs), dt, times, y[complete])''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c03_batch_03_solver as s\\np=pickle.load(open('public_alpha_m97_c03_batch_03.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; o=s.solve_alpha_m97_c03_batch_03(d)\\nfor key, gt in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n print(key,np.round(o[key],6),'max absolute error',np.max(abs(o[key]-g[gt])))\\nt=d['test']; groups=np.c_[t['lab_id'],t['stratum']]; missing=np.isnan(t['coupon_features_raw']).any(axis=1)\\nfor key, gt in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n e=o[key]-g[gt]; rms=lambda v: np.mean(v*v)**.5; print(key,'overall/complete/missing/worst-cell',rms(e),rms(e[~missing]),rms(e[missing]),max(rms(e[(groups==v).all(axis=1)]) for v in np.unique(groups,axis=0)))\\nprint('train keys',list(d['train']),'test keys',list(d['test']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: fit the exact law with Cauchy loss on directly observed coupons and retain the specified cell-mean imputation for prediction; the previous robust trial reached worst-cell RMSE 0.0684 for strain and 0.0877 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the test imputation to optimize public scores\",\n      \"rejected_reason\": \"With public reference weights, the missing-row error already follows the terminal-flow basis almost exactly. Preserve the specified cell means and keep those descriptor errors out of material estimation.\"\n    }\n  ],\n  \"rationale\": \"The public-reference diagnostic isolates imputation error from constitutive error. Verify that the saved robust candidate improves material recovery and complete-row predictions before testing transfer across training labs and exercising the calibration fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3ba012358ebdc8362049410903978ba16088168c3d9eca2a3e14bdddc0f96ae3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47410.78,
+      "usage_known": true,
+      "prompt_tokens": 29272,
+      "cached_tokens": 11136,
+      "completion_tokens": 1848
+    }
+  ]
+}

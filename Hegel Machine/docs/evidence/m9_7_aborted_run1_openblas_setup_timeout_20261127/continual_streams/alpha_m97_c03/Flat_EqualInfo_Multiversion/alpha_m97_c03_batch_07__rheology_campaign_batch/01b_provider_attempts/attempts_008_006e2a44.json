@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "006e2a443efb4661a69d1af7032b94cc",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:26:39.280193+00:00",
+  "ended_at_utc": "2026-11-27T07:27:12.114889+00:00",
+  "request_sha256": "6b655c619993e23e9d250787136cfd0ba2cce0a2c1c0d9e21921500daef3b17d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61023,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32907,
+    "cached_tokens": 6784,
+    "completion_tokens": 1276
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,83p' alpha_m97_c03_batch_07_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='alpha_m97_c03_batch_07_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nr=pickle.load(open('public_alpha_m97_c03_batch_07.pkl','rb'))[0]; d,g=r['dataset'],r['gt']; te=d['test']; dt=d['past_dt']; times=d['eval_times']; crit=d['crit_stress']\\ncal=d['calibration_load_cells']; lines=s._calibrate(cal); truth=np.c_[g['stress_gains'],g['stress_biases']]\\nassert np.max(abs(lines-truth))<2e-4\\n# Supply clean sweeps on every channel and verify that none needs historical calibration.\\nxx=np.tile([-2.,-1.,0.,1.,2.],4); lab=np.repeat(np.arange(4),5); shifted=truth.copy(); shifted[:,0]+=.08; shifted[:,1]-=.04\\nyy=shifted[lab,0]*xx+shifted[lab,1]\\nnp.testing.assert_allclose(s._calibrate(dict(lab_id=lab,cmd_stress=xx,true_stress=yy)),shifted,atol=1e-12)\\n# Recreate a sparse current sweep with one EMI transient; compare with the measured prefix state.\\nfor c in range(4):\\n x=np.array([-1.8,-.2,1.3]); y=truth[c,0]*x+truth[c,1]; y[1]+=8\\n fit=s._calibrate(dict(lab_id=np.full(3,c),cmd_stress=x,true_stress=y))\\n np.testing.assert_allclose(fit[c],truth[c],atol=5e-4)\\nout=s.solve_alpha_m97_c03_batch_07(d); tau=out['estimated_taus']; hw=out['hereditary_weights']; rw=out['regime_mode_weights']; _,a=s._align(d['train'],te)\\nhist,hold,_,act=s._inputs(te,a,lines,dt,crit,True)\\nz=np.zeros((len(hold),2))\\nfor j,h in enumerate(dt):\\n e=np.exp(-h/tau); z=e*z+(1-e)*hist[:,j,None]\\ngap=hold[:,None]-z; drift=hw[2]+a@hw[3:]+rw[1]*act*z[:,0]\\ndef delta(t):\\n f=-np.expm1(-t[:,None]/tau)\\n return (gap*hw[:2])@f.T+(rw[0]*act*hold)[:,None]*f[:,0]+drift[:,None]*np.log1p(t)\\nnp.testing.assert_allclose(out['predicted_strain'],te['strain_0'][:,None]+delta(times),atol=2e-12,rtol=0)\\nh=1e-5; derivative=(4*delta(np.array([h/2]))[:,0]-delta(np.array([h]))[:,0])/h\\nnp.testing.assert_allclose(out['initial_rate_pred'],derivative,atol=1e-8,rtol=0)\\ne=out['predicted_strain']-g['te_clean']; er=out['initial_rate_pred']-g['te_true_rate0']; complete=np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor mask,name in [(act==0,'zero damage'),(act>0,'positive damage'),(~complete,'imputed')]:\\n print(name,int(mask.sum()),'strain/rate RMSE',np.sqrt(np.mean(e[mask]**2)),np.sqrt(np.mean(er[mask]**2)))\\nprint('Independent recurrence, initial derivative, clean sweep and sparse EMI stress checks passed.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 phase-wide logarithmic creep with damage-gated corrections → H2 robust variable projection on complete training coupons; public worst-lab RMSE is 0.0904 for strain and 0.0682 for initial rate, with larger errors on the imputed slice.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t07\"]},\"considered_alternatives\":[{\"option\":\"Replace the specified imputation to reduce the largest public error slice\",\"rejected_reason\":\"The task prescribes lab-by-stratum cell means; keep that rule and report the resulting prediction error separately.\"}],\"rationale\":\"The public results support the corrected creep basis and show that complete-coupon fitting improves parameter recovery without a meaningful prediction tradeoff. Check whether the calibration logic recovers both clean current sweeps and sparse EMI-contaminated sweeps; a failure would require a targeted sweep-selection fix. Independently verify the unrolled recurrence and initial derivative against the submitted outputs to catch any basis or derivative mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d50cb09aa3ba38c4cd4a61f28b97e68ec51e250f047c6e6a3e4fe1c27c473043",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37757.83,
+      "usage_known": true,
+      "prompt_tokens": 32907,
+      "cached_tokens": 6784,
+      "completion_tokens": 1276
+    }
+  ]
+}

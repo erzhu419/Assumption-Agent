@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d45318101ffd4e0795c9622a85ebcb1d",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:42:08.743978+00:00",
+  "ended_at_utc": "2026-11-27T06:42:40.596008+00:00",
+  "request_sha256": "ec9282528173c2a60b0c16dd73afd9a8ca9e28a6fa9ea04bb7ecfd89ed92a5a2",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 41022,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25941,
+    "cached_tokens": 11136,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task'); spec=importlib.util.spec_from_file_location('solver',p/'beta_m97_c01_s00_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.loads((p/'public_beta_m97_c01_s00.pkl').read_bytes())[0]; s,g=item['study'],item['gt']; out=m.solve_beta_m97_c01_s00(s); w=out['weights']; c=out['kkt_certificate']; upper=s['u_box']; ll=np.array(c['lam_lower']); lu=np.array(c['lam_upper']); grad=g['S_tilde'].T@(g['S_tilde']@w-g['r_y'])+s['source_ridge']*w\\nstationarity=np.max(np.abs(grad-c['nu_sum']-ll+lu)); complementarity=max(np.max(np.abs(ll*w)),np.max(np.abs(lu*(upper-w)))); print('independent stationarity and complementarity:',stationarity,complementarity); assert max(stationarity,complementarity)<1e-6\\nsensor,_=m._forward(s); z=s['Z_nuisance']; a=np.column_stack((m._calibrated_target(s),sensor)); projected=a-z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@a); expected=np.column_stack((g['r_y'],g['S_tilde'])); bank=s['row_bank_id']; bank_errors={int(b):float(np.max(np.abs(projected[bank==b]-expected[bank==b]))) for b in np.unique(bank)}; print('projected input max error by bank:',bank_errors); assert max(bank_errors.values())<1e-6\\nsweeps=s['sensor_calibration_sweeps']; sb=sweeps['bank_id']; ref=sweeps['ref_signal']; raw=sweeps['raw_readout']; base=m._calibrated_target(s); worst=0.\\nwith tempfile.TemporaryDirectory() as tmp:\\n    m._CALIBRATION_ARCHIVE=Path(tmp)/'calibration.json'; m._CALIBRATION_ARCHIVE.write_text(json.dumps({str(b):{'gain':1.0,'offset':0.0} for b in range(4)}))\\n    for i in range(raw.size):\\n        for spike in (-3.01,3.01):\\n            perturbed=raw.copy(); perturbed[i]+=spike\\n            t=dict(s,sensor_calibration_sweeps=dict(sweeps,raw_readout=perturbed)); delta=float(np.max(np.abs(m._calibrated_target(t)-base))); worst=max(worst,delta)\\n    for b in range(4):\\n        keep=sb!=b\\n        t=dict(s,sensor_calibration_sweeps={'bank_id':sb[keep],'ref_signal':ref[keep],'raw_readout':raw[keep]}); delta=float(np.max(np.abs(m._calibrated_target(t)-base))); worst=max(worst,delta)\\nprint('worst calibrated-target change across threshold-adjacent EMI and complete single-bank sweep loss:',worst); assert worst<1e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open Robin transport with affine bank calibration) -> H2 (verify bank-specific errors and threshold-adjacent EMI): the public KKT gap is 8.31e-8, and the worst gap across 280 stress cases is 3.56e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift, and within-batch classification\",\n      \"rejected_reason\": \"This deliverable specifies deterministic open-Robin transport and continuous source inversion; it has no relay, stochastic drift, or classification labels.\"\n    }\n  ],\n  \"rationale\": \"The earlier stress test covered one large spike and one missing calibration row pattern. This audit can expose bank-specific projection errors, missed spikes just above the specified threshold, or incorrect KKT multipliers. A failure would identify the branch to fix; passing requires no solver change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "0dc5cf3fc9501a0c981e527a32b2eaf55b268b85320e8d7f5ff90395f2601243",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34234.43,
+      "usage_known": true,
+      "prompt_tokens": 25941,
+      "cached_tokens": 11136,
+      "completion_tokens": 1255
+    }
+  ]
+}

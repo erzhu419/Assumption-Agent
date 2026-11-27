@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89fe0337e4cd44888afdba1f70c600a5",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:42.473092+00:00",
+  "ended_at_utc": "2026-11-27T06:58:57.785193+00:00",
+  "request_sha256": "e73dee5d8c49d847c772d8eba64b957cbfacd855785ddc050826544f336628c2",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 30886,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22532,
+    "cached_tokens": 6784,
+    "completion_tokens": 509
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport json, pickle, numpy as np\\nitem=pickle.load(open('/holdout_task/public_beta_m97_c01_batch_03.pkl','rb'))[0]\\ns=item['study']\\nfor k,v in s.items():\\n if isinstance(v,np.ndarray): print(k, v.shape, v.dtype, v.ravel()[:5] if k in ('xs','ys','mu_shifts') else '')\\n elif k not in ('sensor_calibration_sweeps','aux_manifold_telemetry'): print(k,str(v)[:300])\\nprint('reference keys',list(item['gt']))\\nfor q in [s['sensor_calibration_sweeps'],*json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))]:\\n print(q.get('episode_short_name','current'),list(q))\\n b=np.asarray(q['bank_id']); x=np.asarray(q['ref_signal']); y=np.asarray(q['raw_readout']);\\n for j in range(4):\\n  xx,yy=x[b==j],y[b==j]; print(j,len(xx), np.round(xx,4).tolist(),np.round(yy,4).tolist())\\nPY\\nsed -n '91,150p' /tmp/hegel_continual_archive/beta_m97_c01_batch_02_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived open-Robin forward map → H2 periodic forward map with bank-local calibration and prefix fallback; no validation metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Inspect the nested study and per-bank sweeps to identify where direct calibration is possible and where prefix fallback is required. Read the archived active-set solver to determine whether its bound handling can be reused unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d0997341f347b0b1314a7972c204d23900f32fc2919ad59089d6f681f504630f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17745.04,
+      "usage_known": true,
+      "prompt_tokens": 22532,
+      "cached_tokens": 6784,
+      "completion_tokens": 509
+    }
+  ]
+}

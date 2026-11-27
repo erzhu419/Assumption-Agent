@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a33cb160cd4642e780b294cab5c1c4fd",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:20:07.175660+00:00",
+  "ended_at_utc": "2026-11-27T07:20:42.038074+00:00",
+  "request_sha256": "52722dc8d17ddc0bab7adebd1f17ed0a5936b567ae0b03c93eb3012b40237f6a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 54909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30634,
+    "cached_tokens": 11136,
+    "completion_tokens": 1310
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_06_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np=pickle.load(open('public_alpha_m97_c03_batch_06.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; cal=d['calibration_load_cells']; gold=np.c_[g['stress_gains'],g['stress_biases']]\\nhistory=json.loads(s._HISTORY.read_text()); record=next(r for r in history if r['episode_short_name']=='alpha_m97_c03_batch_01')\\nfor channel in (1,2):\\n    x,y=s._sweep(record,channel)\\n    other=cal['lab_id']!=channel\\n    for n,spikes in [(0,()),(1,()),(3,(0,)),(3,(0,1)),(6,(0,1))]:\\n        errors=[]\\n        for shift in range(len(x)):\\n            keep=np.roll(np.arange(len(x)),shift)[:n]; yy=y[keep].copy()\\n            yy[list(spikes)]+=4.7*(-1 if shift%2 else 1)\\n            sweep=dict(lab_id=np.r_[cal['lab_id'][other],np.full(n,channel)],cmd_stress=np.r_[cal['cmd_stress'][other],x[keep]],true_stress=np.r_[cal['true_stress'][other],yy])\\n            errors.append(np.max(np.abs(s._calibrate(sweep)[channel]-gold[channel])))\\n        print(f'archive-supported channel={channel} readings={n} spikes={len(spikes)} worst gain/bias error={max(errors):.7f}')\\n        assert max(errors)<.005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use in-batch fits for the changed channels and archive fallback for channels with a matching historical state; worst public clean-slice curve/rate RMSE is 0.12067/0.15556 on imputed coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune fallback to recover the missing calibration states for channels 0 and 3\",\n      \"rejected_reason\": \"The archive contains neither current line, and a single clean reading cannot identify both gain and bias. Both channels have direct in-batch sweeps in the supplied campaign.\"\n    }\n  ],\n  \"rationale\": \"Stress the fallback on measured sweeps from channels whose current calibration state is represented in the archive. A failure there would indicate a fixable selection or EMI-detection error, unlike the missing-state counterfactual for channels 0 and 3.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "aa6bd775d85c6643bd35c3f89aefbfdc56c9e4b58c1cfbfa2ac054777dfc217d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37290.26,
+      "usage_known": true,
+      "prompt_tokens": 30634,
+      "cached_tokens": 11136,
+      "completion_tokens": 1310
+    }
+  ]
+}

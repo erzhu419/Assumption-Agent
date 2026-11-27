@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3009ad694bf4452836bc17b2b42b7b4",
+  "call_seq": 14,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:53:40.508110+00:00",
+  "ended_at_utc": "2026-11-27T06:53:59.916243+00:00",
+  "request_sha256": "35d929e89135001abcf142e368a21e8e999310aee35ce3d6d5b85f753a6f57c1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 80225,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38107,
+    "cached_tokens": 6784,
+    "completion_tokens": 646
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/rheology_handoff_audit.py')\\ns = p.read_text().split(\\\"print('Reference alignment comparison by lab\\\", 1)[0]\\nexec(compile(s, str(p), 'exec'))\\nprint('Public reference fields:', [(k, np.shape(v)) for k,v in g.items()])\\ntraces = [(k, np.asarray(v)) for k,v in g.items() if 'past' in k and np.shape(v) == past[n:].shape]\\nassert len(traces) == 1, 'Cannot uniquely identify the public test stress-history reference'\\nkey, reference_past = traces[0]\\nprint('Stress-history reference:', key)\\nfor lab in np.unique(d['test']['lab_id']):\\n    sel = d['test']['lab_id'] == lab\\n    ep = np.max(np.abs(past[n:][sel]-reference_past[sel]))\\n    eh = np.max(np.abs(hold[n:][sel]-g['te_hold_true'][sel]))\\n    print(f'lab {lab}: maximum history/hold stress error {ep:.6g}/{eh:.6g}')\\n    assert max(ep, eh) < 1e-3, 'Calibration handoff exceeds the public audit margin'\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Retain the Cauchy-profiled plateau; independent strain and rate reconstruction agrees within 8.9e-16, and the worst public slice remains missing-feature coupons at 0.229 strain RMSE and 0.174 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the solver after the audit exception\",\n      \"rejected_reason\": \"The exception came from a reference key in the temporary audit. Independent reconstruction already agreed with the solver in both damage slices.\"\n    }\n  ],\n  \"rationale\": \"Complete the interrupted calibration audit using the measured reference under its actual key. A lab exceeding the audit margin would warrant checking its gain, bias, or channel indexing; otherwise the solver remains unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "eb7c23a38dd2bd0e58d9215207084c46579b9d8761c869c1f181e64ab82bc286",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21840.37,
+      "usage_known": true,
+      "prompt_tokens": 38107,
+      "cached_tokens": 6784,
+      "completion_tokens": 646
+    }
+  ]
+}

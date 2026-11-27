@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c8e69b09b81f4314848dce27b2d2a71b",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:10:10.883052+00:00",
+  "ended_at_utc": "2026-11-27T07:10:44.634917+00:00",
+  "request_sha256": "5ba6f5048b648cd42423f5e7ea2143c1c75deccb9697a4b3f02a2fa619bd59f8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50000,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29123,
+    "cached_tokens": 6784,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/alpha_m97_c01_batch_04_solver.py')\\ns=p.read_text()\\nold='''    activated = (dataset['shear_banding_index'] <= .50) & (damage > 0)\\n    return past, hold, x, activated, np.where(activated, np.tanh(damage), 0.)'''\\nnew='''    plateau = np.full(len(hold), dataset['shear_banding_index'] <= .50)\\n    # Banding selects the baseline flow basis; damage controls only the network terms.\\n    return past, hold, x, plateau, np.where(plateau, np.tanh(damage), 0.)'''\\nassert old in s\\ns=s.replace(old,new).replace('past, hold, x, activated, act = state','past, hold, x, plateau, act = state').replace('np.where(activated[:, None], np.log1p(time), time)','np.where(plateau[:, None], np.log1p(time), time)')\\np.write_text(s)\\np=Path('/tmp/rheo04_cv.py'); s=p.read_text().replace(\\\"(state[3][:n],'active'),(~state[3][:n],'inactive')\\\", \\\"(state[4][:n]>0,'active'),(state[4][:n]==0,'zero damage')\\\").replace(\\\"'te_true_curve'\\\", \\\"'te_clean'\\\").replace('state[3][n:].sum()', '(state[4][n:]>0).sum()'); p.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/rheo04_cv.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open(p+'public_alpha_m97_c01_batch_04.pkl','rb'))[0]; d,gt=it['dataset'], it['gt']; out=m.solve_alpha_m97_c01_batch_04(d)\\nn=len(d['train']['lab_id']); test=d['test']; state=tuple(v[n:] for v in m._prepare(d)); active=state[4]>0; missing=np.isnan(test['coupon_features_raw']).any(axis=1)\\nfor key,ref in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(key,'abs errors',np.round(np.abs(out[key]-gt[ref]),6))\\ncurve=out['predicted_strain']-gt['te_clean']; rate=out['initial_rate_pred']-gt['te_true_rate0']\\nfor name,k in [('active',active),('zero damage',~active),('missing',missing),('complete',~missing)]+[(f'lab {c}',test['lab_id']==c) for c in range(4)]:\\n if k.any(): print(name,int(k.sum()),'clean curve / late / rate RMSE',*[round(np.sqrt(np.mean(e**2)),6) for e in (curve[k],curve[k,-1],rate[k])])\\na,b=m._design(out['estimated_taus'],state,d['past_dt'],np.array([0.,1e-7])); w=np.r_[out['hereditary_weights'],out['regime_mode_weights']]\\nnp.testing.assert_allclose(a[:,0,:]@w,0,atol=1e-12)\\nnp.testing.assert_allclose(a[:,1,:]@w/1e-7,b@w,atol=2e-6,rtol=0)\\nprint('zero-time value and derivative verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage gates baseline flow -> H2 low banding selects logarithmic flow and damage gates only network terms; held-out zero-damage late-time median absolute error fell from 0.386 to 0.0132.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use a pooled imputation mean for all missing coupons\",\n      \"rejected_reason\": \"With the corrected flow basis, held-out missing-coupon curve and rate RMSE were both lower when filling from the matching lab and stratum.\"\n    }\n  ],\n  \"rationale\": \"Promote the flow basis supported by held-out responses. Verify that the exact saved solver improves the clean zero-damage slice without sacrificing active rows, and check the predicted initial rate against the forward curve derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6c417bf6bdcaa36f281ea938d06b442a57c26af1fe7546e0d0607bee8309dd1c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36105.77,
+      "usage_known": true,
+      "prompt_tokens": 29123,
+      "cached_tokens": 6784,
+      "completion_tokens": 1320
+    }
+  ]
+}

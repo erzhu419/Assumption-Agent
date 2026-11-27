@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "adec993d03c848a4843fa74fd4a61aaf",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:59:53.928955+00:00",
+  "ended_at_utc": "2026-11-27T07:00:39.631114+00:00",
+  "request_sha256": "dd844c2a7cb39255df487c8b6fc0d2462d159966e5fbdbd55f834c9375653265",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61653,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33485,
+    "cached_tokens": 0,
+    "completion_tokens": 1724
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/alpha_m97_c03_batch_03_solver.py')\\ns=p.read_text(); a=s.index('def _calibrate('); b=s.index('def _align(',a)\\ns=s[:a]+'''def _calibrate(cal):\\n    params = np.empty((4, 2))\\n    history = None\\n    for lab in range(4):\\n        x, y = _sweep(cal, lab)\\n        spread = np.unique(x).size >= 2\\n        if x.size >= 2 and not spread:\\n            raise ValueError(f'Load cell {lab} has no calibration stress spread')\\n        spike = False\\n        if x.size >= 3:\\n            # A three-point fit can absorb a spike. Test each observation\\n            # against the line fitted to the remaining sweep points.\\n            for i in range(x.size):\\n                keep = np.arange(x.size) != i\\n                if np.unique(x[keep]).size >= 2:\\n                    gain, bias = _line(x[keep], y[keep])\\n                    if abs(y[i] - (gain*x[i] + bias)) > 3.0:\\n                        spike = True\\n                        break\\n        if spread and not spike:\\n            params[lab] = _line(x, y)\\n            continue\\n        if history is None:\\n            history = json.loads(_HISTORY.read_text())\\n        for saved in reversed(history):\\n            hx, hy = _sweep(saved, lab)\\n            if np.unique(hx).size >= 2:\\n                prior = _line(hx, hy)\\n                break\\n        else:\\n            raise ValueError(f'No archived calibration for load cell {lab}')\\n        clean = np.abs(y - (prior[0]*x + prior[1])) <= 3.0\\n        if clean.sum() >= 4 and np.unique(x[clean]).size >= 2:\\n            params[lab] = _line(x[clean], y[clean])\\n        elif not spike or not clean.all():\\n            params[lab] = prior\\n        else:\\n            # The archive does not corroborate EMI; retain in-batch data.\\n            params[lab] = _line(x, y)\\n    return params\\n\\n\\n'''+s[b:]; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py | grep -E '^all |Three-point'\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom itertools import combinations\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c03_batch_03_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_03.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; ref=m._calibrate(cal)\\nfor n in (1,3,4,5):\\n errors=[]\\n for c in range(4):\\n  rows=np.flatnonzero(cal['lab_id']==c); other=np.flatnonzero(cal['lab_id']!=c)\\n  for group in combinations(rows,n):\\n   use=np.r_[group,other]; base={k:v[use] for k,v in cal.items()}; x,y=m._sweep(base,c)\\n   if n==1:\\n    errors.append(np.max(abs(m._calibrate(base)[c]-ref[c]))); continue\\n   np.testing.assert_allclose(m._calibrate(base)[c],m._line(x,y),atol=1e-12,rtol=0)\\n   for idx in range(n):\\n    for amplitude in (-6.,6.):\\n     corrupted=dict(base,true_stress=base['true_stress'].copy()); corrupted['true_stress'][idx]+=amplitude\\n     keep=np.arange(n)!=idx; expected=m._line(x[keep],y[keep]) if n>=5 else ref[c]\\n     errors.append(np.max(abs(m._calibrate(corrupted)[c]-expected)))\\n print(f'{n}-point calibration: {len(errors)} cases; max coefficient error {max(errors):.6g}')\\n assert max(errors)<4e-4\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pairwise-median EMI screening → H2 leave-one-out screening with archive confirmation; H1 missed 960 of 2,880 three-point spike cases, while the unchanged rheology fit has worst held-out strain p95 0.329 and onset-rate RMSE 0.084.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Always use historical calibration for sparse sweeps\",\"rejected_reason\":\"Clean sweeps with two or more distinct points provide a direct fit; the task limits archive use to fewer than two points or suspected EMI.\"},{\"option\":\"Exclude imputed rows from training\",\"rejected_reason\":\"Exclusion did not improve the worst held-out rate RMSE or materially change the strain tail.\"}],\"rationale\":\"Fix the observed sparse-sweep failure without changing the constitutive law. Re-run the held-out audit and check clean and corrupted subsets of the real sweeps to verify both archive fallback and direct fitting when four clean points remain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a3b59acf5d2cebf8f9112e9c91f75f8524bd84e2f883a993dfa06966570f0fb5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48080.46,
+      "usage_known": true,
+      "prompt_tokens": 33485,
+      "cached_tokens": 0,
+      "completion_tokens": 1724
+    }
+  ]
+}

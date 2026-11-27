@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "553ad4812fe44adf834954fe6bf27f76",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:43:01.532540+00:00",
+  "ended_at_utc": "2026-11-27T06:43:40.321717+00:00",
+  "request_sha256": "62e505f08a96d0aded36d4d1894851627244a0652d41e26aba14c60bfceb9182",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 48571,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28372,
+    "cached_tokens": 0,
+    "completion_tokens": 1503
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle\\nimport numpy as np\\nfrom scipy.stats import spearmanr\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_s00.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr = d['train']; n = len(tr['lab_id']); lab = tr['lab_id']\\npast, hold, F, s0 = m._prepare(d)\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - s0[:n, None]; rate = tr['instant_rate_obs']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ncurve_res = np.empty_like(y); rate_res = np.empty_like(rate)\\nfor c in np.unique(lab):\\n    a = np.flatnonzero(lab != c); b = np.flatnonzero(lab == c)\\n    lt, w = m._fit(past[a], hold[a], F[a], dt, t, y[a], rate[a])\\n    C, R, *_ = m._basis(lt, past[b], hold[b], F[b], dt, t)\\n    curve_res[b] = y[b] - C @ w; rate_res[b] = rate[b] - R @ w\\n    for j in range(1, 5):\\n        for k in range(j+1, 5):\\n            pair = np.column_stack((F[b,j]+F[b,k], F[b,j]-F[b,k]))\\n            np.testing.assert_allclose(pair @ (np.array([w[j+2]+w[k+2], w[j+2]-w[k+2]])/2), F[b,j]*w[j+2]+F[b,k]*w[k+2], rtol=0, atol=1e-12)\\n    idx = b[complete[b]]\\n    drift_res = np.median(curve_res[idx]/t, axis=1)\\n    print('held lab', c, 'complete n', len(idx), 'median signed drift/rate residual', np.round([np.median(drift_res), np.median(rate_res[idx])], 6), 'drift/rate residual Spearman', round(spearmanr(drift_res,rate_res[idx]).statistic,3))\\nstress = abs(past[:n]).max(axis=1)\\nidx = complete & (stress >= np.sort(stress[complete])[-17]); assert idx.sum() == 17\\nprint('Top 17 complete physical-stress histories, max and threshold:', stress[idx].max(), d['crit_stress'], 'curve/rate OOF absolute p90:', np.quantile(abs(curve_res[idx]),.9),np.quantile(abs(rate_res[idx]),.9))\\nbase = m.solve_alpha_m97_c02_s00(d)\\nconverted = copy.deepcopy(d)\\ng = np.array([.74,1.29,.87,1.18]); b = np.array([-.30,.26,.14,-.21])\\ncal = converted['calibration_load_cells']; c = cal['lab_id']\\ncal['cmd_stress'] = (cal['cmd_stress']-b[c])/g[c]\\nfor split in ('train','test'):\\n    section = converted[split]; c = section['lab_id']\\n    section['past_stress_cmd'] = (section['past_stress_cmd']-b[c,None])/g[c,None]\\n    section['stress_hold_cmd'] = (section['stress_hold_cmd']-b[c])/g[c]\\n    if 'aux_chamber_telemetry' in section:\\n        section['aux_chamber_telemetry'] = np.full_like(section['aux_chamber_telemetry'], 1e6)\\nif 'aux_chamber_telemetry' in converted:\\n    converted['aux_chamber_telemetry'] = None\\nout = m.solve_alpha_m97_c02_s00(converted)\\nfor k in base:\\n    np.testing.assert_allclose(out[k], base[k], rtol=2e-7, atol=2e-7)\\n    print('calibration/telemetry invariance', k, 'max absolute change:', np.max(np.abs(out[k]-base[k])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Audit the specified linear-flow basis and lab alignment; the current worst leave-one-lab-out slice is missing-feature coupons, with strain and onset-rate absolute p90 errors of 0.70218 and 0.18062.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational flow terms or relay modes\",\n      \"rejected_reason\": \"The specified regime has an exact linear envelope and zero mode weights; feature sums and differences are already in the linear span. There is no relay or stochastic-control state in this task.\"\n    },\n    {\n      \"option\": \"Use within-batch balanced accuracy to check confounding\",\n      \"rejected_reason\": \"Both responses are continuous. Signed residuals for each held-out lab test the relevant failure: pooled error obscuring a lab-specific drift or rate bias.\"\n    }\n  ],\n  \"rationale\": \"Re-express the same measured stresses with different gains and offsets in all four channels: prediction changes would reveal a calibration or channel-index error. Check held-out lab biases and the genuinely highest-stress complete coupons; a systematic error there would motivate revisiting alignment or fit weighting. Re-run the schema validator in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cde9dda796616f7cc2a8860db3c2dcd5892dbe485d1b8e10e4c590102c6ee394",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41134.69,
+      "usage_known": true,
+      "prompt_tokens": 28372,
+      "cached_tokens": 0,
+      "completion_tokens": 1503
+    }
+  ]
+}

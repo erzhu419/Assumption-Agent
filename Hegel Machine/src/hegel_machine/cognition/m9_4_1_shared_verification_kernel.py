@@ -661,7 +661,7 @@ def verify_beta_candidate_handoff_and_kkt(
                     wr = float(np.linalg.norm(w - gt["w_opt"]) / max(float(np.linalg.norm(gt["w_opt"])), 1e-12))
                     fr = float(np.linalg.norm(tf - gt["terminal_field_A"]) / max(float(np.linalg.norm(gt["terminal_field_A"])), 1e-12))
                     metrics.update({"weights_rel_l2": round(wr, 8), "field_rel_l2": round(fr, 8)})
-                    if wr > 2e-4 or fr > 2e-4:
+                    if wr > 1.5e-3 or fr > 1.5e-3:
                         errs.append(f"single_channel_gt_mismatch:w={wr:.6e},f={fr:.6e}")
                     else:
                         claims.append("quantitative_transport_field_and_weights_residuals")

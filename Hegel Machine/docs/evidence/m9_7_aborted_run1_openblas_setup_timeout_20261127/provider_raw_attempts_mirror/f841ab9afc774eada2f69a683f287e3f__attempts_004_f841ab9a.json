@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f841ab9afc774eada2f69a683f287e3f",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:53:16.077436+00:00",
+  "ended_at_utc": "2026-11-27T06:53:56.252837+00:00",
+  "request_sha256": "f422cc85c444a432d12371560cc53a9b353c86c7483dea17c7a79846bb65e6ad",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 30848,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22614,
+    "cached_tokens": 6784,
+    "completion_tokens": 1657
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust nonlinear least squares viscoelastic Prony relaxation' | head -8\\npython3 - <<'PY'\\nfrom pathlib import Path\\nprior = Path('/tmp/hegel_continual_archive/alpha_m97_c02_batch_01_solver.py').read_text()\\nshared = prior[prior.index('import json'):prior.index('def _activity')]\\nPath('alpha_m97_c02_batch_02_solver.py').write_text('\\\"\\\"\\\"Calibrated two-branch creep model for an amorphous melt.\\\"\\\"\\\"\\\\n' + shared)\\nPY\\ncat >> alpha_m97_c02_batch_02_solver.py <<'PY'\\ndef _basis(log_taus, past, hold, features, age, dt, times, derivatives=False):\\n    tau = np.exp(log_taus)\\n    a, q, r = age[:, None]/tau, dt[:, None]/tau, times[:, None]/tau\\n    ea, eq, er = np.exp(-a), np.exp(-q), np.exp(-r)\\n    # A history step contributes its uptake times its decay over subsequent steps.\\n    memory = ea * -np.expm1(-q)\\n    gap = hold[:, None] - past @ memory\\n    step = -np.expm1(-r)\\n    curve = np.concatenate((gap[:, None, :] * step,\\n                            features[:, None, :] * times[None, :, None]), axis=2)\\n    rate = np.column_stack((gap/tau, features))\\n    if not derivatives:\\n        return curve, rate\\n    dz = past @ (a*memory - q*ea*eq)\\n    dc = -dz[:, None, :]*step - gap[:, None, :]*r*er\\n    dr = (-dz - gap)/tau\\n    return curve, rate, dc, dr\\n\\n\\ndef _fit(past, hold, features, age, dt, times, curves, rates):\\n    target = np.r_[curves.ravel(), rates]\\n    observed = np.isfinite(target)\\n    target = target[observed]\\n    args = past, hold, features, age, dt, times\\n\\n    def design(log_taus, derivatives=False):\\n        c, r, *jac = _basis(log_taus, *args, derivatives=derivatives)\\n        matrix = np.vstack((c.reshape(-1, 7), r))[observed]\\n        if derivatives:\\n            dc, dr = jac\\n            return matrix, np.vstack((dc.reshape(-1, 2), dr))[observed]\\n        return matrix\\n\\n    def residual(params):\\n        return np.einsum('ij,j->i', design(params[:2]), params[2:]) - target\\n\\n    def jacobian(params):\\n        matrix, diff = design(params[:2], derivatives=True)\\n        return np.column_stack((diff * params[2:4], matrix))\\n\\n    lo = np.r_[np.log([0.01, 0.01]), np.full(7, -np.inf)]\\n    hi = np.r_[np.log([100., 100.]), np.full(7, np.inf)]\\n    best = None\\n    for pair in ((0.45, 2.4), (0.20, 1.0), (0.20, 6.0),\\n                 (1.0, 6.0), (0.09, 2.4), (0.45, 15.0)):\\n        log_taus = np.log(pair)\\n        weights = np.linalg.lstsq(design(log_taus), target, rcond=None)[0]\\n        fit = least_squares(residual, np.r_[log_taus, weights], jac=jacobian,\\n                            bounds=(lo, hi), loss='cauchy', f_scale=0.025,\\n                            x_scale='jac', max_nfev=130)\\n        if best is None or fit.cost < best.cost:\\n            best = fit\\n    params = best.x.copy()\\n    if params[0] > params[1]:\\n        params[[0, 1, 2, 3]] = params[[1, 0, 3, 2]]\\n    return params[:2], params[2:]\\n\\n\\ndef solve_alpha_m97_c02_batch_02(dataset: dict) -> dict:\\n    past, hold, features, strain0 = _prepare(dataset)\\n    dt, times = (np.asarray(dataset[k], dtype=float) for k in ('past_dt', 'eval_times'))\\n    age = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.]\\n    train = dataset['train']\\n    n = len(train['lab_id'])\\n    curves = np.asarray(train['strain_curves_obs']) - strain0[:n, None]\\n    rates = np.asarray(train['instant_rate_obs'])\\n    log_taus, weights = _fit(past[:n], hold[:n], features[:n], age, dt, times, curves, rates)\\n    curve, rate = _basis(log_taus, past[n:], hold[n:], features[n:], age, dt, times)\\n    return {'estimated_taus': np.exp(log_taus), 'hereditary_weights': weights,\\n            'regime_mode_weights': np.zeros(2), 'predicted_strain': strain0[n:, None] + curve @ weights,\\n            'initial_rate_pred': rate @ weights}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and cell-balanced panel alignment -> H2 two-branch Prony relaxation with linear terminal flow; worst calibration residual is 0.000242 stress units, and worst-lab prediction error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Ordinary least squares on all strain and rate observations\",\n      \"rejected_reason\": \"The public strain range includes a large positive extreme. Fit with bounded influence so potentially corrupted observations cannot dominate the shared relaxation parameters.\"\n    }\n  ],\n  \"rationale\": \"Reuse the verified alignment convention and implement the specified terminal flow without plateau or damage regressors. The isolated schema run checks importability, output shapes, and finiteness; prediction accuracy still needs lab-level validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "12c8e437bf704bf8f59950447b2814464845477b306520b46a5a5806601d77df",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45053.5,
+      "usage_known": true,
+      "prompt_tokens": 22614,
+      "cached_tokens": 6784,
+      "completion_tokens": 1657
+    }
+  ]
+}

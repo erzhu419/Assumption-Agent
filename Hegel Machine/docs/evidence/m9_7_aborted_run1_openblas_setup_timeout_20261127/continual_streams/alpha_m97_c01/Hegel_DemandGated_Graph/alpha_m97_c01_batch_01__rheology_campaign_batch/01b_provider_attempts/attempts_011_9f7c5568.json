@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f7c55686a08422c92b10779f329b80b",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:52:23.284526+00:00",
+  "ended_at_utc": "2026-11-27T06:52:51.867858+00:00",
+  "request_sha256": "b9d45be9d09cb0d42976e05045ed46a3713c21393ba17062a875f2492e33ecef",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 70336,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36295,
+    "cached_tokens": 0,
+    "completion_tokens": 1116
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/rheo_stress_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m97_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_01.pkl','rb'))[0]; d=it['dataset']; tr=d['train']; lab=tr['lab_id']; n=len(lab); dt,t=d['past_dt'],d['eval_times']; data=tuple(a[:n] for a in m._prepare(d)); past,hold,x,act=data; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rate=tr['instant_rate_obs']; cc=np.isfinite(tr['coupon_features_raw']).all(1); L=np.log1p(t)\\n# Pairwise sums and differences are already in the four-feature linear span.\\n# Probe genuinely new terms: pairwise interactions, curvatures and saturated damage response.\\ninter=np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i,4)])\\ndamage=np.maximum(np.abs(past)-d['crit_stress'],0)**2@dt\\nsat=np.column_stack((act*hold/(1+damage**2),act*hold/(1+hold**2)))\\nrows=[]\\nfor k in np.unique(lab):\\n    keep=lab!=k; p=m._fit(tuple(a[keep] for a in data),dt,t,y[keep],rate[keep],'log'); a,b,*_=m._design(p[:2],data,dt,t,'log'); ey=y-m._dot(a,p[2:]); er=rate-m._dot(b,p[2:]); drift=np.median(ey/L,axis=1); fit=keep & cc\\n    print('held lab', k, 'signed complete implied drift/rate medians', np.round([np.median(drift[~keep&cc]),np.median(er[~keep&cc])],6))\\n    for name,u in [('baseline',np.zeros((n,1))),('coupon interactions',inter),('rational damage',sat)]:\\n        coef=np.linalg.lstsq(u[fit],drift[fit],rcond=None)[0]; corr=u@coef\\n        for sl,v in [('active complete',cc&(act>0)),('inactive complete',cc&(act==0)),('missing',~cc)]:\\n            sel=~keep&v\\n            rows.append((name,sl,np.median(abs(ey[sel]-corr[sel,None]*L)),np.median(abs(er[sel]-corr[sel]))))\\nfor name in ('baseline','coupon interactions','rational damage'):\\n    for sl in ('active complete','inactive complete','missing'):\\n        z=np.array([(a,b) for nm,ss,a,b in rows if nm==name and ss==sl]); print(name,sl,'worst lab median strain/rate',np.round(z.max(axis=0),6))\\nPY\\npython3 -I /tmp/rheo_stress_audit.py\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated two-branch memory → H2 campaign-wide logarithmic drift with work-gated corrections; worst leave-one-lab-out median strain/rate errors are 0.1700/0.1532 on missing coupons and 0.01305/0.01789 on complete coupons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run balanced-accuracy, relay-mode, and Fokker–Planck checks\",\"rejected_reason\":\"This dataset has continuous strain and rate measurements, no classification labels or relay state, and a specified deterministic memory recurrence. Held-lab residuals directly test the applicable nuisance and model-basis risks.\"}],\"rationale\":\"Fit residual corrections using only non-held labs and compare worst held-lab slices. If new terms improve those slices consistently, investigate omitted structure; otherwise retain the specified basis. Signed residuals by lab test whether pooled performance is masking a laboratory offset.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b252af4650649b7de7407d5342af13666ec0a1f44b0023f303847c3df58457d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30914.1,
+      "usage_known": true,
+      "prompt_tokens": 36295,
+      "cached_tokens": 0,
+      "completion_tokens": 1116
+    }
+  ]
+}

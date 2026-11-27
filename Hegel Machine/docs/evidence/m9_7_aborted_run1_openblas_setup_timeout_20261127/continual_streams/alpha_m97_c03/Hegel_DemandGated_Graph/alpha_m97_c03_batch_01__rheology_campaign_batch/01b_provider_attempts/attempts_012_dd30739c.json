@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dd30739c1da5450e809ebe24d678a62c",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:52:30.336298+00:00",
+  "ended_at_utc": "2026-11-27T06:53:08.554097+00:00",
+  "request_sha256": "9856b380c83a6bae3987ef1596e996f8f891a41bf3c268a6941c0b1284d33c56",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 70718,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35131,
+    "cached_tokens": 11136,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology_gate_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'alpha_m97_c03_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c03_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\nx = m._align(tr, te)\\ncal = m._calibration(d['calibration_load_cells'])\\nti = m._inputs(d, tr, x[:n], cal)\\nvi = m._inputs(d, te, x[n:], cal)\\ny = np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None], tr['instant_rate_obs']]\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(1)\\ndef subset(inp, keep):\\n    return tuple(v[keep] if j in (0,1,2,5,6) else v for j,v in enumerate(inp))\\n\\nout = m.solve_alpha_m97_c03_batch_01(d)\\ntau, w, rw = (out[k] for k in ('estimated_taus','hereditary_weights','regime_mode_weights'))\\nstress, hold, feat, dt, times, active, _, campaign = vi\\nmemory = np.zeros((len(hold),2))\\ndamage = np.zeros(len(hold))\\nfor step, step_dt in enumerate(dt):\\n    a = np.exp(-step_dt/tau)\\n    memory = a*memory + (1-a)*stress[:,step,None]\\n    damage += np.maximum(0, abs(stress[:,step])-d['crit_stress'])**2*step_dt\\nactivation = np.tanh(damage)*(damage>0)*campaign\\nweights = (hold[:,None]-memory)*w[:2]\\nweights[:,0] += rw[0]*activation*hold\\nterminal_weight = w[2]+feat@w[3:]+rw[1]*activation*memory[:,0]\\nclock = np.log1p(times) if campaign else times\\ncurve = te['strain_0'][:,None] + weights@(-np.expm1(-times[None,:]/tau[:,None])) + terminal_weight[:,None]*clock\\nrate = weights@(1/tau) + terminal_weight\\nfor label, keep in [('active',active),('inactive',~active)]:\\n    if keep.any():\\n        e = np.max(abs(curve[keep]-out['predicted_strain'][keep])); r = np.max(abs(rate[keep]-out['initial_rate_pred'][keep]))\\n        print('independent recurrence and rate',label,keep.sum(),e,r)\\n        assert max(e,r) < 1e-10\\n\\n# Keep the mandated panels and calibrations available, but hold out all response labels from each lab.\\ne = np.empty_like(y)\\nfor lab in np.unique(tr['lab_id']):\\n    test = tr['lab_id']==lab\\n    fit = ~test & complete\\n    q = m._fit(subset(ti,fit), y[fit])\\n    e[test] = m._design(q[:2],*subset(ti,test))[0]@q[2:]-y[test]\\nfor lab, stratum in np.unique(np.c_[tr['lab_id'],tr['stratum']],axis=0):\\n    k = complete & (tr['lab_id']==lab) & (tr['stratum']==stratum)\\n    if k.any():\\n        print('OOF complete cell',lab,stratum,k.sum(),'signed curve-end/rate medians',np.round(np.median(e[k][:,[-2,-1]],axis=0),5),'absolute curve/rate medians',round(np.median(abs(e[k,:-1])),5),round(np.median(abs(e[k,-1])),5))\\ncurve_e = e[complete,:-1]\\nprint('OOF complete abs curve error quantiles by time',np.round(np.quantile(abs(curve_e),[.5,.9,.95,.99],axis=0),4))\\nprint('OOF complete gross residual counts per coupon',tuple(v.tolist() for v in np.unique((abs(curve_e)>.25).sum(1),return_counts=True)))\\nprint('OOF complete signed median by horizon and rate',np.round(np.median(e[complete],axis=0),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_gate_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 remaining error is chiefly due to missing coupon features and gross curve residuals -> H2 check for a shared constitutive or lab-by-stratum residual before making any further change; worst clean slice curve/rate RMSE is 0.1107/0.0851.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Probe relay, classifier, and PDE operators\",\n      \"rejected_reason\": \"The dataset has continuous rheology responses and no relay modes, class labels, or PDE observations. The relevant checks are the memory recurrence, the zero-time rate, and held-out residuals within lab and stratum.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence can catch a missing coefficient, sign, or rate term in either damage slice. Held-out signed residuals can distinguish a reproducible lab or time bias, which would justify a targeted challenger, from scattered measurement outliers, which would not justify adding constitutive terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "488836e0d94538ae7ee1f7fdae5e71c70c01fd41a7a7168549199d7f74e82353",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40544.66,
+      "usage_known": true,
+      "prompt_tokens": 35131,
+      "cached_tokens": 11136,
+      "completion_tokens": 1552
+    }
+  ]
+}

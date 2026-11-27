@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "932e1cbf0bf4417492930b9b26bf5ba7",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:17:37.279189+00:00",
+  "ended_at_utc": "2026-11-27T07:18:04.697812+00:00",
+  "request_sha256": "8d3162201b9da06eea552b51ee16397459aa4f72f77bda4ce7b3cf8b7afe93e6",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50353,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28518,
+    "cached_tokens": 6784,
+    "completion_tokens": 1017
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom pathlib import Path\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'alpha_m97_c01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith (root/'public_alpha_m97_c01_batch_06.pkl').open('rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']\\nrows = d['calibration_load_cells']\\nfull = m._calibrate(rows)\\ntruth = np.column_stack((gt['stress_gains'], gt['stress_biases']))\\nfor c in (0, 2):\\n    lab_rows = np.flatnonzero(rows['lab_id'] == c)\\n    x, y = m._points(rows, c)\\n    clean = np.argmin(abs(y - np.polyval(full[c], x)))\\n    # Drop either observed EMI spike while retaining the real current anchor.\\n    for j in np.delete(lab_rows, clean):\\n        keep = np.arange(len(rows['lab_id'])) != j\\n        got = m._calibrate({k: np.asarray(v)[keep] for k, v in rows.items()})[c]\\n        print('calibration omit EMI row', j, 'channel', c, 'absolute gain/bias error', abs(got - truth[c]))\\nout = m.solve_alpha_m97_c01_batch_06(d)\\nraw = d['test']['coupon_features_raw']\\nmissing = np.isnan(raw).sum(axis=1)\\ne = out['predicted_strain'] - gt['te_clean']\\nr = out['initial_rate_pred'] - gt['te_true_rate0']\\nfor k in np.unique(missing):\\n    use = missing == k\\n    print('missing features', k, 'n', use.sum(), 'worst horizon strain MAE', np.max(np.mean(abs(e[use]), axis=0)), 'rate MAE', np.mean(abs(r[use])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (prefix-assisted EMI rejection and robust jammed-slip fit) -> H2 (test calibration stability when an observed EMI row is absent and prediction stability across missing-feature slices); prior worst clean strain horizon MAE was 0.01238 and worst clean rate MAE was 0.01418.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the closed-form law and derivative checks\",\n      \"rejected_reason\": \"They already agreed with the verified artifact; repeating them would not test sparse-sweep screening or missing-feature performance.\"\n    }\n  ],\n  \"rationale\": \"A two-row sweep containing one real EMI spike and one clean anchor can expose a screening failure masked by the full sweep. If it does, revise the sparse-channel calibration. If prediction error instead concentrates among coupons with missing features, investigate panel imputation rather than changing the creep law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "6fe200ba6c9e090340406e98a566602a8f592eb5f18e56f2fc8d3fb825460027",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29874.09,
+      "usage_known": true,
+      "prompt_tokens": 28518,
+      "cached_tokens": 6784,
+      "completion_tokens": 1017
+    }
+  ]
+}

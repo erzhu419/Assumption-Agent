@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a04459ead796400fa2949f25d0ba0b29",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:21.561342+00:00",
+  "ended_at_utc": "2026-11-27T06:57:55.117925+00:00",
+  "request_sha256": "0119a4e39ca30e7a9c7d320d43d5badbae369e43afcd826d4e3023953e8a39d2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43714,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27707,
+    "cached_tokens": 6784,
+    "completion_tokens": 1329
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'cauchy robust IRLS' | head -c 1100; printf '\\\\n'\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_trend_decomposition.cauchy_linear_fit | head -c 1100; printf '\\\\n'\\ncat >/tmp/rheology_robust_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/alpha_m97_c03_batch_03_solver.py'; sp=importlib.util.spec_from_file_location('s',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_03.pkl','rb'))[0]['dataset']; a,b=d['train'],d['test']\\nx=m._align(a,b)[:len(a['lab_id'])]; past,hold=m._physical(a,m._calibrate(d['calibration_load_cells'])); dt,t=d['past_dt'],d['eval_times']; y=np.column_stack((a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']))\\ndef robust(keep, sc):\\n args=(past[keep],hold[keep],dt,t,x[keep]); obs=y[keep]; lo=np.log([.015,.04]); hi=np.log([20.,200.]); best=None\\n for f,s in ((.25,1.6),(.55,3.2),(1.2,7.)):\\n  p=np.log([f,s/f-1]); w=np.linalg.lstsq(m._design([f,s],*args).reshape(-1,9),obs.ravel(),rcond=None)[0]\\n  def residual(v):\\n   f,r=np.exp(v[:2]); return ((m._design([f,f*(1+r)],*args)@v[2:]-obs)/sc).ravel()\\n  z=np.r_[p,w]\\n  for loss,width in [('soft_l1',3),('cauchy',1)]:\\n   sol=least_squares(residual,z,loss=loss,f_scale=width,bounds=(np.r_[lo,np.full(9,-np.inf)],np.r_[hi,np.full(9,np.inf)]),max_nfev=180,x_scale='jac'); z=sol.x\\n  if best is None or sol.cost < best.cost: best=sol\\n f,r=np.exp(best.x[:2]); return np.array([f,f*(1+r)]),best.x[2:]\\nfor method in ('ols',.003,.015,.05):\\n all_e=np.empty_like(y)\\n for c in [-1,0,1,2,3]:\\n  keep=a['lab_id']!=c; args=(past[keep],hold[keep],dt,t,x[keep],y[keep]); tau,w=m._fit(*args) if method=='ols' else robust(keep,method)\\n  sel=~keep if c>=0 else keep; e=m._design(tau,past[sel],hold[sel],dt,t,x[sel])@w-y[sel]\\n  print('fit',method,c,'tau',np.round(tau,6),'med/p95',np.round(np.quantile(abs(e[:,:-1]),[.50,.95]),6),np.round(np.quantile(abs(e[:,-1]),[.50,.95]),6),'rate rmse',round(np.sqrt(np.mean(e[:,-1]**2)),6))\\n  if c<0: print('w',np.round(w,6),'counts > .1/1',[(abs(e[:,:-1])>v).sum() for v in [.1,1]],'by horizon scaled MAD',np.round(1.4826*np.median(abs(e-np.median(e,axis=0)),axis=0),6))\\n  else: all_e[sel]=e\\n for k,sel in [('missing',np.isnan(a['coupon_features_raw']).any(axis=1)),('complete',~np.isnan(a['coupon_features_raw']).any(axis=1))]: print(method,k,'med abs',np.median(abs(all_e[sel,:-1])),np.median(abs(all_e[sel,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_robust_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 ordinary least squares → H2 robust residual fitting of the same constitutive law; baseline worst lab strain RMSE is 3.044 and worst lab rate RMSE is 0.164.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add another rheological term\",\"rejected_reason\":\"A residual above 64 alongside a median residual below 0.07 warrants testing sensitivity to contamination before changing the stated law.\"}],\"rationale\":\"Compare robust and ordinary fits across held-out labs and missing-feature slices. If robust fitting stabilizes the taus and improves typical held-out errors without worsening onset predictions, replace the squared-loss baseline.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ebee54406c7ef3be2de0367350f9898d6598cda905871713c94fda0b85d589bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35887.36,
+      "usage_known": true,
+      "prompt_tokens": 27707,
+      "cached_tokens": 6784,
+      "completion_tokens": 1329
+    }
+  ]
+}

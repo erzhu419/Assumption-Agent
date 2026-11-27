@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d736c05fd94c4d0f92aaba0a7a9aa67b",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:49:22.746085+00:00",
+  "ended_at_utc": "2026-11-27T06:49:49.901879+00:00",
+  "request_sha256": "f9ad32214588421807d4c00c82f1399754f99730e59d84156dc6ee40abf8eff0",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42622,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26685,
+    "cached_tokens": 6784,
+    "completion_tokens": 1067
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat public_asset_index.json; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nr='/holdout_task/'; s=importlib.util.spec_from_file_location('candidate',r+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\np=pickle.load(open(r+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m._align(tr,te); c=np.c_[g['stress_gains'],g['stress_biases']]; w=np.r_[g['theta'],g['vp_theta']]; lt=np.log(g['taus']); rms=lambda x:np.sqrt(np.mean(x*x))\\nfor name,part,xx,curve,rate in [('train',tr,x[:n],tr['strain_curves_obs'],tr['instant_rate_obs']),('test',te,x[n:],g['te_clean'],g['te_true_rate0'])]:\\n inp=m._inputs(d,part,xx,c); a=m._design(lt,*inp)[0]; y=np.c_[curve-part['strain_0'][:,None],rate]; e=y-a@w; t=inp[4]; print(name,'oracle stress check',np.max(abs(inp[0]-g['te_hist_true'])) if name=='test' else None)\\n for lab in [-1,0,1,2,3]:\\n  for active in [False,True]:\\n   mask=(inp[-2]==active)&((part['lab_id']==lab) if lab>=0 else True); v=e[mask]; f=np.log1p(t) if active else t; h=v[:,:-1]@f/(f@f); print(lab,active,len(v),'curve RMSE/MdAE',rms(v[:,:-1]),np.median(abs(v[:,:-1])),'rate RMSE/MdAE',rms(v[:,-1]),np.median(abs(v[:,-1])),'median terminal residual',np.round(np.median(v,axis=0),4),'excess beyond terminal basis',rms(v[:,:-1]-h[:,None]*f),'rate minus terminal coeff',rms(v[:,-1]-h))\\n for lab in range(4):\\n  mask=part['lab_id']==lab; print('panel lab',lab,'raw med',np.nanmedian(part['coupon_features_raw'][mask],axis=0),'ref mean/std med',np.nanmedian(np.nanmean(part['ref_coupons'][mask],axis=0)),np.nanmedian(np.nanstd(part['ref_coupons'][mask],axis=0)))\\n if name=='train':\\n  mag=np.max(abs(e[:,:-1]),axis=1)\\n  for i in np.argsort(mag)[-8:]: print('largest train residual',i,'lab',part['lab_id'][i],'active',inp[-2][i],np.round(e[i],3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 parameter-fit error -> H2 systematic alignment or terminal-law mismatch; worst clean curve RMSE is 0.268 for inactive coupons and worst clean rate RMSE is 0.148 for lab 1.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the robust loss immediately\",\n      \"rejected_reason\": \"Retuning cannot resolve a discrepancy that persists when the forward model uses the public reference parameters.\"\n    }\n  ],\n  \"rationale\": \"Use reference parameters only for diagnosis, never fitting. Test whether clean residuals lie in the terminal-flow basis, which would implicate alignment, or have additional time structure, which would implicate the constitutive design. Inspect the largest measured training residuals to determine whether they are isolated points or whole-curve disturbances.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "09b1fb08223bef02dc775cf1b3e2c880f1306099e3f9aed0afce5eccd7635f2b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29479.09,
+      "usage_known": true,
+      "prompt_tokens": 26685,
+      "cached_tokens": 6784,
+      "completion_tokens": 1067
+    }
+  ]
+}

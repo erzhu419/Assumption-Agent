@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5bae90d584e4400a027c2f466a2cc45",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:52:03.009505+00:00",
+  "ended_at_utc": "2026-11-27T06:52:30.383273+00:00",
+  "request_sha256": "c468ea024a7c537a6867c00a4ccf12544e36606f43c1e97d7f112a81951fed09",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 64014,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33079,
+    "cached_tokens": 11136,
+    "completion_tokens": 1064
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c02_batch_01_solver.py')\\ns = p.read_text()\\nold = '''    tau, coef = _fit(past[:n], hold[:n], features[:n], dt, times, activity[:n],\\n                     train['strain_curves_obs'] - strain0[:n, None], train['instant_rate_obs'], plateau)'''\\nnew = '''    # Imputation supplies prediction features, not measured training covariates.\\n    # Prefer complete coupons for identifying the shared relaxation spectrum.\\n    fit_rows = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    if fit_rows.sum() <= n / 2 or (np.any(activity[:n] > 0) and not np.any(activity[:n][fit_rows] > 0)):\\n        fit_rows = slice(None)\\n    tau, coef = _fit(past[:n][fit_rows], hold[:n][fit_rows], features[:n][fit_rows],\\n                     dt, times, activity[:n][fit_rows],\\n                     (train['strain_curves_obs'] - strain0[:n, None])[fit_rows],\\n                     train['instant_rate_obs'][fit_rows], plateau)'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_alpha_m97_c02_batch_01.pkl','rb'))[0]; d,g=i['dataset'],i['gt']; o=m.solve_alpha_m97_c02_batch_01(d)\\nrel=np.max(np.abs(o['estimated_taus']/g['taus']-1)); print('Solver tau maximum relative error:',rel); assert rel < 0.02\\nfor k,j in [('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(k,'maximum absolute error',np.max(np.abs(o[k]-g[j])))\\nmiss=~np.isfinite(d['test']['coupon_features_raw']).all(axis=1); rmse=lambda e:np.sqrt(np.mean(e**2))\\nfor key,ref,limit in [('predicted_strain','te_clean',0.041),('initial_rate_pred','te_true_rate0',0.0315)]:\\n e=o[key]-g[ref]; print(key,'RMSE all/complete/imputed',rmse(e),rmse(e[~miss]),rmse(e[miss])); assert rmse(e)<limit\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust fit on all coupons → H2 fit on complete coupons while retaining cell-balanced prediction imputation; worst held-lab curve/rate MedAE improved from 0.012691/0.014551 to 0.012514/0.012922.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all training coupons in the fit\",\n      \"rejected_reason\": \"Complete-coupon fitting improved all three worst held-lab metrics and reduced public maximum relative tau error from 2.46% to 1.45%; public strain and rate RMSE changed by less than 0.0001.\"\n    }\n  ],\n  \"rationale\": \"Promote the fit that better identifies the relaxation spectrum without materially changing prediction error. Verify that the edited solver selects the tested fit and still passes the independent recurrence, onset-rate handoff, and public schema checks; a failure would block promotion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "610ab7263254dd864810f0ebd7f699dade069a1c484ab89b56eeec5db09e0fd3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29729.68,
+      "usage_known": true,
+      "prompt_tokens": 33079,
+      "cached_tokens": 11136,
+      "completion_tokens": 1064
+    }
+  ]
+}

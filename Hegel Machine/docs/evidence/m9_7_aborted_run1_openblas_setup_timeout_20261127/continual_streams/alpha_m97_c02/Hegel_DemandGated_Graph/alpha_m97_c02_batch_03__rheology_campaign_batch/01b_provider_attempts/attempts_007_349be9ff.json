@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "349be9ff107d4d4f9964c078d38dc7cb",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:56:56.244531+00:00",
+  "ended_at_utc": "2026-11-27T06:57:23.474111+00:00",
+  "request_sha256": "a25e42b0d290bb7bb95eed0c2e00af9758c14c7f3c5bb1278cf1b19d05b9c86b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 39461,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24873,
+    "cached_tokens": 6784,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\np = pickle.load(open('public_alpha_m97_c02_batch_03.pkl','rb'))[0]\\nd, g = p['dataset'], p['gt']\\ntr = d['train']\\nn = len(tr['lab_id'])\\npast, hold, f, e0 = m._prepare(d)\\nt = d['eval_times']\\nprint('evaluation grid', t)\\nw = np.r_[g['theta'], g['vp_theta']]\\nbasis, rate = m._basis(g['taus'], past, hold, f, d['past_dt'], t)\\nce = e0[:n,None] + basis[:n] @ w - tr['strain_curves_obs']\\nre = rate[:n] @ w - tr['instant_rate_obs']\\nte = e0[n:,None] + basis[n:] @ w - g['te_clean']\\nrt = rate[n:] @ w - g['te_true_rate0']\\nfor label, v in [('train_curve',ce),('train_rate',re),('test_curve',te),('test_rate',rt)]:\\n print(label, np.quantile(np.abs(v), [.25,.5,.8,.9,.95,.98,.99,1]))\\nprint('train curve residual MAD by time', np.median(np.abs(ce-np.median(ce,axis=0)),axis=0))\\nprint('test residual unmodeled by drift shape', np.max(np.abs(te - rt[:,None]*(t/(1+.85*t)))))\\nprint('test stress max errors', np.max(np.abs(past[n:]-g['te_hist_true'])), np.max(np.abs(hold[n:]-g['te_hold_true'])))\\nfor label, x in [('train',ce),('test',te)]:\\n tab=d[label]\\n miss=np.isnan(tab['coupon_features_raw']).any(axis=1)\\n print(label, 'complete/missing RMSE', [np.sqrt(np.mean(x[mask]**2)) for mask in (~miss,miss)])\\n for i in np.argsort(np.max(np.abs(x),axis=1))[-5:]:\\n  print(i,tab['lab_id'][i],tab['stratum'][i],int(miss[i]),np.round(x[i],5))\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor e in h:\\n labs,x,y=(np.asarray(e[k]) for k in ('lab_id','cmd_stress','true_stress'))\\n print(e['episode_short_name'], [(c,int(np.sum(labs==c)),np.round(np.polyfit(x[labs==c],y[labs==c],1),5).tolist() if np.unique(x[labs==c]).size>=2 else None) for c in range(4)])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection' | head -22\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unweighted jammed-slip fit -> H2 separate sparse response contamination from preprocessing error; worst leave-one-lab-out lab-by-stratum strain/rate RMSE is 6.767/0.204.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch to a robust loss before examining the residuals\",\n      \"rejected_reason\": \"A robust loss can suppress training spikes but cannot correct a systematic mismatch in the clean prediction curves.\"\n    }\n  ],\n  \"rationale\": \"Rerun the diagnostic after fixing its syntax. Residuals proportional to the drift shape would point to coupon preprocessing; isolated deviations in measured training curves would motivate robust fitting. The archive summary will identify which prefix sweeps can supply the missing-channel calibration fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "9df71838dc1adeeb62ceffb575be6223fe022e077cefdcc139c5ae2704001ce7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29658.38,
+      "usage_known": true,
+      "prompt_tokens": 24873,
+      "cached_tokens": 6784,
+      "completion_tokens": 1021
+    }
+  ]
+}

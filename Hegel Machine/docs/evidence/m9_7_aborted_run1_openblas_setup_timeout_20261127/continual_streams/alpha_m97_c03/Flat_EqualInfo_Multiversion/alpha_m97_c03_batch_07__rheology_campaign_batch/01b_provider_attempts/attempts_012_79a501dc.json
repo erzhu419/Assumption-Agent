@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79a501dc83c543a797394848171d3460",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:28:49.310631+00:00",
+  "ended_at_utc": "2026-11-27T07:29:19.325909+00:00",
+  "request_sha256": "8c7808af5c9be7807a1dcf456bc58f435bc8fae21f69c6c534b388a8a2b21b84",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35961,
+    "cached_tokens": 6784,
+    "completion_tokens": 1149
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c03_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nhistory = json.loads(s._HISTORY.read_text())\\nrecord = pickle.load(open('public_alpha_m97_c03_batch_07.pkl', 'rb'))[0]\\nd, gt = record['dataset'], record['gt']\\ncal = d['calibration_load_cells']\\nref = np.c_[gt['stress_gains'], gt['stress_biases']]\\nfit = s._calibrate(cal)\\n# Measure the error that actually reaches the stress-memory model.\\nte = d['test']; labs = te['lab_id']; gain, bias = fit[labs].T\\nstress = te['past_stress_cmd'] * gain[:, None] + bias[:, None]\\nhold = te['stress_hold_cmd'] * gain + bias\\nfor c in range(4):\\n    rows = labs == c\\n    print('channel', c, 'max history/hold physical-stress error', np.max(abs(stress[rows]-gt['te_hist_true'][rows])), np.max(abs(hold[rows]-gt['te_hold_true'][rows])))\\n# Replay the nearest prior episode's real EMI rows against its prefix only.\\ni = next(i for i, h in enumerate(history) if h['episode_short_name'].endswith('batch_06'))\\nfor c in (1, 2):\\n    x, y = s._sweep(history[i], c)\\n    expected = ref[c]\\n    spike = np.abs(y - np.polyval(expected, x)) > 3\\n    assert spike.any() and (~spike).any()\\n    fit = s._historical_line(history[:i], c, x, y)\\n    error = np.max(abs(fit - expected))\\n    print('measured EMI replay channel', c, 'spikes', spike.sum(), 'max affine coefficient error', error)\\n    assert error < 2e-4\\n# Retain a single measured current anchor; it should select the current state\\n# rather than the older, incompatible calibration for channel zero.\\nfor anchor in range(len(cal['lab_id'])):\\n    lone = {k: np.asarray(v)[[anchor]] for k, v in cal.items()}\\n    c = int(lone['lab_id'][0])\\n    np.testing.assert_allclose(s._calibrate(lone)[c], ref[c], atol=2e-4, rtol=0)\\nprint('Single-anchor state selection passed.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 prefix-assisted load-cell calibration and phase-wide logarithmic creep -> H2 robust fitting on complete coupons; public imputed-slice RMSE is 0.1937 for strain and 0.1464 for initial rate, with drift-adjusted strain RMSE 0.00249.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear coupon and lab-confounding audit\",\n      \"rejected_reason\": \"Held-out lab results already show small signed residuals and no consistent gain from extra terms. The remaining untested calibration case is replay of actual archived EMI with only its available prefix.\"\n    }\n  ],\n  \"rationale\": \"Replay real archived EMI and reduce the public two-point sweep to each measured anchor in turn. A failure would identify a specific prefix-selection rule to fix; otherwise, the measured stress errors and prior held-out lab results support keeping the verified model and prescribed imputation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5a1263eb9b9b107afdc1803d5b55f19bc256743e4b7368e3dd90ec71f0495658",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32496.0,
+      "usage_known": true,
+      "prompt_tokens": 35961,
+      "cached_tokens": 6784,
+      "completion_tokens": 1149
+    }
+  ]
+}

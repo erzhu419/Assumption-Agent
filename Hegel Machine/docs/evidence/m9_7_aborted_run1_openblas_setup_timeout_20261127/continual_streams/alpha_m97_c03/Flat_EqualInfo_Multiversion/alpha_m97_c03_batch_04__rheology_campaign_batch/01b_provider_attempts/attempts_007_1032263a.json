@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1032263a4d1f4ecdb8943758b1c3a6d5",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:10:35.723106+00:00",
+  "ended_at_utc": "2026-11-27T07:11:07.945464+00:00",
+  "request_sha256": "534442fa8e3e98506dce387286447b934d76b68e65ac82fc5447247b4d1b9f22",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42419,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26967,
+    "cached_tokens": 6784,
+    "completion_tokens": 1280
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/holdout_task/alpha_m97_c03_batch_04_solver.py\\ncp \\\"$p\\\" /tmp/rheology04_ols.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_batch_04_solver.py')\\ns = p.read_text()\\na = s.index('    def profile(', s.index('def _fit('))\\nb = s.index('\\\\n\\\\ndef solve_', a)\\ns = s[:a] + '''    sqrt_weight = np.ones(target.shape)\\n\\n    def profile(logtau, return_weights=False):\\n        a = _design(logtau, inputs, dt, times, crit, crystallizes)[valid]\\n        aw = a * sqrt_weight[:, None]\\n        weights = np.linalg.lstsq(aw, target * sqrt_weight, rcond=1e-11)[0]\\n        return weights if return_weights else (a @ weights - target) * sqrt_weight\\n\\n    def optimize(start):\\n        return least_squares(profile, start, bounds=(np.log(lo), np.log(hi)),\\n                             max_nfev=100, ftol=1e-10, gtol=1e-9, xtol=1e-9)\\n\\n    starts = ((0.45, 2.5), (1.2, 6.0), (0.22, 1.3), (3.0, 0.65))\\n    fits = [optimize(np.log(np.clip(seed, lo * 1.01, hi / 1.01))) for seed in starts]\\n    logtau = min(fits, key=lambda fit: fit.cost).x\\n    # Isolated readout spikes affect individual cells, not entire specimens.\\n    # Estimate a separate residual scale for each curve horizon and the rate.\\n    for _ in range(12):\\n        resid = _design(logtau, inputs, dt, times, crit, crystallizes) @ profile(logtau, True) - y\\n        mad = np.nanmedian(np.abs(resid - np.nanmedian(resid, axis=0)), axis=0)\\n        scale = np.maximum(2.385 * 1.4826 * mad, 1e-6)\\n        sqrt_weight = (1 / np.hypot(1, resid / scale))[valid]\\n        logtau = optimize(logtau).x\\n    if not crystallizes:\\n        logtau = np.sort(logtau)\\n    return logtau, profile(logtau, return_weights=True)\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/rheology04_lolo.py')\\ns=p.read_text().replace(\\\"root / 'alpha_m97_c03_batch_04_solver.py'\\\", \\\"Path(__import__('sys').argv[1])\\\")\\ns=s.replace(\\\"round(np.sqrt(np.mean(re[use]**2)),6))\\\", \\\"round(np.sqrt(np.mean(re[use]**2)),6), 'curve_medianAE/p90AE', np.round(np.quantile(abs(ce[use]), [.5,.9]), 6), 'rate_medianAE/p90AE', np.round(np.quantile(abs(re[use]), [.5,.9]), 6))\\\")\\nPath('/tmp/rheology04_compare.py').write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\nfor f in /tmp/rheology04_ols.py \\\"$p\\\"; do echo \\\"=== $f\\\"; python3 -I /tmp/rheology04_compare.py \\\"$f\\\"; done\\ncd /holdout_task; python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: equal-weight Prony fit → H2: cellwise Cauchy-weighted fit with horizon-specific scales; baseline held-out lab × regime RMSE peaks at 2.2103 for curves and 0.1853 for initial rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop entire specimens with a large residual\",\n      \"rejected_reason\": \"Most extreme residuals are isolated curve measurements; specimen-level rejection would discard useful neighboring measurements.\"\n    }\n  ],\n  \"rationale\": \"The largest curve residual is 39.0, while most specimens show no residual above 0.5. Preserve the physical basis and estimate robust weights inside each training fold. Compare both candidates on the same held-out labs and report tail and median errors alongside raw RMSE, which can be dominated by a single bad reading.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "080e308fb5cdc2b54bf04fa9b7b1d6e01694bc2998a2ce30ee031919fba5d609",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34631.86,
+      "usage_known": true,
+      "prompt_tokens": 26967,
+      "cached_tokens": 6784,
+      "completion_tokens": 1280
+    }
+  ]
+}

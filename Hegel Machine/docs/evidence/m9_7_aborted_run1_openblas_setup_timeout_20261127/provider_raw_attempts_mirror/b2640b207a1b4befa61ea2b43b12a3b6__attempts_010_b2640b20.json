@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2640b207a1b4befa61ea2b43b12a3b6",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_04__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:14:57.725402+00:00",
+  "ended_at_utc": "2026-11-27T07:15:33.614116+00:00",
+  "request_sha256": "7d8981f39f4af5c48b1302e7f05aba9931b1956162503980445d4348da39c65e",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39373,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24790,
+    "cached_tokens": 11136,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_m97_c03_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(m._CALIBRATION_ARCHIVE) as f:\\n    history = json.load(f)\\nwith open('public_beta_m97_c03_batch_04.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\ndef sweeps(node):\\n    if isinstance(node, dict):\\n        if {'bank_id', 'ref_signal', 'raw_readout'} <= node.keys():\\n            yield node\\n        else:\\n            for value in node.values():\\n                yield from sweeps(value)\\n    elif isinstance(node, list):\\n        for value in node:\\n            yield from sweeps(value)\\nworst = 0.0\\ncount = 0\\npath = m._CALIBRATION_ARCHIVE\\nm._CALIBRATION_ARCHIVE = '/tmp/hegel_unused_calibration_path.json'\\nfor sweep in sweeps(history):\\n    bank, x, raw = (np.asarray(sweep[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n    selected = []\\n    for b in range(4):\\n        ii = np.flatnonzero(bank == b)\\n        ii = ii[m._clean_sweep(x[ii], raw[ii])]\\n        if len(ii) < 5:\\n            break\\n        selected.append(ii[np.argsort(x[ii])])\\n    if len(selected) != 4:\\n        continue\\n    for n in (2, 3, 4):\\n        train = np.concatenate([ii[np.linspace(0, len(ii)-1, n, dtype=int)] for ii in selected])\\n        test = np.setdiff1d(np.concatenate(selected), train)\\n        episode = dict(study, sensor_calibration_sweeps=dict(bank_id=bank[train], ref_signal=x[train], raw_readout=raw[train]), row_bank_id=bank[test], y_obs_raw=raw[test])\\n        error = float(np.max(np.abs(m._calibrate(episode)-x[test])))\\n        print(f'{sweep.get(\\\"episode_short_name\\\", \\\"prefix\\\")}: {n} in-batch points per bank, held-out max calibration error={error:.3e}')\\n        worst = max(worst, error)\\n        count += 1\\nprint(f'prefix checks={count}, worst held-out calibration error={worst:.3e}')\\nassert count > 0 and worst < 1e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin and periodic transport -> H2 sealed Neumann transport with wall sorption; public forward-matrix max error is 1.53e-16 and worst leave-one-bank-out weight sensitivity is 4.71e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the forward-operator and leave-one-bank-out checks\",\n      \"rejected_reason\": \"Those checks already passed on the saved artifact; held-out calibration rows test sparse local fits independently of the inverse solver.\"\n    }\n  ],\n  \"rationale\": \"Fit from two, three, and four clean rows per bank and test on held-out prefix measurements with archive fallback unavailable. This can expose incorrect fallback or poor affine recovery on real sparse sweeps; either failure would warrant revisiting calibration rather than changing the verified transport model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "2d78510adb6dae7021d727d4c270a8c13fc81fe8e2904409eaa612eca4bf2156",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38383.24,
+      "usage_known": true,
+      "prompt_tokens": 24790,
+      "cached_tokens": 11136,
+      "completion_tokens": 1323
+    }
+  ]
+}

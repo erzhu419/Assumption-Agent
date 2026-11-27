@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a4adf4ce3884a4fae3ceca066353df0",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:25:12.325097+00:00",
+  "ended_at_utc": "2026-11-27T07:25:40.072046+00:00",
+  "request_sha256": "8bcbb10150273f41b8ad3ce853d4c119e5062c40876241e85ef0313095463613",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48751,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28585,
+    "cached_tokens": 6784,
+    "completion_tokens": 946
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c03_batch_07_solver as s\\np=pickle.load(open('public_alpha_m97_c03_batch_07.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; xt,xe=s._align(tr,te)\\nb=np.log(g['taus']); w=np.r_[g['theta'],g['vp_theta']]; print('public reference parameters',np.exp(b),w)\\nprint('stress calibration max errors',np.max(np.abs(s._calibrate(d['calibration_load_cells'])-np.c_[g['stress_gains'],g['stress_biases']]),axis=0))\\nfor part,x in [(tr,xt),(te,xe)]:\\n inp=s._inputs(part,x,np.c_[g['stress_gains'],g['stress_biases']],dt,d['crit_stress'],True)\\n a=s._design(b,inp,dt,t,True)\\n raw=part['coupon_features_raw']; missing=np.any(~np.isfinite(raw),axis=1)\\n if part is te:\\n  print('test stress discrepancy',np.max(np.abs(inp[0]-g['te_hist_true'])),np.max(np.abs(inp[1]-g['te_hold_true'])))\\n  y=np.c_[g['te_clean']-te['strain_0'][:,None],g['te_true_rate0']]\\n else: y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]\\n for active in [False,True]:\\n  for miss in [False,True]:\\n   m=((inp[-1]>0)==active)&(missing==miss)\\n   if not np.any(m):continue\\n   e=(a@w-y)[m]\\n   print('test' if part is te else 'train',active,miss,np.sum(m),'med|e|',np.round(np.median(abs(e),axis=0),5),'p90|e|',np.round(np.quantile(abs(e),.9,axis=0),5))\\n   if part is te:\\n    logflow=np.r_[np.log1p(t),1.]; linflow=np.r_[t,1.]\\n    e2=e+(inp[2][m]@w[2:7])[:,None]*(logflow-linflow)*(not active)\\n    print('all-log median/rmse',np.round(np.median(abs(e2),axis=0),5),np.sqrt(np.mean(e2**2)))\\nPY\\npython3 - <<'PY'\\nimport json\\nx=json.load(open('public_asset_index.json')); print(str(x)[:3500])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated inputs plus robust fitting -> H2 test the flow basis independently of estimation; robust worst-public-lab RMSE was 0.2282 for strain and 0.1869 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote robust fitting as the sole fix\",\"rejected_reason\":\"It barely improved worst-lab strain RMSE and worsened worst-lab initial-rate RMSE.\"}],\"rationale\":\"Evaluate the forward model at the public reference parameters without fitting to reference labels. Slicing complete and imputed coupons by activation state will distinguish a flow-basis error from alignment error or observation contamination and determine what to change next.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e1df43e3e1aac8a688af1bf03fb8377a9ed1aef755dcc2f9c2bf10304787ffa2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27707.51,
+      "usage_known": true,
+      "prompt_tokens": 28585,
+      "cached_tokens": 6784,
+      "completion_tokens": 946
+    }
+  ]
+}

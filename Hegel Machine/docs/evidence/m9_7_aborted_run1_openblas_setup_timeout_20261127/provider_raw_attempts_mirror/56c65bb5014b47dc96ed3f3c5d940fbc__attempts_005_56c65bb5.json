@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56c65bb5014b47dc96ed3f3c5d940fbc",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:01:10.496625+00:00",
+  "ended_at_utc": "2026-11-27T07:01:45.043707+00:00",
+  "request_sha256": "4c290c4f97b5370f911bf5022e84b2e0adaf8d84c88f30c4ab87d3ccdc64ddc7",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42068,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26809,
+    "cached_tokens": 6784,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\np = Path('/holdout_task')\\nm = load('candidate', p / 'beta_m97_c03_batch_03_solver.py')\\na = load('archive', '/tmp/hegel_continual_archive/beta_m97_c03_batch_02_solver.py')\\nwith (p / 'public_beta_m97_c03_batch_03.pkl').open('rb') as f:\\n    case = pickle.load(f)[0]\\ns = case['study']; gt = case['gt']\\nc = s['sensor_calibration_sweeps']; banks = np.asarray(c['bank_id'])\\nworst = {}\\nfor name in ('missing', 'single_row', 'emi_full', 'emi_sparse'):\\n    errors = []\\n    for b in range(4):\\n        idx = np.flatnonzero(banks == b)\\n        for i in idx:\\n            keep = np.ones(banks.size, dtype=bool)\\n            y = np.asarray(c['raw_readout']).copy()\\n            if name == 'missing':\\n                keep[idx] = False\\n            elif name == 'single_row':\\n                keep[idx] = False; keep[i] = True\\n            else:\\n                y[i] += 9.0\\n                if name == 'emi_sparse':\\n                    keep[idx] = False\\n                    keep[i] = True\\n                    keep[idx[idx != i][:3]] = True\\n            sweep = {k: np.asarray(v)[keep] for k, v in c.items()}\\n            sweep['raw_readout'] = y[keep]\\n            out = m.solve_beta_m97_c03_batch_03(dict(s, sensor_calibration_sweeps=sweep))\\n            c_out = out['kkt_certificate']; w = out['weights']\\n            g = gt['S_tilde'].T @ (gt['S_tilde'] @ w - gt['r_y']) + s['source_ridge'] * w\\n            stat = np.max(np.abs(g - c_out['nu_sum'] - c_out['lam_lower'] + c_out['lam_upper']))\\n            errors.append((np.max(np.abs(w - gt['w_opt'])), stat, b, int(i)))\\n    worst[name] = max(errors)\\nprint('Calibration slices: (max weight error, KKT stationarity, bank, sweep row)', worst)\\nS, F = m._forward(dict(s, recirculation_loop_mode=0.5)); A, B = a._forward(s)\\nopen_error = max(np.max(abs(S-A)), np.max(abs(F-B)))\\nconstant_error = max(np.max(np.abs(m._periodic_axis(s['kappa_'+k], s['vel_'+k], s['L'+k]/(s['n'+k]-1)) @ np.ones(s['n'+k]))) for k in ('x', 'y'))\\nprint('Open-Robin regression', open_error, 'periodic constant-nullspace residual', constant_error)\\nrng = np.random.default_rng(84)\\nmax_feas = max_gap = 0.0\\nfor t in range(200):\\n    X = rng.normal(size=(16, 12)); y = 9*rng.normal(size=16)\\n    u = (0.25, 0.8, 1.5)[t % 3]\\n    budget = (0.0, u, 2.6*u, 11*u, 12*u)[t % 5]\\n    w, nu = m._box_simplex(X, y, 0.04, u, budget)\\n    g = X.T @ (X @ w-y)+0.04*w\\n    gap = g@w - nu*budget - u*np.minimum(0., g-nu).sum()\\n    max_feas = max(max_feas, abs(w.sum()-budget), -w.min(), w.max()-u)\\n    max_gap = max(max_gap, abs(gap))\\nprint('QP worst feasibility',max_feas,'worst supporting-plane gap',max_gap)\\nassert max_feas < 1e-9 and max_gap < 1e-8\\nassert open_error < 1e-12 and constant_error < 1e-12\\nassert max(v[0] for v in worst.values()) < 1e-5, worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Public operator match → calibration fallback and active-set stress tests; public max errors are 1.94e-16 for S_tilde, 5.08e-7 for weights, and 2.59e-8 for the terminal field.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validator passes\",\n      \"rejected_reason\": \"The public case does not exercise missing or contaminated sweeps, the open-Robin branch, or vertex budgets.\"\n    }\n  ],\n  \"rationale\": \"Stress the documented fallback branches by perturbing the public sweeps one bank at a time. An error confined to those slices calls for a calibration fix; a transport identity or supporting-plane gap failure calls for a fix in the corresponding component.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "95b8015dd18d4dba888092ae43b367de379e635d5c381c4f74a2c5b0fcc081f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36906.92,
+      "usage_known": true,
+      "prompt_tokens": 26809,
+      "cached_tokens": 6784,
+      "completion_tokens": 1366
+    }
+  ]
+}

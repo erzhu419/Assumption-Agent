@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0391fc090ac64d4787af503c0d77f115",
+  "call_seq": 3,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:14:33.463312+00:00",
+  "ended_at_utc": "2026-11-27T07:14:52.067339+00:00",
+  "request_sha256": "bb2c7dc6121597d8d30a58a68efa9ebae972a690a9e319cfc1e8bd99ddbb95e2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 23940,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20877,
+    "cached_tokens": 6784,
+    "completion_tokens": 645
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,100p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_05_solver.py; python3 - <<'PY'\\nimport json,numpy as np\\np='/tmp/hegel_continual_archive/archive_calibration_history.json'\\nfor r in json.load(open(p)):\\n a,x,y=map(np.asarray,(r['lab_id'],r['cmd_stress'],r['true_stress'])); print(r['episode_short_name'])\\n for c in range(4):\\n  v=a==c; X=x[v]; Y=y[v]; print(c,len(X),np.round(np.c_[X,Y],4).tolist() if len(X)<4 else np.round(np.polyfit(X,Y,1),6), 'max_affine_resid',round(max(abs(np.polyval(np.polyfit(X,Y,1),X)-Y)),5) if len(X)>1 else None)\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection Prony' | head -10\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (in-batch affine load cells) -> H2 (archive-assisted EMI rejection followed by calibrated jammed-slip fitting); no held-out prediction metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Every current calibration row measures the channel's affine stress law without a transient disturbance.\",\n    \"empirical_witness\": \"In channel 0, command -0.9 reports -1.056, but the line through the other two rows predicts 3.769, a difference of 4.825.\",\n    \"causal_blanket_diagnosis\": \"An EMI offset can corrupt the calibration response without changing the stress physically applied to the coupon.\",\n    \"sublated_pivot\": \"Keep direct fits on clean channels; use prefix calibration to identify EMI on sparse channels and retain credible current evidence.\",\n    \"risk_kind\": \"calibration_confounding\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Pool all calibration rows across episodes\",\n      \"rejected_reason\": \"Pooling can wash out real calibration changes; inspect episode-level fits to see which historical measurements transfer.\"\n    }\n  ],\n  \"rationale\": \"The rejected public calibration makes transfer the immediate bottleneck. Inspect compact episode-level fits and the prior alignment code; if historical coefficients move across episodes, use recent corroborating sweeps and surviving current points rather than a global average.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "288b6fd95acf1ba0fc2f156b34b69a362ed51b52238fa2658415bd26b78e4c5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21073.39,
+      "usage_known": true,
+      "prompt_tokens": 20877,
+      "cached_tokens": 6784,
+      "completion_tokens": 645
+    }
+  ]
+}

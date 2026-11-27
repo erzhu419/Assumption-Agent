@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7dd91431b5d14362ae62d5362828e5e3",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_04__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:11:20.226946+00:00",
+  "ended_at_utc": "2026-11-27T07:11:50.376479+00:00",
+  "request_sha256": "12e58cb00bcc8f1daca1d59761e9a8ee700659d7ee4e3ab0d1ac7afe3efb09db",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 51654,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28809,
+    "cached_tokens": 6784,
+    "completion_tokens": 1164
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'beta_m97_c01_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nhistory = json.loads(m._CALIBRATION_ARCHIVE.read_text())\\ncase = pickle.load((root/'public_beta_m97_c01_batch_04.pkl').open('rb'))[0]\\ns, gt = case['study'], case['gt']\\ndef rows(record, bank):\\n    mask = np.asarray(record['bank_id']) == bank\\n    return np.asarray(record['ref_signal'])[mask], np.asarray(record['raw_readout'])[mask]\\nfor i in range(1, len(history)):\\n    errors = {'latest': [], 'pooled': []}\\n    for bank in range(4):\\n        x, y = rows(history[i], bank)\\n        latest = m._historical_line(history[:i], bank)\\n        xx, yy = [np.concatenate(items) for items in zip(*(rows(r, bank) for r in history[:i]))]\\n        pooled = m._fit_line(xx, yy)\\n        for name, (gain, offset) in [('latest', latest), ('pooled', pooled)]:\\n            errors[name].append(float(np.max(np.abs(y-gain*x-offset))))\\n    print('chronological holdout', history[i]['episode_short_name'], errors)\\nfor count in (3, 4, 5):\\n    misses = []\\n    for bank in range(4):\\n        x, y = rows(history[-1], bank)\\n        for start in range(len(x)-count+1):\\n            for j in range(count):\\n                for step in (-3.05, 3.05):\\n                    dirty = y[start:start+count].copy(); dirty[j] += step\\n                    clean = m._clean_sweep_rows(x[start:start+count], dirty)\\n                    if clean[j]: misses.append((bank, start, j, step))\\n    print('EMI audit on historical sweep coordinates', count, 'misses', len(misses), 'first', misses[:2])\\nfor axis in ('x','y'):\\n    op = m._axis_operator(s['kappa_'+axis], s['vel_'+axis], s['L'+axis], 0.0)\\n    defect = float(np.max(np.abs(op @ np.ones(op.shape[0]))))\\n    print('sealed constant-mode transport defect', axis, defect)\\n    assert defect < 1e-10\\nout = m.solve_beta_m97_c01_batch_04(s)\\nprint('public maximum weight and field errors:', np.max(np.abs(out['weights']-gt['w_opt'])), np.max(np.abs(out['terminal_field']-gt['terminal_field_A'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived Robin transport -> H2: sealed Neumann transport with calibrated wall sorption; the public maximum weight error is 6.32e-7 and the stressed duality gap is 3.33e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test generic rational, HJB, relay, or classification models\",\n      \"rejected_reason\": \"The specified model is a deterministic boundary-value problem with continuous measurements and a constrained quadratic inverse problem. It has no relay states or class labels; both recirculation branches were already tested.\"\n    }\n  ],\n  \"rationale\": \"Check the sealed stencil's constant-mode invariant and use chronological held-out calibration sweeps to test whether pooling masks regime changes. Inject just-over-threshold spikes at real sweep coordinates to find any calibration failure that the earlier +5 stress test missed. A stencil defect would change the operator; a reproducible spike miss would motivate a focused calibration fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "fc0a32abe5c7177c4a8e77a68bacd59e4d09492a169ee3660d46f6e0ae83cf2d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32481.92,
+      "usage_known": true,
+      "prompt_tokens": 28809,
+      "cached_tokens": 6784,
+      "completion_tokens": 1164
+    }
+  ]
+}

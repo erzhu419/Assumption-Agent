@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d55f9056832b4dcd920e546de3bdc175",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:54:32.469918+00:00",
+  "ended_at_utc": "2026-11-27T06:54:56.972231+00:00",
+  "request_sha256": "7de8b711d6cb6fb31442c5af2a33bdea3967381deaa5535e88f5015ffca0da9c",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 66080,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32928,
+    "cached_tokens": 6784,
+    "completion_tokens": 905
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('solver',p/'beta_m97_c03_batch_01_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith (p/'public_beta_m97_c03_batch_01.pkl').open('rb') as f:\\n    s=pickle.load(f)[0]['study']\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    archive=json.load(f)[-1]\\nsw={k:np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\na={k:np.asarray(v) for k,v in archive.items()}\\nsolve=m.solve_beta_m97_c03_batch_01\\nworst_w=worst_f=worst_gap=0.\\nfor bank in range(4):\\n    ids=np.flatnonzero(sw['bank_id']==bank)\\n    ordered=ids[np.argsort(sw['ref_signal'][ids])]\\n    triplet=ordered[[0,len(ordered)//2,-1]]\\n    other=sw['bank_id']!=bank\\n    past=a['bank_id']==bank\\n    reference={**s,'sensor_calibration_sweeps':{k:np.concatenate((v[other],a[k][past])) for k,v in sw.items()}}\\n    want=solve(reference)\\n    keep=other.copy(); keep[triplet]=True\\n    for endpoint,amp in ((triplet[0],-3.01),(triplet[-1],3.01)):\\n        raw=sw['raw_readout'].copy(); raw[endpoint]+=amp\\n        test={**s,'sensor_calibration_sweeps':{**{k:v[keep] for k,v in sw.items()},'raw_readout':raw[keep]}}\\n        got=solve(test)\\n        ew=np.max(np.abs(got['weights']-want['weights'])); ef=np.max(np.abs(got['terminal_field']-want['terminal_field']))\\n        c=got['kkt_certificate']; gap=abs(c['primal_objective']-c['dual_lower_bound'])\\n        assert max(ew,ef,gap) < 1e-10,(bank,endpoint,ew,ef,gap)\\n        worst_w=max(worst_w,ew); worst_f=max(worst_f,ef); worst_gap=max(worst_gap,gap)\\nprint(f'8 sparse EMI cases: worst archive-oracle weight error={worst_w:.3e}, field error={worst_f:.3e}, reported KKT gap={worst_gap:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 repeated-median detection → H2 archive-assisted pair selection for three-row sweeps; the worst clean-triplet calibration deviation was 3.66e-6, and all tested EMI triplets matched archive fallback exactly.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t12\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The calibration-only probe passed. Compare the full solver outputs for sparse EMI cases with an oracle that supplies the affected bank’s archived sweep directly. A discrepancy would reveal a fallback error that propagates to weights, the terminal field, or the certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "09d758ad68e390adbcc163e6b073d24a64472a4ac97faf063e8e1bc7e99d157b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26851.82,
+      "usage_known": true,
+      "prompt_tokens": 32928,
+      "cached_tokens": 6784,
+      "completion_tokens": 905
+    }
+  ]
+}

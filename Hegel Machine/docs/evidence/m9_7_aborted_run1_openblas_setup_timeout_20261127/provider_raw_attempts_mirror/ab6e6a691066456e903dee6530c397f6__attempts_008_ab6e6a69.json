@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab6e6a691066456e903dee6530c397f6",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:15.378050+00:00",
+  "ended_at_utc": "2026-11-27T06:58:56.816576+00:00",
+  "request_sha256": "f3649ba83f8d7d40640369f7fef3f42ba10b3bd6d589afd60ffe479e41646600",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48615,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29227,
+    "cached_tokens": 6784,
+    "completion_tokens": 1666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_batch_03_solver.py')\\ns = p.read_text()\\na, b = s.index('def _fit('), s.index('def solve_alpha_m97_c03_batch_03(')\\ns = s[:a] + '''def _fit(past, hold, dt, times, coupon, y):\\n    args = past, hold, dt, times, coupon\\n    lo = np.r_[np.log([0.015, 0.04]), np.full(9, -np.inf)]\\n    hi = np.r_[np.log([20.0, 200.0]), np.full(9, np.inf)]\\n\\n    def taus(p):\\n        fast, ratio = np.exp(p[:2])\\n        return np.array([fast, fast * (1.0 + ratio)])\\n\\n    def residual(p):\\n        return ((_design(taus(p), *args) @ p[2:] - y) / 0.015).ravel()\\n\\n    best = None\\n    for fast, slow in ((0.25, 1.6), (0.55, 3.2), (1.2, 7.0)):\\n        design = _design(np.array([fast, slow]), *args).reshape(-1, 9)\\n        weights = np.linalg.lstsq(design, y.ravel(), rcond=None)[0]\\n        start = np.r_[np.log([fast, slow / fast - 1.0]), weights]\\n        # Soft L1 gets close before Cauchy downweights large isolated spikes.\\n        for loss, width in (('soft_l1', 3.0), ('cauchy', 1.0)):\\n            fit = least_squares(residual, start, loss=loss, f_scale=width,\\n                                bounds=(lo, hi), max_nfev=180, x_scale='jac')\\n            start = fit.x\\n        if best is None or fit.cost < best.cost:\\n            best = fit\\n    return taus(best.x), best.x[2:]\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c03_batch_03_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_03.pkl','rb'))[0]['dataset']; a,b=d['train'],d['test']; cal=d['calibration_load_cells']; ref=m._calibrate(cal)\\nfor lab in range(4):\\n rows=np.flatnonzero(cal['lab_id']==lab)\\n for mode in ('sparse','emi'):\\n  if mode=='sparse':\\n   sel=np.ones(len(cal['lab_id']),bool); sel[rows[1:]]=False\\n   stress={k:v[sel] for k,v in cal.items()}\\n  else:\\n   stress={k:v.copy() for k,v in cal.items()}; stress['true_stress'][rows[0]]+=8\\n  np.testing.assert_allclose(m._calibrate(stress),ref,atol=4e-4,rtol=0)\\nx=m._align(a,b)[:len(a['lab_id'])]; past,hold=m._physical(a,ref); dt,t=d['past_dt'],d['eval_times']; y=np.column_stack((a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs'])); e=np.empty_like(y)\\nfor c in range(4):\\n keep=a['lab_id']!=c; tau,w=m._fit(past[keep],hold[keep],dt,t,x[keep],y[keep]); sel=~keep\\n design=m._design(tau,past[sel],hold[sel],dt,t,x[sel]); e[sel]=design@w-y[sel]\\n z=np.zeros((int(sel.sum()),2))\\n for step,stress in zip(dt,past[sel].T):\\n  decay=np.exp(-step/tau); z=decay*z+(1-decay)*stress[:,None]\\n g,h=(hold[sel,None]-z).T; slip=np.sign(hold[sel])*np.sqrt(np.abs(hold[sel])); drift=w[2]+x[sel]@w[3:7]+w[7]*slip\\n rate=(w[0]*g+w[8]*(g-h))/tau[0]+w[1]*h/tau[1]+drift\\n np.testing.assert_allclose(design[:,-1]@w,rate,atol=1e-12,rtol=1e-12)\\n print('held-out lab',c,'tau',tau,'strain MAE median/p95',np.quantile(abs(e[sel,:-1]),[.5,.95]),'rate RMSE',np.sqrt(np.mean(e[sel,-1]**2)))\\nfor label,sel in [('missing',np.isnan(a['coupon_features_raw']).any(axis=1)),('complete',~np.isnan(a['coupon_features_raw']).any(axis=1))]:\\n if sel.any(): print(label,'median strain/rate absolute errors',np.median(abs(e[sel,:-1])),np.median(abs(e[sel,-1])))\\nprint('largest horizon median absolute error',np.max(np.median(abs(e[:,:-1]),axis=0)))\\nprint('sparse/EMI calibration and independent recurrence derivative passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 ordinary least squares → H2 Cauchy fitting of the same constitutive law: the probe lowered worst-lab strain p95 absolute error from 0.438 to 0.329 and onset-rate RMSE from 0.164 to 0.084.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add terms to the constitutive law\",\n      \"rejected_reason\": \"Robust fitting improves both held-out outputs and stabilizes the relaxation times without changing the specified law.\"\n    }\n  ],\n  \"rationale\": \"Install the robust fit and verify the exact candidate in an isolated Python process. Held-out labs and missing-feature slices check that the gains carry over; injected sparse sweeps and EMI exercise the supported calibration fallbacks, and an independent recurrence checks the onset derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e927b5ac8ef36b251189778460eec0cc2fef8037fad7c384d6169988943755f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43858.42,
+      "usage_known": true,
+      "prompt_tokens": 29227,
+      "cached_tokens": 6784,
+      "completion_tokens": 1666
+    }
+  ]
+}

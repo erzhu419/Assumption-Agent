@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ffed759ceda4e209167bfb147c01a94",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:02:07.672840+00:00",
+  "ended_at_utc": "2026-11-27T07:02:55.986831+00:00",
+  "request_sha256": "204b019e4cc3d77d1a743080a0a2f18175c358960bd4e8093ba26f400d9aaa33",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 46722,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27202,
+    "cached_tokens": 6784,
+    "completion_tokens": 2016
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c01_batch_03_solver.py')\\ns = p.read_text()\\na = s.index('    i, j = np.triu_indices', s.index('def _clean_sweep'))\\nb = s.index('\\\\n\\\\ndef _calibrated_target', a)\\ns = s[:a] + '''    # A clean sweep is affine to readout precision. Fit the largest affine\\n    # consensus before applying the EMI threshold: an OLS or median-slope\\n    # fit can tilt toward a spike when only a few points are available.\\n    i, j = np.triu_indices(x.size, 1)\\n    distinct = x[i] != x[j]\\n    if not np.any(distinct):\\n        return np.ones(x.size, dtype=bool)\\n    i, j = i[distinct], j[distinct]\\n    slopes = (y[j] - y[i]) / (x[j] - x[i])\\n    residuals = np.abs((y - y[i, None]) - slopes[:, None] * (x - x[i, None]))\\n    consensus = residuals <= 1e-5\\n    support = consensus.sum(axis=1)\\n    best = support == support.max()\\n    if support.max() == x.size:\\n        return np.ones(x.size, dtype=bool)\\n    if support.max() == 2 and np.any(residuals[best] > 3.0):\\n        # Two points determine a line but cannot identify the bad point.\\n        # Return fewer than four clean points so current-sweep fitting is skipped.\\n        return consensus[np.flatnonzero(best & np.any(residuals > 3.0, axis=1))[0]]\\n    # Within equally supported fits, prefer the pair with greater leverage.\\n    k = np.argmax(np.where(best, np.abs(x[j] - x[i]), -1.0))\\n    keep = consensus[k]\\n    gain, offset = _fit_line(x[keep], y[keep])\\n    return np.abs(y - (gain * x + offset)) <= 3.0\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, itertools, json, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'beta_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns = pickle.load(open(p+'public_beta_m97_c01_batch_03.pkl','rb'))[0]['study']\\nq = {k:np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\nids, rows = q['bank_id'], np.asarray(s['row_bank_id'])\\nprior = json.loads(m._CALIBRATION_ARCHIVE.read_text())[-1]\\nworst = dict.fromkeys((0,1,2,3,4,5,12),0.)\\nfor bank in range(4):\\n    inds = np.flatnonzero(ids==bank)\\n    other = np.flatnonzero(ids!=bank)\\n    check = rows==bank\\n    xp,yp = m._bank_sweep(prior,bank)\\n    ag,ao = m._fit_line(xp,yp)\\n    archived = (s['y_obs_raw'][check]-ao)/ag\\n    for size in worst:\\n        for take in itertools.combinations(inds,size):\\n            chosen = np.r_[other,np.asarray(take,dtype=int)]\\n            sub = {k:v[chosen].copy() for k,v in q.items()}\\n            target = dict(s,sensor_calibration_sweeps=sub)\\n            if size < 2:\\n                worst[size] = max(worst[size],float(np.max(abs(m._calibrated_target(target)[check]-archived))))\\n                continue\\n            x,y = m._bank_sweep(sub,bank)\\n            gain,offset = m._fit_line(x,y)\\n            expected = (s['y_obs_raw'][check]-offset)/gain\\n            worst[size] = max(worst[size],float(np.max(abs(m._calibrated_target(target)[check]-expected))))\\n            if size==2:\\n                continue\\n            for j in range(size):\\n                if size<5:\\n                    expected = archived\\n                else:\\n                    g,o = m._fit_line(np.delete(x,j),np.delete(y,j))\\n                    expected = (s['y_obs_raw'][check]-o)/g\\n                pos = len(other)+j\\n                for spike in (-9.,-3.01,3.01,9.):\\n                    sub['raw_readout'][pos] = y[j]+spike\\n                    actual = m._calibrated_target(target)[check]\\n                    worst[size] = max(worst[size],float(np.max(abs(actual-expected))))\\n                sub['raw_readout'][pos] = y[j]\\nprint('Max absolute calibration error by available sweep size:',worst)\\nassert max(worst.values()) < 1e-10\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 median-slope EMI detection → H2 affine consensus with archive fallback for ambiguous sparse sweeps; H1’s worst observed calibration error was 3.20e4.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Median pair slope plus median intercept reliably separates EMI spikes from clean affine readings in sparse sweeps.\",\"empirical_witness\":\"358 sparse-sweep perturbations disagreed with the archive-fallback prediction; maximum absolute calibration error was 32007.88.\",\"causal_blanket_diagnosis\":\"With only three or four sweep points, pairs containing the spike can dominate or tie the slope statistic and tilt the fitted calibration line.\",\"sublated_pivot\":\"Select the largest affine consensus before classifying >3.0 readout spikes; use prior calibration when the contaminated sweep cannot establish enough clean support.\",\"risk_kind\":\"sparse_calibration_emi\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use archived calibration for every sparse sweep.\",\"rejected_reason\":\"That would override valid in-batch calibration for clean sweeps with two or three distinct references.\"}],\"rationale\":\"Change only the failed calibration branch. Re-run the public validator and check clean and spiked subsets of the measured reference levels, including four clean points plus a spike, where the solver must still fit in-batch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b41fee61ce0b7fd3aa5fc54c6f9f638efabaa0554e6968245144c59231407e5c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 53188.43,
+      "usage_known": true,
+      "prompt_tokens": 27202,
+      "cached_tokens": 6784,
+      "completion_tokens": 2016
+    }
+  ]
+}

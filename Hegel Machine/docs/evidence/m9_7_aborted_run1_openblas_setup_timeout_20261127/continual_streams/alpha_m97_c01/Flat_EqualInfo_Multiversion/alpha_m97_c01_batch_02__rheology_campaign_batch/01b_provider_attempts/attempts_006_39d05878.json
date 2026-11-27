@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "39d05878c8754efabfc1117410254092",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:50.939002+00:00",
+  "ended_at_utc": "2026-11-27T06:58:15.822570+00:00",
+  "request_sha256": "452d9deec36323f411c32c1a7473d28bc4c85d082da3ce28bfb244fc793271ed",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44050,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27703,
+    "cached_tokens": 0,
+    "completion_tokens": 795
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha02_missing_cv.py <<'PY'\\nexec(open('/tmp/alpha02_cv.py').read().split(\\\"for loss in ('cauchy'\\\")[0])\\nfor complete_fit in (False, True):\\n    e=np.empty_like(y); f=np.empty_like(r); params=[]\\n    for j in range(4):\\n        test=lab==j\\n        fit=~test & (~missing if complete_fit else True)\\n        p,w=m._fit(tuple(a[fit] for a in state),dt,time,y[fit],r[fit])\\n        A,B=m._design(p,tuple(a[test] for a in state),dt,time)\\n        e[test]=A@w-y[test]; f[test]=B@w-r[test]\\n        params.append(np.r_[np.exp(p),w])\\n    print('complete_fit',complete_fit,'fold parameters',np.round(params,5))\\n    for name,mask in [('complete',~missing),('missing',missing)]:\\n        slices=[mask & (lab==j) for j in range(4)]\\n        print(name,'pooled curve/rate median and p90',q(e[mask])[[0,2]],q(f[mask])[[0,2]],'worst lab-horizon strain median',round(max(np.median(abs(e[s]),axis=0).max() for s in slices),5),'worst lab rate median',round(max(np.median(abs(f[s])) for s in slices),5))\\n    fit=~missing if complete_fit else np.ones(n,dtype=bool)\\n    p,w=m._fit(tuple(a[fit] for a in state),dt,time,y[fit],r[fit]); print('full parameters',np.round(np.r_[np.exp(p),w],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha02_missing_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated, aligned inputs → H2 robust two-branch linear flow; held-out curve median error is 0.23380 on missing-feature rows versus 0.01196 on complete rows, and the worst lab–horizon median across all rows is 0.02462.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the imputation rule to reduce missing-row error\",\n      \"rejected_reason\": \"The contract fixes cell-balanced imputation; the comparison changes only which training outcomes inform the shared parameters.\"\n    }\n  ],\n  \"rationale\": \"Test whether fitting outcomes from rows with imputed covariates distorts the relaxation times and drift weights. Keep predictions and alignment identical across folds, and change the fitting sample only if it improves parameter stability or held-out errors without materially worsening the other slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9243d79d6e34ffc3773c02c6381a1b563be08d6d73b1c20ee78006043d544740",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24842.64,
+      "usage_known": true,
+      "prompt_tokens": 27703,
+      "cached_tokens": 0,
+      "completion_tokens": 795
+    }
+  ]
+}

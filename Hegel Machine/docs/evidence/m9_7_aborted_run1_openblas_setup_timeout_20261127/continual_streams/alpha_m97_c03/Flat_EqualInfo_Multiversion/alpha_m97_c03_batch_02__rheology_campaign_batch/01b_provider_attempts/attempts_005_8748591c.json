@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8748591c54094d15be42394eed7f969c",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:56:18.453282+00:00",
+  "ended_at_utc": "2026-11-27T06:56:45.397649+00:00",
+  "request_sha256": "3258db9705d8b146a07174ab9f1e1b57843a30f864469acae76eb1333a6de63b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44787,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27021,
+    "cached_tokens": 6784,
+    "completion_tokens": 1017
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nimport alpha_m97_c03_batch_02_solver as s\\np=pickle.load(open('public_alpha_m97_c03_batch_02.pkl','rb'))[0]; d=p['dataset']; g=p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; lines=s._calibrate(d['calibration_load_cells']); x=s._align(tr,te); n=len(tr['lab_id']); inp=s._inputs(tr,x[:n],lines); y=np.column_stack((tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']))\\na,da=s._design(np.log(g['taus']),inp,dt,t); pred=a@g['theta']; e=pred-y\\nprint('reference residual abs quantiles by time then rate:'); print(np.round(np.quantile(abs(e),[.25,.5,.75,.9,.95,.99,1],axis=0),5)); print('missing coupon vs complete:', [(i, np.sum(m), np.quantile(abs(e[m]),[.5,.9,.99])) for i,m in enumerate((np.isfinite(tr['coupon_features_raw']).all(1),np.isnan(tr['coupon_features_raw']).any(1)))])\\nprint('large residuals per row',np.unique(np.sum(abs(e)>.1,axis=1),return_counts=True)); out=s.solve_alpha_m97_c03_batch_02(d); print('estimated poles/weights:',out['estimated_taus'],out['hereditary_weights']); a=s._design(np.log(g['taus']),s._inputs(te,x[n:],lines),dt,t)[0]; et=a@g['theta']-np.column_stack((g['te_clean']-te['strain_0'][:,None],g['te_true_rate0'])); print('reference test residual max:',np.max(abs(et),axis=0)); print('reference test worst-lab RMSE, curves/rate:',np.max([[(np.mean(et[te['lab_id']==lab,:-1]**2))**.5,(np.mean(et[te['lab_id']==lab,-1]**2))**.5] for lab in range(4)],axis=0))\\nfor h in json.loads(s._HISTORY.read_text()):\\n print('history',h['episode_short_name'],[(k,np.shape(h[k]),np.asarray(h[k]).ravel()[:5].tolist()) for k in ('lab_id','cmd_stress','true_stress')]);\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS outlier regression' | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unweighted initialization followed by a local robust fit → robust initialization before pole refinement; baseline worst public clean-test RMSE is 0.2882 for strain and 0.1492 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add another flow term\",\n      \"rejected_reason\": \"The observations already show isolated strain discrepancies as large as 323; first determine whether the prescribed model closes on clean data.\"\n    }\n  ],\n  \"rationale\": \"Use the public reference parameters only in this diagnostic to separate observation contamination from an incorrect model or alignment. The archive entries contain raw sweeps, which the current fallback cannot read; inspect their layout before fixing that branch.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "73b35c3edf0e81cd7b03ce0a7f3864a170818f8566b8887ab6051d3a18c831b4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29261.01,
+      "usage_known": true,
+      "prompt_tokens": 27021,
+      "cached_tokens": 6784,
+      "completion_tokens": 1017
+    }
+  ]
+}

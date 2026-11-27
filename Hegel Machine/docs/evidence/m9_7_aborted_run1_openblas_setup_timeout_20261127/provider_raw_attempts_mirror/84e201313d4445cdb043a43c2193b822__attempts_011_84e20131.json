@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84e201313d4445cdb043a43c2193b822",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:09:51.497441+00:00",
+  "ended_at_utc": "2026-11-27T07:10:19.230157+00:00",
+  "request_sha256": "e6f8d1dadce713727ce9c097359785faf043e63587aeb45c3075d16a39e7d14e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 62204,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32876,
+    "cached_tokens": 6784,
+    "completion_tokens": 1084
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m97_b04_margin.py <<'PY'\\nexec(open('/tmp/m97_b04_cv.py').read().split('v, w =')[0])\\nimport json\\nfrom itertools import product\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)[-3:]\\ncalibrate = m._calibrate\\nbase_cal = calibrate(d['calibration_load_cells'])\\nbase = m.solve_alpha_m97_c02_batch_04(d)\\nbase_p = m._prepare(d)[0]\\nbase_act = m._activation(d, base_p, dt) > 0\\nchannels = np.flatnonzero(np.bincount(d['calibration_load_cells']['lab_id'], minlength=4) < 2)\\nchoices = []\\nfor channel in channels:\\n    fits = []\\n    for sweep in history:\\n        q = np.asarray(sweep['lab_id']) == channel\\n        fits.append(np.polyfit(np.asarray(sweep['cmd_stress'])[q], np.asarray(sweep['true_stress'])[q], 1))\\n    choices.append(fits)\\n    print('archive-dependent channel', channel, 'gain/bias range', np.ptp(fits, axis=0))\\nmax_delta = np.zeros(2)\\nflips = 0\\ntry:\\n    for pick in product(*choices):\\n        candidate_cal = base_cal.copy()\\n        candidate_cal[channels] = pick\\n        m._calibrate = lambda table: candidate_cal\\n        act = m._activation(d, m._prepare(d)[0], dt) > 0\\n        flips += np.count_nonzero(act != base_act)\\n        out = m.solve_alpha_m97_c02_batch_04(d)\\n        for i,key in enumerate(('predicted_strain', 'initial_rate_pred')):\\n            max_delta[i] = max(max_delta[i], np.max(np.abs(out[key]-base[key])))\\nfinally:\\n    m._calibrate = calibrate\\nprint('activation flips across measured archive combinations', flips, 'max absolute strain/rate change', max_delta)\\nfor lab in np.unique(tr['lab_id']):\\n    q = tr['lab_id']==lab; f = ~q\\n    lt,b = m._fit(p[f],h[f],x[f],dt,t,a[f],y[f],r[f]); c,g = m._design(lt,p[q],h[q],x[q],dt,t,a[q])\\n    resolved = ~np.isnan(tr['coupon_features_raw'][q]).any(axis=1)\\n    for state in (False,True):\\n        sub = resolved & ((a[q]>0)==state)\\n        if sub.any():\\n            print('held lab',lab,'active',state,'complete rows',sub.sum(),'signed median strain/rate residuals',np.round([np.median((c@b-y[q])[sub]),np.median((g@b-r[q])[sub])],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m97_b04_margin.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 pooled least squares → H2 robust fitting of the specified plateau; worst held-lab/damage median absolute errors are 0.0163 for strain and 0.0210 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the algebraic comparison or add a classification audit\",\n      \"rejected_reason\": \"The direct recurrence and relevant response alternatives were already checked; this continuous regression has no class labels or relay state.\"\n    }\n  ],\n  \"rationale\": \"Propagate the spread of actual prefix calibration sweeps through the full fit. A damage-gate flip or a prediction shift comparable to the observed errors would justify changing archive selection. Signed residuals on complete rows within held-lab damage strata can reveal a systematic lab offset that unsigned error summaries would hide.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "74a112a7e55d72a93c0932eb268bd0e1dc246a5ec1f425c8eeb6fdd232ded1a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30075.99,
+      "usage_known": true,
+      "prompt_tokens": 32876,
+      "cached_tokens": 6784,
+      "completion_tokens": 1084
+    }
+  ]
+}

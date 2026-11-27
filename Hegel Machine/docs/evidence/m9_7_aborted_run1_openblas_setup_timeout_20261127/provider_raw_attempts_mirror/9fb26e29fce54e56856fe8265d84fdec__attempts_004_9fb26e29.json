@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9fb26e29fce54e56856fe8265d84fdec",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:47:46.355950+00:00",
+  "ended_at_utc": "2026-11-27T06:48:34.507438+00:00",
+  "request_sha256": "2a4102be6fbddc8a7456697a775141c7af96e1cf2b9afe9516b5169afcb1b36f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 31967,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23245,
+    "cached_tokens": 6784,
+    "completion_tokens": 1972
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\np=alpha_m97_c02_batch_01_solver.py\\nawk '/^def _basis\\\\(/ {exit} {print}' /tmp/hegel_continual_archive/alpha_m97_c02_s00_solver.py > \\\"$p\\\"\\nsed -i '1c\\\\\\\"\\\"\\\"Calibrated two-branch Prony model with a crystallization plateau.\\\"\\\"\\\"' \\\"$p\\\"\\ncat >> \\\"$p\\\" <<'PY'\\ndef _basis(taus, past, hold, features, dt, times, activity, plateau=True):\\n    # A stress increment is attenuated by all steps after its own step.\\n    age = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\\n    z = past @ (np.exp(-age[:, None] / taus) * -np.expm1(-dt[:, None] / taus))\\n    gap = hold[:, None] - z\\n    rise = -np.expm1(-times[:, None] / taus)\\n    flow = np.where(activity[:, None] > 0, np.log1p(times), times) if plateau else np.broadcast_to(times, (len(hold), len(times)))\\n    cols = 9 if plateau else 7\\n    curves = np.empty((len(hold), len(times), cols))\\n    rates = np.empty((len(hold), cols))\\n    curves[:, :, :2] = gap[:, None, :] * rise\\n    rates[:, :2] = gap / taus\\n    curves[:, :, 2:7] = flow[:, :, None] * features[:, None, :]\\n    rates[:, 2:7] = features\\n    if plateau:\\n        extra = activity * hold\\n        network = activity * z[:, 0]\\n        curves[:, :, 7] = extra[:, None] * rise[:, 0]\\n        curves[:, :, 8] = network[:, None] * flow\\n        rates[:, 7] = extra / taus[0]\\n        rates[:, 8] = network\\n    return curves, rates\\n\\n\\ndef _activity(dataset, past, dt):\\n    if dataset['shear_banding_index'] > 0.50:\\n        return np.zeros(len(past))\\n    excess = np.maximum(np.abs(past) - dataset['crit_stress'], 0.0)\\n    return np.tanh(excess**2 @ dt)\\n\\n\\ndef _fit(past, hold, features, dt, times, activity, observed, rates, plateau=True):\\n    plateau = plateau and np.any(activity > 0)\\n    ncols = 9 if plateau else 7\\n    nc = observed.size\\n    y = np.r_[observed.ravel(), rates]\\n    mask = np.isfinite(y)\\n    is_rate = (np.arange(y.size) >= nc)[mask]\\n    y = y[mask]\\n\\n    def project(log_tau, weight):\\n        curves, derivatives = _basis(np.exp(log_tau), past, hold, features, dt, times, activity, plateau)\\n        A = np.concatenate((curves.reshape(-1, ncols), derivatives))[mask]\\n        coef = np.linalg.lstsq(A * weight[:, None], y * weight, rcond=None)[0]\\n        return A @ coef - y, coef\\n\\n    lo, hi = np.log([0.025, 150.0])\\n    weight = np.where(is_rate, 1.0, 1.0 / np.sqrt(len(times)))\\n\\n    def optimize(start):\\n        return least_squares(lambda p: project(p, weight)[0] * weight, start,\\n                             bounds=(lo, hi), max_nfev=70)\\n\\n    starts = [(0.35, 2.0), (0.7, 4.0), (1.4, 8.0)]\\n    init = [optimize(np.log(s)) for s in starts]\\n    fit = min(init, key=lambda r: r.cost)\\n    for _ in range(12):\\n        residual, _ = project(fit.x, weight)\\n        wnew = np.ones_like(weight)\\n        for m in (is_rate, ~is_rate):\\n            if not np.any(m):\\n                continue\\n            r = residual[m]\\n            scale = max(1.4826 * np.median(np.abs(r - np.median(r))), 1e-5)\\n            wnew[m] = 1.0 / np.hypot(2.385 * scale, r)\\n        wnew /= np.max(wnew)\\n        weight = wnew\\n        fit = optimize(fit.x)\\n    _, coef = project(fit.x, weight)\\n    tau = np.exp(fit.x)\\n    if not plateau:\\n        order = np.argsort(tau)\\n        tau = tau[order]\\n        coef[:2] = coef[order]\\n        coef = np.r_[coef, 0.0, 0.0]\\n    return tau, coef\\n\\n\\ndef solve_alpha_m97_c02_batch_01(dataset: dict) -> dict:\\n    past, hold, features, strain0 = _prepare(dataset)\\n    train = dataset['train']\\n    n = len(train['lab_id'])\\n    dt, times = map(np.asarray, (dataset['past_dt'], dataset['eval_times']))\\n    activity = _activity(dataset, past, dt)\\n    tau, coef = _fit(past[:n], hold[:n], features[:n], dt, times, activity[:n],\\n                     train['strain_curves_obs'] - strain0[:n, None], train['instant_rate_obs'])\\n    curves, rates = _basis(tau, past[n:], hold[n:], features[n:], dt, times, activity[n:])\\n    return {'estimated_taus': tau, 'hereditary_weights': coef[:7],\\n            'regime_mode_weights': coef[7:], 'predicted_strain': strain0[n:, None] + curves @ coef,\\n            'initial_rate_pred': rates @ coef}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\npython3 - <<'PY'\\nimport json\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nprint('archive structure:', {k:list(v) if isinstance(v,dict) else len(v) if isinstance(v,list) else v for k,v in h.items()})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived linear flow -> H2 damage-gated logarithmic plateau with robust variable projection; maximum in-batch calibration residual is 0.000192, and held-out fit is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Ordinary least squares for all curve points\",\"rejected_reason\":\"Observed curve tails are several times larger than the central range; robust profiling limits their influence while retaining the prescribed physical basis.\"}],\"rationale\":\"Implement the specified basis and onset derivative with shared weights, preserving the archived panel convention. The public validator will catch import, shape, or nonfinite-output failures; the archive key inspection determines whether the sparse calibration path can read the supplied history.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "00b729b170825a0a799c74176bb32508b713507a4ac525b48a2b9dae3cb44fc1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50498.59,
+      "usage_known": true,
+      "prompt_tokens": 23245,
+      "cached_tokens": 6784,
+      "completion_tokens": 1972
+    }
+  ]
+}

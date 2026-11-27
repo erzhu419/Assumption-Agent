@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c5c29831dcad42bba68211abdaeaa5d2",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_02__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:13.965593+00:00",
+  "ended_at_utc": "2026-11-27T06:57:48.839081+00:00",
+  "request_sha256": "d0118f949dab0f58cfb9d202c28eb02f77f13c54339b0cb344f615acdca6ca44",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 30795,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23196,
+    "cached_tokens": 6784,
+    "completion_tokens": 1513
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/holdout_task/beta_m97_c02_batch_02_solver.py\\na=/tmp/hegel_continual_archive/beta_m97_c02_s00_solver.py\\ncat > \\\"$p\\\" <<'PY'\\n\\\"\\\"\\\"Open-Robin reactor source inversion from calibrated sensor banks.\\\"\\\"\\\"\\nimport json\\nfrom pathlib import Path\\n\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\n\\n\\n_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\ndef _bank_rows(sweeps, bank):\\n    mask = np.asarray(sweeps['bank_id']) == bank\\n    return (np.asarray(sweeps['ref_signal'], dtype=float)[mask],\\n            np.asarray(sweeps['raw_readout'], dtype=float)[mask])\\n\\n\\ndef _fit_affine(x, y):\\n    xc = x - x.mean()\\n    gain = (xc @ (y - y.mean())) / (xc @ xc)\\n    return gain, y.mean() - gain * x.mean()\\n\\n\\ndef _clean_rows(x, y):\\n    # Repeated-median slope keeps an isolated spike from setting the fit.\\n    dx = x[:, None] - x\\n    dy = y[:, None] - y\\n    slopes = np.divide(dy, dx, out=np.full_like(dx, np.nan), where=dx != 0)\\n    gain = np.nanmedian(np.nanmedian(slopes, axis=1))\\n    intercept = np.median(y - gain * x)\\n    return np.abs(y - (gain * x + intercept)) <= 3.0\\n\\n\\ndef _calibration(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    history = None\\n    gain = np.empty(4)\\n    offset = np.empty(4)\\n    for b in range(4):\\n        x, y = _bank_rows(sweeps, b)\\n        if len(x) >= 4:\\n            clean = _clean_rows(x, y)\\n            if clean.all() or clean.sum() >= 4:\\n                gain[b], offset[b] = _fit_affine(x[clean], y[clean])\\n                continue\\n        elif len(x) == 2:\\n            gain[b], offset[b] = _fit_affine(x, y)\\n            continue\\n        elif len(x) == 3:\\n            # With only three rows, a >3 leave-one-out discrepancy flags\\n            # corruption but does not reliably identify which row is bad.\\n            i, j, k = np.argsort(x)\\n            g, a = _fit_affine(x[[i, k]], y[[i, k]])\\n            if abs(y[j] - (g * x[j] + a)) <= 3.0:\\n                gain[b], offset[b] = _fit_affine(x, y)\\n                continue\\n        if history is None:\\n            history = json.loads(_ARCHIVE.read_text())\\n        for sweep in reversed(history):\\n            hx, hy = _bank_rows(sweep, b)\\n            if len(hx) >= 4:\\n                clean = _clean_rows(hx, hy)\\n                hx, hy = hx[clean], hy[clean]\\n            if len(hx) >= 2 and np.ptp(hx) > 0:\\n                gain[b], offset[b] = _fit_affine(hx, hy)\\n                break\\n        else:\\n            raise ValueError(f'No usable archived calibration for sensor bank {b}')\\n    banks = np.asarray(study['row_bank_id'], dtype=int)\\n    return (np.asarray(study['y_obs_raw'], dtype=float) - offset[banks]) / gain[banks]\\n\\n\\nPY\\nsed -n '/^def _axis/,$p' \\\"$a\\\" | sed 's/^def solve_beta_m97_c02_s00(/def solve_beta_m97_c02_batch_02(/' >> \\\"$p\\\"\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, numpy as np, pickle\\nfrom pathlib import Path\\np=Path('/holdout_task'); spec=importlib.util.spec_from_file_location('solver',p/'beta_m97_c02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor i,item in enumerate(pickle.loads((p/'public_beta_m97_c02_batch_02.pkl').read_bytes())):\\n s,ref=item['study'],item['gt']; y=m._calibration(s); S,_=m._forward(s); Z=s['Z_nuisance']; both=np.column_stack((y,S)); r=both-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@both); out=m.solve_beta_m97_c02_batch_02(s)\\n print(i,'projected design max err',np.max(np.abs(r[:,1:]-ref['S_tilde'])),'projected obs max err',np.max(np.abs(r[:,0]-ref['r_y'])),'weight max err',np.max(np.abs(out['weights']-ref['w_opt'])),'field max err',np.max(np.abs(out['terminal_field']-ref['terminal_field_A'])),'gap',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"In-batch affine fits → open-Robin transport → box-simplex KKT inversion; all four public banks have 12 clean rows, and numerical validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Copy the archived solver unchanged\",\n      \"rejected_reason\": \"Its fallback expects stored gains and offsets, whereas the archive contains raw calibration sweeps.\"\n    }\n  ],\n  \"rationale\": \"Fit current sweeps first and use historical sweeps only for sparse or corrupted banks. Compare the projected design and observations separately against public references so any discrepancy can be localized before stress-testing the certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "813244950507836a6ec711b8dab04b23baad3fb9afa38c6f837b2f3acdf063e7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39655.19,
+      "usage_known": true,
+      "prompt_tokens": 23196,
+      "cached_tokens": 6784,
+      "completion_tokens": 1513
+    }
+  ]
+}

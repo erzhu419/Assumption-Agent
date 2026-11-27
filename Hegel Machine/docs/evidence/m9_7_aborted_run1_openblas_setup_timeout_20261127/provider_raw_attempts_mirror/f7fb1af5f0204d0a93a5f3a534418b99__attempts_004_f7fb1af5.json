@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7fb1af5f0204d0a93a5f3a534418b99",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:09:03.515388+00:00",
+  "ended_at_utc": "2026-11-27T07:09:41.336086+00:00",
+  "request_sha256": "150e44e1deb865271a8505c0eff25d2fc5700d3fb4394ef467ae1b3edbb7f79f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 31593,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22998,
+    "cached_tokens": 6784,
+    "completion_tokens": 1519
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/holdout_task/alpha_m97_c03_batch_04_solver.py\\nsed '/^def _design/,$d' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py | sed '1c\\\\\\\"\\\"\\\"Calibrated two-branch Prony model for strain-crystallized flow.\\\"\\\"\\\"' > \\\"$p\\\"\\nsed -n '56,127p' \\\"$p\\\"\\ncat >> \\\"$p\\\" <<'PY'\\ndef _design(logtau, inputs, dt, times, crit, crystallizes):\\n    stress, hold, xd = inputs\\n    tau = np.exp(logtau)\\n    tail = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\\n    kernel = np.exp(-tail[:, None] / tau) * -np.expm1(-dt[:, None] / tau)\\n    z = stress @ kernel\\n    gap = hold[:, None] - z\\n    damage = np.maximum(np.abs(stress) - crit, 0.0)**2 @ dt\\n    act = np.tanh(damage) if crystallizes else np.zeros_like(damage)\\n    flow = np.where(act[:, None] > 0, np.log1p(times), times)\\n    decay = -np.expm1(-times[:, None] / tau)\\n    a = np.empty((len(hold), len(times) + 1, 9))\\n    a[:, :-1, :2] = gap[:, None, :] * decay\\n    a[:, -1, :2] = gap / tau\\n    a[:, :-1, 2:7] = xd[:, None, :] * flow[:, :, None]\\n    a[:, -1, 2:7] = xd\\n    a[:, :-1, 7] = (act * hold)[:, None] * decay[:, 0]\\n    a[:, -1, 7] = act * hold / tau[0]\\n    a[:, :-1, 8] = (act * z[:, 0])[:, None] * flow\\n    a[:, -1, 8] = act * z[:, 0]\\n    return a\\n\\n\\ndef _fit(inputs, dt, times, crit, crystallizes, y):\\n    # Profile all nine linear coefficients at each pair of relaxation times.\\n    valid = np.isfinite(y)\\n    target = y[valid]\\n    lo = min(np.min(dt), np.min(times[times > 0])) / 10\\n    hi = max(np.sum(dt), np.max(times)) * 10\\n\\n    def profile(logtau, return_weights=False):\\n        a = _design(logtau, inputs, dt, times, crit, crystallizes)[valid]\\n        weights = np.linalg.lstsq(a, target, rcond=1e-11)[0]\\n        return weights if return_weights else a @ weights - target\\n\\n    starts = ((0.45, 2.5), (1.2, 6.0), (0.22, 1.3), (3.0, 0.65))\\n    fits = [least_squares(profile, np.log(np.clip(seed, lo * 1.01, hi / 1.01)),\\n                          bounds=(np.log(lo), np.log(hi)), max_nfev=100,\\n                          ftol=1e-10, gtol=1e-9, xtol=1e-9) for seed in starts]\\n    best = min(fits, key=lambda fit: fit.cost)\\n    logtau = best.x\\n    if not crystallizes:\\n        logtau = np.sort(logtau)\\n    return logtau, profile(logtau, return_weights=True)\\n\\n\\ndef solve_alpha_m97_c03_batch_04(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    lines = _calibrate(dataset['calibration_load_cells'])\\n    x_train, x_test = _align(train, test)\\n    train_inputs = _inputs(train, x_train, lines)\\n    test_inputs = _inputs(test, x_test, lines)\\n    times = np.asarray(dataset['eval_times'], dtype=float)\\n    dt = np.asarray(dataset['past_dt'], dtype=float)\\n    crit = float(dataset['crit_stress'])\\n    crystallizes = dataset['shear_banding_index'] <= 0.50\\n    y = np.column_stack((train['strain_curves_obs'] - train['strain_0'][:, None],\\n                         train['instant_rate_obs']))\\n    logtau, weights = _fit(train_inputs, dt, times, crit, crystallizes, y)\\n    pred = _design(logtau, test_inputs, dt, times, crit, crystallizes) @ weights\\n    return {'estimated_taus': np.exp(logtau), 'hereditary_weights': weights[:7],\\n            'regime_mode_weights': weights[7:],\\n            'predicted_strain': pred[:, :-1] + test['strain_0'][:, None],\\n            'initial_rate_pred': pred[:, -1]}\\nPY\\ngrep '^def' \\\"$p\\\"\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: in-batch calibration for channel 0 and historical calibration for channels 1–3 → H2: damage-gated logarithmic flow with a profiled two-branch Prony fit; worst-lab error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit relaxation times and linear weights jointly\",\n      \"rejected_reason\": \"Profiling solves the linear coefficients exactly for each pair of relaxation times and reduces the nonlinear search to two dimensions.\"\n    }\n  ],\n  \"rationale\": \"Reuse archived calibration and coupon preprocessing, then implement the requested curve and initial-rate equations in one design. The public schema check will expose integration errors before held-out validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "4008ebd1acc17eb38a46a4b776401ed04f205b67450c29d00f12442c91774db7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40225.11,
+      "usage_known": true,
+      "prompt_tokens": 22998,
+      "cached_tokens": 6784,
+      "completion_tokens": 1519
+    }
+  ]
+}

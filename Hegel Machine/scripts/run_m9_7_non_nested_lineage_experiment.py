@@ -92,7 +92,8 @@ from hegel_machine.cognition.m9_7_non_nested_counterfactual_lineage_world import
 )
 
 DEFAULT_V7_BUNDLE = REPO_ROOT / "docs/evidence/m9_2_1_audit_closure_and_regrade_20261126/pretrained_autogenous_forest_v7_m921.json"
-DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_7_non_nested_counterfactual_lineage_20261127"
+DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_7_non_nested_counterfactual_lineage_run2_20261127"
+ABORTED_RUN1_MANIFEST = REPO_ROOT / "docs/evidence/m9_7_aborted_run1_openblas_setup_timeout_20261127/00_aborted_run1_forensic_manifest.json"
 
 _CALL_CONTEXT = threading.local()
 
@@ -1290,6 +1291,15 @@ def main() -> None:
     all_dag_files = sorted(out_dir.rglob("01_decision_provenance_dag.json"))
     dag_valid_count = sum(1 for fp in all_dag_files if json.loads(fp.read_text(encoding="utf-8"))["provenance_verification"]["valid"])
 
+    scope3_run2 = aggregate_call_usages(master_provider_receipts, deduplicate_uuid=True)
+    scope3_plus_grand: dict[str, Any] | None = None
+    if ABORTED_RUN1_MANIFEST.is_file():
+        r1_man = json.loads(ABORTED_RUN1_MANIFEST.read_text(encoding="utf-8"))
+        r1_sp = r1_man["aborted_run1_physical_spend"]
+        from hegel_machine.cognition.cost_policy import sum_aggregated_ledgers
+
+        scope3_plus_grand = sum_aggregated_ledgers([r1_sp, scope3_run2])
+
     master_summary = {
         "schema": "hegel_m9_7_non_nested_counterfactual_lineage_summary_v1",
         "cost_policy_version": COST_POLICY_VERSION,
@@ -1307,7 +1317,8 @@ def main() -> None:
         "tracked_tree_dirty_at_end": bool(tracked_dirty),
         "wall_clock_sec": round(monotonic() - t0_all, 2),
         "stage_S_cost_ledger": {"shared_stage_S_solve_6clusters": stage_s_solve_agg},
-        "scope_3_campaign_physical_spend_all_calls": aggregate_call_usages(master_provider_receipts, deduplicate_uuid=True),
+        "scope_3_campaign_physical_spend_all_calls": scope3_run2,
+        "scope_3_plus_grand_campaign_spend_including_aborted_run1": scope3_plus_grand,
         "arm_comparison": arm_agg,
         "paired_statistics_Hegel_vs_Flat_n6_clusters": paired_stats,
         "multibranch_lineage_and_counterfactual_funnel": lineage_funnel,

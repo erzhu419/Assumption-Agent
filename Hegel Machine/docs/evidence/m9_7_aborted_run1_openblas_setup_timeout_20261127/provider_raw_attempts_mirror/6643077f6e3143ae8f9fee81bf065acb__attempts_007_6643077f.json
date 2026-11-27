@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6643077f6e3143ae8f9fee81bf065acb",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:41:30.668834+00:00",
+  "ended_at_utc": "2026-11-27T06:42:10.683958+00:00",
+  "request_sha256": "6a0938bf8d89e0e9f12c4e7907611735fba551b6e75f14f3bde97a7609dba463",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 32870,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23451,
+    "cached_tokens": 0,
+    "completion_tokens": 1637
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/rheology_candidate.py')\\ns = p.read_text()\\ns = 'import json\\\\nfrom pathlib import Path\\\\n\\\\n' + s\\nstart = s.index('def _calibration')\\nend = s.index('def _align', start)\\ns = s[:start] + '''_CALIBRATION_HISTORY = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\ndef _historical_calibration(history, channel):\\n    if history is None:\\n        return None\\n    if isinstance(history, list):\\n        for entry in reversed(history):\\n            estimate = _historical_calibration(entry, channel)\\n            if estimate is not None:\\n                return estimate\\n        return None\\n    if 'stress_gains' in history and 'stress_biases' in history:\\n        return float(history['stress_gains'][channel]), float(history['stress_biases'][channel])\\n    if history.get('lab_id') == channel and 'gain' in history and 'bias' in history:\\n        return float(history['gain']), float(history['bias'])\\n    return None\\n\\n\\ndef _calibration(cal):\\n    gains = np.empty(4)\\n    biases = np.empty(4)\\n    history_loaded = False\\n    history = None\\n    for c in range(4):\\n        take = (cal['lab_id'] == c) & np.isfinite(cal['cmd_stress']) & np.isfinite(cal['true_stress'])\\n        x, y = cal['cmd_stress'][take], cal['true_stress'][take]\\n        clean = np.ones(len(x), dtype=bool)\\n        if np.unique(x).size >= 2:\\n            i, j = np.triu_indices(len(x), 1)\\n            distinct = x[j] != x[i]\\n            i, j = i[distinct], j[distinct]\\n            slope = np.median((y[j] - y[i]) / (x[j] - x[i]))\\n            intercept = np.median(y - slope*x)\\n            clean = np.abs(y - (slope*x + intercept)) <= 3.0\\n        fallback = len(x) < 2 or not clean.all()\\n        historical = None\\n        if fallback:\\n            if not history_loaded:\\n                try:\\n                    history = json.loads(_CALIBRATION_HISTORY.read_text())\\n                except FileNotFoundError:\\n                    pass\\n                history_loaded = True\\n            historical = _historical_calibration(history, c)\\n        if np.unique(x[clean]).size >= 2 and (clean.sum() >= 4 or historical is None):\\n            gains[c], biases[c] = np.linalg.lstsq(\\n                np.column_stack((x[clean], np.ones(clean.sum()))), y[clean], rcond=None\\n            )[0]\\n        elif historical is not None:\\n            gains[c], biases[c] = historical\\n        else:\\n            raise ValueError(f'No usable load-cell calibration for channel {c}')\\n    return gains, biases\\n\\n\\n''' + s[end:]\\ns = s.replace('gains, biases, _ = _calibration', 'gains, biases = _calibration')\\nPath('alpha_m97_c03_s00_solver.py').write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I /tmp/rheology_stress.py /holdout_task/alpha_m97_c03_s00_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c03_s00_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('public_alpha_m97_c03_s00.pkl', 'rb') as f:\\n    cal = pickle.load(f)[0]['dataset']['calibration_load_cells']\\nlab, x = cal['lab_id'], cal['cmd_stress']\\ng = np.array([.82, 1.13, .97, 1.06]); b = np.array([.11, -.06, .07, .04]); y = g[lab]*x+b[lab]\\nwith tempfile.TemporaryDirectory() as tmp:\\n    m._CALIBRATION_HISTORY = Path(tmp)/'archive.json'\\n    m._CALIBRATION_HISTORY.write_text('not json')\\n    np.testing.assert_allclose(m._calibration(dict(lab_id=lab, cmd_stress=x, true_stress=y)), [g,b], atol=1e-12)\\n    archive_g, archive_b = g.copy(), b.copy()\\n    archive_g[1] += .4; archive_b[1] += .3\\n    m._CALIBRATION_HISTORY.write_text(json.dumps(dict(stress_gains=archive_g.tolist(), stress_biases=archive_b.tolist())))\\n    y[np.flatnonzero(lab==1)[0]] += 12\\n    keep = lab!=2; keep[np.flatnonzero(lab==2)[0]] = True\\n    np.testing.assert_allclose(m._calibration(dict(lab_id=lab[keep], cmd_stress=x[keep], true_stress=y[keep])), [g,b], atol=1e-12)\\nprint('Calibration verified: no archive access for clean rows, in-batch fit despite an EMI spike, archive fallback for a sparse channel.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: preserve the validated Prony fit and complete calibration fallback; worst synthetic lab P90 curve/rate errors were 0.00239/0.00097, and public missing-feature median errors were 0.26673/0.11186.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Substitute identity calibration when measurements are insufficient\",\n      \"rejected_reason\": \"Identity calibration would silently bias predictions when channel gain or bias differs from nominal.\"\n    }\n  ],\n  \"rationale\": \"Write the required solver and verify that it preserves clean in-batch calibration, rejects an EMI spike, and uses history for a sparse channel. The archive is absent in this container, so exercise the fallback with a temporary fixture using the indexed gain and bias field names, then rerun the schema and synthetic recovery tests on the exact deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "89766ecb2d76130508d74781a9cac4186aa127338145c661b59a73983f37f5c8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42407.47,
+      "usage_known": true,
+      "prompt_tokens": 23451,
+      "cached_tokens": 0,
+      "completion_tokens": 1637
+    }
+  ]
+}

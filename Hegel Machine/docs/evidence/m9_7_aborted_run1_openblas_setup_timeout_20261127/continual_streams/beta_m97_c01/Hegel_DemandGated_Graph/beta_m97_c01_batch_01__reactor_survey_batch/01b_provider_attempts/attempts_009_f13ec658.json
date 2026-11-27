@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f13ec658dbef4e6ca5c5857110dfc160",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:13.816528+00:00",
+  "ended_at_utc": "2026-11-27T06:51:46.822660+00:00",
+  "request_sha256": "3f9ef4b4aeab79b4c04c3e2af5f252d70d7e99936e918484cc0073c781d1da65",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 45988,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27094,
+    "cached_tokens": 11136,
+    "completion_tokens": 1426
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport ast, copy, pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nm = runpy.run_path(str(p/'beta_m97_c01_batch_01_solver.py'))\\narch = runpy.run_path('/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py')\\ntree = ast.parse((p/'validate_public_schema.py').read_text())\\nfn = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate')\\nns = {'np': np}\\nimport math\\nns['math'] = math\\nexec(compile(ast.Module(body=[fn], type_ignores=[]), '<certificate verifier>', 'exec'), ns)\\nverify = ns[fn.name]\\nsolve, cal, forward = (m[k] for k in ('solve_beta_m97_c01_batch_01','_calibrated_target','_forward'))\\nfor case in pickle.loads((p/'public_beta_m97_c01_batch_01.pkl').read_bytes()):\\n st, gt = case['study'], case['gt']\\n o = solve(st)\\n ew = np.max(abs(o['weights']-gt['w_opt'])); ef = np.max(abs(o['terminal_field']-gt['terminal_field_A']))\\n assert ew < 1e-5 and ef < 1e-6\\n print(f'public max weight error={ew:.3g}; max terminal field error={ef:.3g}')\\n expected = cal(st); worst = 0.\\n for bank in range(4):\\n  for n, spike, use_archive in [(0,False,True),(1,False,True),(2,False,False),(3,False,False),(4,True,True),(12,True,False)]:\\n   t = copy.deepcopy(st); q = t['sensor_calibration_sweeps']; keep = np.asarray(q['bank_id']) != bank\\n   rows = np.asarray(st['row_bank_id']) == bank\\n   x = np.arange(n,dtype=float); g,b = (1.,0.) if use_archive else (1.27,-.17)\\n   y = g*x+b\\n   if spike: y[1] += 20\\n   for key,v in [('bank_id',np.full(n,bank)),('ref_signal',x),('raw_readout',y)]: q[key] = np.r_[np.asarray(q[key])[keep],v]\\n   t['y_obs_raw'][rows] = g*expected[rows]+b\\n   e = np.max(abs(cal(t)-expected)); worst = max(worst,e)\\n   assert e < 1e-12, (bank,n,spike,e)\\n print(f'worst error over 24 bank calibration slices={worst:.3g}')\\n for mode, zero in [(1,False),(0,True)]:\\n  t = dict(st,recirculation_loop_mode=mode)\\n  if zero: t['past_vortex_circulation_trace'] = np.full_like(st['past_vortex_circulation_trace'],st['critical_vortex_circulation'])\\n  e = max(np.max(abs(a-b)) for a,b in zip(forward(t),arch['_forward'](t)))\\n  assert e < 1e-12, (mode,zero,e)\\n print('both open-Robin control slices match the archived forward operator')\\n ss,_ = forward(st); z = st['Z_nuisance']; gram = z.T@z + st['nuisance_ridge']*np.eye(z.shape[1]); project = lambda v: v-z@np.linalg.solve(gram,z.T@v)\\n s = project(ss); upper = st['u_box']; ridge = st['source_ridge']; gap = 0.\\n for budget in [0.,.01,1.,2.,2.6,11.,11.99,12.]:\\n  t = dict(st,total_budget=budget,y_obs_raw=np.asarray(st['y_obs_raw'])*13)\\n  o = solve(t); w = o['weights']; c = o['kkt_certificate']; y = project(cal(t))\\n  verdict = verify(s,y,ridge,upper,budget,c)\\n  assert verdict['valid'], (budget,verdict)\\n  lo,hi = np.asarray(c['lam_lower']),np.asarray(c['lam_upper']); grad = s.T@(s@w-y)+ridge*w\\n  assert np.max(abs(grad-c['nu_sum']-lo+hi)) < 1e-10\\n  assert max(np.max(abs(w*lo)),np.max(abs((upper-w)*hi))) < 1e-10\\n  gap = max(gap,abs(verdict['gap']))\\n print(f'worst independently verified KKT gap over eight budgets={gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 clean in-batch calibration only -> H2 use archived sweeps for sparse or EMI-affected banks when current clean rows are insufficient; latest reported public max weight and terminal-field errors are 3.65e-07 and 2.92e-08.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the bound schema receipt\",\n      \"rejected_reason\": \"The previous command printed the schema result twice and none of the expected stress metrics, so it did not establish coverage of the fallback, regime controls, or active bounds.\"\n    }\n  ],\n  \"rationale\": \"Load only the independent certificate verifier function to avoid running the validator's top-level code. Leave the artifact unchanged and run the missing checks: a failure identifies whether to revisit calibration, boundary dispatch, or the active-set certificate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7f42aca9764cb17e3f230920148a9eaf47947c86862d590aa38b0bf819be4bc8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37754.99,
+      "usage_known": true,
+      "prompt_tokens": 27094,
+      "cached_tokens": 11136,
+      "completion_tokens": 1426
+    }
+  ]
+}

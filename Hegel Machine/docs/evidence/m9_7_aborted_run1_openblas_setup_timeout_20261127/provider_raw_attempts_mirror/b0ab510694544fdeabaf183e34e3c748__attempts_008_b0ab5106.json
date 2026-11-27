@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0ab510694544fdeabaf183e34e3c748",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:50:25.049328+00:00",
+  "ended_at_utc": "2026-11-27T06:51:10.701331+00:00",
+  "request_sha256": "1abb13d2e4e53f3c77d47993f4435f5997b0a0cc7d814e3cbcc36c1dd58a945f",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38994,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24992,
+    "cached_tokens": 6784,
+    "completion_tokens": 1885
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('        prior = None\\\\n')\\nb = s.index('        rows = row_banks == bank', a)\\ns = s[:a] + '''        n_clean = np.count_nonzero(clean)\\n        if n_clean >= 4 or (n_clean >= 2 and np.all(clean)):\\n            gain, offset = _fit_line(x[clean], y[clean])\\n        else:\\n            if archive is None:\\n                archive = json.loads(_CALIBRATION_ARCHIVE.read_text())\\n            for record in reversed(archive):\\n                mask = np.asarray(record['bank_id']) == bank\\n                ax = np.asarray(record['ref_signal'], dtype=float)[mask]\\n                if np.unique(ax).size >= 2:\\n                    ay = np.asarray(record['raw_readout'], dtype=float)[mask]\\n                    gain, offset = _fit_line(ax, ay)\\n                    break\\n            else:\\n                raise ValueError(f'Insufficient calibration data for bank {bank}')\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, pickle, runpy\\nimport numpy as np\\np='/holdout_task/'\\nm=runpy.run_path(p+'beta_m97_c01_batch_01_solver.py')\\narch=runpy.run_path('/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py')\\nverify=runpy.run_path(p+'validate_public_schema.py',run_name='verification_helpers')['verify_box_simplex_kkt_certificate']\\nfor case in pickle.load(open(p+'public_beta_m97_c01_batch_01.pkl','rb')):\\n st,gt=case['study'],case['gt']\\n solve=m['solve_beta_m97_c01_batch_01']; cal=m['_calibrated_target']; forward=m['_forward']\\n out=solve(st)\\n werr=np.max(abs(out['weights']-gt['w_opt'])); ferr=np.max(abs(out['terminal_field']-gt['terminal_field_A']))\\n assert werr<1e-5 and ferr<1e-6\\n print(f'public weight max error={werr:.3g}, terminal field max error={ferr:.3g}')\\n expected=cal(st); worst=0.\\n for bank in range(4):\\n  for label,n,spike in [('missing',0,False),('single',1,False),('clean_pair',2,False),('clean_triple',3,False),('sparse_emi',4,True),('ample_emi',12,True)]:\\n   t=copy.deepcopy(st); q=t['sensor_calibration_sweeps']; mask=np.asarray(q['bank_id'])!=bank\\n   use_history=label in ('missing','single','sparse_emi')\\n   affected=np.asarray(st['row_bank_id'])==bank\\n   x=np.arange(n,dtype=float); g,b=(1.,0.) if use_history else (1.27,-.17)\\n   y=g*x+b\\n   if spike: y[1]+=20\\n   for key,v in [('bank_id',np.full(n,bank)),('ref_signal',x),('raw_readout',y)]: q[key]=np.r_[np.asarray(q[key])[mask],v]\\n   t['y_obs_raw'][affected]=g*expected[affected]+b\\n   e=np.max(abs(cal(t)-expected)); worst=max(worst,e)\\n   assert e<1e-12,(bank,label,e)\\n print(f'worst calibration slice error across all banks={worst:.3g}')\\n for mode,erase in [(1,False),(0,True)]:\\n  t=dict(st,recirculation_loop_mode=mode)\\n  if erase: t['past_vortex_circulation_trace']=np.full_like(st['past_vortex_circulation_trace'],st['critical_vortex_circulation'])\\n  e=max(np.max(abs(a-b)) for a,b in zip(forward(t),arch['_forward'](t)))\\n  assert e<1e-12,(mode,erase,e)\\n print('open Robin matches the archived forward operator with loop on or zero vortex memory')\\n ss,_=forward(st); z=st['Z_nuisance']; project=lambda v:v-z@np.linalg.solve(z.T@z+st['nuisance_ridge']*np.eye(z.shape[1]),z.T@v)\\n worst_gap=0.\\n for budget in [0.,.01,1.,2.,2.6,11.,11.99,12.]:\\n  t=dict(st,total_budget=budget,y_obs_raw=np.asarray(st['y_obs_raw'])*13)\\n  o=solve(t); w=o['weights']; c=o['kkt_certificate']; upper=t['u_box']; ridge=t['source_ridge']\\n  s=project(ss); y=project(cal(t)); verdict=verify(s,y,ridge,upper,budget,c)\\n  assert verdict['valid'],(budget,verdict)\\n  g=s.T@(s@w-y)+ridge*w\\n  assert np.max(abs(g-c['nu_sum']-np.asarray(c['lam_lower'])+np.asarray(c['lam_upper'])))<1e-10\\n  assert max(np.max(abs(w*np.asarray(c['lam_lower']))),np.max(abs((upper-w)*np.asarray(c['lam_upper']))))<1e-10\\n  worst_gap=max(worst_gap,abs(verdict['gap']))\\n print(f'worst independently verified KKT gap over eight budgets={worst_gap:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 clean in-batch calibration only -> H2 use current clean rows when sufficient and fit the archived sweeps when fallback is required; public maximum weight and terminal-field errors before the fallback repair were 3.65e-07 and 2.92e-08.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use historical calibration for every EMI-affected bank\",\n      \"rejected_reason\": \"Historical gains differ from the current batch, so replacing an adequate clean current fit would bias the inversion.\"\n    }\n  ],\n  \"rationale\": \"Repair the demonstrated archive-format bug, then verify the exact artifact in an isolated process. The bank slices detect incorrect archive selection or spike handling, the alternate regimes detect incorrect boundary dispatch, and the budget slices detect certificate failures at active bounds that the interior public solution does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4333d3265f4beeb5a6fe3a88d428d7bb425bc608edd61e1f8f103005c5f2479f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48044.77,
+      "usage_known": true,
+      "prompt_tokens": 24992,
+      "cached_tokens": 6784,
+      "completion_tokens": 1885
+    }
+  ]
+}

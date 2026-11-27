@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "acae09f1becb4a75ba440aa3005e24d9",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:21:31.623238+00:00",
+  "ended_at_utc": "2026-11-27T07:22:12.606873+00:00",
+  "request_sha256": "5ff09a9b059d8b23a920631c3ee9c63861d4650f316d67ea1f621255f23da03f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 59667,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33089,
+    "cached_tokens": 6784,
+    "completion_tokens": 1515
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd = pickle.load(open('public_alpha_m97_c02_batch_07.pkl', 'rb'))[0]['dataset']\\ntr = d['train']; lab = tr['lab_id']; n = len(lab)\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nbase = s._design\\n\\ndef gated(log_tau, inputs, dt, times, plateau):\\n    curve, rate = base(log_tau, inputs, dt, times, plateau)\\n    inactive = inputs[-1] == 0\\n    ratio = np.divide(times, np.log1p(times), out=np.ones_like(times), where=times != 0)\\n    curve[inactive, :, 2:7] *= ratio[None, :, None]\\n    return curve, rate\\n\\ncal = s._calibrate(d['calibration_load_cells']); older = cal.copy(); older[2] = (.85, .10)\\nfor name, design, line in [('candidate', base, cal), ('linear at zero damage', gated, cal), ('old channel 2', base, older)]:\\n    s._design = design\\n    inputs, z0, dt, times, plateau = s._prepare(d, line)\\n    y = tr['strain_curves_obs'] - z0[:n, None]; r = tr['instant_rate_obs']\\n    ec, er = np.empty_like(y), np.empty_like(r)\\n    for c in range(4):\\n        keep = lab != c; ids = np.flatnonzero(keep); val = np.flatnonzero(~keep)\\n        p, w = s._fit(tuple(a[ids] for a in inputs), dt, times, plateau, y[ids], r[ids])\\n        a, b = design(p, tuple(a[val] for a in inputs), dt, times, plateau)\\n        ec[val], er[val] = a @ w - y[val], b @ w - r[val]\\n    def summary(mask):\\n        return np.round([np.median(abs(ec[mask])), np.median(abs(er[mask])), np.median(ec[mask]), np.median(er[mask])], 4).tolist()\\n    print(name, 'absolute then signed medians: strain, rate')\\n    for c in range(4):\\n        for state in (False, True):\\n            mask = (lab == c) & ((inputs[-1][:n] > 0) == state)\\n            if mask.any(): print(c, int(state), int(mask.sum()), summary(mask))\\n    if name == 'candidate':\\n        print('complete versus imputed, by lab:', [(c, int(sum((lab == c) & missing)), summary((lab == c) & ~missing), summary((lab == c) & missing)) for c in range(4) if ((lab == c) & missing).any()])\\n\\ns._design = base\\nfit = s.solve_alpha_m97_c02_batch_07(d)\\ninputs, z0, dt, t, _ = s._prepare(d)\\npast, hold, features, act = (a[n:] for a in inputs)\\ntau, hw, rw = (fit[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\nz = np.zeros((len(hold), 2))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step / tau)\\n    z = decay * z + (1 - decay) * past[:, j, None]\\ngap = hold[:, None] - z\\nprony = (gap * hw[:2]) @ (1 - np.exp(-t[:, None] / tau)).T\\nflow = features @ hw[2:] + rw[1] * act * z[:, 0]\\nquick = rw[0] * act * hold\\npred = z0[n:, None] + prony + quick[:, None] * (1 - np.exp(-t / tau[0])) + flow[:, None] * np.log1p(t)\\nrate = (gap * hw[:2]) @ (1 / tau) + quick / tau[0] + flow\\nfor name, value in [('predicted_strain', pred), ('initial_rate_pred', rate)]:\\n    err = np.max(np.abs(value - fit[name])); print(name, 'explicit recurrence max difference:', err); assert err < 1e-11\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear flow at zero damage or stale channel-2 calibration -> H2 shared logarithmic plateau with recent calibration; current worst held-out slice median absolute errors are 0.0195 for strain and 0.0237 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification accuracy, or Fokker–Planck/HJB drift\",\n      \"rejected_reason\": \"This dataset contains continuous creep and rate measurements, with no relay, class labels, or stochastic control equation. The relevant checks are within-lab residuals and constitutive identities.\"\n    }\n  ],\n  \"rationale\": \"Compare the two plausible structural alternatives on held-out labs and inspect signed errors by lab and imputation status for bias hidden by pooling. An independent step-by-step recurrence checks both predictions; a mismatch would require an implementation fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "50d64321685681ac775319e43cbf12b17cf1e77e7c225fed85089ab9259558ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43381.27,
+      "usage_known": true,
+      "prompt_tokens": 33089,
+      "cached_tokens": 6784,
+      "completion_tokens": 1515
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1e3a00d39d6f4add815f3b154229e407",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:05:25.912128+00:00",
+  "ended_at_utc": "2026-11-27T07:05:58.394153+00:00",
+  "request_sha256": "ea52dc83f02c1e1e1c5f6e04115c5e9ade98b215ff76016a9e2ab6faac8036fa",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 53062,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29146,
+    "cached_tokens": 6784,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_batch03_basis.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ns = d['train']\\nlab = s['lab_id']\\nn = len(lab)\\ndt, t = d['past_dt'], d['eval_times']\\ny = s['strain_curves_obs'] - s['strain_0'][:, None]\\nr = s['instant_rate_obs']\\nstate = tuple(v[:n] for v in m._prepare(d))\\noriginal = m._design\\n\\ndef basis(kind):\\n    def design(tau, inputs, dt, t):\\n        a, b = original(tau, inputs, dt, t)\\n        if kind == 'no cross-gap':\\n            return a[..., :-1], b[..., :-1]\\n        if kind == 'no signed slip':\\n            cols = [0, 1, 2, 3, 4, 5, 6, 8]\\n            return a[..., cols], b[..., cols]\\n        if kind == 'linear terminal flow':\\n            a[..., 2:8] *= (1 + .85*t)[None, :, None]\\n        return a, b\\n    return design\\n\\nfor kind in ('full', 'no cross-gap', 'no signed slip', 'linear terminal flow'):\\n    m._design = basis(kind)\\n    rows = []\\n    bias = []\\n    for c in np.unique(lab):\\n        train = lab != c\\n        test = ~train\\n        tau, w = m._fit(tuple(v[train] for v in state), dt, t, y[train], r[train])\\n        a, b = m._design(tau, tuple(v[test] for v in state), dt, t)\\n        e, f = a @ w - y[test], b @ w - r[test]\\n        edge = np.array_split(np.arange(len(t)), 2)\\n        rows.append([np.median(np.abs(e[:, j])) for j in edge] + [np.median(np.abs(f))])\\n        hold = state[1][test]\\n        for sign in (hold < 0, hold >= 0):\\n            if np.any(sign):\\n                bias.append(np.abs([np.median(e[sign]), np.median(f[sign])]))\\n        if kind == 'full':\\n            hits = (np.abs(e) > .2).sum(axis=1)\\n            print('lab', int(c), 'gross curve residuals by specimen', np.bincount(hits, minlength=len(t)+1).tolist())\\n    print(kind, 'held-lab median absolute errors (early strain, late strain, initial rate)', np.round(rows, 6).tolist(), 'worst', np.round(np.max(rows, axis=0), 6).tolist(), 'max lab-by-hold-sign absolute median biases', np.round(np.max(bias, axis=0), 6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch03_basis.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated stress and reference-panel alignment -> H2: the signed-slip, cross-gap, and rational saturation terms transfer across labs; current worst public lab-by-stratum RMSE is 0.03579 for strain and 0.04589 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the calibration-point jackknife\",\n      \"rejected_reason\": \"The previous audit already bounded the maximum stress shift below 0.0001; it did not test the contribution of individual rheology terms.\"\n    }\n  ],\n  \"rationale\": \"Refit each ablation inside leave-one-lab-out folds to test whether a simpler basis is hiding a transfer problem. Split residuals by horizon and hold sign to expose cancellation in pooled summaries. If large residuals cluster by specimen rather than time point, evaluate specimen-level robust weighting; otherwise retain the current weighting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c6c03ef261cc0eafea3fb5297a0f9473f64e73aeea76721de41614f369a2bd80",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34899.6,
+      "usage_known": true,
+      "prompt_tokens": 29146,
+      "cached_tokens": 6784,
+      "completion_tokens": 1255
+    }
+  ]
+}

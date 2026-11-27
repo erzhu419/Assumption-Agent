@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "03ec298c286f4ee49c74b9d02a24c9dc",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:21:36.988361+00:00",
+  "ended_at_utc": "2026-11-27T07:22:08.013206+00:00",
+  "request_sha256": "1d8009840951627ed1ef7d5087377d4eca402bad018c5cc78facae42d61baf5c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65162,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32286,
+    "cached_tokens": 6784,
+    "completion_tokens": 1164
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_06_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_06.pkl','rb') as f: p=pickle.load(f)[0]\\nd,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; out=s.solve_alpha_m97_c03_batch_06(d)\\nlines=s._calibrate(d['calibration_load_cells']); xa,xb=s._align(tr,te); stress,hold,features=s._inputs(te,xb,lines)\\ntau,hw,rw=(out[k] for k in ('estimated_taus','hereditary_weights','regime_mode_weights'))\\nend=np.cumsum(dt); lag=end[-1]-end\\nz=stress@((1-np.exp(-dt[:,None]/tau))*np.exp(-lag[:,None]/tau)); gap=hold[:,None]-z\\nphi=t/(1+.85*t); flow=features@hw[2:]+rw[0]*np.sign(hold)*np.sqrt(abs(hold)); transient=gap*hw[:2]; transient[:,0]+=rw[1]*(gap[:,0]-gap[:,1]); curve=transient@(-np.expm1(-t[None,:]/tau[:,None]))+flow[:,None]*phi+te['strain_0'][:,None]; rate=transient@(1/tau)+flow\\nfor key,actual in [('predicted_strain',curve),('initial_rate_pred',rate)]:\\n    print(key,'independent formula max abs difference',np.max(abs(actual-out[key]))); np.testing.assert_allclose(actual,out[key],atol=1e-11,rtol=0)\\nrank=np.linalg.matrix_rank(s._design(np.log(tau),(stress,hold,features),dt,t).reshape(-1,9)); print('basis rank',rank); assert rank==9\\nlabs=tr['lab_id']; y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; tin=s._inputs(tr,xa,lines); complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor lab in np.unique(labs):\\n    train=labs!=lab; held=(~train)&complete; lt,w=s._fit(tuple(v[train] for v in tin),dt,t,y[train]); e=s._design(lt,tuple(v[held] for v in tin),dt,t)@w-y[held]; print('held-out lab',lab,'complete n',held.sum(),'max absolute median horizon bias',round(np.nanmax(abs(np.nanmedian(e[:,:-1],axis=0))),5),'median signed rate bias',round(np.nanmedian(e[:,-1]),5),'median absolute curve/rate error',np.round([np.nanmedian(abs(e[:,:-1])),np.nanmedian(abs(e[:,-1]))],5))\\nce=curve-g['te_clean']; re=rate-g['te_true_rate0']; cells=np.c_[te['lab_id'],te['stratum']]; scores=[]\\nfor cell in np.unique(cells,axis=0):\\n    m=np.all(cells==cell,axis=1); scores.append((tuple(map(int,cell)),int(m.sum()),float(np.sqrt(np.mean(ce[m]**2))),float(np.sqrt(np.mean(re[m]**2)))))\\nprint('worst lab-by-stratum curve slice',max(scores,key=lambda x:x[2])); print('worst lab-by-stratum rate slice',max(scores,key=lambda x:x[3]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the specified nine-term jammed-slip model transfers across calibrated labs; the measured imputed-specimen strain/rate RMSE is 0.12067/0.15556, with the lab-by-stratum audit pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the solver after the broadcast failure\",\n      \"rejected_reason\": \"The failure was in the independent audit: it multiplied the two memory gaps by all seven hereditary coefficients instead of the first two. The solver itself passed the isolated schema check.\"\n    }\n  ],\n  \"rationale\": \"Correct the audit expression and rerun it without changing the artifact. A mismatch against the separately evaluated closed form would warrant fixing the response basis; a concentrated signed error on complete specimens would warrant investigating lab calibration or alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "dccb0d141fee2097c0999b7b08bd6298346dbc59ca1eb9a54de8d487a7db1e06",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33427.51,
+      "usage_known": true,
+      "prompt_tokens": 32286,
+      "cached_tokens": 6784,
+      "completion_tokens": 1164
+    }
+  ]
+}

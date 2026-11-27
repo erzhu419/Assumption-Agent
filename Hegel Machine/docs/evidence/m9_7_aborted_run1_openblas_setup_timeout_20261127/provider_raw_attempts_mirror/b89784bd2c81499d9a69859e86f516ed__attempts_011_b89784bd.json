@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b89784bd2c81499d9a69859e86f516ed",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:52:00.897011+00:00",
+  "ended_at_utc": "2026-11-27T06:52:45.757038+00:00",
+  "request_sha256": "051dd6f742536a9cc76406eebc5acecb1e25a5da9cfb14364ee72e7c3870c28d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 67077,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34213,
+    "cached_tokens": 11136,
+    "completion_tokens": 1856
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('    history = json.loads(')\\nb = s.index('\\\\n\\\\ndef _calibrate', a)\\ns = s[:a] + '''    history = json.loads(_ARCHIVE.read_text())\\n    for sweep in reversed(history):\\n        mask = np.asarray(sweep['lab_id']) == lab\\n        x = np.asarray(sweep['cmd_stress'])[mask]\\n        y = np.asarray(sweep['true_stress'])[mask]\\n        if len(x) >= 2 and np.ptp(x) > 0:\\n            return np.polyfit(x, y, 1)\\n    return None\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, runpy\\nfrom unittest.mock import patch\\nimport numpy as np\\nm = runpy.run_path('alpha_m97_c01_batch_01_solver.py')\\nwith open('public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\nc = d['calibration_load_cells']; lab = c['lab_id']\\ncalibrate = m['_calibrate']; solve = m['solve_alpha_m97_c01_batch_01']\\nwith patch.dict(calibrate.__globals__, {'_historical_calibration': lambda _: (_ for _ in ()).throw(AssertionError('clean data must not read the archive'))}):\\n    clean = calibrate(c)\\n    out = solve(d)\\n    for count in (2, 3):\\n        rows = np.flatnonzero(lab == 0)[:count]\\n        keep = (lab != 0); keep[rows] = True\\n        sub = {k: v[keep] for k,v in c.items()}\\n        np.testing.assert_allclose(calibrate(sub)[0], np.polyfit(c['cmd_stress'][rows], c['true_stress'][rows], 1))\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    archived = json.load(f)[-1]\\na_lab, a_x, a_y = (np.asarray(archived[k]) for k in ('lab_id','cmd_stress','true_stress'))\\nfor channel in range(4):\\n    old = a_lab == channel\\n    expected = np.polyfit(a_x[old], a_y[old], 1)\\n    for count in (0, 1):\\n        keep = lab != channel\\n        keep[np.flatnonzero(~keep)[:count]] = True\\n        got = calibrate({k: v[keep] for k, v in c.items()})\\n        np.testing.assert_allclose(got[channel], expected)\\n        np.testing.assert_allclose(got[np.arange(4) != channel], clean[np.arange(4) != channel])\\n    row = np.flatnonzero(lab == channel)[0]\\n    spiked = {k:v.copy() for k,v in c.items()}; spiked['true_stress'][row] += 8\\n    keep = (lab == channel); keep[row] = False\\n    np.testing.assert_allclose(calibrate(spiked)[channel], np.polyfit(c['cmd_stress'][keep], c['true_stress'][keep], 1))\\nprint('Calibration stress cases passed: 0–3 points and isolated EMI on each channel (2–3 clean points tested on channel 0).')\\nspiked = {k:v.copy() for k,v in c.items()}\\nfor channel in range(4):\\n    row = np.flatnonzero(lab == channel)[0]; spiked['true_stress'][row] += 8\\nchallenger = solve(dict(d, calibration_load_cells=spiked))\\nfor key in out:\\n    np.testing.assert_allclose(challenger[key], out[key], rtol=0, atol=1e-3)\\nkeys = [('estimated_taus','taus',.004),('hereditary_weights','theta',.005),('regime_mode_weights','vp_theta',.006),('predicted_strain','te_clean',.056),('initial_rate_pred','te_true_rate0',.043)]\\nfor key, reference, limit in keys:\\n    rmse = np.sqrt(np.mean((out[key]-g[reference])**2)); print(key, 'RMSE', round(rmse,6)); assert rmse < limit\\nmissing = np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\n(data, n) = m['_prepare'](d)\\nactive = m['_state'](data,d['past_dt'],d['crit_stress'],True)[3][n:] > 0\\nfor label, mask in [('missing',missing),('complete',~missing),('active',active),('inactive',~active)]+[(f'lab{i}',d['test']['lab_id']==i) for i in range(4)]:\\n    e = out['predicted_strain'][mask]-g['te_clean'][mask]; r = out['initial_rate_pred'][mask]-g['te_true_rate0'][mask]\\n    print(label, 'strain/rate/late-strain RMSE', *(round(float(np.sqrt(np.mean(v*v))),6) for v in (e,r,e[:,-1])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Preserve the Cauchy plateau fit and repair sparse calibration fallback; the worst public slice remains missing-feature coupons at 0.229 strain RMSE and 0.174 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use stratum-conditioned imputation\",\n      \"rejected_reason\": \"Masked-entry overall RMSE improved from 1.105 to 1.090, but worst-cell RMSE worsened from 1.433 to 1.488; equal weighting across lab–stratum cells remains the better fit to the contract.\"\n    }\n  ],\n  \"rationale\": \"The archive stores column arrays per sweep, which the inherited parser mistook for individual rows. Read the latest usable sweep by channel. In a clean process, verify that sparse channels use the archive, clean channels bypass it, and rejecting EMI spikes leaves all five outputs close to the clean-data result. Any failure would identify whether to revise archive selection, spike rejection, or the calibration handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1c9e434ac59b9129a4f291e1c1a9a7a8e7dc773ecf8d44d7ff25b4fefa122a8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47206.38,
+      "usage_known": true,
+      "prompt_tokens": 34213,
+      "cached_tokens": 11136,
+      "completion_tokens": 1856
+    }
+  ]
+}

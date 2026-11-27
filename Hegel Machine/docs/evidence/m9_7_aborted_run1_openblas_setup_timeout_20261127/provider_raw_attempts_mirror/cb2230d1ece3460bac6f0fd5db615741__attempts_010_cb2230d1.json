@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb2230d1ece3460bac6f0fd5db615741",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:24:09.230909+00:00",
+  "ended_at_utc": "2026-11-27T07:24:30.579575+00:00",
+  "request_sha256": "f7048114930f108589372c021d82a17383c920f365cebc127b7e08cb7064d258",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 53956,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29518,
+    "cached_tokens": 6784,
+    "completion_tokens": 765
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_07_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]['dataset']; rows=d['calibration_load_cells']; sweeps=json.loads(m._ARCHIVE.read_text()); cal=m._calibrate(rows)\\nfor c in range(4):\\n print('channel',c,'in-batch',list(zip(*m._points(rows,c))),'used',cal[c].tolist())\\n for j in range(len(sweeps)-2,len(sweeps)):\\n  x,y=m._points(sweeps[j],c); e=y-np.polyval(cal[c],x); print('prefix',j,'rows',len(x),'residuals',e.round(5).tolist())\\ntr=d['train']; te=d['test']; lab=np.r_[tr['lab_id'],te['lab_id']]; group=np.r_[tr['stratum'],te['stratum']]; x=np.vstack((tr['coupon_features_raw'],te['coupon_features_raw'])); print('missing entries by split',np.isnan(tr['coupon_features_raw']).sum(),np.isnan(te['coupon_features_raw']).sum()); print('missing entries without a same-cell donor',sum(np.isnan(x[i,k]) and not np.isfinite(x[(lab==lab[i])&(group==group[i]),k]).any() for i,k in zip(*np.where(np.isnan(x)))))\\nbase=m.solve_alpha_m97_c01_batch_07(d); t=d['eval_times']; print('evaluation times',t.tolist()); print('estimated taus',base['estimated_taus'].tolist()); print('prediction nonfinite counts', {k:int(np.sum(~np.isfinite(v))) for k,v in base.items()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated two-branch Prony memory → logarithmic creep with damage-gated corrections; missing-coupon out-of-fold p90 absolute errors are 0.338 for strain and 0.231 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the constitutive identity and held-out lab checks\",\n      \"rejected_reason\": \"Those checks already passed on this exact artifact. The remaining actionable questions are whether a newer calibration sweep contains usable evidence and whether missing coupons ever lack same-cell donors.\"\n    }\n  ],\n  \"rationale\": \"Use measured calibration residuals to distinguish genuine channel shifts from transient EMI before changing the archive fallback. Check same-cell donor coverage to establish whether the larger missing-coupon errors reflect the prescribed mean imputation or an avoidable fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "7dcfd4308559e892de35ef618bde6ef8d6e8e189faefa3697f39e2e9a74bd859",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23793.36,
+      "usage_known": true,
+      "prompt_tokens": 29518,
+      "cached_tokens": 6784,
+      "completion_tokens": 765
+    }
+  ]
+}

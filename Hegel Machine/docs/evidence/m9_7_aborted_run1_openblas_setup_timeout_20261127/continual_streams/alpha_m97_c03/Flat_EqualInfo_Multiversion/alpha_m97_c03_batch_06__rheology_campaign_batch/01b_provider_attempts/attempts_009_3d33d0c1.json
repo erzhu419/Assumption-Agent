@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d33d0c17183463abcc2a206bfdf2788",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:19:32.831696+00:00",
+  "ended_at_utc": "2026-11-27T07:20:04.833275+00:00",
+  "request_sha256": "25b7cde46168fb9d0aeac908530d00c4600345ad793410e598f4be7667052ccf",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48107,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28355,
+    "cached_tokens": 6784,
+    "completion_tokens": 992
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'alpha_m97_c03_batch_06_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open(root+'public_alpha_m97_c03_batch_06.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; hs=json.loads(s._HISTORY.read_text()); print('history episode, channel, n, line, max residual, min current residual')\\nfor rec in hs:\\n for c in range(4):\\n  x,y=s._sweep(rec,c); cx,cy=s._sweep(cal,c)\\n  if np.unique(x).size<2: continue\\n  line=s._line(x,y); e=np.abs(y-np.polyval(line,x)); ce=np.abs(cy-np.polyval(line,cx)); print(rec['episode_short_name'],c,len(x),np.round(line,6),round(max(e),6),round(min(ce),6))\\nfor c in (0,3):\\n x,y=s._sweep(cal,c)\\n for n,spikes in ((1,()),(3,(0,)),(3,(0,1))):\\n  xx,yy=x[:n],y[:n].copy(); yy[list(spikes)]-=4.7\\n  keep=s._consensus(xx,yy); print('stress witness',c,n,spikes,'keep',keep,'fallback',s._historical_line(hs,c,xx,yy))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: sparse-sweep stress tests reject channel-local archive fallback for channels 0 and 3, with up to 0.60002 gain/bias error; determine whether the correct calibration states exist in the archive.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Channel-local historical sweeps recover the current affine calibration state for any sparse or EMI-corrupted channel.\",\n    \"empirical_witness\": \"For channels 0 and 3, all 12 downsampled sweeps in each of the single-reading and two sparse EMI scenarios exceeded 0.005 gain/bias error; the maximum was 0.6000185.\",\n    \"causal_blanket_diagnosis\": \"The fallback can substitute a different physical calibration state when the current sweep has too few clean anchors.\",\n    \"sublated_pivot\": \"Separate directly identifiable two-anchor fits from archive-dependent one-anchor fits, and check whether the archive actually contains the needed state before altering selection.\",\n    \"risk_kind\": \"sparse_calibration_state_mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Loosen the historical anchor tolerance\",\n      \"rejected_reason\": \"A wider tolerance cannot recover a calibration state that is missing from the archive and could admit incompatible states.\"\n    }\n  ],\n  \"rationale\": \"Distinguish missing archive coverage from incorrect candidate ranking. If the needed states are absent, preserve identifiable fits from two clean readings rather than tuning the archive selector to synthetic cases.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d0a84ead27774ea499d2456e0ba0bca46c39defde4f934ebb45c9ce99d682c09",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34494.12,
+      "usage_known": true,
+      "prompt_tokens": 28355,
+      "cached_tokens": 6784,
+      "completion_tokens": 992
+    }
+  ]
+}

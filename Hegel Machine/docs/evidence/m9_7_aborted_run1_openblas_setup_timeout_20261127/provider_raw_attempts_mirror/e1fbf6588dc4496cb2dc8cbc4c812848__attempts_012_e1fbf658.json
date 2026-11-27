@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e1fbf6588dc4496cb2dc8cbc4c812848",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:12:52.438500+00:00",
+  "ended_at_utc": "2026-11-27T07:13:14.649407+00:00",
+  "request_sha256": "3d256da589fd015623e28fd066bd15fa7ba4236fadeafe1e3d61c51f61d6a9f1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 59680,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31967,
+    "cached_tokens": 6784,
+    "completion_tokens": 810
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^xc, _/,$d' /tmp/rheology04_lolo.py > /tmp/rheology04_bias_audit.py\\ncat >> /tmp/rheology04_bias_audit.py <<'PY'\\nxa, _ = m._align(a,b)\\ninputs = m._inputs(a,xa,m._calibrate(d['calibration_load_cells']))\\ndt,t,crit = (d[k] for k in ('past_dt','eval_times','crit_stress'))\\nactive = (np.maximum(abs(inputs[0])-crit,0)**2 @ dt) > 0\\ny = np.column_stack((a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']))\\nfor lab in np.unique(a['lab_id']):\\n    val = a['lab_id'] == lab\\n    tr = tuple(v[~val] for v in inputs)\\n    te = tuple(v[val] for v in inputs)\\n    lt,w = m._fit(tr,dt,t,crit,True,y[~val])\\n    fit = m._design(lt,tr,dt,t,crit,True) @ w\\n    pred = m._design(lt,te,dt,t,crit,True) @ w\\n    print('lab',lab,'taus',np.round(np.exp(lt),4),'train rate quartiles',np.round(np.quantile(y[~val,-1]-fit[:,-1],[.25,.5,.75]),4))\\n    for on in (False,True):\\n        use = active[val] == on\\n        e = y[val][use] - pred[use]\\n        print('  active',on,'signed medians by horizon then rate',np.round(np.median(e,axis=0),4),'rate sign fraction',round(np.mean(e[:,-1]>0),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology04_bias_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: robust fitting with the prescribed damage gate → H2: test whether the signed residuals are specific to the rate readout or persist along the curve; worst held-out lab × regime RMSE is 2.1972 for strain and 0.1540 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a rate offset to the returned predictions\",\n      \"rejected_reason\": \"That would break the required equality between initial rate and the derivative of the predicted strain curve.\"\n    }\n  ],\n  \"rationale\": \"The previous audit found negative median prediction residuals for initial rate in all eight lab × regime slices. Compare those residuals with the full held-out time profile. A rate-only discrepancy would motivate testing a training-only readout correction; a coherent curve trend would instead point toward calibration, alignment, or the fitted physical coefficients.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2b7720887f3cc81f96f384f9a3d550de4a7d9ebc506b690adb4ac54e55e9849d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24584.4,
+      "usage_known": true,
+      "prompt_tokens": 31967,
+      "cached_tokens": 6784,
+      "completion_tokens": 810
+    }
+  ]
+}

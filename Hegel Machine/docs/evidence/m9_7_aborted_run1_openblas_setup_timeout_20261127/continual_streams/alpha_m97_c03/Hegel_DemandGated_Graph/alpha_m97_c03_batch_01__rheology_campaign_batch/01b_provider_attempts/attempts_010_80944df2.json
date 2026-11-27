@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "80944df2f76a41269d608292710d8bdc",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:43.763052+00:00",
+  "ended_at_utc": "2026-11-27T06:52:14.290185+00:00",
+  "request_sha256": "0d6e3445aea7efa0214a359807261017aa4c9458330f3f4c3a3563376d083f1b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 69922,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35460,
+    "cached_tokens": 6784,
+    "completion_tokens": 1204
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\nold = '    p = _fit(_inputs(dataset, train, x[:n], cal), y)'\\nnew = '''    # Estimate material parameters from measured features, not cell-mean substitutes.\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    inputs = _inputs(dataset, train, x[:n], cal)\\n    fit_inputs = tuple(v[complete] if i in (0, 1, 2, 5, 6) else v\\n                       for i, v in enumerate(inputs))\\n    p = _fit(fit_inputs, y[complete])'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root+'alpha_m97_c03_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c03_batch_01.pkl','rb') as f:\\n    p = pickle.load(f)[0]\\nd, g = p['dataset'], p['gt']\\nout = m.solve_alpha_m97_c03_batch_01(d)\\nlimits = [('estimated_taus','taus',.020), ('hereditary_weights','theta',.010), ('regime_mode_weights','vp_theta',.007)]\\nfor key, ref, limit in limits:\\n    err = np.linalg.norm(out[key]-g[ref])/np.linalg.norm(g[ref])\\n    print(key, 'relative L2', round(err, 7))\\n    assert err < limit\\ntr, te = d['train'], d['test']\\nx = m._align(tr, te)\\ncal = m._calibration(d['calibration_load_cells'])\\nactive = m._inputs(d, te, x[len(tr['lab_id']):], cal)[5]\\ncomplete = np.isfinite(te['coupon_features_raw']).all(axis=1)\\ne = out['predicted_strain'] - g['te_clean']\\nr = out['initial_rate_pred'] - g['te_true_rate0']\\nslices = [('pooled', np.ones(len(r),bool), .037,.029,.052), ('complete', complete,.012,.010,.017), ('missing',~complete,.112,.087,.155), ('active',active,.044,.034,.061), ('inactive',~active,.018,.014,.025)]\\nslices += [(f'lab {j}',te['lab_id']==j,.047,.037,.065) for j in range(4)]\\nfor name, mask, cmax, rmax, hmax in slices:\\n    c = np.sqrt(np.mean(e[mask]**2)); rr = np.sqrt(np.mean(r[mask]**2)); h = np.sqrt(np.mean(e[mask]**2,axis=0)).max()\\n    print(name, 'curve/rate/worst-horizon RMSE', *(round(v,7) for v in (c,rr,h)))\\n    assert c<cmax and rr<rmax and h<hmax\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fit all coupons -> H2 estimate parameters from complete coupons while retaining the specified imputation for prediction; the challenger reduced public time-constant error from 3.03% to 1.57%, with missing-feature curve/rate RMSE of 0.1107/0.0851.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all coupons in the fit\",\n      \"rejected_reason\": \"Complete-only fitting improves all three parameter estimates, while pooled and worst-slice prediction errors are essentially unchanged.\"\n    }\n  ],\n  \"rationale\": \"Apply the tested fit-selection change without altering the prediction law or imputation. Verify the exact artifact in isolated Python; if any parameter or slice regresses beyond the observed comparison margins, inspect the integration before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f734dada72bf3c03c6f4e34264fa9bf5ccb78b4e1dc0fcc027ac36660ab25ec6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32904.48,
+      "usage_known": true,
+      "prompt_tokens": 35460,
+      "cached_tokens": 6784,
+      "completion_tokens": 1204
+    }
+  ]
+}

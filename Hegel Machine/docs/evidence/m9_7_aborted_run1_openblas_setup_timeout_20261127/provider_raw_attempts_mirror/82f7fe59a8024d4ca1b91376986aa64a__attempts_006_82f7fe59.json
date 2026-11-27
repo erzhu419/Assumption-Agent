@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82f7fe59a8024d4ca1b91376986aa64a",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_02__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:12.069036+00:00",
+  "ended_at_utc": "2026-11-27T06:58:46.991058+00:00",
+  "request_sha256": "850131cc309bc04770d5d20187d7ad49b32ccd93aa076d3f46321f2958202e63",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37675,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24877,
+    "cached_tokens": 6784,
+    "completion_tokens": 1462
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nprior = Path('/tmp/hegel_continual_archive/beta_m97_c02_s00_solver.py').read_text()\\ncalibration = '''def _archived_affine(bank):\\n    # The archive is chronological. The latest sweep with a usable bank takes precedence.\\n    for row in reversed(json.loads(_ARCHIVE.read_text())):\\n        use = np.asarray(row['bank_id']) == bank\\n        x = np.asarray(row['ref_signal'], dtype=float)[use]\\n        if len(x) >= 2 and np.ptp(x) > 0:\\n            return _fit_affine(x, np.asarray(row['raw_readout'], dtype=float)[use])\\n    raise ValueError(f'No archived calibration for sensor bank {bank}')\\n\\n\\ndef _calibration(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    bank_id = np.asarray(sweeps['bank_id'])\\n    ref = np.asarray(sweeps['ref_signal'], dtype=float)\\n    raw = np.asarray(sweeps['raw_readout'], dtype=float)\\n    gain, offset = np.empty(4), np.empty(4)\\n    for bank in range(4):\\n        use = bank_id == bank\\n        x, y = ref[use], raw[use]\\n        if len(x) < 2:\\n            gain[bank], offset[bank] = _archived_affine(bank)\\n            continue\\n        if len(x) >= 4:\\n            # Repeated median slopes isolate transient outliers before the affine fit.\\n            dx, dy = x[:, None] - x, y[:, None] - y\\n            slopes = np.divide(dy, dx, out=np.full_like(dx, np.nan), where=dx != 0)\\n            seed_gain = np.nanmedian(np.nanmedian(slopes, axis=1))\\n            seed_offset = np.median(y - seed_gain * x)\\n            clean = np.abs(y - seed_gain * x - seed_offset) <= 3.0\\n            if clean.sum() < 4:\\n                gain[bank], offset[bank] = _archived_affine(bank)\\n                continue\\n            x, y = x[clean], y[clean]\\n        elif len(x) == 3:\\n            # With only two corroborating points, use the prefix on evidence of EMI.\\n            for i in range(3):\\n                j, k = (i + 1) % 3, (i + 2) % 3\\n                if x[j] != x[k]:\\n                    prediction = y[j] + (y[k] - y[j]) * (x[i] - x[j]) / (x[k] - x[j])\\n                    if abs(y[i] - prediction) > 3.0:\\n                        gain[bank], offset[bank] = _archived_affine(bank)\\n                        break\\n            else:\\n                gain[bank], offset[bank] = _fit_affine(x, y)\\n            continue\\n        gain[bank], offset[bank] = _fit_affine(x, y)\\n    banks = np.asarray(study['row_bank_id'], dtype=int)\\n    return (np.asarray(study['y_obs_raw']) - offset[banks]) / gain[banks]\\n\\n\\n'''\\ntarget = prior[:prior.index('def _archived_affine')] + calibration + prior[prior.index('def _axis'):]\\ntarget = target.replace('solve_beta_m97_c02_s00', 'solve_beta_m97_c02_batch_02')\\nPath('/holdout_task/beta_m97_c02_batch_02_solver.py').write_text(target)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived Robin stencil and active set → H2 preserve the validated numerics and repair bank dispatch; on the public case the worst projected-design, weight, and terminal-field errors were 8.33e-17, 1.16e-7, and 6.93e-9, respectively.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived calibration parser\",\"rejected_reason\":\"The archive stores sweep rows rather than fitted gains and offsets, and its older identity calibration is not applicable to this batch.\"}],\"rationale\":\"Preserve the forward stencil and source inversion after their agreement with the public reference. Implement the batch entry point and fit the latest archived sweep only where sparse coverage or EMI warrants it. The isolated validator will catch a contract or certificate regression before the calibration stress tests.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "681596259b651a05b1eb8893372e11bedbbbcc7f76f86cc1e10d708eeac9db6a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39773.45,
+      "usage_known": true,
+      "prompt_tokens": 24877,
+      "cached_tokens": 6784,
+      "completion_tokens": 1462
+    }
+  ]
+}

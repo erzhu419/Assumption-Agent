@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dea927e475394ae0a30b16fd2c759ff9",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:48:52.494209+00:00",
+  "ended_at_utc": "2026-11-27T06:49:19.635076+00:00",
+  "request_sha256": "efce8b201601e0a338e6a6756f8b358f6031aa369a8d272347b5a3c343c229d2",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 41918,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26179,
+    "cached_tokens": 0,
+    "completion_tokens": 979
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',root+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open(root+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; out=m.solve_alpha_m97_c03_batch_01(d)\\nfor key,ref in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n a,b=np.asarray(out[key]),np.asarray(g[ref]); print(key,'estimate',a,'reference',b,'maxabs',np.max(abs(a-b)),'relative L2',np.linalg.norm(a-b)/np.linalg.norm(b))\\ncal=m._calibration(d['calibration_load_cells']); x=m._align(tr,te); n=len(tr['lab_id']); y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; ti=m._inputs(d,tr,x[:n],cal); vi=m._inputs(d,te,x[n:],cal)\\nprint('active train/test',ti[-2].sum(),vi[-2].sum(),'calibration max errors',np.max(abs(cal[:,0]-g['stress_gains'])),np.max(abs(cal[:,1]-g['stress_biases'])))\\ncurve=out['predicted_strain']-g['te_clean']; rate=out['initial_rate_pred']-g['te_true_rate0']; rms=lambda z:np.sqrt(np.mean(z*z)); print('public clean curve/rate RMSE',rms(curve),rms(rate),'worst horizon',np.sqrt(np.mean(curve**2,axis=0)).max())\\nfor label, mask in [(f'lab {i}',te['lab_id']==i) for i in range(4)]+[('plateau',vi[-2]),('linear',~vi[-2])]:\\n if mask.any(): print('clean slice',label,mask.sum(),rms(curve[mask]),rms(rate[mask]))\\nfor lab in range(4):\\n keep=tr['lab_id']!=lab; a=tuple(v[keep] if j in (0,1,2,5,6) else v for j,v in enumerate(ti)); b=tuple(v[~keep] if j in (0,1,2,5,6) else v for j,v in enumerate(ti)); q=m._fit(a,y[keep]); residual=m._design(q[:2],*b)[0]@q[2:]-y[~keep]; print('LOLO',lab,'taus',np.exp(q[:2]),'curve/rate RMSE',rms(residual[:,:-1]),rms(residual[:,-1]),'curve/rate median abs',np.median(abs(residual[:,:-1])),np.median(abs(residual[:,-1])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 two-branch linear creep -> H2 damage-gated logarithmic creep with two regime terms; the isolated schema check passed and worst public calibration residual is 2.17e-4 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation\",\n      \"rejected_reason\": \"Correct shapes do not establish parameter recovery or accuracy on held-out labs and damage regimes.\"\n    }\n  ],\n  \"rationale\": \"Compare all five outputs against public references only after fitting, then refit without each lab's strain and rate measurements. A lab-specific failure would direct attention to calibration or alignment; a regime- or horizon-specific failure would direct attention to the constitutive terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "053dd01a96dd9cb36d378755a777b976ca7284080ae8fbe99e13c10ad3b3c650",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29500.74,
+      "usage_known": true,
+      "prompt_tokens": 26179,
+      "cached_tokens": 0,
+      "completion_tokens": 979
+    }
+  ]
+}

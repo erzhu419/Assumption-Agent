@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "02de9e97923d45ea84b0a63bbb2aa605",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:01:34.141693+00:00",
+  "ended_at_utc": "2026-11-27T07:02:03.624772+00:00",
+  "request_sha256": "dae2fd4ad27756b930bb3b0a08eaf97f6c33a9de5e4f463a78bb4d008a4fb7a7",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41732,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25539,
+    "cached_tokens": 6784,
+    "completion_tokens": 1105
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\nsp=importlib.util.spec_from_file_location('solver',p+'beta_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_beta_m97_c01_batch_03.pkl','rb')):\\n s,g=item['study'],item['gt']; q=s['sensor_calibration_sweeps']; ids=np.asarray(q['bank_id']); rows=np.asarray(s['row_bank_id']); z=s['Z_nuisance']; u,d,_=np.linalg.svd(z,full_matrices=False); raw=np.column_stack((m._calibrated_target(s),m._forward(s)[0])); r=raw-u@((d*d/(d*d+s['nuisance_ridge']))[:,None]*(u.T@raw)); ref=np.column_stack((g['r_y'],g['S_tilde'])); print('Projected measurement and operator max abs errors by bank:',[(float(np.max(abs((r-ref)[rows==b,0]))),float(np.max(abs((r-ref)[rows==b,1:])))) for b in range(4)])\\n assert np.max(abs(r[:,0]-ref[:,0])) < 1e-6 and np.max(abs(r[:,1:]-ref[:,1:])) < 1e-12\\n prior=json.loads(m._CALIBRATION_ARCHIVE.read_text())[-1]; worst=0.; missed=0\\n for b in range(4):\\n  inds=np.flatnonzero(ids==b); print('bank',b,'reference levels',np.round(np.asarray(q['ref_signal'])[inds],4).tolist())\\n  mask=np.asarray(prior['bank_id'])==b; xp=np.asarray(prior['ref_signal'])[mask]; yp=np.asarray(prior['raw_readout'])[mask]; gain,offset=np.linalg.lstsq(np.c_[xp,np.ones_like(xp)],yp,rcond=None)[0]; expected=(s['y_obs_raw'][rows==b]-offset)/gain\\n  for count in (3,4):\\n   for j in range(len(inds)-count+1):\\n    take=inds[j:j+count]; keep=ids!=b; keep[take]=True\\n    for idx in take:\\n     for spike in (-3.01,3.01,-9.,9.):\\n      sub={k:np.asarray(v)[keep].copy() for k,v in q.items()}; sub['raw_readout'][np.count_nonzero(keep[:idx])]+=spike\\n      actual=m._calibrated_target(dict(s,sensor_calibration_sweeps=sub))[rows==b]; err=float(np.max(abs(actual-expected))); worst=max(worst,err); missed+=err>1e-10\\n print('Sparse sweep plus EMI: maximum calibration fallback error',worst,'nonmatching slices',missed)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived open-Robin solver → H2 mode-gated periodic recirculation with bank-local calibration; worst normalized PDE residual was 1.66e-15 and worst stressed KKT gap was 9.09e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat boundary-mode and public schema checks on the unchanged artifact.\",\n      \"rejected_reason\": \"They already passed in isolation; they would not detect a calibration failure when a bank is both sparse and spiked.\"\n    }\n  ],\n  \"rationale\": \"Check the nuisance projection separately by bank and test the previously uncovered interaction between sparse sweeps and EMI on measured reference levels. A projection discrepancy would change the nuisance implementation; an EMI discrepancy would isolate the spike detection and archive fallback decision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "c3e793c51194eaf462724fc95b51828eca0dd185bf7ca9e64fc4c894bf216400",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31847.03,
+      "usage_known": true,
+      "prompt_tokens": 25539,
+      "cached_tokens": 6784,
+      "completion_tokens": 1105
+    }
+  ]
+}

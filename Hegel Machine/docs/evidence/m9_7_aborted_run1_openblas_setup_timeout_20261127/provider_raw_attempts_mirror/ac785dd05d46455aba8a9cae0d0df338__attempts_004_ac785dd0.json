@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac785dd05d46455aba8a9cae0d0df338",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:40:48.543461+00:00",
+  "ended_at_utc": "2026-11-27T06:41:19.000566+00:00",
+  "request_sha256": "ef571f4fab9687c7b8220893e60e45b63606ad275d4fbe7ea7cae8bee33ac68f",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 33785,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23789,
+    "cached_tokens": 0,
+    "completion_tokens": 1271
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, json, pathlib, pickle, tempfile\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'beta_m97_c02_s00_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nst = pickle.load(open('public_beta_m97_c02_s00.pkl', 'rb'))[0]['study']\\n# Preserve the measured sensor geometry and nuisance basis; control calibration faults independently.\\nst = copy.deepcopy(st)\\nsw = st['sensor_calibration_sweeps']; bid = sw['bank_id']; rb = st['row_bank_id']\\ngain = np.array([.8, 1.15, 1.3, .95]); offset = np.array([.2, -.15, .35, -.3])\\ntrue = np.linspace(-1, 1, len(rb)); st['y_obs_raw'] = gain[rb]*true + offset[rb]\\nsw['raw_readout'] = gain[bid]*sw['ref_signal'] + offset[bid]\\nworst_cal = np.max(np.abs(m._calibration(st)-true))\\nwith tempfile.TemporaryDirectory() as temp:\\n    archive = pathlib.Path(temp)/'archive_calibration_history.json'\\n    archive.write_text(json.dumps({str(b): {'gain': gain[b], 'offset': offset[b]} for b in range(4)}))\\n    m._ARCHIVE = archive\\n    for b in range(4):\\n        rows = np.flatnonzero(bid == b)\\n        for k in (0, 1):\\n            keep = bid != b; keep[rows[:k]] = True\\n            tmp = {**st, 'sensor_calibration_sweeps': {key: val[keep] for key,val in sw.items()}}\\n            worst_cal = max(worst_cal, np.max(np.abs(m._calibration(tmp)-true)))\\n        for i in rows:\\n            for spike in (-8., 8.):\\n                tmp = copy.deepcopy(st); tmp['sensor_calibration_sweeps']['raw_readout'][i] += spike\\n                worst_cal = max(worst_cal, np.max(np.abs(m._calibration(tmp)-true)))\\nprint('Worst calibration error, clean / sparse archive / single EMI spike:', worst_cal)\\nassert worst_cal < 1e-12\\n# The analytic dual gap independently detects failures on bound-heavy and all-bound faces.\\nrng = np.random.default_rng(741)\\nworst = np.zeros(4)\\nfor budget in (0., .02, 1., 2.6, 6., 11.98, 12.):\\n    for _ in range(30):\\n        S = rng.normal(size=(36, 12)); S[:, 6:] = S[:, :6] + 1e-5*S[:,6:]; y = 10*rng.normal(size=36)\\n        w, c = m._box_simplex(S, y, .04, 1., budget)\\n        r = S@w-y; g = S.T@r+.04*w; nu = c['nu_sum']; lo = c['lam_lower']; up = c['lam_upper']\\n        err = [max(abs(w.sum()-budget), -w.min(), w.max()-1), np.max(np.abs(g-nu-lo+up)), max(np.max(np.abs(lo*w)), np.max(np.abs(up*(1-w)))), c['primal_objective']-c['dual_lower_bound']]\\n        worst = np.maximum(worst, err)\\nprint('Worst feasibility, stationarity, complementarity, and gap across 210 QPs:', worst)\\nassert np.max(worst) < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Bank-wise calibration and sparse Robin solves -> certified source inversion; the public case passed with maximum weight error 2.15e-7, terminal-field error 1.50e-8, and duality gap 6.60e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public validator\",\n      \"rejected_reason\": \"The public case does not exercise archive fallback, transient EMI, or saturated simplex faces.\"\n    }\n  ],\n  \"rationale\": \"Test the supported calibration fallback and EMI cases on public sensor geometry, then check feasibility and KKT residuals independently on bound-heavy inversions. Failures would isolate either calibration or the active-set solver without changing the verified Robin operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "04ee262384a27c5b579f8c999e975b58983fb0b3c29eeac7d060313bd35e464d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35168.41,
+      "usage_known": true,
+      "prompt_tokens": 23789,
+      "cached_tokens": 0,
+      "completion_tokens": 1271
+    }
+  ]
+}

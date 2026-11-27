@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d861be4bb5014366b8a0d9ca17065529",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:23:15.526332+00:00",
+  "ended_at_utc": "2026-11-27T07:23:45.341927+00:00",
+  "request_sha256": "649fc75b9b8c76c8775799c76d0696374a8e83ae4d59a7335e5f41b87e7bb786",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43312,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26359,
+    "cached_tokens": 6784,
+    "completion_tokens": 1113
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e; cd /holdout_task; sed -n '74,165p' alpha_m97_c01_batch_07_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_07_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]['dataset'];tr=d['train'];te=d['test'];n=len(tr['lab_id']);state=m._prepare(d);dt=d['past_dt'];ts=d['eval_times'];crit=d['crit_stress'];assert d['shear_banding_index']<=.50\\np,h,x=(a[n:] for a in state);out=m.solve_alpha_m97_c01_batch_07(d);tau=out['estimated_taus'];w=out['hereditary_weights'];v=out['regime_mode_weights'];z=np.array([[sum(stress[j]*(1-np.exp(-dt[j]/t))*np.exp(-sum(dt[j+1:])/t) for j in range(len(dt))) for t in tau] for stress in p]);g=h[:,None]-z;a=np.tanh(np.sum(np.maximum(np.abs(p)-crit,0)**2*dt,axis=1));b=g*w[:2];b[:,0]+=v[0]*a*h;u=w[2]+x@w[3:]+v[1]*a*z[:,0]\\nf=lambda t:b@(-np.expm1(-t[None,:]/tau[:,None]))+u[:,None]*np.log1p(t)\\nec=np.max(np.abs(te['strain_0'][:,None]+f(ts)-out['predicted_strain']));step=1e-5;er=np.max(np.abs(((4*f(np.array([step]))-f(np.array([2*step])))/(2*step)).ravel()-out['initial_rate_pred']));print('closed-form curve max error',ec,'forward derivative max error',er,'test active counts',np.bincount(a>0,minlength=2));assert ec<1e-10 and er<1e-7\\nA,B=m._design(tau,tuple(q[:n] for q in state),dt,ts,crit);M=np.vstack((A.reshape(-1,9),B));print('basis rank and normalized condition',np.linalg.matrix_rank(M),np.linalg.cond(M/np.linalg.norm(M,axis=0)));assert np.linalg.matrix_rank(M)==9\\np=tuple(q[:n] for q in state);y=tr['strain_curves_obs']-tr['strain_0'][:,None];r=tr['instant_rate_obs'];lab=tr['lab_id'];complete=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor c in np.unique(lab):\\n hold=lab==c;fit=~hold;t,co=m._fit(tuple(q[fit] for q in p),dt,ts,crit,y[fit],r[fit]);A,B=m._design(t,tuple(q[hold] for q in p),dt,ts,crit);keep=complete[hold];e=(A@co-y[hold])[keep];q=(B@co-r[hold])[keep];print('lab',c,'complete n',keep.sum(),'signed median strain@last/rate',np.round([np.median(e[:,-1]),np.median(q)],5),'curve/rate p90',np.round([np.quantile(abs(e),.9),np.quantile(abs(q),.9)],5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated Prony memory → logarithmic creep with damage-gated corrections; missing-coupon out-of-fold p90 absolute errors remain 0.338 for strain and 0.231 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the solver after the failed audit\",\n      \"rejected_reason\": \"The audit multiplied two branch gaps by all seven hereditary weights. That error was in the independent check, not the solver.\"\n    }\n  ],\n  \"rationale\": \"Correct the audit to use only the two branch weights. A curve or derivative mismatch would require fixing the constitutive implementation; a rank deficit would flag unidentifiable weights. Signed held-out lab residuals on complete coupons test whether a systematic lab offset remains after alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "10f7b2960621bd163d1f417ace222e98b4fc4494f5ba6dce36a95ed306ab539a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32284.79,
+      "usage_known": true,
+      "prompt_tokens": 26359,
+      "cached_tokens": 6784,
+      "completion_tokens": 1113
+    }
+  ]
+}

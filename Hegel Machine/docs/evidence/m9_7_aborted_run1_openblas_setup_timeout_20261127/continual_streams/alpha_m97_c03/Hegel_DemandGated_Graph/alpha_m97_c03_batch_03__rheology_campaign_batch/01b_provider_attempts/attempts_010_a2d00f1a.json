@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2d00f1ad7f749939624fed29d75b69c",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:59:16.106602+00:00",
+  "ended_at_utc": "2026-11-27T06:59:48.420336+00:00",
+  "request_sha256": "576176165106a68bc146b663ea6bc24cbb3a681c3a2e5b26c96326ff31da5f0e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56436,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31569,
+    "cached_tokens": 0,
+    "completion_tokens": 1357
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/tmp/rheology_margin_audit.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c03_batch_03_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_03.pkl','rb'))[0]['dataset']\\na,b=d['train'],d['test']; lab=a['lab_id']; miss=np.isnan(a['coupon_features_raw']).any(axis=1)\\ng=m._calibrate(d['calibration_load_cells']); x=m._align(a,b)[:len(lab)]; past,h=m._physical(a,g); dt,t=d['past_dt'],d['eval_times']; y=np.column_stack((a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']))\\nfor mode in ('all','complete'):\\n e=np.empty_like(y)\\n for c in range(4):\\n  use=(lab!=c)&((~miss) if mode=='complete' else True); z=lab==c\\n  tau,w=m._fit(past[use],h[use],dt,t,x[use],y[use]); e[z]=m._design(tau,past[z],h[z],dt,t,x[z])@w-y[z]\\n  print(mode,c,'tau',np.round(tau,5),'p95 strain, rate rmse',np.quantile(abs(e[z,:-1]),.95),np.sqrt(np.mean(e[z,-1]**2)),'complete median signed by horizon',np.round(np.median(e[z&~miss],axis=0),4))\\n  # Compare the entire design, including rate, against a direct recurrence and scalar constitutive terms.\\n  mem=np.zeros((z.sum(),2))\\n  for step,stress in zip(dt,past[z].T):\\n   q=np.exp(-step/tau); mem=q*mem+(1-q)*stress[:,None]\\n  q0,q1=(h[z,None]-mem).T\\n  v=w[2]+x[z]@w[3:7]+w[7]*np.sign(h[z])*np.sqrt(abs(h[z]))\\n  f0=w[0]*q0+w[8]*(q0-q1); f1=w[1]*q1\\n  strain=f0[:,None]*(1-np.exp(-t/tau[0]))+f1[:,None]*(1-np.exp(-t/tau[1]))+v[:,None]*t/(1+.85*t)\\n  rate=f0/tau[0]+f1/tau[1]+v\\n  np.testing.assert_allclose(np.column_stack((strain,rate)),e[z]+y[z],atol=1e-12)\\n for name,z in [('complete',~miss),('missing',miss),('nonnegative stress',h>=0),('negative stress',h<0)]:\\n  if z.any(): print(mode,name,z.sum(),'med abs',np.median(abs(e[z,:-1])),np.median(abs(e[z,-1])))\\ncal=d['calibration_load_cells']; errors=[]\\nfor c in range(4):\\n rows=np.flatnonzero(cal['lab_id']==c)\\n from itertools import combinations\\n for group in combinations(rows,3):\\n  selected=np.flatnonzero((cal['lab_id']!=c)|np.isin(np.arange(len(lab))[:len(cal['lab_id'])],group))\\n  base={k:v[selected] for k,v in cal.items()}\\n  for idx in np.flatnonzero(base['lab_id']==c):\\n   for noise in (-6.,6.):\\n    alt=dict(base,true_stress=base['true_stress'].copy()); alt['true_stress'][idx]+=noise\\n    errors.append(np.max(abs(m._calibrate(alt)[c]-g[c])))\\nprint('Three-point sweeps with one EMI spike: max coefficient error and failures above 0.001:',max(errors),sum(v>.001 for v in errors),'of',len(errors))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unweighted least squares → H2 Cauchy fitting: verified worst held-out lab strain p95 is 0.329 and onset-rate RMSE is 0.084; the remaining audit targets sparse EMI sweeps and missing-feature sensitivity.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay-mode or balanced-accuracy diagnostics\",\"rejected_reason\":\"The dataset has continuous strain and rate outcomes, not relay states or class labels. Per-lab residuals are the relevant nuisance diagnostic.\"}],\"rationale\":\"Independently evaluate the full strain and rate equations to catch a missing slip, gap-difference, or saturation term. Compare fits with and without imputed training rows, while preserving the required prediction imputation, to see whether missingness biases the shared coefficients. Stress-test sparse EMI sweeps because a three-point robust line may mask a spike and skip the prescribed archive fallback.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "95fb4ccbe7c20211e8ecd79cc204deaf9d6b7f624564f4a68ea299b5f365775a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37042.93,
+      "usage_known": true,
+      "prompt_tokens": 31569,
+      "cached_tokens": 0,
+      "completion_tokens": 1357
+    }
+  ]
+}

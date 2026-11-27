@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d18024fe8f9e44b7bb13a8fdefeaffcb",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:23.082314+00:00",
+  "ended_at_utc": "2026-11-27T06:58:02.651706+00:00",
+  "request_sha256": "648540d2d20b097f7cbe5935c1fa66d9dbe04aa36f60242cd8e9901d8a794684",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45010,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27619,
+    "cached_tokens": 6784,
+    "completion_tokens": 1617
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology_contract.py <<'PY'\\nimport copy, importlib.util, pickle\\nfrom time import perf_counter\\nimport numpy as np\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'alpha_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd = pickle.load(open(root+'public_alpha_m97_c01_batch_03.pkl','rb'))[0]['dataset']\\ncal = d['calibration_load_cells']; nominal = m._calibrate(cal)\\nfor c in range(4):\\n    idx = np.flatnonzero(cal['lab_id'] == c)\\n    keep = (cal['lab_id'] != c) | (np.arange(len(cal['lab_id'])) == idx[0])\\n    sparse = m._calibrate({k: v[keep] for k,v in cal.items()})\\n    np.testing.assert_allclose(sparse[c], m._historical_line(c), atol=1e-12)\\n    np.testing.assert_allclose(sparse[np.arange(4) != c], nominal[np.arange(4) != c], atol=1e-12)\\n    worst = 0.\\n    for i in idx:\\n        for spike in (-12., -3.01, 3.01, 12.):\\n            noisy = {k: v.copy() for k,v in cal.items()}; noisy['true_stress'][i] += spike\\n            worst = max(worst, float(np.max(np.abs(m._calibrate(noisy)-nominal))))\\n    print('channel', c, 'sparse archive versus full current max coefficient delta', np.max(abs(sparse[c]-nominal[c])), 'worst EMI coefficient error', worst)\\n    assert worst < 0.001\\n\\ndef forward(data, dt, times, tau, w):\\n    past, hold, x = data\\n    ends = np.cumsum(dt)\\n    age = ends[-1] - ends\\n    kernel = np.exp(-age[:,None]/tau) - np.exp(-(age+dt)[:,None]/tau)\\n    g = hold[:,None] - past@kernel\\n    drift = w[2] + x@w[3:7] + w[7]*np.sign(hold)*np.sqrt(abs(hold))\\n    f = 1 - np.exp(-times[:,None]/tau)\\n    return (g*w[:2])@f.T + drift[:,None]*times/(1+0.85*times) + w[8]*(g[:,0]-g[:,1])[:,None]*f[:,0]\\n\\nstart = perf_counter()\\nout = m.solve_alpha_m97_c01_batch_03(d)\\nprint('default-process solve seconds', perf_counter()-start)\\nn = len(d['train']['lab_id']); data = m._prepare(d); dt = d['past_dt']; t = d['eval_times']\\ntest = tuple(v[n:] for v in data)\\ntau = out['estimated_taus']; w = np.r_[out['hereditary_weights'],out['regime_mode_weights']]\\nnp.testing.assert_allclose(out['predicted_strain'] - d['test']['strain_0'][:,None], forward(test,dt,t,tau,w), atol=2e-12)\\nh = 1e-5\\nv = forward(test,dt,np.array([-h,h]),tau,w); rate = (v[:,1]-v[:,0])/(2*h)\\nprint('max independent onset derivative error', np.max(abs(rate-out['initial_rate_pred'])))\\nnp.testing.assert_allclose(rate, out['initial_rate_pred'], atol=2e-8)\\nclean = copy.deepcopy(d); tau0 = np.array([0.52, 4.6]); w0 = np.array([0.72,0.46,0.18,0.13,-0.16,0.08,-0.1,0.28,-0.18]); train = tuple(v[:n] for v in data)\\nclean['train']['strain_curves_obs'] = d['train']['strain_0'][:,None] + forward(train,dt,t,tau0,w0)\\nv = forward(train,dt,np.array([-h,h]),tau0,w0)\\nclean['train']['instant_rate_obs'] = (v[:,1]-v[:,0])/(2*h)\\nret = m.solve_alpha_m97_c01_batch_03(clean)\\nprint('noiseless max tau/weight errors', np.max(abs(ret['estimated_taus']-tau0)), np.max(abs(np.r_[ret['hereditary_weights'],ret['regime_mode_weights']]-w0)))\\nnp.testing.assert_allclose(ret['estimated_taus'],tau0,atol=1e-5)\\nnp.testing.assert_allclose(np.r_[ret['hereditary_weights'],ret['regime_mode_weights']],w0,atol=1e-5)\\nPY\\npython3 -I /tmp/rheology_contract.py && python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the saturated jammed-slip fit gives worst held-out-lab MAE of 0.123 for strain and 0.0302 for onset rate; missing coupons raise these to 0.195 and 0.0980, respectively.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune against the largest raw curve RMSE\",\n      \"rejected_reason\": \"The gap between RMSE and MAE points to a heavy residual tail. First verify that the solver recovers known parameters and satisfies the physical law independently of that tail.\"\n    }\n  ],\n  \"rationale\": \"Test sparse and EMI calibration against the prescribed fallback and clean fit; fix the detector if a spike changes the fitted line. Check the recurrence against a closed-form convolution and the rate against a numerical derivative; any mismatch identifies which design term needs correction. An independent noiseless fit checks optimizer recovery before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "57e36bfd15ed6f71c40d3d8738011b81fd89b7f86d3be4f255b91baa176cdb2b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41896.8,
+      "usage_known": true,
+      "prompt_tokens": 27619,
+      "cached_tokens": 6784,
+      "completion_tokens": 1617
+    }
+  ]
+}

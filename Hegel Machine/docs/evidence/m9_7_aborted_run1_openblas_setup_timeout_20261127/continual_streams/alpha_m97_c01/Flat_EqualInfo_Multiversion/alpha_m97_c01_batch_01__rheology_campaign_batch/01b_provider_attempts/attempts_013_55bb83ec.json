@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "55bb83ec5c3947af8fab29240311f843",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:53:05.437848+00:00",
+  "ended_at_utc": "2026-11-27T06:53:37.753891+00:00",
+  "request_sha256": "5e6f020e205f9da8c516319df60bc62972f2cfab827e7deca8a95b32457dafdd",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 72904,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35867,
+    "cached_tokens": 6784,
+    "completion_tokens": 1199
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '/^def _calibrate/,/^def _prepare/p' alpha_m97_c01_batch_01_solver.py\\ncat > /tmp/rheology_handoff_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom pathlib import Path\\nroot = Path('/holdout_task')\\nm = runpy.run_path(str(root/'alpha_m97_c01_batch_01_solver.py'))\\nwith (root/'public_alpha_m97_c01_batch_01.pkl').open('rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\nout = m['solve_alpha_m97_c01_batch_01'](d)\\n(past, hold, x), n = m['_prepare'](d)\\ndt, t = d['past_dt'], d['eval_times']\\ntau, hw, rw = (out[k] for k in ('estimated_taus','hereditary_weights','regime_mode_weights'))\\ntail = dt.sum() - np.cumsum(dt)\\nz = past[n:] @ (np.exp(-tail[:,None]/tau) - np.exp(-(tail+dt)[:,None]/tau))\\ngap = hold[n:,None] - z\\nD = np.maximum(np.abs(past[n:])-d['crit_stress'],0)**2 @ dt\\nact = np.tanh(D)\\namplitudes = gap*hw[:2]\\namplitudes[:,0] += rw[0]*act*hold[n:]\\ndrift = hw[2] + x[n:]@hw[3:7] + rw[1]*act*z[:,0]\\neps = d['test']['strain_0'][:,None] + amplitudes @ (1-np.exp(-t[None,:]/tau[:,None])) + drift[:,None]*np.log1p(t)\\nrate = amplitudes @ (1/tau) + drift\\nfor label, pred, actual in [('strain',eps,out['predicted_strain']),('rate',rate,out['initial_rate_pred'])]:\\n    for name, sel in [('zero damage',D==0),('positive damage',D>0)]:\\n        e = np.max(np.abs(pred[sel]-actual[sel])); print(label,name,'max independent handoff difference',e); assert e < 1e-10\\ns = d['test']; mask = np.isfinite(s['coupon_features_raw']).all(axis=1)\\ncurve_e = eps-g['te_clean']; rate_e = rate-g['te_true_rate0']\\nprint('Complete coupons only, mean signed strain/rate residual by lab and damage group:')\\nfor lab in np.unique(s['lab_id']):\\n    for damage in (False, True):\\n        q = mask & (s['lab_id']==lab) & ((D>0)==damage)\\n        if q.any(): print(int(lab),damage,int(q.sum()),round(curve_e[q].mean(),6),round(rate_e[q].mean(),6))\\nprint('Reference alignment comparison by lab, including cases with missing coupons:')\\nfor lab in np.unique(s['lab_id']):\\n    q = s['lab_id']==lab\\n    print(int(lab),'max past/hold stress error',np.max(abs(past[n:][q]-g['te_past_true'][q])),np.max(abs(hold[n:][q]-g['te_hold_true'][q])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_handoff_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Retain the Cauchy-profiled two-branch plateau and audit its closed-form memory and lab alignment; the worst verified public slice remains missing-feature coupons at 0.229 strain RMSE and 0.174 initial-rate RMSE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add rational, pairwise, or relay terms to the rheology model\",\"rejected_reason\":\"The specified model has two exponential memory branches and logarithmic drift, with no relay state or stochastic drift operator. The independent reconstruction checks that every prescribed term reaches both outputs.\"},{\"option\":\"Audit within-batch balanced accuracy\",\"rejected_reason\":\"Both targets are continuous. Signed errors within lab and damage strata can expose biases that cancel in pooled regression metrics.\"}],\"rationale\":\"Independently reconstruct the branch states from the closed-form convolution. A disagreement would identify a memory or output-handoff error; signed residuals and physical stress errors by lab will reveal whether a calibration mismatch is being hidden by pooling. Check the exact artifact in an isolated process without changing the fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "aade8c161e8ccaf72bb3f38af23db143604313d570e67aefcd5be10b4a37151c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34713.32,
+      "usage_known": true,
+      "prompt_tokens": 35867,
+      "cached_tokens": 6784,
+      "completion_tokens": 1199
+    }
+  ]
+}

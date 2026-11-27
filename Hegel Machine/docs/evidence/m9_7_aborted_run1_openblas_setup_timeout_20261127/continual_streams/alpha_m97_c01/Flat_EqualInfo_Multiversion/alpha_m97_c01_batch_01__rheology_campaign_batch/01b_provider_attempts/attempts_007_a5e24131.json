@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a5e24131658640c89142c15af444bb23",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:49:51.570263+00:00",
+  "ended_at_utc": "2026-11-27T06:50:27.123058+00:00",
+  "request_sha256": "e6d2dd79db8d279ae52f130a89fc3cf6c32b8a40c66cac82424f750fc773d44c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48511,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28915,
+    "cached_tokens": 11136,
+    "completion_tokens": 1422
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('    fits = [fit_from(')\\nb = s.index('    if not np.any(state[3])', a)\\ns = s[:a] + '''    fits = [fit_from(np.clip(np.log(pair), *bounds), 0.) for pair in starts]\\n    best = min(fits, key=lambda fit: fit.cost)\\n    initial, w = profile(best.x, 0.)\\n\\n    def scale(residual):\\n        return max(1.4826*np.median(np.abs(residual-np.median(residual))), 1e-8)\\n\\n    curve_scale = scale(initial)\\n    _, rate = matrices(best.x)\\n    if use_rates:\\n        rate_scale = scale(rate @ w-rate_obs[rate_good])\\n        rate_weight = curve_scale/rate_scale\\n        best = min((fit_from(fit.x, rate_weight) for fit in fits), key=lambda fit: fit.cost)\\n        initial, w = profile(best.x, rate_weight)\\n        curve_scale = scale(initial[:curve_good.sum()])\\n        _, rate = matrices(best.x)\\n        rate_scale = scale(rate @ w-rate_obs[rate_good])\\n        target = np.r_[delta[curve_good]/curve_scale, rate_obs[rate_good]/rate_scale]\\n    else:\\n        target = delta[curve_good]/curve_scale\\n\\n    def robust(logtaus, return_weights=False):\\n        a, rate = matrices(logtaus)\\n        a = a/curve_scale\\n        if use_rates:\\n            a = np.vstack((a, rate/rate_scale))\\n        weights = np.linalg.lstsq(a, target, rcond=None)[0]\\n        for _ in range(10):\\n            e = np.einsum('ij,j->i', a, weights)-target\\n            v = 1/np.hypot(1., e/2.)\\n            weights = np.linalg.lstsq(a*v[:, None], target*v, rcond=None)[0]\\n        if return_weights:\\n            return weights\\n        e = np.einsum('ij,j->i', a, weights)-target\\n        return np.sign(e)*2*np.sqrt(np.log1p((e/2.)**2))\\n\\n    robust_starts = [best.x, np.clip(np.log([0.75, 4.0]), *bounds)]\\n    if plateau and np.any(state[3]):\\n        robust_starts.append(best.x[::-1])\\n    best = min((least_squares(robust, start, bounds=tuple(bounds), max_nfev=90)\\n                for start in robust_starts), key=lambda fit: fit.cost)\\n    logs = best.x.copy()\\n    weights = robust(logs, return_weights=True)\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle,runpy,time,numpy as np\\np='alpha_m97_c01_batch_01_solver.py'; obj=pickle.load(open('public_alpha_m97_c01_batch_01.pkl','rb'))[0]; d,g=obj['dataset'],obj['gt']; m=runpy.run_path(p); t0=time.monotonic(); out=m['solve_alpha_m97_c01_batch_01'](d); print('runtime',time.monotonic()-t0)\\nfor k,l in zip(out,('taus','theta','vp_theta','te_clean','te_true_rate0')):\\n e=out[k]-g[l]; print(k,'RMSE',np.sqrt(np.mean(e**2)),'max',np.max(abs(e)), 'estimate' if out[k].size<10 else '',out[k] if out[k].size<10 else '')\\ndata,n=m['_prepare'](d); h=m['_state'](data,d['past_dt'],d['crit_stress'],True)[3][n:]; test=d['test']; missing=np.isnan(test['coupon_features_raw']).any(axis=1)\\naxes={'active':h>0,'inactive':h==0,'missing':missing,'complete':~missing}; axes.update({f'lab{i}':test['lab_id']==i for i in range(4)})\\nfor name,sel in axes.items():\\n e=out['predicted_strain'][sel]-g['te_clean'][sel]; r=out['initial_rate_pred'][sel]-g['te_true_rate0'][sel]; print(name,sel.sum(),'strain/rate RMSE',np.mean(e**2)**.5,np.mean(r**2)**.5,'early/late strain RMSE',np.mean(e[:,0]**2)**.5,np.mean(e[:,-1]**2)**.5)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Keep batch-wide logarithmic drift and replace ordinary fitting with Cauchy profiling; held-lab curve MAE improved from 0.233 to 0.196 at worst, and missing-feature rate RMSE improved from 0.171 to 0.141.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use soft-L1 profiling\",\n      \"rejected_reason\": \"It gave similar missing-feature errors, but Cauchy profiling yielded a higher and more stable slow relaxation time across held-lab folds.\"\n    }\n  ],\n  \"rationale\": \"Promote the robust fit because it reduced held-lab errors without changing the physical model. Verify every output against the public reference in an isolated process, and separate missing-feature errors from complete-coupon errors to determine whether alignment still limits predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d8a1515d1e09b527a9c7021820e92f4d9ca08c749fe80833a42b1f16e486288e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37904.4,
+      "usage_known": true,
+      "prompt_tokens": 28915,
+      "cached_tokens": 11136,
+      "completion_tokens": 1422
+    }
+  ]
+}

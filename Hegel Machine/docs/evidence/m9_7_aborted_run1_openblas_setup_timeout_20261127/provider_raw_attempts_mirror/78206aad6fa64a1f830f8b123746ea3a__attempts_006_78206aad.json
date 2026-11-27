@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78206aad6fa64a1f830f8b123746ea3a",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:13:28.382078+00:00",
+  "ended_at_utc": "2026-11-27T07:13:54.334579+00:00",
+  "request_sha256": "bcb3be54300f8259ba616d9ee102ccc5a54e03f175621a2f77fee68f7e7ff007",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40949,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26479,
+    "cached_tokens": 11136,
+    "completion_tokens": 1008
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, time\\nimport numpy as np\\ns = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_06_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_batch_06.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']\\nt0 = time.monotonic()\\no = m.solve_alpha_m97_c02_batch_06(d)\\nprint('elapsed_s', round(time.monotonic()-t0, 3))\\ncal = m._calibrate(d['calibration_load_cells'])\\nfor name, a, b in [('taus',o['estimated_taus'],g['taus']), ('load gains',cal[:,0],g['stress_gains']), ('load biases',cal[:,1],g['stress_biases'])]:\\n    print(name, 'max abs error', np.max(abs(np.asarray(a)-np.asarray(b))))\\nte = d['test']; lab=np.asarray(te['lab_id']); hold = np.asarray(g['te_hold_true']).reshape(-1)\\nassert np.allclose(cal[lab,0]*te['stress_hold_cmd'] + cal[lab,1], hold, atol=5e-4)\\nassert np.allclose(cal[lab,0,None]*te['past_stress_cmd'] + cal[lab,1,None], g['te_hist_true'], atol=5e-4)\\nce = np.abs(o['predicted_strain'] - np.asarray(g['te_clean'])); re = np.abs(o['initial_rate_pred'] - np.asarray(g['te_true_rate0']).reshape(-1))\\nassert ce.shape == o['predicted_strain'].shape and re.shape == o['initial_rate_pred'].shape\\nslices = [('all',np.ones(lab.size,dtype=bool)), ('imputed',np.isnan(te['coupon_features_raw']).any(axis=1)), ('negative hold',hold<0), ('positive hold',hold>0)] + [('lab '+str(c),lab==c) for c in range(4)] + [('stratum '+str(c),np.asarray(te['stratum'])==c) for c in np.unique(te['stratum'])]\\nfor name, mask in slices:\\n    if mask.any():\\n        print(name, 'n',mask.sum(), 'curve MAE/max horizon MAE',np.round([ce[mask].mean(),ce[mask].mean(axis=0).max()],6),'rate MAE',round(re[mask].mean(),6))\\nfor k in ('theta','vp_theta'):\\n    print(k, np.asarray(g[k]).shape)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (channelwise calibration and reference-panel alignment) -> H2 (shared jammed-slip dynamics); held-out lab/stratum worst median absolute errors were 0.01441 for strain and 0.01671 for initial rate, with worst raw MAEs of 0.16570 and 0.02892.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The held-out strain MAE is dominated by a few large observed residuals. Evaluate the unchanged solver against clean public references to distinguish measurement contamination from systematic prediction error, particularly for missing coupon features and opposite stress signs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c5f410cf10c0c94a4b9e1693f131dec56fe44befb02057bc938c2854a6ca3daa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28369.29,
+      "usage_known": true,
+      "prompt_tokens": 26479,
+      "cached_tokens": 11136,
+      "completion_tokens": 1008
+    }
+  ]
+}

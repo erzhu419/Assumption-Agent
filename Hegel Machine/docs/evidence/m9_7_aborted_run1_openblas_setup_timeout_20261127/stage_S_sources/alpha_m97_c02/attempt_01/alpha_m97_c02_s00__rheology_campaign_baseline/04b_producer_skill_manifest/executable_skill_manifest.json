@@ -1,0 +1,120 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c02_s00_c4caea57c8e0",
+    "source_hash": "c4caea57c8e0695d87b6c4ec3b3bcd8f7a518ef91a00be40c5723a65072449bf",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c02_s00__rheology_campaign_baseline",
+    "task_id": "alpha_m97_c02_s00__rheology_campaign_baseline",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheo_explore.py",
+        "archived_relpath": "producers/tmp__rheo_explore.py",
+        "bytes": 3762,
+        "sha256": "6f5980125232f257162413999a44c6ee3fb4a5a24a80d79e0d8633fb27d7f9b2"
+      },
+      {
+        "container_path": "/tmp/rheo_final_audit.py",
+        "archived_relpath": "producers/tmp__rheo_final_audit.py",
+        "bytes": 2549,
+        "sha256": "cf2115ca48dad80a59424b09654d176cd9abf89cedf74ed28524a15aeb0975f5"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_alpha_m97_c02_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,getattr(v,'shape',''),getattr(v,'dtype',''),end=' ')\n  if isinstance(v,dict):\n   print();show(v,depth+2)\n  elif isinstance(v,np.ndarray): print(repr(v.reshape(-1)[:8]))\n  elif isinstance(v,(list,tuple)): print(len(v),repr(v[:1])[:400])\n  else: print(repr(v)[:400])\nshow(d)\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_ski",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nitem=pickle.load(open('public_alpha_m97_c02_s00.pkl','rb'))[0]\nd=item['dataset']\ndef show(d,ind=''):\n for k,v in d.items():\n  if isinstance(v,dict): print(ind,k); show(v,ind+'  ')\n  elif isinstance(v,np.ndarray): print(ind,k,v.shape,v.dtype,repr(v.ravel()[:6]), ('nonfinite='+str((~np.isfinite(v)).sum())) if v.dtype.kind in 'f' else '')\n  else: print(ind,k,str(v)[:200])\nshow(d)\nprint('dt and t',d['past_dt'],d['eval_times'])\na=d['calibration_load_cells'];\nfor c in np.unique(a['lab_id']):\n m=a['lab_id']==c; x=a['cmd_stress'][m]; y=a['",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_alpha_m97_c02_s00.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\nc=d['calibration_load_cells']; tr=d['train']; te=d['test']; t=d['eval_times']; x=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); r=np.vstack([tr['ref_coupons'],te['ref_coupons']]); labs=np.r_[tr['lab_id'],te['lab_id']]; strata=np.r_[tr['stratum'],te['stratum']]; cal=[]\nfor lab in range(4):\n m=c['lab_id']==lab; u,y=c['cmd_stress'][m],c['true_stress'][m]; p=np.polyfit(u,y,1); cal.append(p); a=labs==lab; mu=np.median(np.nanmean(r[a],a",
+      "cat > /tmp/rheo_explore.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nfrom itertools import combinations\n\ndef data(d, fill='balanced'):\n    tr,te=d['train'],d['test']; keys=('lab_id','stratum','coupon_features_raw','ref_coupons','past_stress_cmd','stress_hold_cmd','strain_0')\n    lab,st,x,r,p,u,s0=(np.concatenate((tr[k],te[k])) for k in keys)\n    c=d['calibration_load_cells']; cal=[]\n    for l in range(4):\n        idx=c['lab_id']==l; cal.append(np.polyfit(c['cmd_stress'][idx],c['true_stress'][idx],1))\n        idx=lab==l; x[idx]=(x[idx]-np.nanmedian(np.nanmean(r[",
+      "cat > /holdout_task/alpha_m97_c02_s00_solver.py <<'PY'\n\"\"\"Calibrated two-branch Prony fit for the linear-flow campaign.\"\"\"\n\nimport json\nfrom pathlib import Path\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\n_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _archived_calibration(channel):\n    if not _ARCHIVE.is_file():\n        return None\n    with _ARCHIVE.open() as stream:\n        history = json.load(stream)\n    if isinstance(history, dict):\n        history = history.get('channels', history.get('calibration_load_cells', history))\n    if isi",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom pathlib import Path\np=Path('/holdout_task')\nspec=importlib.util.spec_from_file_location('solver',p/'alpha_m97_c02_s00_solver.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith (p/'public_alpha_m97_c02_s00.pkl').open('rb') as f:\n    d=pickle.load(f)[0]['dataset']\ntr,te=d['train'],d['test']\nn=len(tr['lab_id']); dt=d['past_dt']; t=d['eval_times']; y=tr['strain_curves_obs']; rate=tr['instant_rate_obs']; lab=tr['lab_id']\ncurve_errors=np.empty_like(y); rate_errors=np.empty_like",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_alpha_m97_c02_s00.pkl', 'rb') as f:\n    records = pickle.load(f)\nprint('Public records:', len(records))\nfor record in records:\n    d = record['dataset']; tr = d['train']\n    lab = tr['lab_id']; missing = np.isnan(tr['coupon_features_raw']).any(axis=1)\n    if not missing.any():\n        continue\n    past, hold, F, ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\nfrom scipy.stats import spearmanr\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_alpha_m97_c02_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\ntr = d['train']; n = len(tr['lab_id']); lab = tr['lab_id']\npast, hold, F, s0 = m._prepare(d)\ndt, t = d['past_dt'], d['eval_times']\ny = tr['strain_curves_obs'] - s0[:n, None]; rate = tr['instant_rate_ob",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_alpha_m97_c02_s00.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\ntr = d['train']; lab = tr['lab_id']; n = len(lab)\np, u, F, s0 = m._prepare(d)\ncomplete = np.flatnonzero(np.isfinite(tr['coupon_features_raw']).all(axis=1))\nstress = np.max(np.abs(p[:n]), axis=1)\n# Select a fixed number of rows even",
+      "set -e\ncat > /tmp/rheo_final_audit.py <<'PY'\nimport importlib.util\nimport json\nimport pickle\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', root / 'alpha_m97_c02_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith (root / 'public_alpha_m97_c02_s00.pkl').open('rb') as stream:\n    d = pickle.load(stream)[0]['dataset']\ntr = d['train']\nlab = tr['lab_id']\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\nn = len(lab)\np, u, f, s0 = m"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rheo_explore.py",
+      "primary_producer_container_path": "/tmp/rheo_explore.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_non_nested_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c02_s00_solver.py",
+        "filename": "alpha_m97_c02_s00_solver.py",
+        "bytes": 7423,
+        "sha256": "8a0831d9b1d73adcbcec9700fd3cde71edfee0967616de5f8c6c345a5c9fa169",
+        "content_addressed_ref": "content_addressed_blobs/8a0831d9b1d73adcbcec9700fd3cde71edfee0967616de5f8c6c345a5c9fa169.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c02_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "data",
+      "basis",
+      "fit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c4caea57c8e0695d87b6c4ec3b3bcd8f7a518ef91a00be40c5723a65072449bf",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncat > /tmp/rheo_final_audit.py <<'PY'\nimport importlib.util\nimport json\nimport pickle\nfrom pathlib import Path\nfrom tempfile import TemporaryDirectory\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_f",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c4caea57c8e0695d87b6c4ec3b3bcd8f7a518ef91a00be40c5723a65072449bf",
+        "expected_candidate_sha256": "c4caea57c8e0695d87b6c4ec3b3bcd8f7a518ef91a00be40c5723a65072449bf",
+        "computed_candidate_sha256": "c4caea57c8e0695d87b6c4ec3b3bcd8f7a518ef91a00be40c5723a65072449bf",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c02_s00_solver.py",
+            "bytes": 7423
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c4caea57"
+    }
+  },
+  "structure": {
+    "full_producer_count": 2,
+    "reusable_ast_function_closures": [
+      {
+        "name": "data",
+        "code": "def data(d, fill='balanced'):\n    tr, te = (d['train'], d['test'])\n    keys = ('lab_id', 'stratum', 'coupon_features_raw', 'ref_coupons', 'past_stress_cmd', 'stress_hold_cmd', 'strain_0')\n    lab, st, x, r, p, u, s0 = (np.concatenate((tr[k], te[k])) for k in keys)\n    c = d['calibration_load_cells']\n    cal = []\n    for l in range(4):\n        idx = c['lab_id'] == l\n        cal.append(np.polyfit(c['cmd_stress'][idx], c['true_stress'][idx], 1))\n        idx = lab == l\n        x[idx] = (x[idx] - np.nanmedian(np.nanmean(r[idx], axis=0))) / np.nanmedian(np.nanstd(r[idx], axis=0))\n    cells = [(lab == l) & (st == s) for l, s in np.unique(np.column_stack((lab, st)), axis=0)]\n    means = np.array([np.nanmean(x[m], axis=0) for m in cells])\n    balanced = np.nanmean(means, axis=0)\n    for m, mu in zip(cells, means):\n        x[m] = np.where(np.isfinite(x[m]), x[m], np.where(np.isfinite(mu), mu, balanced) if fill == 'local' else balanced)\n    gain, bias = np.asarray(cal)[lab].T\n    return (gain[:, None] * p + bias[:, None], gain * u + bias, np.column_stack((np.ones(len(x)), x)), s0)"
+      },
+      {
+        "name": "basis",
+        "code": "def basis(lt, p, u, f, dt, t):\n    tau = np.exp(lt)\n    age = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    a = age[:, None] / tau\n    q = dt[:, None] / tau\n    r = t[:, None] / tau\n    ea = np.exp(-a)\n    eq = np.exp(-q)\n    er = np.exp(-r)\n    w = ea * -np.expm1(-q)\n    dw = a * w - q * ea * eq\n    g = u[:, None] - p @ w\n    dg = -p @ dw\n    e = -np.expm1(-r)\n    curve = np.concatenate((g[:, None, :] * e, t[None, :, None] * f[:, None, :]), axis=2)\n    rates = np.column_stack((g / tau, f))\n    dc = dg[:, None, :] * e - g[:, None, :] * r * er\n    dr = (dg - g) / tau\n    return (curve, rates, dc, dr)"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(p, u, f, dt, t, y, rate, sc=0.025, sr=None, starts=None):\n    from itertools import combinations\n    from scipy.optimize import least_squares\n    ns = len(t)\n\n    def ev(b, jac):\n        C, R, dc, dr = basis(b[:2], p, u, f, dt, t)\n        w = b[2:]\n        A = C.reshape(-1, 7)\n        D = dc.reshape(-1, 2)\n        if jac:\n            a = np.column_stack((D * w[:2], A)) / sc\n            return a if sr is None else np.vstack((a, np.column_stack((dr * w[:2], R)) / sr))\n        a = (A @ w - y.ravel()) / sc\n        return a if sr is None else np.r_[a, (R @ w - rate) / sr]\n    if starts is None:\n        starts = list(combinations([0.035, 0.09, 0.2, 0.45, 1.0, 2.4, 6.0, 15.0], 2))\n    out = []\n    for pair in starts:\n        lt = np.log(pair)\n        C, R, _, _ = basis(lt, p, u, f, dt, t)\n        A = C.reshape(-1, 7)\n        z = y.ravel()\n        wt = 1 / np.maximum(1, np.abs(z) / max(np.quantile(abs(z), 0.9), 0.01))\n        h = np.linalg.lstsq(A * wt[:, None], z * wt, rcond=None)[0]\n        sol = least_squares(lambda b: ev(b, False), np.r_[lt, h], jac=lambda b: ev(b, True), loss='cauchy', bounds=(np.r_[np.log([0.01, 0.01]), np.full(7, -np.inf)], np.r_[np.log([100.0, 100.0]), np.full(7, np.inf)]), max_nfev=130, x_scale='jac')\n        b = sol.x\n        ts = np.exp(b[:2])\n        order = np.argsort(ts)\n        out.append((sol.cost, ts[order], np.r_[b[2:4][order], b[4:]]))\n    return sorted(out, key=lambda z: z[0])"
+      }
+    ]
+  }
+}

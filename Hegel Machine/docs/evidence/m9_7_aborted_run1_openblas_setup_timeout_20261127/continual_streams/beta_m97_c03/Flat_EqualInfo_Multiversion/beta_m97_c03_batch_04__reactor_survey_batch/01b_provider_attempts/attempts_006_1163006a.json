@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1163006a2fd945819d5d8717b9ff8282",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_04__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:13:16.157139+00:00",
+  "ended_at_utc": "2026-11-27T07:13:57.370417+00:00",
+  "request_sha256": "3a613f9c3fc16995287444b355e2dbc3f2f31c6256689ed4587b4d95b50f15e7",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37997,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25401,
+    "cached_tokens": 6784,
+    "completion_tokens": 1677
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('candidate', 'beta_m97_c03_batch_04_solver.py')\\na = load('archive', '/tmp/hegel_continual_archive/beta_m97_c03_batch_03_solver.py')\\nwith open('public_beta_m97_c03_batch_04.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\ns, gt = case['study'], case['gt']\\nsolve = m.solve_beta_m97_c03_batch_04\\nbase = solve(s)\\nassert np.max(np.abs(base['weights'] - gt['w_opt'])) < 1e-5\\nassert np.max(np.abs(base['terminal_field'] - gt['terminal_field_A'])) < 1e-5\\nsealed = solve(dict(s, robin_x=2*s['robin_x'], robin_y=2*s['robin_y']))\\nnp.testing.assert_allclose(sealed['terminal_field'], base['terminal_field'], rtol=0, atol=1e-13)\\nfor label, study in [('exact-threshold Robin', dict(s, past_vortex_circulation_trace=np.full_like(s['past_vortex_circulation_trace'], s['critical_vortex_circulation']))), ('periodic despite excursion', dict(s, recirculation_loop_mode=1.0))]:\\n    expected = a.solve_beta_m97_c03_batch_03(study)\\n    actual = solve(study)\\n    for key in ('weights', 'terminal_field'):\\n        np.testing.assert_allclose(actual[key], expected[key], rtol=0, atol=1e-13, err_msg=label)\\nprint('Boundary slices: sealed independent of Robin coefficients; threshold and periodic results match archive')\\n\\nb = s['row_bank_id']; banks = np.repeat(np.arange(4), 5)\\nx = np.tile(np.linspace(-2, 2, 5), 4)\\ngains = np.array([1.42, .86, 1.10, .76]); offsets = np.array([.2, -.3, .4, -.1])\\ny = np.linspace(-.4, .5, b.size)\\nsweep = dict(bank_id=banks, ref_signal=x, raw_readout=gains[banks]*x+offsets[banks])\\ncal = dict(s, sensor_calibration_sweeps=sweep, y_obs_raw=gains[b]*y+offsets[b])\\narchive_path = m._CALIBRATION_ARCHIVE\\nm._CALIBRATION_ARCHIVE = '/tmp/no-calibration-archive-required.json'\\nnp.testing.assert_allclose(m._calibrate(cal), y, rtol=0, atol=1e-13)\\nm._CALIBRATION_ARCHIVE = archive_path\\nsweep['raw_readout'][4] += 3.001\\nnp.testing.assert_allclose(m._calibrate(cal), y, rtol=0, atol=1e-13)\\npublic_cal = m._calibrate(s)\\ncal_error = np.max(np.abs(public_cal[b == 0] - y[b == 0])) if np.any(b == 0) else 0\\nassert np.all(np.isfinite(public_cal))\\nprint('Calibration slices: clean local calibration and four clean points plus EMI agree with known affine truth; public missing-bank fallback is finite')\\n\\nS, fields = m._forward(s)\\nz = s['Z_nuisance']; D = np.column_stack((public_cal, S))\\nD = D - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T@D)\\nry, F = D[:, 0], D[:, 1:]; u = s['u_box']; ridge = s['source_ridge']\\nworst_gap = worst_comp = 0.\\nfor budget in (0., .001, 1., s['total_budget'], 6., 11.999, 12.):\\n    out = solve(dict(s, total_budget=budget)); w = out['weights']; c = out['kkt_certificate']\\n    assert np.array_equal(c['weights'], w)\\n    assert np.min(w) >= 0 and np.max(w) <= u and abs(w.sum()-budget) < 1e-10\\n    r = F@w-ry; g = F.T@r+ridge*w; nu = c['nu_sum']\\n    lo, hi = c['lam_lower'], c['lam_upper']; p = .5*(r@r+ridge*(w@w))\\n    lb = p + nu*budget - g@w + u*np.minimum(g-nu, 0).sum()\\n    comp = max(np.max(abs(lo*w)), np.max(abs(hi*(u-w))))\\n    gap = p - c['dual_lower_bound']\\n    assert np.min(lo) >= 0 and np.min(hi) >= 0 and np.max(abs(g-nu-lo+hi)) < 1e-10\\n    assert comp < 1e-10 and abs(p-c['primal_objective']) < 1e-10 and c['dual_lower_bound'] <= lb+1e-10 and abs(gap) < 1e-10\\n    np.testing.assert_allclose(out['terminal_field'], (fields@w).reshape((s['nx'], s['ny']), order='F'), rtol=0, atol=1e-13)\\n    worst_gap = max(worst_gap, abs(gap)); worst_comp = max(worst_comp, comp)\\nprint(f'7 box-simplex budget slices: worst absolute gap={worst_gap:.3e}, worst complementarity={worst_comp:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin/periodic transport -> H2 sealed Neumann with wall sorption; public weight max error is 4.60e-7, terminal-field max error is 2.58e-8, and the candidate duality gap is 1.25e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The sole public case does not exercise the circulation threshold, periodic dispatch, clean local calibration, EMI rejection, or endpoint budgets.\"\n    }\n  ],\n  \"rationale\": \"Stress the exact candidate without editing it. Boundary failures would change dispatch or stencil assembly, calibration failures would change sweep selection, and certificate failures would localize to the active-set solver or multiplier construction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9d5371f92da85a310e632e6d522670c475bac5d8cdb2170eaea2039f8bf4820f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43630.04,
+      "usage_known": true,
+      "prompt_tokens": 25401,
+      "cached_tokens": 6784,
+      "completion_tokens": 1677
+    }
+  ]
+}

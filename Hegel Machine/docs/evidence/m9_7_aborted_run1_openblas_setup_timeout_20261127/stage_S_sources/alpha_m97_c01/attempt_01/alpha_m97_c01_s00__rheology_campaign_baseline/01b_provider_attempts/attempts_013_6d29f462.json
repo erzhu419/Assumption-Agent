@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d29f46232f54cd69beb5b43e3a64ffd",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:44:59.064875+00:00",
+  "ended_at_utc": "2026-11-27T06:45:36.087797+00:00",
+  "request_sha256": "42c6f395569f180f6fdf99a4f925950a0d9e6b90af5dce0773f1c58a2e1c3811",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 69724,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35031,
+    "cached_tokens": 0,
+    "completion_tokens": 1429
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_s00_solver.py')\\ns = p.read_text()\\nstart = s.index('    # Give each observed lab/stratum cell equal total weight.')\\nend = s.index('    x = np.where(valid, x, fill)', start)\\ns = s[:start] + '''    # Each cell with an observation contributes one mean per feature.\\n    cells, cell = np.unique(np.column_stack((lab, strata)), axis=0, return_inverse=True)\\n    valid = np.isfinite(x)\\n    sums = np.zeros((len(cells), x.shape[1]))\\n    counts = np.zeros_like(sums)\\n    np.add.at(sums, cell, np.where(valid, x, 0.))\\n    np.add.at(counts, cell, valid)\\n    means = np.divide(sums, counts, out=np.zeros_like(sums), where=counts > 0)\\n    observed_cells = np.count_nonzero(counts, axis=0)\\n    fill = np.divide(means.sum(axis=0), observed_cells,\\n                     out=np.zeros(x.shape[1]), where=observed_cells > 0)\\n''' + s[end:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_s00_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit = pickle.load(open('public_alpha_m97_c01_s00.pkl', 'rb'))[0]\\nd, g = it['dataset'], it['gt']\\ndata, n = m._prepare(d)\\nraw, ref, lab, strata = [np.concatenate([d[k][name] for k in ('train','test')]) for name in ('coupon_features_raw','ref_coupons','lab_id','stratum')]\\nx = raw.copy()\\nfor l in np.unique(lab):\\n    sel = lab == l\\n    panel = ref[sel]; panel = panel[:, np.isfinite(panel).sum(axis=0) >= 2]\\n    x[sel] = (x[sel] - np.median(np.nanmean(panel, axis=0))) / np.median(np.nanstd(panel, axis=0))\\nkeys, cell = np.unique(np.column_stack((lab, strata)), axis=0, return_inverse=True)\\nmeans = np.array([np.nanmean(x[cell == i], axis=0) for i in range(len(keys))])\\nnp.testing.assert_allclose(data[2], np.where(np.isfinite(x), x, np.nanmean(means, axis=0)))\\nout = m.solve_alpha_m97_c01_s00(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\nassert np.all(np.diff(out['estimated_taus']) > 0)\\nassert np.array_equal(out['regime_mode_weights'], np.zeros(2))\\nlogs, w = np.log(out['estimated_taus']), out['hereditary_weights']\\ntest_data = tuple(v[n:] for v in data)\\nshort, _ = m._predict(logs,w,test_data,d['past_dt'],np.array([0.,1e-6]))\\nnp.testing.assert_allclose(short[:,0],0.)\\nnp.testing.assert_allclose(short[:,1]/1e-6,out['initial_rate_pred'],atol=1e-5,rtol=0.)\\nerr = out['predicted_strain']-g['te_clean']; rate_err = out['initial_rate_pred']-g['te_true_rate0']\\nprint('max relative tau error', np.max(np.abs(out['estimated_taus']/g['taus']-1)), 'max absolute weight error',np.max(np.abs(w-g['theta'])))\\nprint('worst horizon strain RMSE',np.sqrt(np.mean(err**2,axis=0)).max())\\nmissing = np.isnan(raw[n:]).any(axis=1)\\nfor name, mask in [('complete',~missing),('missing',missing)]+[(f'lab {l}',lab[n:]==l) for l in np.unique(lab[n:])]:\\n    print(name, 'strain/rate RMSE',np.sqrt(np.mean(err[mask]**2)),np.sqrt(np.mean(rate_err[mask]**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration and equal observed-cell feature means -> H2: joint robust two-branch linear creep; the challenger had a worst held-lab horizon median error of 0.06112 and rate p90 of 0.04929.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep inverse cell-size row weights\",\n      \"rejected_reason\": \"Missing entries reduce a cell's contribution to that feature, so observed cell means do not receive equal weight.\"\n    },\n    {\n      \"option\": \"Fill from the coupon's own lab and stratum\",\n      \"rejected_reason\": \"It worsened worst held-lab rate p90 from 0.04946 to 0.05516 and was less accurate on deliberately masked measurements.\"\n    }\n  ],\n  \"rationale\": \"Implement equal weighting of observed cell means directly. The held-lab audit found no material regression from this correction. Verify that the final artifact implements the grouping rule and retains the public schema, time-zero derivative, and slice accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "586c0daf6643a288842df8270b37314339900a616c9a7faa3dcc28756da1236a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39419.8,
+      "usage_known": true,
+      "prompt_tokens": 35031,
+      "cached_tokens": 0,
+      "completion_tokens": 1429
+    }
+  ]
+}

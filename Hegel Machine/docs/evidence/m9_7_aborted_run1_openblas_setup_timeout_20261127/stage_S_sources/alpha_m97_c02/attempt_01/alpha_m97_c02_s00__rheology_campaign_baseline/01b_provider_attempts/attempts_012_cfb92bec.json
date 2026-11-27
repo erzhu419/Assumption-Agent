@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cfb92bec0f414149bbfff00b6d4dd1ea",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:44:30.563437+00:00",
+  "ended_at_utc": "2026-11-27T06:45:45.802761+00:00",
+  "request_sha256": "c44483e929cdfeb49d78989409abf1e470be9c034726e2d3dc4b8143a76863a4",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 62305,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32457,
+    "cached_tokens": 6784,
+    "completion_tokens": 1498
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheo_final_audit.py <<'PY'\\nimport importlib.util\\nimport json\\nimport pickle\\nfrom pathlib import Path\\nfrom tempfile import TemporaryDirectory\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'alpha_m97_c02_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith (root / 'public_alpha_m97_c02_s00.pkl').open('rb') as stream:\\n    d = pickle.load(stream)[0]['dataset']\\ntr = d['train']\\nlab = tr['lab_id']\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nn = len(lab)\\np, u, f, s0 = m._prepare(d)\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - s0[:n, None]\\nr = tr['instant_rate_obs']\\nresults = {}\\nfor complete_only in (False, True):\\n    ec, er = np.empty_like(y), np.empty_like(r)\\n    taus = []\\n    for c in np.unique(lab):\\n        keep = lab != c\\n        if complete_only:\\n            keep &= ~missing\\n        a = np.flatnonzero(keep)\\n        b = np.flatnonzero(lab == c)\\n        lt, w = m._fit(p[a], u[a], f[a], dt, t, y[a], r[a])\\n        C, R, *_ = m._basis(lt, p[b], u[b], f[b], dt, t)\\n        ec[b], er[b] = y[b] - C @ w, r[b] - R @ w\\n        taus.append(np.exp(lt))\\n    results[complete_only] = ec, er\\n    print('complete-only training:', complete_only, 'fold tau span:', np.ptp(taus, axis=0))\\n    for name, sel in [('missing', missing), ('complete', ~missing)]:\\n        print(name, 'strain and rate median/p90:', np.quantile(abs(ec[sel]), [.5,.9]), np.quantile(abs(er[sel]), [.5,.9]))\\n    print('largest lab/horizon absolute strain median:', max(np.median(abs(ec[lab == c]),axis=0).max() for c in np.unique(lab)))\\na, b = results[False][0], results[True][0]\\nprint('missing coupon horizon-median absolute error decreased on', int(np.count_nonzero(np.median(abs(b[missing]), axis=1) < np.median(abs(a[missing]), axis=1))), 'of', missing.sum())\\n\\ncal = d['calibration_load_cells']\\nbase = m._calibrate(cal)\\nwith TemporaryDirectory() as tmp:\\n    m._ARCHIVE = Path(tmp) / 'archive_calibration_history.json'\\n    m._ARCHIVE.write_text(json.dumps({'channels': {str(c): {'gain': float(g), 'bias': float(b)} for c, (g,b) in enumerate(base)}}))\\n    for count in (0, 1):\\n        mask = cal['lab_id'] != 2\\n        mask[np.flatnonzero(~mask)[:count]] = True\\n        np.testing.assert_allclose(m._calibrate({k: v[mask] for k, v in cal.items()}), base, rtol=0, atol=1e-12)\\n    m._ARCHIVE.write_text('{}invalid')\\n    np.testing.assert_allclose(m._calibrate(cal), base, rtol=0, atol=1e-12)\\nprint('Sparse channel uses calibration archive; clean channels do not read it.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_final_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether imputed training rows distort the shared Prony fit; the baseline's worst held-out slice is missing-feature coupons, with strain and onset-rate p90 errors of 0.70218 and 0.18062.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the flow basis with nonlinear or relay terms\",\n      \"rejected_reason\": \"The specified envelope is linear, pairwise linear sums and differences were verified to lie in the existing span, and there is no relay or stochastic-control state.\"\n    }\n  ],\n  \"rationale\": \"Fit with and without imputed rows in each held-out lab fold while retaining the prescribed imputation for prediction. A consistent reduction in worst-slice errors would support changing the training fit. Test the documented sparse-calibration branch separately: any failure to recover archived coefficients, or any archive read with clean calibration, calls for a calibration fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a7561efeea43d9b1dd5ce7208b6221158e8e50d8ab2c8e3ef7d7b4419e016caf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 80016.35,
+      "usage_known": true,
+      "prompt_tokens": 32457,
+      "cached_tokens": 6784,
+      "completion_tokens": 1498
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e73babc1db5645efa42ae898bad50df2",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:02.621990+00:00",
+  "ended_at_utc": "2026-11-27T06:51:30.360235+00:00",
+  "request_sha256": "d21654b80d3394fe0e95a977571ce43b89e88d8fd81e3a51e9f424624b3b9f7b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 62949,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33608,
+    "cached_tokens": 6784,
+    "completion_tokens": 1055
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I - <<'PY'\\nimport json, pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('alpha_m97_c01_batch_01_solver.py')\\nd = pickle.load(open('public_alpha_m97_c01_batch_01.pkl', 'rb'))[0]['dataset']\\n(past, hold, x), n = m['_prepare'](d)\\ntrain, test = d['train'], d['test']\\nraw = np.concatenate((train['coupon_features_raw'], test['coupon_features_raw']))\\nlab = np.r_[train['lab_id'], test['lab_id']]\\nstratum = np.r_[train['stratum'], test['stratum']]\\nprint('reference panel shapes', np.shape(train['ref_coupons']), np.shape(test['ref_coupons']))\\nfor key, value in json.load(open('public_asset_index.json')).items():\\n    if any(word in key.lower() for word in ('panel', 'align', 'imput', 'reference')):\\n        print(key, str(value)[:1000])\\nprint('archive fallback by lab', [m['_historical_calibration'](i) for i in range(4)])\\n# Mask observed training entries one at a time; use only donor rows for each estimate.\\nerrors = {'balanced_global': [], 'matched_cell': [], 'balanced_within_stratum': []}\\nfor i, j in zip(*np.where(np.isfinite(raw[:n]))):\\n    donor = np.isfinite(raw[:, j]); donor[i] = False\\n    means = {(l, s): x[sel, j].mean() for l, s in set(zip(lab, stratum))\\n             if (sel := (lab == l) & (stratum == s) & donor).any()}\\n    global_mean = np.mean(list(means.values()))\\n    estimates = [global_mean, means.get((lab[i], stratum[i]), global_mean),\\n                 np.mean([v for (l, s), v in means.items() if s == stratum[i]])]\\n    for rows, estimate in zip(errors.values(), estimates):\\n        rows.append((i, j, estimate-x[i, j]))\\nfor name, rows in errors.items():\\n    i, j, e = np.asarray(rows).T; i, j = i.astype(int), j.astype(int)\\n    print(name, 'feature RMSE', round(np.mean(e**2)**.5, 5), 'worst lab/stratum/column RMSE', round(max(np.mean(e[mask]**2)**.5 for l,s,c in set(zip(lab[i],stratum[i],j)) if (mask := (lab[i]==l)&(stratum[i]==s)&(j==c)).sum() >= 5), 5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Keep the verified Cauchy plateau fit and check whether cell conditioning improves prescribed imputation; public missing-coupon strain/rate RMSE is 0.229/0.174, versus 0.00760/0.00764 on complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Choose an imputer by its error on the four public missing coupons\",\n      \"rejected_reason\": \"Four rows are too few to distinguish a general improvement from chance; mask observed training entries instead.\"\n    }\n  ],\n  \"rationale\": \"The reference coefficients reproduce the observed residual as a drift error, so another spectrum fit will not fix it. Compare cell-mean interpretations without using public test labels. Also check that archived calibration resolves the four channel IDs; if it does not, fix the fallback before testing sparse and spiked calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b2284cf2e4edbe7892401726fe9dd0d79593992ef3236350ac364f96a7fd68d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30062.15,
+      "usage_known": true,
+      "prompt_tokens": 33608,
+      "cached_tokens": 6784,
+      "completion_tokens": 1055
+    }
+  ]
+}

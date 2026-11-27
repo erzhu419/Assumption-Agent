@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "871df8978b954337bb608cec19b185e3",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:04:27.573737+00:00",
+  "ended_at_utc": "2026-11-27T07:05:35.943597+00:00",
+  "request_sha256": "4cebb90a51fca7772717f1f15135964d0dd24053f0ef928e4e11d57fd7aeebff",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56976,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31735,
+    "cached_tokens": 11136,
+    "completion_tokens": 952
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nsed -n '1,103p' alpha_m97_c03_batch_03_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, copy\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m97_c03_batch_03_solver.py')\\ns=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('public_alpha_m97_c03_batch_03.pkl','rb'))[0]['dataset']\\ntr,te=d['train'],d['test']; n=len(tr['lab_id']); lines=s._calibrate(d['calibration_load_cells']); x=s._align(tr,te)\\ndt,t=d['past_dt'],d['eval_times']; a=s._inputs(tr,x[:n],lines)\\ny=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; clean=np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor lab in range(4):\\n    fit=clean&(tr['lab_id']!=lab); hold=clean&(tr['lab_id']==lab)\\n    lt,b=s._fit(tuple(v[fit] for v in a),dt,t,y[fit]); e=np.abs(s._design(lt,tuple(v[hold] for v in a),dt,t)@b-y[hold]); print('leave-lab-out',lab,'n',sum(hold),'taus',np.exp(lt),'curve/rate median AE',np.median(e[:,:-1]),np.median(e[:,-1]),'curve worst horizon median AE',np.max(np.median(e[:,:-1],axis=0)))\\n    assert np.median(e[:,:-1]) < .04 and np.median(e[:,-1]) < .04\\nc=d['calibration_load_cells']; solve=s.solve_alpha_m97_c03_batch_03; base=solve(d)\\nfor scenario in ('one point', 'EMI'):\\n    for lab in range(4):\\n        q=copy.deepcopy(d); idx=np.flatnonzero(c['lab_id']==lab)\\n        if scenario=='one point':\\n            keep=np.ones(len(c['lab_id']),dtype=bool); keep[idx[1:]]=False\\n            q['calibration_load_cells']={k:v[keep] for k,v in c.items()}\\n        else:\\n            q['calibration_load_cells']['true_stress'][idx[0]]+=8.\\n        err=np.max(np.abs(s._calibrate(q['calibration_load_cells'])-lines)); assert err<.002,(scenario,lab,err)\\n        pred=solve(q); delta={k:float(np.max(np.abs(v-base[k]))) for k,v in pred.items()}; print(scenario,lab,'calibration max shift',err,'output max shifts',delta); assert max(delta.values())<.01\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: the robust complete-coupon fit reduces maximum tau error to 0.055 and public worst-cell RMSE to 0.0656 for strain and 0.0843 for initial rate; next test cross-lab transfer and calibration fallback.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adjust the imputation rule to lower public worst-cell RMSE\",\"rejected_reason\":\"The reference-parameter diagnostic traces most of that error to missing descriptors, and the contract specifies cell-balanced imputation.\"}],\"rationale\":\"Leave-one-lab-out fits test whether the shared material law transfers across calibrated labs; a systematic failure would warrant revisiting alignment or fit weighting. Sparse and spiked sweeps test the documented fallback paths, which the clean public sweep does not exercise.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "da993a387058117070a12d791696389653ad76d8861821b0b16ee39c37c9dffd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 73144.79,
+      "usage_known": true,
+      "prompt_tokens": 31735,
+      "cached_tokens": 11136,
+      "completion_tokens": 952
+    }
+  ]
+}

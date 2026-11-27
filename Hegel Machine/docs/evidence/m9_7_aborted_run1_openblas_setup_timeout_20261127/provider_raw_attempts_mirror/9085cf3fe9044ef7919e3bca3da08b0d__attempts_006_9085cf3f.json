@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9085cf3fe9044ef7919e3bca3da08b0d",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:50:36.531396+00:00",
+  "ended_at_utc": "2026-11-27T06:51:17.640175+00:00",
+  "request_sha256": "bd763668b8df6bcb909a6daacf3d1340433e0c11e909097c43969e2c3abd7470",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38182,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25109,
+    "cached_tokens": 6784,
+    "completion_tokens": 1682
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -eu\\np=/holdout_task/beta_m97_c03_batch_01_solver.py\\nsed -i \\\"s/study\\\\['vel_y'\\\\], study\\\\['robin_y'\\\\]/study['vel_y'], 0 if fouled else study['robin_y']/\\\" \\\"$p\\\"\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nbase = '/holdout_task/'\\nm = load('solver', base+'beta_m97_c03_batch_01_solver.py')\\narchive = load('prior', '/tmp/hegel_continual_archive/beta_m97_c03_s00_solver.py')\\nwith open(base+'public_beta_m97_c03_batch_01.pkl', 'rb') as f:\\n    r = pickle.load(f)[0]\\ns, g = r['study'], r['gt']\\na = m.solve_beta_m97_c03_batch_01(s)\\nS, _ = m._forward(s)\\ny = m._calibrate(s)\\nz = s['Z_nuisance']\\nD = np.column_stack((y, S))\\nP = D - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T @ D)\\nfor label, actual, expected, tol in [('design', P[:,1:], g['S_tilde'], 1e-11), ('observations', P[:,0], g['r_y'], 1e-6), ('weights', a['weights'], g['w_opt'], 2e-6), ('terminal', a['terminal_field'], g['terminal_field_A'], 2e-7)]:\\n    error = np.max(np.abs(actual-expected))\\n    print(label, 'max error', error)\\n    assert error < tol, label\\nc = a['kkt_certificate']\\nprint('public certificate gap', c['primal_objective']-c['dual_lower_bound'])\\nfor label, q in [('recirculating', {**s, 'recirculation_loop_mode': 1}), ('subcritical', {**s, 'past_vortex_circulation_trace': np.full_like(s['past_vortex_circulation_trace'], s['critical_vortex_circulation'])})]:\\n    error = max(np.max(abs(x-y)) for x,y in zip(m._forward(q), archive._forward(q)))\\n    print(label, 'archive forward max error', error)\\n    assert error < 1e-11, label\\nsweeps = s['sensor_calibration_sweeps']\\nb = np.asarray(sweeps['bank_id'])\\nrows = np.asarray(s['row_bank_id'])\\nfor bank in range(4):\\n    idx = np.flatnonzero(b == bank)\\n    q = {k: np.array(v, copy=True) for k,v in sweeps.items()}\\n    q['raw_readout'][idx[0]] += 20\\n    np.testing.assert_allclose(m._calibrate({**s, 'sensor_calibration_sweeps': q}), y, atol=5e-7, rtol=0)\\n    keep = (b != bank)\\n    keep[idx[0]] = True\\n    q = {k: np.asarray(v)[keep] for k,v in sweeps.items()}\\n    with open(m._CALIBRATION_ARCHIVE) as f:\\n        latest = json.load(f)[-1]\\n    in_bank = np.asarray(latest['bank_id']) == bank\\n    gain, offset = np.polyfit(np.asarray(latest['ref_signal'])[in_bank], np.asarray(latest['raw_readout'])[in_bank], 1)\\n    expected = y.copy()\\n    expected[rows == bank] = (s['y_obs_raw'][rows == bank]-offset)/gain\\n    np.testing.assert_allclose(m._calibrate({**s, 'sensor_calibration_sweeps': q}), expected, atol=1e-12, rtol=0)\\nprint('all four banks: isolated EMI rejection and sparse sweep fallback passed')\\nS, y = P[:,1:], P[:,0]\\nupper, ridge = s['u_box'], s['source_ridge']\\nworst = 0.\\nfor fraction in (0.001, 0.05, 0.2, 0.5, 0.8, 0.95, 0.999):\\n    budget = fraction * upper * S.shape[1]\\n    w, nu = m._box_simplex(S, y, ridge, upper, budget)\\n    grad = S.T @ (S @ w - y) + ridge*w\\n    gap = (grad-nu) @ w - upper*np.minimum(0, grad-nu).sum()\\n    assert np.min(w) >= -1e-10 and np.max(w) <= upper+1e-10 and abs(w.sum()-budget) < 1e-10\\n    assert abs(gap) < 1e-10\\n    worst = max(worst, abs(gap))\\nprint('budget stress worst absolute gap', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 x-only sealing → H2 symmetric x/y sealing with the same wall sink; public projected-design max error fell from 3.24e-2 to 1.04e-16 in the diagnostic.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Only the x-axis boundary stencil switches to zero flux in the fouled regime.\",\n    \"empirical_witness\": \"The public design max error is 3.24e-2 for x-only sealing and 2.69e-2 for y-only sealing, but 1.04e-16 with both axes sealed.\",\n    \"causal_blanket_diagnosis\": \"The projected observation error is only 1.78e-7, isolating the material mismatch to the forward operator rather than bank calibration.\",\n    \"sublated_pivot\": \"Remove both Robin losses when fouling is active; preserve the wall sink, interior stencil, and non-fouled boundary rules.\",\n    \"risk_kind\": \"incomplete boundary symmetry\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the reaction sink or revise the KKT solver\",\n      \"rejected_reason\": \"Both-axis sealing alone reproduces the public projected design to roundoff and reduces the terminal error to 2.18e-8.\"\n    }\n  ],\n  \"rationale\": \"Apply the boundary correction and verify the exact target in isolation. The public references catch inconsistencies between the design, certificate, and terminal field; the non-fouled, calibration, and budget slices isolate any remaining failures to boundary gating, sweep selection, or active-set transitions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "9994442cb9fb0cf43056c89ac2ff42eab6aaf780effcdd35ef2055309ac48b8e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43510.24,
+      "usage_known": true,
+      "prompt_tokens": 25109,
+      "cached_tokens": 6784,
+      "completion_tokens": 1682
+    }
+  ]
+}

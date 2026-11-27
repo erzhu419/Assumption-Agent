@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d518da97c9ca45c98be766e2280198d6",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:49:46.748797+00:00",
+  "ended_at_utc": "2026-11-27T06:50:07.090875+00:00",
+  "request_sha256": "adb2d02f6c73cd38918ef0024c5abfcfdf87910d089ddc50f24669819bb2ce87",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 41693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26667,
+    "cached_tokens": 6784,
+    "completion_tokens": 608
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nimport json, pathlib, numpy as np, pickle\\np=pathlib.Path('/tmp/hegel_continual_archive/archive_calibration_history.json'); history=json.loads(p.read_text())\\nfor ep in history:\\n print(ep.get('episode_short_name'), sorted(ep), 'bank counts:',np.bincount(ep['bank_id'],minlength=4).tolist())\\n if 'raw_readout' in ep:\\n  for b in range(4):\\n   mask=np.asarray(ep['bank_id'])==b; x=np.asarray(ep['ref_signal'])[mask]; y=np.asarray(ep['raw_readout'])[mask]; fit=np.linalg.lstsq(np.column_stack((x,np.ones_like(x))),y,rcond=None)[0]; print(b,fit.tolist(),float(np.max(abs(y-(fit[0]*x+fit[1])))))\\nfor case in pickle.load(open('/holdout_task/public_beta_m97_c01_batch_01.pkl','rb')):\\n st=case['study']; print('public weights at lower/upper:',np.sum(case['gt']['w_opt']<1e-7),np.sum(case['gt']['w_opt']>st['u_box']-1e-7))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 in-batch calibration passes -> H2 fit historical sweep rows for sparse or EMI-affected banks; public max weight error is 3.65e-07 and max terminal-field error is 2.92e-08.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the public-passing artifact\",\n      \"rejected_reason\": \"The required fallback calls .get on the history, but the archive contains a list of sweep records.\"\n    }\n  ],\n  \"rationale\": \"Inspect only archive keys, bank coverage, and per-bank fit residuals to determine how to replace the broken fallback. The public bound counts show which KKT cases still need a targeted stress test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "36baa046f1a9906fc300109c6dd7b36ac6b759f4166de80c65d0c1df25bf57ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20301.33,
+      "usage_known": true,
+      "prompt_tokens": 26667,
+      "cached_tokens": 6784,
+      "completion_tokens": 608
+    }
+  ]
+}

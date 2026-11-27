@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3a2406d28a24ac3a346b74679449f4d",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:11:58.612878+00:00",
+  "ended_at_utc": "2026-11-27T07:12:33.584369+00:00",
+  "request_sha256": "f6ad3e05f728fe7b9dfa3204bffb93aa776bb88a681df51990b6481beea78085",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55905,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31485,
+    "cached_tokens": 6784,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed '/^xc, _/,$d' /tmp/rheology04_lolo.py > /tmp/rheology04_gate_audit.py\\ncat >> /tmp/rheology04_gate_audit.py <<'PY'\\nfrom scipy.stats import spearmanr\\nlines = m._calibrate(d['calibration_load_cells'])\\nxc, _ = m._align(a,b)\\nstress,hold,_ = m._inputs(a,xc,lines)\\ndt,t,crit = (d[k] for k in ('past_dt','eval_times','crit_stress'))\\ndamage = np.maximum(abs(stress)-crit,0)**2 @ dt\\nact = np.tanh(damage)\\ny = np.column_stack((a['strain_curves_obs'],a['instant_rate_obs']))\\npred = np.empty_like(y)\\nfor lab in np.unique(a['lab_id']):\\n    val = a['lab_id'] == lab\\n    fold = dict(d, train={k:v[~val] for k,v in a.items()}, test={k:np.concatenate((a[k][val],v)) for k,v in b.items()})\\n    o = solve(fold)\\n    pred[val] = np.column_stack((o['predicted_strain'][:val.sum()],o['initial_rate_pred'][:val.sum()]))\\nr = pred - y\\nfor lab in np.unique(a['lab_id']):\\n    for name,slice_mask in [('inactive',act==0),('weak',(act>0)&(act<=0.2)),('strong',act>0.2)]:\\n        use = (a['lab_id']==lab) & slice_mask\\n        if use.any():\\n            print('lab/damage',lab,name,use.sum(),'curve/rate signed medians',np.round([np.median(r[use,:-1]),np.median(r[use,-1])],4),'curve/rate P90 abs',np.round([np.quantile(abs(r[use,:-1]),.9),np.quantile(abs(r[use,-1]),.9)],4))\\n# Probe coherent residual patterns, not isolated corrupted time cells.\\nz = np.zeros((len(hold),2))\\no = solve(d)\\nfor h,step in enumerate(dt):\\n    e = np.exp(-step/o['estimated_taus']); z = z*e + stress[:,h,None]*(1-e)\\nbases = {'hold': hold,'gap difference': z[:,1]-z[:,0], 'damage':act, 'activated memory': act*z[:,0], 'saturating memory':act*z[:,0]/(1+z[:,0]**2)}\\nfor name,v in bases.items():\\n    rr = np.column_stack((np.median(r[:,:-1],axis=1),r[:,-1]))\\n    by_lab = [np.round([spearmanr(v[a['lab_id']==lab],q[a['lab_id']==lab]).statistic for q in rr.T],3).tolist() for lab in np.unique(a['lab_id'])]\\n    print('residual rank correlation',name,'pooled',np.round([spearmanr(v,q).statistic for q in rr.T],3),'by lab',by_lab)\\n# Measure the physical sensitivity to the published calibration discrepancy.\\nreference = np.array([[1.28994604,.12001392],[.81974036,-.14964349],[1.17001889,.1400143],[.7600149,-.11004836]])\\n_,xb = m._align(a,b)\\nu,v = (m._inputs(b,xb,c) for c in (lines,reference))\\nw = np.r_[o['hereditary_weights'],o['regime_mode_weights']]\\nargs = (dt,t,crit,d['shear_banding_index']<=.5)\\ndelta = (m._design(np.log(o['estimated_taus']),u,*args)-m._design(np.log(o['estimated_taus']),v,*args)) @ w\\nprint('max calibration delta in physical stress',np.max(abs(u[0]-v[0])),'in strain',np.max(abs(delta[:,:-1])),'in rate',np.max(abs(delta[:,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology04_gate_audit.py\\ncd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: equal-weight Prony fit → H2: cellwise Cauchy weighting with the prescribed damage gate; worst held-out lab × regime RMSE is 2.1972 for strain and 0.1540 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay, classification, or Fokker–Planck checks\",\"rejected_reason\":\"The public inputs specify continuous strain and rate, with a scalar damage gate; they contain no relay state, classification label, or diffusion operator. Both applicable gate states already matched the explicit recurrence.\"}],\"rationale\":\"Audit held-out residuals within each lab and across damage levels. A consistent within-lab pattern would warrant investigating the physical basis or panel alignment; a pooled-only pattern would not justify adding a term. Quantify the prediction sensitivity to the published calibration discrepancy before considering a calibration change.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "9c1d27668c36c08c1e329942effd185e4fed0aebccd0904801b0578011272bfa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37376.56,
+      "usage_known": true,
+      "prompt_tokens": 31485,
+      "cached_tokens": 6784,
+      "completion_tokens": 1392
+    }
+  ]
+}

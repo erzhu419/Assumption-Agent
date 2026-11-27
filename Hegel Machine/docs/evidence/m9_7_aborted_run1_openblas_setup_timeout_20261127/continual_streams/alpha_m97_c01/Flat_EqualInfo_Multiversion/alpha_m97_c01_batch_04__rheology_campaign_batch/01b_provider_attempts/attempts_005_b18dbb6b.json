@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b18dbb6b024b4bb3a2d7f7b0d6d94921",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:08:39.276567+00:00",
+  "ended_at_utc": "2026-11-27T07:09:02.785342+00:00",
+  "request_sha256": "5417c4907ac961947347008de3a161fa177ed5e9eac1be882fcc405c2c6e7c3b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43356,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26512,
+    "cached_tokens": 6784,
+    "completion_tokens": 885
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rheo04_cv.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nP='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',P+'alpha_m97_c01_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem=pickle.load(open(P+'public_alpha_m97_c01_batch_04.pkl','rb'))[0]; d=item['dataset']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; n=len(tr['lab_id']); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; state=m._prepare(d)\\nprint('calibration',m._calibrate(d['calibration_load_cells'])); print('public reference schema',{k:np.shape(v) for k,v in item['gt'].items()})\\ndef rm(e): return np.sqrt(np.mean(e**2))\\ndef stats(label,ec,er): print(label,'curve MAE/RMSE',np.mean(np.abs(ec)),rm(ec),'rate MAE/RMSE',np.mean(np.abs(er)),rm(er),'late RMSE',rm(ec[:,-1]))\\nlab=tr['lab_id']; ec=np.empty_like(y); er=np.empty_like(r)\\nfor c in np.unique(lab):\\n a=lab!=c; b=~a\\n tau,coef=m._fit(tuple(v[:n][a] for v in state),dt,t,y[a],r[a]); A,B=m._design(tau,tuple(v[:n][b] for v in state),dt,t)\\n ec[b]=A@coef-y[b]; er[b]=B@coef-r[b]; stats(('held lab',c,'tau',np.round(tau,5)),ec[b],er[b])\\nfor b,label in [(state[3][:n],'active'),(~state[3][:n],'inactive'),(np.isnan(tr['coupon_features_raw']).any(axis=1),'missing coupon'),(np.ones(n,dtype=bool),'pooled')]:\\n if b.any(): stats((label,b.sum()),ec[b],er[b])\\nout=m.solve_alpha_m97_c01_batch_04(d)\\nfor key in ('estimated_taus','hereditary_weights','regime_mode_weights'): print(key,out[key])\\ngt=item['gt']\\nif 'te_true_curve' in gt: stats('public references',out['predicted_strain']-gt['te_true_curve'],out['initial_rate_pred']-gt['te_true_rate0'])\\nprint('test activation count',state[3][n:].sum(),'/',len(te['lab_id']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo04_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine calibration and lab panel alignment -> H2 damage-gated logarithmic creep; the public schema passes and leave-one-lab-out errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit on the schema result alone\",\"rejected_reason\":\"Finite outputs do not establish that the memory fit generalizes across labs, activation states, or missing coupons.\"}],\"rationale\":\"Fit only on the other labs’ response measurements in each fold, keeping the label-free pooled panel alignment prescribed by the task. Separate curve, late-time, and initial-rate errors to identify which part of the model needs revision if a slice fails.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "038d29f74a52d0eb67a96e13da402a4c78df83664d8d977f64cd8cc0205d8a83",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25877.09,
+      "usage_known": true,
+      "prompt_tokens": 26512,
+      "cached_tokens": 6784,
+      "completion_tokens": 885
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2866d9959fba4826ac5075fad668f69f",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:56:26.444982+00:00",
+  "ended_at_utc": "2026-11-27T06:56:54.640142+00:00",
+  "request_sha256": "af9b76b541f3cbf6caec4d4a0209ebd660993a111694aea38aa07d1e2a8f6a02",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 38594,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24780,
+    "cached_tokens": 6784,
+    "completion_tokens": 1033
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_m97_c02_batch_03.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr=d['train']; n=len(tr['lab_id']); past,hold,f,e0=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; print('dt and evaluation grid',dt,t)\\nw=np.r_[g['theta'],g['vp_theta']]; basis,rate=m._basis(g['taus'],past,hold,f,dt,t); ce=e0[:n,None]+basis[:n]@w-tr['strain_curves_obs']; re=rate[:n]@w-tr['instant_rate_obs']; te=e0[n:,None]+basis[n:]@w-g['te_clean']; rt=rate[n:]@w-g['te_true_rate0']; print('oracle residual quantiles',[(v.shape,np.quantile(np.abs(v),[0,.25,.5,.8,.9,.95,.98,.99,1])) for v in [ce,re,te,rt]]); print('oracle train curve residual median/MAD by time',np.median(ce,axis=0),np.median(np.abs(ce-np.median(ce,axis=0)),axis=0)); print('oracle residual train lab quantiles',[(l,np.quantile(np.abs(ce[tr['lab_id']==l]),[.5,.95,1]),np.quantile(np.abs(re[tr['lab_id']==l]),[.5,.95,1])) for l in range(4)]); print('oracle test stress max errors',np.max(np.abs(past[n:]-g['te_hist_true'])),np.max(np.abs(hold[n:]-g['te_hold_true']))\\nfor label,x in [('train',ce),('test',te)]:\\n tab=d[label]; print(label,'largest curve row residuals');\\n for i in np.argsort(np.max(np.abs(x),axis=1))[-8:]: print(i,tab['lab_id'][i],tab['stratum'][i],np.isnan(tab['coupon_features_raw'][i]).sum(),np.round(x[i],6))\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); print('archive calibration sweeps')\\nfor e in h:\\n l,x,y=(np.asarray(e[k]) for k in ('lab_id','cmd_stress','true_stress')); print(e['episode_short_name'],[(c,int(np.sum(l==c)),np.round(np.polyfit(x[l==c],y[l==c],1),5).tolist() if np.unique(x[l==c]).size>=2 else None) for c in range(4)])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection' | head -25\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unweighted jammed-slip fit -> H2 separate observation contamination from alignment error; worst leave-one-lab-out lab-by-stratum strain/rate RMSE is 6.767/0.204.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the rheology basis immediately\",\n      \"rejected_reason\": \"The existing errors do not yet distinguish a basis error from response outliers or preprocessing errors.\"\n    }\n  ],\n  \"rationale\": \"Compare public-reference residuals on noisy training observations and clean test responses strictly as a diagnostic, not as fitting inputs. This separates sparse contamination from systematic preprocessing error. The archive lookup returned no coefficients despite available sweep rows; inspect sweep order and channel coverage before fixing the parser.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "86a5f5caea88ce90f377359839e614a28e17e3f3cf632ee23d01f009d839921f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30504.02,
+      "usage_known": true,
+      "prompt_tokens": 24780,
+      "cached_tokens": 6784,
+      "completion_tokens": 1033
+    }
+  ]
+}

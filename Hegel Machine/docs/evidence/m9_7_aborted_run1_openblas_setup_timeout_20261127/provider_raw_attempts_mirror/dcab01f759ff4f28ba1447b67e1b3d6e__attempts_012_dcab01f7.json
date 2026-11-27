@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dcab01f759ff4f28ba1447b67e1b3d6e",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:21:00.123833+00:00",
+  "ended_at_utc": "2026-11-27T07:21:35.380338+00:00",
+  "request_sha256": "7b5574a107ab7c19ef0a48eff1f4216cfb112b4c16b330e47c299e973faa821b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 59910,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31772,
+    "cached_tokens": 6784,
+    "completion_tokens": 1286
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nname='alpha_m97_c03_batch_06_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',name); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np=pickle.load(open('public_alpha_m97_c03_batch_06.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; out=s.solve_alpha_m97_c03_batch_06(d)\\nlines=s._calibrate(d['calibration_load_cells']); xa,xb=s._align(tr,te); inp=s._inputs(te,xb,lines); stress,hold,features=inp; tau=out['estimated_taus']; hw=out['hereditary_weights']; rw=out['regime_mode_weights']; end=np.cumsum(dt); lag=end[-1]-end\\nz=stress@((1-np.exp(-dt[:,None]/tau))*np.exp(-lag[:,None]/tau)); gap=hold[:,None]-z\\nphi=t/(1+.85*t); flow=features@hw[2:]+rw[0]*np.sign(hold)*np.sqrt(abs(hold)); transient=gap*hw; transient[:,0]+=rw[1]*(gap[:,0]-gap[:,1]); curve=transient@(-np.expm1(-t[None,:]/tau[:,None]))+flow[:,None]*phi+te['strain_0'][:,None]; rate=transient@(1/tau)+flow\\nprint('explicit-formula max strain/rate differences',np.max(abs(curve-out['predicted_strain'])),np.max(abs(rate-out['initial_rate_pred']))); np.testing.assert_allclose(curve,out['predicted_strain'],atol=1e-11,rtol=0); np.testing.assert_allclose(rate,out['initial_rate_pred'],atol=1e-11,rtol=0)\\nprint('basis rank',np.linalg.matrix_rank(s._design(np.log(tau),inp,dt,t).reshape(-1,9)))\\ny=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; tin=s._inputs(tr,xa,lines); labs=tr['lab_id']; missing=np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor lab in np.unique(labs):\\n m=labs==lab; a=tuple(v[~m] for v in tin); b=tuple(v[m] for v in tin); lt,w=s._fit(a,dt,t,y[~m]); e=s._design(lt,b,dt,t)@w-y[m]; complete=~missing[m]; e=e[complete]; strain_bias=np.nanmedian(e[:,:-1],axis=0); print('held-out lab',lab,'complete n',len(e),'max abs median horizon bias',round(np.max(abs(strain_bias)),5),'median signed rate bias',round(np.nanmedian(e[:,-1]),5),'median absolute curve/rate error',np.round([np.nanmedian(abs(e[:,:-1])),np.nanmedian(abs(e[:,-1]))],5))\\nce=curve-g['te_clean']; re=rate-g['te_true_rate0']; cells=np.c_[te['lab_id'],te['stratum']]; scores=[]\\nfor cell in np.unique(cells,axis=0):\\n mask=np.all(cells==cell,axis=1); scores.append((tuple(cell),int(mask.sum()),float(np.sqrt(np.mean(ce[mask]**2))),float(np.sqrt(np.mean(re[mask]**2)))))\\nprint('worst public lab-by-stratum curve slice',max(scores,key=lambda x:x[2])); print('worst public lab-by-stratum rate slice',max(scores,key=lambda x:x[3]))\\nprint('max complete-case curve/rate errors',np.max(abs(ce[~np.isnan(te['coupon_features_raw']).any(axis=1)])),np.max(abs(re[~np.isnan(te['coupon_features_raw']).any(axis=1)])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: verify the nine-term jammed-slip basis independently and check for residual lab bias; the imputed public slice has strain/rate RMSE of 0.12067/0.15556.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit unrelated rational, stochastic-control, or relay terms\",\n      \"rejected_reason\": \"The supplied continuous-response law specifies the rational saturation and gap difference. It has no relay state, stochastic-control operator, or classification label.\"\n    }\n  ],\n  \"rationale\": \"An independent closed-form memory calculation can catch a sign, coefficient, or derivative error shared by fit and prediction. Evaluate complete-specimen residuals by held-out lab to detect calibration or alignment bias without conflating it with missing coupons or isolated outliers. Check lab-by-stratum slices so pooled scores cannot hide a poorly served group.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8786d53b8bddb2e356685c4662e90e34fc0df56a6d3cdb71c5008925dbbaaebc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37718.57,
+      "usage_known": true,
+      "prompt_tokens": 31772,
+      "cached_tokens": 6784,
+      "completion_tokens": 1286
+    }
+  ]
+}

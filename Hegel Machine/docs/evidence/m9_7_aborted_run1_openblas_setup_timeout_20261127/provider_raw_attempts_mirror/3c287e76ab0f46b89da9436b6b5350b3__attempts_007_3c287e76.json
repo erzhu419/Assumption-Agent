@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c287e76ab0f46b89da9436b6b5350b3",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:16.061578+00:00",
+  "ended_at_utc": "2026-11-27T06:58:50.497735+00:00",
+  "request_sha256": "92621da7b6dd55ed556a90edf5eeb02c80e872bd8707c461e2005f795d8ab923",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44389,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27809,
+    "cached_tokens": 6784,
+    "completion_tokens": 1307
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\npath = '/holdout_task/alpha_m97_c01_batch_02_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]['dataset']\\nrows = d['calibration_load_cells']\\nlab = np.asarray(rows['lab_id'])\\nclean = m._calibrate(rows)\\nfor channel in range(4):\\n    j = np.flatnonzero(lab == channel)\\n    damaged = {k: np.array(v, copy=True) for k,v in rows.items()}\\n    damaged['true_stress'][j[len(j)//2]] += 8\\n    np.testing.assert_allclose(m._calibrate(damaged), clean, atol=3e-4, rtol=0)\\n    keep = lab != channel\\n    keep[j[0]] = True\\n    sparse = {k: np.asarray(v)[keep] for k,v in rows.items()}\\n    for sweep in reversed(json.loads(m._ARCHIVE.read_text())):\\n        sel = np.asarray(sweep['lab_id']) == channel\\n        x = np.asarray(sweep['cmd_stress'])[sel]\\n        if len(x) >= 2 and np.ptp(x) > 0:\\n            expected = np.polyfit(x, np.asarray(sweep['true_stress'])[sel], 1)\\n            break\\n    else:\\n        raise AssertionError(f'No archival sweep for channel {channel}')\\n    np.testing.assert_allclose(m._calibrate(sparse)[channel], expected)\\nprint('EMI rejection and sparse archival fallback passed on all four channels')\\ntrain, test = d['train'], d['test']\\nn = len(train['lab_id'])\\ndt, times = d['past_dt'], d['eval_times']\\npast, hold, x = m._prepare(d)\\ntaus = np.array([0.41, 3.3]); weights = np.array([.74,.49,.11,.17,-.12,.10,-.08])\\n# Independent convolution form of the zero-initialized memory recurrence.\\nages = np.cumsum(dt[::-1])[::-1] - dt\\nmass = np.exp(-ages[:,None]/taus) - np.exp(-(ages+dt)[:,None]/taus)\\ngap = hold[:,None] - past @ mass\\ndrift = x @ weights[2:]\\ncurves = (gap*weights[:2]) @ (1-np.exp(-times[None,:]/taus[:,None])) + drift[:,None]*times\\nrates = gap @ (weights[:2]/taus) + drift\\nnoiseless = dict(d, train=dict(train, strain_curves_obs=train['strain_0'][:,None]+curves[:n], instant_rate_obs=rates[:n]))\\nout = m.solve_alpha_m97_c01_batch_02(noiseless)\\nnp.testing.assert_allclose(out['estimated_taus'], taus, atol=1e-5, rtol=0)\\nnp.testing.assert_allclose(out['hereditary_weights'], weights, atol=1e-5, rtol=0)\\nnp.testing.assert_allclose(out['predicted_strain'], test['strain_0'][:,None]+curves[n:], atol=1e-6, rtol=0)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rates[n:], atol=1e-6, rtol=0)\\nnp.testing.assert_array_equal(out['regime_mode_weights'], np.zeros(2))\\nprint('Noiseless recovery passed; maximum strain/rate errors:', np.max(np.abs(out['predicted_strain']-test['strain_0'][:,None]-curves[n:])), np.max(np.abs(out['initial_rate_pred']-rates[n:])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct affine calibration and cell-balanced alignment → H2 robust two-branch linear flow; leave-one-lab-out worst lab–horizon median strain error is 0.02462 overall and 0.74866 on rows with imputed features.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit only on complete-feature rows\",\n      \"rejected_reason\": \"The fitted parameters barely moved, and the worst lab–horizon strain median worsened on both complete and missing-feature rows.\"\n    }\n  ],\n  \"rationale\": \"Keep the all-row Cauchy fit. Test the same artifact in an isolated process: calibration failures would require revising the EMI or archive selection logic, while failure to recover known parameters and predictions from an independent convolution would require revisiting the memory or fitting implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "575f9f11dd1bf6d4cc9de09f0923d189796d9c9b9f2577fca27d1608cbc838f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36862.64,
+      "usage_known": true,
+      "prompt_tokens": 27809,
+      "cached_tokens": 6784,
+      "completion_tokens": 1307
+    }
+  ]
+}

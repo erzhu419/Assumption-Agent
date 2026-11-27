@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86952827711c4447a982edbeed928172",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:19.535388+00:00",
+  "ended_at_utc": "2026-11-27T06:57:47.109930+00:00",
+  "request_sha256": "3de2fbc8fde2026d886aa88d26eccbb5f24cfd09eeaf84aa35d9215785065652",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42697,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26548,
+    "cached_tokens": 6784,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/alpha02_cv.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/alpha_m97_c01_batch_02_solver.py'\\ns=importlib.util.spec_from_file_location('cand',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]['dataset']\\nt=d['train']; dt=d['past_dt']; time=d['eval_times']; n=len(t['lab_id']); state=tuple(a[:n] for a in m._prepare(d)); y=t['strain_curves_obs']-t['strain_0'][:,None]; r=t['instant_rate_obs']; lab=t['lab_id']; missing=~np.isfinite(t['coupon_features_raw']).all(axis=1)\\nq=lambda a: np.round(np.quantile(np.abs(a),[.5,.8,.9,.95,.99,1.]),5)\\nfor loss in ('cauchy','soft_l1','linear'):\\n    e=np.zeros_like(y); f=np.zeros_like(r); ps=[]\\n    for j in range(4):\\n        ok=lab!=j; test=~ok\\n        par,w=m._fit(tuple(a[ok] for a in state),dt,time,y[ok],r[ok],loss=loss)\\n        A,B=m._design(par,tuple(a[test] for a in state),dt,time)\\n        e[test]=A@w-y[test]; f[test]=B@w-r[test]; ps.append(np.round(np.exp(par),4))\\n    print(loss,'taus',ps,'abs errors curve/rate',q(e),q(f),flush=True)\\n    print('lab curve median, worst-horizon median, rate median:',[(j,round(float(np.median(np.abs(e[lab==j]))),5),round(float(np.max(np.median(np.abs(e[lab==j]),axis=0))),5),round(float(np.median(np.abs(f[lab==j]))),5)) for j in range(4)],flush=True)\\n    print('complete/missing curve/rate:',[(q(e[ss])[:3],q(f[ss])[:3]) for ss in (~missing,missing)],flush=True)\\n    if loss=='cauchy':\\n        print('curve horizon scaled MAD',np.round([m._scale(v) for v in e.T],5),'signed median',np.round(np.median(e,axis=0),5),flush=True)\\n        print('rate scaled MAD',round(m._scale(f),5),'by stratum',[(int(j),q(f[t['stratum']==j])[:3]) for j in np.unique(t['stratum'])],flush=True)\\n        print('curve signed median by lab',[(j,np.round(np.median(e[lab==j],axis=0),4)) for j in range(4)],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha02_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct affine calibration → H2 robust two-branch linear flow; worst calibration residual is 0.000336 stress units, and the isolated schema check passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Accept the schema check as predictive verification\",\n      \"rejected_reason\": \"Shape and finiteness cannot detect a poorly recovered relaxation time or a systematic error in one lab or horizon.\"\n    }\n  ],\n  \"rationale\": \"Fit each loss with one lab's outcomes held out. Compare curve and rate errors by lab, horizon, and missingness, and check whether residual spread changes enough across horizons to justify separate noise scales.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f9fd1a39191ed0cd10bc2edc79c6730e17e2abca5caa13d2ddcf0d9c47ab7955",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29899.82,
+      "usage_known": true,
+      "prompt_tokens": 26548,
+      "cached_tokens": 6784,
+      "completion_tokens": 1003
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7bb2128c2d7a4fd39c61df662fb07522",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:49:53.094843+00:00",
+  "ended_at_utc": "2026-11-27T06:50:36.430435+00:00",
+  "request_sha256": "9a9a0a9c176d969ac2d74a4fc6b5b614e3896d8d09f05ac5fad84997bb01235b",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 40147,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26000,
+    "cached_tokens": 11136,
+    "completion_tokens": 1809
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nbase = '/holdout_task/'\\nm = load('candidate', base+'beta_m97_c02_batch_01_solver.py')\\nold = load('archive', '/tmp/hegel_continual_archive/beta_m97_c02_s00_solver.py')\\nwith open(base+'public_beta_m97_c02_batch_01.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns, gt = item['study'], item['gt']\\ncrit = s['critical_vortex_circulation']\\ntrace = np.asarray(s['past_vortex_circulation_trace'])\\nassert np.any(trace > crit)\\nref_open = old._forward(s)\\nworst_open = 0.0\\nfor mode, tr in [(1, trace), (0, np.minimum(trace, crit)), (1, np.minimum(trace, crit))]:\\n    got = m._forward(dict(s, recirculation_loop_mode=mode, past_vortex_circulation_trace=tr))\\n    err = max(np.max(np.abs(g-r)) for g, r in zip(got, ref_open))\\n    worst_open = max(worst_open, err)\\n    assert err < 1e-12\\nprint('open-branch maximum deviation from archived forward operator:', worst_open)\\n\\narchive_expected = (1.0, 0.0)\\nclean_expected = (1.33, 0.14)\\nx = np.linspace(-1.5, 2.2, 12)\\ny = clean_expected[0]*x+clean_expected[1]\\nworst_cal = 0.0\\nfor rows, spikes, expected in [(0, [], archive_expected), (1, [], archive_expected), (2, [], clean_expected), (3, [], clean_expected), (4, [], clean_expected), (3, [(1, 6)], archive_expected), (4, [(3, -7)], archive_expected), (5, [(4, 3.01)], clean_expected), (12, [(0, 6), (5, -9), (11, 4)], clean_expected)]:\\n    raw = y[:rows].copy()\\n    for i, delta in spikes:\\n        raw[i] += delta\\n    err = np.max(np.abs(np.array(m._bank_affine(1, x[:rows], raw))-expected))\\n    worst_cal = max(worst_cal, err)\\n    assert err < 1e-12, (rows, spikes, err)\\nprint('clean, sparse-history and EMI maximum calibration parameter error:', worst_cal)\\n\\nrng = np.random.default_rng(873)\\nworst_w = worst_gap = worst_stationarity = 0.0\\nfor case in range(100):\\n    cap = rng.uniform(0.4, 2.0)\\n    weights = cap*np.r_[np.zeros(4), rng.uniform(0.02, 0.98, 5), np.ones(3)]\\n    if case % 5 == 0:\\n        weights[4:9] = cap if case % 10 else 0.0\\n    weights = rng.permutation(weights)\\n    S = rng.normal(size=(24, 12))\\n    ridge = 0.04\\n    nu = rng.normal()\\n    g = nu + np.where(weights == 0, 1.3, np.where(weights == cap, -0.7, 0.0))\\n    y = S@weights - np.linalg.lstsq(S.T, g-ridge*weights, rcond=None)[0]\\n    w, c = m._box_simplex(S, y, ridge, cap, weights.sum())\\n    r = S@w-y\\n    grad = S.T@r+ridge*w\\n    j = (r@r+ridge*(w@w))/2\\n    stationarity = np.max(np.abs(grad-c['nu_sum']-c['lam_lower']+c['lam_upper']))\\n    gap = j-c['dual_lower_bound']\\n    err = np.max(np.abs(w-weights))\\n    worst_w, worst_gap, worst_stationarity = max(worst_w, err), max(worst_gap, gap), max(worst_stationarity, stationarity)\\n    assert abs(w.sum()-weights.sum()) < 1e-8 and w.min() >= -1e-9 and w.max() <= cap+1e-9\\n    assert err < 1e-7 and -1e-9 <= gap < 1e-7 and stationarity < 1e-7, (case, err, gap, stationarity)\\n    assert abs(j-c['primal_objective']) < 1e-10\\nout = m.solve_beta_m97_c02_batch_01(s)\\nassert np.max(np.abs(out['terminal_field']-gt['terminal_field_A'])) < 1e-6\\nperturbed = m.solve_beta_m97_c02_batch_01(dict(s, aux_manifold_telemetry=np.full_like(s['aux_manifold_telemetry'], 1000)))\\nassert np.array_equal(out['weights'], perturbed['weights']) and np.array_equal(out['terminal_field'], perturbed['terminal_field'])\\nprint('100 known-solution KKT cases: max weight error', worst_w, 'max gap', worst_gap, 'max stationarity error', worst_stationarity)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived open-Robin boundaries → H2 conditional sealing on both axes plus wall sorption; public maximum forward-matrix, weight, and terminal-field errors are 1.18e-16, 6.27e-7, and 3.51e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"One or both axes can retain Robin outflow in the fouled, non-recirculating regime.\",\n    \"empirical_witness\": \"Keeping Robin outflow on one or both axes produced projected forward-matrix errors of 0.0283–0.0381; sealing both reduced the error to 1.18e-16 with the same wall sorption.\",\n    \"causal_blanket_diagnosis\": \"The circulation excursion and loop mode govern boundary closure; the localized wall sink does not replace that closure.\",\n    \"sublated_pivot\": \"Preserve the archived Robin operator outside the fouling trigger and seal both axes inside it.\",\n    \"risk_kind\": \"boundary_regime_misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public episode verifies the sealed branch but not the open branch, sparse and spiked calibration, or KKT solutions with no free variables. Test those slices directly; any failure identifies which implementation branch needs correction before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "ce6ab26b323665a0086f4aecb32216449e168740d335236bc66100d26420786e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45693.47,
+      "usage_known": true,
+      "prompt_tokens": 26000,
+      "cached_tokens": 11136,
+      "completion_tokens": 1809
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f10ae5bca0234053ba34cd92dadefe28",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:10:14.492889+00:00",
+  "ended_at_utc": "2026-11-27T07:10:33.954230+00:00",
+  "request_sha256": "a83c2b68885a1a8a3d435f8ec50c082adac97ab4da24301cf1860ecd636b792c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 41865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26462,
+    "cached_tokens": 6784,
+    "completion_tokens": 665
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^xc, _/,$d' /tmp/rheology04_lolo.py > /tmp/rheology04_residual.py\\ncat >> /tmp/rheology04_residual.py <<'PY'\\nxc, _ = m._align(a,b)\\nz = m._inputs(a,xc,m._calibrate(d['calibration_load_cells']))\\ndt,t,crit = (d[k] for k in ('past_dt','eval_times','crit_stress'))\\ny=np.column_stack((a['strain_curves_obs']-a['strain_0'][:,None],a['instant_rate_obs']))\\nlt,w=m._fit(z,dt,t,crit,True,y)\\nr=y-m._design(lt,z,dt,t,crit,True)@w\\nprint('absolute residual quantiles by horizon and rate (last):')\\nprint(np.round(np.quantile(abs(r),[.25,.5,.75,.9,.95,.98,.995,1],axis=0),5))\\nprint('largest residuals',[(int(i),int(j),round(r[i,j],3)) for i,j in zip(*np.where(abs(r)>2))]); print('per-row counts',np.unique((abs(r)>.5).sum(axis=1),return_counts=True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology04_residual.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS nonlinear variable projection' | head -25\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: equal-weight calibrated Prony fit → H2: test for sparse observation contamination; held-out lab × regime RMSE peaks at 2.2103 for curves and 0.1853 for initial rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add physical terms to the response model\",\n      \"rejected_reason\": \"The elevated error at isolated horizons could come from bad observations; check residual patterns before changing the prescribed physical basis.\"\n    }\n  ],\n  \"rationale\": \"Distinguish isolated corrupt cells from errors that persist across a specimen’s trajectory. Isolated extremes call for cellwise robust fitting; coherent errors would instead warrant inspecting alignment, gating, or the response basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "867a14bb0abb89c5c5a774bfd8f7df5d8c0e22d426aab6312703c700a6cbd967",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21814.06,
+      "usage_known": true,
+      "prompt_tokens": 26462,
+      "cached_tokens": 6784,
+      "completion_tokens": 665
+    }
+  ]
+}

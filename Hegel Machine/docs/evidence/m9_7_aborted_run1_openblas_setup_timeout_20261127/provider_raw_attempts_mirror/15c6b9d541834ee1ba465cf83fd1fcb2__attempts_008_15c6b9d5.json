@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "15c6b9d541834ee1ba465cf83fd1fcb2",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:42:26.889283+00:00",
+  "ended_at_utc": "2026-11-27T06:42:57.266730+00:00",
+  "request_sha256": "7a38bc39af5e6a7bfc8824f07cb407d8aecac64439a3474e8d5c46e5a77b8628",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 47737,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28503,
+    "cached_tokens": 0,
+    "completion_tokens": 1195
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nit = pickle.load(open('/holdout_task/public_alpha_m97_c01_s00.pkl','rb'))[0]\\nd, g = it['dataset'], it['gt']\\naligned, n = m._prepare(d)\\na = tuple(v[n:] for v in aligned)\\nprint('public calibration max abs errors:', np.max(np.abs(a[0]-g['te_hist_true'])), np.max(np.abs(a[1]-g['te_hold_true'])))\\ny, r = m._predict(np.log(g['taus']), g['theta'], a, d['past_dt'], d['eval_times'])\\ny += d['test']['strain_0'][:,None]\\nfor missing in (False, True):\\n    rows = np.isnan(d['test']['coupon_features_raw']).any(axis=1) == missing\\n    print('reference parameters, missing:', missing, 'strain and rate RMSE:', np.sqrt(np.mean((y[rows]-g['te_clean'][rows])**2)), np.sqrt(np.mean((r[rows]-g['te_true_rate0'][rows])**2)))\\nwith tempfile.TemporaryDirectory() as td:\\n    m._ARCHIVE = Path(td)/'archive_calibration_history.json'\\n    m._ARCHIVE.write_text('{\\\"1\\\":{\\\"gain\\\":1.25,\\\"bias\\\":-0.1}}')\\n    lab = np.repeat([0, 2, 3], 7)\\n    x = np.tile(np.linspace(-2, 2, 7), 3)\\n    expected = np.array([[0.90, 0.12], [1.25, -0.1], [1.05, 0.2], [0.95, -0.08]])\\n    y = expected[lab, 0]*x + expected[lab, 1]\\n    y[0] += 12\\n    np.testing.assert_allclose(m._calibrate({'lab_id':lab, 'cmd_stress':x, 'true_stress':y}), expected, atol=1e-12)\\n    m._ARCHIVE.write_text('not JSON')\\n    lab = np.repeat(np.arange(4), 7)\\n    x = np.tile(np.linspace(-2, 2, 7), 4)\\n    y = expected[lab, 0]*x + expected[lab, 1]\\n    np.testing.assert_allclose(m._calibrate({'lab_id':lab, 'cmd_stress':x, 'true_stress':y}), expected, atol=1e-12)\\nprint('Calibration stress cases passed: EMI, absent in-batch channel, and no archive access for clean calibration.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine calibration and cell-balanced panel alignment -> H2: shared robust two-branch strain-and-rate fit; worst held-lab horizon median error is 0.0611 and public missing-coupon strain RMSE is 0.4452.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add per-horizon loss scaling\",\"rejected_reason\":\"It changes worst held-lab horizon median error by only 0.0004 and does not materially improve the missing-coupon slice.\"}],\"rationale\":\"Use the supplied reference parameters as a diagnostic, not to fit the solver: if the missing-coupon gap persists, changing the estimator will not address it. Exercise the documented sparse and EMI calibration branches, which the public schema run does not cover; a failure would require a calibration fix before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8fe5a09d5778a56c5a87f2c6e6a290c8ec301fe058025de78dfb32994874aac0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32717.45,
+      "usage_known": true,
+      "prompt_tokens": 28503,
+      "cached_tokens": 0,
+      "completion_tokens": 1195
+    }
+  ]
+}

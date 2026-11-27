@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ec6a7d409f64f68aafeea767d16aea5",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_02__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:59:10.600103+00:00",
+  "ended_at_utc": "2026-11-27T06:59:43.786680+00:00",
+  "request_sha256": "a070843f665864b12dd6c98629b8c13718acd9b3a81bfbf9d86c624bc394503d",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 34863,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23501,
+    "cached_tokens": 11136,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/beta_m97_c02_batch_02_solver.py')\\ns=p.read_text()\\nold='''            # With only three rows, a >3 leave-one-out discrepancy flags\\n            # corruption but does not reliably identify which row is bad.\\n            i, j, k = np.argsort(x)\\n            g, a = _fit_affine(x[[i, k]], y[[i, k]])\\n            if abs(y[j] - (g * x[j] + a)) <= 3.0:\\n'''\\nnew='''            # An endpoint spike can be attenuated by interpolation. Test\\n            # every held-out row, then use history if the triplet is inconsistent.\\n            for j in range(3):\\n                i, k = (j + 1) % 3, (j + 2) % 3\\n                if x[i] != x[k]:\\n                    predicted = y[i] + (x[j] - x[i]) * (y[k] - y[i]) / (x[k] - x[i])\\n                    if abs(y[j] - predicted) > 3.0:\\n                        break\\n            else:\\n'''\\nassert s.count(old)==1\\np.write_text(s.replace(old,new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom itertools import combinations\\nfrom pathlib import Path\\nfrom unittest.mock import patch\\nimport numpy as np\\np=Path('/holdout_task'); spec=importlib.util.spec_from_file_location('solver',p/'beta_m97_c02_batch_02_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.loads((p/'public_beta_m97_c02_batch_02.pkl').read_bytes())[0]['study']; a=s['sensor_calibration_sweeps']; ids=np.asarray(a['bank_id']); raw=np.asarray(s['y_obs_raw']); row_ids=np.asarray(s['row_bank_id']); hist=json.loads(m._ARCHIVE.read_text())\\nworst_clean=worst_fallback=0.; tested=0\\nfor b in range(4):\\n rows=np.flatnonzero(ids==b); other=np.flatnonzero(ids!=b); target=row_ids==b; hg,ha=m._fit_affine(*m._bank_rows(hist[-1],b)); expected=(raw[target]-ha)/hg\\n for triple in combinations(rows,3):\\n  keep=np.r_[other,triple]; sweep={k:np.asarray(v)[keep].copy() for k,v in a.items()}; t={**s,'sensor_calibration_sweeps':sweep}; x,y=m._bank_rows(sweep,b); g,o=m._fit_affine(x,y)\\n  with patch.object(m,'_ARCHIVE',Path('/tmp/should-not-be-read-calibration.json')):\\n   worst_clean=max(worst_clean,float(np.max(np.abs(m._calibration(t)[target]-(raw[target]-o)/g))))\\n  for j in range(len(other),len(keep)):\\n   for spike in (-3.01,3.01):\\n    sweep['raw_readout'][j]+=spike\\n    worst_fallback=max(worst_fallback,float(np.max(np.abs(m._calibration(t)[target]-expected))))\\n    sweep['raw_readout'][j]-=spike; tested+=1\\nprint('Clean triplets:', tested//6, 'spiked triplets:', tested, 'worst direct-fit error:', worst_clean, 'worst fallback error:',worst_fallback)\\nassert max(worst_clean,worst_fallback)<1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Endpoint-only EMI screening → all three held-out affine predictions; the old screen missed up to 440 of 660 injected +3.01 spikes per bank on measured triplets.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Testing only the middle reference against the endpoint fit detects any single EMI spike above 3.0.\",\n    \"empirical_witness\": \"On measured sweep triplets with an injected +3.01 spike, the endpoint-only test missed 433–440 of 660 cases per bank.\",\n    \"causal_blanket_diagnosis\": \"Interpolation downweights a corrupted endpoint, shrinking its contribution below the screening threshold.\",\n    \"sublated_pivot\": \"Test each held-out readout against the line through the other two, so a clean pair exposes the full residual of a single corrupted row.\",\n    \"risk_kind\": \"Sparse-bank calibration error\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use history for three-point sweeps\",\n      \"rejected_reason\": \"That would discard valid in-batch calibration and consult history for clean sweeps.\"\n    }\n  ],\n  \"rationale\": \"Change only the three-point screening branch. Exhaustive triplet checks on the measured sweep coordinates will detect either false archive use on clean rows or missed fallback for just-over-threshold spikes of either sign. The isolated public validator checks that the unchanged forward model and inversion still satisfy the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2cf64bd812137c49a539ac6defb7a10d979effcac53108ded8ec734306a0ce54",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35558.66,
+      "usage_known": true,
+      "prompt_tokens": 23501,
+      "cached_tokens": 11136,
+      "completion_tokens": 1341
+    }
+  ]
+}

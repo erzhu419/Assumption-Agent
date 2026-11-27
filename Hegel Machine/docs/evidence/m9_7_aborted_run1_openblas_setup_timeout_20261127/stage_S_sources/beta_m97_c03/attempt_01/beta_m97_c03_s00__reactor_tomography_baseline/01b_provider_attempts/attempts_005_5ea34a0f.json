@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5ea34a0f24e145b390de89ada264e3b0",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:40:54.350615+00:00",
+  "ended_at_utc": "2026-11-27T06:41:39.919714+00:00",
+  "request_sha256": "d0f1137363edba50617269892e87b57adb65ad5fd8e8c252546dede970f95be4",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 39938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26078,
+    "cached_tokens": 0,
+    "completion_tokens": 1895
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', 'beta_m97_c03_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_beta_m97_c03_s00.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nns = {'__name__': 'certificate_check'}\\nexec(Path('validate_public_schema.py').read_text().split('\\\\n_d =')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\n\\n# Exercise calibration with known gains, an isolated EMI spike, and a missing bank.\\nrng = np.random.default_rng(9703)\\ngains, offsets = np.array([1.4, .7, 2., .8]), np.array([-.3, .2, .9, -1.])\\nrids = s['row_bank_id']\\ny = rng.normal(size=rids.size)\\nbase = dict(s, y_obs_raw=y * gains[rids] + offsets[rids])\\nbank = np.repeat(np.arange(4), 12)\\nx = np.tile(np.linspace(-2, 2, 12), 4)\\nraw = gains[bank] * x + offsets[bank]\\nwith tempfile.TemporaryDirectory() as td:\\n    archive = Path(td) / 'history.json'\\n    m._CALIBRATION_ARCHIVE = str(archive)\\n    cases = []\\n    cases.append(('clean', np.ones(bank.size, dtype=bool), raw.copy()))\\n    cases.append(('EMI', np.ones(bank.size, dtype=bool), raw.copy()))\\n    cases[-1][2][17] += 4.2\\n    cases.append(('one_row', (bank != 2) | (np.arange(bank.size) == 26), raw.copy()))\\n    cases.append(('zero_rows', bank != 3, raw.copy()))\\n    cases.append(('two_clean', (bank != 0) | (np.arange(bank.size) < 2), raw.copy()))\\n    for label, keep, v in cases:\\n        if label in ('EMI', 'one_row', 'zero_rows'):\\n            archive.write_text(json.dumps({str(i): {'gain': float(g), 'offset': float(o)} for i, (g, o) in enumerate(zip(gains, offsets))}))\\n        else:\\n            archive.write_text('invalid JSON: clean sweeps must not consult the archive')\\n        st = dict(base, sensor_calibration_sweeps=dict(bank_id=bank[keep], ref_signal=x[keep], raw_readout=v[keep]))\\n        err = np.max(np.abs(m._calibrate(st) - y))\\n        assert err < 1e-12, (label, err)\\n        print('calibration', label, f'{err:.3e}')\\n\\n# A row-wise dense reference catches a reversed upwind direction or indexing error.\\nsmall = dict(s, nx=4, ny=3, kappa_x=np.array([.12,.08,.15,.10]), kappa_y=np.array([.10,.14,.09]), vel_x=np.array([-.2,-.3,.25,.2]), vel_y=np.array([.1,-.23,-.2]), V_reaction_2d=rng.uniform(.2,1.,(4,3)), source_modes=rng.normal(size=(12,4,3)), sensor_ij=np.array([[2,0],[0,2],[3,1]]))\\nL = np.diag(small['V_reaction_2d'].ravel(order='F'))\\nfor j in range(3):\\n    for i in range(4):\\n        row = i + 4*j\\n        for axis, k, n, step in [('x',i,4,1),('y',j,3,4)]:\\n            h = small['L'+axis]/(n-1)\\n            kap = small['kappa_'+axis]\\n            v = small['vel_'+axis][k]\\n            if k == 0 or k == n-1:\\n                d = kap[k]/h**2\\n                L[row,row] += d + small['robin_'+axis]/h\\n                L[row,row+step*(1 if k == 0 else -1)] -= d\\n            else:\\n                for e in (-1,1):\\n                    d = (kap[k]+kap[k+e])/(2*h*h) + max(-e*v,0)/h\\n                    L[row,row] += d\\n                    L[row,row+e*step] -= d\\nrhs = np.array([a.ravel(order='F') for a in small['source_modes']]).T\\nref = [np.linalg.solve(L+mu*np.eye(12), rhs) for mu in small['mu_shifts']]\\nA,F = m._forward(small)\\nerr = max(np.max(np.abs(A - np.vstack([a[[2,8,7]] for a in ref]))), np.max(np.abs(F-ref[-1])))\\nassert err < 1e-12, err\\nprint('signed-upwind forward max error', f'{err:.3e}')\\n\\n# Independently verify optimality where lower bounds, upper bounds, or all constraints bind.\\nworst = 0.\\nfor trial in range(200):\\n    D = rng.normal(size=(36, 12))\\n    if trial % 3 == 0:\\n        D[:, 6:] = D[:, :6]\\n    y = rng.normal(size=36) * (0.03, 2., 20.)[trial % 3]\\n    upper = (0.2, 1., 2.3)[trial % 3]\\n    budget = upper * (0., 0.01, 1., 2.6, 6., 11.99, 12.)[trial % 7]\\n    ridge = (0.0001, .04, .4)[trial % 3]\\n    w, nu = m._box_simplex(D, y, ridge, upper, budget)\\n    r = D @ w - y\\n    g = D.T @ r + ridge*w\\n    p = 0.5 * (r @ r + ridge*(w @ w))\\n    cert = dict(weights=w, nu_sum=nu, lam_lower=np.maximum(g-nu,0), lam_upper=np.maximum(nu-g,0), primal_objective=p, dual_lower_bound=p-g@w+nu*budget+upper*np.minimum(0.,g-nu).sum())\\n    chk = verify(D, y, ridge, upper, budget, cert, gap_tol=1e-8)\\n    assert chk['valid'], (trial, chk)\\n    worst = max(worst, chk['gap'])\\nprint('200 box-simplex cases; worst verified gap', f'{worst:.3e}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine bank calibration -> H2: ridge-projected Robin tomography and box-simplex KKT inversion; the public validator passed, with weight error 3.98e-8, terminal-field error 1.48e-9, and duality gap 3.47e-17.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case does not exercise EMI or sparse calibration, reversed upwinding, or constrained QP faces. Test each with a known reference so any failure identifies which part of the solver to fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "0a161bee3c0e5fc28f217b90285e3bdcd32d8b370395e7dbac72d9095921efcd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47890.29,
+      "usage_known": true,
+      "prompt_tokens": 26078,
+      "cached_tokens": 0,
+      "completion_tokens": 1895
+    }
+  ]
+}

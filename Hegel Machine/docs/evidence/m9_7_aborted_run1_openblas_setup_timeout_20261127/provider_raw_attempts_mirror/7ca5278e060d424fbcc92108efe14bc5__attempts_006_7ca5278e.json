@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ca5278e060d424fbcc92108efe14bc5",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:49:05.938977+00:00",
+  "ended_at_utc": "2026-11-27T06:49:36.089921+00:00",
+  "request_sha256": "8f0243d1ff6830ae4880e5dc24d77d07b337b39fc4b7efcd96126118351bbb96",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26436,
+    "cached_tokens": 6784,
+    "completion_tokens": 1190
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','alpha_m97_c02_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_alpha_m97_c02_batch_01.pkl','rb'))[0]; d,g=i['dataset'],i['gt']; p,h,x,b=m._prepare(d); n=len(d['train']['lab_id']); dt=d['past_dt']; t=d['eval_times']; a=m._activity(d,p,dt); lab=d['train']['lab_id']; y=d['train']['strain_curves_obs']-b[:n,None]; yr=d['train']['instant_rate_obs']\\nfor entry in json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')):\\n print('archive fields', {k:(np.shape(v),str(v)[:55]) for k,v in entry.items()}); print('archive counts',np.unique(entry['lab_id'],return_counts=True))\\norig=m._basis\\nfor uniform in (False,True):\\n def basis(taus,past,hold,features,dt,times,activity,plateau=True):\\n  A,R=orig(taus,past,hold,features,dt,times,activity,plateau)\\n  if uniform and plateau: A[:,:,2:7]=np.log1p(times)[None,:,None]*features[:,None,:]\\n  return A,R\\n m._basis=basis\\n print('uniform log flow',uniform)\\n for c in (-1,0,1,2,3):\\n  tr=(lab!=c); tau,w=m._fit(p[:n][tr],h[:n][tr],x[:n][tr],dt,t,a[:n][tr],y[tr],yr[tr]); print('fold',c,'taus',tau,'weights',w if c==-1 else '')\\n  if c==-1:\\n   A,R=basis(tau,p[n:],h[n:],x[n:],dt,t,a[n:]); e=b[n:,None]+A@w-g['te_clean']; er=R@w-g['te_true_rate0']; print('clean errors overall/inactive/active/nonmissing/imputed:',[(round(np.sqrt(np.mean(e[k]**2)),6),round(np.sqrt(np.mean(er[k]**2)),6)) for k in [np.ones(len(e),bool),a[n:]==0,a[n:]>0,~np.isnan(d['test']['coupon_features_raw']).any(axis=1),np.isnan(d['test']['coupon_features_raw']).any(axis=1)]])\\n   A,R=basis(g['taus'],p[n:],h[n:],x[n:],dt,t,a[n:]); ew=b[n:,None]+A@np.r_[g['theta'],g['vp_theta']]-g['te_clean']; print('public coefficient nonmissing diagnostic RMSE',np.sqrt(np.mean(ew[~np.isnan(d['test']['coupon_features_raw']).any(axis=1)]**2)))\\n  else:\\n   te=~tr; A,R=basis(tau,p[:n][te],h[:n][te],x[:n][te],dt,t,a[:n][te]); e=A@w-y[te]; er=R@w-yr[te]; print('OOF curve abs median overall/inactive/active and rate abs median',*[round(np.median(np.abs(e[k])),6) for k in [np.ones(len(e),bool),a[:n][te]==0,a[:n][te]>0]],round(np.median(np.abs(er)),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage switches the drift time basis → H2 low shear banding selects logarithmic drift while damage scales only the network terms; current inactive-slice clean curve RMSE is 0.367472.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the optimizer first\",\n      \"rejected_reason\": \"The error grows with time on inactive rows even though their onset rates are accurate, which points first to the drift time basis.\"\n    }\n  ],\n  \"rationale\": \"Compare the two drift bases on held-out labs before editing; retain the broader logarithmic basis only if the measured inactive rows support it. Inspect the archive row structure to fix the confirmed fallback parsing failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "239d6fb6445beed66fc42171501addc7f06ecfe14a5abe0b3ac7473c3e067ca6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32515.84,
+      "usage_known": true,
+      "prompt_tokens": 26436,
+      "cached_tokens": 6784,
+      "completion_tokens": 1190
+    }
+  ]
+}

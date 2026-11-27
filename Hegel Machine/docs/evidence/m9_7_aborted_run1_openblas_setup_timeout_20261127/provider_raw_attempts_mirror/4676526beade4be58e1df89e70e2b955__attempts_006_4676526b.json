@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4676526beade4be58e1df89e70e2b955",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:59:47.785807+00:00",
+  "ended_at_utc": "2026-11-27T07:00:25.633562+00:00",
+  "request_sha256": "7a0ae33d580f268b82dd338d1000d914a14a564c158af4c39498906aae58b297",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42448,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27272,
+    "cached_tokens": 6784,
+    "completion_tokens": 1249
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate', p+'beta_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_beta_m97_c01_batch_03.pkl','rb'))[0]['study']\\nq=s['sensor_calibration_sweeps']; ids=np.asarray(q['bank_id']); rows=np.asarray(s['row_bank_id']); y=m._calibrated_target(s)\\nerrors={'leave_one_out':[], 'emi_with_clean_points':[], 'archive_fallback':[]}\\nfor i in range(len(ids)):\\n    bank=ids[i]; check=rows==bank\\n    sub={k:np.delete(np.asarray(v),i) for k,v in q.items()}\\n    yy=m._calibrated_target(dict(s,sensor_calibration_sweeps=sub)); errors['leave_one_out'].append(np.max(np.abs(yy[check]-y[check])))\\n    for spike in (-3.01,3.01,-9.,9.):\\n        sub={k:np.asarray(v).copy() for k,v in q.items()}; sub['raw_readout'][i]+=spike\\n        yy=m._calibrated_target(dict(s,sensor_calibration_sweeps=sub)); errors['emi_with_clean_points'].append(np.max(np.abs(yy[check]-m._calibrated_target(dict(s,sensor_calibration_sweeps={k:np.delete(np.asarray(v),i) for k,v in q.items()}))[check])))\\nprior=json.loads(m._CALIBRATION_ARCHIVE.read_text())[-1]\\nfor bank in range(4):\\n    mask=np.asarray(prior['bank_id'])==bank\\n    x=np.asarray(prior['ref_signal'])[mask]; raw=np.asarray(prior['raw_readout'])[mask]\\n    gain,offset=np.linalg.lstsq(np.c_[x,np.ones_like(x)],raw,rcond=None)[0]\\n    for keep_count in (0,1):\\n        keep=ids!=bank; keep[np.flatnonzero(ids==bank)[:keep_count]]=True\\n        sub={k:np.asarray(v)[keep] for k,v in q.items()}\\n        yy=m._calibrated_target(dict(s,sensor_calibration_sweeps=sub)); check=rows==bank\\n        errors['archive_fallback'].append(np.max(np.abs(yy[check]-(s['y_obs_raw'][check]-offset)/gain)))\\n        assert np.array_equal(yy[~check],y[~check])\\nprint({k:float(max(v)) for k,v in errors.items()})\\nassert max(errors['leave_one_out']) < 1e-5\\nassert max(errors['archive_fallback']) < 1e-12\\nassert max(errors['emi_with_clean_points']) < 1e-12\\nrng=np.random.default_rng(42); worst_gap=worst_feas=0.\\nfor budget in (0.,.01,1.,2.6,6.,11.99,12.):\\n    for _ in range(24):\\n        a=rng.normal(size=(24,12)); b=18*rng.normal(size=24); ridge=.04\\n        w,nu=m._box_simplex(a,b,ridge,1.,budget); grad=a.T@(a@w-b)+ridge*w\\n        gap=grad@w-nu*budget-np.minimum(grad-nu,0).sum()\\n        worst_gap=max(worst_gap,abs(gap)); worst_feas=max(worst_feas,abs(w.sum()-budget),max(-w),max(w-1.))\\nprint('box simplex stress max_gap',worst_gap,'max_feasibility_error',worst_feas)\\nassert worst_gap < 1e-9 and worst_feas < 1e-11\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived open-Robin map → H2 periodic stencil with bank-local calibration and active-set inversion; public worst weight error 3.31e-7, terminal-field error 2.12e-8, and certified gap 1.42e-16.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Public validation passes on clean sweeps. Test whether a just-over-threshold EMI spike biases any bank, whether missing-bank fallback affects unrelated rows, and whether the active set remains feasible at tight budgets. A failure will identify the branch to fix before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "82d211d924bd8819fba49d2bd77a0b88ed92476b89c54a6bc39a99e046dba1ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40216.54,
+      "usage_known": true,
+      "prompt_tokens": 27272,
+      "cached_tokens": 6784,
+      "completion_tokens": 1249
+    }
+  ]
+}

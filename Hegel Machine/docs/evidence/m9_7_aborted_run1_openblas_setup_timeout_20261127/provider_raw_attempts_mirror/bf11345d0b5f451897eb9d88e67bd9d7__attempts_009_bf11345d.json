@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf11345d0b5f451897eb9d88e67bd9d7",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:35.067584+00:00",
+  "ended_at_utc": "2026-11-27T06:59:10.289289+00:00",
+  "request_sha256": "61a29664c84f1343b7d4832bd1b7dc35b65e9c541941f00740b8c6e70e9adf13",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 55299,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29485,
+    "cached_tokens": 0,
+    "completion_tokens": 1364
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c03_batch_02_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c03_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nlines = s._calibrate(d['calibration_load_cells'])\\nx = s._align(tr, te)[:len(tr['lab_id'])]\\ninputs = s._inputs(tr, x, lines)\\nstress, hold, xd = inputs\\ny = np.column_stack((tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']))\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nlabs = tr['lab_id']\\n# Check the compact memory expression against the specified step recurrence.\\nfor tau in (np.array([.12, 14.]), np.array([.6, 4.])):\\n    z = np.zeros((len(hold), 2))\\n    for h, u in zip(dt, stress.T):\\n        z = np.exp(-h/tau)*z - np.expm1(-h/tau)*u[:, None]\\n    gap = hold[:, None] - z\\n    a, _ = s._design(np.log(tau), inputs, dt, t)\\n    np.testing.assert_allclose(a[:, :-1, :2], gap[:, None, :] * -np.expm1(-t[:, None]/tau), atol=1e-12)\\n    np.testing.assert_allclose(a[:, -1, :2], gap/tau, atol=1e-12)\\n    np.testing.assert_allclose(a[:, :-1, 2:], xd[:, None, :]*t[None, :, None], atol=1e-12)\\nprint('Recurrence, initial-rate limit, and linear drift agree with the prescribed basis.')\\n# Probe for repeatable omitted drift: learn corrections only on the other labs.\\n# A linear pairwise difference is already in xd; squared differences and\\n# stress-dependent denominators test genuinely new terms.\\nfeatures = np.column_stack([*( (x[:, i]-x[:, j])**2 for i in range(4) for j in range(i+1, 4) ), xd/(1+hold[:, None]**2)-xd])\\nterminal = np.r_[t, 1.]\\nworst = np.zeros((2, 2))\\nfor lab in np.unique(labs):\\n    fit = (labs != lab) & complete\\n    val = (labs == lab) & complete\\n    lt, w = s._fit(tuple(v[fit] for v in inputs), dt, t, y[fit])\\n    pred = s._design(lt, inputs, dt, t)[0] @ w\\n    e = y-pred\\n    per_row = np.median(e / terminal, axis=1)\\n    design = features - np.median(features[fit], axis=0)\\n    beta = np.linalg.lstsq(design[fit], per_row[fit], rcond=None)[0]\\n    from scipy.optimize import least_squares\\n    mad = max(1e-8, 1.4826*np.median(abs(per_row[fit]-np.median(per_row[fit]))))\\n    beta = least_squares(lambda b: design[fit]@b-per_row[fit], beta, loss='cauchy', f_scale=2*mad).x\\n    challenger = e-(design@beta)[:, None]*terminal\\n    scores = np.array([[np.max(np.median(abs(r[val, :-1]), axis=0)), np.median(abs(r[val, -1]))] for r in (e, challenger)])\\n    worst = np.maximum(worst, scores)\\n    print('left-out lab', lab, 'median signed drift residual', float(np.median(per_row[val])), 'base/challenger (worst-horizon strain, rate)', scores.tolist())\\nprint('worst base/challenger:', worst.tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated two-branch Prony flow → direct recurrence and held-out-lab residual audit; worst complete-coupon test RMSE is 0.02360 for strain and 0.00702 for rate, and worst held-out-lab median absolute strain error is 0.04405.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode or balanced-accuracy checks\",\n      \"rejected_reason\": \"This dataset has continuous strain and initial-rate targets, not relay states or class labels. Held-out-lab signed drift and prediction errors test the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"A recurrence mismatch would require correcting the compact basis. A consistent reduction in held-out residuals from nonlinear corrections would warrant investigating an omitted term or calibration bias; an in-sample improvement alone would not justify changing the prescribed flow law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "b5e7f166385b60102597d07ace7076e10e5805d69a7441348181716da576cb14",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37649.28,
+      "usage_known": true,
+      "prompt_tokens": 29485,
+      "cached_tokens": 0,
+      "completion_tokens": 1364
+    }
+  ]
+}

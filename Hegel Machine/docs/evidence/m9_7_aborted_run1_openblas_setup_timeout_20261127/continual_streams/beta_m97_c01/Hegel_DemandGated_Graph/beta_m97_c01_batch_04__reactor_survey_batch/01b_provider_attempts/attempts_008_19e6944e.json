@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19e6944ec8eb41ee8e9e77ca0ca12950",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_04__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:09:50.798614+00:00",
+  "ended_at_utc": "2026-11-27T07:10:27.520414+00:00",
+  "request_sha256": "62e3ba575cb56ce91d9ffaeb63b38e240dc2c6bc2bcb6a8063ab28148baf4d3d",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38789,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24704,
+    "cached_tokens": 6784,
+    "completion_tokens": 1477
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c01_batch_04_solver.py')\\ns = p.read_text()\\na = s.index('        clean = np.ones(')\\nb = s.index('        rows = row_banks == bank', a)\\ns = s[:a] + '''        clean = _clean_sweep_rows(x, y)\\n        if clean.sum() >= 4 or (x.size >= 2 and clean.all()):\\n            gain, offset = _fit_line(x[clean], y[clean])\\n        else:\\n            if archive is None:\\n                archive = json.loads(_CALIBRATION_ARCHIVE.read_text())\\n            gain, offset = _historical_line(archive, bank)\\n''' + s[b:]\\na = s.index('def _calibrated_target')\\ns = s[:a] + '''def _clean_sweep_rows(x, y):\\n    if x.size < 3:\\n        return np.ones(x.size, dtype=bool)\\n    # Median of pointwise median slopes limits the leverage of a single spike.\\n    slopes = []\\n    for i in range(x.size):\\n        other = x != x[i]\\n        if np.any(other):\\n            slopes.append(np.median((y[other] - y[i]) / (x[other] - x[i])))\\n    if not slopes:\\n        return np.ones(x.size, dtype=bool)\\n    residual = y - np.median(slopes) * x\\n    return np.abs(residual - np.median(residual)) <= 3.0\\n\\n\\ndef _historical_line(archive, bank):\\n    # Prefer the latest usable sweep: the early archive spans a different regime.\\n    for record in reversed(archive):\\n        rows = np.asarray(record['bank_id']) == bank\\n        x = np.asarray(record['ref_signal'], dtype=float)[rows]\\n        y = np.asarray(record['raw_readout'], dtype=float)[rows]\\n        clean = _clean_sweep_rows(x, y)\\n        if clean.sum() >= 2 and np.ptp(x[clean]) > 0.0:\\n            return _fit_line(x[clean], y[clean])\\n    raise ValueError(f'Insufficient historical calibration for bank {bank}')\\n\\n\\n''' + s[a:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root/'beta_m97_c01_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load((root/'public_beta_m97_c01_batch_04.pkl').open('rb')):\\n    s,g = item['study'],item['gt']; out = m.solve_beta_m97_c01_batch_04(s)\\n    y = m._calibrated_target(s); z=s['Z_nuisance']; y -= z @ np.linalg.solve(z.T@z + s['nuisance_ridge']*np.eye(z.shape[1]),z.T@y)\\n    cert = out['kkt_certificate']; w=out['weights']; grad=g['S_tilde'].T@(g['S_tilde']@w-g['r_y'])+s['source_ridge']*w\\n    errors = dict(projected_target=np.max(abs(y-g['r_y'])),weights=np.max(abs(w-g['w_opt'])),terminal=np.max(abs(out['terminal_field']-g['terminal_field_A'])),stationarity=np.max(abs(grad-cert['nu_sum']-np.asarray(cert['lam_lower'])+np.asarray(cert['lam_upper']))),budget=abs(w.sum()-s['total_budget']))\\n    print({k:float(v) for k,v in errors.items()}); assert errors['weights']<1e-4 and errors['terminal']<1e-5\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived open-Robin transport and per-bank archive lookup -> H2: sealed Neumann transport with wall sorption and latest usable archived sweeps; public forward error is 9.71e-17 and the latest-sweep projected target error is 4.22e-7.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool all historical sweeps\",\"rejected_reason\":\"The earliest episode alone causes a projected target error of 1.13, while the most recent episode gives 4.22e-7.\"}],\"rationale\":\"Read the actual episode-list format and prefer current clean sweeps whenever sufficient. Run the public gate and check weights and terminal field separately, since the gate checks terminal-field shape but not its values.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d9e035f76ca8398ac1c94a6d98010605ab3408909c297a573081985f2d411c08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39073.93,
+      "usage_known": true,
+      "prompt_tokens": 24704,
+      "cached_tokens": 6784,
+      "completion_tokens": 1477
+    }
+  ]
+}

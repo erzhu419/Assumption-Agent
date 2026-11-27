@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a73c034fc294137bee14766da2fa74b",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:57:00.702531+00:00",
+  "ended_at_utc": "2026-11-27T06:57:29.899261+00:00",
+  "request_sha256": "087d02051de3ab29542f519d614eb7aceec0fefc3a89822902d43d0f70028c47",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 57663,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30991,
+    "cached_tokens": 11136,
+    "completion_tokens": 1142
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport contextlib, io, runpy\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    v = runpy.run_path('/tmp/check_m97_rheology.py')\\nd, lab, n, t = (v[k] for k in ('d', 'lab', 'n', 't'))\\nx = v['features'][:n, 1:]\\ncomplete = ~np.isnan(d['train']['coupon_features_raw']).any(axis=1)\\ny, r = v['y'], v['r']\\n# Pairwise linear sums and differences are already in the feature span.\\npairs = list(combinations(range(4), 2))\\ntriples = list(combinations(range(4), 3))\\nq = np.column_stack([x[:, i]*x[:, j] for i,j in pairs] + [np.prod(x[:, ijk], axis=1) for ijk in triples] + [x[:, i]/(1+.25*(x[:, i]-x[:, j])**2)-x[:, i] for i,j in pairs])\\nshapes = (t[:, None]/(1+(t[:, None]/np.array([.5, 4.]))**2))-t[:, None]\\nrows = []\\nfor j in np.unique(lab):\\n    tr, te = (lab != j) & complete, (lab == j) & complete\\n    tau,w = v['fit'](tr)\\n    a,b = v['predict'](complete,tau,w)\\n    e = np.zeros_like(y); f = np.zeros_like(r)\\n    e[complete], f[complete] = a-y[complete], b-r[complete]\\n    c = np.concatenate((q[:,None,:]*t[None,:,None], np.broadcast_to(shapes,(n,*shapes.shape))),axis=2)\\n    h = np.column_stack((q,np.zeros((n,shapes.shape[1]))))\\n    matrix = np.vstack((c[tr].reshape(-1,h.shape[1]),h[tr])); err = np.r_[e[tr].ravel(),f[tr]]\\n    p = least_squares(lambda p: matrix@p+err, np.zeros(h.shape[1]), jac=lambda p: matrix.copy(), loss='cauchy', f_scale=.025).x\\n    ec,fc = e[te]+c[te]@p, f[te]+h[te]@p\\n    row = [np.median(abs(e[te])),np.median(abs(ec)),np.sqrt(np.mean(f[te]**2)),np.sqrt(np.mean(fc**2))]\\n    rows.append(row)\\n    slope = np.median(e[te][:,t>0]/t[t>0],axis=1)\\n    print('held lab',int(j),'complete n',int(te.sum()),'strain median baseline/augmented; rate RMSE baseline/augmented',np.round(row,6),'median signed slope',round(float(np.median(slope)),6),'median signed rate error',round(float(np.median(f[te])),6))\\nprint('Worst complete held-lab metrics',np.round(np.max(rows,axis=0),6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 consensus-screened affine calibration and panel alignment -> H2 two-branch Prony relaxation with linear flow; worst held-out lab strain median absolute error is 0.0164 and initial-rate RMSE is 0.0359.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB operators, or balanced accuracy\",\n      \"rejected_reason\": \"This task has continuous rheology outputs and no relay state, stochastic control operator, or class labels. Held-lab signed drift and rate residuals are the relevant nuisance diagnostics.\"\n    }\n  ],\n  \"rationale\": \"Fit residual corrections only on the non-held labs to test whether pair and triple interactions or rational drift terms expose repeatable lack of fit. Use complete coupons to isolate structural bias from prescribed imputation. A consistent held-lab gain would warrant investigating alignment or model assumptions; no gain would support retaining the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "5c409b893e4c482730b5ca3ba33afe4c461ae2071f6843bdeed207c1e88e4af1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31570.5,
+      "usage_known": true,
+      "prompt_tokens": 30991,
+      "cached_tokens": 11136,
+      "completion_tokens": 1142
+    }
+  ]
+}

@@ -1777,7 +1777,11 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             (td_p / "cand.py").write_text(candidate_code, encoding="utf-8")
             m6f.exec_container_bash(cid, "mkdir -p /holdout_task", timeout_sec=10)
             subprocess.run(["docker", "cp", str(td_p / "_setup.py"), f"{cid}:/tmp/_setup.py"], check=True, timeout=15)
-            m6f.exec_container_bash(cid, "python3 -I /tmp/_setup.py && rm -f /tmp/_setup.py", timeout_sec=45)
+            m6f.exec_container_bash(
+                cid,
+                "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 -I /tmp/_setup.py && rm -f /tmp/_setup.py",
+                timeout_sec=120,
+            )
             # Clean any unmanifested files under `/tmp/hegel_continual_archive/` BEFORE running schema validator OR scientific probe (`F02`)!
             clean_unman_py = (
                 "import json, os\n"

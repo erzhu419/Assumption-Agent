@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b027698d60cf45f880e0afb12382141b",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:03:11.540079+00:00",
+  "ended_at_utc": "2026-11-27T07:03:47.014178+00:00",
+  "request_sha256": "54921f3364db18252a57567c9495968768c1d77b56a98583c19e878f945e9987",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43144,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26379,
+    "cached_tokens": 6784,
+    "completion_tokens": 1263
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/check_batch03.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/alpha_m97_c01_batch_03_solver.py'\\nspec=importlib.util.spec_from_file_location('solver',p)\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_03.pkl','rb'))[0]; d=i['dataset']; g=i['gt']; o=m.solve_alpha_m97_c01_batch_03(d)\\nrms=lambda x: np.sqrt(np.mean(x*x))\\nn=len(d['train']['lab_id']); t=d['eval_times']; dt=d['past_dt']; state=m._prepare(d); p,h,x=state\\na,b=m._design(o['estimated_taus'],state,dt,t)\\nz=np.zeros((len(h),2)); tau=o['estimated_taus']\\nfor j,width in enumerate(dt):\\n    q=np.exp(-width/tau); z=q*z+(1-q)*p[:,j,None]\\nwa=o['hereditary_weights']; wr=o['regime_mode_weights']; gap=h[:,None]-z; drift=x[:,0:5]@wa[2:]+wr[0]*np.sign(h)*np.sqrt(abs(h)); cross=wr[1]*(gap[:,0]-gap[:,1]); f=1-np.exp(-t[:,None]/tau)\\nassert np.allclose(o['predicted_strain'],d['test']['strain_0'][:,None]+((gap*wa[:2])@f.T+drift[:,None]*(t/(1+.85*t))+cross[:,None]*f[:,0])[n:])\\nassert np.allclose(o['initial_rate_pred'],((gap*wa[:2])@(1/tau)+drift+cross/tau[0])[n:])\\nfor key,ref in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    e=o[key]-g[ref]; s=d['test']; miss=~np.isfinite(s['coupon_features_raw']).all(1)\\n    print(key, 'complete/missing',[(int(k.sum()),rms(e[k])) for k in (~miss,miss)], 'by stratum',[rms(e[s['stratum']==j]) for j in np.unique(s['stratum'])], 'by hold sign',[rms(e[k]) for k in (h[n:]<0,h[n:]>=0)])\\n    print('worst lab/stratum',max((rms(e[k]),c,j,int(k.sum())) for c in range(4) for j in range(3) if (k:=(s['lab_id']==c)&(s['stratum']==j)).any()))\\ns=d['train']; delta=s['strain_curves_obs']-s['strain_0'][:,None]; y=s['instant_rate_obs']; print('leave-one-lab-out, observed response RMSE:')\\nfor c in range(4):\\n    keep=s['lab_id']!=c; tr=tuple(v[:n][keep] for v in state); va=tuple(v[:n][~keep] for v in state)\\n    tau,w=m._fit(tr,dt,t,delta[keep],y[keep]); a,b=m._design(tau,va,dt,t)\\n    print(c,tau,rms(a@w-delta[~keep]),rms(b@w-y[~keep]))\\ncal=d['calibration_load_cells']; c0=np.flatnonzero(cal['lab_id']==0)\\nfor name,keep,spikes in [('sparse', np.arange(len(cal['lab_id']))!=c0[-1], []),('EMI', np.ones(len(cal['lab_id']),bool), c0[:1])]:\\n    if name=='sparse': keep[c0[1:]]=False\\n    rows={k:v.copy() for k,v in cal.items()}; rows['true_stress'][spikes]+=5\\n    print(name,m._calibrate({k:v[keep] for k,v in rows.items()})[0])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_batch03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibrated stress and reference-panel alignment -> H2: asymmetric jammed-slip variable projection; public worst-lab RMSE is 0.02863 for strain and 0.03656 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema and aggregate errors pass\",\n      \"rejected_reason\": \"The aggregate results do not test sparse or spiked calibration, response holdouts by lab, or whether prediction errors concentrate in missing-feature rows.\"\n    }\n  ],\n  \"rationale\": \"Compare the closed-form memory against the explicit recurrence to catch indexing or derivative errors. Separate missing-feature errors from complete-case errors and hold out each lab's responses to distinguish imputation limits from a fit that fails to transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e79a0fcc95965b87471043f191b88391de03f9c1ab5185206335e90744964307",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40157.51,
+      "usage_known": true,
+      "prompt_tokens": 26379,
+      "cached_tokens": 6784,
+      "completion_tokens": 1263
+    }
+  ]
+}

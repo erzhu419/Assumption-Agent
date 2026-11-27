@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bde07e72a144d9994e96f1999e3e991",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:48:47.755474+00:00",
+  "ended_at_utc": "2026-11-27T06:49:29.476271+00:00",
+  "request_sha256": "d24a2365809d9a4810935469b81819171490b6076a104676051a2c2c4f48d361",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27375,
+    "cached_tokens": 11136,
+    "completion_tokens": 1718
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('alpha_m97_c02_batch_01_solver.py')\\ns=p.read_text().replace('full_plateau=False','plateau').replace('(full_plateau | (act > 0))[:, None], np.log1p(times), times','plateau, np.log1p(times), times').replace('phi = np.where(plateau, np.log1p(times), times)','phi = np.broadcast_to(np.log1p(times) if plateau else times, (len(past), len(times)))').replace('act, full_plateau)', 'act, plateau)').replace(\\\"    act = _activity(dataset, past, dt)\\\\n\\\", \\\"    # The campaign selects the terminal basis; work damage gates only the two extra terms.\\\\n    plateau = dataset['shear_banding_index'] <= 0.50\\\\n    act = _activity(dataset, past, dt)\\\\n\\\").replace(\\\"np.asarray(train['instant_rate_obs']))\\\", \\\"np.asarray(train['instant_rate_obs']), plateau)\\\").replace('dt, times, act[n:])','dt, times, act[n:], plateau)')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/plateau_diagnostics.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport alpha_m97_c02_batch_01_solver as s\\nwith open('/holdout_task/public_alpha_m97_c02_batch_01.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\np,h,x,y0=s._prepare(d)\\ndt,t=d['past_dt'],d['eval_times']\\na=s._activity(d,p,dt)\\nl=d['train']['lab_id']; n=len(l)\\ny=d['train']['strain_curves_obs']-y0[:n,None]; r=d['train']['instant_rate_obs']\\ne=np.empty_like(y); er=np.empty_like(r)\\nfor j in np.unique(l):\\n    tr=l!=j; va=~tr\\n    z,w=s._fit(p[:n][tr],h[:n][tr],x[:n][tr],dt,t,a[:n][tr],y[tr],r[tr],True)\\n    cb,rb,*_=s._basis(z,p[:n][va],h[:n][va],x[:n][va],dt,t,a[:n][va],True)\\n    e[va]=cb@w-y[va]; er[va]=rb@w-r[va]\\nprint('Curve residual absolute quantiles by time:',np.quantile(abs(e),[.5,.8,.9,.95,.99],axis=0).round(4))\\nprint('Rate residual absolute quantiles:',np.quantile(abs(er),[.5,.8,.9,.95,.99]).round(4))\\nprint('Curve outliers > 0.15 per coupon:',np.unique((abs(e)>.15).sum(axis=1),return_counts=True))\\nprint('Curve outliers > 0.15 by time:',(abs(e)>.15).sum(axis=0))\\nprint('Lab/damage slices: lab, active, count, worst time median absolute curve error, median absolute rate error')\\nfor j in np.unique(l):\\n    for active in [False,True]:\\n        m=(l==j)&((a[:n]>0)==active)\\n        print(j,active,m.sum(),np.median(abs(e[m]),axis=0).max(),np.median(abs(er[m])))\\nfor plateau in (False,True):\\n    logtau=np.log([.5,3.8]); taus=np.exp(logtau)\\n    act=a if plateau else np.zeros_like(a)\\n    z=np.zeros((len(p),2))\\n    for stress,ds in zip(p.T,dt):\\n        z=np.exp(-ds/taus)*z+(-np.expm1(-ds/taus))*stress[:,None]\\n    cb,rb,*_=s._basis(logtau,p,h,x,dt,t,act,plateau)\\n    phi=np.log1p(t) if plateau else t\\n    step=-np.expm1(-t[:,None]/taus)\\n    for m in range(2):\\n        np.testing.assert_allclose(cb[:,:,m],(h-z[:,m])[:,None]*step[:,m],atol=1e-13)\\n    np.testing.assert_allclose(cb[:,:,2:7],x[:,None,:]*phi[None,:,None],atol=1e-13)\\n    np.testing.assert_allclose(cb[:,:,7],(act*h)[:,None]*step[:,0],atol=1e-13)\\n    np.testing.assert_allclose(cb[:,:,8],(act*z[:,0])[:,None]*phi,atol=1e-13)\\n    cb_small,*_=s._basis(logtau,p,h,x,dt,np.array([1e-7]),act,plateau)\\n    np.testing.assert_allclose(cb_small[:,0,:]/1e-7,rb,rtol=2e-7,atol=1e-12)\\nprint('Recurrence and initial-rate checks passed for both terminal bases.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/plateau_diagnostics.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupon damage gates the terminal basis → H2 campaign mode selects the terminal basis and damage gates only the extra terms; worst held-out lab median late-time error on zero-damage coupons fell from 0.659 to 0.0241.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"Zero work damage restores linear terminal flow for individual coupons in the plateau campaign.\",\"empirical_witness\":\"At the final time, held-out zero-damage lab medians were 0.460–0.659 with linear flow versus 0.0175–0.0241 with logarithmic flow. Active-coupon errors also stayed at the noise scale.\",\"causal_blanket_diagnosis\":\"The damage threshold controls the added crystallization stresses, but does not switch the shared campaign terminal basis back to linear.\",\"sublated_pivot\":\"Use the campaign-level logarithmic terminal basis below the shear-banding threshold, retaining both damage-dependent terms and the exact initial derivative.\",\"risk_kind\":\"terminal_regime_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use raw RMSE to select the terminal basis\",\"rejected_reason\":\"Large observation glitches dominate RMSE; the zero-damage late-time medians show a systematic error across all four labs.\"}],\"rationale\":\"Implement the held-out improvement and verify the basis against the direct recurrence and initial derivative. The residual quantiles and outlier counts distinguish isolated glitches, which the Cauchy fit can handle, from a remaining systematic error that would warrant another model change.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c9053276788acc18ea39afca76bb165a32f1d0d8246bd147952c15f82e6bdc37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44083.79,
+      "usage_known": true,
+      "prompt_tokens": 27375,
+      "cached_tokens": 11136,
+      "completion_tokens": 1718
+    }
+  ]
+}

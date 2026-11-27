@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c958902ec6d4b089886fdbeb3a17f5f",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:21:00.710305+00:00",
+  "ended_at_utc": "2026-11-27T07:21:42.393986+00:00",
+  "request_sha256": "057029bae5f87891d0a88cca0a9ea3a2eb829fcb27f8ce3ce5b4c390d19a1728",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32633,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23002,
+    "cached_tokens": 6784,
+    "completion_tokens": 1668
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsrc=/tmp/hegel_continual_archive/alpha_m97_c01_batch_06_solver.py\\nout=alpha_m97_c01_batch_07_solver.py\\n{ echo '\\\"\\\"\\\"Calibrated two-branch rheology with a strain-crystallization plateau.\\\"\\\"\\\"'; sed -n '/^import json/,/^def _design/{ /^def _design/!p; }' \\\"$src\\\"; } > \\\"$out\\\"\\n# Require a supported archive line: a sparse, EMI-contaminated sweep must not supersede a clean sweep.\\nsed -i 's/if good.sum() >= 2 and np.ptp(a\\\\[good\\\\]):/if good.sum() >= 4 and np.ptp(a[good]):/' \\\"$out\\\"\\ncat >> \\\"$out\\\" <<'PY'\\ndef _design(tau, state, dt, times, crit):\\n    past, hold, features = state\\n    q = -dt[:, None] / tau\\n    decay, transfer = np.exp(q), -np.expm1(q)\\n    memory = np.zeros((len(hold), 2))\\n    for step in range(len(dt)):\\n        memory = memory * decay[step] + past[:, step, None] * transfer[step]\\n\\n    gap = hold[:, None] - memory\\n    damage = np.maximum(np.abs(past) - crit, 0.)**2 @ dt\\n    act = np.tanh(damage)\\n    terminal = np.column_stack((np.ones(len(hold)), features))\\n    transient = -np.expm1(-times[:, None] / tau)\\n    log_time = np.log1p(times)\\n    active_hold, active_memory = act * hold, act * memory[:, 0]\\n    curve = np.concatenate((\\n        gap[:, None, :] * transient,\\n        terminal[:, None, :] * log_time[None, :, None],\\n        (active_hold[:, None] * transient[None, :, 0])[:, :, None],\\n        (active_memory[:, None] * log_time)[:, :, None],\\n    ), axis=2)\\n    rate = np.column_stack((gap / tau, terminal, active_hold / tau[0], active_memory))\\n    return curve, rate\\n\\n\\nPY\\nsed -n '/^def _mad/,/^def solve_/{ /^def solve_/!p; }' \\\"$src\\\" | sed 's/def _fit(state, dt, times, curves, rates):/def _fit(state, dt, times, crit, curves, rates):/;s/_design(unpack(p), state, dt, times)/_design(unpack(p), state, dt, times, crit)/' >> \\\"$out\\\"\\ncat >> \\\"$out\\\" <<'PY'\\ndef solve_alpha_m97_c01_batch_07(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    dt, times = (np.asarray(dataset[k], float) for k in ('past_dt', 'eval_times'))\\n    # An infinite threshold switches off the plateau-specific columns when the\\n    # crystallized regime is not selected; this batch is in the low-banding regime.\\n    crit = dataset['crit_stress'] if dataset['shear_banding_index'] <= .50 else np.inf\\n    state = _prepare(dataset)\\n    n = len(train['lab_id'])\\n    curves = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    tau, coef = _fit(tuple(a[:n] for a in state), dt, times, crit, curves,\\n                     train['instant_rate_obs'])\\n    curve, rate = _design(tau, tuple(a[n:] for a in state), dt, times, crit)\\n    return {'estimated_taus': tau, 'hereditary_weights': coef[:7],\\n            'regime_mode_weights': coef[7:],\\n            'predicted_strain': test['strain_0'][:, None] + curve @ coef,\\n            'initial_rate_pred': rate @ coef}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_07_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]['dataset']; t=d['train']; n=len(t['lab_id']); p=tuple(a[:n] for a in m._prepare(d)); dt=d['past_dt']; ts=d['eval_times']; c=d['crit_stress']; y=t['strain_curves_obs']-t['strain_0'][:,None]; r=t['instant_rate_obs']; active=(np.maximum(abs(p[0])-c,0)**2@dt)>0\\nprint('calibration',m._calibrate(d['calibration_load_cells']).tolist())\\nfor lab in np.unique(t['lab_id']):\\n sel=t['lab_id']==lab\\n tau,co=m._fit(tuple(a[~sel] for a in p),dt,ts,c,y[~sel],r[~sel]); A,B=m._design(tau,tuple(a[sel] for a in p),dt,ts,c)\\n print('held out lab',lab,'tau',tau.round(5),'coef',co.round(5),'counts',np.bincount(active[sel],minlength=2),'curve/rate abs error quantiles',np.quantile(np.abs(A@co-y[sel]),[.5,.9,.95,1]).round(5),np.quantile(np.abs(B@co-r[sel]),[.5,.9,.95,1]).round(5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean per-channel calibration and aligned coupons → profiled two-branch Prony/logarithmic plateau; leave-one-lab-out errors pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the latest sparse archive sweep for every missing channel\",\n      \"rejected_reason\": \"Channels 0 and 2 have only three rows with apparent EMI shifts; preceding full sweeps agree closely, while channel 1 has a clean updated sweep.\"\n    }\n  ],\n  \"rationale\": \"Implement the specified curve and its analytic initial derivative as one profiled linear basis. The public validator checks output shape and finiteness; leave-one-lab-out errors and parameter stability will show whether the robust fit transfers across calibration and damage slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "63ac975359b2b250aafbcbdee487e7dac866b5ec3c81fcfa04b82024a6a76bf0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46582.62,
+      "usage_known": true,
+      "prompt_tokens": 23002,
+      "cached_tokens": 6784,
+      "completion_tokens": 1668
+    }
+  ]
+}

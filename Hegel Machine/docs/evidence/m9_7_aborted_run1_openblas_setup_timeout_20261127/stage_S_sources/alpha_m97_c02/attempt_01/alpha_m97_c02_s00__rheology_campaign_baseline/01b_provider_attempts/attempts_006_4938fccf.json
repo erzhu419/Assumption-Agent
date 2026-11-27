@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4938fccfe260492e9f62968df6fe761a",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:41:39.781037+00:00",
+  "ended_at_utc": "2026-11-27T06:42:07.161382+00:00",
+  "request_sha256": "9f878c6b694436ed30ff446928b79d5f408844fb4d2878cd70ae1ee2e1b69bd2",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 43032,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27464,
+    "cached_tokens": 0,
+    "completion_tokens": 1037
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom pathlib import Path\\np=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('solver',p/'alpha_m97_c02_s00_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith (p/'public_alpha_m97_c02_s00.pkl').open('rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\ntr,te=d['train'],d['test']\\nn=len(tr['lab_id']); dt=d['past_dt']; t=d['eval_times']; y=tr['strain_curves_obs']; rate=tr['instant_rate_obs']; lab=tr['lab_id']\\ncurve_errors=np.empty_like(y); rate_errors=np.empty_like(rate)\\nfor held in np.unique(lab):\\n    keep=lab!=held; val=~keep\\n    fold=dict(d, train={k:v[keep] for k,v in tr.items()}, test={k:np.concatenate((tr[k][val],v)) for k,v in te.items()})\\n    out=m.solve_alpha_m97_c02_s00(fold); nv=int(val.sum())\\n    curve_errors[val]=abs(out['predicted_strain'][:nv]-y[val]); rate_errors[val]=abs(out['initial_rate_pred'][:nv]-rate[val]);\\n    assert np.all(np.diff(out['estimated_taus'])>0) and np.array_equal(out['regime_mode_weights'],np.zeros(2))\\n    print('held lab',held,'curve medians by horizon',np.round(np.median(curve_errors[val],axis=0),5),'rate med/p90',np.round(np.quantile(rate_errors[val],[.5,.9]),5),'taus',np.round(out['estimated_taus'],5))\\nmissing=np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor name, sel in [('missing features',missing),('complete features',~missing),('high-stress histories',abs(tr['past_stress_cmd']).max(axis=1)>=np.quantile(abs(tr['past_stress_cmd']).max(axis=1),.9))]:\\n    print(name,sel.sum(),'curve med/p90',np.round(np.quantile(curve_errors[sel],[.5,.9]),5),'rate med/p90',np.round(np.quantile(rate_errors[sel],[.5,.9]),5))\\npast,hold,F,strain0=m._prepare(d); out=m.solve_alpha_m97_c02_s00(d); tau=out['estimated_taus']; h=out['hereditary_weights']; z=np.zeros((len(past)-n,2));\\nfor j,step in enumerate(dt):\\n    decay=np.exp(-step/tau); z=z*decay+past[n:,j,None]*(1-decay)\\ngap=hold[n:,None]-z; drift=F[n:]@h[2:]; expected=strain0[n:,None]+(gap*h[:2])@(1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t\\nnp.testing.assert_allclose(out['predicted_strain'],expected,rtol=1e-12,atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'],(gap*h[:2])@(1/tau)+drift,rtol=1e-12,atol=1e-12)\\nprint('Explicit memory recurrence and onset derivative match solver predictions; full-fit taus',tau)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: The calibrated two-branch model fits public strain and onset-rate observations with median errors of 0.0149 and 0.0142 in sample; held-out lab, horizon, and missing-feature errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Withhold each lab’s response measurements while retaining the permitted unlabeled reference panel. A lab- or horizon-specific error increase would motivate revisiting alignment or the fit; an independent recurrence mismatch would require correcting the prediction basis.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "141a05b21ff3d042dfc99c56ec2e84fa65c7fc8b6bc5cb745bfab2e404b9f21d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29768.42,
+      "usage_known": true,
+      "prompt_tokens": 27464,
+      "cached_tokens": 0,
+      "completion_tokens": 1037
+    }
+  ]
+}

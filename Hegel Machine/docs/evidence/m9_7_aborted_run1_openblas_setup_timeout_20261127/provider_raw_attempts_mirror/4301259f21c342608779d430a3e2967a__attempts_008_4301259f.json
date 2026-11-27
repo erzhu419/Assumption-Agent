@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4301259f21c342608779d430a3e2967a",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:00:43.655075+00:00",
+  "ended_at_utc": "2026-11-27T07:01:14.904048+00:00",
+  "request_sha256": "ea83f0ad2b4aa709b3e35c111b5cd57698d046a61a3a84ac338c9b37d4bb06f5",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39344,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25977,
+    "cached_tokens": 11136,
+    "completion_tokens": 1355
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.sparse import csr_matrix, diags, eye, kron\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p+'beta_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ndef stencil(k, v, length, robin, periodic):\\n    n = len(k)\\n    h = length / (n-1)\\n    a = np.zeros((n,n))\\n    for i in range(n):\\n        if not periodic and i in (0,n-1):\\n            a[i,1 if i == 0 else n-2] = -k[i]/h**2\\n            a[i,i] = k[i]/h**2 + robin/h\\n            continue\\n        j, l = (i-1)%n, (i+1)%n\\n        a[i,j] += -(k[i]+k[j])/(2*h**2) - max(v[i],0)/h\\n        a[i,l] += -(k[i]+k[l])/(2*h**2) - max(-v[i],0)/h\\n        a[i,i] -= a[i,j]+a[i,l]\\n    if periodic:\\n        assert np.max(np.abs(a.sum(axis=1))) < 1e-11\\n    return csr_matrix(a)\\nworst = {'open':0., 'periodic':0., 'aux_delta':0.}\\nfor item in pickle.load(open(p+'public_beta_m97_c01_batch_03.pkl','rb')):\\n    s = item['study']; nx, ny = s['nx'], s['ny']\\n    for mode in (0.50, np.nextafter(0.50,1.0), s['recirculation_loop_mode']):\\n        periodic = mode > 0.50\\n        q = dict(s, recirculation_loop_mode=mode)\\n        a, b = [stencil(s['kappa_'+d], s['vel_'+d], s['L'+d], s['robin_'+d], periodic) for d in 'xy']\\n        pot = np.array(s['V_reaction_2d'], copy=True)\\n        if periodic:\\n            pot += 0.75*mode*np.outer(np.cos(2*np.pi*np.arange(nx)/(nx-1)), np.cos(2*np.pi*np.arange(ny)/(ny-1)))\\n        op = kron(eye(ny),a) + kron(b,eye(nx)) + diags((pot+s['mu_shifts'][-1]).ravel(order='F'))\\n        out = m.solve_beta_m97_c01_batch_03(q)\\n        rhs = np.einsum('k,kij->ij',out['weights'],s['source_modes']).ravel(order='F')\\n        r = np.max(abs(op @ out['terminal_field'].ravel(order='F') - rhs)) / max(1.,np.max(abs(rhs)))\\n        key = 'periodic' if periodic else 'open'\\n        worst[key] = max(worst[key],float(r))\\n        q.pop('aux_manifold_telemetry',None)\\n        other = m.solve_beta_m97_c01_batch_03(q)\\n        worst['aux_delta'] = max(worst['aux_delta'],*(float(np.max(abs(out[k]-other[k]))) for k in ('weights','terminal_field')))\\nprint('Worst independent normalized terminal PDE residual by mode and auxiliary invariance:', worst)\\nassert max(worst['open'],worst['periodic']) < 1e-10\\nassert worst['aux_delta'] == 0\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived open-Robin map → H2 mode-gated periodic recirculation with bank-specific calibration; worst stressed KKT gap 9.09e-13 and feasibility error 1.78e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay, and Fokker–Planck diagnostics.\",\n      \"rejected_reason\": \"This study has no class labels, relay state, or stochastic drift model. The relevant checks are bank-local calibration, nuisance projection, and the discrete transport boundary.\"\n    }\n  ],\n  \"rationale\": \"Check both sides of the documented mode threshold on the public reactor inputs using an independently assembled stencil. A PDE residual failure would isolate a boundary, reaction, or terminal-field assembly defect; any change after removing auxiliary telemetry would reveal an unintended dependency.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "ab9256b46314d35f216d8e40ffef01aba517c0c2914589c4c2db4c88ed44d848",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36005.69,
+      "usage_known": true,
+      "prompt_tokens": 25977,
+      "cached_tokens": 11136,
+      "completion_tokens": 1355
+    }
+  ]
+}

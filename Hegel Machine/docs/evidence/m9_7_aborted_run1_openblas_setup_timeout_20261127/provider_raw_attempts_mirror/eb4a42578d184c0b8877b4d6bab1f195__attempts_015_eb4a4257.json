@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eb4a42578d184c0b8877b4d6bab1f195",
+  "call_seq": 15,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:14:24.288417+00:00",
+  "ended_at_utc": "2026-11-27T07:15:01.533266+00:00",
+  "request_sha256": "759bb796cd72af9a3f9fa3abe903e8e424bd927d9950f84c52ae4b924e821949",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74152,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37064,
+    "cached_tokens": 6784,
+    "completion_tokens": 1360
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_04_solver.py')\\ns = p.read_text()\\nold = '    flow = np.where(act[:, None] > 0, np.log1p(times), times)'\\nnew = '''    # Low banding sets the base drift law; damage gates the two corrections.\\n    flow = np.broadcast_to(np.log1p(times) if crystallizes else times,\\n                           (len(hold), len(times)))'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I /tmp/rheology04_compare.py /holdout_task/alpha_m97_c03_batch_04_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/alpha_m97_c03_batch_04_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c03_batch_04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntrain, test = d['train'], d['test']\\n_, xb = m._align(train, test)\\nstress, hold, xd = m._inputs(test, xb, m._calibrate(d['calibration_load_cells']))\\ndt, t, crit = (d[k] for k in ('past_dt', 'eval_times', 'crit_stress'))\\ndamage = (np.maximum(np.abs(stress) - crit, 0)**2 * dt).sum(axis=1)\\nassert np.any(damage == 0) and np.any(damage > 0)\\nfor banding in (0.50, 0.51):\\n    out = m.solve_alpha_m97_c03_batch_04(dict(d, shear_banding_index=banding))\\n    assert all(np.isfinite(v).all() for v in out.values())\\n    tau, hw, rw = (out[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\n    z = np.zeros((len(hold), 2))\\n    for step, load in zip(dt, stress.T):\\n        e = np.exp(-step / tau)\\n        z = e*z + (1-e)*load[:, None]\\n    act = np.tanh(damage) if banding <= .50 else np.zeros_like(damage)\\n    flow = np.log1p(t) if banding <= .50 else t\\n    amp = (hold[:, None] - z)*hw[:2]\\n    amp[:, 0] += rw[0]*act*hold\\n    drift = xd @ hw[2:] + rw[1]*act*z[:, 0]\\n    expected_curve = test['strain_0'][:, None] + amp @ (1-np.exp(-t / tau[:, None])) + drift[:, None]*flow\\n    expected_rate = (amp / tau).sum(axis=1) + drift\\n    np.testing.assert_allclose(out['predicted_strain'], expected_curve, atol=1e-12, rtol=1e-12)\\n    np.testing.assert_allclose(out['initial_rate_pred'], expected_rate, atol=1e-12, rtol=1e-12)\\n    print('banding', banding, 'zero-damage rows', int((damage == 0).sum()), 'max strain/rate error', np.max(abs(out['predicted_strain']-expected_curve)), np.max(abs(out['initial_rate_pred']-expected_rate)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: linear drift at zero damage → H2: low banding sets logarithmic base drift and damage gates only the two corrections; worst held-out lab × regime P90 absolute error dropped from 0.41266 to 0.28682 for strain and from 0.24952 to 0.17998 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Zero past-work damage restores linear terminal drift in the low-banding campaign.\",\n    \"empirical_witness\": \"With linear drift, zero-damage late-strain median residuals were positive in all four held-out labs (0.0353 to 0.4003). Logarithmic base drift reduced their maximum absolute median to 0.0086 and cut worst initial-rate RMSE from 0.15402 to 0.08032.\",\n    \"causal_blanket_diagnosis\": \"The inferred fallback used the damage gate to switch both the base drift law and the two activation corrections, producing opposite late-strain biases across damage strata.\",\n    \"sublated_pivot\": \"Use logarithmic base drift throughout the low-banding regime while retaining damage activation for the two correction terms and the analytic initial rate.\",\n    \"risk_kind\": \"Incorrect constitutive fallback at zero damage\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep linear drift at zero damage and increase rate weight\",\n      \"rejected_reason\": \"Preceding weighting comparisons improved rate at the expense of strain P90 and did not resolve the systematic late-strain bias.\"\n    }\n  ],\n  \"rationale\": \"Promote the change because it improves both prediction outputs while preserving the specified active-row equations. Recheck held-out errors on the saved solver and compare both outputs against an explicit recurrence at and above the banding threshold to catch implementation or boundary errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "4f36ff68b5716fc6c5f13131a1ef2238ef6cf6d8a554b7f830bc8ecf7c495c08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39718.38,
+      "usage_known": true,
+      "prompt_tokens": 37064,
+      "cached_tokens": 6784,
+      "completion_tokens": 1360
+    }
+  ]
+}

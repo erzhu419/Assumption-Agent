@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d0514aa64f440eb9ee8d650a074fd15",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:42.539687+00:00",
+  "ended_at_utc": "2026-11-27T06:52:21.213361+00:00",
+  "request_sha256": "462f110a9be411fcb084eb2353aa78fc5010016f8cae4d298d5cd67b70351c75",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63459,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32962,
+    "cached_tokens": 6784,
+    "completion_tokens": 1671
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('        xc, yc = x[clean], y[clean]')\\nb = s.index('    return fitted.T', a)\\ns = s[:a] + '''        # With four readings, the six pair slopes split evenly between\\n        # clean pairs and pairs touching a single spike. Compare triplets.\\n        if len(x) == 4:\\n            best = None\\n            for omitted in range(4):\\n                keep = np.arange(4) != omitted\\n                if np.unique(x[keep]).size < 2:\\n                    continue\\n                gain, bias = _line(x[keep], y[keep])\\n                residual = np.abs(y - (gain*x + bias))\\n                score = np.linalg.norm(residual[keep])\\n                if best is None or score < best[0]:\\n                    best = score, residual, keep\\n            if best is not None:\\n                _, residual, keep = best\\n                clean = keep if residual[~keep].item() > 3.0 and np.all(residual[keep] <= 3.0) else np.ones(4, dtype=bool)\\n        xc, yc = x[clean], y[clean]\\n        if np.unique(xc).size >= 2:\\n            fitted[lab] = _line(xc, yc)\\n            continue\\n        if len(x) >= 2 and clean.all():\\n            raise ValueError(f'Load-cell sweep has no distinct commands for channel {lab}')\\n        if history is None:\\n            history = json.loads(_HISTORY.read_text())\\n        for entry in reversed(history):\\n            hx, hy = _sweep(entry, lab)\\n            if np.unique(hx).size >= 2:\\n                fitted[lab] = _line(hx, hy)\\n                break\\n        else:\\n            raise ValueError(f'No usable load-cell calibration for channel {lab}')\\n''' + s[b:]\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/holdout_task/alpha_m97_c03_batch_01_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nv=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=v['dataset'],v['gt']; cal=d['calibration_load_cells']; labs=np.asarray(cal['lab_id']); baseline=m._calibration(cal); history=json.loads(m._HISTORY.read_text()); worst=0.\\nfor lab in range(4):\\n idx=np.flatnonzero(labs==lab); e=next(e for e in reversed(history) if np.unique(m._sweep(e,lab)[0]).size>=2); archived=m._line(*m._sweep(e,lab))\\n for n in (0,1,2,3,4,len(idx)):\\n  for spike in (range(n) if n>=4 else [-1]):\\n   keep=labs!=lab; keep[idx[:n]]=True; changed={k:np.asarray(a)[keep].copy() for k,a in cal.items()}; li=np.flatnonzero(changed['lab_id']==lab)\\n   if spike>=0: changed['true_stress'][li[spike]]+=8.*(-1 if spike%2 else 1)\\n   got=m._calibration(changed); expected=archived if n<2 else baseline[:,lab]; delta=np.max(np.abs(np.asarray(got)[:,lab]-expected)); worst=max(worst,delta)\\n   assert np.allclose(np.asarray(got)[:,np.arange(4)!=lab],baseline[:,np.arange(4)!=lab],atol=1e-12,rtol=0) and delta<.005,(lab,n,spike,delta)\\nprint('worst coefficient error over sparse and EMI sweeps:',worst)\\no=m.solve_alpha_m97_c03_batch_01(d); missing=np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\nfor name,obs,mask in [('strain','te_clean',missing),('rate','te_true_rate0',missing)]:\\n r=o['predicted_strain' if name=='strain' else 'initial_rate_pred']-g[obs]; print(name,'RMSE complete/missing',*[np.sqrt(np.mean(r[k]**2)) for k in (~mask,mask)])\\nfor a,b in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(a,'max absolute error',np.max(abs(o[a]-g[b])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: replace a contaminated short sweep with the archive → H2: fit identifiable clean in-batch readings and use the archive only when necessary; observed archive substitution shifted a gain by up to 0.290, while public missing-feature RMSE is 0.1105 strain and 0.0851 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the archived line whenever EMI is detected in a short sweep\",\n      \"rejected_reason\": \"The archived gains are near unity and differ materially from the current batch; three agreeing, distinct in-batch readings can identify the current affine map.\"\n    }\n  ],\n  \"rationale\": \"Keep the verified creep model and fix the calibration path that discarded usable measurements. Vary the spike location and sweep size to catch misidentified spikes, unintended archive substitution, or changes to unaffected channels; rerun the public validator in a clean process to confirm the edit preserves the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "81f125440d0855deeaabc71ec91f7910b7947af6aeb9fa5645764ee7317af4b7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43455.29,
+      "usage_known": true,
+      "prompt_tokens": 32962,
+      "cached_tokens": 6784,
+      "completion_tokens": 1671
+    }
+  ]
+}

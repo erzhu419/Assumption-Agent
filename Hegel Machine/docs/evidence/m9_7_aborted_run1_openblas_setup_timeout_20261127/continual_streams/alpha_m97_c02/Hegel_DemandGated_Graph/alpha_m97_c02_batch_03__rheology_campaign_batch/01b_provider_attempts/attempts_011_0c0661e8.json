@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c0661e83fc44c61b461ff493124a865",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:59:14.528647+00:00",
+  "ended_at_utc": "2026-11-27T06:59:58.439217+00:00",
+  "request_sha256": "c4464de726dc0d7fbd0f18a504dc02c578c37261f1067ff6cfc6b42d88d608df",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 77515,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37672,
+    "cached_tokens": 0,
+    "completion_tokens": 1852
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/verify_rheology03.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\np = pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_03.pkl', 'rb'))[0]\\nd, g = p['dataset'], p['gt']\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\npast, hold, f, e0 = m._prepare(d)\\ndt, t = d['past_dt'], d['eval_times']\\ny, r = tr['strain_curves_obs'] - e0[:n,None], tr['instant_rate_obs']\\nrmse = lambda e: float(np.sqrt(np.mean(e**2)))\\nce, re = np.empty_like(y), np.empty_like(r)\\nfor l in range(4):\\n    v = tr['lab_id'] == l\\n    a = ~v\\n    tau, w = m._fit(past[:n][a], hold[:n][a], f[:n][a], dt, t, y[a], r[a])\\n    b, b0 = m._basis(tau, past[:n][v], hold[:n][v], f[:n][v], dt, t)\\n    ce[v], re[v] = b @ w - y[v], b0 @ w - r[v]\\n    print('held-out lab', l, 'strain MAE/median AE, rate RMSE, taus', np.mean(abs(ce[v])), np.median(abs(ce[v])), rmse(re[v]), tau)\\nlab, st = tr['lab_id'], tr['stratum']\\ncells = [(l,s,(lab==l)&(st==s)) for l,s in np.unique(np.c_[lab,st],axis=0)]\\nprint('worst held-out lab/stratum median abs strain and rate RMSE', max((np.median(abs(ce[v])),l,s) for l,s,v in cells), max((rmse(re[v]),l,s) for l,s,v in cells))\\no = m.solve_alpha_m97_c02_batch_03(d)\\nec, er = o['predicted_strain']-g['te_clean'],o['initial_rate_pred']-g['te_true_rate0']\\nprint('worst clean-test horizon RMSE', max(rmse(ec[:,i]) for i in range(len(t))))\\nfor label, v in [('positive',hold[n:]>0),('negative',hold[n:]<0),('large hold',abs(hold[n:])>d['crit_stress']),('missing coupon',np.isnan(te['coupon_features_raw']).any(axis=1))]:\\n    print(label, int(v.sum()), rmse(ec[v]), rmse(er[v]))\\ncal = d['calibration_load_cells']\\nbase = m._calibrate(cal)\\nfor l in range(4):\\n    ch = np.flatnonzero(cal['lab_id']==l)\\n    i = ch[len(ch)//2]\\n    for spike in (-12.,12.):\\n        changed = {k:v.copy() for k,v in cal.items()}\\n        changed['true_stress'][i] += spike\\n        assert np.max(abs(m._calibrate(changed)-base)) < 3e-4\\n        keep = (cal['lab_id']!=l) | np.isin(np.arange(len(cal['lab_id'])),ch[[0,4,9]])\\n        changed = {k:v[keep].copy() for k,v in cal.items()}\\n        spike_row = np.flatnonzero(changed['lab_id']==l)[1]\\n        changed['true_stress'][spike_row] += spike\\n        assert np.max(abs(m._calibrate(changed)[l]-m._archived_calibration(l))) < 3e-4\\n    keep = (cal['lab_id']!=l) | (np.arange(len(cal['lab_id']))==i)\\n    assert np.allclose(m._calibrate({k:v[keep] for k,v in cal.items()})[l],m._archived_calibration(l))\\nprint('all four channels pass single-row fallback and injected EMI tests')\\n# Independent recurrence and near-zero slope check for basis ordering and sign.\\ntau = o['estimated_taus']\\nw = np.r_[o['hereditary_weights'],o['regime_mode_weights']]\\nz = np.zeros((len(hold),2))\\nfor j,h in enumerate(dt):\\n    decay = np.exp(-h/tau)\\n    z = z*decay + past[:,j,None]*(1-decay)\\ngap = hold[:,None]-z\\nv = f @ w[2:7] + w[7]*np.sign(hold)*np.sqrt(abs(hold))\\ndirect = (gap/tau) @ w[:2] + v + w[8]*(gap[:,0]-gap[:,1])/tau[0]\\nnp.testing.assert_allclose(o['initial_rate_pred'],direct[n:],atol=1e-12)\\nb,_ = m._basis(tau,past,hold,f,dt,np.array([0.,1e-7]))\\nnp.testing.assert_allclose((b[:,1]@w-b[:,0]@w)/1e-7,direct,rtol=0,atol=1e-6)\\nprint('direct memory recurrence and strain derivative agree')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rheology03.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unweighted fit → H2 robust Prony/slip fit with panel-based alignment; worst public lab-by-stratum strain/rate RMSE is 0.04084/0.05208, and missing-coupon RMSE is 0.07437/0.09511.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace panel estimates with lab constants inferred from public truth\",\n      \"rejected_reason\": \"That would violate the requested panel estimator and would not transfer to a new campaign.\"\n    }\n  ],\n  \"rationale\": \"Refit without each lab’s response labels to test whether the robust fit transfers despite strain spikes. Test sparse and contaminated calibration on all four channels; a failure would require a calibration fix. Independently verify the memory recurrence and initial slope to catch basis sign or ordering errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "aff624d6ac67d2a79e6ca5193b37708adc301ddef25662661e41556ba74b27ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48644.27,
+      "usage_known": true,
+      "prompt_tokens": 37672,
+      "cached_tokens": 0,
+      "completion_tokens": 1852
+    }
+  ]
+}

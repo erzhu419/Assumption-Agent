@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58411cf9aecb4204a6c8f8a1debc162c",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:17.744905+00:00",
+  "ended_at_utc": "2026-11-27T06:51:58.770767+00:00",
+  "request_sha256": "1776c6a94bb3afc5df6d0fcbf4c0b5513bfd1b4357fac6df8a1cde6bd958d238",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 57707,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31119,
+    "cached_tokens": 11136,
+    "completion_tokens": 1669
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/rheology_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/alpha_m97_c02_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_alpha_m97_c02_batch_01.pkl', 'rb'))[0]\\nd, gt = item['dataset'], item['gt']\\np, h, x, b = m._prepare(d)\\ntr = d['train']; labs = tr['lab_id']; n = len(labs)\\ndt, t = d['past_dt'], d['eval_times']\\na = m._activity(d, p, dt)\\ny = tr['strain_curves_obs'] - b[:n, None]; r = tr['instant_rate_obs']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nprint('Incomplete training rows per lab:', [(c, int(sum((labs == c) & ~complete))) for c in range(4)])\\n\\nout = m.solve_alpha_m97_c02_batch_01(d)\\ntau = out['estimated_taus']; w = out['hereditary_weights']; v = out['regime_mode_weights']\\nz = np.zeros((len(p), 2))\\nwork = np.zeros(len(p))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step / tau)\\n    z = decay * z + (1 - decay) * p[:, j, None]\\n    work += np.maximum(0, np.abs(p[:, j]) - d['crit_stress'])**2 * step\\nnp.testing.assert_allclose(a, np.tanh(work), atol=1e-13)\\ngap = h[:, None] - z\\nrise = 1 - np.exp(-t[:, None] / tau)\\nfor plateau in (False, True):\\n    activity = a if plateau else np.zeros_like(a)\\n    drift = x @ w[2:] + v[1] * activity * z[:, 0]\\n    amp = gap * w[:2]; amp[:, 0] += v[0] * activity * h\\n    expected_curve = amp @ rise.T + drift[:, None] * (np.log1p(t) if plateau else t)\\n    expected_rate = amp @ (1 / tau) + drift\\n    A, R = m._basis(tau, p, h, x, dt, t, activity, plateau)\\n    coef = np.r_[w, v] if plateau else w\\n    np.testing.assert_allclose(A @ coef, expected_curve, atol=1e-12)\\n    np.testing.assert_allclose(R @ coef, expected_rate, atol=1e-12)\\n    if plateau:\\n        np.testing.assert_allclose(out['predicted_strain'], b[n:, None] + expected_curve[n:], atol=1e-12)\\n        np.testing.assert_allclose(out['initial_rate_pred'], expected_rate[n:], atol=1e-12)\\nprint('Independent recurrence, both flow laws, onset derivative and output handoff passed.')\\n\\nfor label, eligible in [('all', np.ones(n, dtype=bool)), ('complete-only', complete)]:\\n    worst = np.zeros(3)\\n    for c in range(4):\\n        fit = (labs != c) & eligible\\n        test = (labs == c) & complete\\n        ta, co = m._fit(p[:n][fit], h[:n][fit], x[:n][fit], dt, t, a[:n][fit], y[fit], r[fit])\\n        A, R = m._basis(ta, p[:n][test], h[:n][test], x[:n][test], dt, t, a[:n][test])\\n        ec, er = A @ co - y[test], R @ co - r[test]\\n        metric = np.array([np.median(np.abs(ec)), np.median(np.abs(er)), abs(np.median(ec[:, -1]))])\\n        worst = np.maximum(worst, metric)\\n        print(label, 'held lab', c, 'tau', np.round(ta, 5), 'curve/rate MedAE and terminal bias', np.round(metric, 6))\\n    print(label, 'worst held-lab metrics:', np.round(worst, 6))\\n    ta, co = m._fit(p[:n][eligible], h[:n][eligible], x[:n][eligible], dt, t, a[:n][eligible], y[eligible], r[eligible])\\n    A, R = m._basis(ta, p[n:], h[n:], x[n:], dt, t, a[n:])\\n    ec, er = b[n:, None] + A @ co - gt['te_clean'], R @ co - gt['te_true_rate0']\\n    rmse = lambda v: np.sqrt(np.mean(v*v))\\n    print(label, 'public relative tau max, curve RMSE, rate RMSE:', max(abs(ta / gt['taus'] - 1)), rmse(ec), rmse(er))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust fit on all coupons → H2 exclude incomplete training coupons only if held-lab validation improves; current worst held-lab inactive curve median absolute error is 0.016170, and imputed test strain/rate RMSE is 0.197117/0.149692.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, pairwise, HJB, or relay terms; score batch classification\",\n      \"rejected_reason\": \"This task specifies continuous strain and onset-rate outputs from two memory branches and a drift law. None of those terms or classification metrics is part of its model or data. Held-lab error and signed terminal bias directly test whether calibration leaves a lab shortcut.\"\n    }\n  ],\n  \"rationale\": \"An independent stepwise recurrence can expose a sign, branch, drift, or onset-rate error shared by the fit and forecast; a mismatch would require a basis correction. Paired held-lab fits test whether imputed training rows bias the slow relaxation estimate without changing the prescribed prediction-time imputation. Retain the verified candidate unless the challenger improves the held-lab margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4799273e216422f66eee43659e3bdaf8bddab831fa84c15037f30f8fae75a0c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43406.84,
+      "usage_known": true,
+      "prompt_tokens": 31119,
+      "cached_tokens": 11136,
+      "completion_tokens": 1669
+    }
+  ]
+}

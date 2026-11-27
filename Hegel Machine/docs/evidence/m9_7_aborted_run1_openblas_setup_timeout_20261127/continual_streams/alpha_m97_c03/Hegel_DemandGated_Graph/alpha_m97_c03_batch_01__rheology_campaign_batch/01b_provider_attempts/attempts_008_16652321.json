@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1665232175534dcb85e9df90b634d8c1",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:50:27.435874+00:00",
+  "ended_at_utc": "2026-11-27T06:51:00.800544+00:00",
+  "request_sha256": "460f97e3a04517c51adfcfb68da542da280b2185bc96a42afb577dee5e74da32",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 52794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29820,
+    "cached_tokens": 6784,
+    "completion_tokens": 1331
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\\ns=p.read_text()\\ns=s.replace('    return stress, hold, aligned, dt, times, plateau, activation', '    return stress, hold, aligned, dt, times, plateau, activation, dataset[\\\\'shear_banding_index\\\\'] <= .50')\\ns=s.replace('def _design(logtau, stress, hold, x, dt, times, plateau, activation):', 'def _design(logtau, stress, hold, x, dt, times, plateau, activation, crystallization_campaign):')\\ns=s.replace('    terminal = np.where(plateau[:, None], np.log1p(times)[None, :], times[None, :])', '    # The clock is shared in this campaign; damage gates the added amplitudes.\\\\n    terminal = np.log1p(times) if crystallization_campaign else times')\\ns=s.replace('terminal[:, :, None]', 'terminal[None, :, None]')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nr='/holdout_task/'; spec=importlib.util.spec_from_file_location('c',r+'alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\np=pickle.load(open(r+'public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m._align(tr,te); cal=m._calibration(d['calibration_load_cells']); ti=m._inputs(d,tr,x[:n],cal); vi=m._inputs(d,te,x[n:],cal); out=m.solve_alpha_m97_c03_batch_01(d); rms=lambda z:np.sqrt(np.mean(z*z))\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n a,b=out[k],g[j]; print(k,np.round(a,6),'relative L2',np.linalg.norm(a-b)/np.linalg.norm(b))\\ne=out['predicted_strain']-g['te_clean']; q=out['initial_rate_pred']-g['te_true_rate0']; full=np.isfinite(te['coupon_features_raw']).all(1); active=vi[5]\\nfor label,keep in [('pooled',np.ones(len(e),bool)),('active',active),('inactive',~active),('complete',full),('missing',~full)]+[(f'lab {j}',te['lab_id']==j) for j in range(4)]:\\n print('clean',label,keep.sum(),'curve/rate RMSE',rms(e[keep]),rms(q[keep]),'worst horizon',np.sqrt(np.mean(e[keep]**2,axis=0)).max())\\ny=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; sub=lambda inp,mask:tuple(v[mask] if j in (0,1,2,5,6) else v for j,v in enumerate(inp))\\nfor lab in range(4):\\n keep=tr['lab_id']!=lab; z=m._fit(sub(ti,keep),y[keep]); er=m._design(z[:2],*sub(ti,~keep))[0]@z[2:]-y[~keep]; print('LOLO',lab,'taus',np.exp(z[:2]),'curve/rate MdAE',np.median(abs(er[:,:-1])),np.median(abs(er[:,-1])),'curve/rate RMSE',rms(er[:,:-1]),rms(er[:,-1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 damage gates the terminal clock -> H2 damage gates only the added amplitudes; at public reference parameters, the log clock reduces inactive curve RMSE from 0.616 to 0.0178.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the clock and imputation together\",\n      \"rejected_reason\": \"The clock has direct evidence from complete coupons. Keeping the specified imputation fixed isolates the effect of the clock correction.\"\n    }\n  ],\n  \"rationale\": \"Apply the logarithmic clock to all coupons in the crystallization campaign while retaining the damage gate on the two regime amplitudes. Refit from measured training data and verify in an isolated process. If error remains concentrated in missing-feature rows, assess imputation separately rather than retuning the clock.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "13f509e8cdca41698e7802cde20a33ea596a2569e4e9f5d8bf0163e2949969a2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35767.08,
+      "usage_known": true,
+      "prompt_tokens": 29820,
+      "cached_tokens": 6784,
+      "completion_tokens": 1331
+    }
+  ]
+}

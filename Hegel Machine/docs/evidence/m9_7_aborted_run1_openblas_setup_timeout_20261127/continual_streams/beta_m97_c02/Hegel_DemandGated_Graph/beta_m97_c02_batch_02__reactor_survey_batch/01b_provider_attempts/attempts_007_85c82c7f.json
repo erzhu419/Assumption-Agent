@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "85c82c7f645f4563affccdd44efa9678",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_02__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:58:50.164772+00:00",
+  "ended_at_utc": "2026-11-27T06:59:28.003043+00:00",
+  "request_sha256": "362053fe9772fc49ef8dce8210a2a807e95b5d96e6e932163dc1dbc0e4dbffbd",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38388,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25012,
+    "cached_tokens": 6784,
+    "completion_tokens": 1529
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c02_batch_02_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d =', 1)[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nitem, = pickle.loads((p/'public_beta_m97_c02_batch_02.pkl').read_bytes())\\ns, gt = item['study'], item['gt']\\nbase = m.solve_beta_m97_c02_batch_02(s)\\ncheck = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], base['kkt_certificate'], gap_tol=2e-4)\\nassert check['valid'], check\\nprint('public max errors (weights, terminal field), verified gap:', np.max(abs(base['weights']-gt['w_opt'])), np.max(abs(base['terminal_field']-gt['terminal_field_A'])), check['gap'])\\nc = {k:np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\noriginal = m._archived_affine\\ncalls = []\\ndef tracked(bank):\\n    calls.append(bank)\\n    return original(bank)\\nm._archived_affine = tracked\\naux = m.solve_beta_m97_c02_batch_02(dict(s, aux_manifold_telemetry=100+s['aux_manifold_telemetry']))\\nassert not calls\\nassert np.array_equal(base['weights'], aux['weights']) and np.array_equal(base['terminal_field'], aux['terminal_field'])\\nworst = np.zeros(3)\\ndef trial(label, keep, spikes=(), expected=()):\\n    d = {k:v[keep].copy() for k,v in c.items()}\\n    if spikes:\\n        d['raw_readout'][list(spikes[0])] += spikes[1]\\n    calls.clear()\\n    out = m.solve_beta_m97_c02_batch_02(dict(s, sensor_calibration_sweeps=d))\\n    assert calls == list(expected), (label, calls, expected)\\n    chk = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n    assert chk['valid'], (label, chk)\\n    errors = [np.max(abs(out['weights']-gt['w_opt'])), np.max(abs(out['terminal_field']-gt['terminal_field_A'])), chk['gap']]\\n    worst[:] = np.maximum(worst, errors)\\n    assert max(errors[:2]) < 2e-6, (label, errors)\\nfor b in range(4):\\n    rows = np.flatnonzero(c['bank_id']==b)\\n    others = np.flatnonzero(c['bank_id']!=b)\\n    for n in range(5):\\n        trial(('count',b,n), np.sort(np.r_[others,rows[:n]]), expected=(b,) if n<2 else ())\\n    for idx in rows:\\n        for delta in (-20., -3.01, 3.01, 20.):\\n            trial(('spike',b,int(idx),delta), np.arange(len(c['bank_id'])), ([idx],delta))\\n    for n in (3,4):\\n        keep = np.sort(np.r_[others,rows[:n]])\\n        for idx in rows[:n]:\\n            trial(('sparse-spike',b,n,int(idx)), keep, ([np.searchsorted(keep,idx)],20.), (b,))\\nprint('calibration worst errors (weights, field, verified gap):', worst)\\nrng = np.random.default_rng(664)\\nqp_worst = 0.\\nfor i in range(100):\\n    A = rng.normal(size=(25,12)) if i%2 else np.eye(12)\\n    y = rng.normal(size=A.shape[0])*10\\n    cap = [0.01, 1., 3.][i%3]\\n    for frac in (0.,1e-8,1/12,0.5,11/12,1-1e-8,1.):\\n        budget = frac*(12*cap)\\n        w, cert = m._box_simplex(A, y, 0.04, cap, budget)\\n        chk = verify(A, y, 0.04, cap, budget, cert, gap_tol=2e-4)\\n        assert chk['valid'], (i,cap,budget,chk)\\n        qp_worst = max(qp_worst, chk['gap'])\\nprint('700 box-simplex stress cases: worst verified gap', qp_worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 public open-Robin agreement → H2 test sparse and EMI-affected calibration and bound-active source inversion; the public validator passed and the worst public weight error was 1.16e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The public case has 12 clean readings per bank and does not exercise archive fallback, EMI rejection, or budgets at the box endpoints.\"\n    }\n  ],\n  \"rationale\": \"Run the saved artifact in isolation. Calibration perturbations preserve the public inverse problem while exposing incorrect archive dispatch or spike rejection; endpoint and vertex tests expose feasibility or certificate failures that would require revising the active-set solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "2f4e2a45a2c5021519b7e38f90159beb8d515abaf7d1b8c8f591924bfd97d807",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40224.5,
+      "usage_known": true,
+      "prompt_tokens": 25012,
+      "cached_tokens": 6784,
+      "completion_tokens": 1529
+    }
+  ]
+}

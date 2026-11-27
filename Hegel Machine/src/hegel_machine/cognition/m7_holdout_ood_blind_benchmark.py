@@ -1596,7 +1596,11 @@ def run_holdout_private_verifier(task: HoldoutOODTask, submitted_tar_path: Path)
             subprocess.run(["docker", "cp", str(td_p / "_run_ver.py"), f"{vcid}:/tmp/_run_ver.py"], check=True, timeout=20)
             if kernel_src_path.is_file():
                 subprocess.run(["docker", "cp", str(kernel_src_path), f"{vcid}:/tmp/_trusted_cert_kernel.py"], check=True, timeout=20)
-        m6f.exec_container_bash(vcid, "python3 /tmp/_setup.py && rm -f /tmp/_setup.py", timeout_sec=60)
+        m6f.exec_container_bash(
+            vcid,
+            "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 /tmp/_setup.py && rm -f /tmp/_setup.py",
+            timeout_sec=120,
+        )
         if submitted_tar_path.is_file():
             m6f.import_declared_artifacts_tar(vcid, task.declared_artifacts, submitted_tar_path)
         art_chk = m6f.check_declared_artifacts_in_container(vcid, task.declared_artifacts)

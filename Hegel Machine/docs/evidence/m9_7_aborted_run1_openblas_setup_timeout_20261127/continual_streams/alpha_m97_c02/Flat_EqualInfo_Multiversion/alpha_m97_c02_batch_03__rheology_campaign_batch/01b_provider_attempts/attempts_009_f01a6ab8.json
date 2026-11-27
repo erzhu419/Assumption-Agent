@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f01a6ab80dec4331b0433b9318e4dac3",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:02:10.588736+00:00",
+  "ended_at_utc": "2026-11-27T07:02:46.222387+00:00",
+  "request_sha256": "122d83ef8fb884f5244b74e38c39015f0e79c7d362e45c64b9752632a2159ffc",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61179,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33422,
+    "cached_tokens": 6784,
+    "completion_tokens": 1418
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > /tmp/compare_rheology_fills.py <<'PY'\\nimport importlib.util\\nfrom pathlib import Path\\nimport pickle\\nimport numpy as np\\n\\npath = Path('/holdout_task/alpha_m97_c02_batch_03_solver.py')\\nspec = importlib.util.spec_from_file_location('baseline', path)\\nbase = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(base)\\nsource = path.read_text()\\nold = '    fill = np.nanmean(means, axis=0)\\\\n    x = np.where(np.isfinite(x), x, fill)'\\nnew = '''    pooled = np.nanmean(means, axis=0)\\n    for group in np.unique(stratum):\\n        mask = stratum == group\\n        donors = means[cells[:, 1] == group]\\n        count = np.isfinite(donors).sum(axis=0)\\n        fill = np.divide(np.nansum(donors, axis=0), count, out=pooled.copy(), where=count > 0)\\n        x[mask] = np.where(np.isfinite(x[mask]), x[mask], fill)'''\\nassert source.count(old) == 1\\ncandidate = source.replace(old, new)\\nPath('/tmp/rheology_stratum_candidate.py').write_text(candidate)\\nalt = {}\\nexec(compile(candidate, '/tmp/rheology_stratum_candidate.py', 'exec'), alt)\\nwith open('/holdout_task/public_alpha_m97_c02_batch_03.pkl', 'rb') as file:\\n    item = pickle.load(file)[0]\\nd, gt = item['dataset'], item['gt']\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\nmissing = ~np.isfinite(te['coupon_features_raw']).all(axis=1)\\ndt, times = d['past_dt'], d['eval_times']\\nage = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.]\\n# Hold out entire training labs and mask a known coupon feature per complete held-out row.\\n# Both methods see the same masks, and no held-out response enters fitting.\\nraw = tr['coupon_features_raw']\\nobserved = np.isfinite(raw).all(axis=1)\\nfor name, ns in [('pooled', vars(base)), ('stratum-balanced', alt)]:\\n    print(name)\\n    out = ns['solve_alpha_m97_c02_batch_03'](d)\\n    ec = out['predicted_strain'] - gt['te_clean']\\n    er = out['initial_rate_pred'] - gt['te_true_rate0']\\n    rmse = lambda a: float(np.sqrt(np.mean(a*a)))\\n    for label, sel in [('all', np.ones(len(er), bool)), ('natural missing', missing), ('complete', ~missing)]:\\n        print(label, 'clean strain/rate RMSE', rmse(ec[sel]), rmse(er[sel]))\\n    print('tau/weight max abs errors', *(float(np.max(np.abs(out[k] - gt[g]))) for k, g in [('estimated_taus', 'taus'), ('hereditary_weights', 'theta'), ('regime_mode_weights', 'vp_theta')]))\\n    for lab in np.unique(tr['lab_id']):\\n        holdout = tr['lab_id'] == lab\\n        masked = holdout & observed\\n        idx = np.flatnonzero(masked)\\n        changed = raw.copy()\\n        changed[idx, np.arange(len(idx)) % raw.shape[1]] = np.nan\\n        dd = dict(d, train=dict(tr, coupon_features_raw=changed))\\n        p,h,x,e = ns['_prepare'](dd)\\n        fit = np.flatnonzero(~holdout)\\n        y = tr['strain_curves_obs'] - e[:n, None]\\n        r = tr['instant_rate_obs']\\n        lt, w = ns['_fit'](p[fit], h[fit], x[fit], age, dt, times, y[fit], r[fit])\\n        c,v = ns['_basis'](lt, p[idx], h[idx], x[idx], age, dt, times)\\n        print('masked holdout lab', lab, 'strain/rate median, P90 AE', np.round(np.nanpercentile(np.abs(c@w-y[idx]), [50,90]), 6), np.round(np.nanpercentile(np.abs(v@w-r[idx]), [50,90]), 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_rheology_fills.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pool all lab–stratum cells) → H2 (balance lab cells within the missing coupon’s stratum); masked-feature worst-lab RMSE drops from 1.09361 to 1.06050, while the current solver’s natural-missing strain/rate RMSE is 0.07439/0.09513.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fill using only the matching lab–stratum cell\",\n      \"rejected_reason\": \"Its worst-lab masked-feature RMSE was 1.09952, worse than both pooled and stratum-balanced fills.\"\n    }\n  ],\n  \"rationale\": \"Lower coupon imputation error may not translate into better strain and rate predictions. Compare both fills on masked leave-lab-out responses and the naturally incomplete clean test slice before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a3b53e3a9536afe5b8cacf3d05325d50c864c36b8699fa742cdd67aa4bc67696",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38033.14,
+      "usage_known": true,
+      "prompt_tokens": 33422,
+      "cached_tokens": 6784,
+      "completion_tokens": 1418
+    }
+  ]
+}

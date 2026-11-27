@@ -1484,6 +1484,10 @@ def start_detached_container(
         "docker", "run", "-d", "--rm",
         f"--memory={memory_limit}",
         f"--cpus={cpus}",
+        "-e", "OPENBLAS_NUM_THREADS=1",
+        "-e", "OMP_NUM_THREADS=1",
+        "-e", "MKL_NUM_THREADS=1",
+        "-e", "NUMEXPR_NUM_THREADS=1",
     ]
     if network_mode == "none":
         cmd.extend(["--network", "none"])
@@ -3036,7 +3040,11 @@ def run_frontier_episode(
                 setup_fp = Path(td_h) / "_setup_holdout.py"
                 setup_fp.write_text(task.holdout_public_setup_py, encoding="utf-8")
                 subprocess.run(["docker", "cp", str(setup_fp), f"{agent_cid}:/tmp/_setup_holdout.py"], check=True, timeout=20)
-            setup_exec = exec_container_bash(agent_cid, "python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py", timeout_sec=60)
+            setup_exec = exec_container_bash(
+                agent_cid,
+                "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 /tmp/_setup_holdout.py && rm -f /tmp/_setup_holdout.py",
+                timeout_sec=120,
+            )
             if setup_exec["exit_code"] != 0 or setup_exec["timed_out"]:
                 raise RuntimeError(
                     f"Container `holdout_public_setup_py` failed before Turn 1 for `{task.task_id}` "

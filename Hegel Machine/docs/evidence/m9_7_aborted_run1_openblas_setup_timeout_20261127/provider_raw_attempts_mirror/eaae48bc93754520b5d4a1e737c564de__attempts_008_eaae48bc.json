@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eaae48bc93754520b5d4a1e737c564de",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:20:39.103558+00:00",
+  "ended_at_utc": "2026-11-27T07:21:11.424342+00:00",
+  "request_sha256": "71238a9e35dd47442ce3c27a811ecf4331ce248c5f7cbba698badb2330e6f817",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 56307,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32801,
+    "cached_tokens": 6784,
+    "completion_tokens": 1255
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_07_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nd=pickle.load(open('public_alpha_m97_c02_batch_07.pkl','rb'))[0]['dataset']; x,z0,dt,t,plateau=s._prepare(d); tr=d['train']; lab=tr['lab_id']; n=len(lab); y=tr['strain_curves_obs']-z0[:n,None]; r=tr['instant_rate_obs']; x=tuple(a[:n] for a in x); active=x[-1]>0\\nabs_curve=np.empty_like(y); abs_rate=np.empty_like(r); params=[]\\nfor channel in np.unique(lab):\\n    train=lab!=channel; valid=~train\\n    for name,keep in [('all',np.ones(len(t),bool)),('early',np.arange(len(t))<len(t)-3)]:\\n        target=np.where(keep,y[train],np.nan)\\n        tau,w=s._fit(tuple(a[train] for a in x),dt,t,plateau,target,r[train]); params.append(np.r_[np.exp(tau),w]) if name=='all' else None\\n        a,b=s._design(tau,tuple(a[valid] for a in x),dt,t,plateau)\\n        ce=np.abs(a@w-y[valid]); re=np.abs(b@w-r[valid]); horizon=~keep if name=='early' else keep\\n        if name=='all': abs_curve[valid]=ce; abs_rate[valid]=re\\n        for state in (False,True):\\n            m=active[valid]==state\\n            if m.any(): print(name,'lab',channel,'active',int(state),'n',m.sum(),'curve med/p90',np.quantile(ce[m][:,horizon],[.5,.9]).round(4),'rate med/p90',np.quantile(re[m],[.5,.9]).round(4))\\nprint('all-fold curve median per time',np.median(abs_curve,axis=0).round(4)); print('all-fold rate median',np.median(abs_rate).round(4)); print('all-fold raw RMSE curve/rate',np.sqrt(np.mean(abs_curve**2)).round(4),np.sqrt(np.mean(abs_rate**2)).round(4)); print('LOLO parameter ranges',np.min(params,axis=0).round(5),np.max(params,axis=0).round(5))\\nfit=s.solve_alpha_m97_c02_batch_07(d); w=np.r_[fit['hereditary_weights'],fit['regime_mode_weights']]; a,b=s._design(np.log(fit['estimated_taus']),x,dt,np.array([0.,1e-7]),plateau); assert np.allclose(a[:,0]@w,0.); error=np.max(np.abs(a[:,1]@w/1e-7-b@w)); assert error < 3e-6; print('initial derivative max error',error)\\nassert all(np.isfinite(v).all() for v in fit.values())\\n# All four measured sweeps must override the archive even with an isolated EMI spike.\\ncmd=np.linspace(-2,2,7); gain=np.array([.86,1.16,.92,1.29]); bias=np.array([-.1,.08,.2,-.17]); stress=gain[:,None]*cmd+bias[:,None]; stress[2,3]+=4.5\\ncal=s._calibrate(dict(lab_id=np.repeat(np.arange(4),len(cmd)),cmd_stress=np.tile(cmd,4),true_stress=stress.ravel())); assert np.allclose(cal,np.c_[gain,bias]); print('clean/EMI calibration and finite outputs pass')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 systematic strain-law mismatch -> H2 calibrated Prony–plateau kinetics with sparse readout spikes; worst in-sample lab–damage–time median absolute strain error is 0.0234, and leave-one-lab-out validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The schema cannot detect poor transfer to a held-out lab or late time points, nor a mismatch between the curve and its initial derivative.\"\n    }\n  ],\n  \"rationale\": \"Refit without each lab and, separately, without the last three time points. Report strain and rate errors by damage state, including raw RMSE so readout spikes remain visible. If a slice fails, revisit calibration or the time law; if an identity check fails, fix the recurrence or calibration implementation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dc0a5bd23b90646997a0c4b2914d8fc5468782c9ba5259b417b834d07238f9ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34811.35,
+      "usage_known": true,
+      "prompt_tokens": 32801,
+      "cached_tokens": 6784,
+      "completion_tokens": 1255
+    }
+  ]
+}

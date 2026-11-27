@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e2366671e644ed08cd4962d35cd6f37",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_02__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:00:34.281123+00:00",
+  "ended_at_utc": "2026-11-27T07:01:03.531071+00:00",
+  "request_sha256": "ff6f8cdc4721356d494332a74d4adb4fd8f8abe2479c9a8efd5508d3be240329",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 47692,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27183,
+    "cached_tokens": 0,
+    "completion_tokens": 1042
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c02_batch_02_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d =', 1)[0], ns)\\nitem, = pickle.loads((p/'public_beta_m97_c02_batch_02.pkl').read_bytes())\\ns, gt = item['study'], item['gt']\\nc = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\nrows = np.asarray(s['row_bank_id'])\\ntrace = np.array(s['past_vortex_circulation_trace'], copy=True)\\ntrace[np.argmax(trace)] = s['critical_vortex_circulation']\\nfor missing in (True, False):\\n    # Whole-prefix transfer and a mixed-source slice: keep public readings, never fabricate labels.\\n    keep = np.zeros(len(c['bank_id']), dtype=bool) if missing else np.isin(c['bank_id'], (0, 2))\\n    study = dict(s, sensor_calibration_sweeps={k:v[keep] for k,v in c.items()}, past_vortex_circulation_trace=trace)\\n    out = m.solve_beta_m97_c02_batch_02(study)\\n    chk = ns['verify_box_simplex_kkt_certificate'](gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'], gap_tol=2e-4)\\n    Z = s['Z_nuisance']; y = m._calibration(study)\\n    err = y - Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T@y) - gt['r_y']\\n    weights = np.max(abs(out['weights']-gt['w_opt']))\\n    field = np.max(abs(out['terminal_field']-gt['terminal_field_A']))\\n    bank_errors = [float(np.max(abs(err[rows == b]))) for b in range(4)]\\n    print('all archived' if missing else 'mixed archived and in-batch', 'per-bank projected errors', bank_errors, 'weight error', weights, 'field error', field, 'KKT', chk)\\n    assert chk['valid'] and max(bank_errors) < 2e-6 and weights < 2e-6 and field < 2e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 single-bank fallback is accurate → H2 simultaneous archive transfer preserves the certified open-Robin solution; the prior worst verified calibration-stress KKT gap was 3.19e-7 against a 2e-4 tolerance.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the leave-one-sweep-out audit\",\n      \"rejected_reason\": \"That audit already passed and cannot reveal accumulated calibration error when several banks rely on the prefix together.\"\n    }\n  ],\n  \"rationale\": \"Test simultaneous fallback on the real public observations and verify the inclusive open-Robin threshold at equality. Excess per-bank error would point to archive transfer; a field or certificate failure without calibration error would point to the forward or inversion path. Class labels, relay state, and nonlinear drift are not part of this batch's contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d1d14e515d1c38ba37e7e24a677f35d73166fa7c2992fab2f9c4602bd7c60a20",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31591.09,
+      "usage_known": true,
+      "prompt_tokens": 27183,
+      "cached_tokens": 0,
+      "completion_tokens": 1042
+    }
+  ]
+}

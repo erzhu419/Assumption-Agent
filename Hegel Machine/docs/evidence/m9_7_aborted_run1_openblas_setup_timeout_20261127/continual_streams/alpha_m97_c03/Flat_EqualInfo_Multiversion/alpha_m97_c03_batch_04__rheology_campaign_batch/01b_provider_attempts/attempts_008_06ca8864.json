@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06ca88648b5e4fad86c82038f9c9443f",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:11:12.556750+00:00",
+  "ended_at_utc": "2026-11-27T07:11:43.697801+00:00",
+  "request_sha256": "202d2c34a96f1ec86ee9ea8e480e837b05961c660d4334322ac3904a0a6e0f63",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47771,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29037,
+    "cached_tokens": 11136,
+    "completion_tokens": 1041
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '1,80p' alpha_m97_c03_batch_04_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nfrom pathlib import Path\\nimport pickle\\nimport numpy as np\\np = Path('alpha_m97_c03_batch_04_solver.py')\\ns = importlib.util.spec_from_file_location('solver', p)\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_m97_c03_batch_04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nlines = m._calibrate(d['calibration_load_cells'])\\nprint('calibration gain/bias by lab:', lines)\\na, b = d['train'], d['test']; xa, xb = m._align(a, b)\\nassert np.isfinite(xa).all() and np.isfinite(xb).all()\\nstress, hold, xd = m._inputs(a, xa, lines)\\ndt, t, crit = (d[k] for k in ('past_dt','eval_times','crit_stress'))\\nout = m.solve_alpha_m97_c03_batch_04(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\ntau, hw, rw = (out[k] for k in ('estimated_taus','hereditary_weights','regime_mode_weights'))\\nz = np.zeros((len(hold), 2))\\nfor j, step in enumerate(dt):\\n    e = np.exp(-step/tau)\\n    z = z * e + stress[:, j, None] * (1-e)\\ngap = hold[:, None] - z\\ndamage = (np.maximum(abs(stress)-crit,0)**2 * dt).sum(axis=1)\\nfor gate in (False, True):\\n    active = gate & (damage > 0)\\n    act = np.where(active, np.tanh(damage), 0)\\n    drift = xd @ hw[2:] + rw[1]*act*z[:,0]\\n    decay = 1 - np.exp(-t[:,None]/tau)\\n    expected = (gap * hw[:2]) @ decay.T + rw[0]*(act * hold)[:,None]*decay[:,0] + drift[:,None] * np.where(active[:,None],np.log1p(t),t)\\n    expected_rate = (gap * hw[:2]/tau).sum(axis=1) + rw[0]*act*hold/tau[0] + drift\\n    pred = m._design(np.log(tau), (stress,hold,xd), dt,t,crit,gate) @ np.r_[hw,rw]\\n    err = np.max(abs(pred[:,:-1]-expected)); rate_err = np.max(abs(pred[:,-1]-expected_rate))\\n    print('gate',gate,'active',active.sum(),'max forward error',err,'max rate error',rate_err)\\n    np.testing.assert_allclose(pred[:,:-1], expected, atol=1e-12, rtol=1e-12)\\n    np.testing.assert_allclose(pred[:,-1], expected_rate, atol=1e-12, rtol=1e-12)\\nprint('all five outputs finite')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: equal-weight fit → H2: cellwise Cauchy weighting; worst leave-one-lab-out regime RMSE improved from 2.2103 to 2.1972 for curves and from 0.1853 to 0.1540 for initial rates.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The robust fit passes the public schema and improves both worst-slice errors. Compare its vectorized design against the explicit memory recurrence and rate equation: unlike cross-validation, this can detect indexing or gating errors that the fitted weights could partly mask.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "28ad2a17eb5a6ee867db9c928024580656a618a7b7d219d9868eb2be945077e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33569.24,
+      "usage_known": true,
+      "prompt_tokens": 29037,
+      "cached_tokens": 11136,
+      "completion_tokens": 1041
+    }
+  ]
+}

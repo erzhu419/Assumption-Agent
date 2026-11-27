@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d085d25de6cf455b801cf241f6934141",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:51:28.443515+00:00",
+  "ended_at_utc": "2026-11-27T06:52:07.747887+00:00",
+  "request_sha256": "69ddefafed10b38bcd03b3e26cdc0851fd93ddcc9dc7f3364f90322f0e4aa526",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 64073,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34837,
+    "cached_tokens": 0,
+    "completion_tokens": 1532
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport copy, importlib.util, json, pickle\\nimport numpy as np\\np='/holdout_task/alpha_m97_c01_batch_01_solver.py'\\ns=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_01.pkl','rb'))[0]; d,g=it['dataset'],it['gt']; c=d['calibration_load_cells']; ref=np.column_stack((g['stress_gains'],g['stress_biases']))\\noriginal_path=m._ARCHIVE\\nm._ARCHIVE=original_path.with_name('not_present_for_direct_fit.json')\\nnp.testing.assert_allclose(m._calibrate(c),ref,atol=5e-5,rtol=0)\\nfor lab in range(4):\\n    idx=np.flatnonzero(c['lab_id']==lab)\\n    for j in (idx[0],idx[np.argmax(c['cmd_stress'][idx])]):\\n        emi={k:np.array(v,copy=True) for k,v in c.items()}; emi['true_stress'][j]+=4.5\\n        np.testing.assert_allclose(m._calibrate(emi),ref,atol=7e-5,rtol=0)\\nm._ARCHIVE=original_path\\narchive=json.loads(original_path.read_text())[-1]\\narchive_cal=m._calibrate(archive)\\nfor lab in range(4):\\n    idx=np.flatnonzero(c['lab_id']==lab)\\n    others=c['lab_id']!=lab\\n    for num in (0,1,2,3):\\n        take=others.copy(); take[idx[:num]]=True\\n        sparse={k:np.asarray(v)[take] for k,v in c.items()}\\n        expect=archive_cal[lab] if num<2 else np.polyfit(sparse['cmd_stress'][~others[take]],sparse['true_stress'][~others[take]],1)\\n        np.testing.assert_allclose(m._calibrate(sparse)[lab],expect,atol=1e-12,rtol=0)\\nprint('Calibration: all four channels pass direct, EMI, and sparse routing checks')\\nout=m.solve_alpha_m97_c01_batch_01(d); te=d['test']; e=out['predicted_strain']-g['te_clean']; r=out['initial_rate_pred']-g['te_true_rate0']; n=len(d['train']['lab_id']); active=m._prepare(d)[-1][n:]>0; complete=np.isfinite(te['coupon_features_raw']).all(1)\\nfor tag,sel in [('active',active),('inactive',~active),('complete',complete),('missing',~complete)]+[(f'lab {i}',te['lab_id']==i) for i in range(4)]:\\n    print(tag, int(sel.sum()),'strain/rate MAE',np.mean(abs(e[sel])),np.mean(abs(r[sel])))\\nprint('parameter max absolute errors:',*[np.max(abs(out[k]-g[v])) for k,v in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]])\\nassert np.max(abs(out['estimated_taus']/g['taus']-1)) < .015\\nassert np.max(abs(out['hereditary_weights']-g['theta'])) < .012\\nassert np.max(abs(out['regime_mode_weights']-g['vp_theta'])) < .012\\nassert np.mean(abs(e[complete])) < .02 and np.mean(abs(r[complete])) < .015\\n# Generate exact labels from the prescribed design, independently of the public ground truth.\\nclean=copy.deepcopy(d); dt, t=clean['past_dt'],clean['eval_times']; tr=clean['train']; past,hold,x,act=(a[:n] for a in m._prepare(clean)); tau=np.array([.51,3.08]); hw=np.array([.7,.42,.11,.09,-.12,.16,-.07]); rw=np.array([.24,.17]); z=np.zeros((n,2))\\nfor j,s in enumerate(dt):\\n    f=np.exp(-s/tau); z=z*f+past[:,j,None]*(1-f)\\ngap=hold[:,None]-z; amp=gap*hw[:2]; amp[:,0]+=rw[0]*act*hold; drift=hw[2]+x@hw[3:]+rw[1]*act*z[:,0]\\ntr['strain_curves_obs']=tr['strain_0'][:,None]+amp@(1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*np.log1p(t)\\ntr['instant_rate_obs']=amp@(1/tau)+drift\\nexact=m.solve_alpha_m97_c01_batch_01(clean)\\nfor k,v in [('estimated_taus',tau),('hereditary_weights',hw),('regime_mode_weights',rw)]: np.testing.assert_allclose(exact[k],v,atol=1e-5,rtol=0)\\nprint('Exact synthetic recovery: both timescales and all nine weights')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated two-branch memory → H2 campaign-wide logarithmic drift with work-gated corrections; worst leave-one-lab-out median strain/rate errors are 0.1700/0.1532 for missing coupons and 0.01305/0.01789 for complete coupons.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Replace the prescribed panel statistics with inferred lab constants\",\"rejected_reason\":\"The reference curves reflect latent panel constants, but the solver contract calls for estimating alignment from the observed pooled panels; deriving constants from the evaluation targets would leak labels.\"}],\"rationale\":\"Verify the exact candidate in isolation. Sparse and EMI checks detect incorrect calibration routing; independent noiseless recovery can expose a forward-model or Jacobian error that robust fitting on noisy measurements could hide.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "61d6476a85325814eb29eda6bae74e6fbf76e501026bfddf3f6cd308b2f29e7d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41687.36,
+      "usage_known": true,
+      "prompt_tokens": 34837,
+      "cached_tokens": 0,
+      "completion_tokens": 1532
+    }
+  ]
+}

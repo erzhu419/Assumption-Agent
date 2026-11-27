@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "18ff8e7f56e74869b2d2d04852035d4e",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:19:00.808846+00:00",
+  "ended_at_utc": "2026-11-27T07:19:20.355644+00:00",
+  "request_sha256": "7603bac533eadcc4927018d70ac538959810ec119329561fb8027bdb6f0b6d98",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44150,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28738,
+    "cached_tokens": 6784,
+    "completion_tokens": 703
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task\\npython3 - <<'PY'\\nimport json\\nj=json.load(open('public_asset_index.json')); print(json.dumps(j,indent=1)[:7000])\\nPY\\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/tmp python3 - <<'PY'\\nfrom rheo07_probe import *\\nids=np.arange(N); e,r,p,dmg=run(cal,False,'balanced',ids,ids)\\nq=[0,.1,.25,.5,.75,.9,.95,.98,1.]\\nprint('absolute curve residual quantiles / time'); print(np.quantile(abs(e),q,axis=0).round(4));print('absolute rate residual quantiles',np.quantile(abs(r),q).round(4));print('large curve entries per coupon',np.unique((abs(e)>.2).sum(1),return_counts=True));print('large curve entries per time',np.sum(abs(e)>.2,axis=0));\\nfor c,a in product(range(4),[0,1]):\\n m=(lab[:N]==c)&((dmg>0)==a); print(c,a,'curve absolute medians',np.median(abs(e[m]),axis=0).round(4),'rate median',np.median(abs(r[m])).round(4))\\nfor i in np.argsort(np.max(abs(e),axis=1))[-14:]:\\n print('coupon',i,'lab',lab[i],'damage',round(dmg[i],3),'residual',e[i].round(3),'rate error',round(r[i],3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 old channel-2 calibration and a joint fit -> H2 recent channel-2 calibration and separate diagnostics for strain and rate; worst in-sample lab–damage RMSE is 2.146 for strain and 0.085 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the constitutive law to reduce pooled strain RMSE\",\n      \"rejected_reason\": \"The current RMSE does not distinguish isolated measurement spikes from a systematic error in the time law.\"\n    }\n  ],\n  \"rationale\": \"The recent channel-2 calibration lowers rate RMSE from 0.449 to 0.044, but curve RMSE remains 1.088. Residuals by time, coupon, and lab–damage slice will show whether to fit around sparse corrupt measurements or revisit a systematic curve mismatch before held-out validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f48d4c73c1d467fe7582df63a304ae7d6bd3cf45f74552b31aff50cf448e998a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21988.33,
+      "usage_known": true,
+      "prompt_tokens": 28738,
+      "cached_tokens": 6784,
+      "completion_tokens": 703
+    }
+  ]
+}

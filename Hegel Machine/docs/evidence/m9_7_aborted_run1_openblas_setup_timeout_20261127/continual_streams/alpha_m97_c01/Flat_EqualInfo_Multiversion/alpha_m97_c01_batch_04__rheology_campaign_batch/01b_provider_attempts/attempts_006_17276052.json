@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "17276052751a4a858c84dc6a0df846e3",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:09:06.058635+00:00",
+  "ended_at_utc": "2026-11-27T07:09:34.919624+00:00",
+  "request_sha256": "8dfc43ee5efea9e15b4d2b39b7f063fa27d8bd4919c0c7c6a791920c9164d219",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 43810,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26959,
+    "cached_tokens": 6784,
+    "completion_tokens": 1049
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_04_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open(p+'public_alpha_m97_c01_batch_04.pkl','rb'))[0]; d=it['dataset']; gt=it['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); state=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; out=m.solve_alpha_m97_c01_batch_04(d)\\nprint('parameter errors', {k:out[k]-gt[g] for k,g in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]})\\nprint('stress reconstruction max abs',np.max(abs(state[0][n:]-gt['te_hist_true'])),np.max(abs(state[1][n:]-gt['te_hold_true'])))\\ncoef=np.r_[gt['theta'],gt['vp_theta']]; ts=tuple(v[n:] for v in state); a,b=m._design(gt['taus'],ts,dt,t)\\nclean=gt['te_clean']; rate=gt['te_true_rate0']; missing=np.isnan(te['coupon_features_raw']).any(axis=1)\\ndef stats(e,f,k):\\n if k.any(): print(int(k.sum()),'rmse',np.sqrt(np.mean(e[k]**2)),np.sqrt(np.mean(f[k]**2)),'max',np.max(abs(e[k])),np.max(abs(f[k])))\\nfor label, e,f in [('fitted',out['predicted_strain']-clean,out['initial_rate_pred']-rate),('reference parameters diagnostic',te['strain_0'][:,None]+a@coef-clean,b@coef-rate)]:\\n print(label)\\n for name,k in [('all',np.ones(len(rate),bool)),('active',ts[3]),('inactive',~ts[3]),('missing',missing),('complete',~missing)]+[(f'lab {j}',te['lab_id']==j) for j in range(4)]:\\n  print(name,end=' ');stats(e,f,k)\\nstate_tr=tuple(v[:n] for v in state); a,b=m._design(out['estimated_taus'],state_tr,dt,t); w=np.r_[out['hereditary_weights'],out['regime_mode_weights']]; e=tr['strain_0'][:,None]+a@w-tr['strain_curves_obs']; f=b@w-tr['instant_rate_obs']; print('training absolute residual quantiles by time',np.quantile(abs(e),[.5,.8,.9,.95,.99],axis=0)); print('training rate absolute residual quantiles',np.quantile(abs(f),[.5,.8,.9,.95,.99])); print('curve points abs residual > .5 by row quantiles',np.quantile((abs(e)>.5).sum(1),[0,.5,.8,.9,.95,1]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated stress and panel alignment -> H2 damage-gated logarithmic creep; leave-one-lab-out RMSE reached 0.727 on inactive curves and 0.115 on initial rates with missing coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the inactive flow law based on raw held-out RMSE\",\n      \"rejected_reason\": \"The observed curve residuals may be dominated by sparse large deviations; clean-reference errors can distinguish that from a wrong flow law.\"\n    }\n  ],\n  \"rationale\": \"Audit the existing candidate against the clean public references and use the reference parameters only as a diagnostic. If errors persist with those parameters, inspect the forward model or alignment; if they vanish, investigate estimation noise rather than changing the physics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "0d696c4d1b29e2820e751bc6b6fe091f351bd99c655b56312df7d07934e7dd38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31269.11,
+      "usage_known": true,
+      "prompt_tokens": 26959,
+      "cached_tokens": 6784,
+      "completion_tokens": 1049
+    }
+  ]
+}

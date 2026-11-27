@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0490d9cc0b644ecaa7869cbb0f7b68c8",
+  "call_seq": 3,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:55:53.925617+00:00",
+  "ended_at_utc": "2026-11-27T06:56:14.534854+00:00",
+  "request_sha256": "5ba6a0ee24e1284a860a1b94cddca338987027b1d665b05b22e43330738a34e3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 22645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20062,
+    "cached_tokens": 6784,
+    "completion_tokens": 545
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '50,190p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_01_solver.py; python3 - <<'PY'\\nimport pickle, numpy as np\\nx=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]['dataset']; tr=x['train']; t=x['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; rough=np.diff(y,n=2,axis=1); rate=tr['instant_rate_obs']; m=lambda a: [round(float(v),4) for v in np.quantile(a,[0,.25,.5,.75,.95,1])]; print('absolute second differences by horizon', [m(abs(v)) for v in rough.T]); print('absolute rates',m(abs(rate))); print('lab stratum counts',[(l,s,int(np.sum((tr['lab_id']==l)&(tr['stratum']==s)))) for l in range(4) for s in np.unique(tr['stratum'])]); ref=np.concatenate([x[a]['ref_coupons'] for a in ('train','test')]); labs=np.concatenate([x[a]['lab_id'] for a in ('train','test')]); print('reference std and mean median by lab',[(float(np.median(np.nanstd(ref[labs==l],axis=0))), float(np.median(np.nanmean(ref[labs==l],axis=0)))) for l in range(4)])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 direct affine calibration → H2 panel-aligned two-branch linear flow; worst in-batch calibration residual is 0.000336 stress units, and curve validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the crystallized-regime solver unchanged\",\"rejected_reason\":\"The current phase requires linear terminal flow and exactly zero regime weights.\"}],\"rationale\":\"Read the prior alignment and fitting code without truncation. Check whether reference columns are estimable and whether training-curve roughness warrants comparing a robust loss against least squares in held-out lab folds.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "fa946ec65fdc1cca9a70a15c96e38f8d170bff549373b73eb78c13fb4ee63c08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20526.63,
+      "usage_known": true,
+      "prompt_tokens": 20062,
+      "cached_tokens": 6784,
+      "completion_tokens": 545
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf880edc704b4ad48ef026cae0f878c3",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:40:04.617173+00:00",
+  "ended_at_utc": "2026-11-27T06:40:29.225839+00:00",
+  "request_sha256": "fcc173d45c96faae26eee6458b7414402faef35e7fe8c280a5c3d41545c0e8c3",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 30488,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22446,
+    "cached_tokens": 0,
+    "completion_tokens": 933
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 PYTHONPATH=/tmp python3 - <<'PY'\\nimport pickle,numpy as np\\nimport rheology_candidate as m\\nd=pickle.load(open('public_alpha_m97_c03_s00.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); dt,t=d['past_dt'],d['eval_times']; g,b,_=m._calibration(d['calibration_load_cells']); lab=tr['lab_id']; h=tr['stress_hold_cmd']*g[lab]+b[lab]; s=tr['past_stress_cmd']*g[lab,None]+b[lab,None]; x=m._align(tr,te)[:n]; y=np.c_[tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']]; missing=np.isnan(tr['coupon_features_raw']).any(axis=1)\\nprint('max physical past stress',np.max(np.abs(s)),'limit',d['crit_stress'])\\nprint('panel center/spread:',[(i,round(float(np.nanmedian(np.nanmean(np.r_[tr['ref_coupons'],te['ref_coupons']][np.r_[lab,te['lab_id']]==i],axis=0))),4),round(float(np.nanmedian(np.nanstd(np.r_[tr['ref_coupons'],te['ref_coupons']][np.r_[lab,te['lab_id']]==i],axis=0))),4)) for i in range(4)])\\nr=np.empty_like(y)\\ndef report(label,rr):\\n q=np.abs(rr); print(label, 'n',len(rr),'curve med/p90',np.round(np.quantile(q[:,:-1],[.5,.9]),5),'rate med/p90',np.round(np.quantile(q[:,-1],[.5,.9]),5),'rate bias',round(float(np.median(rr[:,-1])),5))\\nfor i in range(4):\\n f=lab!=i; p,w=m._fit(s[f],h[f],dt,t,x[f],y[f]); a,_=m._design(p,s[~f],h[~f],dt,t,x[~f]); r[~f]=a@w-y[~f]; report('lab '+str(i),r[~f]); print('  taus',np.exp(p),'weights',np.round(w,5))\\nfor k in np.unique(tr['stratum']): report('stratum '+str(k),r[tr['stratum']==k])\\nreport('feature missing',r[missing]); report('feature complete',r[~missing]); print('curve med by time',np.round(np.median(np.abs(r[:,:-1]),axis=0),5))\\nprint('rate residual MAD',np.median(np.abs(r[:,-1]-np.median(r[:,-1]))),'curve residual MAD',np.median(np.abs(r[:,:-1]-np.median(r[:,:-1]))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether the exact calibrated two-branch model transfers across labs; the schema passes, but the worst held-out error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave each lab’s response measurements out while retaining the specified unlabeled reference panels. Separate curve and rate errors by lab, stratum, and feature missingness to distinguish a fitting problem from an alignment or imputation problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e87b8afae9d59ceeb05a942564566d76ff81ce3ea1379b5bf591f8687243cb7a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26921.91,
+      "usage_known": true,
+      "prompt_tokens": 22446,
+      "cached_tokens": 0,
+      "completion_tokens": 933
+    }
+  ]
+}

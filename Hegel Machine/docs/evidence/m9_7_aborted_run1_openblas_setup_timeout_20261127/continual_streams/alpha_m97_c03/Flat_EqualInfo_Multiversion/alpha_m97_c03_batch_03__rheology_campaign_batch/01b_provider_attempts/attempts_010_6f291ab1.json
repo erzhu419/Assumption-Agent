@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f291ab16ae74bdab53e605b732cf30d",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:05:59.619795+00:00",
+  "ended_at_utc": "2026-11-27T07:06:36.321437+00:00",
+  "request_sha256": "7732b7d7bbbee1c29cfb5f2ca049c8f44e772dfb0cad4985c2d0f7be1624ae91",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34068,
+    "cached_tokens": 6784,
+    "completion_tokens": 1411
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '56,105p' alpha_m97_c03_batch_03_solver.py\\npython3 - <<'PY'\\nimport json\\nx=json.load(open('public_asset_index.json'))\\nprint('Asset-index keys:', list(x) if isinstance(x,dict) else type(x).__name__)\\nfor line in json.dumps(x,indent=2).splitlines():\\n if any(k in line.lower() for k in ('tolerance', 'rmse', 'tau_rel', 'threshold')): print(line)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,itertools\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m97_c03_batch_03_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np=pickle.load(open('public_alpha_m97_c03_batch_03.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); c=d['calibration_load_cells']; lines=s._calibrate(c); a=s._align(tr,te); o=s.solve_alpha_m97_c03_batch_03(d); tau=o['estimated_taus']; hw=o['hereditary_weights']; rw=o['regime_mode_weights']\\nfor split,part,x in [('train',tr,a[:n]),('test',te,a[n:])]:\\n gain,bias=lines[part['lab_id']].T; past=part['past_stress_cmd']*gain[:,None]+bias[:,None]; hold=part['stress_hold_cmd']*gain+bias; mem=np.zeros((len(hold),2))\\n for stress,dt in zip(past.T,d['past_dt']):\\n  decay=np.exp(-dt/tau); mem=decay*mem+(1-decay)*stress[:,None]\\n g=hold[:,None]-mem; t=d['eval_times']; rel=1-np.exp(-t[:,None]/tau); drift=hw[2]+x@hw[3:]+rw[0]*np.copysign(np.sqrt(np.abs(hold)),hold); link=rw[1]*(g[:,0]-g[:,1]); eps=part['strain_0'][:,None]+(g*hw[:2])@rel.T+drift[:,None]*(t/(1+0.85*t))+link[:,None]*rel[:,0]; rate=(g*hw[:2])@(1/tau)+drift+link/tau[0]\\n if split=='test':\\n  de=np.max(abs(eps-o['predicted_strain'])); dr=np.max(abs(rate-o['initial_rate_pred'])); print('Independent recurrence / rational flow / signed gap check:',de,dr); assert max(de,dr)<1e-10\\n else:\\n  err=np.c_[eps-part['strain_curves_obs'],rate-part['instant_rate_obs']]; cells=np.c_[part['lab_id'],part['stratum']]; complete=np.isfinite(part['coupon_features_raw']).all(axis=1)\\n  for label,mask in [('complete',complete),('imputed',~complete)]:\\n   meds=np.array([np.median(err[mask & (cells==cell).all(axis=1)],axis=0) for cell in np.unique(cells[mask],axis=0)]); print(label,'max absolute lab×stratum signed median curve/rate',np.max(abs(meds[:,:-1])),np.max(abs(meds[:,-1])))\\nfor lab in range(4):\\n idx=np.flatnonzero(c['lab_id']==lab); x=c['cmd_stress'][idx]; y=c['true_stress'][idx]; bad=[]\\n for sub in itertools.combinations(range(len(idx)),4):\\n  sub=np.array(sub); xx=x[sub]\\n  for j in range(4):\\n   for impulse in (4.,-4.,8.,-8.):\\n    yy=y[sub].copy(); yy[j]+=impulse; keep=s._clean_sweep(xx,yy)\\n    if keep.all(): bad.append((xx.copy(),j,impulse,float(np.max(abs(s._line(xx,yy)-lines[lab])))))\\n print('lab',lab,'missed EMI in four-row sweeps',len(bad),'worst',max(bad,key=lambda b:b[-1]) if bad else None)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: independently verify the jammed-slip equations and test whether sparse sweeps let EMI evade calibration screening; worst held-out median errors are 0.0154 for strain by horizon and 0.0140 for rate by lab.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, PDE drift, and classification balance\",\n      \"rejected_reason\": \"This is a continuous regression task with no relay state, PDE, or class labels. The relevant checks are the stress-memory recurrence, rational flow term, signed gap difference, and residual bias within lab-by-stratum cells.\"\n    }\n  ],\n  \"rationale\": \"An independent recurrence would expose a sign, derivative, or basis mismatch. Signed cell residuals can reveal bias hidden by pooled errors. The previous EMI test used ten-point sweeps; combining a spike with four measured rows tests whether the screen can instead absorb the spike into the fitted gain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "8b03cde7c930b5e99711f837655cce2b4cbf3e328bb436eac967aaa61e26efad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39089.9,
+      "usage_known": true,
+      "prompt_tokens": 34068,
+      "cached_tokens": 6784,
+      "completion_tokens": 1411
+    }
+  ]
+}

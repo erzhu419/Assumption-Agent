@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c42316ac74414c038f39fcf3ee5337de",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:55:52.834131+00:00",
+  "ended_at_utc": "2026-11-27T06:56:22.755704+00:00",
+  "request_sha256": "dcbd3f824aa01fb1156c912e1beefe89569c46276e6e4f879b0865de2bfda4b1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 37140,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24266,
+    "cached_tokens": 6784,
+    "completion_tokens": 1152
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, time\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c02_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('public_alpha_m97_c02_batch_03.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; start=time.monotonic(); o=m.solve_alpha_m97_c02_batch_03(d); print('solve seconds',round(time.monotonic()-start,3))\\nfor k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(k,'fit',o[k],'reference',g[j], 'max abs',np.max(np.abs(o[k]-g[j])))\\ndef score(a,b): return [round(float(np.sqrt(np.mean(a*a))),7),round(float(np.sqrt(np.mean(b*b))),7)]\\nfor split in ['test','train']:\\n    tbl=d[split]; lab=tbl['lab_id']; stratum=tbl['stratum']\\n    if split=='test':\\n        ec=o['predicted_strain']-g['te_clean']; er=o['initial_rate_pred']-g['te_true_rate0']\\n        print('public test RMSE',score(ec,er),'max absolute',np.max(np.abs(ec)),np.max(np.abs(er)))\\n    else:\\n        past,hold,f,e0=m._prepare(d); n=len(lab); past,hold,f,e0=past[:n],hold[:n],f[:n],e0[:n]; dt,t=d['past_dt'],d['eval_times']; c=tbl['strain_curves_obs']-e0[:,None]; r=tbl['instant_rate_obs']; ec=np.empty_like(c); er=np.empty_like(r)\\n        for l in np.unique(lab):\\n            v=lab==l; a=~v; tau,w=m._fit(past[a],hold[a],f[a],dt,t,c[a],r[a]); cb,rb=m._basis(tau,past[v],hold[v],f[v],dt,t); ec[v]=cb@w-c[v]; er[v]=rb@w-r[v]; print('held-out lab',l,'RMSE',score(ec[v],er[v]),'taus',tau)\\n    groups=[(l,s,score(ec[(lab==l)&(stratum==s)],er[(lab==l)&(stratum==s)])) for l,s in np.unique(np.column_stack([lab,stratum]),axis=0)]\\n    print(split,'worst lab-by-stratum strain and rate',max(groups,key=lambda a:a[2][0]),max(groups,key=lambda a:a[2][1]),'worst time RMSE',np.sqrt(np.mean(ec**2,axis=0)).max())\\n    miss=np.isnan(tbl['coupon_features_raw']).any(axis=1); print(split,'complete/missing coupon RMSE',score(ec[~miss],er[~miss]),score(ec[miss],er[miss]))\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); print('first archive entry shape',[(k,type(v).__name__) for k,v in h[0].items()]); print('archive lookup', [m._archived_calibration(i) for i in range(4)])\\ncal=d['calibration_load_cells']; print('public calibration gain max error, bias max error',np.abs(m._calibrate(cal)-np.column_stack([g['stress_gains'],g['stress_biases']])).max(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal-input fit -> H2 calibrated and panel-aligned jammed-slip variable projection; all five outputs pass the isolated schema gate, but worst-slice errors have not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema gate alone\",\n      \"rejected_reason\": \"Shape and finiteness checks cannot detect wrong relaxation times, inaccurate initial rates, or an archive lookup that silently fails.\"\n    }\n  ],\n  \"rationale\": \"Evaluate public truth only after fitting from measured inputs, and refit without each lab's response labels to expose lab-specific errors. Missing-coupon and lab-by-stratum slices distinguish panel issues from overall fit error. Check archive lookup separately because clean public calibrations do not exercise it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3f1bbbf47931117b872fec376a86d311e1c042a12f3a9f388caa4f6e96ee4590",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32315.57,
+      "usage_known": true,
+      "prompt_tokens": 24266,
+      "cached_tokens": 6784,
+      "completion_tokens": 1152
+    }
+  ]
+}

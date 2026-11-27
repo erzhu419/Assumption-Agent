@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2665e70d3e5499ca2b38e39bc2afd1b",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T06:52:03.749596+00:00",
+  "ended_at_utc": "2026-11-27T06:52:36.749195+00:00",
+  "request_sha256": "7e7b20d7c1741857a1d1199432205f089374b7661acb68c23cd5dceef6ce1c18",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 50176,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28170,
+    "cached_tokens": 11136,
+    "completion_tokens": 1250
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_m97_reactor.py <<'PY'\\nimport pickle, runpy\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nm = runpy.run_path(str(p/'beta_m97_c01_batch_01_solver.py'))\\nfor case in pickle.loads((p/'public_beta_m97_c01_batch_01.pkl').read_bytes()):\\n    st, gt = case['study'], case['gt']\\n    q = st['sensor_calibration_sweeps']\\n    banks, x, y = (np.asarray(q[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    err = []\\n    for b in range(4):\\n        idx = np.flatnonzero(banks == b)\\n        err.append(max(abs(y[i] - np.dot([x[i], 1], m['_fit_line'](x[idx[idx!=i]], y[idx[idx!=i]]))) for i in idx))\\n    print('Leave-one-point-out raw calibration max errors by bank:', err)\\n    assert max(err) < 1e-5\\n    z = st['Z_nuisance']; lam = st['nuisance_ridge']\\n    def project(a):\\n        c = np.linalg.solve(z.T@z + lam*np.eye(z.shape[1]), z.T@a)\\n        r = a-z@c\\n        assert np.max(abs(z.T@r-lam*c)) < 1e-10\\n        return r\\n    S,F = m['_forward'](st)\\n    S_open,_ = m['_forward'](dict(st, recirculation_loop_mode=1))\\n    e_sealed = np.max(abs(project(S)-gt['S_tilde']))\\n    e_open = np.max(abs(project(S_open)-gt['S_tilde']))\\n    e_target = np.max(abs(project(m['_calibrated_target'](st))-gt['r_y']))\\n    print(f'Projected design max errors: sealed={e_sealed:.3g}, open control={e_open:.3g}; projected target={e_target:.3g}')\\n    assert e_sealed < 1e-12 and e_open > 1e-4 and e_target < 1e-6\\n    for axis in ('x','y'):\\n        k = st['kappa_'+axis]; h = st['L'+axis]/(len(k)-1)\\n        for robin in (0.0, st['robin_'+axis]):\\n            a = m['_axis_operator'](k, st['vel_'+axis], st['L'+axis], robin).toarray()\\n            end = [0,len(k)-1]; inward = [1,len(k)-2]\\n            np.testing.assert_allclose(a[end,end], k[end]/h**2 + robin/h, atol=1e-12, rtol=0)\\n            np.testing.assert_allclose(a[end,inward], -k[end]/h**2, atol=1e-12, rtol=0)\\n            np.testing.assert_allclose(a[end].sum(axis=1), robin/h, atol=1e-12, rtol=0)\\n    solve = m['solve_beta_m97_c01_batch_01']\\n    out = solve(st)\\n    control = solve(dict(st,aux_manifold_telemetry=-10*st['aux_manifold_telemetry']))\\n    for k in ('weights','terminal_field'):\\n        np.testing.assert_array_equal(out[k],control[k])\\n    ew = np.max(abs(out['weights']-gt['w_opt'])); ef = np.max(abs(out['terminal_field']-gt['terminal_field_A']))\\n    print(f'Public max absolute errors: weights={ew:.3g}, field={ef:.3g}; boundary identities and telemetry invariance passed')\\n    assert ew < 1e-5 and ef < 1e-6\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_m97_reactor.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-Robin transport -> H2 vortex-gated sealing with wall sorption; prior worst calibration stress error was 8.88e-16 and worst verified KKT gap was zero.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Search for rational terms, drift operators, or classification confounders\",\n      \"rejected_reason\": \"This is a specified reaction-transport inverse problem, not a model-discovery or classification task. The relevant checks are boundary identities, measured calibration by bank, and nuisance projection.\"\n    }\n  ],\n  \"rationale\": \"Run one isolated audit on the actual public measurements. Held-out calibration errors would motivate revisiting the bank fits; a sealed-design or boundary mismatch would motivate correcting the transport operator; a projection or telemetry failure would expose incorrect nuisance handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3a7505d4fe1879fbf4c32467d6b47f3eb72e8f785406832ba23225c5e4e40b7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35346.16,
+      "usage_known": true,
+      "prompt_tokens": 28170,
+      "cached_tokens": 11136,
+      "completion_tokens": 1250
+    }
+  ]
+}

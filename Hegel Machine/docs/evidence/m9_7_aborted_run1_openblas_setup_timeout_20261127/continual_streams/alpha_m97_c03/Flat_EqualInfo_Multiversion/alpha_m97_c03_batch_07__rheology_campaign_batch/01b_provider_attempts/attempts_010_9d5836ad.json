@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9d5836ad7d5d4f428864d08a85d80251",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T063819Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T07:27:34.994164+00:00",
+  "ended_at_utc": "2026-11-27T07:28:22.461631+00:00",
+  "request_sha256": "cc39d8803cc375ee9a0b98fba98adb3739f43bd624bfb5eaee056cf8154e1a7f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 68493,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34873,
+    "cached_tokens": 6784,
+    "completion_tokens": 1690
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '83,120p' alpha_m97_c03_batch_07_solver.py\\ncat > /tmp/audit_plateau07.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p+'alpha_m97_c03_batch_07_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nr = pickle.load(open(p+'public_alpha_m97_c03_batch_07.pkl', 'rb'))[0]\\nd, g = r['dataset'], r['gt']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nx, xt = s._align(tr, te)\\nlines = s._calibrate(d['calibration_load_cells'])\\ni = s._inputs(tr, x, lines, dt, d['crit_stress'], True)\\ny = np.c_[tr['strain_curves_obs']-tr['strain_0'][:, None], tr['instant_rate_obs']]\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nflow = np.r_[np.log1p(t), 1.]\\n# Pair differences are already in the linear coupon span. Check whether adding\\n# fixed interaction or saturating corrections improves unseen-lab residuals.\\npairs = list(combinations(range(4), 2))\\ntriples = list(combinations(range(4), 3))\\nextras = {\\n    'product': np.column_stack([x[:,j]*x[:,k] for j,k in pairs]+[np.prod(x[:,idx],axis=1) for idx in triples]),\\n    'saturating_difference': np.column_stack([(x[:,j]-x[:,k])/(1+(x[:,j]-x[:,k])**2) for j,k in pairs]),\\n}\\nfor j,k in pairs:\\n    for sign in (-1,1):\\n        np.testing.assert_allclose((x[:,j]+sign*x[:,k])[:,None]*flow, x[:,j,None]*flow+sign*x[:,k,None]*flow, atol=1e-14)\\nbase = np.empty_like(y)\\nchallengers = {k:np.empty_like(y) for k in extras}\\nfor lab in range(4):\\n    held = tr['lab_id']==lab\\n    fit = ~held\\n    b,w = s._fit(tuple(a[fit] for a in i),dt,t,y[fit],True,complete[fit])\\n    nuisance = y-s._design(b,i,dt,t,True)@w\\n    base[held] = nuisance[held]\\n    m = fit & complete\\n    valid = np.isfinite(nuisance[m])\\n    for name, f in extras.items():\\n        basis = f[:,None,:]*flow[None,:,None]\\n        a, target = basis[m][valid], nuisance[m][valid]\\n        scale = 1.4826*np.median(np.abs(target-np.median(target)))\\n        v = least_squares(lambda v:a@v-target,np.zeros(a.shape[-1]),loss='cauchy',f_scale=max(2.385*scale,1e-6)).x\\n        challengers[name][held] = nuisance[held]-basis[held]@v\\n\\ndef scores(e,m):\\n    return np.around([np.nanmedian(abs(e[m,:-1])),np.nanmedian(abs(e[m,-1]))],6)\\nfor name, e in [('baseline',base),*challengers.items()]:\\n    print(name,'lab [curve/rate MedAE]',[scores(e,complete&(tr['lab_id']==k)).tolist() for k in range(4)],'damage slices',[scores(e,complete&((i[-1]>0)==k)).tolist() for k in (0,1)])\\nfor lab in range(4):\\n    m = complete & (tr['lab_id']==lab)\\n    print('held lab',lab,'n',m.sum(),'signed mid/final/rate median',np.round(np.nanmedian(base[m][:,[len(t)//2,-2,-1]],axis=0),6))\\nout = s.solve_alpha_m97_c03_batch_07(d)\\ncurve = out['predicted_strain']-g['te_clean']\\nrate = out['initial_rate_pred']-g['te_true_rate0']\\nfull = np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor m,name in [(full,'complete'),(~full,'imputed')]:\\n    # If the imputation gap explains the residual, the curve/rate error ratio\\n    # follows log1p(t) with no remaining history-dependent term.\\n    dev=curve[m]-rate[m,None]*np.log1p(t)\\n    print(name,'n',m.sum(),'curve/rate RMSE',np.sqrt(np.mean(curve[m]**2)),np.sqrt(np.mean(rate[m]**2)),'RMSE after drift component removed',np.sqrt(np.mean(dev**2)))\\nprint('relative tau errors',np.abs(out['estimated_taus']/g['taus']-1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_plateau07.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 phase-wide logarithmic creep with damage-gated corrections -> H2 robust complete-coupon fitting; public imputed-coupon RMSE is 0.1937 for strain and 0.1464 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck drift, or class-balanced accuracy\",\n      \"rejected_reason\": \"The dataset has continuous strain and rate responses, with no relay state, stochastic drift equation, or classification labels. Held-out lab residuals are the relevant check for nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Check whether fixed nonlinear coupon corrections improve unseen-lab errors or merely fit training residuals. Independently test whether the largest public error slice follows the expected drift-only signature of coupon imputation; a substantial residual after subtracting that component would warrant revisiting the stress-memory handoff.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "23f70ff175f034667cd37072effd4e07573ae6425f5928187d53ccf08561c513",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 52493.31,
+      "usage_known": true,
+      "prompt_tokens": 34873,
+      "cached_tokens": 6784,
+      "completion_tokens": 1690
+    }
+  ]
+}
