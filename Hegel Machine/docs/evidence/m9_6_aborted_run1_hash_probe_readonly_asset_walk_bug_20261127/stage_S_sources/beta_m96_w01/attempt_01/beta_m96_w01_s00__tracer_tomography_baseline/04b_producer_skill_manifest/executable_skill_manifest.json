@@ -1,0 +1,101 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m96_w01_s00_ed44e802640f",
+    "source_hash": "ed44e802640fd2cd1c8e1d34bf6a068902bcf285b65f5e5f47ea971a7dac4194",
+    "parent_ids": [],
+    "source_episode_id": "beta_m96_w01_s00__tracer_tomography_baseline",
+    "task_id": "beta_m96_w01_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tracer_discriminate.py",
+        "archived_relpath": "producers/tmp__tracer_discriminate.py",
+        "bytes": 3138,
+        "sha256": "427d94e85f9f75459cdc0a97d5ccb7e271bb61e34ec6b51f49675545657a73c9"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_m96_w01_s00.pkl','rb') as f: s=pickle.load(f)\nprint(type(s))\nfor k,v in s.items():\n try:\n  a=np.asarray(v); print(k,type(v).__name__,a.shape,a.dtype, (np.nanmin(a),np.nanmax(a)) if a.size and a.dtype.kind in 'fiub' else repr(v)[:240])\n except Exception: print(k,type(v).__name__,repr(v)[:240])\nPY\nif [ -d /tmp/hegel_wormhole_skills ]; then PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling box simplex'; fi",
+      "cd /holdout_task && sed -n '52,160p' validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_beta_m96_w01_s00.pkl','rb') as f: studies=pickle.load(f)\nfor s in studies:\n for k,v in s.items():\n  a=np.asarray(v)\n  if a.dtype.kind in 'biuf' and a.size:\n   print(k,a.shape,a.dtype, 'range',a.min(),a.max(), 'head',a.ravel()[:8])\n  else:\n   print(k,a.shape,a.dtype,repr(v)[:1600])\nPY\nif [ -d /tmp/hegel_wormhole_skills ]; then PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; fi\nif [ -f /tmp/hegel_con",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_m96_w01_s00.pkl','rb') as f:\n    item=pickle.load(f)[0]\nfor group in ('study','gt'):\n    print(group)\n    for k,v in item[group].items():\n        a=np.asarray(v)\n        if isinstance(v, (list,tuple)) and len(v) and isinstance(v[0],dict):\n            print(k,len(v),repr(v[:4])[:500]); continue\n        if a.ndim==0 or a.size<=12:\n            print(k,a.shape,repr(v)[:400]); continue\n        print(k,a.shape,a.dtype,a.ravel()[:5], ('range',a.min(),a.max()) if a.dtype.kind in 'biuf' else '')\nprint('scipy',__impor",
+      "cd /holdout_task && cat > /tmp/tracer_discriminate.py <<'PY'\nimport pickle\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\ns,g=(lambda d:(d['study'],d['gt']))(pickle.load(open('public_beta_m96_w01_s00.pkl','rb'))[0])\nz=s['Z_nuisance']; q,d,_=np.linalg.svd(z,full_matrices=False); ridge=s['nuisance_ridge']\nprofiles={'residual':d*d/(d*d+ridge),'sqrt':1-np.sqrt(ridge/(d*d+ridge)),'ols':np.ones_like(d),'none':np.zeros_like(d)}\ndef prof(a,t): return a-q@((t[:,None] if a.ndim==2 else t)*(q.T@a))\ncs=s['sensor_calibration_sweeps']; bank=s['row_bank_id']",
+      "cat > /holdout_task/beta_m96_w01_s00_solver.py <<'PY'\n\"\"\"Calibrated tracer inversion with a box-simplex optimality certificate.\"\"\"\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    h = L / n\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(vel, dtype=float) / h\n    r = np.broadcast_to(np.asarray(robin, dtype=float), (2,))\n    faces = 2 * k[:-1] * k[1:] / ((k[:-1] + k[1:]) * h**2)\n    diag = np.r_[faces, 0.] + np.r_[0., faces] + abs(v) + diag_add\n    kb = k[[0, -1]]\n    np.add.at(dia",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\np = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_m96_w01_s00_solver.py')\nm = importlib.util.module_from_spec(p); p.loader.exec_module(m)\nwith open('public_beta_m96_w01_s00.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\ns, ref = item['study'], item['gt']\nrng = np.random.default_rng(76)\ngains = np.array([.81, 1.12, 1.24, .93]); offsets = np.array([.19, -.14, .09, -.24])\nbank = s['row_bank_id']; sweep = s['sensor_calibration_sweeps']; b = sweep['bank_id'",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w01_s00_solver.py')\nm = importlib.util.module_from_spec(p); p.loader.exec_module(m)\nwith open('public_beta_m96_w01_s00.pkl', 'rb') as f:\n    s = pickle.load(f)[0]['study']\nD, _ = m._design_and_terminal(s)\ny = m._calibrate(s); Z = s['Z_nuisance']; bank = s['row_bank_id']; loc = s['sensor_ij']\npoint = np.tile(np.unique(loc, axis=0, return_inverse=True)[1], len(s['mu_shifts']))\nassert len(point) == len(y)\nA = n"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tracer_discriminate.py",
+      "primary_producer_container_path": "/tmp/tracer_discriminate.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m96_w01_s00_solver.py",
+        "filename": "beta_m96_w01_s00_solver.py",
+        "bytes": 6056,
+        "sha256": "9cdaee422de860facea689fe15277da8b8b620fe4b1a7202bf6477b20e2aa4af",
+        "content_addressed_ref": "content_addressed_blobs/9cdaee422de860facea689fe15277da8b8b620fe4b1a7202bf6477b20e2aa4af.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m96_w01_s00_solver.py"
+    ],
+    "exported_pure_functions": [
+      "rel"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ed44e802640fd2cd1c8e1d34bf6a068902bcf285b65f5e5f47ea971a7dac4194",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w01_s00_solver.py')\nm = importlib.util.module_from_",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ed44e802640fd2cd1c8e1d34bf6a068902bcf285b65f5e5f47ea971a7dac4194",
+        "expected_candidate_sha256": "ed44e802640fd2cd1c8e1d34bf6a068902bcf285b65f5e5f47ea971a7dac4194",
+        "computed_candidate_sha256": "ed44e802640fd2cd1c8e1d34bf6a068902bcf285b65f5e5f47ea971a7dac4194",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w01_s00_solver.py",
+            "bytes": 6056
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_ed44e802"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "rel",
+        "code": "def rel(a, b):\n    return np.linalg.norm(a - b) / np.linalg.norm(b)"
+      }
+    ]
+  }
+}

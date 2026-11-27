@@ -3081,6 +3081,7 @@ def run_frontier_episode(
             )
             exec_container_bash(agent_cid, "python3 -I -c " + _shlex_boot.quote(_asset_idx_py), timeout_sec=20)
 
+            extra_ro_assets = list(getattr(task, "allowed_readonly_dependencies", ()) or ())
             hash_probe = exec_container_bash(
                 agent_cid,
                 "python3 -I -c "
@@ -3094,6 +3095,10 @@ def run_frontier_episode(
                     "            if os.path.isfile(fp):\n"
                     "                b = open(fp, 'rb').read()\n"
                     "                out[fp] = {'size': len(b), 'sha256': hashlib.sha256(b).hexdigest()}\n"
+                    f"for ep in {json.dumps(extra_ro_assets)}:\n"
+                    "    if os.path.isfile(ep):\n"
+                    "        b = open(ep, 'rb').read()\n"
+                    "        out[ep] = {'size': len(b), 'sha256': hashlib.sha256(b).hexdigest()}\n"
                     "print(json.dumps(out, sort_keys=True))\n"
                 ),
                 timeout_sec=20,

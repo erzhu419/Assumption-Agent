@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c707a10d6ea843458155a3ec73bc5a9a",
+  "call_seq": 5,
+  "stage_subdir": "m9_6_auto_struct_20261127T023206Z__alpha_m96_w03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w03_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T02:34:27.250083+00:00",
+  "ended_at_utc": "2026-11-27T02:35:37.696047+00:00",
+  "request_sha256": "016f85ba53d3ad955bca5d4db97f8914775c5154be2d784cef4b265c619c5b0b",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 36294,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24931,
+    "cached_tokens": 0,
+    "completion_tokens": 1257
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, pickle, numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',root+'alpha_m96_w03_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor c in pickle.load(open(root+'public_alpha_m96_w03_s00.pkl','rb')):\\n d,gt=c['dataset'],c['gt']; solve=m.solve_alpha_m96_w03_s00; o=solve(d); te=d['test']\\n for key,truth in [('estimated_taus','taus'),('hereditary_weights','theta'),('viscoplastic_weights','vp_theta'),('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n  e=o[key]-gt[truth]; print(key,'RMSE',np.sqrt(np.mean(e**2)),'max absolute',np.max(np.abs(e)))\\n  if e.ndim==2: print('worst horizon RMSE',np.sqrt(np.mean(e**2,axis=0)).max())\\n  if key in ('predicted_strain','initial_rate_pred'):\\n   for name,mask in [(f'lab {i}',te['lab_id']==i) for i in range(4)]+[('missing feature',np.isnan(te['coupon_features_raw']).any(axis=1))]:\\n    print(' ',name,'RMSE',np.sqrt(np.mean(e[mask]**2)))\\n assert np.all(o['viscoplastic_weights']==0) and .2<=o['estimated_taus'][0]<o['estimated_taus'][1]<=8.\\n # Preserve physical stresses while changing the commands; sparse clean checks and EMI are tested on opposite wings.\\n x=copy.deepcopy(d); gain=np.array([.88,1.12,1.08,.93]); bias=np.array([.10,-.08,.15,-.12]); cal=x['calibration_load_cells']; lab=cal['lab_id']; old_g,old_b=m._load_cell_fit(cal)\\n for split in ('train','test'):\\n  z=x[split]; l=z['lab_id']; z['past_stress_cmd']=(z['past_stress_cmd']*old_g[l,None]+old_b[l,None]-bias[l,None])/gain[l,None]; z['stress_hold_cmd']=(z['stress_hold_cmd']*old_g[l]+old_b[l]-bias[l])/gain[l]\\n cmd=cal['cmd_stress']; cal['cmd_stress']=(old_g[lab]*cmd+old_b[lab]-bias[lab])/gain[lab]; keep=np.ones(len(lab),bool)\\n for l in range(4):\\n  rows=np.flatnonzero(lab==l)\\n  if l<2:\\n   endpoints=rows[[np.argmin(cmd[rows]),np.argmax(cmd[rows])]]; keep[rows]=False; keep[endpoints]=True\\n  else: cal['true_stress'][rows[[0,3]]]+=[1.3,-1.7]\\n x['calibration_load_cells']={k:v[keep] for k,v in cal.items()}; gg,bb=m._load_cell_fit(x['calibration_load_cells']); print('sparse/EMI max gain and bias errors',abs(gg-gain).max(),abs(bb-bias).max())\\n q=solve(x)\\n for k in ('predicted_strain','initial_rate_pred'):\\n  diff=abs(q[k]-o[k]).max(); print('sparse/EMI max change',k,diff); assert diff<.005\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated two-branch creep law -> joint Cauchy strain/rate fit; worst held-out lab median absolute strain residual is 0.01291 and worst horizon median is 0.02549.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The isolated schema and held-out lab checks passed, but the truth keys differ from the output keys, so the prior check did not measure clean error. Map them explicitly and test whether sparse checks or EMI change predictions when physical stresses are unchanged. Revise calibration only if that test exposes material drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "243ad97ccef305b3b936bb3cf057696274fca630f3309e4d181ba81bcbd368fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 74544.34,
+      "usage_known": true,
+      "prompt_tokens": 24931,
+      "cached_tokens": 0,
+      "completion_tokens": 1257
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "860b1c137be84e76848ef59e5159673a",
+  "call_seq": 8,
+  "stage_subdir": "m9_6_auto_struct_20261127T023206Z__alpha_m96_w01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m96_w01_s00__coupon_creep_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T02:35:49.359954+00:00",
+  "ended_at_utc": "2026-11-27T02:36:32.708281+00:00",
+  "request_sha256": "50bc14e35c6e79269b5a8c6b7694817dd7c2a6a948602f507aabe64183faf2d6",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 42054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26688,
+    "cached_tokens": 6784,
+    "completion_tokens": 1746
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m96_w01_s00_solver.py')\\ns = p.read_text()\\nold = \\\"    return {'estimated_taus': taus, 'hereditary_weights': weights, 'viscoplastic_weights': np.zeros(2),\\\\n            'predicted_strain': pred[:n*k].reshape(n, k) + test['strain_0'][:, None], 'initial_rate_pred': pred[n*k:]}\\\"\\nnew = \\\"    rate = pred[n*k:].copy()\\\\n    strain = pred[:n*k].reshape(n, k) + test['strain_0'][:, None]\\\\n    # If an active drift feature is missing, onset identifies its aggregate\\\\n    # contribution after removing the modeled hereditary rate. The resulting\\\\n    # drift correction acts on the hold curve as well as its onset derivative.\\\\n    missing = np.any(~np.isfinite(test['coupon_features_raw']) & (weights[3:] != 0), axis=1)\\\\n    onset = np.asarray(test['instant_rate_obs'])\\\\n    use_onset = missing & np.isfinite(onset)\\\\n    strain[use_onset] += (onset[use_onset] - rate[use_onset])[:, None] * time\\\\n    rate[use_onset] = onset[use_onset]\\\\n    return {'estimated_taus': taus, 'hereditary_weights': weights, 'viscoplastic_weights': np.zeros(2),\\\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m96_w01_s00_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np = pickle.load(open('public_alpha_m96_w01_s00.pkl', 'rb'))[0]\\nd, g = p['dataset'], p['gt']\\nte = d['test']; t = d['eval_times']; n, k = len(te['lab_id']), len(t)\\nsolve = s.solve_alpha_m96_w01_s00\\no = solve(d)\\nshapes = {'estimated_taus': (2,), 'hereditary_weights': (7,), 'viscoplastic_weights': (2,), 'predicted_strain': (n,k), 'initial_rate_pred': (n,)}\\nassert o.keys() == shapes.keys()\\nfor key, shape in shapes.items(): assert o[key].shape == shape and np.isfinite(o[key]).all(), key\\nassert .2 <= o['estimated_taus'][0] < o['estimated_taus'][1] <= 8.\\nassert np.array_equal(o['viscoplastic_weights'], np.zeros(2))\\nmiss = np.isnan(te['coupon_features_raw']).any(axis=1)\\ne = o['predicted_strain'] - g['te_clean']; r = o['initial_rate_pred'] - g['te_true_rate0']\\nrmse = lambda a: np.sqrt(np.mean(a*a))\\nfor name, mask in [('all', np.ones(n, bool)), ('missing', miss), ('complete', ~miss), *[(f'lab_{i}', te['lab_id']==i) for i in range(4)], *[(f'wing_{i}', te['lab_id']//2==i) for i in range(2)]]:\\n    print(name, mask.sum(), 'strain/rate RMSE', rmse(e[mask]), rmse(r[mask]))\\nassert rmse(e[miss]) < .032 and rmse(r[miss]) < .010\\nassert rmse(e[~miss]) < .006 and rmse(r[~miss]) < .0025\\nprint('max absolute tau/weight errors', np.max(np.abs(o['estimated_taus']-g['taus'])), np.max(np.abs(o['hereditary_weights']-g['theta'])))\\n# Perturb onset to check that only missing-covariate drift responds.\\npert = solve(dict(d, test=dict(te, instant_rate_obs=te['instant_rate_obs']+.1)))\\nnp.testing.assert_allclose(pert['initial_rate_pred']-o['initial_rate_pred'], .1*miss, atol=1e-12)\\nnp.testing.assert_allclose(pert['predicted_strain']-o['predicted_strain'], .1*miss[:,None]*t, atol=1e-12)\\n# Spike one calibration reading in each lab; spikes should not move the affine fit.\\nchecks = d['calibration_load_cells']; corrupted = dict(checks, true_stress=checks['true_stress'].copy())\\nfor lab in range(4):\\n    ids = np.flatnonzero(checks['lab_id']==lab)\\n    j = ids[np.argmax(np.abs(checks['cmd_stress'][ids]))]\\n    corrupted['true_stress'][j] += (-1)**lab * .6\\nspiked = solve(dict(d, calibration_load_cells=corrupted))\\nprint('EMI stress, worst-lab strain/rate RMSE', max(rmse((spiked['predicted_strain']-g['te_clean'])[te['lab_id']==i]) for i in range(4)), max(rmse((spiked['initial_rate_pred']-g['te_true_rate0'])[te['lab_id']==i]) for i in range(4)))\\nassert rmse(spiked['predicted_strain']-g['te_clean']) < .025\\nassert rmse(spiked['initial_rate_pred']-g['te_true_rate0']) < .008\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Mean-imputed drift → onset-conditioned drift only for incomplete coupons; the public preview lowered missing-slice strain/rate RMSE from 0.1963/0.0623 to 0.0295/0.0091 and improved held-out curve errors in all four labs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop incomplete training coupons\",\n      \"rejected_reason\": \"The complete-only fit barely changes prediction errors and roughly doubles the public slow-time error.\"\n    },\n    {\n      \"option\": \"Shrink the onset correction by a fixed 3%\",\n      \"rejected_reason\": \"Full correction performs better on the public missing slice and has the simpler interpretation: onset identifies the aggregate missing drift.\"\n    }\n  ],\n  \"rationale\": \"Keep the shared hereditary fit and apply the measured onset correction only where a missing covariate leaves drift unidentified. Run the exact artifact in an isolated process: slice metrics detect regressions, an onset perturbation checks that the correction affects only drift, and a load-cell spike test checks whether calibration still needs work.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8bbaa5012e5b4c1d3d4fba4402240164014b93e1499a92ac6d9d82d969d3c7d0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45320.08,
+      "usage_known": true,
+      "prompt_tokens": 26688,
+      "cached_tokens": 6784,
+      "completion_tokens": 1746
+    }
+  ]
+}

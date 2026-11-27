@@ -1,0 +1,97 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m96_w04_s00_67e877206922",
+    "source_hash": "67e8772069225e6bfaeaaf1ade933fc2a5ce886fc38873d781e2b03d2b37db59",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m96_w04_s00__coupon_creep_baseline",
+    "task_id": "alpha_m96_w04_s00__coupon_creep_baseline",
+    "wormhole_family": "fam_hereditary_viscoelastic_memory"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_w04.py",
+        "archived_relpath": "producers/tmp__audit_w04.py",
+        "bytes": 2183,
+        "sha256": "4d0f38a246115fd1b47a44f43fa0216c54f78a7247d3eb9a3b917eb7a7cd9482"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_alpha_m96_w04_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(d, ind='', depth=0):\n for k,v in d.items():\n  print(ind,k,type(v).__name__,end=' ')\n  if isinstance(v,dict):\n   print(list(v));\n   if depth<2: show(v,ind+'  ',depth+1)\n  elif isinstance(v,np.ndarray):\n   print(v.shape,v.dtype, v.ravel()[:12]);\n  elif isinstance(v,(tuple,list)): print(len(v),repr(v[:1])[:350]);\n  else: print(repr(v)[:250]);\nshow(d)\nPY\nls -l /tmp/hegel_continual_archive 2>/dev/null; PYTHONPATH=/tmp python3",
+      "cd /holdout_task && tail -55 validate_public_schema.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_alpha_m96_w04_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(v, label='root', depth=0):\n p='  '*depth\n if isinstance(v,dict):\n  print(p,label,'dict',list(v))\n  if depth<4:\n   for k,w in v.items(): show(w,k,depth+1)\n elif isinstance(v,(list,tuple)):\n  print(p,label,type(v).__name__,len(v))\n  if v and depth<4: show(v[0],'[0]',depth+1)\n elif isinstance(v,np.ndarray): print(p,label,v.shape,v.dtype,'samples',v.ravel()[:8], 'nonfinite',np.count_nonzero",
+      "cd /holdout_task && sed -n '/^_d =/,$p' validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np,json\nD=pickle.load(open('public_alpha_m96_w04_s00.pkl','rb')); print('entries',len(D));\ndef show(d,depth=0):\n for k,v in d.items():\n  if isinstance(v,dict):\n   print(' '*depth,k);show(v,depth+2)\n  elif isinstance(v,np.ndarray): print(' '*depth,k,v.shape,v.dtype,v.ravel()[:3],('nan='+str(np.isnan(v).sum())) if v.dtype.kind=='f' else '')\n  else: print(' '*depth,k,str(v)[:140]);\nshow(D[0]); print('asset index keys',list(json.load(open('public_asset_index.json'))))\nPY\nls -lh /tmp/hegel_c",
+      "cd /holdout_task && cat > alpha_m96_w04_s00_solver.py <<'PY'\nimport json\nfrom pathlib import Path\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\n_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _sigma(r):\n    return max(1e-8, 1.4826 * np.median(np.abs(r - np.median(r))))\n\n\ndef _archive_prior():\n    gains, biases = np.ones(4), np.zeros(4)\n    if not _ARCHIVE.is_file():\n        return gains, biases\n    with _ARCHIVE.open() as f:\n        history = json.load(f)\n    pairs = [[] for _ in range(4)]\n\n    def visit(value):\n        if isinstance(valu",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nimport alpha_m96_w04_s00_solver as m\nz=pickle.load(open('public_alpha_m96_w04_s00.pkl','rb'))[0]; d,g=z['dataset'],z['gt']; tr,te=d['train'],d['test']; out=m.solve_alpha_m96_w04_s00(d)\nep=out['predicted_strain']-g['te_clean']; er=out['initial_rate_pred']-g['te_true_rate0']; nu=te['instant_rate_obs']-g['te_true_rate0']; t=d['eval_times']; missing=np.isnan(te['coupon_features_raw']).sum(axis=1)\nfor label, ix in [('complete',missing==0),('missing',missing>0), *[(f'missing lab {l}',(missing>0)&(te['lab_id']==l)) ",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m96_w04_s00_solver.py')\ns = p.read_text()\nold = \"    return {'estimated_taus': taus, 'hereditary_weights': weights,\\n            'viscoplastic_weights': np.zeros(2),\\n            'predicted_strain': test['strain_0'][:, None] + curves @ weights,\\n            'initial_rate_pred': rates @ weights}\"\nnew = \"    strain = test['strain_0'][:, None] + curves @ weights\\n    rate = rates @ weights\\n    # On incomplete coupons, use the measured onset to recover the total\\n    # drift that the filled features cannot identify indi",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\ns=importlib.util.spec_from_file_location('solver','alpha_m96_w04_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=pickle.load(open('public_alpha_m96_w04_s00.pkl','rb'))[0]; d=z['dataset']; gt=z['gt']; checks=d['calibration_load_cells']; labs=checks['lab_id']; cmd=checks['cmd_stress']; a=np.array([.97,1.03,1.11,.92]); b=np.array([.08,-.05,.12,-.10]);\nfor variant in ('dense','two_clean','emi_two_of_ten'):\n    ix=np.ones(len(cmd),bool); y=a[labs]*cmd+b[labs]+chec",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m96_w04_s00_solver.py')\ns = p.read_text()\nold = '        if x.size < 3 or np.ptp(x) < 1e-6:\\n'\nnew = '''        if x.size == 2 and np.ptp(x) >= 1e-6:\n            gains[c] = (y[1] - y[0]) / (x[1] - x[0])\n            biases[c] = np.mean(y - gains[c] * x)\n            continue\n        if x.size < 3 or np.ptp(x) < 1e-6:\n'''\nassert old in s\np.write_text(s.replace(old, new))\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\n",
+      "set -e\ncd /holdout_task\nTIMEFORMAT='Isolated validator, default threads: %3R s'\ntime timeout 35s python3 -I validate_public_schema.py",
+      "set -e\ncd /holdout_task\ncat >/tmp/audit_w04.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nroot='/holdout_task/'\ns=importlib.util.spec_from_file_location('solver',root+'alpha_m96_w04_s00_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nz=pickle.load(open(root+'public_alpha_m96_w04_s00.pkl','rb'))[0]; d=z['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']\nlab=tr['lab_id']; miss=np.isnan(tr['coupon_features_raw']).any(1); strata=tr['stratum']; e=np.empty_like(tr['strain_curves_obs']); er=np.empty(len(lab)); core=np.empty_like(e)\nfor c "
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_w04.py",
+      "primary_producer_container_path": "/tmp/audit_w04.py",
+      "selected_channels": [
+        "fam_hereditary_viscoelastic_memory"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m96_w04_s00_solver.py",
+        "filename": "alpha_m96_w04_s00_solver.py",
+        "bytes": 7532,
+        "sha256": "c34ec9a2747ed9c1ed2aea64ca028ef6be35d57b0fe9970b7e6332b992ceb452",
+        "content_addressed_ref": "content_addressed_blobs/c34ec9a2747ed9c1ed2aea64ca028ef6be35d57b0fe9970b7e6332b992ceb452.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m96_w04_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_viscoelastic_memory",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "67e8772069225e6bfaeaaf1ade933fc2a5ce886fc38873d781e2b03d2b37db59",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncd /holdout_task\ncat >/tmp/audit_w04.py <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nroot='/holdout_task/'\ns=importlib.util.spec_from_file_location('solver',root+'alpha_m96_w04_s00_solver.py'); m=importlib.util.module_from",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "67e8772069225e6bfaeaaf1ade933fc2a5ce886fc38873d781e2b03d2b37db59",
+        "expected_candidate_sha256": "67e8772069225e6bfaeaaf1ade933fc2a5ce886fc38873d781e2b03d2b37db59",
+        "computed_candidate_sha256": "67e8772069225e6bfaeaaf1ade933fc2a5ce886fc38873d781e2b03d2b37db59",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m96_w04_s00_solver.py",
+            "bytes": 7532
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_67e87720"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

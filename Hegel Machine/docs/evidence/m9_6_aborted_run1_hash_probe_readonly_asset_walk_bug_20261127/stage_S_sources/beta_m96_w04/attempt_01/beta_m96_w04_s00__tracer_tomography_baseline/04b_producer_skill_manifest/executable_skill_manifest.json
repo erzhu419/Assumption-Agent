@@ -1,0 +1,80 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m96_w04_s00_b54a60ce37a7",
+    "source_hash": "b54a60ce37a76db6b85f788dc06f439a7f895265fe4676f701f4752161979594",
+    "parent_ids": [],
+    "source_episode_id": "beta_m96_w04_s00__tracer_tomography_baseline",
+    "task_id": "beta_m96_w04_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json && cat validate_public_schema.py && ls -l /tmp/hegel_continual_archive 2>/dev/null; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_beta_m96_w04_s00.pkl','rb') as f: s=pickle.load(f)\nprint(type(s))\nfor k,v in s.items():\n if isinstance(v,np.ndarray): print(k,v.shape,v.dtype, (v.min(),v.max()) if np.issubdtype(v.dtype,np.number) and v.size else '')\n elif isinstance(v,(dict,list,tuple)): print(k,type(v).__name__,len(v), list(v)[:15] if isinstance(v,dict) else repr(v[:1])[:300])\n else: print(k,repr(v)[:500])\nPY\nPYTHONPATH=/",
+      "cd /holdout_task && cat validate_public_schema.py; find /tmp/hegel_continual_archive /holdout_task -maxdepth 2 -type f -printf '%p %s\\n' 2>/dev/null; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | head -55; python3 - <<'PY'\nimport pickle,numpy as np\nfrom collections import Counter\nwith open('/holdout_task/public_beta_m96_w04_s00.pkl','rb') as f: cases=pickle.load(f)\nprint('case count',len(cases)); print('case headers',[list(c) for c in cases[:5]])\nfor k,v in cases[0]['study'].items():\n if isinstance(v,np.ndarray): print(",
+      "ls -l /tmp/hegel_continual_archive; cd /holdout_task; sed -n '45,110p' validate_public_schema.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np,pickle,itertools\nfrom scipy.linalg import eig,inv\ns,g=(lambda c:(c['study'],c['gt']))(pickle.load(open('public_beta_m96_w04_s00.pkl','rb'))[0]); z=s['Z_nuisance']; uz,d,_=np.linalg.svd(z,full_matrices=False); q=uz@(uz.T); shrink=s['nuisance_ridge']/(d*d+s['nuisance_ridge']); pro={'ridge_residual':np.eye(len(z))-(uz*(1-shrink))@uz.T,'ridge_sqrt':np.eye(len(z))-(uz*(1-np.sqrt(shrink)))@uz.T,'ols':np.eye(len(z))-q,'none':np.eye(len(z))}\na=s['",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nc=pickle.load(open('public_beta_m96_w04_s00.pkl','rb'))[0]; s,g=c['study'],c['gt']; U=g['terminal_field_A']; rhs=np.einsum('m,mij->ij',g['w_opt'],s['source_modes'])-s['mu_shifts'][-1]*U\nterms={}\nfor axis,dim in [('x',0),('y',1)]:\n u=U if dim==0 else U.T; k=s['kappa_'+axis]; vel=s['vel_'+axis]; h=s['L'+axis]/len(k); r=s['robin_'+axis]\n def add(name,t): terms[axis+'_'+name]=t if dim==0 else t.T\n for key,d in [('dh',2*k[:-1]*k[1:]/(k[:-1]+k[1:])),('da',(k[:-1]+k[1:])/2)]:\n  t=np.zeros_like(u); f=d[:,None]*(u[:-1",
+      "cat > /holdout_task/beta_m96_w04_s00_solver.py <<'PY'\n\"\"\"Calibrated source tomography for the laminar reaction-transport regime.\"\"\"\n\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    \"\"\"Return the lower, main, and upper diagonals of the FVM operator.\"\"\"\n    h = L / n\n    kappa = np.asarray(kappa, dtype=float)\n    speed = np.asarray(vel, dtype=float) / h\n    diffusion = 2 * kappa[:-1] * kappa[1:] / ((kappa[:-1] + kappa[1:]) * h**2)\n    main = np.asarray(diag_add, dtype=float) + np.abs(speed)\n    main[:-1] += diffusion\n    main[1",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w04_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_beta_m96_w04_s00.pkl', 'rb') as f:\n    case = pickle.load(f)[0]\ns = case['study']\nbase = m.solve_beta_m96_w04_s00(s)\nworst = np.zeros(2)\nfor stressed_wing in (0, 1):\n    t = copy.deepcopy(s)\n    sw = t['sensor_calibration_sweeps']\n    bank = sw['bank_id']\n    gain = np.array([0.78, 1.26, 0.91, ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.sparse import coo_matrix, eye, kron, diags\nfrom scipy.sparse.linalg import splu\n\ndef load(name, file):\n    spec = importlib.util.spec_from_file_location(name, '/holdout_task/' + file)\n    mod = importlib.util.module_from_spec(spec)\n    spec.loader.exec_module(mod)\n    return mod\n\nm = load('solver', 'beta_m96_w04_s00_solver.py')\nvfy = load('validator', 'validate_public_schema.py')\n\ndef axis(s, a):\n    k, u = s['kappa_'+a], s['vel_'+a]\n    n = len(k)\n    h = s['L'+a] / n\n   ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/beta_m96_w04_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef axis(s, a):\n    k, u = s['kappa_'+a], s['vel_'+a]\n    n = len(k)\n    h = s['L'+a]/n\n    r = s['robin_'+a]\n    B = np.diag(s['reaction_'+a].copy())\n    for i in range(n-1):\n        d = 2/(1/k[i]+1/k[i+1])/h**2\n        B[i,i] += d"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m96_w04_s00_solver.py",
+        "filename": "beta_m96_w04_s00_solver.py",
+        "bytes": 7022,
+        "sha256": "6864e398427e76d6ace0c82f7c61a537d2480d1bb5c14c9d07843c2b09ca5cb2",
+        "content_addressed_ref": "content_addressed_blobs/6864e398427e76d6ace0c82f7c61a537d2480d1bb5c14c9d07843c2b09ca5cb2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m96_w04_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "b54a60ce37a76db6b85f788dc06f439a7f895265fe4676f701f4752161979594",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\nspec = importlib.util.spec_from_file_locat",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "b54a60ce37a76db6b85f788dc06f439a7f895265fe4676f701f4752161979594",
+        "expected_candidate_sha256": "b54a60ce37a76db6b85f788dc06f439a7f895265fe4676f701f4752161979594",
+        "computed_candidate_sha256": "b54a60ce37a76db6b85f788dc06f439a7f895265fe4676f701f4752161979594",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w04_s00_solver.py",
+            "bytes": 7022
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_b54a60ce"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

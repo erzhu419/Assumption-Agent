@@ -85,7 +85,7 @@ from hegel_machine.cognition.m9_6_autonomous_structure_continual_world import (
 )
 
 DEFAULT_V7_BUNDLE = REPO_ROOT / "docs/evidence/m9_2_1_audit_closure_and_regrade_20261126/pretrained_autogenous_forest_v7_m921.json"
-DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_6_autonomous_guard_multiparent_continual_20261127"
+DEFAULT_OUT_DIR = REPO_ROOT / "docs/evidence/m9_6_autonomous_guard_multiparent_continual_run2_20261127"
 
 _CALL_CONTEXT = threading.local()
 

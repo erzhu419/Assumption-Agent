@@ -1,0 +1,114 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m96_w03_s00_fef41f5f2e25",
+    "source_hash": "fef41f5f2e254cb1fded3d8193a9c2ef98190bd964d6d4f56019faa4d3759f63",
+    "parent_ids": [],
+    "source_episode_id": "beta_m96_w03_s00__tracer_tomography_baseline",
+    "task_id": "beta_m96_w03_s00__tracer_tomography_baseline",
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/tracer_calibration_audit.py",
+        "archived_relpath": "producers/tmp__tracer_calibration_audit.py",
+        "bytes": 2249,
+        "sha256": "a96b95ef60b7f49ee17ce37446b146e8b230dafb69cdd13138b8dd78f143c4e0"
+      },
+      {
+        "container_path": "/tmp/tracer_probe.py",
+        "archived_relpath": "producers/tmp__tracer_probe.py",
+        "bytes": 3327,
+        "sha256": "c920828507334ccad535698d83ebb0b18bebfa9445249ffb1989c449642985f7"
+      },
+      {
+        "container_path": "/tmp/tracer_sensor_audit.py",
+        "archived_relpath": "producers/tmp__tracer_sensor_audit.py",
+        "bytes": 2222,
+        "sha256": "7eeeb3c8320d33e59c79dc0eac6bf86ff8a393d71dce36c43a65e1d304276a6e"
+      },
+      {
+        "container_path": "/tmp/tracer_verify.py",
+        "archived_relpath": "producers/tmp__tracer_verify.py",
+        "bytes": 3722,
+        "sha256": "3de60bda7ac1e0e2e026299d1e5ca994c483fe81f07c366d9174f8f1cb924fd7"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -la /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/public_asset_index.json /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling'; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_beta_m96_w03_s00.pkl','rb') as f: d=pickle.load(f)\ndef show(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,getattr(v,'shape',''),getattr(v,'dtype',''),repr(v)[:220] if not isinstance(v,dict) else '')\n  if isinstance(v,dict) and depth<4:show(v,depth+1)\nshow(d)\nPY",
+      "cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('/holdout_task/public_beta_m96_w03_s00.pkl','rb') as f: d=pickle.load(f)\nprint('cases', len(d))\nfor case in d[:2]:\n for k,v in case['study'].items():\n  if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:6])\n  else: print(k,repr(v)[:650])\nPY",
+      "cat > /tmp/tracer_probe.py <<'PY'\nimport itertools,pickle\nimport numpy as np\nfrom scipy.sparse import csr_matrix,diags,eye,kron\nfrom scipy.sparse.linalg import splu\np=pickle.load(open('/holdout_task/public_beta_m96_w03_s00.pkl','rb'))[0]; s,t=p['study'],p['gt']; nx,ny=s['nx'],s['ny']; V=s['V_reaction_2d']; R=s['reaction_x'][:,None]+s['reaction_y']; Vsep=V.mean(1)[:,None]+V.mean(0)-V.mean(); Z=s['Z_nuisance']; Q,d,_=np.linalg.svd(Z,full_matrices=False); shrink=d*d/(d*d+s['nuisance_ridge']); I=np.eye(len(Z)); profiles={'residual':I-(Q*shrink)@Q.T,'sqrt':I-(Q*(1-np.sqrt(1-shrink)))@Q.T,'OLS':I-Q@",
+      "cat > /holdout_task/beta_m96_w03_s00_solver.py <<'PY'\n\"\"\"Calibrated tracer tomography for the laminar reaction-transport model.\"\"\"\nimport numpy as np\nfrom scipy.linalg import eigh_tridiagonal\n\n\ndef _build_1d(L, n, kappa, vel, robin, diag_add):\n    h = L / n\n    k = np.asarray(kappa, dtype=float)\n    v = np.asarray(vel, dtype=float) / h\n    face = (2 * k[:-1] * k[1:] / (k[:-1] + k[1:])) / h**2\n    diag = np.array(diag_add, dtype=float, copy=True) + np.abs(v)\n    diag[:-1] += face\n    diag[1:] += face\n    kb = k[[0, -1]]\n    wall = robin * kb / (h * (robin * h / 2 + kb))\n    diag[0] += wall[0]\n ",
+      "cat > /tmp/tracer_verify.py <<'PY'\nimport copy, importlib.util, json, pickle, time\nimport numpy as np\nfrom scipy.optimize import minimize\n\nroot = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', root+'beta_m96_w03_s00_solver.py')\nmod = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(mod)\nwith open(root+'public_beta_m96_w03_s00.pkl', 'rb') as f:\n    item = pickle.load(f)[0]\ns, gt = item['study'], item['gt']\nwith open(root+'validate_public_schema.py') as f:\n    ns = {}\n    exec(f.read().split('\\n_d =')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate'",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport collections, importlib.util, sys\nimport numpy as np\npath = '/holdout_task/beta_m96_w03_s00_solver.py'\nspec = importlib.util.spec_from_file_location('solver', path)\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nrng = np.random.default_rng(831)\nfor z in range(144):\n    n = 12\n    A = rng.normal(size=(24,n))*10.**rng.uniform(-1,1)\n    if z%3 == 0: A[:,6:] = A[:,:6]\n    y = rng.normal(size=24)*10.**rng.uniform(-1,2)\n    b = [0., n, 1e-8, n-1e-8, 1., 6., 11., 2.6, 9.45][z%9]\n    try: m._box_simplex(A,y,.04,1.,b)\n    except Ru",
+      "set -e\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/beta_m96_w03_s00_solver.py')\ns = p.read_text()\nstart = s.index('        if np.max(abs(step)) > 1e-12:')\nend = s.index('        status[k] = 0\\n', start)\ns = s[:start] + '''        # One Newton step minimizes the quadratic on this face. If it\n        # reaches the face minimum, test multipliers rather than re-solving\n        # the same ill-conditioned system to chase roundoff in the step.\n        trial = w[free] + step\n        tol = 32 * np.finfo(float).eps * cap\n        up, down = trial > cap + tol, trial < -tol\n        if",
+      "cat > /tmp/tracer_calibration_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\n\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_m96_w03_s00_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nns = {}\nexec((root / 'validate_public_schema.py').read_text().split('\\n_d =')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nwith (root / 'public_beta_m96_w03_s00.pkl').open('rb') as f:\n    cases = pickle.load(f)\nfor i, case in enumerate(cases):\n    s, gt = ca",
+      "cat > /tmp/tracer_sensor_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_m96_w03_s00_solver.py')\nsolver = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(solver)\nns = {}\nexec((root / 'validate_public_schema.py').read_text().split('\\n_d =')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nwith (root / 'public_beta_m96_w03_s00.pkl').open('rb') as f:\n    cases = pickle.load(f)\nfor case_id, case in enumerate(cases):\n    s, gt = ca"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__tracer_verify.py",
+      "primary_producer_container_path": "/tmp/tracer_verify.py",
+      "selected_channels": [
+        "fam_kronecker_sylvester_and_kkt_certification"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m96_w03_s00_solver.py",
+        "filename": "beta_m96_w03_s00_solver.py",
+        "bytes": 6949,
+        "sha256": "719458bfba5254399f9e37d63fcf50ebf450c7c6ee02f2109fa142fbd8cda6fc",
+        "content_addressed_ref": "content_addressed_blobs/719458bfba5254399f9e37d63fcf50ebf450c7c6ee02f2109fa142fbd8cda6fc.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m96_w03_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_sylvester_and_kkt_certification",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "fef41f5f2e254cb1fded3d8193a9c2ef98190bd964d6d4f56019faa4d3759f63",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/tracer_sensor_audit.py <<'PY'\nimport importlib.util\nimport pickle\nfrom pathlib import Path\nimport numpy as np\n\nroot = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_m96_w03_s00_solver.p",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "fef41f5f2e254cb1fded3d8193a9c2ef98190bd964d6d4f56019faa4d3759f63",
+        "expected_candidate_sha256": "fef41f5f2e254cb1fded3d8193a9c2ef98190bd964d6d4f56019faa4d3759f63",
+        "computed_candidate_sha256": "fef41f5f2e254cb1fded3d8193a9c2ef98190bd964d6d4f56019faa4d3759f63",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m96_w03_s00_solver.py",
+            "bytes": 6949
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_fef41f5f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 4,
+    "reusable_ast_function_closures": []
+  }
+}

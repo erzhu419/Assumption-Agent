@@ -249,3 +249,131 @@ def test_m96_non_markovian_U_separates_history_guards_from_myopic_traps_and_shar
             t_code = m96.build_m96_reference_dev_solver_code("alpha", t_task.declared_callable_entrypoints[0], "T_kkt")
             assert m95.execute_single_pre_llm_public_gate_probe_in_container(task=t_task, candidate_code=t_code)["accepted"] is True
             assert m94.grade_m94_artifact_map(t_task, {t_task.declared_artifacts[0]: t_code})["strict_pass"] is True
+
+
+def test_m96_run_frontier_episode_with_readonly_archive_dependency_end_to_end(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Regression test for `run1` `hash_probe` + `execute_host_trusted_scientific_probe` with `allowed_readonly_dependencies` (`0` LLM calls)."""
+    import base64
+    from hegel_machine.cognition import m6_frontier_real_benchmarks as m6f
+    from hegel_machine.cognition.hipporag_wormhole_index import HippoRAGWormholeIndex
+
+    dev_alpha = m96.DEV_M96_WORLD_SPECS[0]
+    assert dev_alpha.split == "dev"
+    _, stream_tasks, manifest = m96.build_m96_world_tasks(dev_alpha)
+    by_ev = {m["causal_event"]: t for t, m in zip(stream_tasks, manifest)}
+    t_task = by_ev["T"]
+    t_ep = t_task.declared_callable_entrypoints[0]
+    t_art = t_task.declared_artifacts[0]
+    t_code = m96.build_m96_reference_dev_solver_code("alpha", t_ep, "T_kkt")
+    t_b64 = base64.b64encode(t_code.encode("utf-8")).decode("ascii")
+
+    ro_path = "/tmp/hegel_continual_archive/archive_calibration_history.json"
+    cal_json = json.dumps([{"episode_short_name": "dev_s00", "lab_id": [0, 1, 2, 3]}])
+    aug_pub_py = (
+        t_task.public_setup_py
+        + "\nos.makedirs('/tmp/hegel_continual_archive', exist_ok=True)\n"
+        + f"open({ro_path!r}, 'w').write({cal_json!r})\n"
+        + f"os.chmod({ro_path!r}, 0o444)\n"
+    )
+    aug_task = type(t_task)(**{**t_task.__dict__, "public_setup_py": aug_pub_py})
+    ft = m96.m96_task_to_frontier_task(
+        aug_task,
+        continual_context_block="CONTINUAL ARCHIVE TEST",
+        allowed_readonly_dependencies=(ro_path,),
+    )
+    assert ro_path in ft.required_public_assets
+
+    turns = [
+        {
+            "action_type": "execute_in_remote_docker",
+            "bash_command": f"python3 -c \"import base64; open({t_art!r}, 'wb').write(base64.b64decode({t_b64!r}))\"",
+            "rationale": "write candidate and log scientific nogood",
+            "active_hypothesis_and_worst_slice_metric": "test kkt allocation",
+            "nogood_update": {
+                "has_new_nogood": True,
+                "nogood_rung": "RUNG_2",
+                "risk_kind": "scientific_model",
+                "scope": "independent_box_simplex_kkt_certificate",
+                "assumption_refuted": "unconstrained least squares violates box-simplex KKT",
+                "empirical_witness": "kkt gap > 0",
+                "causal_blanket_diagnosis": "use projected box-simplex KKT solver",
+                "resolves_nogood_ids": [],
+            },
+        },
+        {
+            "action_type": "execute_in_remote_docker",
+            "bash_command": "python3 -I /holdout_task/validate_public_schema.py",
+            "rationale": "verify candidate and resolve ng_t01 via host isolated scientific probe",
+            "active_hypothesis_and_worst_slice_metric": "schema_valid=True",
+            "nogood_update": {
+                "has_new_nogood": False,
+                "nogood_rung": "NONE",
+                "assumption_refuted": "",
+                "empirical_witness": "",
+                "causal_blanket_diagnosis": "",
+                "resolves_nogood_ids": ["ng_t01"],
+            },
+        },
+        {
+            "action_type": "submit_completed_task",
+            "final_answer": "Verified and completed.",
+            "rationale": "submit verified artifact",
+            "active_hypothesis_and_worst_slice_metric": "verified",
+            "nogood_update": {"has_new_nogood": False, "resolves_nogood_ids": []},
+        },
+    ]
+    call_idx = {"i": 0}
+
+    def _mock_call(self_cli: Any, **kw: Any) -> dict[str, Any]:
+        idx = call_idx["i"]
+        call_idx["i"] += 1
+        return {
+            "ok": True,
+            "parsed": turns[idx],
+            "prompt_tokens": 100,
+            "cached_tokens": 0,
+            "completion_tokens": 25,
+            "wall_ms": 1.0,
+            "returned_model": "mock-m96-test",
+            "call_uuid": f"mock_{idx}",
+            "attempts_ledger_filename": f"attempts_{idx}.json",
+            "attempt_count": 1,
+            "usage_unknown_attempt_count": 0,
+            "cost_accounting_status": "complete",
+        }
+
+    monkeypatch.setattr(m6f.FrontierCodexClient, "call_structured", _mock_call)
+    forest, archive, _ = m7a.build_blank_axiomatic_philosophical_forest()
+    archive["__autogenous_blank_seed__"] = {"enabled": True}
+    ep_out = tmp_path / "ep_ro_test"
+    ep_sum = m6f.run_frontier_episode(
+        ft,
+        "Hegel_M6_9_Antithesis_LiveGPT",
+        model="gpt-6.2-sol",
+        codex_info={
+            "available": True,
+            "auth_mode": "chatgpt",
+            "provider_backend": "mock_codex_cli_zero_llm",
+            "executable": "codex",
+            "is_windows_exe_under_wsl": False,
+            "stage_root_wsl": str(tmp_path / "stage"),
+            "stage_root_cli_str": str(tmp_path / "stage"),
+        },
+        forest=forest,
+        forest_archive=archive,
+        hippo_idx=HippoRAGWormholeIndex(forest),
+        episode_out_dir=ep_out,
+        run_id="test_m96_ro",
+        max_turns=3,
+        cmd_timeout_sec=60,
+        defer_official_verifier=True,
+    )
+    assert ep_sum["ended_by_finish"] is True
+    assert ro_path in ep_sum["public_setup_receipt"]["files_sha256"]
+    ngs = ep_sum["nogoods_recorded"]
+    assert len(ngs) == 1 and ngs[0]["resolved"] is True
+    assert ngs[0]["probe_support_status"] in {
+        "verified_gauge_and_scientific_probe_in_scope",
+        "verified_on_host_scientific_probe",
+    }
+
