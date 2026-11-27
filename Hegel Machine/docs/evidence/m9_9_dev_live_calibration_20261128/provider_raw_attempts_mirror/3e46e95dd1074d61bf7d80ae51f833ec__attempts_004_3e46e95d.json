@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3e46e95dd1074d61bf7d80ae51f833ec",
+  "call_seq": 4,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:41:59.310686+00:00",
+  "ended_at_utc": "2026-11-27T18:42:29.504235+00:00",
+  "request_sha256": "a872de391b8c7aaac0c592ea6f1c1876ba8d8e0f3223520266ac53e876b22ca6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33101,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28050,
+    "cached_tokens": 14976,
+    "completion_tokens": 1230
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_structure.py <<'PY'\\nexec(open('/tmp/m99_probe.py').read().split(\\\"for d,c in\\\")[0])\\ny,dy=obs(di); Y=np.c_[y,dy]\\ndef basis(u): return np.r_[np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1][None,:]]\\nsol=least_squares(lambda p:(lambda a:(np.linalg.lstsq(a,Y.T,rcond=None)[0].T@a.T-Y).ravel())(basis(np.exp(p))),np.log([.5,2.5])); u=np.exp(sol.x); Z=np.linalg.lstsq(basis(u),Y.T,rcond=None)[0].T\\np,h,d=cd\\nprint('effective taus',u,'relative',u/tau)\\nprint('raw-feature missing',np.isnan(di['coupon_features_raw']).sum(0))\\nprint('ranges',np.min(np.c_[p,h,d],axis=0).round(3),np.max(np.c_[p,h,d],axis=0).round(3))\\ndef gaps(u):\\n z=np.zeros((len(h),len(u)))\\n for j,s in enumerate(dt): z+=-np.expm1(-s/u)*(p[:,j,None]-z)\\n return h[:,None]-z\\ng1,g2=gaps(tau),gaps(u)\\nD=d@th[2:]\\nP={'hold':h,'pmean':p@dt/sum(dt),'plast':p[:,-1],'pfirst':p[:,0],'g0':g1[:,0],'g1':g1[:,1],'q0':g2[:,0],'q1':g2[:,1],'drift':D,'strain0':di['strain_0'],**{f'x{j}':d[:,j+1] for j in range(4)},**{f'p{j}':p[:,j] for j in range(len(dt))}}\\ndef regress(A):\\n A=np.column_stack((np.ones(len(h)),A)); co=np.linalg.lstsq(A,Z,rcond=None)[0]; R=A@co-Z; leverage=np.einsum('ij,ji->i',A,np.linalg.pinv(A)); e=R/(1-leverage[:,None]); return np.sqrt(np.mean(e*e,axis=0)),co\\nfor name,a in P.items():\\n E,B=regress(a); print(name,np.round(E,4),np.round(B.T,3))\\nfor names in [('hold','g0','g1'),('hold','q0','q1'),('hold','q0','q1','drift'),('hold','q0','q1','x0','x1','x2','x3'),('hold',*[f'p{j}' for j in range(len(dt))]),('x0','x1','x2','x3')]:\\n E,B=regress(np.column_stack([P[k] for k in names])); print(names,E.round(5),B.T.round(3))\\nprint('per-branch gap ratios',np.c_[Z,g2,Z[:,:2]/g2,D][:8].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop deployment law → H2 chamber-specific relaxation and load coupling; baseline worst-lab curve RMSE is 0.984, while the in-sample free-amplitude fit reaches 0.00253 pooled curve RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The calibrated benchtop law transfers unchanged to the chamber.\",\n    \"empirical_witness\": \"Bridge calibration RMS is 0.000205 and benchtop initial-rate RMS is 0.00872, but chamber initial-rate RMS is 1.850 and worst-lab curve RMS is 0.984. A shared two-exponential chamber basis plus linear drift fits the observed curves to 0.00253 RMS.\",\n    \"causal_blanket_diagnosis\": \"The mismatch is in chamber constitutive behavior, not primarily transducer calibration. The free-amplitude fit does not yet identify how deployment inputs determine those amplitudes.\",\n    \"sublated_pivot\": \"Keep the train-estimated material spectrum and test which calibrated load-history and feature terms explain the chamber amplitudes and drift.\",\n    \"risk_kind\": \"constitutive_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the two-branch basis with a generic time-series model\",\n      \"rejected_reason\": \"The two-exponential basis already fits chamber time dependence near the observation noise; the unresolved problem is predicting its amplitudes from coupon inputs.\"\n    }\n  ],\n  \"rationale\": \"Compare leave-one-coupon-out amplitude errors for hold load, history gaps, and feature drift. The results will show which terms warrant a joint chamber fit and which fail to transfer even between measured coupons.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "899c5e600a3ca5f680991042628708240c5d6a4b71572efdcef7934c897e32dc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31234.16,
+      "usage_known": true,
+      "prompt_tokens": 28050,
+      "cached_tokens": 14976,
+      "completion_tokens": 1230
+    }
+  ]
+}

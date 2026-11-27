@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "557798c7712546698d7e6b41f73f7de5",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:44:12.308510+00:00",
+  "ended_at_utc": "2026-11-27T18:44:36.032653+00:00",
+  "request_sha256": "48ad7532f8f5a6ea6e0502f28e4171d62d445ce594b32254e43c315c1b007e39",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45566,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31348,
+    "cached_tokens": 14976,
+    "completion_tokens": 918
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; X=np.asarray(c['ref_rosette']); Y=np.asarray(c['raw_rosette']); S,_=m._forward(s)\\nX1=np.column_stack((np.ones(len(X)),X)); single=np.count_nonzero(X,axis=1)<=1\\nij=s['sensor_ij']; wall=(ij[:,0]==0)|(ij[:,0]==s['nx']-1)|(ij[:,1]==0)|(ij[:,1]==s['ny']-1)\\nfor name,mask in [('all',np.ones(len(X),bool)),('single-bank',single),('mixed-bank',~single)]:\\n beta,_,rank,_=np.linalg.lstsq(X1[mask],Y[mask],rcond=None)\\n if rank<5:\\n  print(name,'calibration subset cannot identify the full affine map; rank',rank); continue\\n diffs=[]\\n for pulse in item['campaign_diagnostics']:\\n  y=np.asarray(pulse['y_pulse_raw']).reshape(-1,4)\\n  obs=np.linalg.solve(beta[1:].T,(y-beta[0]).T).T.ravel()\\n  diffs.append((S@pulse['w_pulse']-obs).reshape(len(s['mu_shifts']),len(ij)))\\n e=np.abs(np.asarray(diffs)); print(name,'calibration rows',int(mask.sum()),'mixing condition',np.linalg.cond(beta[1:]),'max tracer errors by shift, wall',e[:,:,wall].max(axis=(0,2)),'interior',e[:,:,~wall].max(axis=(0,2)))\\n if name=='all': assert e.max()<5e-6\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin leakage → H2 sealed walls with affine rosette calibration; maximum public tracer error is 2.00e-6 and independently verified field relative L2 error is 1.13e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the same nonlinear calibration comparison\",\n      \"rejected_reason\": \"Held-out sweep errors already show no material improvement; transfer to independent chamber pulses is the more relevant test.\"\n    }\n  ],\n  \"rationale\": \"Fit the calibration separately on single-bank and mixed-bank sweeps, then compare both fits on independent tracer pulses. A systematic bank-dependent discrepancy would reopen the sensor model; agreement across wall and interior slices would support retaining the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2c6c547089219daa905d98585c80a95296e940b935632af416e703e752532018",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24685.64,
+      "usage_known": true,
+      "prompt_tokens": 31348,
+      "cached_tokens": 14976,
+      "completion_tokens": 918
+    }
+  ]
+}

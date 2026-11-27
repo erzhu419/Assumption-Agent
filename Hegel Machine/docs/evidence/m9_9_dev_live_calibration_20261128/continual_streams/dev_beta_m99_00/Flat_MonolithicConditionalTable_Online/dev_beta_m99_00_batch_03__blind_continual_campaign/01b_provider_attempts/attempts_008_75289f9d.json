@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "75289f9d89294d60a876d1cf6701636c",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:53:52.910605+00:00",
+  "ended_at_utc": "2026-11-27T18:54:26.370397+00:00",
+  "request_sha256": "a5be037cd693d78e0e77a89036727d50da4e3b77fd9fc0100491f90c1d8eaaed",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46880,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32478,
+    "cached_tokens": 14976,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, runpy\\nimport numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nsw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']\\nfeatures=m['_rosette_features']; fit=m['_fit_rosette']; base=features(x)\\npairs=list(itertools.combinations(range(4),2))\\nextra={\\n 'squares_and_mixed_cubics':np.column_stack((x*x,*(x[:,i]**2*x[:,j] for i,j in itertools.permutations(range(4),2)),*(np.prod(x[:,p],axis=1) for p in itertools.combinations(range(4),3)))),\\n}\\nfor a in (.1,.5,1.):\\n q=[x[:,i]+sign*x[:,j] for i,j in pairs for sign in (-1,1)]\\n extra[f'rational_{a}']=np.column_stack([v/(1+a*v*v) for v in q])\\nmodels={'current':base,**{k:np.column_stack((base,v)) for k,v in extra.items()}}\\nstratum=np.count_nonzero(x,axis=1)==1\\nrng=np.random.default_rng(813); folds=[np.concatenate(z) for z in zip(*(np.array_split(rng.permutation(np.flatnonzero(stratum==i)),5) for i in (False,True)))]; pred={k:np.empty_like(y) for k in models}\\nfor test in folds:\\n tr=np.setdiff1d(np.arange(len(x)),test); b=fit(x[tr],y[tr]); e=np.max(abs(base[tr]@b-y[tr]),axis=1); tr=tr[e<=max(.001,10*np.median(e))]\\n for name,A in models.items():\\n  pred[name][test]=A[test]@np.linalg.lstsq(A[tr],y[tr],rcond=None)[0]\\nfor name,p in pred.items():\\n err=abs(p-y); independent_clean=np.max(abs(y),axis=1)<8\\n print(name,'worst clean single/multi bank errors',*[float(err[independent_clean & (stratum==i)].max()) for i in (True,False)])\\na=sw['single_bank_sweeps']; bank=a['bank_id']; scalar_x=np.eye(4)[bank]*a['ref_signal'][:,None]; residual=(features(scalar_x)@fit(x,y))[np.arange(len(bank)),bank]-a['raw_readout']; print('separate single-bank validation max clean by bank',[float(np.max(abs(residual[(bank==j)&(abs(residual)<1)]))) for j in range(4)],'gross discrepancies',residual[abs(residual)>=1].tolist())\\nS,_=m['_forward'](s); Y=m['_calibrate'](s); Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); B=S-Z@(P@S); b=Y-Z@(P@Y); H=B.T@B+s['source_ridge']*np.eye(S.shape[1]); c=B.T@b; cap=s['u_box']; n=len(c)\\nw=m['solve_batch'](s)['weights']; r=Y-S@w-Z@(P@(Y-S@w)); row=s['row_bank_id']; print('nuisance-adjusted mean / RMSE by channel',[(float(r[row==j].mean()),float(np.sqrt(np.mean(r[row==j]**2)))) for j in range(4)])\\nfor budget in (0.,.01*cap,cap,2*cap,s['total_budget'],(n-1)*cap,(n-.01)*cap,n*cap):\\n w,nu=m['_box_simplex'](H,c,cap,budget); h=H@w-c-nu; gap=np.maximum(h,0)@w+np.maximum(-h,0)@(cap-w)\\n print('budget, sum error, gap, lower/upper active',budget,abs(w.sum()-budget),gap,np.count_nonzero(w==0),np.count_nonzero(w==cap)); assert abs(w.sum()-budget)<1e-10 and gap<1e-10 and np.all((w>=0)&(w<=cap))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration with periodic walls → H2 robust cubic-plus-pair calibration with open walls; worst held-out clean-sweep error is 4.69×10⁻⁵ raw units and worst held-out sensor RMSE is 0.0168.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification or relay-mode checks\",\n      \"rejected_reason\": \"The data describe a continuous steady-state inverse problem with sensor channels, not class labels, technical cohorts, or relay states.\"\n    }\n  ],\n  \"rationale\": \"Compare omitted cubic and rational terms on held-out sweeps and check channel residuals after nuisance projection. Change calibration only if the evidence shows a repeatable shortfall. Stress the optimizer near both budget limits and at exact multiples of the cap; any feasibility or duality-gap failure would require an active-set fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "fe57707bb7e7a219f20252492b787b167fb28ca958890e96c003e6b831996e4b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34531.28,
+      "usage_known": true,
+      "prompt_tokens": 32478,
+      "cached_tokens": 14976,
+      "completion_tokens": 1401
+    }
+  ]
+}

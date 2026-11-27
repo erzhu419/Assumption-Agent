@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "615b2780db574430b557c80d3573a6ad",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:08:28.868547+00:00",
+  "ended_at_utc": "2026-11-27T19:08:48.356837+00:00",
+  "request_sha256": "5503dee22d6419ee43a828c03ecccb09094a238fb3ce0d3a58c57972167903df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54384,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35395,
+    "cached_tokens": 14976,
+    "completion_tokens": 737
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nbase = Path('/tmp/hegel_continual_archive/dev_alpha_m99_00_batch_04_solver.py').read_text()\\nstart = base.index('def _deployment(')\\nend = base.index('def solve_batch(', start)\\nnew = '''def _deployment(hold, features, tau, theta, t):\\n    \\\"\\\"\\\"Predict from reset branch states and a chamber-specific drift kernel.\\\"\\\"\\\"\\n    # Fitted on complete-feature chamber verification coupons standardized\\n    # on their own reference panel. The coefficients sum to one in the\\n    # initial derivative, so the intrinsic drift score is unchanged at t=0.\\n    fraction = 0.255213\\n    fast, slow = 0.623606, 7.449697\\n    drift_kernel = -(fraction * fast * np.expm1(-t / fast)\\n                     + (1.0 - fraction) * slow * np.expm1(-t / slow))\\n    hold_kernel = -np.expm1(-t[:, None] / tau) @ theta[:2]\\n    score = theta[2] + features @ theta[3:]\\n    delta = hold[:, None] * hold_kernel + score[:, None] * drift_kernel\\n    rate = hold * np.sum(theta[:2] / tau) + score\\n    return delta, rate\\n\\n\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(base[:start] + new + base[end:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -n '/^def solve_batch/,$p' /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (reset plus linear/exponential drift) -> H2 (reset plus two exponential drift branches); complete-coupon leave-one-lab-out worst-lab strain MAE is 0.00296, with aligned worst-lab initial-rate MAE of 0.00154.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Round the kernel parameters to nominal settings\",\"rejected_reason\":\"Rounding to (0.25, 0.6, 7.5) increases the worst late-window MAE from about 0.0032 in held-out folds to 0.00545 on the verification panel; the apparatus log does not establish nominal constants.\"}],\"rationale\":\"Install the measured chamber law while retaining dynamic load calibration, train-only material fitting, and joint train/test feature processing. The isolated schema run catches import and output-contract failures before final numerical verification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "70d2853c3aab1ab65d5f3bed958014dc383496b56a8fcefa84ccb1d7ff35b3e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20514.87,
+      "usage_known": true,
+      "prompt_tokens": 35395,
+      "cached_tokens": 14976,
+      "completion_tokens": 737
+    }
+  ]
+}

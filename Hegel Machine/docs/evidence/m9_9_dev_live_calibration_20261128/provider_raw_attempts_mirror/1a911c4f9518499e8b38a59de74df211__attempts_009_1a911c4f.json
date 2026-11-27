@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a911c4f9518499e8b38a59de74df211",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:56:12.932131+00:00",
+  "ended_at_utc": "2026-11-27T18:56:51.559388+00:00",
+  "request_sha256": "4cf207c54c4f0782f490a7b50aac877e34337ca4d2f3e4b7ac1114a26f85cc64",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50285,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34621,
+    "cached_tokens": 14976,
+    "completion_tokens": 1687
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/batch_solver_affine.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\nimport re\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nbridge = '''def _bridge(cal):\\n    \\\"\\\"\\\"Fit the forward bridge, excluding contaminated calibration readings.\\\"\\\"\\\"\\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\\n    design = np.column_stack((np.ones(len(loads)), loads, loads**3,\\n                              loads * np.roll(loads, -1, axis=1)))\\n    keep = np.ones(len(loads), dtype=bool)\\n    for _ in range(10):\\n        beta = np.linalg.lstsq(design[keep], raw[keep], rcond=None)[0]\\n        error = np.linalg.norm(raw - design @ beta, axis=1)\\n        updated = error < max(0.001, 4 * np.median(error))\\n        if np.array_equal(updated, keep):\\n            break\\n        keep = updated\\n    return np.linalg.lstsq(design[keep], raw[keep], rcond=None)[0]\\n\\n\\ndef _stress(raw, bridge):\\n    \\\"\\\"\\\"Invert the coupled bridge before summing the physical channel loads.\\\"\\\"\\\"\\n    raw = np.asarray(raw, dtype=float)\\n    r = raw.reshape(-1, 4)\\n    bias, linear, cubic, pair = bridge[0], bridge[1:5], bridge[5:9], bridge[9:13]\\n    loads = np.linalg.solve(linear.T, (r - bias).T).T\\n    j = np.arange(4)\\n    for _ in range(20):\\n        nxt = np.roll(loads, -1, axis=1)\\n        residual = bias + loads @ linear + loads**3 @ cubic + (loads * nxt) @ pair - r\\n        if np.max(np.abs(residual)) < 1e-10:\\n            break\\n        jac = linear + (3 * loads**2)[:, :, None] * cubic + nxt[:, :, None] * pair\\n        jac[:, (j + 1) % 4, :] += loads[:, :, None] * pair\\n        loads -= np.linalg.solve(jac.swapaxes(1, 2), residual[:, :, None])[..., 0]\\n    return loads.sum(axis=1).reshape(raw.shape[:-1])\\n\\n\\ndef _coupon(split, features, bridge):\\n    return (_stress(split['past_channel_raw'], bridge),\\n            _stress(split['hold_channel_raw'], bridge), features)\\n\\n\\n'''\\nfor name in ('_bridge', '_coupon'):\\n    s, count = re.subn(r'^def '+name+r'\\\\([^\\\\n]*\\\\n[\\\\s\\\\S]*?(?=^def |\\\\Z)', '', s, count=1, flags=re.M)\\n    assert count == 1, name\\nat = s.index('def ')\\np.write_text(s[:at] + bridge + s[at:])\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; R=c['bridge_raw']; Y=c['true_channel_loads']; A=np.c_[np.ones(len(Y)),Y,Y**3,Y*np.roll(Y,-1,axis=1)]\\nerror=np.linalg.norm(R-A@m._bridge(c),axis=1); clean=error<.001; loo=[]\\nfor i in np.flatnonzero(clean):\\n k=np.arange(len(Y))!=i; beta=m._bridge(dict(bridge_raw=R[k],true_channel_loads=Y[k])); loo.append(float(m._stress(R[i],beta)-Y[i].sum()))\\nprint('Contaminated calibration rows:',np.flatnonzero(~clean),'inverse LOO total-stress RMSE/max:',np.sqrt(np.mean(np.square(loo))),np.max(np.abs(loo)))\\no=m.solve_batch(d); assert all(np.isfinite(v).all() for v in o.values()); print('Full fit taus',o['estimated_taus'],'weights',o['hereditary_weights'])\\ntr,te=d['train'],d['test']; b=m._bridge(c); t,dt=d['eval_times'],d['past_dt']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; lab=tr['lab_id']\\nfor l in np.unique(lab):\\n a=lab!=l; v=~a; fit={k:z[a] for k,z in tr.items()}; val={k:z[v] for k,z in tr.items()}; x=m._features(fit,val,te); n=int(a.sum()); q=int(v.sum()); tau,theta=m._fit(m._coupon(fit,x[:n],b),dt,t,y[a],r[a]); A,B=m._design(tau,m._coupon(val,x[n:n+q],b),dt,t); e=np.abs(A@theta-y[v]); er=np.abs(B@theta-r[v]); print('held-out lab',l,'taus',tau,'max horizon MAE',e.mean(0).max(),'curve p90 AE',np.quantile(e,.9),'rate p90 AE',np.quantile(er,.9))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 coupled cubic forward calibration; the retained-row forward LOO residual norm peaks at 0.000372, while the affine baseline's worst held-out-lab horizon MAE is 0.195.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Project the raw signal onto its sum and calibrate only that scalar\",\n      \"rejected_reason\": \"Summing cancels the disturbance but also discards channel composition, which affects the cubic and pairwise bridge response.\"\n    }\n  ],\n  \"rationale\": \"Three sweep rows share a large channel offset; the other 77 support the coupled forward law at the calibration noise floor. Implement its inverse and refit the calibration inside each clean-row holdout. If inverse stress error falls but the relaxation time still hits its bound or held-out lab errors remain large, investigate the material fit rather than adding more bridge terms.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "175dfe382a8e5c02fce2197b5e5cab9c0502578f4d70ab4c9c12c74f15e527a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40671.51,
+      "usage_known": true,
+      "prompt_tokens": 34621,
+      "cached_tokens": 14976,
+      "completion_tokens": 1687
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6696e12d82b94cfc92e8d01e0da1f92d",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__stageS__dev_beta_m99_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:38:40.661467+00:00",
+  "ended_at_utc": "2026-11-27T18:39:05.575111+00:00",
+  "request_sha256": "51f71828236ccb075e3d7d1333c8ecebb5555ae97b488b7ef8451fc8f70d9482",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37996,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29080,
+    "cached_tokens": 14976,
+    "completion_tokens": 989
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport json, pickle\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\ns=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log=json.load(f)\\nprint('Archive campaign metadata:', [{k:v for k,v in e.items() if k != 'facility_telemetry_trace'} for e in log])\\nprint('Study keys:', sorted(s))\\nA=np.column_stack((np.ones(len(x)),x)); pairs=list(combinations_with_replacement(range(4),2)); Q=np.column_stack([x[:,i]*x[:,j] for i,j in pairs]); Q=Q/np.maximum(1e-15,np.linalg.norm(Q,axis=0)); polys=np.column_stack([A,Q]); groups=np.count_nonzero(x,axis=1)==1\\n# Fit all coefficients from training rows only. The rational alternatives permit a separate quadratic denominator for each output channel.\\nfor label,mask in [('mixed',~groups),('single-bank plus mixed',np.ones(len(x),dtype=bool))]:\\n    indices=np.flatnonzero(mask); rng=np.random.default_rng(31); slices=np.array_split(rng.permutation(indices),5); worst=np.zeros(3)\\n    for test in slices:\\n        train=np.setdiff1d(np.arange(len(x)),test)\\n        affine=A[test]@np.linalg.lstsq(A[train],y[train],rcond=None)[0]; quad=polys[test]@np.linalg.lstsq(polys[train],y[train],rcond=None)[0]; rational=np.empty_like(affine)\\n        for k in range(4):\\n            R=np.column_stack([A,-y[:,k,None]*Q]); v=np.linalg.lstsq(R[train],y[train,k],rcond=None)[0]; rational[:,k]=(A[test]@v[:5])/(1+Q[test]@v[5:]);\\n        worst=np.maximum(worst, [np.sqrt(np.mean((p-y[test])**2,axis=0)).max() for p in (affine,quad,rational)])\\n    print(label, 'worst held-out channel RMSE (affine, quadratic, rational)', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine rosette and open Robin -> H2 retain them unless held-out nonlinear calibration or archive evidence warrants a change; current worst held-out shift RMSE is 0.00983 and worst stress-test optimality gap is 1.34e-12.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Pairwise linear sums and differences are already in the affine span. Test quadratic interactions and rational saturation on held-out measured sweeps; change calibration only if they improve held-out prediction. Check archive metadata for a named wall setting that would override the Robin fallback. The study has no relay states, classification labels, or Fokker–Planck/HJB dynamics; the specified continuous nuisance projection is already implemented and independently checked.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1ea0bc2e76da122e98030a451115d9675ba18bd937a7bf722854602b50bcbb77",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25914.67,
+      "usage_known": true,
+      "prompt_tokens": 29080,
+      "cached_tokens": 14976,
+      "completion_tokens": 989
+    }
+  ]
+}

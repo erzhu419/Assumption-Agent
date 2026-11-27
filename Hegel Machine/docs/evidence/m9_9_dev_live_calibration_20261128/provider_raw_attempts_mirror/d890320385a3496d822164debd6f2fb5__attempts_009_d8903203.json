@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d890320385a3496d822164debd6f2fb5",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:01:03.636243+00:00",
+  "ended_at_utc": "2026-11-27T19:01:27.615596+00:00",
+  "request_sha256": "6c2abae90b1d61f1a9320f7e29c07a82eafa82b8b3820d14417c66bf24a94bef",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44759,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28890,
+    "cached_tokens": 13696,
+    "completion_tokens": 813
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _invert\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x, y = c['true_channel_loads'], c['bridge_raw']\\nb = _fit_bridge(x, y)\\nres = y - _forward(x, b)\\nspike = np.linalg.norm(res, axis=1) > 1\\nxc, yc = x[~spike], y[~spike]\\n# Move the measured spike vectors to real, high-leverage mixed-load rows.\\nrank = np.argsort(np.max(abs(xc), axis=1) + 0.25*np.linalg.norm(xc, axis=1))\\nrank = rank[np.count_nonzero(xc[rank], axis=1) > 1]\\noriginal = solve_batch(ds)\\nfor label, rows in [('largest mixed loads', rank[-spike.sum():]), ('next largest mixed loads', rank[-2*spike.sum():-spike.sum()])]:\\n    damaged = yc.copy(); damaged[rows] += res[spike]\\n    fitted = _fit_bridge(xc, damaged)\\n    movement = max(np.max(abs(_invert(ds[s][k], fitted) - _invert(ds[s][k], b))) for s in ('train','test') for k in ('past_channel_raw','hold_channel_raw'))\\n    altered = solve_batch(dict(ds, calibration_load_cells=dict(c, true_channel_loads=xc, bridge_raw=damaged)))\\n    print(label, 'max operating-load change:', format(movement,'.6g'), 'max output changes:', {k: float(np.max(abs(v-original[k]))) for k,v in altered.items()})\\n    assert movement < 5e-4, 'Moving the observed spikes destabilized the calibration on operating loads'\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 cyclic sparse cubic bridge; worst grouped held-out load error was 0.000484, with high-leverage spike sensitivity not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis and grouped holdout audits\",\n      \"rejected_reason\": \"Those checks already found no material missing term, but the observed spikes were concentrated in one axis sweep and did not test contamination of high-leverage mixed-load rows.\"\n    }\n  ],\n  \"rationale\": \"Move the observed spike residuals to high-load calibration rows and measure the effect on operating loads and downstream outputs. If calibration movement exceeds the measured holdout error scale, revisit the robust fit initialization.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "71748c3bb83bde32176ef622ae9f31b8a13fd92b3ef5ce294852de54ee59e382",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24987.8,
+      "usage_known": true,
+      "prompt_tokens": 28890,
+      "cached_tokens": 13696,
+      "completion_tokens": 813
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a918acefbe264b909034f7995c049b95",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:48:44.942733+00:00",
+  "ended_at_utc": "2026-11-27T18:49:21.283221+00:00",
+  "request_sha256": "23c20c50759823b53639ed54918746a5607237ed92a13b056cc30639e229acdb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43232,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31029,
+    "cached_tokens": 14976,
+    "completion_tokens": 1471
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']\\n    sweep = s['sensor_calibration_sweeps']\\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\\n    A = np.column_stack((np.ones(len(x)), x))\\n    pairs = list(itertools.combinations_with_replacement(range(4), 2))\\n    P = np.column_stack([A] + [x[:, i]*x[:, j] for i, j in pairs])\\n    names, matrices = ['affine', 'quadratic'], [A, P]\\n    for i, j in itertools.combinations(range(4), 2):\\n        for sign, ratio, strength in itertools.product((-1, 1), (.5, 1., 2.), (.01, .1, 1.)):\\n            q = x[:, i] + sign*ratio*x[:, j]\\n            q = q / max(np.std(q), 1e-12)\\n            names.append((i, j, sign, ratio, strength))\\n            matrices.append(A/(1 + strength*q[:, None]**2))\\n    def fit(a, b):\\n        u, d, vt = np.linalg.svd(a, full_matrices=False)\\n        keep = d > d[0]*1e-12\\n        v = u[:, keep]\\n        coef = (vt[keep].T/d[keep]) @ (v.T @ b)\\n        leverage = (v*v).sum(1)\\n        return coef, np.mean(((b-a@coef)/np.maximum(1-leverage[:, None], 1e-12))**2)\\n    errors = np.zeros((len(x), 3, x.shape[1]))\\n    selected = {}\\n    for i in range(len(x)):\\n        tr = np.arange(len(x)) != i\\n        fitted = [fit(a[tr], y[tr]) for a in matrices]\\n        j = min(range(2, len(matrices)), key=lambda j: fitted[j][1])\\n        selected[names[j]] = selected.get(names[j], 0) + 1\\n        for col, k in enumerate((0, 1, j)):\\n            errors[i, col] = matrices[k][i] @ fitted[k][0] - y[i]\\n    print('calibration outer LOO [affine, quadratic, nested rational] RMSE:', np.sqrt(np.mean(errors**2, axis=(0, 2))))\\n    print('calibration worst outer LOO absolute [affine, quadratic, nested rational]:', np.max(np.abs(errors), axis=(0, 2)))\\n    print('rational selections:', len(selected), 'distinct')\\n    S, _ = m._forward(s)\\n    b, _ = fit(A, y)\\n    Z = s['Z_nuisance']\\n    pz = np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\n    worst = np.zeros(2)\\n    for pulse in item.get('campaign_diagnostics') or []:\\n        obs = pulse['y_pulse_raw'].reshape(-1, 4)\\n        pred = S @ pulse['w_pulse']\\n        raw_err = pred.reshape(-1, 4) @ b[1:] + b[0] - obs\\n        calibrated_err = np.linalg.solve(b[1:].T, (obs-b[0]).T).T.ravel() - pred\\n        projected = calibrated_err - Z@(pz@calibrated_err)\\n        for k, e in enumerate((calibrated_err, projected)):\\n            worst[k] = max(worst[k], np.sqrt(np.mean(e.reshape(len(s['mu_shifts']), -1, 4)**2, axis=1)).max())\\n    print('worst calibrated pulse shift/channel RMSE [before, after prescribed ridge projection]:', worst)\\n    print('ridge-projected nuisance rank:', np.linalg.matrix_rank(Z), 'of', Z.shape[1])\\n    assert len(Z) == S.shape[0] and np.all(np.isfinite(worst))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fitted endpoint corrections -> H2 exact periodic upwind FVM with affine rosette calibration; verified worst public pulse/shift/channel RMSE is 1.95e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply classification deconfounding or relay-mode checks\",\"rejected_reason\":\"The public task is a continuous inverse problem with a specified nuisance design matrix, not a multi-cohort classifier or relay controller.\"}],\"rationale\":\"Compare affine, quadratic-interaction, and rational calibrations on held-out sweeps, selecting rational terms only within training folds. Compare tracer residuals before and after nuisance projection to detect whether the periodic fit depends on that projection. Leave the verified artifact unchanged unless the audit identifies a material calibration or transport error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "28f2ca8a9045a0521400b8916d60de05b2685b40e963d403a3d0675b06f57c27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37320.08,
+      "usage_known": true,
+      "prompt_tokens": 31029,
+      "cached_tokens": 14976,
+      "completion_tokens": 1471
+    }
+  ]
+}

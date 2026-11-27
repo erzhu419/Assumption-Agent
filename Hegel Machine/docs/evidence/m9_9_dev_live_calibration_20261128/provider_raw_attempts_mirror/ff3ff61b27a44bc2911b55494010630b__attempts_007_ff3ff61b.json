@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff3ff61b27a44bc2911b55494010630b",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:00:55.581867+00:00",
+  "ended_at_utc": "2026-11-27T19:01:20.164311+00:00",
+  "request_sha256": "0e47f53969352daa211c8209d53967f54ae5eb9f88b1dac3c575241581e64c87",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40521,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29375,
+    "cached_tokens": 14976,
+    "completion_tokens": 981
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\np='/holdout_task/'; idx=json.load(open(p+'public_asset_index.json')); print('asset notes',str(idx)[:3500]); d=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=np.array(c['bridge_raw']); q=np.array(c['true_channel_loads']); s=q.sum(1); print('first six raw/true rows',np.round(np.c_[r,q][:6],4)); print('load ranges',q.min(0),q.max(0),'sum',s.min(),s.max()); print('sweep metadata',[(k,np.round(v[:8],4)) for k,v in c['single_channel_sweeps'].items()]);\\ndef regress(a,y): return y-a@np.linalg.lstsq(a,y,rcond=None)[0]\\na=np.c_[np.ones(len(q)),q]; e=regress(a,r); print('forward affine coefs',np.round(np.linalg.lstsq(a,r,rcond=None)[0],4)); print('forward residual rms/max',np.sqrt(np.mean(e**2,0)),abs(e).max(0)); print('inverse residual rms',np.sqrt(np.mean(regress(np.c_[np.ones(len(r)),r],s)**2))); print('forward residual corr',np.round(np.corrcoef(e.T),3));\\nterms={}\\nfor degree in (2,3):\\n for ids in combinations_with_replacement(range(4),degree): terms[str(ids)]=np.prod(q[:,ids],axis=1)\\nfor i in range(4):\\n for j in range(i+1,4):\\n  for v in (-1,1):\\n   z=q[:,i]+v*q[:,j]; terms[str((i,j,v,'tanh'))]=np.tanh(z); terms[str((i,j,v,'sat'))]=z/(1+z*z)\\nbase=np.sum(e**2,0); scores=[]\\nfor k,z in terms.items():\\n zz=regress(a,z); scores.append((k,np.maximum(0,1-np.sum(regress(np.c_[a,zz],r)**2,0)/base)))\\nfor j in range(4): print('channel',j,'best forward terms',[(k,round(v[j],4)) for k,v in sorted(scores,key=lambda t:-t[1][j])[:7]])\\nfor i in np.array_split(np.arange(len(q)),5): print('sequence slice forward rms',i[0],np.round(np.sqrt(np.mean(e[i]**2,0)),4),'load mean',np.round(q[i].mean(0),2))\\nPY\\nsed -n '/^def _deployment/,/^def solve_batch/p' /tmp/hegel_continual_archive/dev_alpha_m99_00_batch_02_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic inverse-polynomial bridge → H2 test a sparse forward bridge while retaining the recurring chamber law; affine calibration worst-fold RMSE is 0.5673 and benchtop leave-one-lab-out rate RMSE peaks at 0.3131.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote an unrestricted inverse polynomial\",\n      \"rejected_reason\": \"Quadratic and cubic bases worsened worst-fold calibration RMSE from 0.5673 to 1.3249 and 44.4532.\"\n    }\n  ],\n  \"rationale\": \"Known physical loads let us inspect the bridge in the forward direction. If a small set of terms explains its residuals, test that grammar on held-out sweeps before replacing the affine calibration; otherwise retain the affine model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "66fd278a1aaa139bc7c815eba1a0f71242835c0514776fbec3538d84d0a84ec6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25588.09,
+      "usage_known": true,
+      "prompt_tokens": 29375,
+      "cached_tokens": 14976,
+      "completion_tokens": 981
+    }
+  ]
+}

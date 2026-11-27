@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e33cb5a8426e4cb1af072d092afbb31a",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:49:35.236735+00:00",
+  "ended_at_utc": "2026-11-27T18:50:04.538133+00:00",
+  "request_sha256": "61a0af3294097f1c695cbbb8d8e8156feab90759025c19d6c2236ad778efb986",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51111,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33165,
+    "cached_tokens": 14976,
+    "completion_tokens": 1202
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m99_sensor_jackknife.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    S, _ = m._forward(s)\\n    y = m._calibrate(s).ravel()\\n    Z = s['Z_nuisance']\\n    nshift, nsensor = len(s['mu_shifts']), len(s['sensor_ij'])\\n    rows = np.arange(len(y)).reshape(nshift, nsensor)\\n    w_ref = m.solve_batch(s)['weights']\\n    ridge_z = s['nuisance_ridge'] * np.eye(Z.shape[1])\\n    ridge_w = s['source_ridge'] * np.eye(len(w_ref))\\n    errors = np.empty(rows.shape)\\n    change = np.empty(nsensor)\\n    for j in range(nsensor):\\n        test = rows[:, j]\\n        train = np.ones(len(y), dtype=bool)\\n        train[test] = False\\n        z, a, b = Z[train], S[train], y[train]\\n        p = np.linalg.solve(z.T @ z + ridge_z, z.T)\\n        t, r = a - z @ (p @ a), b - z @ (p @ b)\\n        w, _ = m._box_simplex(t.T @ t + ridge_w, t.T @ r, s['u_box'], s['total_budget'])\\n        gamma = p @ (b - a @ w)\\n        errors[:, j] = S[test] @ w + Z[test] @ gamma - y[test]\\n        change[j] = np.linalg.norm(w - w_ref) / np.linalg.norm(w_ref)\\n    sensor_rmse = np.sqrt(np.mean(errors**2, axis=0))\\n    shift_rmse = np.sqrt(np.mean(errors**2, axis=1))\\n    gamma_full = np.linalg.solve(Z.T @ Z + ridge_z, Z.T @ (y - S @ w_ref))\\n    full_residual = y - S @ w_ref - Z @ gamma_full\\n    j = int(sensor_rmse.argmax())\\n    print('full-fit residual RMSE:', np.sqrt(np.mean(full_residual**2)))\\n    print('sensor-held-out RMSE by shift:', shift_rmse)\\n    print('sensor-held-out RMSE median / worst:', np.median(sensor_rmse), sensor_rmse[j], 'at grid index', s['sensor_ij'][j].tolist())\\n    print('maximum relative weight change:', change.max(), 'at grid index', s['sensor_ij'][change.argmax()].tolist())\\n    assert np.isfinite(errors).all() and np.isfinite(change).all()\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m99_sensor_jackknife.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fitted endpoint corrections -> H2 exact periodic upwind stencil with affine calibration; worst public tracer RMSE is 1.95e-6, and sensor-held-out recovery is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the quadratic and rational calibration comparison\",\n      \"rejected_reason\": \"Nested sweep validation already favored affine calibration, and the periodic tracer fit was accurate before nuisance projection.\"\n    }\n  ],\n  \"rationale\": \"Hold out each physical sensor at every shift and refit weights and nuisance coefficients on the remaining sensors. This tests whether the measured inverse fit depends disproportionately on one sensor. If a sensor dominates, inspect its channel and shift residuals before attributing the issue to calibration or transport.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d5d3c4c83861a06a7ca01ac58deb1feb9c9175badfec350e6f43abcdc4c82360",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30315.2,
+      "usage_known": true,
+      "prompt_tokens": 33165,
+      "cached_tokens": 14976,
+      "completion_tokens": 1202
+    }
+  ]
+}

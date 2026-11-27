@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31a8bf09ecf04321b46c9928b2186cb1",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:58:08.249147+00:00",
+  "ended_at_utc": "2026-11-27T18:58:37.737830+00:00",
+  "request_sha256": "ac6e3aa54b0a3b076378a9fe30eb168b19a101126bf3c5bb9f66f0875c6a854b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44530,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28927,
+    "cached_tokens": 13696,
+    "completion_tokens": 1217
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rosette_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    study = item['study']\\n    sweeps = study['sensor_calibration_sweeps']\\n    x, y = (sweeps[k] for k in ('ref_rosette', 'raw_rosette'))\\n    full = up._fit(x, y)\\n    clean = np.linalg.norm(up._basis(x) @ full - y, axis=1) < 0.01\\n    bank = sweeps['single_bank_sweeps']\\n    ids = np.asarray(bank['bank_id'])\\n    bx = np.eye(4)[ids] * np.asarray(bank['ref_signal'])[:, None]\\n    predicted = (up._basis(bx) @ full)[np.arange(len(bx)), ids]\\n    err = abs(predicted - bank['raw_readout'])\\n    maxima = [float(err[(ids == i) & (err < .01)].max()) for i in range(4)]\\n    print('Independent clean single-bank max error by channel:', maxima)\\n    assert max(maxima) < 2e-4\\n    # Compare the actual delivered inverse with the same fit after removing the observed EMI rows.\\n    clean_fit = up._fit(x[clean], y[clean])\\n    obs = study['y_obs_raw']\\n    shift = float(np.max(abs(up._invert(obs, full) - up._invert(obs, clean_fit))))\\n    print('Observation coordinate shift after removing measured EMI rows:', shift)\\n    assert shift < 2e-5\\n    # Signed channel bias and curvature omission are evaluated on the same held-out rows.\\n    rows = np.flatnonzero(clean)\\n    folds = np.array_split(np.random.default_rng(18).permutation(rows), 5)\\n    errors, quad_errors = [], []\\n    a = up._basis(x)\\n    for test in folds:\\n        train = np.setdiff1d(rows, test)\\n        coef = up._fit(x[train], y[train])\\n        errors.append(up._invert(y[test], coef) - x[test])\\n        q = np.linalg.lstsq(a[train, :15], y[train], rcond=None)[0]\\n        quad_errors.extend(np.linalg.norm(a[test, :15] @ q - y[test], axis=1))\\n    e = np.concatenate(errors)\\n    worst = float(np.linalg.norm(e, axis=1).max())\\n    q90 = float(np.percentile(quad_errors, 90))\\n    print('ng_t04 comparison: quadratic p90 forward error:', q90, 'cubic worst inverse error:', worst, 'mean signed error by channel:', e.mean(axis=0).tolist())\\n    assert worst < 2e-4 and q90 > 10 * np.percentile(np.linalg.norm(e, axis=1), 90)\\n    out = solve_batch(study)\\n    cert = out['kkt_certificate']\\n    gap = abs(cert['primal_objective'] - cert['dual_lower_bound'])\\n    assert np.isfinite(out['terminal_field']).all() and gap < 1e-9\\n    print('Isolated composed solver KKT gap:', gap)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_margin_audit.py && python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or quadratic coupling → H2 robust quadratic coupling plus pure channel cubics; worst grouped inverse error is 5.95 × 10⁻⁵ and worst high-amplitude inverse error is 4.09 × 10⁻⁵.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis, relay, and classification checks\",\n      \"rejected_reason\": \"The amplitude-tail comparison already ruled out the tested rational terms. The calibration interface has neither relay modes nor class labels.\"\n    }\n  ],\n  \"rationale\": \"The remaining relevant failure is an EMI-sensitive fit or a channel-specific error hidden by pooled metrics. Compare the delivered estimate with an EMI-deleted fit on real observations and report each independent bank separately. A material shift would warrant revisiting row rejection; otherwise keep the verified artifacts unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "13af07eeaf8d0445627de90067e01cd06bde7228d0cca969cd0629e7ccd2c148",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30502.32,
+      "usage_known": true,
+      "prompt_tokens": 28927,
+      "cached_tokens": 13696,
+      "completion_tokens": 1217
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6f7826b1d00a4a1abc8079c5b864088d",
+  "call_seq": 2,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:47:59.010680+00:00",
+  "ended_at_utc": "2026-11-27T18:48:16.685425+00:00",
+  "request_sha256": "24c465653a0628f000cfd82004097d790963873df1750ffb6879f3375a6d6712",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 14464,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21089,
+    "cached_tokens": 14976,
+    "completion_tokens": 581
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /tmp/hegel_continual_archive/*_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/'\\nfor f in ('archive_manifest.json','archive_apparatus_log.json'):\\n a=json.load(open(p+f));print(f)\\n if isinstance(a,list):\\n  for r in a: print({k:(f'array{np.shape(v)}' if isinstance(v,list) and len(v)>8 else v) for k,v in r.items()})\\n else: print(a)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=a['dataset'];print('times',d['past_dt'],d['eval_times']);c=d['calibration_load_cells'];x=c['bridge_raw'];y=c['true_channel_loads'];print('calibration range', x.min(0),x.max(0));print('affine RMSE',np.sqrt(np.mean((np.c_[np.ones(len(x)),x]@np.linalg.lstsq(np.c_[np.ones(len(x)),x],y,rcond=None)[0]-y)**2,0)))\\nfor name,s in [('train',d['train']),('test',d['test']),('diagnostics',a['campaign_diagnostics'])]:\\n if s is not None: print(name,np.unique(s['lab_id'],return_counts=True),np.unique(s['stratum'],return_counts=True),'missing',np.sum(np.isnan(s['coupon_features_raw']),0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' | head -10\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shared intrinsic relaxation → H2: distinguish the current chamber law using the 24 public verification coupons; no fitted residual metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat this campaign as blind\",\"rejected_reason\":\"The public pickle contains 24 chamber verification coupons. They can distinguish candidate laws during development without changing the dataset-only prediction interface.\"}],\"rationale\":\"Read the archived laws and summarize the apparatus log without dumping traces. Measure affine calibration error to determine whether nonlinear terms need testing, and inspect lab support to choose a meaningful held-out split.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "74f6976afc8d2bcd2ae2b4ac21ee1d3f9ca2df844fd23efda1e09942e790df8d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17635.43,
+      "usage_known": true,
+      "prompt_tokens": 21089,
+      "cached_tokens": 14976,
+      "completion_tokens": 581
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8d328ed1ed9a40d8913da9572cc3982b",
+  "call_seq": 12,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:09:58.506385+00:00",
+  "ended_at_utc": "2026-11-27T19:10:20.727459+00:00",
+  "request_sha256": "6893920bd95eba802d859cf4f37f511a652f2e010b9c7585cea0600eba5ce3d4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60832,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35436,
+    "cached_tokens": 14976,
+    "completion_tokens": 853
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/material_lab_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\nlab = tr['lab_id']\\nx = m._features(tr, te)[:len(lab)]\\nbridge = m._bridge(d['calibration_load_cells'])\\ncoupon = m._coupon(tr, x, bridge)\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nout = m.solve_batch(d)\\ntau0 = out['estimated_taus']\\nrows = []\\nfor l in np.unique(lab):\\n    keep = lab != l\\n    tau, theta = m._fit(tuple(v[keep] for v in coupon), dt, t, y[keep], r[keep])[:2]\\n    A, B = m._design(tau, tuple(v[~keep] for v in coupon), dt, t)\\n    e, q = abs(A @ theta - y[~keep]), abs(B @ theta - r[~keep])\\n    row = [np.median(e[:, :4]), np.median(e[:, -4:]), np.median(q), max(abs(tau/tau0 - 1))]\\n    rows.append(row)\\n    print('held lab', l, 'early/late/rate MedAE, max relative tau shift', np.round(row, 6))\\nprint('worst benchtop slice', np.max(rows, axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/material_lab_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (a pooled material fit may depend on one lab) -> H2 (a shared material spectrum with reset chamber history); the existing chamber audit found worst-lab held-out MAE of 0.00296 for strain and 0.00154 for initial rate on complete coupons.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the chamber interaction audit\",\n      \"rejected_reason\": \"History carryover, a rational score correction, a feature contrast, and load–score coupling were already tested on held-out chamber labs; that audit held the material fit fixed.\"\n    }\n  ],\n  \"rationale\": \"Leave each benchtop lab out of the material fit to detect whether one lab drives the shared relaxation spectrum. If an omission materially shifts the spectrum and worsens held-out strain or rate, inspect that lab's residuals before changing the estimator. Relay and classification checks do not apply to these continuous measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "1caffaaa90533f17b75b8ef36890d4cb5d5310e4379b68123b7d0dd83e79c98b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23270.82,
+      "usage_known": true,
+      "prompt_tokens": 35436,
+      "cached_tokens": 14976,
+      "completion_tokens": 853
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1e12a19666c463e83f1235180e45779",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:59:27.521722+00:00",
+  "ended_at_utc": "2026-11-27T18:59:53.784549+00:00",
+  "request_sha256": "cbd3c372a776ddcd956b185cdf4c8306ae601278a601e29c70977e871d39928d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41933,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30481,
+    "cached_tokens": 13696,
+    "completion_tokens": 1057
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit_bridge, _forward, _invert\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncells = ds['calibration_load_cells']\\nx, y = cells['true_channel_loads'], cells['bridge_raw']\\ncoeff = _fit_bridge(x, y)\\nresid = np.max(np.abs(_forward(x, coeff) - y), axis=1)\\naxis = np.argmax(np.abs(x), axis=1)\\none = np.count_nonzero(x, axis=1) == 1\\nworst = 0.0\\nfor j in range(4):\\n    held = one & (axis == j)\\n    clean = held & (resid < 0.01)\\n    err = np.max(np.abs(_invert(y[clean], _fit_bridge(x[~held], y[~held])) - x[clean]))\\n    worst = max(worst, err)\\nassert worst < 0.001, worst\\nprint(f'Worst load error with a complete channel-axis sweep withheld: {worst:.6g}')\\nraw = {k: ds['test'][k].copy() for k in ('past_channel_raw', 'hold_channel_raw')}\\ntrial = dict(raw, trial_id='public-contract-check')\\ncal = calibrate_upstream(dict(ds, chamber_verification_trials=trial))\\nfor k, original in raw.items():\\n    np.testing.assert_array_equal(ds['test'][k], original)\\n    np.testing.assert_array_equal(trial[k], original)\\n    np.testing.assert_allclose(cal['chamber_verification_trials'][k], cal['test'][k], rtol=0, atol=0)\\nassert cal['chamber_verification_trials']['trial_id'] == trial['trial_id']\\nassert calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nnorm = cal['calibration_load_cells']\\nfor actual, expected in ((norm['bridge_raw'], x), (norm['single_channel_sweeps']['cmd_stress'], cells['single_channel_sweeps']['true_stress'])):\\n    np.testing.assert_array_equal(actual, expected)\\n    assert not np.shares_memory(actual, expected)\\nassert np.max(np.abs(cells['bridge_raw'] - x)) > 10\\nresult = solve_batch(ds)\\nfor k, shape in {'estimated_taus': (2,), 'hereditary_weights': (7,), 'predicted_strain': (len(ds['test']['lab_id']), len(ds['eval_times'])), 'initial_rate_pred': (len(ds['test']['lab_id']),)}.items():\\n    assert result[k].shape == shape and np.isfinite(result[k]).all(), k\\nprint('Isolated pipeline, identity copies, nonmutation, and both optional trial states passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 cyclic sparse cubic bridge; worst leave-one-out load error was 0.000468 on mixed-load rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema passed, but it does not exercise chamber trials or detect dependence on a complete single-channel sweep. Check those two gaps before submitting; a failure would require fixing the split transformation or revisiting the fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "31a427c8229f531930eb914a3ff44cda6c4337764980386fa6dc483918aa1bd5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27261.81,
+      "usage_known": true,
+      "prompt_tokens": 30481,
+      "cached_tokens": 13696,
+      "completion_tokens": 1057
+    }
+  ]
+}

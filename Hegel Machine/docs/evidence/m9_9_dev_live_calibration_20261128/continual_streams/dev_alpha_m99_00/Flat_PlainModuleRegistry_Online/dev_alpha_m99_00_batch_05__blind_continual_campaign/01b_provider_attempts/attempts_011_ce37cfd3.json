@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce37cfd382c24637a8700d51db3a7546",
+  "call_seq": 11,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:06:08.174204+00:00",
+  "ended_at_utc": "2026-11-27T19:06:40.295295+00:00",
+  "request_sha256": "8a44ab23de417baa2e225a42a0fa87e6aae07a00643ef6545d64f8292fb3cd28",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 64089,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37246,
+    "cached_tokens": 13696,
+    "completion_tokens": 1328
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/verify_m99.py <<'PY'\\nimport sys\\nsys.path.insert(0, '/holdout_task')\\nimport pickle\\nimport numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features, _fit, _design, _predict_chamber, solve_downstream\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\nd = calibrate_upstream(dict(raw, chamber_verification_trials=item['campaign_diagnostics']))\\na,b,q = (d[k] for k in ('train','test','chamber_verification_trials'))\\ndt,t = d['past_dt'],d['eval_times']\\nx = _features(a,b)[:len(a['lab_id'])]\\nout = solve_batch(raw)\\ndirect = solve_downstream(d)\\nexpected = {'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(len(b['lab_id']),len(t)), 'initial_rate_pred':(len(b['lab_id']),)}\\nassert out.keys() == direct.keys() == expected.keys()\\nfor k,shape in expected.items():\\n    assert out[k].shape == shape and np.isfinite(out[k]).all()\\n    np.testing.assert_allclose(out[k], direct[k])\\ntau,th = out['estimated_taus'],out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nprint('material parameters:',tau,th)\\ndef report(name,e,r,s):\\n    print(name,'pooled strain/rate RMSE',*(round(np.sqrt(np.mean(z*z)),5) for z in (e,r)), 'worst horizon RMSE',round(np.sqrt(np.mean(e*e,axis=0)).max(),5))\\n    print('strain/rate RMSE by lab',[(int(l),*[round(np.sqrt(np.mean(z[s['lab_id']==l]**2)),5) for z in (e,r)]) for l in np.unique(s['lab_id'])])\\nxd = _features(q)\\nyp,rp = _predict_chamber(tau,th,q,xd,t)\\ny,r = q['strain_curves_obs'],q['instant_rate_obs']\\nreport('independent chamber response, verification cohort normalized separately',yp-y,rp-r,q)\\ndrift = th[2]+xd@th[3:]\\ng = 2*t/(np.sqrt(1+t)+1)\\nreport('archived log control',yp+drift[:,None]*(np.log1p(t)-g)-y,rp-r,q)\\nreport('linear drift control',yp+drift[:,None]*(t-g)-y,rp-r,q)\\n_,r0 = _predict_chamber(tau,th,q,xd,np.array([0.]))\\nypulse,_ = _predict_chamber(tau,th,q,xd,np.array([0.,1.e-6]))\\nnp.testing.assert_array_equal(ypulse[:,0],q['strain_0'])\\nnp.testing.assert_allclose(np.diff(ypulse,axis=1)[:,0]/1.e-6,r0,rtol=2.e-6)\\nce,re = np.empty_like(a['strain_curves_obs']),np.empty_like(a['instant_rate_obs'])\\nfor lab in np.unique(a['lab_id']):\\n    m = a['lab_id']==lab\\n    fit = {k:v[~m] for k,v in a.items()}\\n    ta,tw = _fit(fit,x[~m],dt,t)\\n    c,rr = _design(ta,a['past_channel_raw'][m].sum(-1),a['hold_channel_raw'][m].sum(-1),x[m],dt,t)\\n    ce[m] = a['strain_0'][m,None] + c@tw - a['strain_curves_obs'][m]\\n    re[m] = rr@tw - a['instant_rate_obs'][m]\\n    print('held-out lab',lab,'taus',ta,'max weight change',round(max(abs(tw-th)),5),'strain median absolute',round(np.median(abs(ce[m])),5))\\nreport('benchtop leave-one-lab-out response',ce,re,a)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_m99.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace logarithmic drift with an inverse-square-root drift rate after chamber reset; the kernel-only worst-horizon RMSE is 0.0044, with full prediction validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace joint train/test normalization with deployment-only normalization\",\n      \"rejected_reason\": \"The interface explicitly requires joint normalization for the deployment dataset. The separate diagnostic cohort can test the chamber law without changing that contract.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact deliverables in an isolated interpreter. Compare chamber laws with the same inputs, measure both response channels by lab, and check intrinsic parameter stability when each benchtop lab is held out. This distinguishes boundary-law failure from a material fit dominated by one lab.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f629aaf64bc9361382380786510010def905c8c7246359c6971b61ed4afd7c56",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33187.47,
+      "usage_known": true,
+      "prompt_tokens": 37246,
+      "cached_tokens": 13696,
+      "completion_tokens": 1328
+    }
+  ]
+}

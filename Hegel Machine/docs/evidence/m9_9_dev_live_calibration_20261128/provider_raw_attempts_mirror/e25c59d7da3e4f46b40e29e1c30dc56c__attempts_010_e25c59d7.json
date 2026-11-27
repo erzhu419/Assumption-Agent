@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e25c59d7da3e4f46b40e29e1c30dc56c",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:53:40.783967+00:00",
+  "ended_at_utc": "2026-11-27T18:54:15.598008+00:00",
+  "request_sha256": "47ed5d072238f01b84101e47a35eef7029d039fa3bcbd1d71f4fc367e6de975c",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 72198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39756,
+    "cached_tokens": 13696,
+    "completion_tokens": 1466
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_gap_check.py <<'PY'\\nimport contextlib, io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n    from chamber_compact import *\\nfrom itertools import product\\nD=theta[2]+old._features(g)@theta[3:]\\ng0,g1=(h[:,None]-z).T\\nU=np.ones(len(h)); full=np.ones(len(h),bool)\\nmodels={\\n 'affine': ((h,z[:,0],z[:,1],D,U),)*3,\\n 'two_gaps': ((g0,g1,D),)*3,\\n 'two_gaps_bias': ((g0,g1,D,U),)*3,\\n 'compact_gaps': ((g0,D),(g0,g1,D),(g1,D)),\\n 'compact_gaps_bias': ((g0,D,U),(g0,g1,D,U),(g1,D,U)),\\n 'mixed': ((g0,g1,D),(g0,g1,D),(g0,g1,D,U)),\\n}\\n\\ndef score(m,train,rate_w=2.):\\n    w=np.r_[np.ones(len(t)),rate_w]\\n    def calculate(q):\\n        times=np.exp(q); times[1]+=times[0]; b=basis(times)\\n        a=np.concatenate([np.column_stack(v)[:,None,:]*b[None,:,j,None] for j,v in enumerate(models[m])],axis=2)\\n        aw=a[train]*w[None,:,None]\\n        coef=np.linalg.lstsq(aw.reshape(-1,a.shape[2]),(y[train]*w).ravel(),rcond=None)[0]\\n        return a@coef,coef,times\\n    opt=least_squares(lambda q:((calculate(q)[0][train]-y[train])*w).ravel(),np.log([.49,.95]),bounds=(np.log([.25,.15]),np.log([.85,9.])),max_nfev=80)\\n    return calculate(opt.x)\\n\\nquart=[('hold',lab,(h<=np.quantile(h,.25) if lab==0 else h>=np.quantile(h,.75))) for lab in (0,1)]\\nfor m in models:\\n    p0,c,ts=score(m,full); ee=p0-y\\n    print(m, 'full', np.round([rm(ee[:,:-1]),rm(ee[:,-1])],6), 'times', np.round(ts,6), 'coef', np.round(c,5))\\n    for name,fs in [('lab/stratum',folds),('load tails',quart)]:\\n        es=[score(m,~ix)[0][ix]-y[ix] for _,_,ix in fs]; a=np.concatenate(es)\\n        print(name,'pooled',np.round([rm(a[:,:-1]),rm(a[:,-1])],6),'worst',np.round(np.max([[rm(e[:,:-1]),rm(e[:,-1])] for e in es],axis=0),6))\\nprint('largest residual coupons: index/lab/stratum/missing/curve/rate')\\np0,_,_=score('affine',full); e=p0-y\\nfor i in np.argsort(np.linalg.norm(e,axis=1))[-5:]:\\n print(i,g['lab_id'][i],g['stratum'][i],np.flatnonzero(np.isnan(g['coupon_features_raw'][i])),round(rm(e[i,:-1]),5),round(e[i,-1],5))\\nprint('dynamic fit vs staged calibration')\\nfitted=calibrate_upstream(raw); print(*(np.max(abs(fitted[s]['hold_channel_raw']-d[s]['hold_channel_raw'])) for s in ('train','test')))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_gap_check.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted affine forcing) -> H2 (forcing expressed through hereditary stress gaps); the verified affine candidate has worst held-out lab/stratum RMSE of 0.01408 for strain and 0.02116 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add deployment telemetry as a predictor\",\n      \"rejected_reason\": \"The chamber diagnostic coupons lack that field, so the available observations cannot establish its effect on chamber response.\"\n    }\n  ],\n  \"rationale\": \"The fitted load and memory coefficients suggest a stress-gap symmetry. Test that restriction on held-out groups and load tails, where deployment extrapolation is most relevant. Compare the staged and dynamically fitted calibration to see whether the specified composition changes the physical loads.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1a80f5ffbcc463b8fb8bad0460b6bfa55925f8c4bd374aee4eb3bba9153ed372",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35881.78,
+      "usage_known": true,
+      "prompt_tokens": 39756,
+      "cached_tokens": 13696,
+      "completion_tokens": 1466
+    }
+  ]
+}

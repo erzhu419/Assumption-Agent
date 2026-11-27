@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "05dc08e2b0224b9d8198dbcdbaa971fe",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:43:54.072743+00:00",
+  "ended_at_utc": "2026-11-27T18:44:34.905202+00:00",
+  "request_sha256": "5407ffbc883ae73b54a8a00cd98363d1092288349d84ab95eb53145b597d2058",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43789,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30898,
+    "cached_tokens": 14976,
+    "completion_tokens": 1243
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\ns = item['study']\\ncal = s['sensor_calibration_sweeps']\\nx, y = np.asarray(cal['ref_rosette']), np.asarray(cal['raw_rosette'])\\n\\ndef design(x, kind):\\n    out = [np.ones(len(x)), *x.T]\\n    if kind == 'quadratic':\\n        out.extend(x[:,i]*x[:,j] for i in range(4) for j in range(i,4))\\n    if kind == 'saturation':\\n        out.extend((q/(1+q*q)) for q in x.T)\\n    return np.column_stack(out)\\n\\nS, _ = m._forward(s)\\npulses = item['campaign_diagnostics']\\nx_pulse = np.vstack([S @ p['w_pulse'] for p in pulses]).reshape(-1,4)\\ny_pulse = np.vstack([p['y_pulse_raw'] for p in pulses]).reshape(-1,4)\\nfolds = np.array_split(np.random.default_rng(38).permutation(len(x)),5)\\nfor kind in ('affine','quadratic','saturation'):\\n    X, T = design(x,kind), design(x_pulse,kind)\\n    sweep, pulse = [], []\\n    for fold in folds:\\n        train = np.ones(len(x), dtype=bool)\\n        train[fold] = False\\n        B = np.linalg.lstsq(X[train], y[train], rcond=None)[0]\\n        sweep.append(np.sqrt(np.mean((X[fold]@B-y[fold])**2, axis=0)))\\n        e = (T @ B-y_pulse).reshape(len(pulses),len(s['mu_shifts']),-1,4)\\n        pulse.append(np.sqrt(np.mean(e**2, axis=2)))\\n    print(f'{kind}: worst held-out sweep bank RMS {np.max(sweep):.6g}; worst independent pulse/shift/bank RMS {np.max(pulse):.6g}')\\n\\nZ = np.asarray(s['Z_nuisance'])\\nD = np.array([S @ p['w_pulse'] - m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) for p in pulses]).T\\nDz = Z @ np.linalg.lstsq(Z,D,rcond=None)[0]\\nprint('fraction of each pulse residual energy in nuisance subspace:', (np.sum(Dz**2,axis=0)/np.sum(D**2,axis=0)).tolist())\\nfor key in 'xy':\\n    k = s['kappa_'+key]\\n    A = m._axis(k,s['vel_'+key],s['L'+key]/(len(k)-1),0.)\\n    row_sum = np.asarray(A.sum(axis=1)).ravel()\\n    print(key, 'wall constant-field residual', np.abs(row_sum[[0,-1]]).max(), 'interior max', np.abs(row_sum[1:-1]).max())\\n    assert np.abs(row_sum).max() < 1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls with affine sensor calibration; worst public pulse-by-shift RMS is 7.74e-7 and worst KKT stress error is 2.27e-13.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay-mode, or Fokker–Planck tests\",\n      \"rejected_reason\": \"This study has continuous tracer responses, no class labels or relay modes, and a specified steady transport operator.\"\n    }\n  ],\n  \"rationale\": \"Compare affine calibration with cross-channel quadratic and rational saturation terms on held-out sweeps and independent tracer slices. A material improvement on both would warrant revisiting calibration. Measure how much tracer discrepancy nuisance projection could hide, and verify that the sealed transport stencil annihilates a constant field before reaction and shift are added.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "342275ed094276d156a932e27b971772c9c02ed7b5ff82ab66c84c937f578f41",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41795.25,
+      "usage_known": true,
+      "prompt_tokens": 30898,
+      "cached_tokens": 14976,
+      "completion_tokens": 1243
+    }
+  ]
+}

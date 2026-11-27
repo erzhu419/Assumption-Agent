@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3cd3bb1646fd45aba0bb97b1722d16b6",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:53:58.491281+00:00",
+  "ended_at_utc": "2026-11-27T18:54:36.511156+00:00",
+  "request_sha256": "4d61e3140825a9858ba1497088029846e869f86268069ee085617e1f3ebeb3ad",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 58461,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35195,
+    "cached_tokens": 13696,
+    "completion_tokens": 1585
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\ncd /tmp\\npython3 -I - <<'PY'\\nimport json, pickle, runpy, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\ntry:\\n    runpy.run_path(sys.argv[0], run_name='__main__')\\nexcept SystemExit as exc:\\n    if exc.code:\\n        raise\\nimport batch_solver as batch\\nimport downstream_solver as ds\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ndata, diag = item['dataset'], item['campaign_diagnostics']\\ncal = calibrate_upstream(data, batch._PAY)\\nout = batch.solve_batch(data)\\nfor key, val in ds.solve_downstream(cal).items():\\n    np.testing.assert_array_equal(val, out[key])\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\ntr, te = cal['train'], cal['test']\\nn = len(tr['strain_0'])\\nx = ds._features(tr, te)\\ndt, t = np.asarray(cal['past_dt']), np.asarray(cal['eval_times'])\\nproj, intercept = cal['total_load_projection']\\nbridge = np.r_[proj, intercept]\\ndef coupon(split, features):\\n    return ds._coupon(split, features, bridge)\\ndef predict(split, features, times, decay=1.):\\n    cp = coupon(split, features)\\n    curve, rate = ds._design(tau, cp, dt, times)\\n    f = -np.expm1(-decay * times) / decay\\n    return split['strain_0'][:, None] + curve[:, :, :2] @ theta[:2] + (cp[2] @ theta[2:])[:, None] * f, rate @ theta\\np, q = predict(te, x[n:], t)\\nnp.testing.assert_allclose(p, out['predicted_strain'], atol=1e-12)\\nnp.testing.assert_allclose(q, out['initial_rate_pred'], atol=1e-12)\\nh = 1e-6\\np0, _ = predict(te, x[n:], np.array([0., h]))\\nnp.testing.assert_allclose(p0[:, 0], te['strain_0'], atol=1e-12)\\nnp.testing.assert_allclose((p0[:, 1] - p0[:, 0]) / h, q, atol=2e-5, rtol=2e-5)\\nmeas = calibrate_upstream(dict(data, test=diag), batch._PAY)['test']\\nxd = meas['coupon_features_raw'].copy()\\nlabs = meas['lab_id']\\nfor lab in np.unique(labs):\\n    m = labs == lab\\n    panel = meas['ref_coupons'][m]\\n    xd[m] = (xd[m] - np.median(panel.mean(0))) / np.median(panel.std(0))\\ncomplete = np.isfinite(xd).all(1)\\nxd = np.where(np.isfinite(xd), xd, x.mean(0))\\ny, r = meas['strain_curves_obs'], meas['instant_rate_obs']\\nrmse = lambda e: float(np.sqrt(np.mean(e**2)))\\nfixed, cv = [], []\\nfor lab in np.unique(labs):\\n    m = labs == lab\\n    fit = ~m & complete\\n    best = least_squares(lambda a: (predict(meas, xd, t, a[0])[0][fit] - y[fit]).ravel(), [1.], bounds=(.05, 10.), loss='soft_l1', f_scale=.009).x[0]\\n    p, q = predict(meas, xd, t)\\n    pc, _ = predict(meas, xd, t, best)\\n    er = p[m] - y[m]\\n    fixed.append([rmse(er), max(rmse(z) for z in er.T), rmse(er[:, -1]), rmse(q[m] - r[m])])\\n    cv.append(rmse(pc[m] - y[m]))\\n    print('diagnostic lab', int(lab), 'n', int(m.sum()), 'decay from other labs', round(best, 5), 'fixed curve/worst horizon/final/rate', np.round(fixed[-1], 6))\\nworst = np.max(fixed, axis=0)\\nprint('worst fixed curve/worst horizon/final/rate:', worst, 'worst learned-decay OOF curve:', max(cv))\\nprint('complete and missing diagnostic curve RMSE:', rmse((p-y)[complete]), rmse((p-y)[~complete]))\\nassert worst[0] < .022 and worst[1] < .028 and worst[3] < .026\\nprint('Verified both entry points, chronological response, and initial-rate derivative.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Retain chronological memory and use unit-rate exponential drift; prior diagnostic worst held-out-lab RMSE was 0.0174 for strain and 0.0200 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Modify the batch wrapper to alter Python's module search path\",\n      \"rejected_reason\": \"The requested invocation uses normal sibling imports. For the additional isolated test, supply the project directory in the test harness rather than changing runtime code.\"\n    }\n  ],\n  \"rationale\": \"Run the prescribed schema check, then verify the unchanged artifacts in an isolated process. Check both entry points and the initial-rate derivative, and compare the fixed chamber law against decay fitted on other labs to detect a regression hidden by pooled curve error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "18fe1c3c61b1c19b893f0a8dd88d58dcc5c4c8eb65260d034b89c60441ccb605",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39045.99,
+      "usage_known": true,
+      "prompt_tokens": 35195,
+      "cached_tokens": 13696,
+      "completion_tokens": 1585
+    }
+  ]
+}

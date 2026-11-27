@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b8d740ccf19469594758144d223aa04",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__stageS__dev_alpha_m99_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:38:15.513793+00:00",
+  "ended_at_utc": "2026-11-27T18:38:46.916508+00:00",
+  "request_sha256": "b9a35092e0990a2cdb93307861d3500bbca2656d43679ad10bcc4cd5f58b98ef",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 35584,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27643,
+    "cached_tokens": 14976,
+    "completion_tokens": 1302
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nroot=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('candidate',root/'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.loads((root/'public_batch.pkl').read_bytes()); item=item[0]; d=item['dataset']\\nfor p in sorted(Path('/tmp/hegel_continual_archive').glob('archive*.json')):\\n    obj=json.loads(p.read_text()); print(p.name, list(obj) if isinstance(obj,dict) else len(obj))\\n    if isinstance(obj,list): print('entry keys', [list(e) for e in obj if isinstance(e,dict)])\\n    else:\\n        for k,v in obj.items():\\n            if isinstance(v,list): print(k,'entries',len(v),'last keys',list(v[-1]) if v and isinstance(v[-1],dict) else None)\\ncal=d['calibration_load_cells']; x=cal['bridge_raw']; y=cal['true_channel_loads'].sum(axis=1); n=len(y)\\na=np.c_[np.ones(n),x]; pairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\nz=np.c_[a,x*x,*[x[:,i]*x[:,j] for i,j in pairs]]\\npredictors={'affine':lambda tr,te:a[te]@np.linalg.lstsq(a[tr],y[tr],rcond=None)[0], 'quadratic':lambda tr,te:z[te]@np.linalg.lstsq(z[tr],y[tr],rcond=None)[0]}\\ndef rational(tr,te):\\n    q=np.c_[x,x.sum(axis=1),*[x[:,i]-x[:,j] for i,j in pairs]]**2\\n    def model(b,idx): return (a[idx]@b[:5])/(1+q[idx]@b[5:])\\n    b=np.r_[np.linalg.lstsq(a[tr],y[tr],rcond=None)[0],np.full(q.shape[1],1e-9)]\\n    fit=least_squares(lambda b:model(b,tr)-y[tr],b,bounds=(np.r_[np.full(5,-np.inf),np.zeros(q.shape[1])],np.inf),gtol=1e-11)\\n    return model(fit.x,te)\\npredictors['rational']=rational\\n# Contiguous calibration segments expose extrapolation and repeated sweep structure.\\nfor name,fit in predictors.items():\\n    e=[]\\n    for te in np.array_split(np.arange(n),5):\\n        tr=np.setdiff1d(np.arange(n),te); e.append(np.sqrt(np.mean((fit(tr,te)-y[te])**2)))\\n    print('bridge',name,'block RMS',np.round(e,7))\\ns=d['train']; labs=s['lab_id']; t=d['eval_times']; dt=d['past_dt']; xx=m._features(s,d['test'])[:len(labs)]\\nc=m._coupon(s,xx,m._bridge(cal)); cy=s['strain_curves_obs']-s['strain_0'][:,None]; ry=s['instant_rate_obs']\\nfor lab in np.unique(labs):\\n    te=labs==lab; tr=~te\\n    tau,b=m._fit(tuple(v[tr] for v in c),dt,t,cy[tr],ry[tr]); A,B=m._design(tau,tuple(v[te] for v in c),dt,t)\\n    E=cy[te]-A@b; F=ry[te]-B@b\\n    slope=(E@t)/(t@t)\\n    print('held lab',lab,'median effective drift / initial-rate residual',np.round([np.median(slope),np.median(F)],6),'median abs signal-normalized drift residual',round(float(np.median(np.abs(slope))/np.median(np.abs(c[2][te]@b[2:]))),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and shared material drift → H2 nonlinear bridge or lab-dependent drift only if supported by held-out measurements; current worst held-out-lab P90 errors are 0.02605 for strain and 0.01415 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB terms, or balanced class accuracy\",\n      \"rejected_reason\": \"The supplied experiment has no relay state, stochastic control equation, or class labels; continuous lab-wise residuals are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Blocked calibration sweeps test whether pairwise or rational terms fix a real calibration error. Signed held-out lab residuals test for a systematic drift offset that absolute errors could hide. Change the estimator only if the measurements show a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "47b37e42dbd588589f3c9b13d293847350b33584f34e831543eadbb9c497eb47",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32371.57,
+      "usage_known": true,
+      "prompt_tokens": 27643,
+      "cached_tokens": 14976,
+      "completion_tokens": 1302
+    }
+  ]
+}

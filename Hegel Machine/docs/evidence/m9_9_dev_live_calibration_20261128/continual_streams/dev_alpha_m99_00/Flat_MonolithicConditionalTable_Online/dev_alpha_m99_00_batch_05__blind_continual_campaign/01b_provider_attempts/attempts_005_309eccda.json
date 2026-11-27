@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "309eccda5b4645899dde963d80835155",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:06:56.995898+00:00",
+  "ended_at_utc": "2026-11-27T19:07:24.573262+00:00",
+  "request_sha256": "5676aaadcfb857c96f1e80cc81cf7d833e202cb02072b44205787aa3bd9f3269",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41821,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29867,
+    "cached_tokens": 14976,
+    "completion_tokens": 1067
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_residuals.py <<'PY'\\nfrom chamber_compare import *\\nnp.set_printoptions(precision=4,suppress=True,linewidth=180)\\nkh=k@th[:2]; rh=np.sum(th[:2]/tau)\\nY=np.column_stack((r-hold*rh,y-hold[:,None]*kh)); T=np.r_[0,t]\\nxa=m._features(obs)[good]; xb=m._features(tr,te,obs)[n+len(te['lab_id']):][good]\\nfor label,xx in [('train/test ref',x),('diag ref',xa),('all ref',xb)]:\\n sc=th[2]+xx@th[3:]; print('\\\\n',label,'score',sc)\\n print('kernel ratio median',np.median(Y/sc[:,None],0)); print('score/rate residual',np.round(Y[:,0]-sc,4))\\n print('linear kernel coefficient',np.linalg.lstsq(np.c_[np.ones(len(sc)),sc],Y,rcond=None)[0]); print('rank1 rms',np.sqrt(np.mean((Y-sc[:,None]*(sc@Y/(sc@sc)))**2,0)))\\nprint('lab,hold,history,gaps,score and scaled residuals')\\nprint(np.c_[o['lab_id'],hold,past,score,Y[:,[0,1,4,8,12]]]); print('Y singular values',np.linalg.svd(Y,compute_uv=False)); print('reference center,scale by group')\\nfor l in np.unique(lab):\\n print(l,[(np.median(ref.mean(0)),np.median(ref.std(0))) for ref in [tr['ref_coupons'][tr['lab_id']==l],te['ref_coupons'][te['lab_id']==l],refs[lab==l],obs['ref_coupons'][ol==l]]])\\nfor label,v in [('residual rate',Y[:,0]-score),('residual final',Y[:,-1]-score*(-np.expm1(-t[-1])))]:\\n cols=np.c_[x,hold,past,hold*score,score**2,score**3]\\n print(label,'correlations with [features,hold,history,hold*score,score**2,score**3]',np.corrcoef(np.c_[v,cols].T)[0,1:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_residuals.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived reset and drift response) -> H2 (reset with a reidentified drift response); worst-lab median strain/rate errors are 0.351/0.106 archived versus 0.219/0.105 for reset alone.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The prescribed benchtop history recursion transfers unchanged to chamber deployment.\",\n    \"empirical_witness\": \"On complete-feature verification coupons, replacing carried-in branch states with zero reduces worst-lab median initial-rate error from 2.403 to 0.105 using the same calibration and material fit.\",\n    \"causal_blanket_diagnosis\": \"The deployment branch initialization differs from benchtop; the archived drift kernel still leaves a lab-specific strain discrepancy.\",\n    \"sublated_pivot\": \"Retain the shared relaxation spectrum and reset initialization, then isolate reference alignment and drift-response terms.\",\n    \"risk_kind\": \"deployment law transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the archived drift kernel because it improves pooled strain error\",\n      \"rejected_reason\": \"It worsens worst-lab median strain error from 0.219 to 0.351 without improving initial-rate error.\"\n    }\n  ],\n  \"rationale\": \"Compare load-subtracted residuals across time and reference alignments. A shared residual kernel favors a drift-law change; a discrepancy that vanishes under a different verification-panel normalization instead points to reference alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "e0c368d9000cff810fed2360015e240e131e9c07d0b2678a9effc0d6e69dde0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28577.79,
+      "usage_known": true,
+      "prompt_tokens": 29867,
+      "cached_tokens": 14976,
+      "completion_tokens": 1067
+    }
+  ]
+}

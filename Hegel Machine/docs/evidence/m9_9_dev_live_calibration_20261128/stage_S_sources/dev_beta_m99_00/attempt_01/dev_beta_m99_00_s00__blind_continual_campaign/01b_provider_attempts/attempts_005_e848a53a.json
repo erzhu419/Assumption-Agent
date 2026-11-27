@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e848a53a4a5f4098944bdf194b9fbaf7",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__stageS__dev_beta_m99_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:37:55.435632+00:00",
+  "ended_at_utc": "2026-11-27T18:38:26.974624+00:00",
+  "request_sha256": "b28d4fa817c490e833a6ce074bf92a8c4a8ae64610e2deea7b52f202756044be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38951,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30531,
+    "cached_tokens": 14976,
+    "completion_tokens": 1296
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nb = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(b)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nc = study['sensor_calibration_sweeps']\\nx = np.column_stack((np.ones(len(c['ref_rosette'])), c['ref_rosette']))\\ny = c['raw_rosette']\\naxis = np.count_nonzero(x[:, 1:], axis=1) == 1\\nfor label, test in [('single-bank', axis), ('mixed', ~axis)]:\\n    coeff = np.linalg.lstsq(x[~test], y[~test], rcond=None)[0]\\n    print(label, 'held-out worst channel RMSE', np.sqrt(np.mean((x[test] @ coeff - y[test])**2, axis=0)).max())\\nS, U = b._forward(study)\\nZ = study['Z_nuisance']\\nP = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + study['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\nworst = np.zeros(5)\\nfor scale in [1., 5., -5.]:\\n    s = dict(study, y_obs_raw=scale * study['y_obs_raw'])\\n    for budget in [0., s['u_box'], s['total_budget'], 3*s['u_box'], S.shape[1]*s['u_box']]:\\n        s['total_budget'] = budget\\n        out = b.solve_batch(s)\\n        w = out['weights']; k = out['kkt_certificate']; cap = s['u_box']\\n        A = P @ S; r = A @ w - P @ b._calibrate(s)\\n        g = A.T @ r + s['source_ridge'] * w\\n        J = (r @ r + s['source_ridge'] * (w @ w))/2\\n        lo, hi, nu = np.array(k['lam_lower']), np.array(k['lam_upper']), k['nu_sum']\\n        assert np.array_equal(w, k['weights']) and min(lo.min(), hi.min(), w.min(), cap - w.max()) >= 0\\n        worst = np.maximum(worst, [abs(w.sum()-budget), np.max(abs(g-nu-lo+hi)), max(np.max(abs(lo*w)), np.max(abs(hi*(cap-w)))), max(abs(J-k['primal_objective']), abs(J-k['dual_lower_bound'])), np.max(abs(out['terminal_field']-np.einsum('i,ixy->xy', w, U)))])\\nprint('15 end-to-end cases; worst budget, stationarity, complementarity, objective/bound, field errors:', worst)\\nassert np.max(worst) < 1e-10\\nrng = np.random.default_rng(102)\\nworst_gap = 0.\\nvertices = 0\\nfor j in range(500):\\n    n = 8\\n    m = rng.normal(size=(n, n)); H = m.T @ m + .04 * np.eye(n)\\n    c = rng.normal(size=n) * (1, 10, 100)[j % 3]\\n    cap = .42\\n    budget = cap * (j % 7 + 1) if j % 2 else rng.uniform(.001, n-.001)*cap\\n    w, nu = b._box_simplex(H, c, cap, budget)\\n    g = H @ w - c\\n    # The linearized objective minimized by filling cheapest coordinates is an independent dual-gap check.\\n    v = np.empty(n); v[np.argsort(g)] = np.clip(budget - cap*np.arange(n), 0, cap)\\n    worst_gap = max(worst_gap, abs(g @ (w-v)))\\n    vertices += np.all((w == 0) | (w == cap))\\n    assert abs(w.sum()-budget) < 1e-10 and np.min(w) >= 0 and np.max(w) <= cap\\nprint('500 coupled QPs; all-bound vertices:', vertices, 'worst linearized gap:', worst_gap)\\nassert vertices > 0 and worst_gap < 1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin and affine calibration -> H2 retain both and verify active-bound solutions; worst held-out shift RMSE is 0.00983 and the public certificate gap is 1.01e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public case matches the independent dense reference but has no active bounds. Stress constrained faces and vertices, check every certificate term in an isolated process, and hold out each sweep type to detect calibration errors. Revise only the component that fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3cac55d0af8ae777faf8ed4c23dcfbde2c65d99573d93035ffe71f5dbebdcaef",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32505.13,
+      "usage_known": true,
+      "prompt_tokens": 30531,
+      "cached_tokens": 14976,
+      "completion_tokens": 1296
+    }
+  ]
+}

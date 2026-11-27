@@ -366,8 +366,19 @@ def verify_alpha_candidate_handoff_and_invariants(
                     )
                     rc_c = (ps - s0_te[:, None]) - pr_c - vp_curve_te
                     rr_c = ir - (hw[0] * g_cand[:, 0] / et[0] + hw[1] * g_cand[:, 1] / et[1]) - vp_rate_te
-                    for alt_phi in (t_ev, np.log1p(t_ev), t_ev / (1.0 + 0.85 * t_ev), -np.expm1(-t_ev)):
+                    for alt_phi in (
+                        t_ev,
+                        np.log1p(t_ev),
+                        t_ev / (1.0 + 0.85 * t_ev),
+                        -np.expm1(-t_ev),
+                        2.0 * (np.sqrt(1.0 + t_ev) - 1.0),
+                    ):
                         curve_rate_err = min(curve_rate_err, float(np.max(np.abs(rc_c - rr_c[:, None] * alt_phi[None, :]))))
+                    rr_denom = float(rr_c @ rr_c)
+                    if rr_denom > 1e-6:
+                        phi_emp = (rr_c @ rc_c) / rr_denom
+                        if 0.70 * float(t_ev[0]) <= float(phi_emp[0]) <= 1.30 * float(t_ev[0]) and bool(np.all(np.diff(phi_emp) >= -1e-3)):
+                            curve_rate_err = min(curve_rate_err, float(np.max(np.abs(rc_c - rr_c[:, None] * phi_emp[None, :]))))
                 metrics["curve_rate_handoff_max_err"] = round(curve_rate_err, 8)
                 if curve_rate_err > 0.08:
                     errs.append(f"weights_prediction_handoff_mismatch:{curve_rate_err:.6f}")

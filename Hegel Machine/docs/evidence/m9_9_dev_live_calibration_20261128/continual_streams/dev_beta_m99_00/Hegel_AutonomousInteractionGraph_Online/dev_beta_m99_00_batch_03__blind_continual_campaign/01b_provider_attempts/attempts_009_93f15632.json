@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "93f15632c2874a798f93c81fb004223c",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:56:45.350839+00:00",
+  "ended_at_utc": "2026-11-27T18:57:08.264470+00:00",
+  "request_sha256": "e7305efa64d6442edfb1c64785f91d9b3863b8eca41484d8f6eb62d8cbcf3113",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30502,
+    "cached_tokens": 13696,
+    "completion_tokens": 824
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\n\\nstudy = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nsweep = study['sensor_calibration_sweeps']\\nx, y = sweep['ref_rosette'], sweep['raw_rosette']\\nD = up._design(x)\\nrows = np.arange(len(x))\\nblocks = [rows[:16]] + list(np.array_split(rows[16:], 8))\\nsep = [i for i, t in enumerate(up._TERMS) if len(set(t)) <= 1]\\nmax_coupled, max_separable = 0., 0.\\nfor held in blocks:\\n    train = np.setdiff1d(rows, held)\\n    p = up._fit(x[train], y[train])\\n    error = np.linalg.norm(D @ p - y, axis=1)\\n    gate = 8 * max(np.median(error[train]), 1e-12)\\n    clean = train[error[train] <= gate]\\n    test = held[error[held] <= gate]\\n    q = np.linalg.lstsq(D[np.ix_(clean, sep)], y[clean], rcond=None)[0]\\n    a = np.linalg.norm(D[np.ix_(test, sep)] @ q-y[test], axis=1).max()\\n    b = error[test].max()\\n    inv = np.linalg.norm(up._invert(y[test], p)-x[test], axis=1).max()\\n    print(f'block={held[0]} rejected={held[error[held] > gate].tolist()} separable_forward={a:.6g} coupled_forward={b:.6g} coupled_inverse={inv:.6g}')\\n    max_coupled, max_separable = max(max_coupled, b), max(max_separable, a)\\n    assert inv < 2e-4\\nprint(f'ng_t03 worst blocked forward: separable={max_separable:.6g} coupled={max_coupled:.6g}')\\nassert max_coupled < 1e-4 and max_separable > 100 * max_coupled\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable cubic -> H2 coupled cyclic cubic; the verified worst blocked inverse row error is 4.17e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational saturation comparison\",\n      \"rejected_reason\": \"All nine nested folds already selected a zero denominator correction; that comparison did not directly test the separable-basis omission in ng_t03.\"\n    }\n  ],\n  \"rationale\": \"Compare separable and coupled cubics on identical held-out sweep rows with the same training-only EMI screening. If the gap disappears, withdraw the claim that coupling improves generalization; if it persists, the comparison directly supports closing ng_t03.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2b7a438ecea90f03c71afe59974bb39eb8ae0a42e9ac0e6e8b7e4c20b3254626",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22878.59,
+      "usage_known": true,
+      "prompt_tokens": 30502,
+      "cached_tokens": 13696,
+      "completion_tokens": 824
+    }
+  ]
+}

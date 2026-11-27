@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2a0c0681b2e34d5298c622c0e6ae1421",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:43:57.836650+00:00",
+  "ended_at_utc": "2026-11-27T18:44:33.341587+00:00",
+  "request_sha256": "53e88e7fd573541f88cb29aea9a1bac87cd31aeb48f5086c827ae44eaba5f38d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53314,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37037,
+    "cached_tokens": 14976,
+    "completion_tokens": 1490
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,51p' /tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor l in log: print({k:v for k,v in l.items() if k!='facility_telemetry_trace'})\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; print('top',list(i),'data',list(i['dataset'])); print('chamber fields',[(k,np.shape(v)) for k,v in i['campaign_diagnostics'].items()]); print('train',list(i['dataset']['train']))\\nPY\\ncat > /tmp/m99_amplitude.py <<'PY'\\nimport contextlib,io,itertools\\nwith contextlib.redirect_stdout(io.StringIO()): exec(open('/tmp/m99_probe.py').read())\\np,h,D=cc; labs=ch['lab_id']; Y=np.c_[ch['strain_curves_obs']-ch['strain_0'][:,None],ch['instant_rate_obs']]; H=np.r_[-np.expm1(-t[:,None]/tau)@theta[:2],theta[:2]@(1/tau)]; K=np.r_[np.log1p(t),1.]; a=(Y-h[:,None]*H)@K/(K@K)\\nX=D[:,1:]; r=D@theta[2:]; rawf=ch['coupon_features_raw']; flags=np.isnan(rawf); base=np.c_[np.ones(len(h)),r]; cells=ch['stratum']\\nprint('stratum residuals',[(j,(a-r)[cells==j].mean(),(a-r)[cells==j].std()) for j in np.unique(cells)])\\nQ={'r':r,'h':h,'hcenter':h-h.mean(),'pastmean':p.mean(1),'pastlast':p[:,-1]}; Q.update({'x%d'%j:X[:,j] for j in range(4)}); Q.update({'raw%d'%j:np.nan_to_num(rawf[:,j]) for j in range(4)}); Q.update({'p%d'%j:p[:,j] for j in range(p.shape[1])}); Q.update({'flag%d'%j:flags[:,j].astype(float) for j in range(4)}); Q.update({'lab%d'%j:(labs==j).astype(float) for j in np.unique(labs)}); Q.update({'str%d'%j:(cells==j).astype(float) for j in np.unique(cells)}); orig=list(Q)\\nfor l,k in itertools.combinations_with_replacement(orig[:13],2): Q[l+'*'+k]=Q[l]*Q[k]\\nfor l,k in itertools.combinations(orig[:13],2):\\n for s in [1,-1]:\\n  v=Q[l]+s*Q[k]; name=l+('+' if s==1 else '-')+k\\n  for fun,tag in [(np.abs,'abs'),(np.square,'sq'),(np.tanh,'tanh')]: Q[tag+'('+name+')']=fun(v)\\nfor l,k,j in itertools.combinations_with_replacement(orig[5:9],3): Q[l+'*'+k+'*'+j]=Q[l]*Q[k]*Q[j]\\nfor l,k in itertools.product(orig[:9],orig[:9]): Q[l+'/(1+'+k+'^2)']=Q[l]/(1+Q[k]**2)\\nfor bname,B in [('material',base),('features',D),('per-lab',np.c_[base,np.eye(4)[labs][:,:3]]),('per-stratum',np.c_[base,np.eye(3)[cells][:,:2]])]:\\n def score(M):\\n  E=np.zeros(len(h));\\n  for lab in np.unique(labs):\\n   q=labs!=lab; E[~q]=a[~q]-M[~q]@np.linalg.lstsq(M[q],a[q],rcond=None)[0]\\n  return np.sqrt(np.mean(E**2)),abs(E).max()\\n print(bname,'base',score(B))\\n out=[]\\n for n,v in Q.items():\\n  M=np.c_[B,v]; coef=np.linalg.lstsq(M,a,rcond=None)[0]; E=a-M@coef; out.append((score(M)[0],np.std(E),n,coef[-1]))\\n print('by LOO',sorted(out)[:12]); print('by fit',sorted(out,key=lambda z:z[1])[:8])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_amplitude.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shifted decay times → H2: intrinsic zero-memory hold response plus log(1+t) drift; this closes observed curves to 0.0095 with free amplitudes, but held-out-lab errors remain 0.228 in strain and 0.137 in rate with linear feature amplitudes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit independent offsets for each lab\",\"rejected_reason\":\"Lab offsets are not identifiable for a held-out lab; first test whether a shared feature or preprocessing convention explains the residual.\"}],\"rationale\":\"Compare the archived preprocessing with the specification, then screen compact interaction terms against the inferred drift amplitude. If no term transfers across labs, prefer the simpler chamber law rather than extrapolate a weak interaction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e95ae5d7542d55c25d3d7d4c992b9bd972f3ef1e96cf62aabf4448dccbca8973",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36465.33,
+      "usage_known": true,
+      "prompt_tokens": 37037,
+      "cached_tokens": 14976,
+      "completion_tokens": 1490
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c58749e030034464be1c71d45cd8aa90",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:42:24.469359+00:00",
+  "ended_at_utc": "2026-11-27T18:43:01.488544+00:00",
+  "request_sha256": "05664e0967bb47fa39197914e3e77493241a56d99831b78707d96cacb18b4948",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41678,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31124,
+    "cached_tokens": 14976,
+    "completion_tokens": 1601
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_transfer.py <<'PY'\\nimport contextlib,io,runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): p=runpy.run_path('/tmp/chamber_probe.py')\\nglobals().update({k:p[k] for k in ('m','d','tr','te','di','dt','t','tau','theta','bridge','n','h','v','vr')})\\nO=np.c_[v,vr]; W=np.r_[np.ones(len(t)),2.]; E=lambda a:np.r_[-np.expm1(-t/a),1/a]; L=np.r_[t,1.]; reshape=lambda a:np.asarray(a).reshape(O.shape)\\nfor label,x in [('diag',m._features(di)),('all',m._features(tr,te,di)[n+h:])]:\\n past,hold,_=m._coupon(di,x,bridge); f=x@theta[3:];\\n A=np.c_[np.ones(len(f)),hold,f]; C=np.linalg.lstsq(A,O,rcond=None)[0]; sig=theta[0]*E(tau[0])+theta[1]*E(tau[1]);\\n print(label,'design residual RMS',np.sqrt(np.mean((A@C-O)**2,axis=0)).round(4)); print('hold transfer vs time and derivative:',C[1].round(5)); print('hold prior same:',sig.round(5)); print('feature transfer:',C[2].round(5)); print('intercept:',C[0].round(5)); print('hold minus baseline:',(C[1]-sig).round(5));\\n def fit_hold(z): return (z[0]*E(np.exp(z[2]))+z[1]*E(np.exp(z[3]))-C[1])*W\\n q=least_squares(fit_hold,[*theta[:2],*np.log(tau)]).x; print('hold-only two-exponential weights/taus',q[:2],np.exp(q[2:]),'RMS',np.sqrt(np.mean(fit_hold(q)**2)))\\n for name,ta in [('intrinsic',tau),('effective',np.array([.50,2.52]))]:\\n  B=np.stack([E(ta[0]),E(ta[1]),L]); print(name,'coeff matrix',np.linalg.lstsq((B*W).T,(C*W).T,rcond=None)[0].T.round(5));\\n # Independently estimate hold and feature response by variable projection, testing shared/fixed and extra-branch bases.\\n for form in ('shared','separate','hold-fixed','single-feature','fixed-reset'):\\n  def design(z,j):\\n   a=np.exp(z)\\n   if form=='shared': return np.stack([E(a[0]),E(a[1]),L])\\n   if form=='separate': return np.stack([E(a[0]),E(a[1]),L]) if j==1 else np.stack([E(a[2]),E(a[3]),L])\\n   if form=='hold-fixed': return sig[None,:] if j==1 else np.stack([E(a[0]),E(a[1]),L])\\n   if form=='single-feature': return np.stack([E(a[0]),E(a[1]),L]) if j==1 else np.stack([E(a[2]),L])\\n   return sig[None,:] if j==1 else np.stack([E(tau[0]),E(tau[1]),L])\\n  def calc(z,C=C):\\n   vals=[]; coeff=[]\\n   for j in range(3):\\n    B=design(z,j); w=np.linalg.lstsq((B*W).T,C[j]*W,rcond=None)[0]; vals.append(w@B); coeff.append(w)\\n   return np.array(vals),[x.round(5).tolist() for x in coeff]\\n  ini={'shared':[.5,2.5],'separate':[.5,4,.5,2.5],'hold-fixed':[.5,2.5],'single-feature':[.5,4,1.5],'fixed-reset':[]}[form]; z=np.log(ini)\\n  if len(z): z=least_squares(lambda z:((A@calc(z)[0]-O)*W).ravel(),z,bounds=(np.log(.05),np.log(25)),max_nfev=140).x\\n  P,Q=calc(z); r=A@P-O; print(form,'taus',np.exp(z).round(4),'coeff',Q,'curve/rate RMS',round(np.sqrt(np.mean(r[:,:-1]**2)),6),round(np.sqrt(np.mean(r[:,-1]**2)),6))\\n print('diag range hold',np.quantile(hold,[0,.5,1]).round(3),'past std',past.std(0).round(3),'x range',np.stack([x.min(0),x.max(0)]).round(3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_transfer.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 deployment retains benchtop history -> H2 test chamber memory reset and a separate coupon-feature response; the per-coupon temporal fit improves from 0.00263 to 0.00245 weighted RMS when chamber time constants are free.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the free per-coupon time constants directly\",\n      \"rejected_reason\": \"The small fit gain does not show whether hold stress or feature response drives the effective time constants, and the per-coupon amplitudes do not predict new coupons.\"\n    }\n  ],\n  \"rationale\": \"Past-stress coefficients nearly vanish after fitting hold and feature effects. Separate their time responses to test whether removing benchtop memory is sufficient or whether deployment also changes how hold stress or coupon features drive strain.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6cc15a743a57c5509bc321b68cd649c4d0edc64aaba03e1fe70bfe2512f758b0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39095.7,
+      "usage_known": true,
+      "prompt_tokens": 31124,
+      "cached_tokens": 14976,
+      "completion_tokens": 1601
+    }
+  ]
+}

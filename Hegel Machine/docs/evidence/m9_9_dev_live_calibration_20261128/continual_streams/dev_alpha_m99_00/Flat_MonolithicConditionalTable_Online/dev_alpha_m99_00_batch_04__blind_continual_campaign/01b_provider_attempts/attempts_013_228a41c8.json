@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "228a41c8d65a433bbe400580f80a214b",
+  "call_seq": 13,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:03:43.813274+00:00",
+  "ended_at_utc": "2026-11-27T19:04:14.062042+00:00",
+  "request_sha256": "5d31a8f99318f43330c8bdfd56059deb3a66fb0c38a797f1e9e8776c82be1cea",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69761,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38320,
+    "cached_tokens": 14976,
+    "completion_tokens": 1217
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; q=c['true_channel_loads']; raw=c['bridge_raw']; keep=np.linalg.norm(raw,axis=1)<10; q,raw=q[keep],raw[keep]\\npowers=np.array([np.bincount(term,minlength=4) for k in range(4) for term in m.combinations_with_replacement(range(4),k)])\\na=np.prod(q[:,None,:]**powers[None,:,:],axis=-1)\\nz=np.column_stack([q[:,i]+sgn*q[:,j] for i,j in combinations(range(4),2) for sgn in (-1,1)])\\nfamilies={'coupled cubic':a,'cubic plus rational sums/differences':np.column_stack((a,z/(1+z*z)))}\\nfolds=np.array_split(np.random.default_rng(84).permutation(len(q)),6)\\nfor label,x in families.items():\\n errors=[]\\n for val in folds:\\n  tr=np.setdiff1d(np.arange(len(q)),val); errors.append(raw[val]-x[val]@np.linalg.lstsq(x[tr],raw[tr],rcond=None)[0])\\n print(label,'pooled and worst-fold raw RMSE',np.sqrt(np.mean(np.concatenate(errors)**2)),max(np.sqrt(np.mean(e**2)) for e in errors))\\ntr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; n=len(tr['strain_0']); x=m._features(tr,te)[:n]; coupon=m._coupon(tr,x,m._bridge(c)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; ec=np.empty_like(y); er=np.empty_like(r)\\nfor lab in np.unique(tr['lab_id']):\\n v=tr['lab_id']==lab; tau,w=m._fit(tuple(z[~v] for z in coupon),dt,t,y[~v],r[~v])[:2]; aa,bb=m._design(tau,tuple(z[v] for z in coupon),dt,t); ec[v]=aa@w-y[v]; er[v]=bb@w-r[v]\\n for st in np.unique(tr['stratum'][v]):\\n  ix=v&(tr['stratum']==st); print('lab/stratum',lab,st,'n',ix.sum(),'median signed curve/rate',np.round([np.median(ec[ix]),np.median(er[ix])],6),'rate RMSE',round(np.sqrt(np.mean(er[ix]**2)),6))\\nfor label,cols in zip(('early','middle','late'),np.array_split(np.arange(len(t)),3)):\\n e=ec[:,cols]; print(label,'MAE, median signed, worst lab MAE',np.mean(abs(e)),np.median(e),max(np.mean(abs(e[tr['lab_id']==l])) for l in np.unique(tr['lab_id'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic bridge misses saturation or leaves cohort bias → H2 retain the coupled cubic and recurring chamber law unless held-out residuals justify a change; existing worst-fold load RMSE is 0.000615 and worst leave-one-lab-out rate RMSE is 0.01022.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification accuracy, or HJB drift\",\n      \"rejected_reason\": \"The supplied data contain continuous load, strain, and rate measurements under a hereditary constitutive law, not a relay, classifier, or stochastic-control model.\"\n    }\n  ],\n  \"rationale\": \"Compare fixed rational pairwise terms against the cubic on held-out sweeps; revisit the bridge only if they materially improve the worst fold. Slice leave-one-lab-out residuals by stratum and time horizon to detect signed bias hidden by pooled errors. The isolated schema check verifies that the exact deliverable still loads and returns the required outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "11349b780531fe4aa17acdb2533c5fec04a11dce240ff7d158337beab44691b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31286.23,
+      "usage_known": true,
+      "prompt_tokens": 38320,
+      "cached_tokens": 14976,
+      "completion_tokens": 1217
+    }
+  ]
+}

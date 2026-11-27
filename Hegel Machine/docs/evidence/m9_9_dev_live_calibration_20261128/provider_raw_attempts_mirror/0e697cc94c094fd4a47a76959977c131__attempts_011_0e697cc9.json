@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0e697cc94c094fd4a47a76959977c131",
+  "call_seq": 11,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:02:57.002625+00:00",
+  "ended_at_utc": "2026-11-27T19:03:26.616237+00:00",
+  "request_sha256": "96dd4291d1a6edcb8c27cb4883210c34db3dbcdd2dbc723869ec7bbeb54ad616",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67491,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39378,
+    "cached_tokens": 14976,
+    "completion_tokens": 1183
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; out=m.solve_batch(d)\\na=Path('/tmp/hegel_continual_archive'); log=json.loads((a/'archive_apparatus_log.json').read_text()); means=np.array([np.mean(e['facility_telemetry_trace'],axis=0) for e in log]); distance=np.linalg.norm(means[:-1]-means[-1],axis=1); print('apparatus matches:',[(e['completed_campaign_short_name'],round(float(v),5)) for e,v in zip(log,distance)]); assert log[np.argmin(distance)]['completed_campaign_short_name']=='dev_alpha_m99_00_s00'\\nsrc=Path('batch_solver.py').read_text(); old='return x.sum(axis=1).reshape(shape)'; assert src.count(old)==1; probe={}; exec(compile(src.replace(old,'return x.reshape(*shape, 4)'),'<channel-audit>','exec'),probe)\\nc=d['calibration_load_cells']; r=c['bridge_raw']; q=c['true_channel_loads']; clean=np.linalg.norm(r,axis=1)<10\\nexponents=np.array([np.bincount(ids,minlength=4) for j in range(4) for ids in m.combinations_with_replacement(range(4),j)])\\ndef design(x): return np.prod(x[...,None,:]**exponents,axis=-1)\\nb=np.linalg.lstsq(design(q[clean]),r[clean],rcond=None)[0]; inverse=probe['_bridge'](c)\\nfor split in ('train','test'):\\n for key in ('past_channel_raw','hold_channel_raw'):\\n  z=d[split][key]; loads=inverse(z); err=abs(design(loads)@b-z).max(); print(split,key,'worst forward reconstruction',err,'channel range',loads.min(),loads.max()); assert err<1e-8; assert np.all((loads>=q.min(0))&(loads<=q.max(0)))\\ntrain,test=d['train'],d['test']; n=len(train['strain_0']); f=m._features(train,test)[n:]; h=m._bridge(c)(test['hold_channel_raw']); tau,w=out['estimated_taus'],out['hereditary_weights']; eps=1e-5\\nz,rate=m._deployment(h,f,tau,w,np.array([-eps,0.,eps])); err=abs((z[:,2]-z[:,0])/(2*eps)-out['initial_rate_pred']).max(); print('deployment worst initial derivative mismatch',err); assert err<1e-8 and np.max(abs(z[:,1]))<1e-12 and np.array_equal(rate,out['initial_rate_pred'])\\nz,_=m._deployment(h,f,tau,w,d['eval_times']); assert np.array_equal(z+test['strain_0'][:,None],out['predicted_strain']); assert .05<tau[0]<tau[1]<25 and all(np.isfinite(v).all() for v in out.values())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 coupled forward cubic bridge with the recurring memory-reset chamber law; worst held-out total-load RMSE improved from 0.58240 to 0.000615, and worst leave-one-lab-out strain and rate RMSEs were 0.04684 and 0.01022.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t10\"]},\"considered_alternatives\":[{\"option\":\"Refit the chamber law from current benchtop measurements\",\"rejected_reason\":\"Those measurements do not identify the active deployment response; the blind campaign supplies apparatus traces but no labeled chamber coupons.\"}],\"rationale\":\"The cubic bridge passed held-out inverse calibration and improved both benchtop outputs. Check that the apparatus trace selects the archived reset setting, that Newton inversion reconstructs every current coupon reading within the calibrated load range, and that the reported initial rate is the derivative of the deployed strain law. A failure would identify which component needs revision before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3e9d399e7cc3218e04a1ff5de571ab613ce274d475728d3f5359beb8e36bdf18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30629.32,
+      "usage_known": true,
+      "prompt_tokens": 39378,
+      "cached_tokens": 14976,
+      "completion_tokens": 1183
+    }
+  ]
+}

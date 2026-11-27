@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8fcc3533082d441ab40aafa3eb784f18",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:56:32.110864+00:00",
+  "ended_at_utc": "2026-11-27T18:57:05.819084+00:00",
+  "request_sha256": "257bc38e2212366606a4b3a251b323ce758519344eb3b9a9c002173f4cf4e244",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42021,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30126,
+    "cached_tokens": 0,
+    "completion_tokens": 1416
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']\\n    full = up._fit(x, y)\\n    base_error = np.linalg.norm(up._basis(x) @ full - y, axis=1)\\n    clean = base_error < 0.01\\n    assert clean.sum() >= x.shape[0] * .8\\n    print('EMI rows:', np.flatnonzero(~clean).tolist())\\n    folds = [('axis sweeps', np.flatnonzero(np.count_nonzero(x, axis=1) == 1))]\\n    mixed = np.flatnonzero(np.count_nonzero(x, axis=1) != 1)\\n    folds.extend((f'mixed fold {i}', rows) for i, rows in enumerate(np.array_split(mixed, 5), 1))\\n    worst = 0.\\n    for name, test in folds:\\n        train = np.setdiff1d(np.arange(len(x)), test)\\n        coef = up._fit(x[train], y[train])\\n        keep = test[clean[test]]\\n        err = np.linalg.norm(up._invert(y[keep], coef) - x[keep], axis=1)\\n        maximum = float(err.max())\\n        worst = max(worst, maximum)\\n        print(name, 'n=', len(keep), 'max reference-space error=', maximum)\\n    assert worst < 2e-4, worst\\n    first = np.flatnonzero(clean)[:8]\\n    bank = c['single_bank_sweeps']\\n    bank_x = np.eye(4)[bank['bank_id']] * bank['ref_signal'][:, None]\\n    bank_error = np.abs((up._basis(bank_x) @ full)[np.arange(len(bank_x)), bank['bank_id']] - bank['raw_readout'])\\n    print('independent bank clean max forward error:', bank_error[bank_error < 0.01].max(), 'spike count:', (bank_error >= .01).sum())\\n    snapshots = [a.copy() for a in (s['y_obs_raw'], y, bank['raw_readout'])]\\n    pulse = y[first].reshape(2, 4, 4).copy()\\n    extra = dict(s, reference_tracer_pulses=[{'y_pulse_raw': pulse, 'label': 'shape test'}])\\n    cal = up.calibrate_upstream(extra)\\n    np.testing.assert_allclose(cal['reference_tracer_pulses'][0]['y_pulse_raw'], x[first].reshape(pulse.shape), atol=2e-4, rtol=0)\\n    assert cal['reference_tracer_pulses'][0]['label'] == 'shape test'\\n    normalized = cal['sensor_calibration_sweeps']\\n    np.testing.assert_array_equal(normalized['raw_rosette'], x)\\n    np.testing.assert_array_equal(normalized['single_bank_sweeps']['raw_readout'], bank['ref_signal'])\\n    assert not np.shares_memory(normalized['raw_rosette'], x)\\n    for current, old in zip((s['y_obs_raw'], y, bank['raw_readout']), snapshots):\\n        np.testing.assert_array_equal(current, old)\\n    reconstructed = up._basis(cal['y_obs_raw'].reshape(-1, 4)) @ full\\n    np.testing.assert_allclose(reconstructed.ravel(), s['y_obs_raw'], atol=1e-11, rtol=0)\\n    absent = up.calibrate_upstream(s)\\n    assert absent.get('reference_tracer_pulses') is None\\n    out = solve_batch(s)\\n    w = out['weights']\\n    kkt = out['kkt_certificate']\\n    assert np.all(np.isfinite(w)) and np.all(np.isfinite(out['terminal_field']))\\n    assert np.all(w >= -1e-10) and np.all(w <= s['u_box'] + 1e-10)\\n    gap = kkt['primal_objective'] - kkt['dual_lower_bound']\\n    assert abs(w.sum() - s['total_budget']) < 1e-10 and abs(gap) < 1e-9\\n    print('budget residual:', abs(w.sum() - s['total_budget']), 'KKT gap:', gap)\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or quadratic coupling → H2 robust quadratic coupling plus pure channel cubics; public schema passes and five-fold forward error at the 90th percentile is approximately 4e-5, with grouped inverse validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Hold out the entire axis sweep and contiguous mixed-sweep blocks to detect inverse errors hidden by random folds. Exercise the pulse path, which the public item omits, and verify that normalization leaves the input intact and the composed solver preserves budget feasibility and the KKT gap.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3a8cc0e5de059c152f144b87b041694eabb2cf5200fce9705f705a45f63aceca",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34728.21,
+      "usage_known": true,
+      "prompt_tokens": 30126,
+      "cached_tokens": 0,
+      "completion_tokens": 1416
+    }
+  ]
+}

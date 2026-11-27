@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "498c4eacfe534b728f6c132160f92c28",
+  "call_seq": 3,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:58:12.316399+00:00",
+  "ended_at_utc": "2026-11-27T18:58:37.991030+00:00",
+  "request_sha256": "ca43e70a67073a4ed58d3b0a7654c036e1d0a30e7a38cdcc3029b501a79b87f9",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21569,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22913,
+    "cached_tokens": 13696,
+    "completion_tokens": 1004
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"tail -30 /holdout_task/_verified_downstream.py; python3 - <<'PY'\\nimport json\\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nprint('log layout:',type(p).__name__,list(p) if isinstance(p,dict) else len(p))\\nif isinstance(p,dict):\\n for k,v in p.items():\\n  print(k,type(v).__name__,list(v) if isinstance(v,dict) else len(v) if isinstance(v,list) else v)\\n  if isinstance(v,list) and v: print('latest:',str(v[-1])[:1600])\\nelif p: print('latest:',str(p[-1])[:1600])\\nPY\\ncat >/tmp/bridge_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; c=p['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; ax=(x!=0).sum(1)<=1; spikes=np.max(abs(y),axis=1)>6\\nprint('axis rows',np.where(ax)[0], 'provisional spikes',np.where(spikes)[0], 'max provisionally clean',np.max(abs(y[~spikes])))\\nfor degree in range(1,5):\\n terms=[t for j in range(degree+1) for t in combinations_with_replacement(range(4),j)]\\n a=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); err=np.full_like(y,np.nan)\\n for i in np.where(~spikes)[0]:\\n  tr=~spikes & (np.arange(len(x))!=i)\\n  b=np.linalg.lstsq(a[tr],y[tr],rcond=None)[0]; err[i]=a[i]@b-y[i]\\n print('degree',degree,'rank',np.linalg.matrix_rank(a[~spikes]),'cols',len(terms),'axis/mixed RMSE, max',[(np.sqrt(np.nanmean(err[z]**2,axis=0)).round(6).tolist(),round(np.nanmax(abs(err[z])),6)) for z in (ax,~ax)])\\n if degree==3:\\n  b=np.linalg.lstsq(a[~spikes],y[~spikes],rcond=None)[0]; print('cubic leading coefficients:', [[(terms[j],round(b[j,k],5)) for j in np.argsort(abs(b[:,k]))[-10:][::-1]] for k in range(4)])\\n  m=np.max(abs(a@b-y),axis=1); print('largest residuals:',[(int(i),round(m[i],4)) for i in np.argsort(m)[-14:][::-1]])\\nprint('axis clean data',np.round(np.c_[x,y][ax & ~spikes],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine cross-channel map → H2 structured nonlinear bridge; worst-slice held-out error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit raw-to-load directly with a flexible polynomial\",\n      \"rejected_reason\": \"Gross spikes would contaminate the predictors; fitting the forward map keeps measured reference loads as predictors and makes spike residuals visible.\"\n    }\n  ],\n  \"rationale\": \"Compare held-out errors on axis and mixed-load rows. If higher-degree fits fail to improve both slices, inspect their coefficients and residuals for a compact interaction basis rather than trusting an unconstrained interpolant.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "aa1262a995599d78d2768e28034ec37647d1b9574fd8a1f49f3a2ebcc37f8cb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26683.52,
+      "usage_known": true,
+      "prompt_tokens": 22913,
+      "cached_tokens": 13696,
+      "completion_tokens": 1004
+    }
+  ]
+}

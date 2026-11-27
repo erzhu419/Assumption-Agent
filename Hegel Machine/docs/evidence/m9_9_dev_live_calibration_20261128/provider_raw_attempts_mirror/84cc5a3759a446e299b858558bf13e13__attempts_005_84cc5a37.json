@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84cc5a3759a446e299b858558bf13e13",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:55:12.761193+00:00",
+  "ended_at_utc": "2026-11-27T18:55:43.798773+00:00",
+  "request_sha256": "bd8ca17ed07115d41f008484af306c7abd145560e05f9d308b72992a6993ed2f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 37523,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28643,
+    "cached_tokens": 13696,
+    "completion_tokens": 1288
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nitem = pickle.load(open('public_batch.pkl','rb'))[0]\\ns = item['study']; cal = s['sensor_calibration_sweeps']; x = cal['ref_rosette']; y = cal['raw_rosette']\\np = up._fit(x,y); residual = np.linalg.norm(up._design(x) @ p - y,axis=1); clean = residual < 8*np.median(residual)\\nprint('full-fit nonzero coefficients and excluded rows:', np.count_nonzero(p), np.flatnonzero(~clean))\\nfor name,splits in [('axis/mixed blocks',[np.arange(16)]+list(np.array_split(np.arange(16,len(x)),8))),('leave-one-out',np.arange(len(x))[:,None])]:\\n    err = np.zeros(len(x)); selected = []\\n    for hold in splits:\\n        train = ~np.isin(np.arange(len(x)),hold); q = up._fit(x[train],y[train]); selected.append(np.count_nonzero(q))\\n        test = hold[clean[hold]]\\n        if len(test): err[test] = np.linalg.norm(up._invert(y[test],q)-x[test],axis=1)\\n    print(name,'worst inverse row norm',err.max(),'axis',err[:16].max(),'mixed',err[16:].max(),'fit sizes',sorted(set(selected)))\\n    assert err.max() < 2e-4\\nrng = np.random.default_rng(52); grid = np.array(np.meshgrid(*([[-1,1]]*4))).reshape(4,-1).T\\nfor radius in (.4,1.4,1.8):\\n    refs = np.vstack((radius*grid,rng.uniform(-radius,radius,(2000,4))))\\n    raw = up._design(refs)@p; err = np.max(np.abs(up._invert(raw,p)-refs))\\n    print('inverse stress radius',radius,'max coordinate error',err); assert err < 1e-8\\npulse_ref = rng.uniform(-1.4,1.4,(3,5,4)); pulse_raw = (up._design(pulse_ref.reshape(-1,4))@p).reshape(3,5,4)\\ns2 = dict(s,reference_tracer_pulses=[{'y_pulse_raw':pulse_raw,'tag':'keep'},{'y_pulse_raw':None}]); t = up.calibrate_upstream(s2)\\nassert t['y_obs_raw'].shape == s['y_obs_raw'].shape\\nassert np.max(np.abs(t['reference_tracer_pulses'][0]['y_pulse_raw']-pulse_ref)) < 1e-8\\nassert t['reference_tracer_pulses'][0]['tag']=='keep' and t['reference_tracer_pulses'][1]['y_pulse_raw'] is None\\nassert not np.array_equal(cal['raw_rosette'],x)\\nfor record,rawkey,refkey in [(t['sensor_calibration_sweeps'],'raw_rosette','ref_rosette'),(t['sensor_calibration_sweeps']['single_bank_sweeps'],'raw_readout','ref_signal')]:\\n    assert np.array_equal(record[rawkey],record[refkey]) and not np.shares_memory(record[rawkey],record[refkey])\\nout=solve_batch(s); w=out['weights']; print('public weights',w,'certificate',out['kkt_certificate']); assert np.isfinite(out['terminal_field']).all() and abs(w.sum()-s['total_budget'])<1e-9 and w.min()>=-1e-9 and w.max()<=s['u_box']+1e-9\\nlog=json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text()); traces=np.asarray([r['facility_telemetry_trace'] for r in log]); print('apparatus latest vs older, columnwise RMS',np.round(np.sqrt(np.mean((traces[:-1]-traces[-1])**2,axis=1)),4)); print('apparatus first telemetry row by campaign',traces[:,0,:]); print('public index',Path('public_asset_index.json').read_text()[:4500])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full coupled cubic -> H2 compact cyclic cubic; the full basis had a worst clean blocked forward error of 1.40e-4, and the compact inverse is now being tested on those slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The public gate checks output shape and finiteness but does not test inverse accuracy or the optional pulse path.\"\n    }\n  ],\n  \"rationale\": \"Use the exact composed artifacts in isolated Python. Blocked inversion detects a missing interaction or a loss of accuracy on either sweep slice; range stress detects wrong-root convergence; the pulse and normalization assertions detect output contract failures not covered by the public gate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ce9297bd2d4bdbd413991ece17c3c87772cb8b7d1b913e28dc269e4a94af4b8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32055.05,
+      "usage_known": true,
+      "prompt_tokens": 28643,
+      "cached_tokens": 13696,
+      "completion_tokens": 1288
+    }
+  ]
+}

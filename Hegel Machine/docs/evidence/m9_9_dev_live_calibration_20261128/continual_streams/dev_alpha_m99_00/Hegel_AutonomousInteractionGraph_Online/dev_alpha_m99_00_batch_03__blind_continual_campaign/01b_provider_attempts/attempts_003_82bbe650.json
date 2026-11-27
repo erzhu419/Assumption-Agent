@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82bbe650adaa466ca5f0bd1a874c5943",
+  "call_seq": 3,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:00.645347+00:00",
+  "ended_at_utc": "2026-11-27T18:57:27.912741+00:00",
+  "request_sha256": "a247200725d5fe8226a1dd852e739c491ebe59256433404f2f7f2eda3f1e911b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22405,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23176,
+    "cached_tokens": 13696,
+    "completion_tokens": 1071
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_probe.py <<'PY'\\nimport numpy as np,pickle,itertools\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; x=C['true_channel_loads']; y=C['bridge_raw']\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\nprint('axis rows:',np.column_stack([x[:16],y[:16]]));print('remaining patterns',np.unique(np.count_nonzero(x[16:],axis=1),return_counts=True))\\nprint('sweep',[(k,np.shape(v)) for k,v in C['single_channel_sweeps'].items()]); print('top-level',list(D))\\ndef fit(A,Y):\\n b=np.linalg.lstsq(A,Y,rcond=None)[0]; w=np.ones(len(A));\\n for _ in range(30):\\n  r=np.linalg.norm(A@b-Y,axis=1); w=np.minimum(1,max(np.median(r)*0.7,1.5e-4)/np.maximum(r,1e-12)); b=np.linalg.lstsq(A*w[:,None],Y*w[:,None],rcond=None)[0]\\n return b\\npairs=np.array(list(itertools.combinations(range(4),2))); i,j=pairs.T\\nbase=np.c_[np.ones(len(x)),x]; cross=x[:,i]*x[:,j]\\nmodels={'affine':base,'xabs':np.c_[base,x*abs(x)],'cubic':np.c_[base,x**3],'full quadratic':np.c_[base,x*x,cross], 'quad+cubic':np.c_[base,x*x,cross,x**3], 'cross+xabs':np.c_[base,cross,x*abs(x)], 'cross+cubic':np.c_[base,cross,x**3]}\\nfor a in (.25,.5,1,1.5,2,3):\\n models['rational '+str(a)]=np.c_[base,cross,x**3/(1+a*x*x)]; models['sine '+str(a)]=np.c_[base,cross,np.sin(a*x)]\\nrng=np.random.default_rng(17); folds=np.array_split(rng.permutation(len(x)),5); tails=np.argsort(np.linalg.norm(x,axis=1))[-12:]\\nfor k,A in models.items():\\n b=fit(A,y); r=np.linalg.norm(A@b-y,axis=1); pred=np.empty_like(r)\\n for te in folds:\\n  tr=np.setdiff1d(np.arange(len(x)),te); pred[te]=np.linalg.norm(A[te]@fit(A[tr],y[tr])-y[te],axis=1)\\n tr=np.setdiff1d(np.arange(len(x)),tails); t=np.linalg.norm(A[tails]@fit(A[tr],y[tr])-y[tails],axis=1)\\n print(k,'in sample',np.quantile(r,[.5,.85,.9]),'OOF',np.quantile(pred,[.5,.85,.9]),'tail',np.quantile(t,[.5,.85]),'outliers',np.flatnonzero(r>.01) if np.median(r)<.004 else '')\\n if k in ('cross+cubic','cross+xabs','sine 2'):print(b)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\nprintf '\\\\nArchive bridge logic:\\\\n'; grep -inE 'bridge|transducer|calibr|sweep|tanh|sin|quadr' /tmp/hegel_continual_archive/*solver.py | cut -c1-220\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine cross-channel bridge -> H2 sparse nonlinear bridge; five-fold and high-load errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit raw-to-load polynomials directly\",\n      \"rejected_reason\": \"The known calibration loads are clean predictors; a forward fit avoids treating gross bridge spikes as predictor values.\"\n    }\n  ],\n  \"rationale\": \"Compare robust fits on held-out rows and the largest applied loads. If a model fits the interior but fails at high loads, reject it before inverting the operating data.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "92d4e27ebf69db8c490c9ec30d6a7fbe4524fb5cc12ab388128b4997ccb91b7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28262.79,
+      "usage_known": true,
+      "prompt_tokens": 23176,
+      "cached_tokens": 13696,
+      "completion_tokens": 1071
+    }
+  ]
+}

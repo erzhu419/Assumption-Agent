@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8762c5ace8db4d4b9b069b116f89831b",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:55:03.268148+00:00",
+  "ended_at_utc": "2026-11-27T18:55:24.997436+00:00",
+  "request_sha256": "23d8906e42f60fb55eb100b3cb759f2da5d79946f75ff8648838cad354b9def1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38899,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29028,
+    "cached_tokens": 14976,
+    "completion_tokens": 815
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; s=r.std(0); x=(r-r.mean(0))/s\\nfor tag,a,b in [('raw-to-load',x,y),('load-to-raw',(y-y.mean(0))/y.std(0),r)]:\\n print(tag,'input ranges',np.min(a,axis=0),np.max(a,axis=0))\\n for degree in (1,2,3):\\n  J=[j for k in range(1,degree+1) for j in combinations_with_replacement(range(4),k)]\\n  A=np.column_stack([np.ones(len(a))]+[np.prod(a[:,j],axis=1) for j in J]); B=np.linalg.lstsq(A,b,rcond=None)[0]; E=A@B-b; P=A@np.linalg.pinv(A); Eloo=E/(1-np.diag(P))[:,None]\\n  print(degree,'rank',np.linalg.matrix_rank(A),'rmse',np.sqrt(np.mean(E**2,axis=0)).round(6),'LOO',np.sqrt(np.mean(Eloo**2,axis=0)).round(6),'sum LOO',np.sqrt(np.mean(Eloo.sum(1)**2)).round(6))\\n  if degree==2: print('quadratic terms',list(zip(J[4:],B[5:].round(5).tolist())))\\nprint('ranges calibration',r.min(0),r.max(0))\\nfor k in ('train','test'):\\n z=np.vstack((D[k]['past_channel_raw'].reshape(-1,4),D[k]['hold_channel_raw'])); print(k,'ranges',z.min(0),z.max(0))\\nprint('rows raw/load'); print(np.c_[r[:8],y[:8]].round(4))\\nfor k,v in c['single_channel_sweeps'].items(): print(k, np.shape(v),np.asarray(v)[:10])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge calibration → H2 nonlinear bridge calibration before material fitting; the affine fit gives a worst held-out-lab curve MAE of 0.195 across horizons and a worst-lab rate p90 absolute error of 0.533.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the relaxation optimizer first\",\n      \"rejected_reason\": \"The affine bridge already misses known calibration loads by up to 1.51, so changing the optimizer first could absorb calibration error into the material parameters.\"\n    }\n  ],\n  \"rationale\": \"Compare direct and forward bridge models with pairwise polynomial terms on held-out calibration rows. If one direction sharply reduces error, use it to recalibrate the coupon stresses and check whether the slow relaxation branch moves off its upper bound.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "672a4ffaaf50b17b6860e6bbf01e3e6ae7415fea3c1b3decd55fa4eee889e9ba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22718.76,
+      "usage_known": true,
+      "prompt_tokens": 29028,
+      "cached_tokens": 14976,
+      "completion_tokens": 815
+    }
+  ]
+}

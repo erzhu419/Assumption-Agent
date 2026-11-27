@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6711d03108844b86b1c605de9cb5f628",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:43:41.130785+00:00",
+  "ended_at_utc": "2026-11-27T18:44:16.596898+00:00",
+  "request_sha256": "27682865e5403d746bae7a21ab5e7dbb0d67387e9789de9f295208d600ad237b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50102,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35281,
+    "cached_tokens": 14976,
+    "completion_tokens": 1551
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,49p' /tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/holdout_task/'; a=json.load(open(p+'public_asset_index.json')); print('Public metadata:',str(a)[:1400]); i=pickle.load(open(p+'public_batch.pkl','rb'))[0]; d=i['dataset']; print('times',d['eval_times']); print('sections',list(d)); print('by split: lab counts and missing feature counts');\\nfor q in [d['train'],d['test'],i['campaign_diagnostics']]:\\n print(np.unique(q['lab_id'],return_counts=True),np.isnan(q['coupon_features_raw']).sum(0)); print('reference summary',np.round(np.median(q['ref_coupons'],axis=0),3));\\n if 'aux_chamber_telemetry' in q: print('telemetry summary',np.round(np.stack([q['aux_chamber_telemetry'].mean(0),q['aux_chamber_telemetry'].std(0)]),4))\\nPY\\ncat > /tmp/chamber_refine.py <<'PY'\\nimport contextlib,io,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): p=runpy.run_path('/tmp/chamber_probe.py')\\nglobals().update({k:p[k] for k in ('m','d','tr','te','di','dt','t','tau','theta','bridge','n','h','v','vr')})\\nx=m._features(di); _,hold,_=m._coupon(di,x,bridge); labs=di['lab_id']; z=np.c_[np.ones(len(x)),x]; L=np.r_[t,1.]; E=lambda a:np.r_[-np.expm1(-t/a),1/a]; S=sum(w*E(a) for w,a in zip(theta[:2],tau)); Y=np.c_[v,vr]-hold[:,None]*S; W=np.r_[np.ones(len(t)),1.4]; f=z@theta[2:]; print('benchtop drift direction',theta[2:].round(6));\\nfor mode in ['two','rational','fixed','tied-pole','two-estimate-direction','rational-estimate-direction']:\\n def shapes(q):\\n  a=np.exp(q); return {'two':lambda:[E(a[0]),E(a[1]),L], 'rational':lambda:[np.r_[t/(a[0]+t),1/a[0]],L], 'fixed':lambda:[E(tau[0]),E(tau[1]),L], 'tied-pole':lambda:[E(tau[0]),E(a[0]),L]}[mode.split('-estimate')[0]]()\\n ini={'two':[.32,1.5],'rational':[1.92],'fixed':[],'tied-pole':[1.5],'two-estimate-direction':[.32,1.5],'rational-estimate-direction':[1.92]}[mode]\\n def fit(rows):\\n  def fun(q,ret=False):\\n   B=np.array(shapes(q[:len(ini)])); f1=z@np.r_[theta[2],q[len(ini):]] if mode.endswith('direction') else f\\n   A=np.concatenate([f1[:,None,None]*B.T[None,:,:],np.tile(L[:,None],(len(f),1,1))],axis=-1); a=(A[rows]*W[:,None]).reshape(-1,A.shape[-1]); c=np.linalg.lstsq(a,(Y[rows]*W).ravel(),rcond=None)[0]; r=A@c-Y\\n   return (r,c,f1) if ret else (r[rows]*W).ravel()\\n  q=np.r_[np.log(ini),theta[3:] if mode.endswith('direction') else []]; q=least_squares(fun,q,max_nfev=60).x if len(q) else q; r,c,f1=fun(q,True); return r,c,q\\n r,c,q=fit(np.ones(len(x),bool)); scores=[]\\n for lab in np.unique(labs):\\n  test=labs==lab; e=fit(~test)[0][test]; scores.append([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-2]**2)),np.sqrt(np.mean(e[:,-1]**2))])\\n print(mode,'worst-lab all-strain, final-strain, rate RMS',np.max(scores,axis=0).round(6),'fit r rms',np.sqrt(np.mean(r**2)).round(6),'taus',np.exp(q[:len(ini)]).round(6),'coeff',c.round(6),'direction',q[len(ini):].round(6))\\n print('per-lab mean residual at final/rate',np.array([r[labs==lab,-2:].mean(0) for lab in np.unique(labs)]).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_refine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged hereditary transfer -> H2 chamber memory reset plus a shared nonlinear drift response; the two-pole candidate has worst held-out lab final-strain RMS 0.01785 and rate RMS 0.01121.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add six independent prior-stress corrections\",\"rejected_reason\":\"They improved in-sample fit but worsened worst-lab rate RMS from 0.01121 to 0.01204.\"},{\"option\":\"Fit separate feature weights at each time\",\"rejected_reason\":\"This discards the shared coupon response and its curve-rate derivative constraint.\"}],\"rationale\":\"The rational and two-pole kernels have similar held-out errors. Check whether estimating one common chamber feature direction materially reduces worst-lab errors; if it does not, keep the benchtop direction and encode only the verified chamber response in the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "5cc0702b76675fb6559bc6e731444f8c1dc513d0a2933ab0167476ed9f466b5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37913.19,
+      "usage_known": true,
+      "prompt_tokens": 35281,
+      "cached_tokens": 14976,
+      "completion_tokens": 1551
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f37ce50f4b494d8288bb963a724ee20f",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:43:25.354387+00:00",
+  "ended_at_utc": "2026-11-27T18:43:54.169683+00:00",
+  "request_sha256": "03ddcd53b00c62f8a7f00fa54b71a10da55cbbda246fe97fb60b35f8ba2459f5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38849,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29654,
+    "cached_tokens": 14976,
+    "completion_tokens": 1177
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=item['study']; sw=s['sensor_calibration_sweeps']; X=sw['ref_rosette']; Y=sw['raw_rosette']; rng=np.random.default_rng(6)\\nfolds=np.empty(len(X),int)\\nfor k in (True,False):\\n idx=np.flatnonzero((np.count_nonzero(X,axis=1)>1)==k); folds[rng.permutation(idx)]=np.arange(len(idx))%8\\nmodels=['diagonal','affine','pairwise','rational']; errs={k:np.zeros_like(Y) for k in models}\\nfor j in range(4):\\n x=X[:,j]; y=Y[:,j]; pairs=np.column_stack([X[:,a]*X[:,b] for a in range(4) for b in range(a+1,4)]); designs=[np.column_stack([np.ones(len(x)),x]),np.column_stack([np.ones(len(x)),X]),np.column_stack([np.ones(len(x)),X,pairs])]\\n for fold in range(8):\\n  tr=folds!=fold; te=~tr\\n  for k,A in zip(models,designs):\\n   errs[k][te,j]=A[te]@np.linalg.lstsq(A[tr],y[tr],rcond=None)[0]-y[te]\\n  for q in [x]+[x+d*X[:,a] for a in range(4) if a!=j for d in (-1,1)]:\\n   def pred(t): return t[0]+(X@t[1:5])/(1+t[5]*q*q)\\n   start=np.r_[np.linalg.lstsq(designs[1][tr],y[tr],rcond=None)[0],0.]\\n   f=least_squares(lambda t:(pred(t)-y)[tr],start,bounds=(np.r_[np.full(5,-np.inf),0],np.full(6,np.inf)),gtol=1e-12)\\n   score=np.linalg.norm(f.fun)\\n   if q is x or score<best: best=score; e=pred(f.x)-y\\n  errs['rational'][te,j]=e[te]\\nfor name,e in errs.items(): print(name,'worst held-out fold/channel RMS',max(np.sqrt(np.mean(e[folds==k]**2,axis=0)).max() for k in range(8)),'pooled RMS',np.sqrt(np.mean(e**2)))\\nS,_=m._forward(s); Z=s['Z_nuisance']; P=lambda x:x-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@x); out=m.solve_batch(s); w=out['weights']; U=P(S); y=P(m._calibrate(s)); sv=np.linalg.svd(U@np.linalg.qr(np.eye(len(w))[:,:-1]-np.eye(len(w))[:,[-1]])[0],compute_uv=False); bank=np.asarray(s['row_bank_id']); r=U@w-y\\nprint('nuisance rank',np.linalg.matrix_rank(Z),'projected simplex contrast singular values',sv,'residual RMS per bank',{int(k):np.sqrt(np.mean(r[bank==k]**2)) for k in np.unique(bank)})\\nassert len(r)==len(bank) and np.all(np.isfinite(r)) and sv[-1]>0\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin leakage → H2 sealed walls with affine sensor calibration; the verified maximum tracer error is 2.00e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, drift operators, and within-batch classification accuracy\",\n      \"rejected_reason\": \"The supplied task is a steady linear transport inverse problem with continuous observations and no relay modes or class labels.\"\n    }\n  ],\n  \"rationale\": \"Test whether pairwise or rational sensor terms improve held-out calibration on real sweeps, and whether nuisance projection removes any source contrasts or leaves one bank with a disproportionate residual. A material improvement would justify changing the sensor model; rank loss or a bank-specific discrepancy would warrant examining the nuisance model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "20e596e4f6b63ff5ce92fd8bfec0653f9b7795d9b7ff220dd21bd04fdff049d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30263.15,
+      "usage_known": true,
+      "prompt_tokens": 29654,
+      "cached_tokens": 14976,
+      "completion_tokens": 1177
+    }
+  ]
+}

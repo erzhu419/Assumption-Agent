@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "240fcb4f505040ad912b7be34057bf44",
+  "call_seq": 14,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:56:12.177225+00:00",
+  "ended_at_utc": "2026-11-27T18:56:39.677599+00:00",
+  "request_sha256": "6a6827433b4f445cf34ff4775d90be370eb4cbba02c4ebfd3df4e1072bbc8143",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 72747,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38723,
+    "cached_tokens": 13696,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /tmp\\npython3 -I - <<'PY'\\nimport sys\\nimport numpy as np\\nsys.path[:0] = ['/tmp', '/holdout_task']\\nfrom probe import d, c, cd, dt, t\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import solve_downstream\\n\\nbase = solve_batch(d)\\ntrain, test = c['train'], c['test']\\n# Keep hold load, features, panels, and strain origin identical; vary only the load history.\\nhist = test['past_channel_raw']\\nchanged = dict(c, test=dict(test, past_channel_raw=hist[::-1].copy()))\\ncf = solve_downstream(changed)\\nfor k in ['estimated_taus', 'hereditary_weights']:\\n    np.testing.assert_array_equal(cf[k], base[k])\\na = base['estimated_taus']; w = base['hereditary_weights']\\nv, _ = c['total_load_projection']\\ntail = np.cumsum(dt[::-1])[::-1] - dt\\nmemory_coeff = -np.expm1(-dt[:, None] / a) * np.exp(-tail[:, None] / a)\\nweighted_delta = -(((hist[::-1] - hist) @ v) @ memory_coeff) * w[:2]\\nexpected_curve = weighted_delta @ -np.expm1(-t[None, :] / a[:, None])\\nexpected_rate = weighted_delta @ (1 / a)\\nactual_curve = cf['predicted_strain'] - base['predicted_strain']\\nactual_rate = cf['initial_rate_pred'] - base['initial_rate_pred']\\nnp.testing.assert_allclose(actual_curve, expected_curve, atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(actual_rate, expected_rate, atol=1e-12, rtol=0)\\nfor lab in np.unique(test['lab_id']):\\n    m = test['lab_id'] == lab\\n    print('deployment lab', int(lab), 'history-only strain/rate RMS changes', np.sqrt(np.mean(actual_curve[m]**2)), np.sqrt(np.mean(actual_rate[m]**2)))\\nassert np.linalg.norm(actual_curve) > .01 and np.linalg.norm(actual_rate) > .01\\nprint('PASS ng_t05: changing only real deployment histories changes both outputs by the exact retained-memory law; a reset would predict zero change.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace full reset with chronological memory and unit-rate exponential drift; worst diagnostic-lab RMSE is 0.02047 at a single strain horizon and 0.01990 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the diagnostic-lab fit and scoring\",\n      \"rejected_reason\": \"The measured comparison is settled. A history-only intervention directly checks whether the delivered code retains memory while hold load and drift are unchanged.\"\n    }\n  ],\n  \"rationale\": \"The host did not accept the previous resolution probe despite verifying the bundle. This isolated check changes only measured deployment histories in memory and compares the change in both outputs with the analytical recurrence. A mismatch would identify a deployment wiring error rather than justify retuning the chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "e845560424797ab0d2b11ed37b570f2606a09d6e6be0c2a18a776ac06d7a758d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28490.64,
+      "usage_known": true,
+      "prompt_tokens": 38723,
+      "cached_tokens": 13696,
+      "completion_tokens": 1062
+    }
+  ]
+}

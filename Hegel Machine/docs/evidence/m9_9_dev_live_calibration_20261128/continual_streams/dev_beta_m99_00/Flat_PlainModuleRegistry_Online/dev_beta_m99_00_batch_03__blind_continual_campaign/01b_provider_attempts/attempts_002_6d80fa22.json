@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d80fa22c9164a51a7005a2c6efa4f61",
+  "call_seq": 2,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:55:04.293039+00:00",
+  "ended_at_utc": "2026-11-27T18:55:22.392971+00:00",
+  "request_sha256": "c4002cc046bf6227bc1e7a6b8bd4aa6c5b1f01aaca9b981683f023f3475a3821",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 13445,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19641,
+    "cached_tokens": 13696,
+    "completion_tokens": 649
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _verified_downstream.py && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nb=pickle.load(open('public_batch.pkl','rb')); print('items',len(b))\\nfor item in b:\\n s=item['study']; c=s['sensor_calibration_sweeps']; print('study keys',list(s),'calibration keys',list(c)); print('single bank',type(c.get('single_bank_sweeps')),str(c.get('single_bank_sweeps'))[:400]); x=c['ref_rosette']; y=c['raw_rosette']; print('ref/raw shapes',x.shape,y.shape); print('ranges',np.min(x,0),np.max(x,0),np.min(y,0),np.max(y,0)); print('first refs',x[:8]); print('obs',s['y_obs_raw'].shape,np.percentile(s['y_obs_raw'],[0,5,50,95,100])); p=s.get('reference_tracer_pulses'); print('pulses',None if p is None else [(list(v), np.shape(v.get('y_pulse_raw'))) for v in p]); a=np.c_[np.ones(len(x)),x]; w=np.linalg.lstsq(a,y,rcond=None)[0]; print('affine',w); print('row residual percentiles',np.percentile(np.linalg.norm(a@w-y,axis=1),[0,25,50,75,90,95,100]))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('apparatus summaries');\\nfor r in log:\\n print({k:v for k,v in r.items() if len(str(v))<500},'other keys',[k for k,v in r.items() if len(str(v))>=500])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -30\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 robust nonlinear forward calibration; worst-slice inversion error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The first output was truncated. Recover the field layout and compare sweep coverage with observation coverage to see whether inversion requires extrapolation. Affine residual quantiles will set the baseline for separating saturation from EMI spikes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "33c92fa41dccb5728c6f0824db5c54c858e16d9e2d823da63b5ebd338acf3546",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19087.06,
+      "usage_known": true,
+      "prompt_tokens": 19641,
+      "cached_tokens": 13696,
+      "completion_tokens": 649
+    }
+  ]
+}

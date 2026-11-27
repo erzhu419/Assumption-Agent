@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a9ef76adbf54be8bb7569f6df78fbbc",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:49.473687+00:00",
+  "ended_at_utc": "2026-11-27T18:58:25.259654+00:00",
+  "request_sha256": "b66687de12d0c6530154e03f983b46211c533155f0c8461318dd8e78b82441df",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38763,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29191,
+    "cached_tokens": 13696,
+    "completion_tokens": 1501
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /holdout_task/upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Fit and invert the coupled four-channel load-cell bridge.\\\"\\\"\\\"\\nimport numpy as np\\n\\n_I, _J = np.triu_indices(4, 1)\\n\\n\\ndef _basis(x):\\n    return np.column_stack((np.ones(len(x)), x, x*x, x[:, _I]*x[:, _J], x**3))\\n\\n\\ndef _fit(load, raw):\\n    a = _basis(load)\\n    b = np.linalg.lstsq(a, raw, rcond=None)[0]\\n    for _ in range(30):\\n        r = np.linalg.norm(a @ b - raw, axis=1)\\n        w = np.minimum(1., max(0.7*np.median(r), 1e-12)/np.maximum(r, 1e-12))\\n        b = np.linalg.lstsq(w[:, None]*a, w[:, None]*raw, rcond=None)[0]\\n    r = np.linalg.norm(a @ b - raw, axis=1)\\n    clean = r <= max(6*np.median(r), 1e-10)\\n    a, raw = a[clean], raw[clean]\\n    inv = np.linalg.pinv(a)\\n    b = inv @ raw\\n    # Compact each output separately; the broad fit leaves missing couplings testable.\\n    df = len(a) - a.shape[1]\\n    if df > 0:\\n        sigma = np.linalg.norm(a @ b - raw, axis=0) / np.sqrt(df)\\n        se = np.linalg.norm(inv, axis=1)[:, None]*sigma\\n        for k in range(4):\\n            keep = np.abs(b[:, k]) > 6*se[:, k]\\n            keep[:5] = True\\n            b[:, k] = 0.\\n            b[keep, k] = np.linalg.lstsq(a[:, keep], raw[:, k], rcond=None)[0]\\n    return b\\n\\n\\ndef _invert(raw, b):\\n    shape = raw.shape\\n    y = np.asarray(raw, dtype=float).reshape(-1, 4)\\n    x = np.linalg.solve(b[1:5].T, (y-b[0]).T).T\\n    for _ in range(40):\\n        r = _basis(x) @ b - y\\n        norm = np.linalg.norm(r, axis=1)\\n        if not np.any(norm > 1e-11):\\n            return x.reshape(shape)\\n        jac = (b[1:5] + 2*x[:, :, None]*b[5:9]\\n               + 3*x[:, :, None]**2*b[15:19])\\n        for k, (i, j) in enumerate(zip(_I, _J)):\\n            jac[:, i] += x[:, j, None]*b[9+k]\\n            jac[:, j] += x[:, i, None]*b[9+k]\\n        step = np.linalg.solve(jac.transpose(0, 2, 1), r[..., None])[..., 0]\\n        step[norm <= 1e-11] = 0.\\n        trial = x - step\\n        for _ in range(16):\\n            worse = np.linalg.norm(_basis(trial) @ b - y, axis=1) > norm\\n            if not np.any(worse):\\n                break\\n            step[worse] *= 0.5\\n            trial[worse] = x[worse] - step[worse]\\n        x = trial\\n    raise RuntimeError('Load-cell bridge inverse did not converge')\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return a copy with bridge measurements in canonical load coordinates.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    load = np.asarray(cal['true_channel_loads'], dtype=float)\\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\\n    b = None if np.array_equal(raw, load) else _fit(load, raw)\\n    result = dict(dataset)\\n    result['calibration_load_cells'] = {**cal, 'bridge_raw': cal['true_channel_loads'].copy()}\\n    sweeps = cal['single_channel_sweeps']\\n    result['calibration_load_cells']['single_channel_sweeps'] = {\\n        **sweeps, 'cmd_stress': sweeps['true_stress'].copy()}\\n    for name in ('train', 'test', 'chamber_verification_trials'):\\n        split = dataset.get(name)\\n        if split is not None and b is not None:\\n            result[name] = {**split, **{field: _invert(split[field], b)\\n                                       for field in ('past_channel_raw', 'hold_channel_raw')}}\\n    return result\\nPY\\ncd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense quadratic-plus-cubic bridge → H2 sparse coupled cubic bridge; the dense model's high-load held-out 85th-percentile residual was 0.00039 raw units, and the sparse inverse is not yet validated.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Hard-code the observed coefficient support\",\n      \"rejected_reason\": \"Learning support from clean rows retains the observed sparsity without assuming that future calibration tables have identical couplings.\"\n    }\n  ],\n  \"rationale\": \"The clean refit separates supported terms from near-zero coefficients and gross spikes from ordinary measurement noise. This step implements the bridge and checks the composed schema; the next check will measure held-out inverse load error and exercise the optional trial path.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fbedad1a2f67b5412550157cbfda609c61daa5fe8235ce80b097b85bd0e9930c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36793.83,
+      "usage_known": true,
+      "prompt_tokens": 29191,
+      "cached_tokens": 13696,
+      "completion_tokens": 1501
+    }
+  ]
+}

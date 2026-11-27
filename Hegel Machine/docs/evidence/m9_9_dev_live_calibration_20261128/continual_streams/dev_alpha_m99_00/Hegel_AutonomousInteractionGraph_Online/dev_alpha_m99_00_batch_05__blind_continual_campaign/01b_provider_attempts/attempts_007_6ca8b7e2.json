@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ca8b7e2eaf546bb9ee2fe3d487d7ebb",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:03:12.628906+00:00",
+  "ended_at_utc": "2026-11-27T19:03:45.335170+00:00",
+  "request_sha256": "2146994f8d1b8155c60083852f02f69fb7d07f13400de723020a93d8237b3c4d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44660,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30220,
+    "cached_tokens": 13696,
+    "completion_tokens": 1283
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && tail -35 _verified_upstream.py && cat _upstream_param_payload.json && cat > /tmp/chamber_cv.py <<'PY'\\nexec(open('/tmp/chamber_probe.py').read().split('for k in (1,2,3,4):')[0].replace(\\\"q.get('chamber_verification_trials',q)})\\\", \\\"q.get('chamber_verification_trials',q)},json.load(open('/holdout_task/_upstream_param_payload.json')))\\\"))\\nfrom itertools import combinations\\nz=old._memory(taus,past,dt); gaps=hold[:,None]-z\\nprint('curve/rate shape',Y.shape,'train/test load ranges',[(np.min(s['hold_channel_raw'].sum(-1)),np.max(s['hold_channel_raw'].sum(-1))) for s in (a,b)])\\nfor j in range(2):\\n print('mode fast ratio',j,np.percentile(profile(np.log([.50633129,3.32304303]),True)[0][:,0]/[hold,gaps[:,0]][j],[0,25,50,75,100]))\\nprint('diagnostic raw feature NaNs',np.isnan(c['coupon_features_raw']).sum(axis=0))\\nA=np.c_[np.ones(len(Y)),hold,drift]; wt=np.r_[np.ones(len(t)),1.]\\nlabels=['affine','affine+memory','affine+past','affine+features','quadratic','drift+gaps','hold+drift']\\nmodels=[A,np.c_[A,z],np.c_[A,past],np.c_[A,x[n+m:]],np.c_[A,hold**2,hold*drift,drift**2],np.c_[np.ones(len(Y)),drift,gaps],A[:,1:]]\\n\\ndef fit(X,ix,mode='free'):\\n def calc(v):\\n  T=np.exp(v) if mode=='free' else (np.r_[taus[0],np.exp(v)] if mode=='fast_fixed' else taus)\\n  B=basis(T); W=np.linalg.lstsq(B*wt[:,None],np.linalg.lstsq(X[ix],Y[ix]*wt,rcond=None)[0].T,rcond=None)[0].T\\n  return (X@W@B.T-Y)*wt,W,T\\n v0=np.log([.51,3.3] if mode=='free' else [3.3]); v=v0 if mode=='both_fixed' else least_squares(lambda v:calc(v)[0][ix].ravel(),v0,bounds=(np.log(.06),np.log(20)),max_nfev=100).x\\n return calc(v)\\nfor label,X in zip(labels,models):\\n for mode in ('free','fast_fixed','both_fixed'):\\n  ix=np.arange(len(Y)); R,W,T=fit(X,ix,mode); oof=np.empty_like(R)\\n  for lab in np.unique(c['lab_id']):\\n   v=c['lab_id']==lab; oof[v]=fit(X,ix[~v],mode)[0][v]\\n  print(label,mode,'T',T.round(6),'fit',np.sqrt((R**2).mean()).round(6),'cv',np.sqrt((oof**2).mean(axis=0))[[0,len(t)-1,len(t)]].round(6),'worst',max(np.sqrt(np.mean(oof[c['lab_id']==lab]**2)) for lab in np.unique(c['lab_id'])).round(6))\\n  if label in ('affine','hold+drift') and mode in ('free','both_fixed'): print('coef',W.round(6))\\nprint('prior batch 01 physical prediction RMSE:')\\nimport dev_alpha_m99_00_batch_01_solver as m1\\nfor mode in ('archived_scale','current_projection'):\\n T=taus*m1._CHAMBER_TIME_SCALE\\n R=A@m1._CHAMBER_COEFFICIENTS.T@basis(T).T-Y;print(mode,T,np.sqrt((R**2).mean(0))[[0,-2,-1]])\\n break\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared intrinsic spectrum → H2 two chamber relaxation modes driven chiefly by hold load and drift; two-mode in-sample RMSE is 0.00211, with held-out validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more temporal modes based on in-sample residuals\",\n      \"rejected_reason\": \"The extra modes give small in-sample gains and produce unstable time scales; compare transferable forcing models first.\"\n    }\n  ],\n  \"rationale\": \"Fit each chamber model without the held-out lab and score early strain, late strain, and initial rate separately. This will distinguish useful history dependence from extra terms that only fit the diagnostic sample.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f71ddc20089194862c93153a30ec616e84474fc4a1505ea3ef2ff8d37b687337",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33708.0,
+      "usage_known": true,
+      "prompt_tokens": 30220,
+      "cached_tokens": 13696,
+      "completion_tokens": 1283
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4bcba9c0705b471a9112bbaf1d061045",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Hegel_AutonomousInteractionGraph_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:01:58.727657+00:00",
+  "ended_at_utc": "2026-11-27T19:02:28.671345+00:00",
+  "request_sha256": "022f914c1ad047c4265247348c8729def11e970c42e8aecd8fdfebcc227cd9e8",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 52025,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31880,
+    "cached_tokens": 13696,
+    "completion_tokens": 1178
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path[:0] = ['/holdout_task', '/tmp']\\nfrom fit_wall import pred, s, Y, W\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _forward\\n\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\nstudy = item['study']\\nraw = np.stack([p['y_pulse_raw'] for p in item['campaign_diagnostics']], axis=1)\\nbanks = np.asarray(study['row_bank_id']).ravel()\\nshifts = np.repeat(np.arange(len(study['mu_shifts'])), len(study['sensor_ij']))\\nZ = np.asarray(study['Z_nuisance'])\\nkinds = ['open', 'sealed', 'periodic', 'local_periodic', 'upwind_open', 'upwind_sealed']\\nexpected = ('periodic', 'sealed')\\npreds = {k: pred(*k) for k in itertools.product(kinds, repeat=2)}\\nS, _ = _forward(s)\\nnp.testing.assert_allclose(S @ W, preds[expected], rtol=0, atol=1e-13)\\nfor name, groups in [('bank', banks), ('shift', shifts)]:\\n    worst, min_margin, count = 0., np.inf, 0\\n    for group in np.unique(groups):\\n        test = groups == group\\n        train = ~test\\n        z = Z[train]\\n        proj = np.linalg.solve(z.T @ z + study['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n        for pulse in range(Y.shape[1]):\\n            other = np.arange(Y.shape[1]) != pulse\\n            def score(p):\\n                r = (p - Y)[train][:, other]\\n                return np.linalg.norm(r - z @ (proj @ r))\\n            ranked = sorted((score(p), k) for k, p in preds.items())\\n            assert ranked[0][1] == expected, (name, group, pulse, ranked[:2])\\n            e = (preds[ranked[0][1]] - Y)[test, pulse]\\n            worst = max(worst, np.sqrt(np.mean(e**2)))\\n            min_margin = min(min_margin, ranked[1][0] / ranked[0][0])\\n            count += 1\\n    assert count > 0 and worst < 4e-6 and min_margin > 10\\n    print(f'Joint holdout: pulse + {name}, {count} folds, worst RMSE={worst:.8g}, minimum runner-up residual ratio={min_margin:.3f}')\\nbase = preds[expected]\\nprint('Tracer RMSE before/after upstream calibration:', np.sqrt(np.mean((base-raw)**2)), np.sqrt(np.mean((base-Y)**2)))\\nout = solve_batch(study)\\ncert = out['kkt_certificate']\\ngap = cert['primal_objective'] - cert['dual_lower_bound']\\nassert abs(gap) < 1e-10\\nprint('Study-only entry point, duality gap:', gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: separate holdouts mask dependence on a particular pulse and measurement stratum -> H2: the mixed wall law survives joint holdouts; the previous worst held-out RMSE was 2.23e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear drift or relay-state terms\",\n      \"rejected_reason\": \"The specified steady linear chamber has no relay state; an exact boundary-stencil comparison is the relevant test.\"\n    }\n  ],\n  \"rationale\": \"Previous folds withheld pulses and measurement strata separately. This audit withholds both at once and fits the nuisance projection only on retained rows. A changed winner or collapsed residual margin would prompt investigation of that fold; otherwise the verified solver stays unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a0fd00f65c96e281469e136cde43c0bec4fdf93ef01a62f57634a292f77179a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29910.56,
+      "usage_known": true,
+      "prompt_tokens": 31880,
+      "cached_tokens": 13696,
+      "completion_tokens": 1178
+    }
+  ]
+}

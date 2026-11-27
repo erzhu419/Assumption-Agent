@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c53f5ed86d54fae90b4cd35aa947cc0",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:04:21.425039+00:00",
+  "ended_at_utc": "2026-11-27T19:04:48.609099+00:00",
+  "request_sha256": "d16ea46eb0e8dc1874d68048efdf49dcf3b56c59c5bae51c13122fde802b8415",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48167,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33070,
+    "cached_tokens": 14976,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle, sys\\nimport numpy as np\\nfrom scipy.sparse import diags, eye, kron\\nfrom scipy.sparse.linalg import splu\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']; pulses = item['campaign_diagnostics']\\nout = m.solve_batch(s)\\nw = np.asarray(out['weights']); k = out['kkt_certificate']; field = np.asarray(out['terminal_field'])\\nassert field.shape == (s['nx'], s['ny']) and np.isfinite(field).all()\\nassert np.isfinite(w).all() and abs(w.sum()-s['total_budget']) < 1e-10\\nassert np.min(w) >= -1e-10 and np.max(w) <= s['u_box'] + 1e-10\\nassert abs(k['primal_objective']-k['dual_lower_bound']) < 1e-10\\nsys.path.insert(0, '/tmp')\\nfrom m99_wall_probe import axes, forward\\ncal = s['sensor_calibration_sweeps']; b = m._fit_rosette(cal['ref_rosette'], cal['raw_rosette'])\\ny = np.column_stack([m._invert_rosette(p['y_pulse_raw'].reshape(-1,4), b).ravel() for p in pulses])\\nW = np.column_stack([p['w_pulse'] for p in pulses]); ns = len(s['sensor_ij'])\\nres = {}\\nfor (kx, ax), (ky, ay) in itertools.product(axes(s,'x').items(), axes(s,'y').items()):\\n    res[kx+ky] = (y - forward(s, ax, ay, s['source_modes']) @ W).reshape(-1, ns, len(pulses))\\nactual, _ = m._forward(s)\\nnp.testing.assert_allclose((y-actual@W).reshape(res['PS'].shape), res['PS'], atol=1e-12, rtol=0)\\nheld = []\\nfor i in range(len(pulses)):\\n    train = np.arange(len(pulses)) != i\\n    choice = min(res, key=lambda key: np.max(np.sqrt(np.mean(res[key][:,:,train]**2,axis=1))))\\n    worst = float(np.max(np.sqrt(np.mean(res[choice][:,:,i]**2,axis=1))))\\n    assert choice == 'PS' and worst < 1e-5, (i, choice, worst)\\n    held.append(worst)\\nprint('Isolated solver passed; held-out pulse worst-shift RMS:', held, '; candidate primal-dual gap:', k['primal_objective']-k['dual_lower_bound'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 same wall law on both axes → H2 periodic x and sealed y; worst measured shift-by-pulse RMS is 2.07e-6 and independent field relative L2 error is 3.75e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the boundary or calibration\",\n      \"rejected_reason\": \"The host probe confirms agreement with the reference field and weights, and tracer residuals are already at calibration scale.\"\n    }\n  ],\n  \"rationale\": \"Import the exact artifact in isolated Python to catch implicit runtime dependencies, then select the wall law without each tracer pulse in turn. If the winner changes or its held-out error rises, revisit wall identification before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ad5a65fd1b08ebd6309ea4387b96dc802e2e1f505abf51ddfe30f663d58e08cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28204.28,
+      "usage_known": true,
+      "prompt_tokens": 33070,
+      "cached_tokens": 14976,
+      "completion_tokens": 1072
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a641eb7aa7cc43d889f19d43300a7363",
+  "call_seq": 12,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:34.077673+00:00",
+  "ended_at_utc": "2026-11-27T18:57:56.673813+00:00",
+  "request_sha256": "0fc302a5b472aca67aeb3ec8989479f703982163d351460763fe1bb1b80e542f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63017,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36753,
+    "cached_tokens": 14976,
+    "completion_tokens": 856
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; b=m._bridge(d['calibration_load_cells']); bias,L,C,P=b[0],b[1:5],b[5:9],b[9:13]\\nfor key in ('past_channel_raw','hold_channel_raw'):\\n raw=d['test'][key]; r=raw.reshape(-1,4); x=np.linalg.solve(L.T,(r-bias).T).T; j=np.arange(4)\\n for _ in range(20):\\n  nxt=np.roll(x,-1,axis=1); e=bias+x@L+x**3@C+(x*nxt)@P-r\\n  if np.max(np.abs(e))<1e-10: break\\n  J=L+3*x[:,:,None]**2*C+nxt[:,:,None]*P; J[:,(j+1)%4,:]+=x[:,:,None]*P\\n  x-=np.linalg.solve(J.swapaxes(1,2),e[:,:,None])[...,0]\\n nxt=np.roll(x,-1,axis=1); e=bias+x@L+x**3@C+(x*nxt)@P-r\\n print(key,'max forward residual',np.max(np.abs(e)),'max channel load magnitude',np.max(np.abs(x)))\\n assert np.max(np.abs(e))<1e-8\\n np.testing.assert_allclose(m._stress(raw,b).ravel(),x.sum(1),atol=1e-9,rtol=0)\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print(e['completed_campaign_short_name'], np.asarray(e['facility_telemetry_trace']).mean(0).round(4).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 coupled cubic bridge with baseline deployment mechanics; inverse calibration LOO RMSE is 0.000179, worst held-out-lab horizon MAE is 0.0687, and worst held-out-lab rate p90 absolute error is 0.0166.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the material fit\",\n      \"rejected_reason\": \"Both relaxation times are now interior and stable across held-out labs; the remaining check is whether the bridge inverse converges on actual deployment inputs.\"\n    }\n  ],\n  \"rationale\": \"The schema and held-out checks passed. Finite predictions alone do not show that Newton inversion converged, so check the forward residual on every deployment reading. If it fails, revise the inverse; otherwise retain the verified artifact and use the compact apparatus comparison to confirm the blind deployment setting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "425cd7ae94f6de4501f46b4499dbe2a147b05112a165a56ac0912fed5b0aea0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23596.52,
+      "usage_known": true,
+      "prompt_tokens": 36753,
+      "cached_tokens": 14976,
+      "completion_tokens": 856
+    }
+  ]
+}

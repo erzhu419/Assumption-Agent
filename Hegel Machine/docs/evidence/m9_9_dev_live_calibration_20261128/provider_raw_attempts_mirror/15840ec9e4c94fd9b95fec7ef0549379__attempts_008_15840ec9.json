@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "15840ec9e4c94fd9b95fec7ef0549379",
+  "call_seq": 8,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:44:18.040059+00:00",
+  "ended_at_utc": "2026-11-27T18:44:55.780353+00:00",
+  "request_sha256": "8eebc19aed5b4c823f8fd86b9d3a2e659afbf6936fa660d02d8709c60dc7a642",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56465,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37417,
+    "cached_tokens": 14976,
+    "completion_tokens": 1567
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed '/^def solve_batch(/,$d' /tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py > /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef _deployment(hold, features, tau, theta, t):\\n    # Chamber verification coupons support a memory reset and a separate\\n    # time response for the coupon drift score.\\n    chamber_tau = np.array([0.322898, 1.496942])\\n    chamber_amp = np.array([0.060623, 0.962508])\\n    chamber_slope = 0.16156\\n    chamber_offset = -0.001001\\n    direction_correction = np.array([0.000717, 0.001097, -0.001765, -0.002177])\\n    score = theta[2] + features @ (theta[3:] + direction_correction)\\n    hold_kernel = -np.expm1(-t[:, None] / tau) @ theta[:2]\\n    chamber_kernel = -np.expm1(-t[:, None] / chamber_tau) @ chamber_amp + chamber_slope * t\\n    delta = hold[:, None] * hold_kernel + score[:, None] * chamber_kernel + chamber_offset * t\\n    rate = hold * np.sum(theta[:2] / tau) + score * (np.sum(chamber_amp / chamber_tau) + chamber_slope) + chamber_offset\\n    return delta, rate\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    t, dt = np.asarray(dataset['eval_times']), np.asarray(dataset['past_dt'])\\n    n = len(train['lab_id'])\\n    features = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    train_coupon = _coupon(train, features[:n], bridge)\\n    curves = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    tau, theta = _fit(train_coupon, dt, t, curves, train['instant_rate_obs'])[:2]\\n    _, hold, _ = _coupon(test, features[n:], bridge)\\n    delta, rate = _deployment(hold, features[n:], tau, theta, t)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + delta,\\n            'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\ncat > /tmp/chamber_score_probe.py <<'PY'\\nimport runpy,contextlib,io,numpy as np\\nwith contextlib.redirect_stdout(io.StringIO()): p=runpy.run_path('/tmp/chamber_probe.py')\\nglobals().update({k:p[k] for k in ('m','di','dt','t','tau','theta','bridge','v','vr')})\\nx=m._features(di); past,hold,_=m._coupon(di,x,bridge); labs=di['lab_id']; raw=di['coupon_features_raw']; f=theta[2]+x@theta[3:]; H=-np.expm1(-t[:,None]/tau)@theta[:2]; Y=np.c_[v,vr]-hold[:,None]*np.r_[H,np.sum(theta[:2]/tau)]; a=np.array([.322898,1.496942]); c=np.array([.060623,.962508]); B=np.r_[-np.expm1(-t[:,None]/a)@c+.16156*t,np.sum(c/a)+.16156]; T=np.r_[t,1.]; amp=((Y+.001001*T)@B)/(B@B); e=amp-f\\nprint('lab missing score and residual per coupon:'); print(np.c_[labs,np.isnan(raw).any(1),f,amp,e].round(6)); print('correlation score-residual',np.corrcoef(np.c_[f,f**2,f**3,hold,past, x, e].T)[-1,:-1].round(3))\\nfor label,F in [('linear',f[:,None]),('free',x),('quadratic',np.c_[f,f**2]),('absolute',np.c_[f,abs(f)]),('cubic',np.c_[f,f**3]),('rational',np.c_[f, f/(1+f*f)]),('missing',np.c_[f,np.isnan(raw).astype(float)])]:\\n A=np.c_[np.ones(len(f)),F]; errs=[]\\n for lab in np.unique(labs):\\n  sel=labs!=lab; coef=np.linalg.lstsq(A[sel],amp[sel],rcond=None)[0]; E=(A[~sel]@coef)[:,None]*B-.001001*T-Y[~sel]; errs.append(np.sqrt(np.mean(E[:,[0,-2,-1]]**2,axis=0)))\\n print(label,'worst lab',np.max(errs,axis=0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_score_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber reset with unchanged feature direction -> H2 shared two-pole chamber response with a small direction correction; worst held-out lab final-strain and initial-rate RMS are 0.01723 and 0.01020.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the rational time kernel\",\n      \"rejected_reason\": \"It is slightly better for the initial rate but slightly worse for final strain; the current differences do not establish a clear advantage.\"\n    }\n  ],\n  \"rationale\": \"Build the dataset-only solver and check its public schema in isolation. Test whether the remaining chamber residuals follow score curvature or missingness; if they do so consistently across held-out labs, revise the chamber score rather than adding more time constants.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "df8a40b5c463c50f4f958694b2d637ddffa44bbeeef06e9ecca4214b2427d3f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38712.66,
+      "usage_known": true,
+      "prompt_tokens": 37417,
+      "cached_tokens": 14976,
+      "completion_tokens": 1567
+    }
+  ]
+}

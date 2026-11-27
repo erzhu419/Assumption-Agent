@@ -1,0 +1,79 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_alpha_m99_00_s00_d11ec146b696",
+    "source_hash": "d11ec146b6965c9a0ae9e06ac7f70da6c115fba7783cddf832b1fe2f0209140b",
+    "parent_ids": [],
+    "source_episode_id": "dev_alpha_m99_00_s00__blind_continual_campaign",
+    "task_id": "dev_alpha_m99_00_s00__blind_continual_campaign",
+    "wormhole_family": "m99_alpha"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && ls -l /tmp/hegel_continual_archive/; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference-panel alignment imputation'; cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np, pathlib, json\nitems=pickle.load(open('public_batch.pkl','rb')); print('items:',len(items))\ndef describe(x,name='',depth=0):\n if isinstance(x,dict):\n  print(name, list(x));\n  if depth<3:\n   for k,v in x.items(): describe(v,' '*depth+str(k),depth+1)\n elif hasattr(x,'shape'):\n  a=np.asarray(x); print(name,a.shape",
+      "cd /holdout_task && cat public_asset_index.json && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic' | head -16; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nit=pickle.load(open('public_batch.pkl','rb'))[0]; d=it['dataset']; print('item',list(it),'data',list(d))\nfor k,v in d.items():\n if not isinstance(v,dict): print(k,repr(v)[:400])\nc=d['calibration_load_cells']; print('calibration',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in c.items()]); x,y=c['bridge_raw'],c['true_channel_loads']; a=np.c_[x,np.ones(len(x))]; b=np.linalg.lstsq(a",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic' | cut -d'|' -f1 | head -15; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy IRLS' | cut -d'|' -f1 | head -15; python3 - <<'PY'\nimport pickle,numpy as np, scipy\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; c=d['calibration_load_cells']; s=c['single_channel_sweeps']; print('scipy',scipy.__version__); print('sweeps',[(k,np.shape(v),np.min(v),np.max(v)) for k,v in s.items()]); print('sweep errors by lab',[(int(i),float(np.sqrt(np.mean((s['cmd_stress'][s['lab_id']==i]-s['true",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy IRLS' | grep autogenous_robust_network_assimilation | head -4\ncat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrate the load bridge and fit the two-branch hereditary model.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _bridge(cal):\n    raw = np.asarray(cal['bridge_raw'], dtype=float)\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\n    return np.linalg.lstsq(np.column_stack((raw, np.ones(len(raw)))),\n                           loads.sum(axis=1), rcond=None)[0]\n\n\ndef _features(*splits):\n   ",
+      "set -e\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -18\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\np='/holdout_task/batch_solver.py'\nspec=importlib.util.spec_from_file_location('candidate',p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\ns=d['train']; lab=s['lab_id']; dt,t=d['past_dt'],d['eval_times']\nx=m._features(s,d['tes",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle\nfrom pathlib import Path\nimport numpy as np\nfrom scipy.optimize import least_squares\nroot=Path('/holdout_task')\nspec=importlib.util.spec_from_file_location('candidate',root/'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nitem=pickle.loads((root/'public_batch.pkl').read_bytes()); item=item[0]; d=item['dataset']\nfor p in sorted(Path('/tmp/hegel_continual_archive').glob('archive*.json')):\n    obj=json.loads(p.read_text()); print(p.name, list(obj) if isinstance(obj,dict) el",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\ns,u=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; n=len(s['lab_id']); x=m._features(s,u); cal=m._bridge(d['calibration_load_cells']); c=m._coupon(s,x[:n],cal); v=m._coupon(u,x[n:],cal)\ny=s['strain_curves_obs']-s['strain_0'][:,None]; r=s['instant_rate_"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4417,
+        "sha256": "bfb12c8d281c5e12be900c5800c114e951f669c8fb8c82fdb226f66aff8c81db",
+        "content_addressed_ref": "content_addressed_blobs/bfb12c8d281c5e12be900c5800c114e951f669c8fb8c82fdb226f66aff8c81db.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m99_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d11ec146b6965c9a0ae9e06ac7f70da6c115fba7783cddf832b1fe2f0209140b",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spe",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d11ec146b6965c9a0ae9e06ac7f70da6c115fba7783cddf832b1fe2f0209140b",
+        "expected_candidate_sha256": "d11ec146b6965c9a0ae9e06ac7f70da6c115fba7783cddf832b1fe2f0209140b",
+        "computed_candidate_sha256": "d11ec146b6965c9a0ae9e06ac7f70da6c115fba7783cddf832b1fe2f0209140b",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4417
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d11ec146"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

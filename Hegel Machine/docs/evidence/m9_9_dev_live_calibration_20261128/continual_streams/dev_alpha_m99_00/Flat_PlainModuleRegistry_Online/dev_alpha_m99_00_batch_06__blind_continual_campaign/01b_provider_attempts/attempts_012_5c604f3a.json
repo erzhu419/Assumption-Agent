@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c604f3a68c841b595869d3956fdaa5b",
+  "call_seq": 12,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:12:37.670967+00:00",
+  "ended_at_utc": "2026-11-27T19:13:04.225970+00:00",
+  "request_sha256": "21ddb685ae956d72218149faba14afcebfcc2b102a6e97025852f5f8ca62d927",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 63619,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35026,
+    "cached_tokens": 13696,
+    "completion_tokens": 1023
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as b\\nimport downstream_solver as s\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log = json.load(f)\\nz = np.asarray([e['facility_telemetry_trace'] for e in log]); bg = z[:, :, [0,2,3,4,5,7]]; bg = bg - bg.mean(axis=1, keepdims=True)\\nfor i, e in enumerate(log[:-1]):\\n    err = np.array([np.sqrt(np.mean((np.roll(bg[i], shift, axis=0)-bg[-1])**2)) for shift in range(-3, 4)])\\n    print(e['completed_campaign_short_name'], 'background RMS same clock / best small shift', round(err[3],4), round(err.min(),4), int(err.argmin())-3)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = b._up.calibrate_upstream(d,b._PAY); out = b.solve_batch(d); tr,te=c['train'],c['test']; t=c['eval_times']; x=s._features(tr,te)[len(tr['lab_id']):]; tau,theta=out['estimated_taus'],out['hereditary_weights']; p=c['total_load_projection']; C,R=s._design(tau,*s._loads(te,p),x,c['past_dt'],t)\\ndrift=theta[2]+x@theta[3:]; alt_y=te['strain_0'][:,None]+C[:,:,:2]@theta[:2]+drift[:,None]*-np.expm1(-t); alt_r=R@theta\\nfor key, alt in [('predicted_strain',alt_y),('initial_rate_pred',alt_r)]:\\n    delta=alt-out[key]; print(key,'batch-02 law vs batch-05 law: RMS / max',round(float(np.sqrt(np.mean(delta**2))),5),round(float(np.max(abs(delta))),5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: identical historical prefix traces disprove unique trace-to-law identification; the calibrated bench fit still has worst held-out lab-by-stratum p90 errors of 0.02408 for strain and 0.01545 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"An apparatus prefix trace uniquely identifies the next campaign's chamber memory and drift law.\",\n    \"empirical_witness\": \"The full predecessor traces for batch 02 and batch 05 are byte-for-byte equal as arrays, yet the verified batch-02 solver retains both branches with exponential drift decay and the batch-05 solver resets both branches with inverse-square-root drift decay.\",\n    \"causal_blanket_diagnosis\": \"The prefix trace is an incomplete proxy for the intervention that sets the chamber law; the benchtop observations identify the material, not that intervention.\",\n    \"sublated_pivot\": \"Preserve the calibrated material fit, test whether the current background trace supplies a separate historical clue, and quantify the disagreement between the two supported chamber laws.\",\n    \"risk_kind\": \"blind deployment law selection\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Average the two archived predictions\",\n      \"rejected_reason\": \"There are no labeled chamber measurements or regime probabilities to justify a blend, and it would mix distinct memory boundary conditions.\"\n    }\n  ],\n  \"rationale\": \"A closer background match to a different historical regime would change which precedent deserves priority. The direct comparison on deployment inputs measures the practical cost of choosing the wrong law; neither comparison requires changing the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d46e00f38110a5ccdc6b55e88d8635bcb8e5d08afbc197e2f051255906b38152",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27613.67,
+      "usage_known": true,
+      "prompt_tokens": 35026,
+      "cached_tokens": 13696,
+      "completion_tokens": 1023
+    }
+  ]
+}

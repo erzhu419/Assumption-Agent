@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0b6dea0ea27c4532872fff74af5df477",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:05:27.482401+00:00",
+  "ended_at_utc": "2026-11-27T19:06:05.378373+00:00",
+  "request_sha256": "2a0bf9e50d312c38c74f2a0adbcf3a33120f975a89db8b83a4cee62beb814070",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54916,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34171,
+    "cached_tokens": 13696,
+    "completion_tokens": 1582
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > downstream_solver.py <<'PY'\\n\\\"\\\"\\\"Fit benchtop relaxation and predict the equilibrated chamber response.\\\"\\\"\\\"\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _features(*splits):\\n    x = np.concatenate([s['coupon_features_raw'] for s in splits]).astype(float)\\n    refs = np.concatenate([s['ref_coupons'] for s in splits])\\n    labs = np.concatenate([s['lab_id'] for s in splits])\\n    strata = np.concatenate([s['stratum'] for s in splits])\\n    for lab in np.unique(labs):\\n        rows = labs == lab\\n        panel = refs[rows]\\n        center = np.median(panel.mean(axis=0))\\n        scale = np.median(panel.std(axis=0, ddof=0))\\n        x[rows] = (x[rows] - center) / scale\\n    _, cell, count = np.unique(np.column_stack((labs, strata)), axis=0,\\n                               return_inverse=True, return_counts=True)\\n    w = 1.0 / count[cell]\\n    known = np.isfinite(x)\\n    means = (w @ np.where(known, x, 0.0)) / (w @ known)\\n    return np.where(known, x, means)\\n\\n\\ndef _design(taus, past, hold, features, dt, times):\\n    state = np.zeros((len(hold), 2))\\n    for stress, duration in zip(past.T, dt):\\n        state += -np.expm1(-duration / taus) * (stress[:, None] - state)\\n    gap = hold[:, None] - state\\n    drift = np.column_stack((np.ones(len(hold)), features))\\n    curves = np.concatenate((gap[:, None, :] * -np.expm1(-times[:, None] / taus),\\n                             times[None, :, None] * drift[:, None, :]), axis=2)\\n    rates = np.column_stack((gap / taus, drift))\\n    return curves, rates\\n\\n\\ndef _fit(train, features, dt, times):\\n    past = np.sum(train['past_channel_raw'], axis=-1)\\n    hold = np.sum(train['hold_channel_raw'], axis=-1)\\n    curves = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    rates = train['instant_rate_obs']\\n\\n    def residual(p):\\n        c, r = _design(p[:2], past, hold, features, dt, times)\\n        return np.r_[(c @ p[2:] - curves).ravel(), r @ p[2:] - rates]\\n\\n    lo = [0.050001, 0.050001] + [-np.inf] * 7\\n    hi = [24.999999, 24.999999] + [np.inf] * 7\\n    fits = []\\n    for taus in ([0.4, 3.0], [1.0, 9.0], [0.12, 16.0]):\\n        c, r = _design(np.asarray(taus), past, hold, features, dt, times)\\n        theta = np.linalg.lstsq(np.vstack((c.reshape(-1, 7), r)),\\n                               np.r_[curves.ravel(), rates], rcond=None)[0]\\n        fits.append(least_squares(residual, np.r_[taus, theta], bounds=(lo, hi),\\n                                  loss='soft_l1', f_scale=0.004, x_scale='jac'))\\n    p = min(fits, key=lambda fit: fit.cost).x\\n    order = np.argsort(p[:2])\\n    return p[:2][order], np.r_[p[2:4][order], p[4:]]\\n\\n\\ndef _predict_chamber(taus, theta, split, features, times):\\n    hold = np.sum(split['hold_channel_raw'], axis=-1)\\n    drift = theta[2] + features @ theta[3:]\\n    response = -np.expm1(-times[:, None] / taus) @ theta[:2]\\n    # Both memory branches start at equilibrium; integrate r / sqrt(1+t).\\n    integral = 2 * times / (np.sqrt(1 + times) + 1)\\n    strain = split['strain_0'][:, None] + hold[:, None] * response + drift[:, None] * integral\\n    rate = hold * np.sum(theta[:2] / taus) + drift\\n    return strain, rate\\n\\n\\ndef solve_downstream(cal_item: dict) -> dict:\\n    train, test = cal_item['train'], cal_item['test']\\n    dt = np.asarray(cal_item['past_dt'], dtype=float)\\n    times = np.asarray(cal_item['eval_times'], dtype=float)\\n    features = _features(train, test)\\n    n = len(train['strain_0'])\\n    taus, theta = _fit(train, features[:n], dt, times)\\n    strain, rate = _predict_chamber(taus, theta, test, features[n:], times)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': strain, 'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_probe.py | sed -n '/diagnostic feature alternatives/,/time kernels/p'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace logarithmic drift with the square-root integral after memory reset; worst-horizon RMSE was 0.0044 when measured initial rates isolated the time kernel.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Extract the fit implementation from the archive by source offsets\",\n      \"rejected_reason\": \"The archived source lacks a delimiter assumed by that approach. A self-contained fit removes this dependency.\"\n    }\n  ],\n  \"rationale\": \"Write the downstream implementation directly and preserve the staged batch wrapper, which already performs dynamic upstream calibration. The schema gate checks composition; the diagnostic normalization comparison identifies whether drift amplitude needs further investigation before end-to-end validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "206f1450856c67368c36bed29b44fa9d2ce7b2138bdac61a017f89ab398fee06",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38923.5,
+      "usage_known": true,
+      "prompt_tokens": 34171,
+      "cached_tokens": 13696,
+      "completion_tokens": 1582
+    }
+  ]
+}

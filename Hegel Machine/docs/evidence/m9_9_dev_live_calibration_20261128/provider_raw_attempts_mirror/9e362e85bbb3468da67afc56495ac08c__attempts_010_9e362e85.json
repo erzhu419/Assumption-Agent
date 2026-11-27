@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9e362e85bbb3468da67afc56495ac08c",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:00:22.224341+00:00",
+  "ended_at_utc": "2026-11-27T19:00:45.330280+00:00",
+  "request_sha256": "795c996226c2f6d4f1e8c2b75d1566b292ad9e7397cad419cd7fce80832a7f8a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53193,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33574,
+    "cached_tokens": 14976,
+    "completion_tokens": 875
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p + 'public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nbank = c['single_bank_sweeps']\\ni = np.asarray(bank['bank_id'], dtype=int)\\nr = np.asarray(bank['raw_readout'])\\na = np.zeros((len(i), 4))\\na[np.arange(len(i)), i] = bank['ref_signal']\\nf, fa = m._rosette_features(x), m._rosette_features(a)\\nb = m._fit_rosette(x, y)\\nb_sparse = np.zeros_like(b)\\nclean = np.max(np.abs(f @ b - y), axis=1) < 1e-3\\nfor j in range(4):\\n    active = np.abs(b[:, j]) > 1e-3\\n    b_sparse[active, j] = np.linalg.lstsq(f[clean][:, active], y[clean, j], rcond=None)[0]\\nfor name, coeff in [('current', b), ('sparse cubic', b_sparse)]:\\n    err = np.abs((fa @ coeff)[np.arange(len(i)), i] - r)\\n    print(name, 'single-bank errors, sorted per bank:', np.array([np.sort(err[i == j]) for j in range(4)]))\\n    print(name, 'worst error among bank readings within 1e-3:', np.max(err[err < 1e-3], initial=0), 'readings outside 1e-3:', np.count_nonzero(err >= 1e-3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls with robust cubic calibration: worst sensor holdout RMS is 0.01088 and worst whole-shift holdout RMS is 0.01011.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-basis and nuisance-confounding audits\",\n      \"rejected_reason\": \"The rational probe and whole-shift nuisance audit already ran on this artifact. The single-bank sweeps offer a distinct test of calibration on isolated channel inputs.\"\n    }\n  ],\n  \"rationale\": \"Test whether the small sweep-validation gain from sparsification carries over to single-bank measurements that were not used to fit either challenger in this audit. A systematic bank-specific error would warrant revisiting the calibration; agreement apart from isolated outliers would support keeping the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0e1cee5067fe5b08dbe4e662321c17dd192b7defe232b8060f7a71268659d20b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24114.72,
+      "usage_known": true,
+      "prompt_tokens": 33574,
+      "cached_tokens": 14976,
+      "completion_tokens": 875
+    }
+  ]
+}

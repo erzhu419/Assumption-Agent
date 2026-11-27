@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9edbdde640ce4b49adc99632903e221f",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:52:15.310181+00:00",
+  "ended_at_utc": "2026-11-27T18:52:44.481933+00:00",
+  "request_sha256": "b30534ae285ceee0c37dd35c19aa863eb415c362df4955adbfd26dcf3e3b4baf",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46273,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31769,
+    "cached_tokens": 13696,
+    "completion_tokens": 1167
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/kernel_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import least_squares\\nB,I=curve[:,:,:2]@theta[:2],rate[:,:2]@theta[:2]\\nE=Y-B\\nlabs=cd['lab_id']; F=np.stack([tr[2]@theta[2:]],1)\\n# Profile coupon amplitude to separate temporal shape from feature calibration.\\nkernels={\\n 'exp':(lambda a: -np.expm1(-a*t)/a,[.9]),\\n 'log':(lambda a: np.log1p(a*t)/a,[1.8]),\\n 'rational':(lambda a: t/(1+a*t),[.6]),\\n 'exp+linear':(lambda a,b: (1-b)*(-np.expm1(-a*t)/a)+b*t,[.9,0]),\\n 'rational-power':(lambda a,b: t/(1+a*t)**b,[.6,1]),\\n 'exp-quadratic':(lambda a,b: t*np.exp(-a*t/(1+b*t)),[.5,.25]),\\n 'exp-taper':(lambda a,b: -np.expm1(-a*t)/a*np.exp(-b*t),[.9,0]),\\n}\\nfor name,(fn,start) in kernels.items():\\n def calc(v,e):\\n  f=fn(*v); q=e@f/(f@f); return q,f\\n def fit(e):\\n  def obj(v):\\n   q,f=calc(v,e); return (e-q[:,None]*f).ravel()\\n  return least_squares(obj,start,loss='soft_l1',f_scale=.004,bounds=([.0001]+([-0.2] if len(start)>1 else []),[15]+([5.] if len(start)>1 else []))).x\\n v=fit(E); q,f=calc(v,E); sl=[]\\n for l in np.unique(labs):\\n  m=labs==l; v0=fit(E[~m]); q0,f0=calc(v0,E[m]); sl.append([np.sqrt(np.mean((E[m]-q0[:,None]*f0)**2)),np.sqrt(np.mean((R[m]-I[m]-q0)**2))])\\n print(name,'params',v.round(5),'shape RMSE',np.sqrt(np.mean((E-q[:,None]*f)**2)),'worst OOF shape/rate',np.max(sl,axis=0).round(5),'amp minus drift RMSE',np.sqrt(np.mean((q-drift)**2)))\\n if name=='exp':\\n  print('amp comparisons lab, missing, base, estimated, observed-rate',np.c_[labs,np.isnan(cd['coupon_features_raw']).sum(1),drift,q,R-I].round(4)); print('f',f.round(5)); print('empirical f',((q@E)/(q@q)).round(5))\\nfor splits in [(c['train'],c['test']), (c['train'],cd), (c['train'],c['test'],cd)]:\\n x0=prior._features(*splits); tc=prior._coupon(c['train'],x0[:n],br); a,b=prior._fit(tc,dt,t,y,r)\\n print('feature configuration',list(map(lambda s:len(s['lab_id']),splits)),a.round(5),b.round(5))\\n for l in np.unique(labs):\\n  print('panel',l,[(np.median(s['ref_coupons'][s['lab_id']==l].mean(0)).round(4),np.median(s['ref_coupons'][s['lab_id']==l].std(0)).round(4)) for s in splits])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/kernel_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Separate the common chamber time kernel from coupon-level drift amplitude; the best simple kernels still have worst leave-one-lab-out curve RMSE near 0.062.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Choose the kernel with the lowest joint RMSE now\",\"rejected_reason\":\"The nearly rank-one residual suggests that coupon-amplitude error may dominate and obscure the time law.\"}],\"rationale\":\"Profile diagnostic amplitudes only to identify the shared time law, then check whether the remaining amplitude disagreement follows lab normalization or missing features. This determines whether to change the kernel, feature preparation, or both.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "44f7370ade245a6ab10d3df882b87119deb94ef13dc5042a9e24d3ce8f0cb44c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30174.38,
+      "usage_known": true,
+      "prompt_tokens": 31769,
+      "cached_tokens": 13696,
+      "completion_tokens": 1167
+    }
+  ]
+}

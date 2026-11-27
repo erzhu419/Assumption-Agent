@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53c4b4d42e8b41589b98860470f9f5da",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:51:44.073378+00:00",
+  "ended_at_utc": "2026-11-27T18:52:13.938640+00:00",
+  "request_sha256": "6d4f5dd25da8192804d48a7d90b91233b2570ba7092da48cbffec22c3a7945b9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 42682,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29777,
+    "cached_tokens": 13696,
+    "completion_tokens": 1218
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_probe.py <<'PY'\\nfrom probe import *\\nfrom scipy.optimize import least_squares\\nprint('times',t,'dt',dt,'diagnostic n',len(R))\\nB, I = curve[:,:,:2] @ theta[:2], rate[:,:2] @ theta[:2]\\nfor name,f,df in [('linear',t,1),('log',np.log1p(t),1),('sqrt',2*(np.sqrt(1+t)-1),1),('rational',t/(1+t),1),('saturating',-np.expm1(-t),1)]:\\n e=Y-B-drift[:,None]*f; er=R-I-drift*df\\n print(name,'horizon RMSE',np.sqrt(np.mean(e*e,axis=0)).round(5),'rate RMSE',np.sqrt(np.mean(er*er)))\\nprint('train median, p95 curve/rate errors',*[np.quantile(abs(e),[.5,.95,.99,1]) for e in [y-prior._design(taus,tr,dt,t)[0]@theta,r-prior._design(taus,tr,dt,t)[1]@theta]])\\nprint('diag rate residual',np.c_[drift,R-I,R-I-drift].round(4)); print('diag residual singulars',np.linalg.svd(Y-B,compute_uv=False).round(4))\\nprint('time effective drift integral',(((Y-B).T@drift)/(drift@drift)).round(5))\\n\\ndef predict(v,model):\\n a=np.exp(v[0]); dscale=v[1] if len(v)>1 else 1.\\n if model=='log': f=np.log1p(a*t)/a\\n elif model=='sqrt': f=2*(np.sqrt(1+a*t)-1)/a\\n elif model=='rational': f=t/(1+a*t)\\n else: f=-np.expm1(-a*t)/a\\n return B+dscale*drift[:,None]*f,I+dscale*drift\\n\\ndef err(v,model,mask):\\n p,q=predict(v,model); return np.r_[(p[mask]-Y[mask]).ravel(),(q[mask]-R[mask])*2]\\nfor model in ['log','sqrt','rational','exp']:\\n for k in [1,2]:\\n  full=least_squares(err,[0.,1.][:k],args=(model,np.ones(len(R),bool)),loss='soft_l1',f_scale=.008).x\\n  es=[]\\n  for lab in np.unique(cd['lab_id']):\\n   m=cd['lab_id']==lab; v=least_squares(err,[0.,1.][:k],args=(model,~m),loss='soft_l1',f_scale=.008).x\\n   p,q=predict(v,model); e=p[m]-Y[m]; es.append([np.sqrt(np.mean(e**2)),np.sqrt(np.mean(e[:,-1]**2)),np.sqrt(np.mean((q[m]-R[m])**2))]);\\n  print('fit',model,k,'a',np.exp(full[0]),'scale',full[1:],'worst LOLO curve/final/rate RMSE',np.max(es,axis=0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Preserve hereditary memory and test an integrated time-decaying drift law; benchtop final-horizon RMSE is 1.092 and the archived reset law has rate RMSE 1.826.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The previous campaign's full reset of hereditary memory transfers to this campaign.\",\n    \"empirical_witness\": \"On 24 calibrated diagnostic coupons, resetting memory increases initial-rate RMSE from 0.041 to 1.826; preserving memory but using linear drift still yields final-horizon RMSE 1.092.\",\n    \"causal_blanket_diagnosis\": \"The reset changes the initial rate, whereas the retained-memory residual grows with elapsed time. Memory and chamber drift need separate tests.\",\n    \"sublated_pivot\": \"Retain the chronological branch recurrence and compare exact integrated drift bases in leave-one-lab-out fits.\",\n    \"risk_kind\": \"Chamber mechanism transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit intrinsic material parameters on chamber coupons\",\n      \"rejected_reason\": \"This could absorb deployment drift into the intrinsic relaxation spectrum and would violate the train-only material fit.\"\n    }\n  ],\n  \"rationale\": \"The near-correct initial rates and growing strain discrepancy distinguish a changed drift kernel from a full memory reset. Compare integrated logarithmic, rational, square-root, and exponential drift bases, selecting any free parameters inside each diagnostic fold.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "ccffc2960ea0c2f44b48099d06d13d63b9240059688c964481d0046f763a6919",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30874.02,
+      "usage_known": true,
+      "prompt_tokens": 29777,
+      "cached_tokens": 13696,
+      "completion_tokens": 1218
+    }
+  ]
+}

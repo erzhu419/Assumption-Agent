@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36811a401ce045c9bf7a04c96dec5a6e",
+  "call_seq": 11,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:45:57.410661+00:00",
+  "ended_at_utc": "2026-11-27T18:46:27.953113+00:00",
+  "request_sha256": "d4ab623e765e7272dc2f453463c229d02873125f1b69c62959b74c113293c923",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72692,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 41878,
+    "cached_tokens": 14976,
+    "completion_tokens": 1247
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_complete_cv.py <<'PY'\\nimport contextlib, io, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): p=runpy.run_path('/tmp/chamber_probe.py')\\nglobals().update({k:p[k] for k in ('m','di','t','tau','theta','bridge','v','vr')})\\nx=m._features(di); _,hold,_=m._coupon(di,x,bridge); lab=di['lab_id']; complete=~np.isnan(di['coupon_features_raw']).any(axis=1)\\nT=np.r_[t,1.]; E=lambda a:np.r_[-np.expm1(-t/a),1/a]; H=sum(w*E(a) for w,a in zip(theta[:2],tau)); Y=np.c_[v,vr]-hold[:,None]*H; W=np.r_[np.ones(len(t)),1.4]\\nprint('Intrinsic taus and weights:',tau,theta)\\nfor mode in ('current_family','two_complete','one_complete','rational_complete','intrinsic_complete'):\\n def fit(rows):\\n  init={'current_family':[.32,1.50],'two_complete':[.32,1.50],'one_complete':[1.1],'rational_complete':[1.9],'intrinsic_complete':[]}[mode]\\n  k=len(init)\\n  def fun(q, ret=False):\\n   a=np.exp(q[:k]); B=([E(b) for b in a] if mode!='rational_complete' else [np.r_[t/(a[0]+t),1/a[0]]]) if k else [E(b) for b in tau]; B.append(T)\\n   f=theta[2]+x@q[k:]; A=np.stack([f[:,None]*b for b in B]+[np.broadcast_to(T,Y.shape)],axis=-1)\\n   coef=np.linalg.lstsq((A[rows]*W[:,None]).reshape(-1,A.shape[-1]),(Y[rows]*W).ravel(),rcond=None)[0]; r=A@coef-Y\\n   return (r,coef,q[k:]) if ret else (r[rows]*W).ravel()\\n  q=least_squares(fun,np.r_[np.log(init),theta[3:]],bounds=(np.r_[np.full(k,np.log(.05)),[-np.inf]*4],np.r_[np.full(k,np.log(25)),[np.inf]*4]),max_nfev=80).x\\n  return (*fun(q,True),np.exp(q[:k]))\\n eligible=np.ones(len(x),bool) if mode=='current_family' else complete\\n errors=[]\\n for l in np.unique(lab):\\n  r,*_=fit((lab!=l)&eligible); q=r[(lab==l)&complete]; errors.append([np.sqrt(np.mean(q[:,:-1]**2)),np.sqrt(np.mean(q[:,-2]**2)),np.sqrt(np.mean(q[:,-1]**2))])\\n r,c,b,a=fit(eligible); print(mode,'worst complete-coupon lab strain/final/rate RMS',np.max(errors,axis=0).round(6),'poles, coeff, direction',a.round(6),c.round(6),b.round(6),'missing residual final/rate means',r[~complete,-2:].mean(0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_complete_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fit the chamber kernel on all diagnostic coupons -> H2 test whether excluding missing diagnostic coupons improves transfer without changing deployment imputation; host strain and rate MAE are 0.003627 and 0.003647.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply the diagnostic missingness shift to deployment\",\n      \"rejected_reason\": \"It would move the average deployment rate prediction by 0.00516 in absolute terms, more than the current host MAE, and the benchtop does not show a comparable shift.\"\n    }\n  ],\n  \"rationale\": \"The missing diagnostic coupons may bias the chamber calibration even if their offset does not transfer. Compare fits on identical held-out complete coupons; revise the kernel only if removing those observations improves strain and rate across labs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "cef701d98235e5e759c6106dc1133ae9e90ec9efa431474986d4262a60f93ab3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31572.84,
+      "usage_known": true,
+      "prompt_tokens": 41878,
+      "cached_tokens": 14976,
+      "completion_tokens": 1247
+    }
+  ]
+}

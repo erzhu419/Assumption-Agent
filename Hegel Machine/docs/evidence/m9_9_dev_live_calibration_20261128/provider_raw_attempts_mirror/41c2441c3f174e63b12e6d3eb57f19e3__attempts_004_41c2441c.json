@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41c2441c3f174e63b12e6d3eb57f19e3",
+  "call_seq": 4,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:18.345966+00:00",
+  "ended_at_utc": "2026-11-27T18:57:45.936183+00:00",
+  "request_sha256": "467c94a48932defbde3c1017b552c6a2877aadc1c381cbbac218c86bf82e9326",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 34057,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28681,
+    "cached_tokens": 14976,
+    "completion_tokens": 1036
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,87p' /tmp/hegel_continual_archive/dev_beta_m99_00_batch_03_solver.py; sed -n '87,135p' /tmp/hegel_continual_archive/dev_beta_m99_00_batch_03_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport importlib.util, json, pickle, numpy as np\\np='/tmp/hegel_continual_archive/'\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nlog=json.load(open(p+'archive_apparatus_log.json'))\\nfor prior,next_episode in zip(log,log[1:]+[{'completed_campaign_short_name':'current'}]):\\n a=np.asarray(prior['facility_telemetry_trace']); print('predecessor -> solve',prior['completed_campaign_short_name'],next_episode['completed_campaign_short_name'],'channels 2,5',a.mean(0)[[2,5]])\\ndef load(name):\\n spec=importlib.util.spec_from_file_location(name,p+'dev_beta_m99_00_'+name+'_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\nm=load('batch_03'); sweeps=s['sensor_calibration_sweeps']; x=sweeps['ref_rosette']; y=sweeps['raw_rosette'];\\nfor family in ('linear','quadratic','archive'):\\n pred=np.empty_like(y)\\n for fold in range(5):\\n  t=np.arange(len(x))%5==fold\\n  if family=='archive':\\n   coef=m._fit_rosette(x[~t],y[~t]); pred[t]=m._rosette_features(x[t])@coef\\n  else:\\n   f=np.column_stack([np.ones(len(x)),x]+([x*x,np.column_stack([x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)])] if family=='quadratic' else [])); pred[t]=f[t]@np.linalg.lstsq(f[~t],y[~t],rcond=None)[0]\\n print(family,'sweep OOF RMSE per bank',np.sqrt(np.mean((pred-y)**2,0)))\\ny=m._calibrate(s);Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); yt=y-Z@(P@y)\\nfor name in ('s00','batch_01','batch_02','batch_03'):\\n a=load(name); S,_=a._forward(s); S-=Z@(P@S); ridge=s['source_ridge']; w,nu=m._box_simplex(S.T@S+ridge*np.eye(S.shape[1]),S.T@yt,s['u_box'],s['total_budget']); r=S@w-yt; print(name,'norm',np.linalg.norm(r),'shift RMS',np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)),'weights',np.round(w,5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 use the latest record as a label for the same campaign -> H2 use it as the predecessor setting, predicting sealed walls; calibration and per-shift validation pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the open-wall stencil from batch 03\",\n      \"rejected_reason\": \"Its campaign followed a low-low trace, whereas this campaign follows the same high-channel-5 pattern that preceded the verified sealed-wall batch 01 solver.\"\n    }\n  ],\n  \"rationale\": \"Align archived traces with the following campaign rather than the campaign that produced them. Check held-out sweep errors to detect a calibration change, and compare per-shift residuals under a shared calibration to test whether the wall inference is consistent with the public measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "c707fc00c235c23d765154a6e9ba12928bcd93e9cc2203499a3dfbda92ac5fad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27555.86,
+      "usage_known": true,
+      "prompt_tokens": 28681,
+      "cached_tokens": 14976,
+      "completion_tokens": 1036
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "edad74335e854f139b003602d77791a9",
+  "call_seq": 11,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:51:58.901042+00:00",
+  "ended_at_utc": "2026-11-27T18:52:31.915056+00:00",
+  "request_sha256": "5809a7c33f152ca08620a60770674dbccbf8224e211ad3dabaaddf3bb360c49a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66088,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37884,
+    "cached_tokens": 14976,
+    "completion_tokens": 1352
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd,dc=item['dataset'],item['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; labs=dc['lab_id']; missing=np.isnan(dc['coupon_features_raw']).any(axis=1)\\nb=m._bridge(d['calibration_load_cells']); train=m._coupon(tr,m._features(tr,te)[:len(tr['lab_id'])],b); cp=m._coupon(dc,m._features(dc),b)\\ny=np.c_[dc['instant_rate_obs'],dc['strain_curves_obs']-dc['strain_0'][:,None]]; yt=tr['strain_curves_obs']-tr['strain_0'][:,None]; rt=tr['instant_rate_obs']; kernels={'sat':np.r_[1,-np.expm1(-t)],'linear':np.r_[1,t]}\\nlabels=('saturation','linear drift blend','paired stress memory','stress–drift products','rational stress gate'); errs={k:np.zeros_like(y) for k in labels}\\nfor l in np.unique(labs):\\n    train_mask=tr['lab_id']!=l; val=labs==l\\n    tau,theta=m._fit(tuple(v[train_mask] for v in train),dt,t,yt[train_mask],rt[train_mask]); c,r=m._deployment(tau,theta,cp,dt,t)\\n    base=np.c_[r,c]; residual=y-base; past,hold,x=cp; score=x@theta[2:]; _,design_rate=m._design(tau,cp,dt,t); gap=design_rate[:,:2]*tau\\n    directional=np.column_stack((gap[:,0]-gap[:,1],gap[:,0]+gap[:,1])); directional-=directional[~val].mean(axis=0)\\n    opts=[[],[(score,kernels['linear']-kernels['sat'])],[(directional[:,j],np.r_[1/tau[j],-np.expm1(-t/tau[j])]) for j in range(2)],[(score*directional[:,j],kernels['sat']) for j in range(2)],[(score/(1+directional[:,j]**2)-score,kernels['sat']) for j in range(2)]]\\n    for name,terms in zip(labels,opts):\\n        correction=np.zeros_like(y)\\n        if terms:\\n            A=np.stack([p[:,None]*q for p,q in terms],axis=-1); beta=np.linalg.lstsq(A[~val].reshape(-1,len(terms)),residual[~val].ravel(),rcond=None)[0]; correction=A@beta\\n        errs[name][val]=(residual-correction)[val]\\ndef metrics(e): return np.sqrt([np.mean(e[:,1:]**2),np.mean(e[:,-1]**2),np.mean(e[:,0]**2)])\\nfor name,e in errs.items():\\n    print(name,'OOF strain/late/rate',metrics(e).round(6),'worst lab',np.max([metrics(e[labs==l]) for l in np.unique(labs)],axis=0).round(6))\\nfor l in np.unique(labs):\\n    for kind,mask in [('complete',~missing),('imputed',missing)]:\\n        sel=(labs==l)&mask\\n        if sel.any(): print('saturation',int(l),kind,int(sel.sum()),metrics(errs['saturation'][sel]).round(6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: unit-rate drift saturation → H2: test whether the worst-lab residual needs a constitutive correction or tracks feature imputation; current worst-lab RMSE is 0.014738 for strain and 0.020262 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, HJB, or classification diagnostics\",\n      \"rejected_reason\": \"The dataset contains continuous strain and rate measurements, with no relay state, optimal-control operator, or class labels. Lab and missing-feature slices test the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Fit each prespecified algebraic challenger without the held-out lab and compare strain, final-horizon, and rate errors separately. A repeatable improvement would justify investigating a missing chamber term; an error concentrated on imputed rows without a transferable improvement would not.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1ead1defc970074f0a07925cd20d54056bb7c655101af31cf21926dcb52155c6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34021.44,
+      "usage_known": true,
+      "prompt_tokens": 37884,
+      "cached_tokens": 14976,
+      "completion_tokens": 1352
+    }
+  ]
+}

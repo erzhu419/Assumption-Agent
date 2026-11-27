@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d686303355a743778d234d54bfa85650",
+  "call_seq": 13,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:55:38.307897+00:00",
+  "ended_at_utc": "2026-11-27T18:56:09.949368+00:00",
+  "request_sha256": "465fa1d6226cf707ce1a6c62ecedace017fb45a5fd6defc7b2636f61b2d3c8ba",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 67236,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37108,
+    "cached_tokens": 13696,
+    "completion_tokens": 1318
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncd /tmp\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as bs\\nimport downstream_solver as ds\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ndata = item['dataset']\\ncal = calibrate_upstream(data, bs._PAY)\\nresult = bs.solve_batch(data)\\ntau = result['estimated_taus']; theta = result['hereditary_weights']\\nt = np.asarray(cal['eval_times']); dt = np.asarray(cal['past_dt'])\\nv, b = cal['total_load_projection']\\ntrain, test = cal['train'], cal['test']\\nx = ds._features(train, test)[len(train['lab_id']):]\\n\\ndef response(split, features):\\n    history = split['past_channel_raw'] @ v + b\\n    hold = split['hold_channel_raw'] @ v + b\\n    # Closed-form chronological recurrence, independently of the solver loop.\\n    remaining = np.cumsum(dt[::-1])[::-1] - dt\\n    coeff = -np.expm1(-dt[:, None] / tau) * np.exp(-remaining[:, None] / tau)\\n    memory = history @ coeff\\n    drift = theta[2] + features @ theta[3:]\\n    weights = (hold[:, None] - memory) * theta[:2]\\n    init = split['strain_0'][:, None]\\n    curve = init + weights @ -np.expm1(-t[None, :] / tau[:, None])\\n    return curve + drift[:, None] * -np.expm1(-t), weights @ (1 / tau) + drift, init, hold, drift, curve\\n\\np, q, *_ = response(test, x)\\nnp.testing.assert_allclose(result['predicted_strain'], p, atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(result['initial_rate_pred'], q, atol=1e-12, rtol=0)\\ndiag = calibrate_upstream(dict(data, test=item['campaign_diagnostics']), bs._PAY)['test']\\np, q, init, hold, drift, memory_curve = response(diag, ds._features(diag))\\ny = diag['strain_curves_obs']; r = diag['instant_rate_obs']\\nlinear = memory_curve + drift[:, None] * t\\nreset = init + hold[:, None] * (-np.expm1(-t[None, :] / tau[:, None]).T @ theta[:2]) + drift[:, None] * np.log1p(t)\\nreset_q = hold * (theta[:2] @ (1/tau)) + drift\\nlabs = diag['lab_id']; rmse = lambda z: np.sqrt(np.mean(z*z))\\nworst = []\\nfor lab in np.unique(labs):\\n    m = labs == lab\\n    scores = [rmse(p[m]-y[m]), max(rmse(e) for e in (p[m]-y[m]).T), rmse(q[m]-r[m])]\\n    worst.append(scores)\\n    assert scores[0] < rmse(linear[m]-y[m])\\n    assert scores[0] < rmse(reset[m]-y[m]) and scores[2] < rmse(reset_q[m]-r[m])\\n    print('lab', lab, 'retained exponential curve/horizon/rate RMSE', np.round(scores, 6))\\nworst = np.max(worst, axis=0)\\nassert np.all(worst < [.022, .028, .026]), worst\\nprint('PASS ng_t05: exact deployment outputs match closed-form chronological response; retained memory with exponential drift beats reset and linear drift in every diagnostic lab.')\\nprint('worst curve/horizon/rate RMSE', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Retained memory with unit-rate exponential drift gives worst diagnostic-lab RMSE of 0.02047 at a single horizon and 0.01990 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a fitted drift–load interaction\",\n      \"rejected_reason\": \"The audit found a small worst-lab improvement concentrated in imputed rows, with no corresponding improvement on complete coupons.\"\n    }\n  ],\n  \"rationale\": \"The prior audit was not accepted as resolution evidence. This read-only probe links the exact deployment outputs to an independently derived chronological recurrence and asserts that the proposed law beats both rejected mechanisms in every diagnostic lab. A failed equality would call for an implementation fix; a failed lab comparison would reopen the chamber-law choice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "e0a82245e89618dbbb4070b8fd1036c64e3e35c797cddc90bc1a8e7f85b73693",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32663.12,
+      "usage_known": true,
+      "prompt_tokens": 37108,
+      "cached_tokens": 13696,
+      "completion_tokens": 1318
+    }
+  ]
+}

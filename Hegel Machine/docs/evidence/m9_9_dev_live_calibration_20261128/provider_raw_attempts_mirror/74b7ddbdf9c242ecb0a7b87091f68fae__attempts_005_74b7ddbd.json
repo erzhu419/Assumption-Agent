@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "74b7ddbdf9c242ecb0a7b87091f68fae",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:00:05.428326+00:00",
+  "ended_at_utc": "2026-11-27T19:00:24.702255+00:00",
+  "request_sha256": "459c060ada7c25da3362c9c67450d6ded909d8975a245ae7244eb658b76f85e2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 36245,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27846,
+    "cached_tokens": 14976,
+    "completion_tokens": 683
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /tmp/hegel_continual_archive\\nsed -n '1,145p' dev_alpha_m99_00_batch_01_solver.py\\nsed -n '/^def solve_batch/,$p' dev_alpha_m99_00_batch_02_solver.py\\nsed -n '/^def solve_batch/,$p' dev_alpha_m99_00_batch_03_solver.py\\npython3 - <<'PY'\\nimport json, pickle, numpy as np\\nlog=json.load(open('archive_apparatus_log.json'))\\nfor e in log:\\n a=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'], np.round(a[:,[1,6]].mean(0),5),np.round(a[:,[1,6]].std(0),5))\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; print('times',d['eval_times'],'history dt',d['past_dt'])\\nc=d['calibration_load_cells']; a=np.c_[c['bridge_raw'],np.ones(len(c['bridge_raw']))]; y=c['true_channel_loads']; e=a@np.linalg.lstsq(a,y,rcond=None)[0]-y; print('calibration channel RMSE',np.sqrt(np.mean(e**2,0)),'summed RMSE',np.sqrt(np.mean(e.sum(1)**2))); print('sweeps',[(k,type(v).__name__,getattr(v,'shape',None)) for k,v in c['single_channel_sweeps'].items()]);\\nfor s in ('train','test'):\\n p=d[s]; v=p['aux_chamber_telemetry']; print(s,'telemetry mean/std',v.mean(0),v.std(0),'missing features',np.isnan(p['coupon_features_raw']).sum(0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop continuation → H2 transfer the batch 01 chamber law; active control means differ from that precedent by 0.0076 and 0.0326, with predictive validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer batch 01 material parameters along with its chamber law\",\"rejected_reason\":\"The chamber setting recurs, but the intrinsic spectrum and weights must be estimated from the current benchtop coupons.\"}],\"rationale\":\"Compare archived chamber-law assumptions before transferring coefficients, and measure current bridge residuals to determine whether an affine total-load calibration is adequate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "b724011ec2814ca4736fb84b43fdd7da22c743ef96885fa56aeeb1c7157eaa2f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20287.93,
+      "usage_known": true,
+      "prompt_tokens": 27846,
+      "cached_tokens": 14976,
+      "completion_tokens": 683
+    }
+  ]
+}

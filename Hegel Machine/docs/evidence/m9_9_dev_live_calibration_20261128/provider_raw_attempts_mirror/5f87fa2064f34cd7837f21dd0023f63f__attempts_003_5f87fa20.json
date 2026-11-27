@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f87fa2064f34cd7837f21dd0023f63f",
+  "call_seq": 3,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:46:02.529437+00:00",
+  "ended_at_utc": "2026-11-27T18:46:30.975510+00:00",
+  "request_sha256": "4198d5c0410d7538c5064b787cf43fff08bf03fee5e6b19540ca24bd472f069b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24572,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25115,
+    "cached_tokens": 14976,
+    "completion_tokens": 1134
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nsed -n '46,160p' /tmp/hegel_continual_archive/dev_beta_m99_00_batch_01_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -35 || true\\ncat > /tmp/m99_probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util, json\\nfrom itertools import combinations_with_replacement\\nfrom scipy.sparse import diags\\np='/tmp/hegel_continual_archive/dev_beta_m99_00_batch_01_solver.py'\\nspec=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=it['study']; cal=s['sensor_calibration_sweeps']; x=cal['ref_rosette']; y=cal['raw_rosette']\\nR=np.array([p['y_pulse_raw'] for p in it['campaign_diagnostics']]); W=np.array([p['w_pulse'] for p in it['campaign_diagnostics']]).T\\nZ=s['Z_nuisance']; Q=np.linalg.qr(Z)[0]\\nprint('cal ranges',np.round([x.min(0),x.max(0),y.min(0),y.max(0)],4));print('pulse ranges raw',R.min(),R.max());print('single banks',np.round(np.column_stack(list(cal['single_bank_sweeps'].values())),5).tolist())\\ndef features(x,d):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,j],axis=1) for a in range(1,d+1) for j in combinations_with_replacement(range(4),a)])\\nfor d in range(1,5):\\n A=features(x,d); C=np.linalg.lstsq(A,y,rcond=None)[0]; E=y-A@C; lev=np.sum(A*np.linalg.pinv(A).T,axis=1)\\n print('cal degree',d,'ncols',A.shape[1],'train',np.sqrt(np.mean(E**2,axis=0)),'worst LOO',np.max(np.abs(E/(1-lev[:,None]+1e-15)),axis=0));print('coeff',[(j,np.round(v,5).tolist()) for j,v in enumerate(C) if np.max(np.abs(v))>0.002][:40])\\naxis=m._axis\\nfor leakx,leaky in [(0,0),(1,0),(0,1),(1,1)]:\\n params=iter([leakx,leaky]); keys=iter('xy')\\n def boundary(k,v,h):\\n  q=next(params)*s['robin_'+next(keys)]/h\\n  return axis(k,v,h)+diags(np.r_[q,np.zeros(len(k)-2),q],format='csc')\\n m._axis=boundary\\n S,U=m._forward(s); P=(S@W).T; b=np.linalg.lstsq(features(x,1),y,rcond=None)[0]; e=m._calibrate(dict(s,y_obs_raw=R.ravel())).reshape(R.shape)-P\\n print('leak',leakx,leaky,'pred range',np.min(P),np.max(P),'calibrated pulse rms',np.sqrt(np.mean(e**2,axis=1)),'after nuisance',np.sqrt(np.mean((e-e@Q@Q.T)**2,axis=1)))\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n T=np.array(a['facility_telemetry_trace']);print('archive',a['completed_campaign_short_name'],'means/std',np.round(T.mean(0),3),np.round(T.std(0),3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 inherited affine calibration and sealed walls -> H2 separate rosette response error from wall leakage using sweep leave-one-out and per-pulse residuals; metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit boundary coefficients immediately\",\"rejected_reason\":\"A misspecified rosette transfer function can mimic boundary error; first measure calibration error independently and compare the exact wall baselines.\"}],\"rationale\":\"Sweep leave-one-out residuals detect missing calibration terms and determine the inversion model. Per-pulse residuals before and after nuisance removal determine whether an exact Robin/sealed operator suffices or whether endpoint terms need further identification.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "c64a5f780e041c18a1adc6385b9eb88ff6ce366c7fe8a733b7dc91ec5f1343ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29476.5,
+      "usage_known": true,
+      "prompt_tokens": 25115,
+      "cached_tokens": 14976,
+      "completion_tokens": 1134
+    }
+  ]
+}

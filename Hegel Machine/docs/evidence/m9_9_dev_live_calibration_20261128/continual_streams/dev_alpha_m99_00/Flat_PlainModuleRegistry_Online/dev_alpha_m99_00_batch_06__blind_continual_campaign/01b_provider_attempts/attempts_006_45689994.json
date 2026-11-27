@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4568999462c64300a8d6f96647f67bda",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_06__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:10:18.038613+00:00",
+  "ended_at_utc": "2026-11-27T19:10:47.646709+00:00",
+  "request_sha256": "bffb4b3e4c34c2daa879ae9f783af82f76e2f65b9a235122cba824ab1115e2d3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44102,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29601,
+    "cached_tokens": 13696,
+    "completion_tokens": 1141
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as b\\nimport downstream_solver as s\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\nds = item['dataset']\\ncal = b._up.calibrate_upstream(ds, b._PAY)\\nout = b.solve_batch(ds)\\nfor key, value in s.solve_downstream(cal).items():\\n    np.testing.assert_array_equal(out[key], value)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25.0\\ntr, te = cal['train'], cal['test']\\nx = s._features(tr, te)[len(tr['lab_id']):]\\np = cal['total_load_projection']\\n_, hold = s._loads(te, p)\\nr = theta[2] + x @ theta[3:]\\nt = np.r_[0.0, 1e-6, cal['eval_times'], 20.0]\\ny, rate = s._predict_chamber(tau, theta, te, x, t, p)\\nnp.testing.assert_allclose(y[:, 0], te['strain_0'], atol=1e-12)\\nnp.testing.assert_allclose(y[:, 2:-1], out['predicted_strain'], atol=1e-12)\\nnp.testing.assert_allclose((y[:, 1] - y[:, 0]) / t[1], rate, rtol=3e-6, atol=1e-7)\\nassert np.isfinite(y[:, -1]).all()\\nprint('max initial derivative error', np.max(np.abs((y[:, 1] - y[:, 0])/t[1] - rate)))\\nprint('deployment hold and drift ranges', (hold.min(), hold.max()), (r.min(), r.max()))\\na = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nz = np.asarray([v['facility_telemetry_trace'] for v in a])\\nfor i in (2, 5):\\n    print('prior marker comparison', a[i]['completed_campaign_short_name'], 'latest vs prior column means', np.round((z[-1]-z[i]).mean(0), 4), 'centered trace RMS', np.round(np.std(z[-1]-z[i], axis=0),4))\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use the archived reset and square-root drift law with a fresh bridge-calibrated material fit; worst leave-one-lab-out p90 absolute errors are 0.022907 for strain and 0.012120 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the material fit based on the public bench residuals\",\n      \"rejected_reason\": \"The fit transfers across all four labs; tuning on these same folds would not resolve the unlabeled chamber-law ambiguity.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifacts in an isolated process. A composition mismatch would require fixing the API boundary; an initial-condition or derivative mismatch would require correcting the chamber equation. The trace comparison checks whether the full traces, not just their means, distinguish the two archived precedents.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d4a50d70962e6d99845c8288dffc13850970481da0aec1f873025bc7178f75ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29576.19,
+      "usage_known": true,
+      "prompt_tokens": 29601,
+      "cached_tokens": 13696,
+      "completion_tokens": 1141
+    }
+  ]
+}

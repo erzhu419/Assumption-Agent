@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6659140db9a54bdbbfd65324d6ac8b6d",
+  "call_seq": 11,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:51:51.876226+00:00",
+  "ended_at_utc": "2026-11-27T18:52:20.727209+00:00",
+  "request_sha256": "743ac6b9d7fa0998710b73a9ea3abc9be825e839e853791d17201142cce9fac0",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53570,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32030,
+    "cached_tokens": 13696,
+    "completion_tokens": 1163
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import _PAY\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _calibrate, _forward\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['study']; s = calibrate_upstream(raw, _PAY)\\nrs = raw['sensor_calibration_sweeps']; cs = s['sensor_calibration_sweeps']\\nref = np.asarray(rs['ref_rosette']); adc = np.asarray(rs['raw_rosette'])\\nvalid = np.max(np.abs(adc), axis=1) <= 8.5\\nX = np.c_[np.ones(len(ref)), ref]; folds = np.arange(len(ref)) % 5\\nS, _ = _forward(s)\\nZ = s['Z_nuisance']; Pz = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nprint('sweep rows fit/rejected:', valid.sum(), (~valid).sum())\\nworst_sweep = worst_drift = 0.\\nfor fold in range(5):\\n    train = valid & (folds != fold); test = valid & (folds == fold)\\n    b = np.linalg.lstsq(X[train], adc[train], rcond=None)[0]\\n    recovered = np.linalg.solve(b[1:].T, (adc[test]-b[0]).T).T\\n    sweep_rmse = np.sqrt(np.mean((recovered-ref[test])**2, axis=0)).max()\\n    worst_sweep = max(worst_sweep, sweep_rmse)\\n    sub = {**s, 'sensor_calibration_sweeps': {**cs, 'ref_rosette':cs['ref_rosette'][train], 'raw_rosette':cs['raw_rosette'][train]}}\\n    drift = np.max(abs(_calibrate(sub)-_calibrate(s)))\\n    worst_drift = max(worst_drift, drift)\\nerrors = []\\nfor p in item['campaign_diagnostics']:\\n    yp = _calibrate(calibrate_upstream({**raw, 'y_obs_raw':p['y_pulse_raw']}, _PAY))\\n    errors.append(S@p['w_pulse']-yp)\\nE = np.column_stack(errors); EP = E-Z@(Pz@E)\\nbanks = np.asarray(s['row_bank_id']).ravel()\\nassert banks.size == E.shape[0]\\nfor bank in np.unique(banks):\\n    idx = banks == bank\\n    print('bank', bank, 'rows', idx.sum(), 'worst pulse RMSE before/after projection', np.sqrt(np.mean(E[idx]**2,axis=0)).max(), np.sqrt(np.mean(EP[idx]**2,axis=0)).max())\\nprint('worst held-out sweep channel RMSE:', worst_sweep, '| max canonical observation drift removing one sweep fold:', worst_drift)\\nassert worst_sweep < 3e-5 and worst_drift < 2e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 edge-local walls -> H2 fully periodic flux on both axes; all three held-out pulse folds favored H2, with worst RMSE of 7.714e-6 across nuisance treatments.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the boundary-model comparison\",\n      \"rejected_reason\": \"The existing held-out comparison already distinguishes the two-axis periodic stencil from the nearest alternatives. It does not measure sweep generalization or bank-specific residuals.\"\n    }\n  ],\n  \"rationale\": \"Test whether the low aggregate tracer residual hides a weak sensor bank or sensitivity to a few calibration rows. A failing sweep slice would reopen calibration before any change to the wall stencil. The probe reads the public data without modifying the fixture, validator, or candidate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6c5c88a0a8b0af1316f64e51451da7f74926c4f5b6dbe0a0d8cab41facd6abe4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29858.09,
+      "usage_known": true,
+      "prompt_tokens": 32030,
+      "cached_tokens": 13696,
+      "completion_tokens": 1163
+    }
+  ]
+}

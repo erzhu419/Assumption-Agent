@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e9181fb41374a6688835c73cc933fce",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:19.329226+00:00",
+  "ended_at_utc": "2026-11-27T18:57:51.144398+00:00",
+  "request_sha256": "1065c7fbcafcfed003cdb33069d3d6cad7bd657e2e61e5ce2ca3d6bf2cda471a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40079,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28582,
+    "cached_tokens": 13696,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']\\n    sweeps = s['sensor_calibration_sweeps']\\n    x, y = (sweeps[k] for k in ('ref_rosette', 'raw_rosette'))\\n    a = up._basis(x)\\n    # Both signs of a pairwise quadratic contrast must be spanned exactly.\\n    for i, j in zip(*np.triu_indices(4, 1)):\\n        for c in (-0.6, 0.6):\\n            diff = (x[:, i] + c*x[:, j])**2 - (x[:, i]**2 + 2*c*x[:, i]*x[:, j] + c*c*x[:, j]**2)\\n            assert np.max(abs(diff)) < 1e-14\\n    def robust(a, y):\\n        w = np.linalg.lstsq(a, y, rcond=None)[0]\\n        for _ in range(25):\\n            e = np.linalg.norm(a@w-y, axis=1)\\n            q = 1/np.hypot(1, e/max(1.8*np.median(e), 1e-12))\\n            w = np.linalg.lstsq(a*q[:, None], y*q[:, None], rcond=None)[0]\\n        return w\\n    print('study keys:', sorted(s))\\n    # An amplitude-tail holdout can reveal extrapolation bias hidden by random folds.\\n    for label, rank in [('joint amplitude', np.linalg.norm(x, axis=1)), ('channel peak', np.max(abs(x), axis=1))]:\\n        test = np.argsort(rank)[-16:]\\n        train = np.setdiff1d(np.arange(len(x)), test)\\n        coef = up._fit(x[train], y[train])\\n        forward = np.linalg.norm(a[test]@coef-y[test], axis=1)\\n        clean = forward < .01\\n        assert clean.sum() >= 12\\n        inverse = np.linalg.norm(up._invert(y[test][clean], coef)-x[test][clean], axis=1).max()\\n        rational = {}\\n        for scale in (.01, .1, 1.):\\n            basis = np.c_[a[:, :15], x**3/(1+scale*x*x)]\\n            w = robust(basis[train], y[train])\\n            rational[scale] = np.linalg.norm(basis[test][clean]@w-y[test][clean], axis=1).max()\\n        print(label, 'clean n', int(clean.sum()), 'cubic forward max', forward[clean].max(), 'cubic inverse max', inverse, 'rational forward maxima by scale', rational)\\n        assert inverse < 2e-4, (label, inverse)\\n    cal = up.calibrate_upstream(s)\\n    z = cal['y_obs_raw'].reshape(-1, 4)\\n    coef = up._fit(x, y)\\n    j = up._jacobian(z, coef)\\n    print('observation reference ranges:', z.min(axis=0), z.max(axis=0), 'min Jacobian singular value:', np.linalg.svd(j, compute_uv=False)[:, -1].min())\\n    np.testing.assert_allclose(up._basis(z)@coef, s['y_obs_raw'].reshape(-1, 4), rtol=0, atol=1e-11)\\n    out = solve_batch(s)\\n    w = out['weights']\\n    k = out['kkt_certificate']\\n    gap = abs(k['primal_objective'] - k['dual_lower_bound'])\\n    assert np.all(np.isfinite(out['terminal_field'])) and np.all(w >= -1e-10) and np.all(w <= s['u_box'] + 1e-10)\\n    assert abs(w.sum()-s['total_budget']) < 1e-10 and gap < 1e-9\\n    print('KKT gap:', gap)\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or quadratic coupling → H2 quadratic coupling plus pure channel cubics; grouped inverse error peaked at 5.95 × 10⁻⁵, with an amplitude-tail comparison against rational alternatives pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add relay-mode, drift-operator, or batch-classification tests\",\n      \"rejected_reason\": \"The interface is a continuous rosette calibration and exposes no relay modes or classification labels; the verified downstream operator is unchanged.\"\n    }\n  ],\n  \"rationale\": \"Hold out the highest-amplitude measured sweeps to detect extrapolation bias. Revisit the basis only if a rational alternative improves a meaningful error margin; check conditioning and round-trip accuracy on actual observations to distinguish calibration bias from numerical inversion failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8995638b7b2661a12b33e9e2dc932b5e9c4a5ecb160584b120bfba69e9137ce8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32817.42,
+      "usage_known": true,
+      "prompt_tokens": 28582,
+      "cached_tokens": 13696,
+      "completion_tokens": 1320
+    }
+  ]
+}

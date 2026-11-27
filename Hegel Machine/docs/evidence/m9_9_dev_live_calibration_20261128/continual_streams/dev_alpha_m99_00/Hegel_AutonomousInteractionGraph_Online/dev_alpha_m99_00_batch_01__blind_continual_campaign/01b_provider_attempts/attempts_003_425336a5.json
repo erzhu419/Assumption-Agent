@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "425336a593d84fddb9820c2cba7cf599",
+  "call_seq": 3,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:41:28.731421+00:00",
+  "ended_at_utc": "2026-11-27T18:41:58.082985+00:00",
+  "request_sha256": "198889101b05b7b1fe365da7e802264f196fd6c6d1e9543e7fb4b16dfec34e81",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23153,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24451,
+    "cached_tokens": 14976,
+    "completion_tokens": 1173
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '45,150p' /tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py; cat > /tmp/m99_probe.py <<'PY'\\nimport pickle,importlib.util,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('prior','/tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=it['dataset']; tr,te,di=ds['train'],ds['test'],it['campaign_diagnostics']; dt,t=ds['past_dt'],ds['eval_times']; n=len(tr['lab_id']); bridge=m._bridge(ds['calibration_load_cells']); x=m._features(tr,te,di); x0=m._features(tr,te)\\ndef obs(d): return d['strain_curves_obs']-d['strain_0'][:,None], d['instant_rate_obs']\\nct=m._coupon(tr,x0[:n],bridge); cd=m._coupon(di,x[-len(di['lab_id']):],bridge); tau,th=m._fit(ct,dt,t,*obs(tr)); print('material',tau,th,'dt',dt,'times',t);print('feature panel sensitivity',np.sqrt(np.mean((x[:len(x0)]-x0)**2)))\\ncal=ds['calibration_load_cells']; B=np.c_[cal['bridge_raw'],np.ones(len(cal['bridge_raw']))]; e=B@bridge-cal['true_channel_loads'].sum(axis=1);print('calibration rms/max',np.sqrt(np.mean(e**2)),np.abs(e).max())\\ndef summary(label,r,q): print(label,'curve RMS/median/max',np.sqrt(np.mean(r*r)),np.median(abs(r)),np.max(abs(r)),'rate RMS/median/max',np.sqrt(np.mean(q*q)),np.median(abs(q)),np.max(abs(q)))\\nfor d,c in [(tr,ct),(di,cd)]:\\n y,dy=obs(d); A,R=m._design(tau,c,dt,t); summary('baseline',A@th-y,R@th-dy)\\n def mat(z):\\n  u=np.exp(z);return np.r_[np.c_[-np.expm1(-t[:,None]/u),t],np.r_[1/u,1][None,:]]\\n Y=np.c_[y,dy];\\n def fit(z):\\n  a=mat(z);return (np.linalg.lstsq(a,Y.T,rcond=None)[0].T@a.T-Y).ravel()\\n for u in [tau,[.2,2],[.7,5]]:\\n  sol=least_squares(fit,np.log(u),bounds=(np.log(.051),np.log(24.99)));print('free amplitude times',np.exp(sol.x),np.sqrt(np.mean(sol.fun**2)))\\n Z=np.linalg.lstsq(mat(sol.x),Y.T,rcond=None)[0].T; r=Z@mat(sol.x).T-Y;summary('free amplitude',r[:,:-1],r[:,-1]); print('amplitude std',Z.std(0),'fit mean',Z.mean(0)); print('lab means',[(l,np.mean((A@th-y)[d['lab_id']==l]**2)**.5) for l in np.unique(d['lab_id'])]);\\n if d is di:\\n  print('per time median residual',np.median(A@th-y,axis=0)); print('rate median residual',np.median(R@th-dy)); print('observed diag first three',Y[:3].round(4))\\nfor split in [tr,te]:\\n a=split['aux_chamber_telemetry']; print('aux mean/std/min/max',a.mean(0),a.std(0),a.min(0),a.max(0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop spectrum → H2 separate chamber changes in relaxation timing, amplitudes, and drift; worst-slice error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a generic regression to chamber observations\",\n      \"rejected_reason\": \"The separation into exponential amplitudes, time constants, and linear drift first tests which physical terms need to change.\"\n    }\n  ],\n  \"rationale\": \"Bridge residuals distinguish calibration error from a constitutive mismatch. Comparing the baseline against free-amplitude fits on the measured coupons determines whether to investigate chamber timing or stress and drift terms next.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "b7a4f5d160360768f964659dd3e40354c54ed748a116b27e6f95bcf028097b36",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30372.19,
+      "usage_known": true,
+      "prompt_tokens": 24451,
+      "cached_tokens": 14976,
+      "completion_tokens": 1173
+    }
+  ]
+}

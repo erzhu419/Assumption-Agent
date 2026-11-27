@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ff76948e67d146ba92b9572a01323a41",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:51:17.883960+00:00",
+  "ended_at_utc": "2026-11-27T18:51:43.893092+00:00",
+  "request_sha256": "500b109518578af3d06a9e20edbb4f3b7f3b5a92d4af4c9fc4ccf9f9ef22cbc9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 61109,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36640,
+    "cached_tokens": 14976,
+    "completion_tokens": 1028
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as handle:\\n    item = pickle.load(handle)[0]\\nd, diag = item['dataset'], item['campaign_diagnostics']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nout = m.solve_batch(d)\\nassert all(np.isfinite(value).all() for value in out.values())\\nassert 0.05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nbridge = m._bridge(d['calibration_load_cells'])\\nx = m._features(tr, te)[:len(tr['strain_0'])]\\nxc = m._features(diag)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrate = tr['instant_rate_obs']\\ntrain_cp = m._coupon(tr, x, bridge)\\nchamber_cp = m._coupon(diag, xc, bridge)\\nrows = []\\nfor lab in np.unique(diag['lab_id']):\\n    fit = tr['lab_id'] != lab\\n    test = diag['lab_id'] == lab\\n    tau, theta = m._fit(tuple(v[fit] for v in train_cp), dt, t, y[fit], rate[fit])\\n    cp = tuple(v[test] for v in chamber_cp)\\n    change, r = m._deployment(tau, theta, cp, dt, t)\\n    e = change + diag['strain_0'][test, None] - diag['strain_curves_obs'][test]\\n    er = r - diag['instant_rate_obs'][test]\\n    met = np.sqrt([np.mean(e**2), np.mean(e[:, -1]**2), np.mean(er**2)])\\n    rows.append(met)\\n    print('held-out lab', lab, 'RMSE strain/last/rate', met.round(6), 'tau', tau.round(6))\\nprint('worst lab RMSE strain/last/rate', np.max(rows, axis=0).round(6))\\ncp = m._coupon(te, m._features(tr, te)[len(x):], bridge)\\nh = 1e-5\\nc, r = m._deployment(out['estimated_taus'], out['hereditary_weights'], cp, dt, np.array([0., h, 2*h]))\\nnp.testing.assert_allclose(c[:, 0], 0., atol=1e-12)\\nnp.testing.assert_allclose((4*c[:, 1]-c[:, 2])/(2*h), r, rtol=1e-7, atol=1e-7)\\nprint('zero-time strain and initial-rate derivative verified')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unchanged stress memory → H2: unit-rate chamber drift saturation; the host verified the current artifact at strain MAE 0.000627, rate MAE 0.000733, and relative spectrum error 0.003053.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retune the chamber decay from 1.0 to the diagnostic fit of 0.99634\",\"rejected_reason\":\"The fitted decay is close to 1.0, and the host metrics give no evidence that adding a fitted constant would improve deployment.\"}],\"rationale\":\"Run the exact artifact in isolated Python and refit intrinsic parameters without each verification lab to detect dependence on a single lab. Check the zero-time derivative separately: a mismatch would require fixing the initial-rate output even if the sampled strain curves pass.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e3dbbfb95860b6aa0b4eab1dccc15ca30bc14d879fad6c274ef7a4a748edb44b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27017.01,
+      "usage_known": true,
+      "prompt_tokens": 36640,
+      "cached_tokens": 14976,
+      "completion_tokens": 1028
+    }
+  ]
+}

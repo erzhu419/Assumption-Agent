@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a33da1a18bd44785877c02f7aa191952",
+  "call_seq": 9,
+  "stage_subdir": "m99_dev_20261127T183538Z__stageS__dev_alpha_m99_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:39:00.714975+00:00",
+  "ended_at_utc": "2026-11-27T18:39:27.110103+00:00",
+  "request_sha256": "6c35af88f2ad04ff6dcce2e73ea1842f652b50606d61b6eb8fda1586614ec307",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44131,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30122,
+    "cached_tokens": 14976,
+    "completion_tokens": 1045
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(p+'public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ns,u=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; n=len(s['lab_id']); x=m._features(s,u); cal=m._bridge(d['calibration_load_cells']); c=m._coupon(s,x[:n],cal); v=m._coupon(u,x[n:],cal)\\ny=s['strain_curves_obs']-s['strain_0'][:,None]; r=s['instant_rate_obs']; out=m.solve_batch(d); taus=out['estimated_taus']; theta=out['hereditary_weights']\\n# Hold out entire tails of the measured hold-step contrast, not random coupons.\\nstep=c[1]-c[0][:,-1]; deploy_step=v[1]-v[0][:,-1]; idx=np.argsort(step); tail=max(1,n//5)\\nprint('hold-step support train/deploy:', (float(step.min()),float(step.max())), (float(deploy_step.min()),float(deploy_step.max())))\\nfor label,ids in [('negative-step tail',idx[:tail]),('positive-step tail',idx[-tail:])]:\\n    keep=np.ones(n,dtype=bool); keep[ids]=False\\n    tau,b=m._fit(tuple(q[keep] for q in c),dt,t,y[keep],r[keep]); a,g=m._design(tau,tuple(q[ids] for q in c),dt,t); e=a@b-y[ids]; f=g@b-r[ids]\\n    print(label,'taus',tau,'P90 early/late/rate',*[float(np.quantile(np.abs(q),.9)) for q in (e[:,:4],e[:,-4:],f)],'signed median rate residual',float(np.median(f)))\\n# Check that the separately returned rate is the derivative of the deployment curve.\\nzero=1e-7; a,g=m._design(taus,v,dt,np.array([0.,zero])); derivative=((a[:,1]-a[:,0])@theta)/zero\\nassert np.allclose(a[:,0]@theta,0.)\\nassert np.allclose(derivative,out['initial_rate_pred'],rtol=2e-6,atol=2e-6)\\nprint('deployment max zero-time derivative error',float(np.max(np.abs(derivative-out['initial_rate_pred']))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 lab validation may miss load-reversal extrapolation → H2 shared hereditary law should also hold across measured loading tails; current worst held-out-lab P90 errors are 0.02605 for strain and 0.01415 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the blocked calibration and lab-confounding audit\",\n      \"rejected_reason\": \"Those checks already favored the affine bridge and found no material lab drift. They do not test extrapolation across loading extremes.\"\n    }\n  ],\n  \"rationale\": \"Hold out the largest and smallest measured hold steps to detect errors that lab splits might miss, and compare those ranges with deployment. A coherent tail bias would warrant checking calibration and memory recurrence on that loading regime. A derivative mismatch would require correcting the initial-rate output.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e109f00f123dd9a2e8f784c2039a5938aded311dde6d0f1f120c99517a65b41d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27392.19,
+      "usage_known": true,
+      "prompt_tokens": 30122,
+      "cached_tokens": 14976,
+      "completion_tokens": 1045
+    }
+  ]
+}

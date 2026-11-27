@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "88bd5721c4824faaa5b3a65dfd6cea59",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:54:35.403983+00:00",
+  "ended_at_utc": "2026-11-27T18:55:00.694543+00:00",
+  "request_sha256": "4a33000133b632dc488d9e3e35487de0a0c35d18c758c9ee33502fff9eaf0e34",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 38418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28880,
+    "cached_tokens": 14976,
+    "completion_tokens": 983
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /tmp/hegel_continual_archive/dev_alpha_m99_00_s00_solver.py /holdout_task/batch_solver.py\\nsed -i '/    # The blind opening campaign/,+1c\\\\    # The latest apparatus trace returns both chamber controls to their\\\\n    # initialization levels, so deployment retains the benchtop law.' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; c=d['calibration_load_cells']; b=m._bridge(c)\\nprint('bridge residual RMSE/max',*[float(f(c['bridge_raw']@b[:-1]+b[-1]-c['true_channel_loads'].sum(1))) for f in (lambda x:np.sqrt(np.mean(x*x)),lambda x:np.max(np.abs(x)))])\\no=m.solve_batch(d); print('full taus',o['estimated_taus'],'theta',o['hereditary_weights']); lab=tr['lab_id']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; n=len(lab)\\nfor l in np.unique(lab):\\n    a=lab!=l; v=~a\\n    fit={k:z[a] for k,z in tr.items()}; val={k:z[v] for k,z in tr.items()}\\n    x=m._features(fit,val,te); j=int(a.sum()); q=int(v.sum()); tau,theta=m._fit(m._coupon(fit,x[:j],b),dt,t,y[a],r[a]); A,B=m._design(tau,m._coupon(val,x[j:j+q],b),dt,t)\\n    e=A@theta-y[v]; er=B@theta-r[v]\\n    print('held-out lab',l, 'n',q,'taus',tau.round(5),'horizon MAE max',np.mean(abs(e),axis=0).max(),'curve medianAE/p90',np.quantile(abs(e),[.5,.90]),'rate medianAE/p90',np.quantile(abs(er),[.5,.90]),'rel weight L2 vs full',np.linalg.norm(theta-o['hereditary_weights'])/np.linalg.norm(o['hereditary_weights']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop spectrum → H2 baseline deployment law after both chamber controls return to initialization levels; worst-lab curve and rate errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the previous campaign's saturating drift\",\n      \"rejected_reason\": \"That campaign followed an elevated apparatus channel; the current prefix shows both controls back near their initialization levels.\"\n    }\n  ],\n  \"rationale\": \"Build the solver with the archived robust material fit and baseline deployment law. Calibration residuals will show whether the affine bridge is adequate; held-out labs will show whether the material fit needs revision. Those folds cannot validate the blind chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "2555a416cfe678429528e9e5986ae0f70942890f4670b3fb4be8b6a728e06074",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26245.22,
+      "usage_known": true,
+      "prompt_tokens": 28880,
+      "cached_tokens": 14976,
+      "completion_tokens": 983
+    }
+  ]
+}

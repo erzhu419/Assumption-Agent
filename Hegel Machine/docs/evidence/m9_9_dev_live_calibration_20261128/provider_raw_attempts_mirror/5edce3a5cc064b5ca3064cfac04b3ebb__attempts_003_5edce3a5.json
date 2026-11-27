@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5edce3a5cc064b5ca3064cfac04b3ebb",
+  "call_seq": 3,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:55:23.699279+00:00",
+  "ended_at_utc": "2026-11-27T18:55:50.310761+00:00",
+  "request_sha256": "a1c6118e69c675092ef3603f5fc7d3588dfc4206ee79e6e16bfe2f76fcc5a81e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22769,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23013,
+    "cached_tokens": 13696,
+    "completion_tokens": 1082
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; grep -nEi 'rosette|satur|tanh|calibrat|cubic' /tmp/hegel_continual_archive/*solver.py | cut -c1-220 | head -60; cat > /tmp/rosette_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; xb=np.eye(4)[b['bank_id']]*b['ref_signal'][:,None]\\ndef fit(a,y):\\n w=np.linalg.lstsq(a,y,rcond=None)[0]\\n for _ in range(20):\\n  e=np.linalg.norm(y-a@w,axis=1); q=np.minimum(1,(max(np.median(e),1e-12)*1.8/np.maximum(e,1e-15))**2)**.5\\n  w=np.linalg.lstsq(a*q[:,None],y*q[:,None],rcond=None)[0]\\n return w\\ndef poly(x,maxdeg):\\n return np.column_stack([np.ones(len(x))]+[x[:,idx].prod(axis=1) for d in range(1,maxdeg+1) for idx in itertools.combinations_with_replacement(range(4),d)])\\nmodels={'linear':lambda x:poly(x,1),'quadratic':lambda x:poly(x,2),'diag23':lambda x:np.c_[poly(x,1),x*x,x**3],'quad+cubics':lambda x:np.c_[poly(x,2),x**3],'full3':lambda x:poly(x,3),'quad+tanh':lambda x:np.c_[poly(x,2),np.tanh(x)],'quad+rational':lambda x:np.c_[poly(x,2),x/(1+x*x)],'quad+sin':lambda x:np.c_[poly(x,2),np.sin(x)],'quad+cubics+5':lambda x:np.c_[poly(x,2),x**3,x**5]}\\nnp.set_printoptions(precision=5,suppress=True)\\nfor name,f in models.items():\\n a=f(x); w=fit(a,y); e=np.linalg.norm(a@w-y,axis=1); pred=np.empty_like(y)\\n for te in np.array_split(np.random.default_rng(12).permutation(len(y)),5):\\n  tr=np.setdiff1d(np.arange(len(y)),te); pred[te]=a[te]@fit(a[tr],y[tr]);\\n cv=np.linalg.norm(pred-y,axis=1); eb=(f(xb)@w)[np.arange(len(xb)),b['bank_id']]-b['raw_readout']; print(name, 'train',np.percentile(e,[25,50,90,97,100]), 'cv',np.percentile(cv,[25,50,90,97,100]),'bank',np.percentile(abs(eb),[50,90,100]));\\n if name in ('quad+cubics','quad+tanh','full3'): print('coeffs',w.round(5)); print('top rows',np.argsort(e)[-8:])\\nprint('axes ref/raw',np.c_[x[:16],y[:16]]); print('bank raw',b['raw_readout'].reshape(4,-1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust affine coupling → H2 robust polynomial or saturation basis; untrimmed affine row residual has median 1.064 and maximum 25.032.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a high-degree inverse directly to raw sweeps\",\n      \"rejected_reason\": \"EMI spikes would become extreme predictor values; forward regression keeps the reference predictors clean.\"\n    }\n  ],\n  \"rationale\": \"Compare robust fits on identical held-out sweeps to separate reproducible nonlinear structure from EMI. Check single-bank residuals separately before deciding whether those measurements can improve the rosette fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "b457f953f2852ec8f6f9bbbf34df51203238907194b84baeea21d29c565704d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27633.1,
+      "usage_known": true,
+      "prompt_tokens": 23013,
+      "cached_tokens": 13696,
+      "completion_tokens": 1082
+    }
+  ]
+}

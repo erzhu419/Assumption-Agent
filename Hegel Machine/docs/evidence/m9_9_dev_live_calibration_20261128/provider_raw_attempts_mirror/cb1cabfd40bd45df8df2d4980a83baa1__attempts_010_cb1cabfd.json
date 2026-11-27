@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cb1cabfd40bd45df8df2d4980a83baa1",
+  "call_seq": 10,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T19:09:06.220387+00:00",
+  "ended_at_utc": "2026-11-27T19:09:42.042876+00:00",
+  "request_sha256": "ab6c31b0f68e089350383645c1a52aa060fabf3973d51772abff04dff4c03d83",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57007,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34565,
+    "cached_tokens": 14976,
+    "completion_tokens": 1522
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, v = item['dataset'], item['campaign_diagnostics']\\nout = m.solve_batch(d)\\ntau, th = out['estimated_taus'], out['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nbridge = m._bridge(d['calibration_load_cells'])\\nx = m._features(v)\\nt = d['eval_times']\\npast, h, _ = m._coupon(v, x, bridge)\\ns = x @ th[3:] + th[2]\\ny = v['strain_curves_obs'] - v['strain_0'][:, None]\\nr = v['instant_rate_obs']\\nlab = v['lab_id']\\ncomplete = np.isfinite(v['coupon_features_raw']).all(axis=1)\\ncurve, rate = m._deployment(h, x, tau, th, t)\\nz = np.zeros((len(h), 2))\\nfor j, dt in enumerate(d['past_dt']):\\n    z += -np.expm1(-dt / tau) * (past[:, j, None] - z)\\nload_c = h[:, None] * (-np.expm1(-t[:, None] / tau) @ th[:2])\\nload_r = h * np.sum(th[:2] / tau)\\n\\ndef fit_predict(kind, keep):\\n    p0, low, high = [0.25, 0.6, 7.5], [0., .03, .6], [1., 5., 50.]\\n    if kind != 'base':\\n        p0 += [0.]; low += [0. if kind == 'quotient' else -1.]; high += [1.]\\n    def predict(p):\\n        w, a, b = p[:3]\\n        f = -w*a*np.expm1(-t/a) - (1-w)*b*np.expm1(-t/b)\\n        ss = s.copy()\\n        if kind == 'quotient': ss = ss / (1 + p[3]*s*s)\\n        if kind == 'pair': ss = ss + p[3]*(x[:,0]-x[:,1])\\n        if kind == 'interaction': ss = ss + p[3]*h*s\\n        cc = load_c + ss[:,None]*f\\n        rr = load_r + ss\\n        if kind == 'memory':\\n            cc -= p[3] * ((z*th[:2]) @ -np.expm1(-t[:,None]/tau).T)\\n            rr -= p[3] * (z @ (th[:2]/tau))\\n        return cc, rr\\n    def residual(p):\\n        cc, rr = predict(p)\\n        return np.r_[(cc[keep]-y[keep]).ravel(), np.sqrt(len(t))*(rr[keep]-r[keep])]\\n    p = least_squares(residual, p0, bounds=(low,high), loss='soft_l1', f_scale=.003).x\\n    return predict(p)\\n\\nfor kind in ['base','memory','quotient','pair','interaction']:\\n    stats = []\\n    for l in np.unique(lab):\\n        fit = complete & (lab != l)\\n        held = complete & (lab == l)\\n        cc, rr = fit_predict(kind, fit)\\n        e = abs(cc[held]-y[held]); q = abs(rr[held]-r[held])\\n        stats.append([e.mean(), q.mean(), e[:,:4].mean(), e[:,-4:].mean()])\\n    print(kind, 'worst lab MAE [strain, rate, early, late]', np.max(stats, axis=0).round(7))\\nfor mask, name in [(complete,'complete'), (~complete,'imputed')]:\\n    print(name, 'rows', mask.sum(), 'fixed-candidate strain/rate MAE', np.mean(abs(curve[mask]-y[mask])), np.mean(abs(rate[mask]-r[mask])))\\nzero, _ = m._deployment(h, x, tau, th, np.array([0.]))\\neps = 1e-6\\nnear, _ = m._deployment(h, x, tau, th, np.array([eps]))\\nassert np.max(abs(zero)) < 1e-12\\nerr = np.max(abs((near[:,0]-zero[:,0])/eps-rate))\\nassert err < 1e-4\\nprint('zero-strain and initial derivative verified; max finite-difference error', err)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (reset plus two-exponential drift) -> H2 (retain that law unless a targeted term improves held-out strain and rate); prior worst-lab complete-coupon strain MAE is 0.00296.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch classification accuracy\",\n      \"rejected_reason\": \"This is a continuous strain and rate problem with no relay states or class labels; lab-held-out residuals are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Fit each plausible extra term inside leave-one-lab-out folds to detect omitted history, score saturation, feature contrast, or load–score coupling. Change the law only if the challenger improves the worst held-out errors without degrading the independent rate prediction. The zero-time and derivative checks would catch a strain/rate handoff error; the isolated schema run would catch an artifact or import failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "822f22aa3c9f4d2f9db0d23346ee3fc6ac546c004a2023d7c8c2aaf1ba76e86a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36840.82,
+      "usage_known": true,
+      "prompt_tokens": 34565,
+      "cached_tokens": 14976,
+      "completion_tokens": 1522
+    }
+  ]
+}

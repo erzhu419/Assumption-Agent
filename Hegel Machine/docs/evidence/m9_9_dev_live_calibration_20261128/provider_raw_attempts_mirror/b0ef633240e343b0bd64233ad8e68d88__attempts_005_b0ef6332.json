@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b0ef633240e343b0bd64233ad8e68d88",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:42:22.934602+00:00",
+  "ended_at_utc": "2026-11-27T18:42:53.960527+00:00",
+  "request_sha256": "39b67bf71039cfd62382f9c3a7bc22ab03c8207fbcc3d74a92786534a31b07b3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40355,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31018,
+    "cached_tokens": 14976,
+    "completion_tokens": 1284
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m99_structure.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/m99_probe.py').read())\\nq=np.load('/tmp/m99_chamber_modes.npz'); tt,A=q['tau'],q['amp']; p,h,D=cc; X=D[:,1:]; labs=ch['lab_id']; Y=np.column_stack((ch['strain_curves_obs']-ch['strain_0'][:,None],ch['instant_rate_obs']);)\\nPY\\nsed -i \\\"s/\\\\['instant_rate_obs'\\\\]);)/['instant_rate_obs']))/\\\" /tmp/m99_structure.py\\ncat >> /tmp/m99_structure.py <<'PY'\\ndef z(u, pp=p, dd=dt):\\n a=np.exp(-dd[:,None]/np.atleast_1d(u)); return pp@((1-a)*np.cumprod(np.vstack((np.ones(a.shape[1]),a[:0:-1])),axis=0)[::-1])\\nprint('effective taus',tt,'amp ranges',np.quantile(A,[0,.5,1],axis=0),'amp/hold ranges',np.quantile(A[:,:2]/h[:,None],[0,.5,1],axis=0))\\nbase=np.column_stack((D,h,p)); names=['one','x0','x1','x2','x3','hold']+['p%d'%j for j in range(6)]\\ndef regress(M):\\n B=np.linalg.lstsq(M,A,rcond=None)[0]; E=M@B-A\\n cv=np.empty_like(A)\\n for lab in np.unique(labs):\\n  trn=labs!=lab; cv[~trn]=M[~trn]@np.linalg.lstsq(M[trn],A[trn],rcond=None)[0]-A[~trn]\\n return np.round(B,4),np.round(np.sqrt(np.mean(E**2,axis=0)),4),np.round(np.max(abs(cv),axis=0),4)\\nprint('linear full',names,regress(base));\\nfor label,M in [('hold',h[:,None]),('affine hold',base[:,[0,5]]),('hold+past',base[:,[0,5,6,7,8,9,10,11]]),('feature+hold',base[:,:6]),('states intrinsic',np.column_stack((D,h,z(tau)))),('states effective',np.column_stack((D,h,z(tt)))),('states reverse',np.column_stack((D,h,z(tau,p[:,::-1],dt[::-1])))),('lags and pairwise',np.column_stack((base[:,[0,5,6,7,8,9,10,11]],(p[:,1:]-p[:,:-1])**2))),('stress and pair products',np.column_stack((base[:,[0,5,6,7,8,9,10,11]],h[:,None]*p)))]:\\n B,err,cv=regress(M); print(label,'rms',err,'worst LOLO',cv,'coef',B.tolist() if M.shape[1]<=8 else '')\\nprint('amps and intrinsic states');print(np.round(np.column_stack((h,z(tau),z(tt),A)),4))\\nfor name,W in [('train',tr),('test',te)]:\\n print(name,'aux mean/std',np.mean(W['aux_chamber_telemetry'],axis=0),np.std(W['aux_chamber_telemetry'],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_structure.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: fixed benchtop decay times → H2: a chamber-specific slow decay time with coupon-dependent branch amplitudes; freeing the times gives a maximum temporal closure error of 0.0095 in strain and 0.0015 in initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The chamber uses the benchtop decay times unchanged, with only amplitudes and linear drift free to vary.\",\n    \"empirical_witness\": \"Joint chamber strain and rate closure with free amplitudes places the slow decay near 2.54 rather than the benchtop 4.03, while the fast decay remains near 0.50.\",\n    \"causal_blanket_diagnosis\": \"Once amplitudes and drift are profiled out, the chamber measurements favor a different slow time basis.\",\n    \"sublated_pivot\": \"Keep intrinsic material fitting on benchtop data and identify the separate chamber transfer law from measured chamber coupons.\",\n    \"risk_kind\": \"constitutive_transfer\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use freely fitted chamber amplitudes directly\",\n      \"rejected_reason\": \"Deployment coupons have no observed response; the amplitudes must be predicted from calibrated stress histories and coupon covariates.\"\n    }\n  ],\n  \"rationale\": \"Regress the measured chamber amplitudes on hold stress, chronological and reversed memory, and basic stress interactions. Leave-one-lab-out errors will distinguish transferable constitutive terms from fits that depend on one lab.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "8780009c2eca5e02f22961ea59e1f567f1caf1d7a0cd7304ee36aa6bd0a75817",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32063.67,
+      "usage_known": true,
+      "prompt_tokens": 31018,
+      "cached_tokens": 14976,
+      "completion_tokens": 1284
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20562ad1dc6b4efb845eb3dd4b93dcf8",
+  "call_seq": 7,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:51:53.857118+00:00",
+  "ended_at_utc": "2026-11-27T18:52:31.677920+00:00",
+  "request_sha256": "2bee95bce570bd24d23ea35232ea5d83bc20cdbe6a8c4167c2f3a91b2a6d982f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 55560,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36982,
+    "cached_tokens": 13696,
+    "completion_tokens": 1597
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,68p' /tmp/hegel_continual_archive/dev_alpha_m99_00_batch_01_solver.py; cat /holdout_task/{batch_solver.py,validate_public_schema.py}; cat > /tmp/chamber_compact.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from chamber_structure import *\\n\\nD=theta[2]+old._features(g)@theta[3:]\\nU=np.ones(len(h)); full=np.ones(len(h),bool)\\nfolds=[(col,int(v),g[col]==v) for col in ('lab_id','stratum') for v in np.unique(g[col])]\\n\\ndef fit_compact(train,mode,D,weight_rate=2.):\\n    def matrices(q):\\n        s,f=np.exp(q[:2]); fast,slow=s,s+f\\n        zf=memory(p,dt,fast); zs=memory(p,dt,slow)\\n        m0=memory(p,dt,np.exp(q[2])) if len(q)>2 else zf\\n        m1=memory(p,dt,np.exp(q[3])) if len(q)>3 else zs\\n        if mode=='intrinsic':\\n            m0,m1=z.T\\n        m={'intrinsic':([h,m0,m1,D,U],)*3,\\n           'retimed':([h,m0,m1,D,U],)*3,\\n           'free_memory':([h,m0,m1,D,U],)*3,\\n           'one_memory':([h,m0,D,U],)*3,\\n           'gap_hold':([h-m0,D],[h,m0,D],[h,m0,D]),\\n           'gap_pair':([h-m0,D],[h,m1,D],[h,m1,D]),\\n           'gap_affine':([h-m0,D,U],[h,m1,D,U],[h,m1,D,U]),\\n           'compact':([h-m0,D],[h,m0,m1,D],[h,m0,m1,D]),\\n           'compact_bias':([h-m0,D,U],[h,m0,m1,D,U],[h,m0,m1,D,U])}[mode]\\n        b=basis(np.array([fast,slow])); return np.concatenate([np.column_stack(a)[:,None,:]*b[None,:,j,None] for j,a in enumerate(m)],axis=2)\\n    w=np.r_[np.ones(len(t)),weight_rate]; yy=y[train]*w\\n    def calc(q):\\n        v=matrices(q); a=v[train]*w[None,:,None]; c=np.linalg.lstsq(a.reshape(-1,v.shape[2]),yy.ravel(),rcond=None)[0]; return v@c,c\\n    times=[.49,.96]+({'free_memory':[.5,2.], 'one_memory':[.5]}.get(mode,[]))\\n    q=least_squares(lambda q:((calc(q)[0][train]-y[train])*w).ravel(),np.log(times),bounds=(np.log(np.array([.25,.15]+[.15]*(len(times)-2))),np.log(np.array([.85,9.]+[15.]*(len(times)-2)))),max_nfev=100).x\\n    pred,c=calc(q); ts=np.exp(q);ts[1]+=ts[0]\\n    return pred,c,ts\\n\\nif __name__=='__main__':\\n for m in ['intrinsic','retimed','free_memory','one_memory','gap_hold','gap_pair','gap_affine','compact','compact_bias']:\\n    pred,co,ts=fit_compact(full,m,D); e=pred-y\\n    scores=[]; pool=[]\\n    for col,v,ix in folds:\\n        r=fit_compact(~ix,m,D)[0][ix]-y[ix];scores.append([rm(r[:,:-1]),rm(r[:,-1])]);pool.append(r)\\n    pool=np.concatenate(pool); print(m,'times',np.round(ts,5),'fit',np.round([rm(e[:,:-1]),rm(e[:,-1])],5),'OOF',np.round([rm(pool[:,:-1]),rm(pool[:,-1])],5),'worst',np.round(np.max(scores,0),5),'coef',np.round(co,5).tolist())\\n print('test joint-vs-test-only drift RMSE/max',rm((old._features(tr,te)[n:]-old._features(te))@theta[3:]),np.max(np.abs((old._features(tr,te)[n:]-old._features(te))@theta[3:])))\\n for name,X in [('train-only',old._features(tr)),('joint',old._features(tr,te)[:n])]:\\n    tau2,theta2=old._fit(coupon(tr,X),dt,t,*obs(tr)); curve,rate=old._design(tau2,coupon(tr,X),dt,t); e=curve@theta2-obs(tr)[0]; er=rate@theta2-obs(tr)[1];print('train alignment',name,np.round(tau2,6),'curve median/90pct',np.round(np.quantile(np.abs(e),[.5,.9]),5),'rate RMSE',round(rm(er),5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_compact.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (diagnostic coupons share deployment reference statistics) -> H2 (diagnostics use their own reference panel and a compact chamber law); diagnostic-only alignment lowers in-sample strain/rate RMSE to 0.00535/0.00686, versus 0.05844/0.06631 worst held-out for the previous affine model.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add nonlinear forcing terms to compensate for pooled reference alignment\",\"rejected_reason\":\"Using the diagnostic reference panel already removes most of the structured residual with an affine law; adding terms now risks fitting an alignment error.\"}],\"rationale\":\"Refit each compact forcing law inside held-out lab and stratum folds to see whether the reference-alignment gain survives validation. Compare joint and train-only alignment on benchtop observations to check the deployment convention before writing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f3196504a937192bfab49ff6b7229ad534d3985838f3b2a6dc2148a882e74433",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38826.99,
+      "usage_known": true,
+      "prompt_tokens": 36982,
+      "cached_tokens": 13696,
+      "completion_tokens": 1597
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3ba2f5d21f745d78acf1dfe5ac952a6",
+  "call_seq": 5,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:48.752929+00:00",
+  "ended_at_utc": "2026-11-27T18:58:30.486894+00:00",
+  "request_sha256": "49b6e9cf0bb4586c95e3183939d5a9890d71fb7ddbd03498864dabb4ac7fb1e1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44281,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32099,
+    "cached_tokens": 14976,
+    "completion_tokens": 1788
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\np=/tmp/hegel_continual_archive/dev_beta_m99_00_batch_03_solver.py\\npython3 - \\\"$p\\\" <<'PY'\\nfrom pathlib import Path\\nimport sys\\ns=Path(sys.argv[1]).read_text().replace('open-wall chamber','sealed-wall chamber').replace('def _axis(kappa, vel, h, robin):','def _axis(kappa, vel, h):').replace('    diagonal = np.r_[-upper[0] + robin / h,\\\\n                     -lower[:-1] - upper[1:], -lower[-1] + robin / h]','    diagonal = np.r_[-upper[0], -lower[:-1] - upper[1:], -lower[-1]]').replace('# The latest equilibration trace matches the open-wall facility baseline.','# The predecessor equilibration trace matches the archived sealed-wall run.').replace(\\\"study['L' + key] / (n - 1), study['robin_' + key])\\\",\\\"study['L' + key] / (n - 1))\\\")\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\ndef load(path):\\n spec=importlib.util.spec_from_file_location('test',path); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\nm=load(p+'batch_solver.py');s=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps'];x=c['ref_rosette'];y=c['raw_rosette']; bank=c['single_bank_sweeps']; print('reference and raw ranges',x.min(0),x.max(0),y.min(0),y.max(0)); print('single-bank sweeps',np.column_stack([bank[k] for k in ('bank_id','ref_signal','raw_readout')]).round(5))\\nbase=np.column_stack([np.ones(len(x)),x]); pair=np.column_stack([x[:,i]*x[:,j] for i,j in combinations(range(4),2)]); tri=np.column_stack([x[:,i]*x[:,j]*x[:,k] for i,j,k in combinations(range(4),3)])\\nfor name,A in [('linear',base),('quadratic',np.c_[base,x*x,pair]),('archived cubic',m._rosette_features(x)),('extended cubic',np.c_[m._rosette_features(x),x*x,tri])]:\\n er=np.empty(len(x))\\n for f in range(5):\\n  t=np.arange(len(x))%5==f; a=A[~t]; b=y[~t]; sh=(a.shape[1],4); initial=np.linalg.lstsq(a,b,rcond=None)[0]; j=np.kron(a,np.eye(4)); v=least_squares(lambda w:(a@w.reshape(sh)-b).ravel(),initial.ravel(),jac=lambda w:j,loss='soft_l1',f_scale=1e-4).x.reshape(sh); e=np.abs(a@v-b).max(1); keep=e<=max(1e-3,10*np.median(e)); v=np.linalg.lstsq(a[keep],b[keep],rcond=None)[0];er[t]=np.abs(A[t]@v-y[t]).max(1)\\n print(name,'OOF row-error quantiles',np.quantile(er,[.5,.75,.9,.95,.99,1]),'rows under 1e-3',sum(er<1e-3))\\ncoef=m._fit_rosette(x,y); err=np.abs(m._rosette_features(x)@coef-y).max(1);print('large error indices',np.flatnonzero(err>1e-3),'coefficients',coef.round(5)); yy=m._calibrate(s).reshape(-1,4); print('observation round trip max',np.max(np.abs(m._rosette_features(yy)@coef-s['y_obs_raw'].reshape(-1,4))))\\nZ=s['Z_nuisance']; yy=yy.ravel(); ridge=s['nuisance_ridge']; cap=s['u_box']; budget=s['total_budget']; nshift=len(s['mu_shifts']); npoint=len(s['sensor_ij']); wall=np.any((s['sensor_ij']==0)|(s['sensor_ij']==[s['nx']-1,s['ny']-1]),axis=1)\\nfor name,mod in [('sealed',m)]+[(k,load('/tmp/hegel_continual_archive/dev_beta_m99_00_'+k+'_solver.py')) for k in ('batch_02','batch_03')]:\\n S,_=mod._forward(s); err=np.empty(len(yy));\\n for j in range(npoint):\\n  hold=np.arange(len(yy))%npoint==j; z=Z[~hold]; a=S[~hold]; b=yy[~hold]; pz=np.linalg.solve(z.T@z+ridge*np.eye(z.shape[1]),z.T); st=a-z@(pz@a); yt=b-z@(pz@b); w,_=m._box_simplex(st.T@st+s['source_ridge']*np.eye(S.shape[1]),st.T@yt,cap,budget); gamma=pz@(b-a@w); err[hold]=S[hold]@w+Z[hold]@gamma-yy[hold]\\n err=err.reshape(nshift,npoint);print(name,'held-out RMS shift/all,wall,interior',np.array([np.sqrt(np.mean(e**2,axis=1)) for e in (err,err[:,wall],err[:,~wall])]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed zero-leakage walls: worst public shift RMS fell from 0.16381 to 0.00921 with identical calibration; held-out sensor validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The current chamber retains the preceding solver's open-wall Robin leakage.\",\n    \"empirical_witness\": \"The latest predecessor trace matches the trace that preceded the verified sealed-wall campaign; using the same calibration, sealed walls reduce projected residual norm from 1.01788 to 0.08804 and outperform the periodic stencil on all three shifts.\",\n    \"causal_blanket_diagnosis\": \"The predecessor apparatus setting controls endpoint leakage; refitting source weights and nuisance terms does not absorb the open-wall mismatch.\",\n    \"sublated_pivot\": \"Remove the Robin leak on both axes while retaining endpoint diffusion and the interior upwind stencil.\",\n    \"risk_kind\": \"incorrect boundary mechanism\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the calibration based on pooled sweep RMSE\",\n      \"rejected_reason\": \"Pooled RMSE cannot distinguish grossly contaminated sweeps from a missing interaction term. Compare robust held-out errors and the single-bank sweeps first.\"\n    }\n  ],\n  \"rationale\": \"Implement the wall correction supported by the apparatus trace and public measurements. Hold each sensor out across all shifts to test whether the correction generalizes to both wall and interior sensors, and check whether the calibration errors warrant changing the inherited model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d105e9c4eebedad06e9dbb55db2a3c011395ec97bf2e764e376fe9d3e3482d42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42742.87,
+      "usage_known": true,
+      "prompt_tokens": 32099,
+      "cached_tokens": 14976,
+      "completion_tokens": 1788
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "374304cdd58d4025ad2045dc737a053c",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:58:28.201269+00:00",
+  "ended_at_utc": "2026-11-27T18:58:55.201710+00:00",
+  "request_sha256": "a6b817e329a9c100503ae2fd2eb34ff9679c73a9dcf85e08253b22bb21d46644",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40312,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29706,
+    "cached_tokens": 13696,
+    "completion_tokens": 1077
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\nrows = np.arange(len(x))\\n# The public spike rows are separated by a large gap in measured amplitude.\\nspikes = np.max(np.abs(y), axis=1) > 10\\nprint('spike rows:', rows[spikes].tolist())\\nfolds = np.array_split(np.random.default_rng(17).permutation(rows), 5)\\ntails = np.argsort(np.linalg.norm(x, axis=1))[-12:]\\naxis = rows[np.count_nonzero(x, axis=1) == 1]\\nfor name, slices in [('five-fold', folds), ('high-load', [tails]), ('axis-only holdout', [axis])]:\\n    errs = []\\n    for test in slices:\\n        tr = np.setdiff1d(rows, test)\\n        te = test[~spikes[test]]\\n        b = u._fit(x[tr], y[tr])\\n        z = u._invert(y[te], b)\\n        errs.append(np.abs(z-x[te]))\\n    e = np.concatenate(errs)\\n    print(name, 'max abs load error by channel:', e.max(axis=0), 'p95:', np.quantile(e, .95))\\n    assert e.max() < .001\\nb = u._fit(x, y)\\nout = u.calibrate_upstream(ds)\\nfor name in ('train', 'test'):\\n    for key in ('past_channel_raw', 'hold_channel_raw'):\\n        inp, loads = ds[name][key], out[name][key]\\n        assert inp.shape == loads.shape and inp is not loads\\n        e = np.max(np.abs(u._basis(loads.reshape(-1,4)) @ b - inp.reshape(-1,4)))\\n        print(name, key, 'max raw round-trip error:', e)\\n        assert e < 1e-10\\nassert np.array_equal(out['calibration_load_cells']['bridge_raw'], x)\\nassert not np.shares_memory(out['calibration_load_cells']['bridge_raw'], x)\\nsweep = out['calibration_load_cells']['single_channel_sweeps']\\nassert np.array_equal(sweep['cmd_stress'], sweep['true_stress'])\\nassert not np.shares_memory(sweep['cmd_stress'], sweep['true_stress'])\\nassert u.calibrate_upstream({**ds, 'chamber_verification_trials': None})['chamber_verification_trials'] is None\\nwith_trials = u.calibrate_upstream({**ds, 'chamber_verification_trials': ds['test']})\\nagain = u.calibrate_upstream(out)\\nfor key in ('past_channel_raw', 'hold_channel_raw'):\\n    assert np.array_equal(with_trials['chamber_verification_trials'][key], out['test'][key])\\n    assert np.array_equal(again['test'][key], out['test'][key])\\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 dense coupled polynomial → H2 sparse coupled cubic inverse; the composed schema passes, and the dense high-load forward p85 was 0.00039 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema check alone cannot detect inaccurate loads. Held-out axis and high-load errors would reveal a need to revise the fitted basis; operating-data round trips and optional-trial assertions would distinguish inversion or field-handling bugs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "116548e22101f4b66ee92d2d79a178c19bece74492e40093545c4a0a2cc46522",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28047.22,
+      "usage_known": true,
+      "prompt_tokens": 29706,
+      "cached_tokens": 13696,
+      "completion_tokens": 1077
+    }
+  ]
+}

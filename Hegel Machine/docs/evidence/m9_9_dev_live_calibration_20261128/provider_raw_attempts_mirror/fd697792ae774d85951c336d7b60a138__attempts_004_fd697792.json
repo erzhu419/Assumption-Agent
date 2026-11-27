@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd697792ae774d85951c336d7b60a138",
+  "call_seq": 4,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Hegel_AutonomousInteractionGraph_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:57:29.304118+00:00",
+  "ended_at_utc": "2026-11-27T18:57:48.303646+00:00",
+  "request_sha256": "5f7b955114e8208e0a206565438aea4199c9d2923707905c0f7b40009bf9d457",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 32479,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27061,
+    "cached_tokens": 13696,
+    "completion_tokens": 697
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"awk '/^rng=/{exit} {print}' /tmp/bridge_probe.py >/tmp/bridge_terms.py; cat >>/tmp/bridge_terms.py <<'PY'\\nA=models['quad+cubic']; B=fit(A,y)\\nr=np.linalg.norm(A@B-y,axis=1); clean=r<0.003\\nB=np.linalg.lstsq(A[clean],y[clean],rcond=None)[0]\\nprint('feature order: intercept, linear 0:4, square 0:4, cross 01 02 03 12 13 23, cube 0:4');print(B)\\nprint('clean max / min rejected',np.max(r[clean]), np.min(r[~clean]));print('mix bounds',x[16:].min(0),x[16:].max(0));print('singular values clean',np.linalg.svd(A[clean],compute_uv=False)[[0,-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_terms.py | tail -23; tail -30 /holdout_task/_verified_downstream.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge -> H2 coupled quadratic plus cubic bridge; held-out 85th-percentile residual at high load fell from 0.950 to 0.00039 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Linear cross-channel coupling suffices to calibrate the bridge.\",\n    \"empirical_witness\": \"At the 85th percentile on held-out high-load rows, affine residuals were 0.950 raw units; adding square, pairwise, and cubic terms reduced them to 0.00039.\",\n    \"causal_blanket_diagnosis\": \"Affine coupling models linear bleed-through but misses load-dependent curvature and mixed-channel interactions.\",\n    \"sublated_pivot\": \"Retain linear coupling and use the recovered polynomial terms in a robust forward fit followed by numerical inversion.\",\n    \"risk_kind\": \"off-manifold calibration bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Quadratic response without cubic terms\",\n      \"rejected_reason\": \"Its high-load held-out residual remains about 0.794 raw units.\"\n    }\n  ],\n  \"rationale\": \"Inspect the coefficient support and the gap between clean residuals and spikes. A clear coefficient separation would justify a compact refit; otherwise keep the broader polynomial basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b8bcface709663b12baa002369c1446a89392bc839a22643bb24b48a90af500f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20006.58,
+      "usage_known": true,
+      "prompt_tokens": 27061,
+      "cached_tokens": 13696,
+      "completion_tokens": 697
+    }
+  ]
+}

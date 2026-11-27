@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b4d7848013f841c18a0c39283f49e060",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:43:02.785652+00:00",
+  "ended_at_utc": "2026-11-27T18:43:39.419765+00:00",
+  "request_sha256": "a0f4275159c78f1c23e6c6e0def0dbc169c6ed02580a8172e98a7c1b08849d44",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33425,
+    "cached_tokens": 14976,
+    "completion_tokens": 1496
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_cv.py <<'PY'\\nimport contextlib, io, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nwith contextlib.redirect_stdout(io.StringIO()): p=runpy.run_path('/tmp/chamber_probe.py')\\nglobals().update({k:p[k] for k in ('m','d','tr','te','di','dt','t','tau','theta','bridge','n','h','v','vr')})\\nx=m._features(di); past,hold,_=m._coupon(di,x,bridge); f=x@theta[3:]; O=np.c_[v,vr]; labs=di['lab_id']; W=np.r_[np.ones(len(t)),1.4]; L=np.r_[t,1.]; E=lambda a:np.r_[-np.expm1(-t/a),1/a]; S=sum(w*E(a) for w,a in zip(theta[:2],tau)); Y=O-hold[:,None]*S\\n\\ndef fit(rows, spec):\\n    form, offset, feat, memory = spec\\n    names=['linear','one','two','rational','fixed']; starts={'linear':[[]], 'one':[[1.1],[3.]], 'two':[[.3,1.4],[.6,3.]], 'rational':[[1.1],[3.]], 'fixed':[[]]}\\n    def design(z):\\n        a=np.exp(z); B={'linear':lambda:[L], 'one':lambda:[E(a[0]),L], 'two':lambda:[E(a[0]),E(a[1]),L], 'rational':lambda:[np.r_[t/(a[0]+t),1/a[0]], L], 'fixed':lambda:[E(tau[0]),E(tau[1]),L]}[form]()\\n        if feat=='free': D=[x[:,j,None]*b for b in B for j in range(4)]\\n        else: D=[(f+theta[2])[:,None]*b for b in B]\\n        if offset=='free': D.extend(np.broadcast_to(b,Y.shape) for b in B)\\n        if offset=='linear': D.append(np.broadcast_to(L,Y.shape))\\n        if memory: D.extend(past[:,j,None]*E(tau[0]) for j in range(past.shape[1]))\\n        return np.stack(D,axis=-1)\\n    def proj(z, pred=False):\\n        A=design(z); a=(A[rows]*W[None,:,None]).reshape(-1,A.shape[-1]); coef=np.linalg.lstsq(a,(Y[rows]*W).ravel(),rcond=1e-8)[0]; P=A@coef\\n        return (P,coef) if pred else ((P[rows]-Y[rows])*W).ravel()\\n    cand=[]\\n    for s in starts[form]:\\n        z=np.log(s)\\n        if len(z): z=least_squares(proj,z,bounds=(np.log(.07),np.log(15.)),max_nfev=65).x\\n        cand.append((np.mean(proj(z)**2),z))\\n    _,z=min(cand,key=lambda el:el[0]); P,c=proj(z,True); return P,c,np.exp(z)\\n\\nspecs=[(form,off,'linked',False) for form in ('linear','one','two','rational','fixed') for off in ('none','linear','free') if not(form=='linear' and off=='free')]; specs.extend([('two','linear','free',False),('two','linear','linked',True),('one','linear','linked',True)])\\nfor spec in specs:\\n    P,c,a=fit(np.ones(len(Y),bool),spec); fold=[]\\n    for lab in np.unique(labs):\\n        rows=labs==lab; Q,_,_=fit(~rows,spec); fold.append(np.sqrt(np.mean((Q[rows]-Y[rows])**2,axis=0)))\\n    fold=np.asarray(fold); last=fold[:,-2]; print(spec,'fit',np.sqrt(np.mean((P-Y)**2,axis=0))[[0,-2,-1]].round(5),'worst-lab early/late/rate',fold[:,[0,-2,-1]].max(0).round(5),'mean lab',fold[:,[0,-2,-1]].mean(0).round(5),'tau',a.round(4),'coef',c.round(4))\\nfor label,g in [('diag',di),('test',te)]:\\n    X=m._features(g) if label=='diag' else m._features(tr,te)[n:]; print(label,'normalized feature projection range',np.quantile(X@theta[3:],[0,.25,.5,.75,1]).round(4),'hold range',np.quantile(m._coupon(g,X,bridge)[1],[0,.5,1]).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_cv.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 benchtop history and linear drift transfer unchanged -> H2 chamber resets history, retains the intrinsic hold-stress response, and reshapes coupon drift; the reset fit has 0.00833 strain RMS and 0.00695 rate RMS in sample, pending held-out lab validation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a distinct response at each evaluation time\",\n      \"rejected_reason\": \"It discards the derivative relationship between the strain curve and the initial rate. Test shared response kernels before using an unconstrained table.\"\n    }\n  ],\n  \"rationale\": \"Refit each chamber candidate without the held-out lab's outcomes, then compare early strain, late strain, and initial rate separately. Retain history terms or independent feature weights only if they improve held-out prediction; compare predictor ranges to flag deployment extrapolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "22e4bc6aea35c13fb3bb8c8202ebaeffb8d6116f6a568b7da00b0ba46688affd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36600.64,
+      "usage_known": true,
+      "prompt_tokens": 33425,
+      "cached_tokens": 14976,
+      "completion_tokens": 1496
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "31bad91168c54ed39efedee8124fd5f8",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_beta_m99_00__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m99_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:58:33.303475+00:00",
+  "ended_at_utc": "2026-11-27T18:59:05.832014+00:00",
+  "request_sha256": "0b865bb0c9731b2cea7216785b46e41ac9c771914e8c45c1ab88aac3d1eef797",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49677,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33831,
+    "cached_tokens": 14976,
+    "completion_tokens": 1346
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; out=m.solve_batch(s)\\n# Independent row-by-row dense forward reference checks endpoints, ordering, and terminal shift.\\ndef axis(k,v,h):\\n a=np.zeros((len(k),len(k)))\\n for i in range(len(k)):\\n  for j in (i-1,i+1):\\n   if 0<=j<len(k):\\n    q=k[i]/h**2 if i in (0,len(k)-1) else (k[i]+k[j])/(2*h*h)+max((i-j)*v[i],0)/h\\n    a[i,j]=-q; a[i,i]+=q\\n return a\\nnx,ny=int(s['nx']),int(s['ny']); ax,ay=[axis(s['kappa_'+key],s['vel_'+key],s['L'+key]/(n-1)) for key,n in zip('xy',(nx,ny))]\\nA=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F')); B=np.stack([m0.ravel(order='F') for m0 in s['source_modes']],axis=1)\\nU=[np.linalg.solve(A+mu*np.eye(nx*ny),B) for mu in s['mu_shifts']]; i,j=s['sensor_ij'].T; S=np.concatenate([u[i+nx*j,:] for u in U]); S0,_=m._forward(s)\\ny=m._calibrate(s); Z=s['Z_nuisance']; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); w=out['weights']; cert=out['kkt_certificate']; st=S-Z@(P@S); r=st@w-(y-Z@(P@y)); ridge=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']; g=st.T@r+ridge*w; J=(r@r+ridge*(w@w))/2; nu=cert['nu_sum']; lo=np.asarray(cert['lam_lower']); hi=np.asarray(cert['lam_upper']); dual=J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nassert np.allclose(cert['weights'],w,rtol=0,atol=1e-12) and lo.min()>=0 and hi.min()>=0\\nerrors={'forward_all_shifts':np.max(np.abs(S-S0)),'terminal_field':np.max(np.abs((U[-1]@w).reshape((nx,ny),order='F')-out['terminal_field'])),'budget':abs(w.sum()-budget),'box':max(0,-w.min(),w.max()-cap),'stationarity':np.max(np.abs(g-nu-lo+hi)),'complementarity':max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w)))),'objective':abs(J-cert['primal_objective']),'dual':abs(dual-cert['dual_lower_bound']),'duality_gap':abs(J-dual)}\\nprint('Independent public verification:',{k:float(v) for k,v in errors.items()}); assert max(errors.values())<1e-10\\n# Stress the active-set solver on feasible interior, saturated, and vertex budgets.\\nrng=np.random.default_rng(159); worst=0.\\nfor n in (3,8,16):\\n for b in (0.,.05,1.,2.,n-.03,float(n)):\\n  if b>n: continue\\n  for _ in range(20):\\n   a=rng.normal(size=(n,n)); h=a.T@a+.04*np.eye(n); c=5*rng.normal(size=n); x,t=m._box_simplex(h,c,1.,b); d=h@x-c-t\\n   gap=np.maximum(d,0)@x+np.maximum(-d,0)@(1-x)\\n   worst=max(worst,abs(x.sum()-b),max(0.,-x.min(),x.max()-1.),abs(gap))\\nprint('Worst stressed active-set feasibility/complementarity error:',worst); assert worst<1e-9\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls: worst held-out sensor RMS across shifts and wall/interior slices fell from 0.19052 to 0.01088, versus 0.01660 for periodic walls.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the cubic calibration model\",\n      \"rejected_reason\": \"The added terms recovered no additional held-out sweeps and increased median error; the existing robust fit already separates the 77 consistent sweeps from the three large outliers.\"\n    }\n  ],\n  \"rationale\": \"Keep the candidate that won every held-out sensor slice. Independently reconstruct the forward system and certificate to catch indexing, terminal-shift, or KKT errors that schema validation would miss; stress the active-set routine on saturated and vertex budgets before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "cd17f0f57dbc1e2b644b039ca0c4b470a9951cf891fd6a49916948e35866e666",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33577.14,
+      "usage_known": true,
+      "prompt_tokens": 33831,
+      "cached_tokens": 14976,
+      "completion_tokens": 1346
+    }
+  ]
+}

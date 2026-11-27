@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc5bf7d3d5c84621beaa967599e5d02c",
+  "call_seq": 6,
+  "stage_subdir": "m99_dev_20261127T183538Z__dev_alpha_m99_00__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m99_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T18:42:55.338049+00:00",
+  "ended_at_utc": "2026-11-27T18:43:24.586381+00:00",
+  "request_sha256": "e91ff9b886e59878cecff468ff5a59049b2884cefed5026dd8a0a3bcabff0d40",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45376,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33572,
+    "cached_tokens": 14976,
+    "completion_tokens": 1206
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/m99_time_shapes.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/m99_probe.py').read())\\np,h,D=cc; Y=np.column_stack((ch['strain_curves_obs']-ch['strain_0'][:,None],ch['instant_rate_obs']);)\\nPY\\nsed -i \\\"s/\\\\['instant_rate_obs'\\\\]);)/['instant_rate_obs']))/\\\" /tmp/m99_time_shapes.py\\ncat >> /tmp/m99_time_shapes.py <<'PY'\\nnp.set_printoptions(precision=5,suppress=True,linewidth=200)\\nlabs=ch['lab_id']; r=D@theta[2:]; F=np.column_stack((-np.expm1(-t[:,None]/tau),t)); F=np.vstack((F,np.r_[1/tau,1]));\\nprint('intrinsic',tau,theta); print('fixed/shaped closure comparison');\\nfor name,B in [('intrinsic',F),('free',np.vstack((np.column_stack((-np.expm1(-t[:,None]/np.array([.5025,2.5386])),t)),[1/.5025,1/2.5386,1]))),('intrinsic plus quadratic',np.column_stack((F,np.r_[t*t,0]))),('intrinsic plus third exp',np.column_stack((F,np.r_[-np.expm1(-t/1.2),1/1.2]))),('intrinsic plus attenuated drift',np.column_stack((F,np.r_[t/(1+.3*t),1])) )]:\\n E=Y-(np.linalg.lstsq(B,Y.T,rcond=None)[0].T@B.T); print(name,np.sqrt(np.mean(E**2)),np.max(abs(E)),np.sqrt(np.mean(E**2,axis=0)))\\nbase=np.column_stack((h,r,np.ones(len(h)))); co=np.linalg.lstsq(base,Y,rcond=None)[0]; print('time, hold kernel, feature drift kernel, intercept, residual RMS'); print(np.column_stack((np.r_[t,0],co.T,np.sqrt(np.mean((Y-base@co)**2,axis=0))))); print('hold minus both zero-memory modes; drift minus linear',np.column_stack((co[0]-F[:,:2]@theta[:2],co[1]-F[:,2]))); print('empirical joint basis sv',np.linalg.svd(Y,compute_uv=False))\\n\\ndef cv(M):\\n E=np.zeros_like(Y)\\n for l in np.unique(labs):\\n  keep=labs!=l; E[~keep]=Y[~keep]-M[~keep]@np.linalg.lstsq(M[keep],Y[keep],rcond=None)[0]\\n return np.sqrt(np.mean(E[:,:-1]**2)),np.max(abs(E[:,:-1])),np.max(abs(E[:,-1]))\\nfor name,M in [('hold, drift',base),('hold, drift, past',np.column_stack((base,p))),('hold, features',np.column_stack((h,D))),('hold drift product',np.column_stack((base,h*r))),('drift rationals',np.column_stack((base,r*r,r*r*r,h*r))),('hold nonlinear',np.column_stack((base,h*h,np.tanh(h))))]: print(name,cv(M))\\nimport json\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); a,b=[np.asarray(l['facility_telemetry_trace']) for l in log]; print('apparatus start/current means and stds',a.mean(0),a.std(0),b.mean(0),b.std(0)); print('apparatus first two',a[:2],b[:2]); print('feature ranges',np.quantile(r,[0,.5,1]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m99_time_shapes.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shifted slow decay alone → H2: separate hold and feature-drift time kernels; the free-basis fit closes at 0.0095 maximum strain error, but feature-plus-hold amplitudes miss by up to 0.188 in leave-one-lab-out validation.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Freeze the freely fitted chamber decay times\",\"rejected_reason\":\"The inferred amplitudes co-vary with the feature drift term, so an omitted drift kernel could make the slow decay appear to shift.\"}],\"rationale\":\"Estimate the time responses to hold stress and material drift separately, then compare omitted temporal terms and stress interactions on held-out labs. Choose an explicit chamber law only once it predicts both strain and rate without coupon-specific fits.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "1867ab47ab07edab462c21123aee9305c52d5cf3682ab45e02a5bf5b9648b7b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30252.07,
+      "usage_known": true,
+      "prompt_tokens": 33572,
+      "cached_tokens": 14976,
+      "completion_tokens": 1206
+    }
+  ]
+}
