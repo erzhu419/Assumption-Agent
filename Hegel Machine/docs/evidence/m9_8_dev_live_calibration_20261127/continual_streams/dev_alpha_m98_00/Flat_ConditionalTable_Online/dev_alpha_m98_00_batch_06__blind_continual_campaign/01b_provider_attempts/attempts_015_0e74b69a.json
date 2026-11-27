@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0e74b69a725649e39073581f80fde943",
+  "call_seq": 15,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:06:56.562053+00:00",
+  "ended_at_utc": "2026-11-27T14:07:22.058449+00:00",
+  "request_sha256": "e7b941019af1c7afb4367df3b74d5291a8bbd68288f2993a411278674f83ec58",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 102744,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 47498,
+    "cached_tokens": 9600,
+    "completion_tokens": 719
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; b=c['bridge_raw']; support=np.count_nonzero(x,axis=1)\\ne=np.empty(len(x))\\nfor j in range(len(x)):\\n    mask=np.arange(len(x))!=j\\n    a=m._fit_bridge({'true_channel_loads':x[mask], 'bridge_raw':b[mask]})\\n    e[j]=np.linalg.norm(m._bridge_forward(x[j:j+1],a)[0]-b[j])\\nprint('LOO calibration residual by sweep type (median, max ordinary, count gross):',[(n, np.median(e[support==n]), max(e[(support==n)&(e<.01)]), np.count_nonzero((support==n)&(e>=.01))) for n in np.unique(support)])\\nassert np.count_nonzero(e>=.01)==3 and max(e[e<.01])<.001\\nout=m.solve_batch(d); assert all(np.isfinite(v).all() for v in out.values()); assert 0.05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine bridge and transferred benchtop memory) → H2 (cyclic nonlinear bridge and chamber reset); the verified candidate gives strain MAE 0.000990 and rate MAE 0.001169 in the host probe, with worst diagnostic coupon strain RMSE 0.0543.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Leave each calibration row out in turn to check whether the sparse bridge depends on any single sweep. If errors rise on ordinary rows or additional rows are flagged as gross, revise the calibration fit before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "31351ef5657309ee4a3ccfcb5eed688e999fe4844ea502b052802f44531d57e6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25461.92,
+      "usage_known": true,
+      "prompt_tokens": 47498,
+      "cached_tokens": 9600,
+      "completion_tokens": 719
+    }
+  ]
+}

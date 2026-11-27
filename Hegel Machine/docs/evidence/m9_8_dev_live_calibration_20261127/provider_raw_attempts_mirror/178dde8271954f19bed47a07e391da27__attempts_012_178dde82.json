@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "178dde8271954f19bed47a07e391da27",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:44:28.001777+00:00",
+  "ended_at_utc": "2026-11-27T13:44:59.480085+00:00",
+  "request_sha256": "ddfb16655dc8e3883076e6473a9fc0f9a2c382dc13283522798150161c8489c3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65336,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32611,
+    "cached_tokens": 9600,
+    "completion_tokens": 1118
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/chamber_grammar_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py'); item=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; q=item['campaign_diagnostics']; out=m['solve_batch'](d); tau=out['estimated_taus']; th=out['hereditary_weights']; t=d['eval_times']; c=m['_stress_calibration'](d['calibration_load_cells']); h=q['hold_channel_raw']@c[:-1]+c[-1]; past=q['past_channel_raw']@c[:-1]+c[-1]; X=m['_aligned_features'](q,q)[len(h):]; D=X@th[2:]; z=np.zeros((len(h),2))\\nfor i,dt in enumerate(d['past_dt']):\\n    z += (-np.expm1(-dt/tau))*(past[:,i,None]-z)\\nU=np.vstack((-np.expm1(-t[:,None]/tau),1/tau)); J=U*tau; T=np.r_[t,1.0]; B=h[:,None]*(U@th[:2])+D[:,None]*T; V=J-T[:,None]; Y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]; M=-z[:,None,:]*U[None,:,:]*th[:2]; scale=np.median(D**2)\\ndef predict(kind, train, rows):\\n    def correction(p, k):\\n        drift=D[k]\\n        if kind=='saturation': drift=drift/(1+p[2]*drift**2/scale)\\n        v=drift[:,None]*(V@p[:2]);\\n        if kind=='residual memory': v+=M[k]@p[2:]\\n        return v\\n    p=np.array([.52,.43]);\\n    if kind!='fixed reset':\\n        lo=[0.,0.]; hi=[1.,1.]\\n        if kind=='saturation': p=np.r_[p,.01]; lo+=[0.]; hi+=[5.]\\n        if kind=='residual memory': p=np.r_[p,.01,.01]; lo+=[0.,0.]; hi+=[1.,1.]\\n        p=least_squares(lambda p:(B[train]+correction(p,train)-Y[train]).ravel(),p,bounds=(lo,hi)).x\\n    return B[rows]+correction(p,rows)\\nfor kind in ('fixed reset','refitted reset','saturation','residual memory'):\\n    for group in ('lab_id','stratum'):\\n        scores=[]\\n        for label in np.unique(q[group]):\\n            k=q[group]==label; e=abs(predict(kind,~k,k)-Y[k]); scores.append((np.quantile(e[:,:-1],.9),np.quantile(e[:,-1],.9)))\\n        print(kind,group,'worst-group P90 strain/rate',np.max(scores,axis=0).round(6),'per-group',np.round(scores,6).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_grammar_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear drift redistribution after a chamber reset -> H2 saturation or residual stress memory only if it improves held-out groups; current worst diagnostic-group P90 absolute errors are 0.03233 strain and 0.02181 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat bridge calibration and robust-loss comparisons\",\n      \"rejected_reason\": \"The preceding grouped audit already favored the current choices. It did not test rational saturation of the chamber transient.\"\n    }\n  ],\n  \"rationale\": \"Fit each challenger without the held-out lab or stratum. This can detect whether linear redistribution misses drift saturation or whether resetting the branch state discards predictive stress history. Retain the verified solver unless a challenger materially improves the worst groups without trading away either output. Relay, HJB, and balanced-accuracy checks do not apply to these continuous measurements.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "989b819e754cff3a0210a054f8a136c779452e3a0e854fbe9388280efa179294",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31437.41,
+      "usage_known": true,
+      "prompt_tokens": 32611,
+      "cached_tokens": 9600,
+      "completion_tokens": 1118
+    }
+  ]
+}

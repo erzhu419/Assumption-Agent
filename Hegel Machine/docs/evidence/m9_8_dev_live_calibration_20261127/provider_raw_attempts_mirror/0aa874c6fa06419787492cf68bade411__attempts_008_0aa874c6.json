@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0aa874c6fa06419787492cf68bade411",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:15:23.694899+00:00",
+  "ended_at_utc": "2026-11-27T14:16:04.502235+00:00",
+  "request_sha256": "1bd41fc7d137c327134da9f3f6ef7165dfbcc54430c86df40b238553d39d17de",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59097,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32743,
+    "cached_tokens": 11136,
+    "completion_tokens": 1369
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/dev_alpha_m98_00_batch_06_solver.py').read_text()\\na = src.index('# The chamber verification coupons')\\nb = src.index('def solve_batch', a)\\nsrc = src[:a] + '''# Standalone chamber verification confirms the archived carried-memory law.\\n_CHAMBER_FORCING = np.array([0.41228893817869877, 2.2768586984955768])\\n\\n\\ndef _deployment(taus, theta, dt, times, coupon):\\n    curve, rate = _design(taus, dt, times, coupon)\\n    drift = coupon[2] @ theta[2:]\\n    u = times[:, None] / taus\\n    correction = (-np.expm1(-u) - u) @ _CHAMBER_FORCING\\n    # The forcing correction has zero derivative at the start of the hold.\\n    return curve @ theta + drift[:, None] * correction, rate @ theta\\n\\n\\n''' + src[b:]\\nsrc = src.replace('predict reset-chamber rheology', 'predict carried-memory chamber rheology')\\nsrc = src.replace('_deployment(taus, theta, times, test_coupon)', '_deployment(taus, theta, dt, times, test_coupon)')\\nPath('/holdout_task/batch_solver.py').write_text(src)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; g=item['campaign_diagnostics']; tr=d['train']; dt,t=d['past_dt'],d['eval_times']; p=m.solve_batch(d); tau,b=p['estimated_taus'],p['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\npc,ec=m._prepare(d); cal=m._stress_calibration(d['calibration_load_cells']); c=d['calibration_load_cells']; e=m._channel_loads(c['bridge_raw'],cal)-c['true_channel_loads']; shifted=np.max(abs(c['bridge_raw']),axis=1)>cal[1]; print('bridge max absolute errors by offset state:', [abs(e[shifted==s]).max() for s in (False,True)]); assert abs(e).max()<5e-4\\n_,gc=m._prepare(dict(d,test=g)); gc=(*gc[:2],m._aligned_features(g,g)[-len(g['lab_id']):]); yp,rp=m._deployment(tau,b,dt,t,gc); e=yp-(g['strain_curves_obs']-g['strain_0'][:,None]); r=rp-g['instant_rate_obs']; rm=lambda x:np.sqrt(np.mean(x*x));\\nfor k in ('lab_id','stratum'):\\n    worst=np.max([[rm(e[g[k]==v]),rm(r[g[k]==v]),rm(e[g[k]==v,:4]),rm(e[g[k]==v,-4:])] for v in np.unique(g[k])],axis=0); print('chamber',k,'worst strain, rate, early, late:',worst); assert np.all(worst<.016)\\nfor subset in (gc,ec):\\n    h=1e-7; z,r=m._deployment(tau,b,dt,np.array([0.,h]),subset); assert np.allclose(z[:,0],0) and np.max(abs(z[:,1]/h-r))<2e-6\\nl=tr['lab_id']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; scores=[]\\nfor lab in np.unique(l):\\n    hold=l==lab; a,w=m._fit(dt,t,tuple(z[~hold] for z in pc),y[~hold],r[~hold]); C,R=m._design(a,dt,t,tuple(z[hold] for z in pc)); scores.append([rm(C@w-y[hold]),rm(R@w-r[hold])]); assert .05<a[0]<a[1]<25\\nprint('benchtop held-out-lab worst strain/rate:',np.max(scores,axis=0)); assert np.all(np.max(scores,axis=0)<[.07,.02])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset chamber with shared diagnostic alignment -> H2 carried memory with archived forcing and standalone diagnostic alignment; worst diagnostic lab RMSE is 0.01186 strain and 0.01073 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\", \"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit forcing coefficients or add a chamber drift or memory term\",\n      \"rejected_reason\": \"Refitting did not improve worst-lab strain RMSE, and additional terms worsened worst-lab initial-rate RMSE.\"\n    }\n  ],\n  \"rationale\": \"Use the archived forcing law supported by chamber measurements and retain the dynamic bridge and train-only material fit. Verify the exact artifact in a clean process: bridge states, held-out benchtop labs, diagnostic lab and stratum slices, and agreement between the predicted initial rate and the strain derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6578c3ab6a4ba2f28077c1e61dff55fa0e4082a08175b7a1207d11a9028bde6f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40771.07,
+      "usage_known": true,
+      "prompt_tokens": 32743,
+      "cached_tokens": 11136,
+      "completion_tokens": 1369
+    }
+  ]
+}

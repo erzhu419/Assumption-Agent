@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41c99bc192a64237b8a8a0bf1441d5bb",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:00:43.400978+00:00",
+  "ended_at_utc": "2026-11-27T14:01:18.786249+00:00",
+  "request_sha256": "d8d26fca243cd27fb19a2c54f14c80651a878a27a223bf6df9678dfd68554e57",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45164,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26868,
+    "cached_tokens": 11136,
+    "completion_tokens": 1383
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat /tmp/hegel_continual_archive/archive_manifest.json\\npython3 - <<'PY'\\nfrom pathlib import Path\\narchive = Path('/tmp/hegel_continual_archive/dev_alpha_m98_00_batch_03_solver.py')\\nsource = archive.read_text()\\nshared = source[source.index('import numpy'):source.index('# Chamber forcing')]\\nsolve = source[source.index('def solve_batch'):]\\ndeployment = '''_APPARATUS_LOG = Path('/tmp/hegel_continual_archive/archive_apparatus_log.json')\\n\\n\\ndef _deployment(taus, theta, dt, times, coupon):\\n    curve, rate = _design(taus, dt, times, coupon)\\n    if not _APPARATUS_LOG.is_file():\\n        return curve @ theta, rate @ theta\\n    with _APPARATUS_LOG.open() as stream:\\n        entries = sorted(json.load(stream), key=lambda row: row['completed_batch_index'])\\n    if len(entries) < 2:\\n        return curve @ theta, rate @ theta\\n\\n    # A completed batch records the equilibration setting for its successor.\\n    # Compare settings, then use the law of the campaign that followed the match.\\n    def signature(row):\\n        return np.asarray(row['facility_telemetry_trace']).mean(axis=0)\\n\\n    target = signature(entries[-1])\\n    match = min(range(len(entries) - 1),\\n                key=lambda j: np.linalg.norm(signature(entries[j]) - target))\\n    successor = entries[match + 1]['completed_short_name']\\n    growth = -np.expm1(-times[:, None] / taus)\\n    drift = coupon[2] @ theta[2:]\\n    if successor.endswith('_batch_01'):\\n        amplitude = coupon[1][:, None] * theta[:2]\\n        forcing = np.array([0.34880024, 1.63895287])\\n        correction = (growth - times[:, None] / taus) @ forcing\\n        return (amplitude @ growth.T + drift[:, None] * (times + correction),\\n                (amplitude / taus).sum(axis=1) + drift)\\n    if successor.endswith('_batch_03'):\\n        forcing = np.array([0.41228893817869877, 2.2768586984955768])\\n        correction = (growth - times[:, None] / taus) @ forcing\\n        return curve @ theta + drift[:, None] * correction, rate @ theta\\n    # Batch 02 is the carried-memory setting with intrinsic linear drift.\\n    return curve @ theta, rate @ theta\\n\\n\\n'''\\nPath('/holdout_task/batch_solver.py').write_text('\\\"\\\"\\\"Fit the benchtop material law and predict deployment from the apparatus lineage.\\\"\\\"\\\"\\\\n\\\\nimport json\\\\nfrom pathlib import Path\\\\n\\\\n' + shared + deployment + solve)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; p=m.solve_batch(d)\\nprint('taus',p['estimated_taus'],'weights',p['hereditary_weights'])\\nfor key,val in p.items(): print(key,val.shape,np.isfinite(val).all()); assert np.isfinite(val).all()\\ntr=d['train']; c,_=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; scores=[]\\nfor lab in np.unique(tr['lab_id']):\\n mask=tr['lab_id']==lab\\n tau,beta=m._fit(dt,t,tuple(a[~mask] for a in c),y[~mask],r[~mask]); A,B=m._design(tau,dt,t,tuple(a[mask] for a in c)); e=abs(A@beta-y[mask]); er=abs(B@beta-r[mask]); scores.append([np.max(np.median(e,axis=0)),np.median(er),np.quantile(e,.9),np.quantile(er,.9)]); print('held lab',lab,'taus',tau,'worst horizon median / rate median / curve p90 / rate p90',np.round(scores[-1],6))\\nprint('worst',np.max(scores,axis=0))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared benchtop fit -> H2 successor-aligned carried memory with intrinsic drift; the latest trace is 0.093 from the setting preceding batch 02, and held-lab errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse batch 01's reset law\",\"rejected_reason\":\"Batch 01 names the completed batch that recorded the matched setting, not the successor that used it.\"},{\"option\":\"Reuse batch 03's drift forcing\",\"rejected_reason\":\"That forcing was fitted under the distinct setting recorded after batch 02.\"}],\"rationale\":\"Compose the archived material estimator with successor-aligned regime selection. Run the schema and held-lab checks to detect output-contract errors or an unstable intrinsic fit before testing chamber boundary behavior.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "157283db242fc0b713c0a1aa318b3211d68caeb8678b7aed8eee705a3e1415d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35349.83,
+      "usage_known": true,
+      "prompt_tokens": 26868,
+      "cached_tokens": 11136,
+      "completion_tokens": 1383
+    }
+  ]
+}

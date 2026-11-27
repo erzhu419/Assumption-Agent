@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "097797ea3cd545e390f1b97c82ee0794",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:57:31.241357+00:00",
+  "ended_at_utc": "2026-11-27T12:57:58.763478+00:00",
+  "request_sha256": "ad26ea880950647075f5feb97919645b122753a249ee5eda4a2826f28a311df4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57207,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31544,
+    "cached_tokens": 0,
+    "completion_tokens": 1052
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\ns=Path('/tmp/b98.py').read_text()\\nc=Path('/tmp/cal98.py').read_text().split('def fit_bridge',1)[1]\\nc=('def fit_bridge'+c).replace('def fit_bridge(', 'def _calibration(').replace('def invert_bridge(', 'def _invert_bridge(')\\na=s.index('def _calibration('); b=s.index('def _kernel(',a)\\ns=s[:a]+c+'\\\\n\\\\ndef _inputs(block, x, cal):\\\\n    past = _invert_bridge(block[\\\\'past_channel_raw\\\\'], cal).sum(axis=-1)\\\\n    hold = _invert_bridge(block[\\\\'hold_channel_raw\\\\'], cal).sum(axis=-1)\\\\n    return past, hold, np.column_stack((np.ones(len(x)), x))\\\\n\\\\n\\\\n'+s[b:]\\nPath('/holdout_task/batch_solver.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nsed -n '110,233p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,runpy,numpy as np\\nm=runpy.run_path('/holdout_task/batch_solver.py'); globals().update({k:v for k,v in m.items() if k.startswith('_') and callable(v)}); d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te,pi=(d[k] for k in ('train','test','chamber_verification_trials')); dt,t=d['past_dt'],d['eval_times']; cal=_calibration(d['calibration_load_cells']); xtr,xte=_features(tr,te); a=_inputs(tr,xtr,cal); tau,w,s=_material(tr,a,dt,t)\\nfor lab in np.unique(tr['lab_id']):\\n g=tr['lab_id']==lab; l,u,_=_material(tr,a,dt,t,~g); pred,rate=_predict(tuple(z[g] for z in a),dt,t,l,u); e=pred+tr['strain_0'][g,None]-tr['strain_curves_obs'][g]; f=rate-tr['instant_rate_obs'][g]; print('held lab',lab,'taus',l,'weight max change',np.max(abs(w-u)),'strain MAE/RMSE',np.mean(abs(e)),np.sqrt(np.mean(e**2)),'rate RMSE',np.sqrt(np.mean(f**2)))\\nfor mode in (False, True):\\n xp,=_features(pi,balanced=mode); p=_inputs(pi,xp,cal); pred,r=_predict(p,dt,t,tau,w); e=pred+pi['strain_0'][:,None]-pi['strain_curves_obs']; f=r-pi['instant_rate_obs']; print('pilot balanced',mode,'RMSEs',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(f**2)),'worst lab',max(np.sqrt(np.mean(e[pi['lab_id']==j]**2)) for j in np.unique(pi['lab_id'])))\\nbase=m['solve_batch'](d); blind=m['solve_batch'](dict(d,chamber_verification_trials=None)); print('blind/pilot max output differences',{k:float(np.max(abs(base[k]-blind[k]))) for k in base})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 robust sparse cubic inversion with benchtop dynamics; held-out ordinary-sweep axial RMSE is 0.000169 and public pilot strain/rate RMSEs are 0.0041/0.00277.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Force a telemetry-driven chamber adjustment\",\"rejected_reason\":\"The current pilot is already explained by the calibrated benchtop model, and the prior telemetry carries no paired response labels.\"}],\"rationale\":\"Install the validated bridge in the deliverable. Held-out labs test material stability; the isolated schema run and pilot-removed run detect interface or blind-path failures before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "aeee7c3f2c86477c7c9fe1dec52283592612d26e2ba8d73985e656c5ea01fcb2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27483.04,
+      "usage_known": true,
+      "prompt_tokens": 31544,
+      "cached_tokens": 0,
+      "completion_tokens": 1052
+    }
+  ]
+}

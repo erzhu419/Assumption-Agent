@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f1d8bd439c5b4bc18e9d2aa3a6e398de",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:23:44.894934+00:00",
+  "ended_at_utc": "2026-11-27T12:24:09.428199+00:00",
+  "request_sha256": "66018ae6333f9ef85e26256c79c077afdd8d9771162c0b223f6b53f5ddfd92f2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59727,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33701,
+    "cached_tokens": 0,
+    "completion_tokens": 915
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rheology_artifact_cv.py <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nfor name in ('train','chamber_verification_trials','test'):\\n a=d[name]; q=a.get('aux_chamber_telemetry'); print('telemetry',name,type(q).__name__,str(q)[:950])\\n print('lab counts',np.unique(a['lab_id'],return_counts=True),'missing rows',np.sum(np.any(~np.isfinite(a['coupon_features_raw']),axis=1)))\\nb=m._calibrate(d['calibration_load_cells']); dt=d['past_dt']; t=d['eval_times']; p=d['chamber_verification_trials']; tr=d['train']; train=m._prepare(tr,b); valid=m._prepare(p,b)\\ndef subset(a,mask): return {k:v[mask] for k,v in a.items() if isinstance(v,np.ndarray) and v.ndim and len(v)==len(mask)}\\ndef stats(e): return np.median(abs(e[:,0])),np.median(abs(e[:,1:])),np.median(abs(e[:,-1]))\\nfor source,target in [('pilot','chamber'),('blind','bench')]:\\n g=p if source=='pilot' else tr; errors=[]\\n for lab in np.unique(g['lab_id']):\\n  keep=g['lab_id']!=lab\\n  a=m._prepare(subset(g,keep),b); v=m._prepare(subset(g,~keep),b)\\n  tau,theta=m._estimate(train,a,dt,t) if source=='pilot' else m._estimate(a,None,dt,t)\\n  # The whole held-out lab forms its own reference panel. Imputation and fit do not use its response.\\n  e=m._design(v,tau,dt,t)@theta-v[4]; errors.append(e); print(source,'lab',lab,'median rate/curve/terminal',np.round(stats(e),6),'tau',tau.round(4))\\n E=np.concatenate(errors); print(source,'worst lab',np.max([stats(e) for e in errors],axis=0),'pooled',stats(E))\\nfor use in (True,False):\\n out=m.solve_batch(d if use else {**d,'chamber_verification_trials':None}); assert all(np.isfinite(v).all() for v in out.values()); assert .05<out['estimated_taus'][0]<out['estimated_taus'][1]<25\\n print('public pilot' if use else 'blind fallback','parameters',out['estimated_taus'].round(5),out['hereditary_weights'].round(5))\\na=Path('/tmp/hegel_continual_archive'); print('archive entries',[(x.name,x.stat().st_size) for x in a.iterdir()] if a.is_dir() else [])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_artifact_cv.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated causal Prony model → H2 split-local alignment and agreement-weighted chamber fitting; the prior proxy's worst-lab median errors were 0.00563 strain and 0.00429 onset rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[],\"rationale\":\"Test the exact artifact on omitted labs to detect unstable chamber fits and verify the no-pilot branch. Inspect the auxiliary telemetry for a measured apparatus signal that could justify improving blind predictions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a104f0ab0e1765729d264b38aa400c5f052586461ed439744f334246b91d5d18",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24499.29,
+      "usage_known": true,
+      "prompt_tokens": 33701,
+      "cached_tokens": 0,
+      "completion_tokens": 915
+    }
+  ]
+}

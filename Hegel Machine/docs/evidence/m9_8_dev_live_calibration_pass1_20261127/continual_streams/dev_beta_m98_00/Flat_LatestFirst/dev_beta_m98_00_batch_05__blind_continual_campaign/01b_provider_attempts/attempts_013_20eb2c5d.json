@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "20eb2c5dcec84db491e60c7ae612f54e",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:15:55.021993+00:00",
+  "ended_at_utc": "2026-11-27T13:16:34.791350+00:00",
+  "request_sha256": "e4aad28b103e72c4e9e5980cd15ef4e8e1323a5c00dd996e4973fc2d952785f3",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73424,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37924,
+    "cached_tokens": 11136,
+    "completion_tokens": 1560
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nassert not s['reference_tracer_pulses']\\n# Independently assemble the baseline stencil, using explicit row updates.\\ndef axis(k, v, h, r):\\n    a = np.zeros((len(k), len(k)))\\n    for i in range(len(k)):\\n        if i in (0, len(k)-1):\\n            a[i, 1 if i == 0 else i-1] = -k[i]/h**2\\n            a[i, i] = k[i]/h**2 + r/h\\n        else:\\n            for d in (-1, 1):\\n                a[i, i+d] = -(k[i]+k[i+d])/(2*h**2) - max(-d*v[i], 0)/h\\n            a[i,i] = -a[i].sum()\\n    return a\\nnx, ny = s['nx'], s['ny']\\nax, ay = [axis(s['kappa_'+c], s['vel_'+c], s['L'+c]/(s['n'+c]-1), s['robin_'+c]) for c in ('x','y')]\\nl = np.kron(np.eye(ny), ax) + np.kron(ay, np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nmodes = s['source_modes']; rhs = np.stack([q.ravel(order='F') for q in modes], axis=1)\\nix, iy = s['sensor_ij'].T\\nstack = []\\nfor mu in s['mu_shifts']:\\n    fields = np.linalg.solve(l + mu*np.eye(nx*ny), rhs)\\n    stack.append(fields[ix + nx*iy])\\nA = np.vstack(stack)\\nS, U = m._response(s, np.ones(8), modes)\\nnp.testing.assert_allclose(S, A, atol=1e-13, rtol=1e-12)\\ncal = m._calibration(s['sensor_calibration_sweeps'])\\ny = cal(s['y_obs_raw']); C = s['sensor_calibration_sweeps']\\nc = np.linalg.lstsq(np.c_[np.ones(len(C['ref_rosette'])), C['ref_rosette']], C['raw_rosette'], rcond=None)[0]\\ny_affine = np.linalg.solve(c[1:].T,(s['y_obs_raw'].reshape(-1,4)-c[0]).T).T.ravel()\\nnp.testing.assert_allclose(y, y_affine, atol=2e-7, rtol=0)\\nz = s['Z_nuisance']; R = np.eye(len(y)) - z @ np.linalg.solve(z.T @ z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T)\\nD = R@A; v = R@y; ridge = s['source_ridge']; cap = s['u_box']\\nfor budget in (0., cap*.3, s['total_budget'], cap*(len(modes)-.3), cap*len(modes)):\\n    result = m.solve_batch(dict(s, total_budget=budget)); w = result['weights']; k = result['kkt_certificate']\\n    g = D.T@(D@w-v) + ridge*w\\n    low, high = np.asarray(k['lam_lower']), np.asarray(k['lam_upper']); nu = k['nu_sum']\\n    J = .5*(np.linalg.norm(D@w-v)**2 + ridge*(w@w))\\n    lb = J-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\n    field = (fields@w).reshape((nx,ny), order='F')\\n    mismatch = np.max(np.abs(result['terminal_field']-field)); gap = J-lb\\n    assert w.min() >= -1e-12 and w.max() <= cap+1e-12 and abs(w.sum()-budget)<1e-11\\n    assert min(low.min(),high.min())>=0 and np.max(np.abs(g-nu-low+high))<1e-11\\n    assert abs(gap)<1e-10 and abs(J-k['primal_objective'])<1e-11 and abs(lb-k['dual_lower_bound'])<1e-11\\n    assert mismatch<1e-12\\n    np.testing.assert_array_equal(w,k['weights'])\\n    print(f'budget={budget:g} gap={gap:.3g} field_max_error={mismatch:.3g} active_lower={(w<1e-10).sum()} active_upper={(w>cap-1e-10).sum()}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted wall inference) -> H2 (nominal wall for this blind campaign): nested wall-region RMSE improves to 0.012637 from 0.014319, but worst held-shift and held-rosette RMSE are unchanged at 0.011786 and 0.010308.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the fitted x-high correction\",\n      \"rejected_reason\": \"Selection improves wall-region prediction but worsens some held-out shifts and rosettes; the rosette-cluster exceedance rate of 0.14 does not establish a specific correction.\"\n    }\n  ],\n  \"rationale\": \"Keep the nominal candidate and verify it against an independently assembled dense stencil and affine calibration. A response or field mismatch would require correcting stencil, ordering, or shift selection; a certificate failure on a bound-active slice would require correcting the optimizer or multiplier calculation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "fb4db4a0ad258d195e92e7eb16aa8d4c687ad6d2ac5e176711da103bb62004bc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39732.55,
+      "usage_known": true,
+      "prompt_tokens": 37924,
+      "cached_tokens": 11136,
+      "completion_tokens": 1560
+    }
+  ]
+}

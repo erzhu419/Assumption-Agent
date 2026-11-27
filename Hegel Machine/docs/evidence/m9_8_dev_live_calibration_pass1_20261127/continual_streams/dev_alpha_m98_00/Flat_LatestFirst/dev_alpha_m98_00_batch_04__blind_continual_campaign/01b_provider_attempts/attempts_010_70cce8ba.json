@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "70cce8ba2a3c4f55ab6c7a267b1a710b",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:58:32.900705+00:00",
+  "ended_at_utc": "2026-11-27T12:58:59.151816+00:00",
+  "request_sha256": "ba5c1762b855407772e7622ae9548685aab0531607dbc11c9e35bc86e1146124",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70826,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39403,
+    "cached_tokens": 11136,
+    "completion_tokens": 934
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nout=m.solve_batch(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25.\\nblind=m.solve_batch(dict(d,chamber_verification_trials=None))\\nassert all(np.isfinite(v).all() for v in blind.values())\\nfor k in out: np.testing.assert_array_equal(out[k],blind[k])\\nc=d['calibration_load_cells']; L,R=c['true_channel_loads'],c['bridge_raw']; err=np.empty(len(L)); oof_raw=np.empty(len(L))\\nfor i in range(5):\\n ix=np.arange(len(L))%5==i; cal=m._calibration({'true_channel_loads':L[~ix],'bridge_raw':R[~ix]}); err[ix]=m._stress(R[ix],cal)-L[ix].sum(1); oof_raw[ix]=np.max(abs(m._bridge_basis(L[ix])@cal-R[ix]),axis=1)\\nclean=oof_raw<.01\\nprint('calibration OOF: inliers',int(clean.sum()),'of',len(clean),'total load RMSE/max',np.sqrt(np.mean(err[clean]**2)),np.max(abs(err[clean])),'all-row RMSE',np.sqrt(np.mean(err**2)))\\nassert clean.sum() >= 76 and np.max(abs(err[clean])) < .005\\ntrain,test=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=m._calibration(c); x,_=m._features(train,test); a=m._inputs(train,x,cal)\\nfor lab in np.unique(train['lab_id']):\\n ix=train['lab_id']==lab; tau,theta,_=m._material(train,a,dt,t,np.flatnonzero(~ix)); y,r=m._predict(tuple(v[ix] for v in a),dt,t,tau,theta); e=y+train['strain_0'][ix,None]-train['strain_curves_obs'][ix]; q=r-train['instant_rate_obs'][ix]; print('train held-out lab',lab,'curve/rate median abs error',np.median(abs(e)),np.median(abs(q)),'tau',tau)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 apparent chamber mismatch -> H2 nonlinear bridge calibration explains the mismatch; worst held-out pilot lab RMSE is 0.00456 strain and 0.00343 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Force a chamber correction\",\n      \"rejected_reason\": \"After recalibration, held-out pilot errors are already below the benchtop noise scales for both outcomes.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in an isolated process. Held-out calibration sweeps can expose unstable inversion, held-out training labs can expose spectrum instability, and removing the pilots tests whether the blind path preserves the predictions when no chamber correction is warranted.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "30cc809111aff59a3b44acf4fa4dfe43d845a958e52f45f7ce6fa736b4364d71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26211.73,
+      "usage_known": true,
+      "prompt_tokens": 39403,
+      "cached_tokens": 11136,
+      "completion_tokens": 934
+    }
+  ]
+}

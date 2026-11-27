@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19b3a88d1d57400caef56659063858c0",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:02:39.242990+00:00",
+  "ended_at_utc": "2026-11-27T13:03:11.371890+00:00",
+  "request_sha256": "66976e64480dadf2b4a6991414c576f3acaf292b59331c9c5c82702d47f59765",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54086,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28456,
+    "cached_tokens": 0,
+    "completion_tokens": 1252
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\ntr, te=d['train'], d['test']; dt,t=d['past_dt'],d['eval_times']\\nxa,xb=m._features(tr,te); cal=m._calibration(d['calibration_load_cells']); a=m._inputs(tr,xa,cal)\\ntau,th,scale=m._material(tr,a,dt,t)\\npast,hold,x=a; base_y,base_r=m._predict(a,dt,t,tau,th); ramp=x@th[2:]; z0=np.zeros((len(hold),2))\\nfor j,step in enumerate(dt):\\n    e=np.exp(-step/tau); z0=e*z0+(1-e)*past[:,j,None]\\nrng=np.random.default_rng(42); max_errors={}\\nfor kind in ('unchanged','memory','quadratic_drift','combined'):\\n    z=z0.copy(); drift=ramp.copy(); q=np.zeros(len(hold))\\n    if kind in ('memory','combined'): z+=np.array([.38,-.25])\\n    if kind in ('quadratic_drift','combined'): q=.08+.30*ramp; drift+=.03\\n    amp=(hold[:,None]-z)*th[:2]\\n    truth_y=amp@(-np.expm1(-t[:,None]/tau)).T+drift[:,None]*t+q[:,None]*t**2/t[-1]; truth_r=amp@(1/tau)+drift\\n    mx=np.zeros(2)\\n    for lab in np.unique(tr['lab_id']):\\n        j=tr['lab_id']==lab; idx=rng.choice(np.flatnonzero(~j),18,replace=False)\\n        p={'strain_0':tr['strain_0'], 'strain_curves_obs':tr['strain_0'][:,None]+truth_y+rng.normal(0,scale[0],truth_y.shape), 'instant_rate_obs':truth_r+rng.normal(0,scale[1],truth_r.shape)}\\n        mem,dr,cf,score=m._pilot_choice(a,p,dt,t,tau,th,scale,idx)\\n        design=m._chamber_design(tuple(v[j] for v in a),dt,t,tau,th,mem,dr)@cf\\n        er=[np.sqrt(np.mean((base_y[j]+design[:,:-1]-truth_y[j])**2)),np.sqrt(np.mean((base_r[j]+design[:,-1]-truth_r[j])**2))]; mx=np.maximum(mx,er)\\n        print(kind,lab,mem,dr,'RMSE strain/rate',np.round(er,5))\\n    max_errors[kind]=mx.tolist()\\nprint('Synthetic worst held-out lab RMSE:', max_errors)\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; total=c['true_channel_loads'].sum(1); A=np.c_[np.ones(len(raw)),raw]; Q=np.c_[A,*[raw[:,i]*raw[:,j] for i in range(4) for j in range(i,4)]]\\nfor name,H in [('affine',A),('quadratic',Q)]:\\n    q,_=np.linalg.qr(H); res=(total-H@np.linalg.lstsq(H,total,rcond=None)[0])/(1-(q*q).sum(1)); print('Bridge',name,'LOO total-load RMSE',np.sqrt(np.mean(res**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated benchtop dynamics -> H2 learn chamber corrections from pilots when available; worst real held-out lab median errors are 0.01068 in strain and 0.00759 in initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Guess a correction from the alternating facility states\",\n      \"rejected_reason\": \"The prefix identifies recurring apparatus states, but supplies no paired chamber outcomes or transfer rule.\"\n    }\n  ],\n  \"rationale\": \"Test the pilot path, which the public blind batch did not exercise. If it invents a correction on unchanged data or misses known memory and drift shifts on held-out labs, revise model selection. Compare affine and quadratic bridge fits out of sample to detect load-calibration curvature before attributing errors to chamber dynamics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "19bba31b03b71844c9d0919632bfc30bb17dcca2e7f8bcd1cf68d24b4bc039da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32086.3,
+      "usage_known": true,
+      "prompt_tokens": 28456,
+      "cached_tokens": 0,
+      "completion_tokens": 1252
+    }
+  ]
+}

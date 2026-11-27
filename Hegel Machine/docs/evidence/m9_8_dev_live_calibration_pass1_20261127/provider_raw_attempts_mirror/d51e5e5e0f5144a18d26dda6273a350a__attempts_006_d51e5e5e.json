@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d51e5e5e0f5144a18d26dda6273a350a",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:20:12.315723+00:00",
+  "ended_at_utc": "2026-11-27T13:20:52.436092+00:00",
+  "request_sha256": "81913e0586e3f980d9a538a3364859c6bbbaff233ed0f45681c7a337ab1c7101",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48006,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30250,
+    "cached_tokens": 11136,
+    "completion_tokens": 1513
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/dev_beta_m98_00_batch_06_solver.py /tmp/model98.py && sed -i 's/^def _calibration(sweeps):/def _legacy_calibration(sweeps):/' /tmp/model98.py && cat >> /tmp/model98.py <<'PY'\\n\\n\\ndef _calibration(sweeps):\\n    x = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    raw = np.asarray(sweeps['raw_rosette'], dtype=float)\\n    bank = sweeps.get('single_bank_sweeps')\\n    coeff = np.zeros((7, 4))\\n    for j in range(4):\\n        n = (j + 1) % 4\\n        def design(t):\\n            return np.column_stack((np.ones(len(t)), t, t[:, j]**3, t[:, j]*t[:, n]))\\n        a, y = design(x), raw[:, j]\\n        if bank:\\n            use = np.asarray(bank['bank_id']) == j\\n            bx = np.asarray(bank['ref_signal'])[use, None] * np.eye(4)[j]\\n            a = np.vstack((a, design(bx)))\\n            y = np.r_[y, np.asarray(bank['raw_readout'])[use]]\\n        start = np.linalg.lstsq(a, y, rcond=None)[0]\\n        fit = least_squares(lambda p: a @ p - y, start, jac=lambda p: a,\\n                            loss='cauchy', f_scale=.03, max_nfev=150).x\\n        err = np.abs(a @ fit - y)\\n        good = err < max(.003, 10 * np.median(err))\\n        if good.sum() < .85 * len(y) or np.median(err) > 3e-4:\\n            return _legacy_calibration(sweeps)\\n        coeff[:, j] = np.linalg.lstsq(a[good], y[good], rcond=None)[0]\\n\\n    def calibrate(values):\\n        values = np.asarray(values).reshape(-1, 4)\\n        affine = coeff[1:5].T\\n        z = np.linalg.solve(affine, (values - coeff[0]).T).T\\n        ids = np.arange(4)\\n        nxt = (ids + 1) % 4\\n        for _ in range(20):\\n            following = z[:, nxt]\\n            residual = coeff[0] + z @ affine.T + coeff[5]*z**3 + coeff[6]*z*following - values\\n            if np.max(np.abs(residual)) < 1e-12:\\n                break\\n            jac = np.broadcast_to(affine, (len(z), 4, 4)).copy()\\n            jac[:, ids, ids] += 3*coeff[5]*z**2 + coeff[6]*following\\n            jac[:, ids, nxt] += coeff[6]*z\\n            z -= np.linalg.solve(jac, residual[..., None])[..., 0]\\n        return z.ravel()\\n    return calibrate\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp'); import model98 as m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; f=m._calibration(c); print('calibrator',f.__qualname__)\\nfor f in [f,m._legacy_calibration(c)]:\\n x=c['ref_rosette']; raw=c['raw_rosette']; keep=np.max(abs(raw-x),axis=1)<8; print('clean sweep inverse RMSE', np.sqrt(np.mean((f(raw[keep]).reshape(-1,4)-x[keep])**2,axis=0)))\\n p=s['reference_tracer_pulses']; modes=np.array([np.tensordot(q['w_pulse'],s['source_modes'],axes=1) for q in p]); y=np.column_stack([f(q['y_pulse_raw']) for q in p]); nom=m._response(s,np.ones(8),modes)[0]; print('nominal pulse RMSE',np.sqrt(np.mean((nom-y)**2,axis=0)))\\n wall=m._walls(s,f,s['source_modes']); e=m._response(s,wall,modes)[0]-y; print('fitted wall',wall,'pulse RMSE',np.sqrt(np.mean(e**2,axis=0)), 'max',np.max(abs(e),axis=0)); print('worst row by pulse',np.argmax(abs(e),axis=0)); print('pulse by shift RMSE',np.sqrt(np.mean(e.reshape(3,32,2)**2,axis=1)))\\nprint(m.solve_batch(s)['kkt_certificate'])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine or quadratic rosette → H2: robust channelwise cubic self-response with adjacent-channel products; screened worst held-out channel-fold RMSE drops from 0.219 to about 0.00002 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Affine and quadratic rosette terms suffice once gross readout excursions are removed.\",\n    \"empirical_witness\": \"On screened rows the worst quadratic fold RMSE is 0.219 raw units, versus about 0.00002 for cubic; robust fits isolate a self-cubic and an adjacent-channel product per output.\",\n    \"causal_blanket_diagnosis\": \"Gross excursions hid the repeatable nonlinear sensor response; wall fitting against the miscalibrated observations could absorb sensor error.\",\n    \"sublated_pivot\": \"Fit the sparse cubic rosette from paired and single-bank sweeps, then test the archived wall operator against independently calibrated tracer pulses.\",\n    \"risk_kind\": \"sensor calibration and forward operator confounding\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unrestricted high-degree sensor polynomial\",\n      \"rejected_reason\": \"The screened sweeps already resolve a sparse cubic law; extra terms are unnecessary and can destabilize inversion.\"\n    }\n  ],\n  \"rationale\": \"Test the sparse law in the inverse direction, then compare nominal and fitted wall residuals by pulse and shift to determine whether the archived boundary family is adequate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "78c53e9b9f8d17a6de5c64915075d0763816b25568c7b638cb4ecb13f8db929c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40083.37,
+      "usage_known": true,
+      "prompt_tokens": 30250,
+      "cached_tokens": 11136,
+      "completion_tokens": 1513
+    }
+  ]
+}

@@ -1,0 +1,148 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_c04_s00_ae2d9b6bfea4",
+    "source_hash": "ae2d9b6bfea42b3460406df95d0367a50abbc24124458e8ee0801c99b1e16ed8",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_c04_s00__blind_continual_campaign",
+    "task_id": "alpha_m98_c04_s00__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheo_candidate_cv.py",
+        "archived_relpath": "producers/tmp__rheo_candidate_cv.py",
+        "bytes": 1123,
+        "sha256": "0edf87debdf391dbdfc18dba7d86184651f581ad953c49086ef29874730c540e"
+      },
+      {
+        "container_path": "/tmp/rheo_cells.py",
+        "archived_relpath": "producers/tmp__rheo_cells.py",
+        "bytes": 872,
+        "sha256": "1ded24b7e9a4f6698442ab68dd0a1f3de4a3b8981bd76d04b8662db3dc4b07e7"
+      },
+      {
+        "container_path": "/tmp/rheo_cv.py",
+        "archived_relpath": "producers/tmp__rheo_cv.py",
+        "bytes": 3173,
+        "sha256": "f9f4117ed8a16c7ed7333c371e990bf466b5b36c551561553c3d8c1c6b4aa3c0"
+      },
+      {
+        "container_path": "/tmp/rheo_factor.py",
+        "archived_relpath": "producers/tmp__rheo_factor.py",
+        "bytes": 3529,
+        "sha256": "348f83854eff40bf4d7335d2209f13f73075b30247de90839f320062bffb5806"
+      },
+      {
+        "container_path": "/tmp/rheo_loadcheck.py",
+        "archived_relpath": "producers/tmp__rheo_loadcheck.py",
+        "bytes": 1101,
+        "sha256": "f0a7739582436690c3aa87b32c0a0a92a5e982d67a6d25d5f6ac3675a81329e2"
+      },
+      {
+        "container_path": "/tmp/rheo_probe.py",
+        "archived_relpath": "producers/tmp__rheo_probe.py",
+        "bytes": 825,
+        "sha256": "05421eab9274d8af3a1021c163e22a1be3b15127df9a3ef0e9bfd668059feed0"
+      },
+      {
+        "container_path": "/tmp/rheo_residual.py",
+        "archived_relpath": "producers/tmp__rheo_residual.py",
+        "bytes": 991,
+        "sha256": "e06f83e8e525c9966318e1871828b64c01693c361f1b754032e65becca4a016a"
+      },
+      {
+        "container_path": "/tmp/rheo_transfer.py",
+        "archived_relpath": "producers/tmp__rheo_transfer.py",
+        "bytes": 1832,
+        "sha256": "1508c8ac0c47869550e62d8c3a5f8e846ff883e0b84588c120beea534295d72c"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task; ls -la; cat public_asset_index.json validate_public_schema.py; ls -la /tmp/hegel_continual_archive /pretrain_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation reference panel alignment imputation robust IRLS'; python3 - <<'PY'\nimport pickle,numpy as np\nwith open('public_batch.pkl','rb') as f: d=pickle.load(f)\ndef show(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,end=' ')\n  if isinstance(v,dict):\n   print();show(v,depth+2)\n  elif isinstance(v,np.ndarray):\n   print(v.shape,v.dtype,repr(v.ravel()[:8]))\n  else: pri",
+      "cd /holdout_task; cat validate_public_schema.py; for s in autogenous_prim_reference_panel_balancing.align_reference_panel autogenous_prim_reference_panel_balancing.weighted_column_fill autogenous_prim_robust_trend_decomposition.cauchy_linear_fit; do PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe \"$s\"; done; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))\nprint('campaign count',len(p))\ndef show(d,depth=0):\n for k,v in d.items():\n  print(' '*depth,k,type(v).__name__,end=' ')\n  if isinstance(v,dict):\n   print();show(v,depth+2)\n  elif isinstance",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb')); print('campaigns',len(p))\nfor i,it in enumerate(p):\n d=it['dataset']; print('\\n',i,{k:str(v)[:160] for k,v in it.items() if k!='dataset'}); print('keys',list(d))\n for k,v in d.items():\n  if not isinstance(v,dict): print(k,str(v)[:700])\n for k in ['train','test','chamber_verification_trials']:\n  g=d.get(k); print(k, None if g is None else {f:np.shape(v) for f,v in g.items()})\n c=d['calibration_load_cells']; x,y=c['bridge_raw'],c['true_channel_loads']; A=np.column_stack((np.ones(len(x)),x",
+      "cd /holdout_task && cat > batch_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import minimize\n\n\ndef _bridge(cal):\n    raw = cal['bridge_raw']\n    return np.linalg.lstsq(np.column_stack((np.ones(len(raw)), raw)),\n                           cal['true_channel_loads'].sum(axis=1), rcond=None)[0]\n\n\ndef _align(groups, source):\n    refs = np.concatenate([g['ref_coupons'] for g in groups])\n    labs = np.concatenate([g['lab_id'] for g in groups])\n    stats = {}\n    for lab in np.unique(labs):\n        ref = refs[labs == lab]\n        stats[lab] = (np.median(np.mean(ref, axis=0)), np.median(np.s",
+      "cat > /tmp/rheo_residual.py <<'PY'\nexec(open('/tmp/rheo_probe.py').read().split('for kind in')[0])\nfor name,g,z in [('train',tr,x[0]),('pilot',pi,x[2])]:\n tau,w,sc=s._fit(g,z,b,dt,t); y=s._obs(g); r=y-s._design(g,z,b,dt,t,tau)@w\n slope=np.median(r[:,:-1]/t,axis=1); nonlinear=np.median(abs(r[:,:-1]-slope[:,None]*t),axis=1)\n print(name,'mad curve/rate',np.median(abs(r),axis=0).round(4),'rate minus slope',np.quantile(abs(r[:,-1]-slope),[.5,.9,1]).round(4))\n for j in (np.arange(len(r)) if name=='pilot' else np.argsort(abs(slope))[-12:]):\n  print(j,g['lab_id'][j],g['stratum'][j],''.join('m' if v el",
+      "cat > /tmp/rheo_cells.py <<'PY'\nexec(open('/tmp/rheo_probe.py').read().split('for kind in')[0])\nfor name,g,z in [('bench',tr,x[0]),('chamber',pi,x[2])]:\n tau,w,_=s._fit(g,z,b,dt,t)\n a=s._design(g,z,b,dt,t,tau); r=s._obs(g)-a@w\n slope=np.median(np.column_stack((r[:,:-1]/t,r[:,-1])),axis=1)\n print(name,'residual drift by lab and stratum:')\n for lab in np.unique(g['lab_id']):\n  for st in np.unique(g['stratum']):\n   idx=np.flatnonzero((g['lab_id']==lab)&(g['stratum']==st))\n   print('cell',lab,st,'slopes',slope[idx].round(4),'X',z[idx].round(2).tolist() if name=='chamber' else '')\n print('abs slope",
+      "cat > /tmp/rheo_transfer.py <<'PY'\nexec(open('/tmp/rheo_probe.py').read().split('for kind in')[0])\nfrom scipy.optimize import least_squares\n\ndef predict(g,z,tau,w): return s._design(g,z,b,dt,t,tau)@w\n\ndef select(g,idx): return {k:v[idx] for k,v in g.items()}\n\ndef fit_projected(g,z):\n y=s._obs(g); h=np.r_[t,1.]; pair=np.arange(len(t)-1)\n def unpack(q): return np.exp(q[:2]),q[2:4]\n def fun(q):\n  tau,w=unpack(q); r=y-s._design(g,z,b,dt,t,tau)[:,:,:2]@w\n  # Adjacent normalized contrasts eliminate each coupon's unknown drift.\n  rc=(r[:,pair+1]*t[pair]-r[:,pair]*t[pair+1])/np.hypot(t[pair],t[pair+1]",
+      "cat > /tmp/rheo_cv.py <<'PY'\nexec(open('/tmp/rheo_probe.py').read().split('for kind in')[0])\nfrom scipy.optimize import minimize\n\n\ndef source_predict(g,z,tau,w):\n    return s._design(g,z,b,dt,t,tau)@w\n\n\ndef basis(g,z,mode):\n    l,u=g['lab_id'],g['stratum']\n    a=(l[:,None]==np.unique(tr['lab_id'])).astype(float)\n    c=(u[:,None]==np.unique(tr['stratum'])).astype(float)\n    cell=(a[:,:,None]*c[:,None,:]).reshape(len(l),-1)\n    main=np.column_stack((np.ones(len(l)),z))\n    if mode=='global': return main,np.array([.10]+[.08]*4)\n    if mode=='lab': return np.column_stack((main,a)),np.array([.10]+[",
+      "sed -i 's/np.r_\\[\\[0,0\\],np.ones(U.shape\\[1\\])\\]/np.r_[[1e-7,1e-7],np.ones(U.shape[1])]/; s/np.vstack((A,reg))/np.vstack((A,np.sqrt(reg)))/; s/np.sum((reg@beta)\\*\\*2)/np.sum((np.sqrt(reg)@beta)**2)/' /tmp/rheo_cv.py\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_cv.py\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nexec(open('/tmp/rheo_probe.py').read().split('for kind in')[0])\ntau,w,_=s._fit(pi,x[2],b,dt,t); r=s._obs(pi)-s._design(pi,x[2],b,dt,t,tau)@w\nslope=np.median(r[:,:-1]/t,axis=1)\nfor i in range(len(r)):\n print(int(pi['lab_id'][i]),int(pi['stratum'][i]),np.round([slope[i],pi['hold_channel_raw'][i]@b[",
+      "cat > /tmp/rheo_factor.py <<'PY'\nexec(open('/tmp/rheo_cv.py').read().split('for mode in [')[0])\nfrom scipy.optimize import least_squares\n\ndef prep(g,z):\n    l,u=g['lab_id'],g['stratum']; hold=g['hold_channel_raw']@b[1:]+b[0]\n    cell=(l[:,None]*3+u[:,None]==np.arange(12)).astype(float)\n    return hold,cell\n\ndef models(g,z,mode):\n    hold,cell=prep(g,z); one=np.ones((len(z),1)); base=bw[2]+z@bw[3:]\n    columns=[one,z,cell]; prior=[.1]+[.08]*4+[.12]*12\n    if mode=='offset': columns=[one,cell]; prior=[.1]+[.12]*12\n    if mode=='load': columns += [(hold[:,None]-3),cell*(hold[:,None]-3)]; prior +=",
+      "cat > /tmp/rheo_loadcheck.py <<'PY'\nexec(open('/tmp/rheo_factor.py').read().split(\"for mode,spec in\")[0])\nfor mode,spec in [('load','fixed'),('cell','fixed'),('load','soft')]:\n pars=factor(allix,mode,spec); print(mode,spec,'drift coefficients',np.round(pars[2]*np.r_[[.1]+[.08]*4+[.12]*12, ([.045]+[.035]*12) if mode=='load' else []],4));\n for tags in (np.arange(len(cell)),cell,pi['lab_id']):\n  yp=np.zeros_like(s._obs(pi))\n  for k in np.unique(tags):\n   ix=tags==k; yp[ix]=pred({key:v[ix] for key,v in pi.items()},x[2][ix],factor(~ix,mode,spec),mode)\n  r=abs(yp-s._obs(pi)); c=r[:,:-1]; v=r[:,-1]\n ",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('batch_solver.py')\ns = p.read_text()\nstart = s.index('\\ndef solve_batch(')\ns = s[:start] + '''\ndef _cell_basis(g, cells):\n    return ((g['lab_id'][:, None] == cells[:, 0]) &\n            (g['stratum'][:, None] == cells[:, 1])).astype(float)\n\n\ndef _chamber_correction(pilot, xp, test, xt, bridge, dt, t, taus, weights):\n    # Fit a shared drift adjustment and shrunk lab/stratum interactions.\n    cells = np.unique(np.column_stack((pilot['lab_id'], pilot['stratum'])), axis=0)\n    cp, ct = _cell_basis(pilot, cells), _cell_basis(te"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rheo_factor.py",
+      "primary_producer_container_path": "/tmp/rheo_factor.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 6811,
+        "sha256": "30083d011462021fe0ada9056cab94143d7655f0c7138b3179c97b88737929ca",
+        "content_addressed_ref": "content_addressed_blobs/30083d011462021fe0ada9056cab94143d7655f0c7138b3179c97b88737929ca.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "select"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "ae2d9b6bfea42b3460406df95d0367a50abbc24124458e8ee0801c99b1e16ed8",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('batch_solver.py')\ns = p.read_text()\nstart = s.index('\\ndef solve_batch(')\ns = s[:start] + '''\ndef _cell_basis(g, cells):\n    return ((g['lab_id'][:, None] == cells[:, 0",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "ae2d9b6bfea42b3460406df95d0367a50abbc24124458e8ee0801c99b1e16ed8",
+        "expected_candidate_sha256": "ae2d9b6bfea42b3460406df95d0367a50abbc24124458e8ee0801c99b1e16ed8",
+        "computed_candidate_sha256": "ae2d9b6bfea42b3460406df95d0367a50abbc24124458e8ee0801c99b1e16ed8",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 6811
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_ae2d9b6b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 8,
+    "reusable_ast_function_closures": [
+      {
+        "name": "select",
+        "code": "def select(g, idx):\n    return {k: v[idx] for (k, v) in g.items()}"
+      }
+    ]
+  }
+}

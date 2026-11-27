@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3bd1df0d550e4317a8bce1149f210cca",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:01:30.206250+00:00",
+  "ended_at_utc": "2026-11-27T14:02:01.432406+00:00",
+  "request_sha256": "07706a5e7094c37ddefc9b46732061538c2ac1086f6bbb3fa23a76ba1bb476bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48330,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26973,
+    "cached_tokens": 0,
+    "completion_tokens": 908
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal06.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom collections import Counter\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; b=C['bridge_raw']; x=C['true_channel_loads']; print('shapes',x.shape,b.shape,'nonzero counts',Counter(np.count_nonzero(x,axis=1))); print('first rows',np.round(np.c_[x,b][:17],4)); print('unique load',*[len(np.unique(x[:,j])) for j in range(4)])\\nrng=np.random.default_rng(602);fold=np.empty(len(x),int);fold[rng.permutation(len(x))]=np.arange(len(x))%5\\n\\ndef terms(z, degree, full):\\n return np.column_stack([np.ones(len(z))]+[np.prod(z[:,ix],axis=1) for j in range(1,degree+1) for ix in combinations_with_replacement(range(4),j) if full or len(set(ix))==1])\\ndef assess(name,a,y):\\n pred=np.zeros_like(y)\\n for f in range(5):\\n  tr=fold!=f;pred[~tr]=a[~tr]@np.linalg.lstsq(a[tr],y[tr],rcond=None)[0]\\n err=pred-y; print(name,'rmse/max',np.sqrt(np.mean(err**2)),abs(err).max(),'nonzero slices',[(n,round(np.sqrt(np.mean(err[np.count_nonzero(x,axis=1)==n]**2)),6)) for n in np.unique(np.count_nonzero(x,axis=1))]); return np.linalg.lstsq(a,y,rcond=None)[0]\\nfor z,y,label in [(x,b,'forward'),(b,x,'inverse')]:\\n for d in (1,2,3,4,5):\\n  for full in ([False,True] if d in (2,3) else [False]):\\n   a=terms(z,d,full); c=assess((label,d,full),a,y)\\n   if label=='forward' and d==3: print('terms coefficient norms',np.round(np.linalg.norm(c,axis=1),5));print('pure coeff' if not full else 'full cubic max',np.round(c,4) if not full else np.max(abs(c)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal06.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (affine inverse bridge) → H2 (invertible nonlinear bridge); the affine fit misses calibration loads by 0.322 RMS and 1.116 at worst.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived affine inverse bridge is adequate for this campaign.\",\n    \"empirical_witness\": \"The affine reconstruction misses known calibration totals by up to 1.116, and training strain residuals remain much larger than the per-coupon temporal fit residuals.\",\n    \"causal_blanket_diagnosis\": \"Stress reconstruction is upstream of both the intrinsic fit and chamber prediction; an inadequate bridge can distort both.\",\n    \"sublated_pivot\": \"Compare low-degree forward and inverse bridge laws on withheld calibration sweeps before refitting either constitutive model.\",\n    \"risk_kind\": \"transducer_calibration\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Withheld sweep residuals distinguish an exact nonlinear bridge from polynomial interpolation. If a compact forward law explains those sweeps, invert it; otherwise inspect the residual structure before modifying the chamber model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "92dbbf27d85c8e722afaf465b36589a0a223707499f751e0a1cb5e90b7d79de4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31189.09,
+      "usage_known": true,
+      "prompt_tokens": 26973,
+      "cached_tokens": 0,
+      "completion_tokens": 908
+    }
+  ]
+}

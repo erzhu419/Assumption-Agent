@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "803f5aa508b14585bc6390c488352d14",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__beta_m98_c03__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_c03_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:24:12.365477+00:00",
+  "ended_at_utc": "2026-11-27T12:24:47.528217+00:00",
+  "request_sha256": "fe5e318a839757240b508eaaeb3936d1e57db5765375bc22a2abe90c05a65b85",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52407,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30675,
+    "cached_tokens": 0,
+    "completion_tokens": 1443
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/stress_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import minimize\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp);sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; d=s['sensor_calibration_sweeps']; x=d['ref_rosette']; y=d['raw_rosette'];b=d['single_bank_sweeps']; print('sweep',x.shape,'quantiles',np.quantile(x,[0,.1,.5,.9,1],axis=0)); print('sweep coef',np.linalg.lstsq(np.c_[np.ones(len(x)),x],y,rcond=None)[0]);print('bank sweep shapes',{k:np.shape(v) for k,v in b.items()}); print('bank affine fits',[np.polyfit(b['ref_signal'][b['bank_id']==j],b['raw_readout'][b['bank_id']==j],1) for j in range(4)])\\nrng=np.random.default_rng(2026); mx=np.zeros(6); active=[0,0]\\nfor i in range(400):\\n n=int(rng.integers(2,33)); R=rng.normal(size=(n,n)); h=R.T@R/n+.04*np.eye(n);q=rng.normal(size=n)*3;u=np.broadcast_to(rng.uniform(.05,1.,size=n) if i%2 else .42,(n,)).copy()\\n if i%11==0:u[0]=0\\n frac=[0,1,1e-7,1-1e-7,.15,.5,.85][i%7];budget=u.sum()*frac\\n w,nu=m._box_qp(h,q,u,budget);g=h@w+q+nu;l=np.where(w<=1e-10,np.maximum(g,0),0);v=np.where(w>=u-1e-10,np.maximum(-g,0),0);r=g-l+v\\n err=0.\\n if i%8==0:\\n  f=lambda z:.5*z@h@z+q@z\\n  sol=minimize(f,u*frac,jac=lambda z:h@z+q,bounds=list(zip(np.zeros(n),u)),constraints=[{'type':'eq','fun':lambda z:z.sum()-budget,'jac':lambda z:np.ones(n)}],method='SLSQP',options={'ftol':1e-11,'maxiter':300});err=abs(f(w)-f(sol.x))\\n mx=np.maximum(mx,[abs(w.sum()-budget),max(0,-w.min(),(w-u).max()),abs(r).max(),abs(l@w).max(),abs(v@(u-w)).max(),err]);active[0]+=np.count_nonzero(l);active[1]+=np.count_nonzero(v)\\nprint('QP worst [sum, box, stationarity, lower complementarity, upper complementarity, independent objective delta]',mx,'active counts',active);assert max(mx[:5])<1e-9 and mx[5]<1e-6\\nc=m._calibrator(d);t=m._Transport(s); p=s['reference_tracer_pulses'];wall=m._wall_fit(t,p,c)\\nfor label,q in [('pulse',s),('blind',dict(s,reference_tracer_pulses=None))]:\\n out=m.solve_batch(q); v=out['kkt_certificate']; used=wall if label=='pulse' else t.nominal; field=out['terminal_field'].ravel(order='F');from scipy.sparse import diags\\n mat=t.matrix+diags(t.walls@used)+t.shifts[-1]*t.identity\\n print(label,'PDE infinity residual',np.max(np.abs(mat@field-t.modes@out['weights'])),'duality gap',v['primal_objective']-v['dual_lower_bound'],'nominal vs tracer wall max relative delta',np.max(np.abs(t.nominal/wall-1)))\\n assert np.max(np.abs(mat@field-t.modes@out['weights']))<1e-10 and abs(v['primal_objective']-v['dual_lower_bound'])<1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 fitted interior corrections → H2 retain the identified stencil unless corrections improve more than tracer-scale error; worst leave-one-shift-out RMSE is 3.95e-5 without corrections versus 3.44e-5 with five fitted terms.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add five fitted interior corrections\",\n      \"rejected_reason\": \"They improve held-out tracer RMSE by about 5e-6 but do not provide a transferable estimate for blind campaigns.\"\n    }\n  ],\n  \"rationale\": \"Stress-test the QP on saturated, nearly saturated, and mixed-bound cases, and independently verify the terminal PDE and duality gap on both campaign branches. Inspect sweep coverage and agreement with the single-bank runs before choosing a nonlinear calibration stress test.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d3aff194c77fdbadf9e1a1ec4a87579b2451d304dc1232d0fdf98fe5846924e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35132.74,
+      "usage_known": true,
+      "prompt_tokens": 30675,
+      "cached_tokens": 0,
+      "completion_tokens": 1443
+    }
+  ]
+}

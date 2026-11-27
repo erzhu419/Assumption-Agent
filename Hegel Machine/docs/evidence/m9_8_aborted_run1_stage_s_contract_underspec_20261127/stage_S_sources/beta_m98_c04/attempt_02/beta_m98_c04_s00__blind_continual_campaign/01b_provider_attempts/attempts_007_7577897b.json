@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7577897bb7df4338a9c38253363f28e8",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__beta_m98_c04__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:33:47.124830+00:00",
+  "ended_at_utc": "2026-11-27T12:34:13.612102+00:00",
+  "request_sha256": "f36224e1b0b1c6b1d797549ee196d8605abd4fe2380271d5f6e2bfd0d5a3fcb0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49154,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29311,
+    "cached_tokens": 11136,
+    "completion_tokens": 986
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; single=np.count_nonzero(x,axis=1)==1; folds=np.arange(len(x))%5\\nterms=[t for d in range(4) for t in combinations_with_replacement(range(4),d)]\\nA=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); banks=c['single_bank_sweeps']; xr=np.eye(4)[banks['bank_id']]*banks['ref_signal'][:,None]; Ar=np.column_stack([np.prod(xr[:,t],axis=1) for t in terms]); bank=banks['bank_id']; raw=banks['raw_readout']\\nfor name,mask in [('affine',[len(t)<=1 for t in terms]),('quadratic',[len(t)<=2 for t in terms]),('quadratic + univariate cubes',[len(t)<=2 or len(set(t))==1 for t in terms]),('cubic',[True]*len(terms))]:\\n a=A[:,mask]; e=np.empty_like(y)\\n for i in range(5):\\n  tr=folds!=i; e[~tr]=a[~tr]@np.linalg.lstsq(a[tr],y[tr],rcond=None)[0]-y[~tr]\\n b=np.linalg.lstsq(a,y,rcond=None)[0]; er=(Ar[:,mask]@b)[np.arange(len(bank)),bank]-raw\\n print(name,'OOF RMS [joint,single]',*[float(np.sqrt(np.mean(e[g]**2))) for g in [~single,single]],'worst bank RMS',max(np.sqrt(np.mean(er[bank==i]**2)) for i in np.unique(bank)),'condition',np.linalg.cond(a))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine rosette calibration → H2 nonlinear calibration only if held-out sweeps support it; the current solver’s worst held-out tracer-sensor RMSE is 1.20e-4 and worst QP stress residual is 3.22e-14.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Always fit a nonlinear rosette model\",\"rejected_reason\":\"Additional terms can fit calibration noise and worsen inversion on unseen rosettes.\"}],\"rationale\":\"Compare held-out mixed-channel and single-channel sweeps, including the separate bank measurements. A reproducible nonlinear gain would change the calibration model; otherwise retain the verified affine solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "ada93ad093e5c14b8389c8ff345a659d09a0ed1deb60f6988f3020f8400dfb54",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26451.75,
+      "usage_known": true,
+      "prompt_tokens": 29311,
+      "cached_tokens": 11136,
+      "completion_tokens": 986
+    }
+  ]
+}

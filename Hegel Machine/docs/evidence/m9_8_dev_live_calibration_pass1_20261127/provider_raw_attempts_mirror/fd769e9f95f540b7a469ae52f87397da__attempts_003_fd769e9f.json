@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd769e9f95f540b7a469ae52f87397da",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:01:24.254362+00:00",
+  "ended_at_utc": "2026-11-27T13:01:43.091978+00:00",
+  "request_sha256": "28d52e9049c4eef607ab0435ea9184f263b5e439898461414fdc87b532cbe91f",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22166,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18167,
+    "cached_tokens": 9600,
+    "completion_tokens": 613
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '58,151p' _verified_downstream.py && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); a=json.loads(p.read_text()); print('apparatus log:',str(a)[:2200]); b=pickle.load(open('public_batch.pkl','rb')); print('studies',len(b))\\nfor i,e in enumerate(b):\\n s=e['study']; c=s['sensor_calibration_sweeps']; x,y=(np.asarray(c[k]) for k in ('ref_rosette','raw_rosette')); z=c['single_bank_sweeps']; r=np.linalg.norm(y-x,axis=1); print(i,x.shape,'ref',x.min(0),x.max(0),'delta quantiles',np.quantile(r,[0,.5,.8,.9,.95,1])); print('bank id,ref,raw first rows',np.c_[z['bank_id'],z['ref_signal'],z['raw_readout']][:8]); print('obs shape/range',np.shape(s['y_obs_raw']), np.min(s['y_obs_raw']),np.max(s['y_obs_raw'])); print('pulse shape/range',[(np.shape(p['y_pulse_raw']),np.min(p['y_pulse_raw']),np.max(p['y_pulse_raw'])) if p.get('y_pulse_raw') is not None else None for p in (s.get('reference_tracer_pulses') or [])]); print('study keys',list(s))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable polynomial → H2 robust coupled rational transfer; worst-slice error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived calibrator unchanged\",\n      \"rejected_reason\": \"Its polynomial selection uses unweighted RMS, which can rank models by their fit to EMI spikes rather than clean sweep rows.\"\n    }\n  ],\n  \"rationale\": \"Read the exact archived rational basis and bank convention before fitting: an incompatible bank mapping would exclude those readings as calibration constraints, and observation or pulse readings outside the sweep range would require an extrapolation stress slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "705a24d4fda8867acfc1cc6447710c13cd76aa8d42939c6c7508e6b838a8fea8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18793.65,
+      "usage_known": true,
+      "prompt_tokens": 18167,
+      "cached_tokens": 9600,
+      "completion_tokens": 613
+    }
+  ]
+}

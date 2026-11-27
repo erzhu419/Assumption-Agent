@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c04e0572493438c9bb7cfb284b4fdb5",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:55:55.374146+00:00",
+  "ended_at_utc": "2026-11-27T13:56:28.808727+00:00",
+  "request_sha256": "4da7eabf4eefec83a2ee67aa4a3acc5c83580b9ba3864979ef819f5af2e7ca45",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38616,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24215,
+    "cached_tokens": 9600,
+    "completion_tokens": 1309
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver\\nfrom upstream_transducer import calibrate_upstream, _basis, _fit_bridge, _invert, _jacobian\\nwith open('public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']; x = cal['true_channel_loads']; y = cal['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) == 1\\n# Gross spikes are separated from ordinary response at the scale of the apparatus.\\n# Identify them independently of the fitted bridge from the raw calibration readings.\\nspikes = np.max(np.abs(y),axis=1) > 6\\nprint('gross spike rows:', np.flatnonzero(spikes).tolist())\\nids = np.arange(len(x)); rng = np.random.default_rng(643)\\nall_max = 0.\\nfor seed in range(5):\\n    recovered = np.empty_like(x); forward = np.empty_like(y)\\n    for held in np.array_split(rng.permutation(ids),5):\\n        fit = np.setdiff1d(ids,held)\\n        b = _fit_bridge(x[fit],y[fit]); forward[held] = _basis(x[held]) @ b\\n        clean = held[~spikes[held]]\\n        recovered[clean] = _invert(y[clean],b)\\n    for label, subset in [('axis', axis), ('mixed', ~axis), ('top-load-quartile', np.max(np.abs(x),axis=1) >= np.quantile(np.max(np.abs(x),axis=1),.75))]:\\n        subset = subset & ~spikes\\n        inv_err = np.abs(recovered[subset] - x[subset]); fwd_err = np.abs(forward[subset]-y[subset]); worst = float(inv_err.max()); all_max=max(worst,all_max)\\n        print('split', seed, label, 'n',subset.sum(), 'inverse_max',round(worst,7),'forward_max',round(float(fwd_err.max()),7))\\nassert all_max < .002, all_max\\nb = _fit_bridge(x,y)\\n# Exercise the optional chamber branch using measured test inputs with the same contract.\\nwith_trials = dict(ds, chamber_verification_trials={k: ds['test'][k][:3].copy() for k in ('past_channel_raw','hold_channel_raw')})\\nresult = calibrate_upstream(with_trials)\\nfor group in ('train','test','chamber_verification_trials'):\\n    for field in ('past_channel_raw','hold_channel_raw'):\\n        raw = with_trials[group][field]; load = result[group][field]; flat = load.reshape(-1,4)\\n        assert load.shape == raw.shape and np.isfinite(load).all() and not np.shares_memory(raw,load)\\n        residual = np.max(np.abs(_basis(flat) @ b - raw.reshape(-1,4)))\\n        sv_min = np.linalg.svd(_jacobian(flat,b),compute_uv=False)[:,-1].min()\\n        print(group,field,'max_roundtrip',float(residual),'min_singular_value',float(sv_min),'load_range',np.round([load.min(),load.max()],4).tolist())\\n        assert residual < 1e-9 and sv_min > 0.1\\noutcal = result['calibration_load_cells']; sw = outcal['single_channel_sweeps']\\nassert np.array_equal(outcal['bridge_raw'],x) and not np.shares_memory(outcal['bridge_raw'],x)\\nassert np.array_equal(sw['cmd_stress'],sw['true_stress']) and not np.shares_memory(sw['cmd_stress'],sw['true_stress'])\\nassert not np.array_equal(cal['bridge_raw'],x)\\nout = batch_solver.solve_batch(ds)\\nfor name, shape in [('estimated_taus',(2,)),('hereditary_weights',(7,)),('predicted_strain',(36,12)),('initial_rate_pred',(36,))]:\\n    a = np.asarray(out[name]); assert a.shape == shape and np.isfinite(a).all(), name\\nprint('Isolated composition, identity calibration, and all three trial branches passed.')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine mixing → H2 quadratic coupling with per-channel cubics; held-out forward p95 is 0.000460, and worst-slice inverse error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Submit on the public schema pass alone\",\"rejected_reason\":\"The schema test cannot detect inaccurate inverse coordinates, unconverged deployment solves, or a missed optional chamber branch.\"}],\"rationale\":\"Hold out measured calibration rows to catch inverse errors on single-channel, mixed, and high-load cases. Check round-trip residuals and Jacobian conditioning on actual deployment inputs; a failing residual or poorly conditioned solve would call for revising the inversion before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "496d0e158685fbd783cc18e1d1b2cb7cf5cdb87f24dcd96c3ead7c38c7812b73",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33395.95,
+      "usage_known": true,
+      "prompt_tokens": 24215,
+      "cached_tokens": 9600,
+      "completion_tokens": 1309
+    }
+  ]
+}

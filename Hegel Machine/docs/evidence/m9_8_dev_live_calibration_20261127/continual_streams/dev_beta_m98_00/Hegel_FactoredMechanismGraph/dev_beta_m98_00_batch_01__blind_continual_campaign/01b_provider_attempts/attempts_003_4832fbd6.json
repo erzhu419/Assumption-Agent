@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4832fbd6b06346a89e5671bc4eb4cb15",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:39:42.577034+00:00",
+  "ended_at_utc": "2026-11-27T13:40:07.870828+00:00",
+  "request_sha256": "f8207007a615e29a3926b081c0890a933463326f6313ebfe907e9ccb0c4cee6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18833,
+    "cached_tokens": 9600,
+    "completion_tokens": 771
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /holdout_task/validate_public_schema.py; sed -n '65,155p' /tmp/hegel_continual_archive/dev_beta_m98_00_s00_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print('LOG', {k:v for k,v in e.items() if k!='facility_telemetry_trace'}); a=np.asarray(e['facility_telemetry_trace']); print(a.shape, np.round(a.mean(0),5),np.round(a.std(0),5),a[-1])\\nfor it in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n s=it['study']; print('ITEM',list(it),'diagnostics',type(it.get('campaign_diagnostics')).__name__); print('STUDY',[(k, np.shape(v) if np.ndim(v) else str(v)[:100]) for k,v in s.items() if k!='sensor_calibration_sweeps']); c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; print('SWEEP RANGE',[(v.min(0),v.max(0)) for v in (x,y)]); print('SWEEP FIRST',x[:3],y[:3]); b=c['single_bank_sweeps']; print('BANK',[(k,np.shape(v),v[:4].tolist()) for k,v in b.items()]);\\n for deg in (1,2,3):\\n  from itertools import combinations_with_replacement\\n  X=np.column_stack([np.ones(len(x))]+[np.prod(x[:,ids],axis=1) for d in range(1,deg+1) for ids in combinations_with_replacement(range(4),d)]); f=np.linalg.lstsq(X[:60],y[:60],rcond=None)[0]; print('CAL HELDOUT',deg,np.sqrt(np.mean((X[60:]@f-y[60:])**2,axis=0))); print(f if deg==1 else '')\\n print('OBS RANGE',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived affine rosette -> H2 sweep-identified constitutive law; held-out calibration error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a new transport boundary directly from the mixed observations\",\n      \"rejected_reason\": \"Source weights and nuisance can mask a boundary error; independent calibration sweeps can test the reported constitutive mismatch first.\"\n    }\n  ],\n  \"rationale\": \"Measure held-out sweep errors to decide whether the archived affine calibration transfers or needs a nonlinear inverse. Print the compact apparatus summary separately to see whether it provides independent evidence for a boundary change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "8958612269e9e0124a5c7a90bac32486922fc84d69e820b70dd345e3982cfcf9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25247.99,
+      "usage_known": true,
+      "prompt_tokens": 18833,
+      "cached_tokens": 9600,
+      "completion_tokens": 771
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b519e1ad9ef6404cb9251b600c0cba26",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:19:50.647215+00:00",
+  "ended_at_utc": "2026-11-27T13:20:27.496568+00:00",
+  "request_sha256": "83c617f10ee8a90160c818dc8c5868dc46906c5a488d1165fdf8d3a84b2d3763",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27569,
+    "cached_tokens": 9600,
+    "completion_tokens": 1428
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat > batch_solver.py <<'PY'\\nfrom __future__ import annotations\\n\\nimport _verified_downstream as _dn\\nfrom upstream_transducer import calibrate_upstream\\n\\n\\ndef solve_batch(item: dict) -> dict:\\n    study = calibrate_upstream(item)\\n    pulses = study.get('reference_tracer_pulses')\\n    if pulses:\\n        # The downstream wall fit uses measured pulses only.\\n        study['reference_tracer_pulses'] = [p for p in pulses if p['y_pulse_raw'] is not None]\\n    return _dn.solve_batch(study)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nsys.path.insert(0, str(root))\\nfrom upstream_transducer import _Rosette, calibrate_upstream\\nfrom batch_solver import solve_batch\\nitems = pickle.loads((root / 'public_batch.pkl').read_bytes())\\nfor i, item in enumerate(items):\\n    study = item['study']\\n    sweep = study['sensor_calibration_sweeps']\\n    x,y = sweep['ref_rosette'], sweep['raw_rosette']\\n    # The documented public EMI spikes are separated from clean rows by a large amplitude gap.\\n    clean = np.max(np.abs(y), axis=1) < 7\\n    fold = np.arange(len(x)) % 4\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    worst = {'axis': 0., 'mixed': 0.}\\n    peak = 0.\\n    for k in range(4):\\n        train = fold != k\\n        fit = _Rosette(x[train], y[train])\\n        for label, kind in [('axis', axis), ('mixed', ~axis)]:\\n            test = clean & ~train & kind\\n            if np.any(test):\\n                err = fit.invert(y[test]) - x[test]\\n                worst[label] = max(worst[label], np.max(np.sqrt(np.mean(err**2, axis=0))))\\n                peak = max(peak, np.max(np.abs(err)))\\n    print('study', i, 'worst held-out inverse channel RMS by sweep type', worst, 'peak', peak)\\n    assert max(worst.values()) < 1e-4\\n    fit = _Rosette(x,y)\\n    fit_clean = _Rosette(x[clean],y[clean])\\n    corrected = calibrate_upstream(study)\\n    got = corrected['sensor_calibration_sweeps']\\n    for a,b in [(got['raw_rosette'],sweep['ref_rosette']), (got['single_bank_sweeps']['raw_readout'],sweep['single_bank_sweeps']['ref_signal'])]:\\n        assert np.array_equal(a,b) and not np.shares_memory(a,b)\\n    assert corrected['y_obs_raw'].shape == study['y_obs_raw'].shape\\n    pairs = [(study['y_obs_raw'], corrected['y_obs_raw'])]\\n    pairs.extend((a['y_pulse_raw'], b['y_pulse_raw']) for a,b in zip(study['reference_tracer_pulses'], corrected['reference_tracer_pulses']) if a['y_pulse_raw'] is not None)\\n    for j,(raw, ref) in enumerate(pairs):\\n        r = np.max(np.abs(fit.predict(ref.reshape(-1,4)).reshape(raw.shape)-raw))\\n        influence = np.max(np.abs(ref - fit_clean.invert(raw)))\\n        print('reading block', j, 'forward closure', r, 'EMI influence', influence)\\n        assert ref.shape == raw.shape and r < 1e-10 and influence < 1e-7\\n    pulses = study['reference_tracer_pulses']\\n    for missing in (1, len(pulses)):\\n        case = dict(study, reference_tracer_pulses=[dict(p, y_pulse_raw=None) if j < missing else p for j,p in enumerate(pulses)])\\n        trimmed = dict(case, reference_tracer_pulses=case['reference_tracer_pulses'][missing:])\\n        assert calibrate_upstream(case)['reference_tracer_pulses'][0]['y_pulse_raw'] is None\\n        actual, expected = solve_batch(case), solve_batch(trimmed)\\n        assert actual.keys() == expected.keys()\\n        for key in actual:\\n            np.testing.assert_equal(actual[key], expected[key])\\n        print('missing pulse count', missing, 'matches explicitly omitted pulses')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic response → H2 robust cyclic cubic response; the public schema passes and the previous full-cubic worst clean-fold forward RMSE was 2.30e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop missing pulses in calibrate_upstream\",\n      \"rejected_reason\": \"The calibration API should preserve pulse entries; only the downstream wall fit needs to omit unmeasured pulses.\"\n    }\n  ],\n  \"rationale\": \"The verified downstream solver attempts to calibrate every supplied pulse, including missing readings. Filter those only at composition, then test that one or all missing readings behave like explicitly omitted pulses. Held-out axis and mixed sweeps measure inverse accuracy separately; closure and EMI influence checks detect failures on the actual observation and pulse blocks.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b33da6f459345dd4ef722390f61e1fbe0652d602d7b2121618e6c6997ed14815",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36813.9,
+      "usage_known": true,
+      "prompt_tokens": 27569,
+      "cached_tokens": 9600,
+      "completion_tokens": 1428
+    }
+  ]
+}

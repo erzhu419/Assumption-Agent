@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_beta_m98_00_s00_c103659f9dec",
+    "source_hash": "c103659f9dec72de75d0f9ce6da5d5eaf0c8d413bee054b56b18254b9892b1d6",
+    "parent_ids": [],
+    "source_episode_id": "dev_beta_m98_00_s00__blind_continual_campaign",
+    "task_id": "dev_beta_m98_00_s00__blind_continual_campaign",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rosette_audit.py",
+        "archived_relpath": "producers/tmp__rosette_audit.py",
+        "bytes": 2698,
+        "sha256": "46f5abf36228328d786fddbcc1c2c706ffd2173b046c9fc919abd6044932609a"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && if [ -d /tmp/hegel_continual_archive ]; then du -ah /tmp/hegel_continual_archive | sort -h | tail -35; fi; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling' 2>&1; cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_batch.pkl','rb') as f: batch=pickle.load(f)\nprint('batch',type(batch),len(batch))\ndef describe(d,depth=0):\n for k,v in d.items():\n  prefix='  '*depth\n  if isinstance(v,dict):\n   print(prefix,k); describe(v,depth+1)\n  elif isinstance(v,np",
+      "cd /holdout_task && cat validate_public_schema.py && if [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%s %p\\n' | head -35; else echo 'No continual archive mounted'; fi; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling projection' 2>&1 | head -14; python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']; r=x['ref_rosette']; y=x['raw_rosette']; print('Sweep residual against identity:',np.sqrt(np.mean((r-y)**2,axis=0)))",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.profile_candidate_amplitudes 2>&1 | head -18\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import minimize\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\nnx,ny=s['nx'],s['ny']; dims=(nx,",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nfrom itertools import product\nimport numpy as np\nfrom scipy.optimize import minimize\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n\ndef exhaustive(H, b, cap, budget):\n    best = np.inf\n    for status in product((-1, 0, 1), repeat=len(b)):\n        status = np.array(status)\n        free, fixed = np.flatnonzero(status == 0), np.flatnonzero(",
+      "set -e\ncat > /tmp/rosette_audit.py <<'PY'\nimport importlib.util\nimport itertools\nimport pickle\nimport numpy as np\n\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nitem = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]\ns = item['study']\nr = s['sensor_calibration_sweeps']['ref_rosette']\ny = s['sensor_calibration_sweeps']['raw_rosette']\nsingle = np.count_nonzero(r, axis=1) == 1\nrng = np.random.default_rng(98)\nfolds = [np.r_[i,j] for i,j in zip(np.array_split(rng.permutati",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nfrom itertools import combinations\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\ns = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]['study']\nsw = s['sensor_calibration_sweeps']\nx, y = sw['ref_rosette'], sw['raw_rosette']\nA = np.c_[np.ones(len(x)), x]\nB = np.column_stack([A] + [np.prod(x[:, ids], axis=1) for ids in combinations(range(4), 3)])\nfolds = np.array_spli",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', p+'batch_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns = pickle.load(open(p+'public_batch.pkl', 'rb'))[0]['study']\nsw = s['sensor_calibration_sweeps']\nids = np.asarray(s['row_bank_id']).reshape(-1)\nlabels, group = np.unique(np.round(ids, 3), return_inverse=True)\nprint('Sweep keys:', list(sw), 'bank labels/counts:', list(zip(labels.tolist(), np.bincount(group).tolist()))[:28])\nif len(labe"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rosette_audit.py",
+      "primary_producer_container_path": "/tmp/rosette_audit.py",
+      "selected_channels": [
+        "fam_elliptic_transport_and_factored_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4799,
+        "sha256": "432dfa4080bf2e92bde75082d716a22c5a97b20c0280364d249515342f982990",
+        "content_addressed_ref": "content_addressed_blobs/432dfa4080bf2e92bde75082d716a22c5a97b20c0280364d249515342f982990.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c103659f9dec72de75d0f9ce6da5d5eaf0c8d413bee054b56b18254b9892b1d6",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('candidate', p+'batch_solver.py')\nm = importlib.util.module_from_spec(spec); spec",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c103659f9dec72de75d0f9ce6da5d5eaf0c8d413bee054b56b18254b9892b1d6",
+        "expected_candidate_sha256": "c103659f9dec72de75d0f9ce6da5d5eaf0c8d413bee054b56b18254b9892b1d6",
+        "computed_candidate_sha256": "c103659f9dec72de75d0f9ce6da5d5eaf0c8d413bee054b56b18254b9892b1d6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4799
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c103659f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

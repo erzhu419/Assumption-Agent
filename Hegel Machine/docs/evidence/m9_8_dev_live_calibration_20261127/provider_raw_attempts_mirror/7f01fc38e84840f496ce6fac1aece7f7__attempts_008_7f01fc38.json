@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f01fc38e84840f496ce6fac1aece7f7",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:42:17.573661+00:00",
+  "ended_at_utc": "2026-11-27T13:43:02.216162+00:00",
+  "request_sha256": "a9e3f321ce44e364f22e8919d2ded440bdd8b1f3d7f10bea29e1b76793c21ad1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42758,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25297,
+    "cached_tokens": 9600,
+    "completion_tokens": 1661
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\ns = item['study']; pulses = item['campaign_diagnostics']; sw = s['sensor_calibration_sweeps']; x, y = sw['ref_rosette'], sw['raw_rosette']\\nZ = s['Z_nuisance']; P = np.linalg.solve(Z.T@Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nS, U = m._design(s)\\nW = np.column_stack([p['w_pulse'] for p in pulses]); Y = np.column_stack([m._calibrate({**s, 'y_obs_raw':p['y_pulse_raw']}) for p in pulses]); R = Y-S@W\\nblocks = len(s['mu_shifts']); banks = np.asarray(s['row_bank_id']).reshape(blocks,-1)\\nfor name, residual in [('unprofiled',R),('profiled',R-Z@(P@R))]:\\n    rr = residual.reshape(blocks,-1,len(pulses)); slices = [float(np.sqrt(np.mean(rr[j,banks[j]==b]**2))) for j in range(blocks) for b in np.unique(banks[j])]; print(name,'worst shift x bank pulse RMSE',max(slices))\\n# Fit all calibration coefficients within the training fold. A quadratic\\n# pairwise numerator spans squares of sums/differences, while a scalar\\n# denominator probes gain compression along each channel and its differences.\\npairs = list(combinations(range(4),2)); X = np.column_stack([np.ones(len(x)),x]); Q = np.column_stack([X,x*x,*[x[:,i]*x[:,j] for i,j in pairs]])\\nerrors = {k:[] for k in ('diagonal','affine','pairwise','rational')}\\nfor fold in range(4):\\n    test = np.arange(len(x))%4==fold; train = ~test\\n    preds = {'diagonal':np.empty_like(y[test]),'rational':np.empty_like(y[test])}\\n    for name, mat in [('affine',X),('pairwise',Q)]:\\n        preds[name] = mat[test]@np.linalg.lstsq(mat[train],y[train],rcond=None)[0]\\n    for j in range(4):\\n        mat = X[:,[0,j+1]]; p0 = np.linalg.lstsq(mat[train],y[train,j],rcond=None)[0]; preds['diagonal'][:,j] = mat[test]@p0\\n        best = (float('inf'),None)\\n        for q in [x[:,j]] + [x[:,j]+sign*x[:,k] for k in range(4) if k!=j for sign in (-1,1)]:\\n            d = q*q / np.max(q*q)\\n            def predict(p): return p[0]+(X[:,1:]@p[1:5])/(1+p[5]*d)\\n            p = least_squares(lambda v:(predict(v)-y[:,j])[train],np.r_[np.linalg.lstsq(X[train],y[train,j],rcond=None)[0],0.],bounds=([-np.inf]*5+[-0.5],[np.inf]*5)).x\\n            yp = predict(p); score = np.mean((yp[train]-y[train,j])**2)\\n            if score<best[0]: best = score,yp[test]\\n        preds['rational'][:,j] = best[1]\\n    for name,pred in preds.items(): errors[name].append(np.sqrt(np.mean((pred-y[test])**2,axis=0)))\\nprint('worst fold x channel calibration RMSE', {k:float(np.max(v)) for k,v in errors.items()})\\no = m.solve_batch(s); cert = o['kkt_certificate']; w = np.asarray(o['weights']); wc = np.asarray(cert['weights']); yl = m._calibrate(s); St = S-Z@(P@S); yt = yl-Z@(P@yl); r = St@w-yt; g = St.T@r+s['source_ridge']*w; J = (r@r+s['source_ridge']*(w@w))/2; nu = cert['nu_sum']; ll = np.asarray(cert['lam_lower']); lu = np.asarray(cert['lam_upper']); b = s['u_box']; gap = J-(J-g@w+nu*s['total_budget']+b*np.minimum(0,g-nu).sum()); defects = {'box':max(0.,-w.min(),w.max()-b),'budget':abs(w.sum()-s['total_budget']),'weight_copy':np.max(abs(w-wc)),'field':np.max(abs(o['terminal_field']-np.tensordot(w,U,axes=(0,0)))),'stationarity':np.max(abs(g-nu-ll+lu)),'complementarity':max(np.max(abs(ll*w)),np.max(abs(lu*(b-w)))),'dual_feasibility':max(0.,-ll.min(),-lu.min()),'primal':abs(J-cert['primal_objective']),'dual':abs(J-gap-cert['dual_lower_bound']),'gap':abs(gap)}; print('certificate and field defects', {k:float(v) for k,v in defects.items()}); assert max(defects.values())<1e-7\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open-wall Robin → nearly sealed Robin with affine calibration; worst public pulse-by-shift RMSE is 8.68e-7, and the independent KKT duality gap is 1.88e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, drift, or classification checks\",\n      \"rejected_reason\": \"This study is steady transport with continuous observations and no relay states or class labels. The relevant confounding check is whether nuisance projection hides errors within sensor banks or shifts.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration models on held-out sweeps to detect missing cross-channel or compression terms. Check known-weight pulse errors before and after nuisance projection within each bank and shift. Recompute the terminal field and certificate quantities from the saved solver in isolated Python; revise only if these checks expose a material defect.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "a0c8713c7b7a9e5e91f12c93c9d65721daa240b88e6a4cb0e2c57f2d1a0c8bf4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44609.47,
+      "usage_known": true,
+      "prompt_tokens": 25297,
+      "cached_tokens": 9600,
+      "completion_tokens": 1661
+    }
+  ]
+}

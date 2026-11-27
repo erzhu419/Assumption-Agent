@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47773d4c54e345a6b78e17f136ea5f64",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:41:30.524772+00:00",
+  "ended_at_utc": "2026-11-27T13:42:09.696274+00:00",
+  "request_sha256": "57539e65a7c7bbe1b2c219f6c21ba7ad2f9dd966bb71262b1c3062161d997c5e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52309,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31032,
+    "cached_tokens": 9600,
+    "completion_tokens": 1594
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_joint.py <<'PY'\\nfrom rheology_base import *\\nfrom scipy.optimize import least_squares\\nP,H,X=pq; D=X@b[2:]; Y=np.column_stack((q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs'])); w=np.r_[np.ones(len(t)),1.]; I=np.arange(len(H)); one=np.ones_like(H)\\nprint('diagnostic keys',list(q),'groups',q['lab_id'],q['stratum']); print('H, D ranges diagnostics vs test', np.percentile(np.c_[H,D],[0,50,100],axis=0),np.percentile(np.c_[ptest[1],ptest[2]@b[2:]],[0,50,100],axis=0))\\ndef temporal(tt): return np.row_stack((np.column_stack((-np.expm1(-t[:,None]/tt),t)), np.r_[1/tt,1]))\\ndef memory(tt):\\n z=np.zeros((len(H),len(tt)))\\n for k,step in enumerate(dt):z+=-np.expm1(-step/tt)*(P[:,k,None]-z)\\n return z\\nz=memory(tau)\\nFs={'one':one,'H':H,'H2':H**2,'H3':H**3,'D':D,'D2':D**2,'tanhD':np.tanh(D),'HD':H*D,'z0':z[:,0],'z1':z[:,1],'gap0':H-z[:,0],'gap1':H-z[:,1]}\\nfor j in range(len(dt)):Fs[f'p{j}']=P[:,j]\\nfor j in range(1,X.shape[1]):Fs[f'x{j}']=X[:,j]\\nF=np.column_stack([one,H,H**3,D,D**2]); C=np.linalg.lstsq(F,Y,rcond=None)[0]; E=Y-F@C\\nprint('time signatures [1,H,H^3,D,D^2]',np.round(C[:,[0,1,3,5,8,11,12]],4)); print('remaining corr',[(k,round(np.linalg.norm(E.T@(v-v.mean()))/(np.linalg.norm(v-v.mean())+1e-10),4)) for k,v in Fs.items()]); print('per-coupon residual rmse',np.round(np.sqrt(np.mean(E**2,axis=1)),4))\\ndef fit(seq, idx, mode):\\n def pr(ltt, ii, cf=None):\\n  B=temporal(np.exp(ltt)); A=np.concatenate([np.column_stack([Fs[n][ii] for n in names])[:,None,:]*B[None,:,j,None] for j,names in enumerate(seq)],axis=2); Aw=A*w[None,:,None]\\n  if cf is None:cf=np.linalg.lstsq(Aw.reshape(-1,Aw.shape[-1]),(Y[ii]*w).ravel(),rcond=None)[0]\\n  return (A@cf-Y[ii])*w,cf\\n ll=np.log(tau)\\n if mode=='free':ll=least_squares(lambda p:pr(p,idx)[0].ravel(),ll,bounds=(np.log([.35,1.2]),np.log([1.1,12.])),max_nfev=70).x\\n return ll,pr(ll,idx)[1],pr\\nmodels=[('HD all',[['one','H','D']]*3),('drift powers',[['H','D'],['one','H3','D','D2'],['one','D','D2']]),('stress powers',[['H','D'],['one','H','H2','D'],['one','D']]),('both powers',[['one','H','D'],['one','H','H2','D','D2'],['one','H','D','D2']]),('history',[['H','D','z0'],['one','H3','D','D2','z1'],['one','D','D2']]),('linear inputs',[['one','H','D'],['one','H','D',*[f'p{j}' for j in range(6)]],['one','H','D']])]\\nfor name,seq in models:\\n for mode in ('fixed','free'):\\n  l,c,p=fit(seq,I,mode); e=p(l,I,c)[0]; o=[]\\n  for j in I:\\n   l2,c2,p2=fit(seq,I[I!=j],mode); o.append(p2(l2,[j],c2)[0][0])\\n  o=np.array(o); print(name,mode,np.exp(l).round(5),'coef',c.round(4),'fit',np.sqrt(np.mean(e[:,:-1]**2)).round(5),np.sqrt(np.mean(e[:,-1]**2)).round(5),'LOO curve/rate/worst',np.round([np.sqrt(np.mean(o[:,:-1]**2)),np.sqrt(np.mean(o[:,-1]**2)),np.max(np.sqrt(np.mean(o[:,:-1]**2,axis=1))),np.max(abs(o[:,-1]))],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_joint.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 history reversal -> H2 hold-stress and drift remapping with possibly shifted chamber time constants; archived transfer has chamber strain/rate RMSE 0.6212/1.2576.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select predictors using per-coupon projected amplitudes alone\",\n      \"rejected_reason\": \"The slow branch and linear drift trade off over the observed window; joint fitting can test whether a predictor improves the measured strain and rate.\"\n    }\n  ],\n  \"rationale\": \"Fit compact chamber laws jointly to observed strain and initial rate, with time constants refit inside each held-out-coupon fold. If memory terms do not improve the worst held-out errors, drop them rather than carrying the archived recurrence into deployment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6f6c5875d7700ff8ecb2568c0b11a7e2f8c4a747cd5e4a17b21619aa131a78ff",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39135.84,
+      "usage_known": true,
+      "prompt_tokens": 31032,
+      "cached_tokens": 9600,
+      "completion_tokens": 1594
+    }
+  ]
+}

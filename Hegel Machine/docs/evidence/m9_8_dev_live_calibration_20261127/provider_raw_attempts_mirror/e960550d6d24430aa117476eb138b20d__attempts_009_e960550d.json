@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e960550d6d24430aa117476eb138b20d",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:57:39.741037+00:00",
+  "ended_at_utc": "2026-11-27T13:58:02.959876+00:00",
+  "request_sha256": "52d0515466c15acdac62f2eab093e73fbdb2c10850027cbc34c4cdf3f849a2a6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45211,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25089,
+    "cached_tokens": 5504,
+    "completion_tokens": 818
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _TERMS, _basis, _fit_bridge, _invert\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\nclean = np.max(np.abs(y), axis=1) <= 6\\naxis = np.count_nonzero(x, axis=1) == 1\\nouter = np.max(np.abs(x), axis=1) >= np.quantile(np.max(np.abs(x[clean]), axis=1), .75)\\nindependent = np.array([len(set(t)) <= 1 for t in _TERMS]); a = _basis(x)\\nworst = 0.\\nfor label, slice_ in [('single-channel', axis), ('high-load mixed', outer & ~axis)]:\\n    te = clean & slice_; tr = ~slice_\\n    full = _fit_bridge(x[tr], y[tr]); reduced = np.zeros_like(full)\\n    reduced[independent] = np.linalg.lstsq(a[tr & clean][:, independent], y[tr & clean], rcond=None)[0]\\n    projected = np.max(np.abs(a[te] @ full - y[te]), axis=1)\\n    ablated = np.max(np.abs(a[te] @ reduced - y[te]), axis=1)\\n    err = float(np.max(np.abs(_invert(y[te], full) - x[te]))); worst = max(worst, err)\\n    print(f'{label}: n={te.sum()}, forward p95 with coupling={np.percentile(projected,95):.9g}, forward p95 without coupling (spikes explicitly removed)={np.percentile(ablated,95):.9g}, max inverse error={err:.9g}')\\nassert worst < .002, worst\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent channel nonlinearities → H2 quadratic cross-channel coupling; worst measured inverse error across the previous folds was 0.0006409, with whole-slice holdouts now testing extrapolation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-model and random-fold comparisons\",\n      \"rejected_reason\": \"Those checks already passed; neither tests what happens when an entire measured load regime is absent during fitting.\"\n    }\n  ],\n  \"rationale\": \"Withhold all single-channel rows or all high-load mixed rows to test whether random folds hid a dependence on nearby calibration points. A failed inverse margin would warrant inspecting fit support and extrapolation before submission; the coupling ablation isolates whether the added terms explain the mixed-load signal.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "309e5d82bccdbca7897572dd31d7aaf41c90035392f15bf0327246fc7e384cdb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23182.54,
+      "usage_known": true,
+      "prompt_tokens": 25089,
+      "cached_tokens": 5504,
+      "completion_tokens": 818
+    }
+  ]
+}

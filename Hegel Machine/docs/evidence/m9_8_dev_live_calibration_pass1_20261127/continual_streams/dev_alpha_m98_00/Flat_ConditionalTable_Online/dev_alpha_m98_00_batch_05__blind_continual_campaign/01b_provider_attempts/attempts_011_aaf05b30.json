@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aaf05b30e2134268a2fbdd77ba4b435a",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:03:37.747508+00:00",
+  "ended_at_utc": "2026-11-27T13:04:16.544311+00:00",
+  "request_sha256": "44730525f53a168408e4269ac3240794d0b3764a26a92dbf3f6a8c712e1d69f1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53353,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28501,
+    "cached_tokens": 0,
+    "completion_tokens": 1540
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_audit.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\ncal = m._calibration(d['calibration_load_cells'])\\nx, _ = m._features(tr, te)\\na = m._inputs(tr, x, cal)\\nlab, st = tr['lab_id'], tr['stratum']\\nobs = np.c_[tr['strain_curves_obs'] - tr['strain_0'][:, None], tr['instant_rate_obs']]\\nz = tr['aux_chamber_telemetry']\\n# Center within labs without using any response data. Compare a fixed telemetry\\n# basis to the null using outer labs only, scoring each lab and stratum separately.\\nzc = z.copy()\\nfor l in np.unique(lab):\\n    zc[lab == l] -= np.mean(z[lab == l], axis=0)\\nrows = []\\nfor l in np.unique(lab):\\n    q = lab == l\\n    f = ~q\\n    tau, th, scale = m._material({k: v[f] for k,v in tr.items()}, tuple(v[f] for v in a), dt, t)\\n    y, r = m._predict(a, dt, t, tau, th)\\n    e = obs - np.c_[y, r]\\n    # Compare a telemetry-driven drift with precisely the required derivative.\\n    g = np.r_[t, 1.]\\n    s = np.broadcast_to(np.asarray(scale).ravel()[:2], (2,))\\n    w = 1/np.r_[np.repeat(s[0], len(t)), s[1]]**2\\n    v = (np.clip(e[f], -3/np.sqrt(w), 3/np.sqrt(w)) @ (g*w)) / ((g*g)@w)\\n    zf = zc[f]\\n    beta = np.linalg.solve(zf.T@zf + 5*np.eye(zf.shape[1]), zf.T@v)\\n    ea = e - (zc@beta)[:, None]*g\\n    def stats(j, residual):\\n        return [np.median(np.abs(residual[j,:-1])),np.median(np.abs(residual[j,-1]))]\\n    print('lab', l, 'baseline', stats(q,e), 'centered telemetry', stats(q,ea))\\n    for h in np.unique(st[q]):\\n        j = q & (st == h)\\n        rows.append([*stats(j,e), *stats(j,ea)])\\nprint('Worst lab-stratum median abs strain/rate, baseline then telemetry:', np.max(rows, axis=0))\\n\\n# Check pairwise difference and low-order rational forward bridge alternatives\\n# against direct held-out total load, not just the calibration training loss.\\nu, raw = (d['calibration_load_cells'][k] for k in ('true_channel_loads','bridge_raw'))\\nfolds = np.array_split(np.random.default_rng(14).permutation(len(u)), 5)\\npairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\nres = []\\nfor q in folds:\\n    f = np.setdiff1d(np.arange(len(u)), q)\\n    z = u / u[f].std(axis=0)\\n    A = np.c_[np.ones(len(u)), z]\\n    delta = np.column_stack([z[:, i] - z[:, j] for i,j in pairs])\\n    # Linear differences are aliases; their squares add the complete pairwise quadratic basis.\\n    assert np.max(abs(delta - A @ np.linalg.lstsq(A[f],delta[f],rcond=None)[0])) < 1e-10\\n    B = np.c_[A, z*z, delta*delta, z/(1+z*z)]\\n    # Diagnose a forward-model failure at fixed true load before adding inversion complexity.\\n    v = []\\n    for design in (A,B):\\n        C = np.linalg.lstsq(design[f],raw[f],rcond=None)[0]\\n        e = raw[q]-design[q]@C\\n        # Convert forward residual to a first-order total-load error using the common affine map.\\n        J = np.linalg.lstsq(A[f],raw[f],rcond=None)[0][1:]\\n        v.append(np.max(abs(e @ np.linalg.solve(J,u[f].std(axis=0)))))\\n    res.append(v)\\nprint('Worst held-out forward residual in total-load units, affine / expanded:', np.max(res,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated benchtop transfer → test measurable bridge curvature and lab-centered telemetry drift; current worst held-out lab RMSE is 0.06151 for strain and 0.00909 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic-control operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"The measured system has no relay, stochastic-control law, or class labels. Held-out load error and lab-stratum regression error test the relevant failure modes.\"\n    }\n  ],\n  \"rationale\": \"Test whether nonlinear bridge terms reduce held-out calibration error and whether lab-centered telemetry predicts residual drift across held-out labs. Either result could justify a targeted change; neither would by itself validate a blind chamber correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "d6b3942cad0db5867e63b5f9103ae7eff87fbe27b5667755698586bfb635593e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38756.91,
+      "usage_known": true,
+      "prompt_tokens": 28501,
+      "cached_tokens": 0,
+      "completion_tokens": 1540
+    }
+  ]
+}

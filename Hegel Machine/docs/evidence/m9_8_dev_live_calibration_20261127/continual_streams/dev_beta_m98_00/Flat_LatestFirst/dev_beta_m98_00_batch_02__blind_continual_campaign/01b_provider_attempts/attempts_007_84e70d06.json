@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84e70d06ae12417d8d5b04c7bcc5d611",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:47:05.062902+00:00",
+  "ended_at_utc": "2026-11-27T13:47:47.244801+00:00",
+  "request_sha256": "02c76230c94e91a1dbea93c1c478dafe3a9c35adfe08391788e8eaa95eaebef0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40208,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25731,
+    "cached_tokens": 11136,
+    "completion_tokens": 1579
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/tmp/rosette_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx,y = c['ref_rosette'],c['raw_rosette']\\nz = np.column_stack([np.ones(len(x)),x])\\n# Hold out the largest amplitudes together, rather than randomly splitting them across folds.\\nfolds = np.array_split(np.argsort(np.max(abs(x),axis=1)),5)\\nerrors = {k: np.empty_like(y) for k in ['full affine','bank affine','saturating rational']}\\nfor te in folds:\\n    tr = np.setdiff1d(np.arange(len(x)),te)\\n    full = np.linalg.lstsq(z[tr],y[tr],rcond=None)[0]\\n    errors['full affine'][te] = z[te]@full-y[te]\\n    for j in range(4):\\n        zz = z[:,[0,j+1]]\\n        d = np.linalg.lstsq(zz[tr],y[tr,j],rcond=None)[0]\\n        errors['bank affine'][te,j] = zz[te]@d-y[te,j]\\n        def pred(p,ix):\\n            a = p[-1]\\n            return (z[ix]@p[:-1])/(1+a*x[ix,j]**2)\\n        p = least_squares(lambda p: pred(p,tr)-y[tr,j],np.r_[full[:,j],0.],bounds=(np.r_[np.full(5,-np.inf),0],np.full(6,np.inf)),gtol=1e-12).x\\n        errors['saturating rational'][te,j] = pred(p,te)-y[te,j]\\nfor k,e in errors.items():\\n    print(k,'pooled RMSE',np.sqrt(np.mean(e**2)),'worst amplitude-fold/bank RMSE',max(np.sqrt(np.mean(e[te]**2,axis=0)).max() for te in folds))\\n# The independently acquired single-bank sweeps can expose cross-bank bias.\\nfull = np.linalg.lstsq(z,y,rcond=None)[0]\\nbk = c['single_bank_sweeps']; j = bk['bank_id']; r = bk['ref_signal']\\ne = full[0,j] + full[j+1,j]*r - bk['raw_readout']\\nprint('Independent sweep RMSE by bank',[np.sqrt(np.mean(e[j==k]**2)) for k in range(4)])\\n# Compare nuisance profiling and omitting nuisance with identical shift-disjoint folds.\\nd,_ = m._design(s); yy = m._calibrate(s); zz = s['Z_nuisance']\\nshift = np.arange(len(yy))//len(s['sensor_ij']); banks = s['row_bank_id']; ridge=s['source_ridge']\\nfor profile in (False,True):\\n    e = np.empty_like(yy)\\n    for h in np.unique(shift):\\n        tr = shift != h; te = ~tr\\n        Z = zz[tr]; P = np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T) if profile else np.zeros((Z.shape[1],len(Z)))\\n        a = d[tr] - Z@(P@d[tr]); b = yy[tr] - Z@(P@yy[tr])\\n        w,_ = m._box_qp(a.T@a+ridge*np.eye(a.shape[1]),-a.T@b,s['u_box'],s['total_budget'])\\n        e[te] = d[te]@w+zz[te]@(P@(yy[tr]-d[tr]@w))-yy[te]\\n    print('Profile nuisance',profile,'worst shift/bank RMSE',max(np.sqrt(np.mean(e[(shift==h)&(banks==k)]**2)) for h in np.unique(shift) for k in np.unique(banks)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (reflecting walls) → H2 (Robin walls on both axes with empirical affine calibration); current worst held-out shift RMSE is 0.013300 versus 0.150597 for reflecting walls.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, stochastic drift operators, and batch balanced accuracy\",\"rejected_reason\":\"The public study has no relay states, stochastic dynamics, class labels, or multiple cohorts. The relevant strata are sensor banks, calibration amplitudes, and transport shifts.\"}],\"rationale\":\"Amplitude-blocked and independent single-bank sweeps can reveal calibration saturation or bank bias missed by random folds. Shift-disjoint nuisance comparisons show whether pooled errors conceal a weak bank. Change the calibration only if a challenger improves the relevant held-out slices materially.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bfcdcafb313c0f2a7ebd16b15115b1b8e057fdcfd9820ae832ea5e7ab8898448",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42141.54,
+      "usage_known": true,
+      "prompt_tokens": 25731,
+      "cached_tokens": 11136,
+      "completion_tokens": 1579
+    }
+  ]
+}

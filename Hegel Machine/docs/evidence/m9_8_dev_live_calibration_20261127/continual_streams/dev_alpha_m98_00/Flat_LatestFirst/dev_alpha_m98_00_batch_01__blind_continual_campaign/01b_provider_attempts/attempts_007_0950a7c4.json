@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0950a7c49fc94273a693fe82b517c379",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:42:25.839292+00:00",
+  "ended_at_utc": "2026-11-27T13:43:05.787817+00:00",
+  "request_sha256": "00864fe849e4a577cc85fdd80386b20d3654fe1c590b7396baecf48afa216848",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56496,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34842,
+    "cached_tokens": 11136,
+    "completion_tokens": 1325
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/m98_final_probe.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\npath='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('solver',path); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; g=i['campaign_diagnostics']; out=m.solve_batch(d); ts=out['estimated_taus']; w=out['hereditary_weights']; t=d['eval_times']; cal=m._stress_calibration(d['calibration_load_cells']); h=g['hold_channel_raw']@cal[:-1]+cal[-1]\\nkeys=('lab_id','stratum','coupon_features_raw','ref_coupons'); complete=np.isfinite(g['coupon_features_raw']).all(1); y=np.c_[g['strain_curves_obs']-g['strain_0'][:,None],g['instant_rate_obs']]; q=np.r_[1/ts,1.]; labs=g['lab_id']; strata=g['stratum']; n=len(labs)\\ndef score(e): return np.sqrt(np.mean(e[:,:-1]**2)), np.sqrt(np.mean(e[:,-1]**2))\\ndef data():\\n x=m._aligned_features({k:g[k][:0] for k in keys},g); C,R=m._chamber_design(ts,t,h,x@w[2:]); D=np.concatenate((C,R[:,None,:]),axis=1); return D[:,:,[1,3,4]],D[:,:,[0,2]]@w[:2]\\nA,base=data(); y0=y-base\\nsplits=[labs==v for v in np.unique(labs)]+[strata==v for v in np.unique(strata)]+[~complete]\\nfor label in ('all','complete','unit_rate'):\\n def fit(mask):\\n  if label=='complete': mask=mask & complete\\n  F=A[mask].reshape(-1,3); z=y0[mask].ravel()\\n  if label=='unit_rate':\\n   c=np.linalg.lstsq(F[:,:2]-F[:,2,None]*q[:2],z-F[:,2],rcond=None)[0]; return np.r_[c,1-c@q[:2]]\\n  return np.linalg.lstsq(F,z,rcond=None)[0]\\n eo=[score((A@fit(~mask)-y0)[mask]) for mask in splits]; c=fit(np.ones(n,bool)); print(label,'coeff',c,'initial drift gain',c@q,'pooled',score(A@c-y0),'worst blocked',np.max(eo,axis=0))\\nc=np.array([.3452,1.6072,.0532]); e=A@c-y0; print('final artifact public chamber RMSE',score(e),'worst group',np.max([score(e[mask]) for mask in splits],axis=0)); print('final artifact horizon max RMSE',np.sqrt(np.mean(e[:,:-1]**2,axis=0)).max()); print('finite deploy outputs:',all(np.isfinite(v).all() for v in out.values())); assert all(np.isfinite(v).all() for v in out.values()) and .05<ts[0]<ts[1]<25\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_final_probe.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: chamber reset with freely fitted drift forcing -> H2: test whether unit initial drift gain or complete-coupon fitting improves transfer; the branch-tied model's worst blocked curve/rate RMSE is 0.02266/0.01835.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add more history or nonlinear drift terms\",\n      \"rejected_reason\": \"The previous blocked tests showed no material improvement and often worsened errors on held-out coupons.\"\n    }\n  ],\n  \"rationale\": \"The fitted initial drift gain is close to one, and missing-feature coupons account for the largest residuals. Compare both explanations on held-out labs, strata, and missingness before changing the verified solver. Also check the exact artifact across evaluation horizons in an isolated process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8096e5a92e9f3674070af20cb5c52222b7ede97cc960d921fe23ddd45b726287",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39916.66,
+      "usage_known": true,
+      "prompt_tokens": 34842,
+      "cached_tokens": 11136,
+      "completion_tokens": 1325
+    }
+  ]
+}

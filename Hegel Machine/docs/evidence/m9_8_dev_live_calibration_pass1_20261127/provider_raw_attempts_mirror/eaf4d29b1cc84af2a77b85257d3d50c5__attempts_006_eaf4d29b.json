@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eaf4d29b1cc84af2a77b85257d3d50c5",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:01:25.396938+00:00",
+  "ended_at_utc": "2026-11-27T13:01:51.246485+00:00",
+  "request_sha256": "35f3ac96775ca5e75ad4f27c7120b52afac215c823e6ef9087d1ef70afa2ea51",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45872,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27365,
+    "cached_tokens": 0,
+    "completion_tokens": 919
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; set -e; sed -n '1,210p' public_asset_index.json; ls -la /pretrain_task /tmp/hegel_continual_archive; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport numpy as np,pickle,json,batch_solver as m\\np=pickle.load(open('public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te=d['train'],d['test']; u=d['calibration_load_cells']['true_channel_loads']; r=d['calibration_load_cells']['bridge_raw']; c=np.linalg.lstsq(np.c_[np.ones(len(u)),u],r,rcond=None)[0]; e=np.c_[np.ones(len(u)),u]@c-r; print('Affine bridge max abs residual and RMS by channel:',abs(e).max(0),np.sqrt(np.mean(e*e,axis=0))); print('Affine matrix:',c)\\nfor k,b in [('train',tr),('test',te)]:\\n v=np.concatenate([b['past_channel_raw'].reshape(-1,4),b['hold_channel_raw']]); print(k,'calibration domain exceedances by channel:',((v<r.min(0))|(v>r.max(0))).sum(0),'of',len(v)); z=b['aux_chamber_telemetry']; print(k,'lag-one telemetry correlation', [float(np.corrcoef(q[1:],q[:-1])[0,1]) for q in z.T]); print(k,'first-half vs second-half telemetry means',z[:len(z)//2].mean(0),z[len(z)//2:].mean(0))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('Archive fields:',[list(e) for e in log]); print('Prefix trace lengths:',[len(e['facility_telemetry_trace']) for e in log]);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Nonlinear bridge baseline → test whether affine calibration suffices; worst held-out lab RMSE is 0.0615 for strain and 0.00910 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the alternating prefix trace as a signed chamber correction\",\n      \"rejected_reason\": \"The observed trace separates states but supplies no measured relationship between those states and deployment strain or initial rate.\"\n    }\n  ],\n  \"rationale\": \"An affine bridge already matched or beat the nonlinear fit on four of five held-out maximum errors. Check its forward residuals and whether specimen loads leave the calibration range before simplifying. Check only for documented chamber metadata or telemetry structure that could justify changing the blind predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "994fdc57477572d7a14b0d6293de6cc4bcc2ee2d0aee1a87d11390116dafbfba",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25811.6,
+      "usage_known": true,
+      "prompt_tokens": 27365,
+      "cached_tokens": 0,
+      "completion_tokens": 919
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2e930c0d426d4ebba7bcd2bee2bf7080",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:07:55.989900+00:00",
+  "ended_at_utc": "2026-11-27T14:08:45.960681+00:00",
+  "request_sha256": "e84eef0ddfedc2eb973876fbd2c21bc8bb65579b5069a55f6f4a4e5bdf380cd0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41894,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26124,
+    "cached_tokens": 11136,
+    "completion_tokens": 1828
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '106,153p' /tmp/hegel_continual_archive/dev_alpha_m98_00_batch_05_solver.py; cat >/tmp/m98_chamber_probe.py <<'PY'\\nimport runpy,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/tmp/hegel_continual_archive/dev_alpha_m98_00_batch_05_solver.py'); p=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; a=p['campaign_diagnostics']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; cal=m['_stress_calibration'](d['calibration_load_cells'])\\ndef prep(s,x):return (m['_channel_loads'](s['past_channel_raw'],cal).sum(-1),m['_channel_loads'](s['hold_channel_raw'],cal).sum(-1),x)\\nx=m['_aligned_features'](tr,te); n=len(tr['lab_id']); train=prep(tr,x[:n]); tau,th=m['_fit'](dt,t,train,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('tau, theta',tau,th)\\ndef mad(x,axis=None):return 1.4826*np.median(abs(x-np.median(x,axis=axis,keepdims=True)),axis=axis)\\nc,r=m['_design'](tau,dt,t,train); e=c@th-(tr['strain_curves_obs']-tr['strain_0'][:,None]); f=r@th-tr['instant_rate_obs']; print('train residual mad',mad(e),mad(f),'by time',mad(e,0))\\ny=a['strain_curves_obs']-a['strain_0'][:,None]; yr=a['instant_rate_obs']; lab=a['lab_id']; g=-np.expm1(-t[:,None]/tau); u=g-t[:,None]/tau\\nfor alignment in ('diagnostic-local','reference-joint'):\\n if alignment=='diagnostic-local': xx=m['_aligned_features'](a,a)[:len(lab)]\\n else:\\n  xx=a['coupon_features_raw'].copy(); all_lab=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); st=np.r_[tr['stratum'],te['stratum']]; raw=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]);\\n  for j in np.unique(lab):\\n   q=refs[all_lab==j]; center=np.nanmedian(np.nanmean(q,0)); scale=np.nanmedian(np.nanstd(q,0)); xx[lab==j]=(xx[lab==j]-center)/scale; raw[all_lab==j]=(raw[all_lab==j]-center)/scale\\n  _,ids,k=np.unique(np.c_[all_lab,st],axis=0,return_inverse=True,return_counts=True); w=1/k[ids,None]; fill=np.nansum(w*raw,0)/np.sum(w*np.isfinite(raw),0); xx=np.c_[np.ones(len(lab)),np.where(np.isnan(xx),fill,xx)]\\n coupon=prep(a,xx); des,rate=m['_design'](tau,dt,t,coupon); drift=xx@th[2:]; hold=coupon[1]; z_term=hold[:,None]*th[:2]-rate[:,:2]*tau*th[:2]; base=(hold[:,None]*th[:2])@g.T+drift[:,None]*t; baser=(hold[:,None]*th[:2]/tau).sum(1)+drift\\n mem=-z_term[:,None,:]*g; memr=-z_term/tau; forc=drift[:,None,None]*u; zero=np.zeros_like(memr); slope=drift[:,None]*t\\n print('\\\\n',alignment,'diagnostic raw ranges',y.min(),y.max(),yr.min(),yr.max())\\n def evaluate(name,base,baser,C=None,R=None):\\n  if C is None:\\n   ec=base-y; er=baser-yr; pars=[]\\n  else:\\n   def fit(mask):\\n    def resid(b):return np.r_[((base[mask]+C[mask]@b-y[mask])/.018).ravel(),(baser[mask]+R[mask]@b-yr[mask])/.030]\\n    return least_squares(resid,np.zeros(C.shape[-1]),loss='soft_l1',f_scale=1).x\\n   ec=np.zeros_like(y); er=np.zeros_like(yr)\\n   for j in np.unique(lab):\\n    k=lab==j; b=fit(~k); ec[k]=base[k]+C[k]@b-y[k]; er[k]=baser[k]+R[k]@b-yr[k]\\n   pars=fit(np.ones(len(lab),bool)).round(4)\\n  print(name,pars,'med',np.median(abs(ec)).round(5),np.median(abs(er)).round(5),'worst lab med',max(np.median(abs(ec[lab==j])) for j in np.unique(lab)).round(5),max(np.median(abs(er[lab==j])) for j in np.unique(lab)).round(5),'90pct',np.quantile(abs(ec),.9).round(5),np.quantile(abs(er),.9).round(5))\\n for alpha,label in ((0,'reset'),(1,'carry')):\\n  b=base+alpha*mem.sum(2); br=baser+alpha*memr.sum(1)\\n  evaluate(label,b,br); evaluate(label+' force',b,br,forc,zero); evaluate(label+' force+slope',b,br,np.dstack([forc,slope]),np.c_[zero,drift]);\\n evaluate('shared carry + force',base,baser,np.dstack([mem.sum(2),forc]),np.c_[memr.sum(1),zero]); evaluate('branch carry + force',base,baser,np.dstack([mem,forc]),np.c_[memr,zero]); evaluate('branch carry + force+slope',base,baser,np.dstack([mem,forc,slope]),np.c_[memr,zero,drift]);\\n for alpha,f in [(0,[.34880024,1.63895287]),(1,[.41228894,2.2768587])]:evaluate('archived '+str(alpha),base+alpha*mem.sum(2)+forc@f,baser+alpha*memr.sum(1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated bridge with archived chamber law -> H2 distinguish carried memory, reset, and drift from chamber measurements; inverse total-stress RMSE is 0.000179, with worst calibration error 0.000554.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Expand the bridge basis before modeling chamber data\",\n      \"rejected_reason\": \"The archived basis refits the current bridge at roughly 0.0001 raw-channel RMSE, and no specimen enters the shifted state.\"\n    }\n  ],\n  \"rationale\": \"Use measured initial rates to distinguish memory changes from drift corrections that have zero initial derivative. Fit chamber coefficients without the held-out lab and compare strain and rate errors separately; retain the simpler archived mechanism if added terms do not improve held-out performance.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "909a4aebe729d5f932b27a5cdde1482396fcbb76f26741b7b67af22e005ee064",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49887.01,
+      "usage_known": true,
+      "prompt_tokens": 26124,
+      "cached_tokens": 11136,
+      "completion_tokens": 1828
+    }
+  ]
+}

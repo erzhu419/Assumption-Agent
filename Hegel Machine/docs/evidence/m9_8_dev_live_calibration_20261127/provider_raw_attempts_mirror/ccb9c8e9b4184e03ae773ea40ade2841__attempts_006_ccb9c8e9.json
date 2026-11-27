@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ccb9c8e9b4184e03ae773ea40ade2841",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:10:46.479414+00:00",
+  "ended_at_utc": "2026-11-27T14:11:33.946554+00:00",
+  "request_sha256": "822557f31438cda2f817a86986f1be74aac667aaaa315638a30cc35262ed53fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42537,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25724,
+    "cached_tokens": 9600,
+    "completion_tokens": 1793
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/m98_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\np='/tmp/hegel_continual_archive/dev_alpha_m98_00_batch_06_solver.py'\\ns=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=b['dataset']; g=b['campaign_diagnostics']; tr=d['train']; te=d['test']; dt=d['past_dt']; t=d['eval_times']; cal=d['calibration_load_cells']; x=cal['true_channel_loads']; y=cal['bridge_raw']\\nfor model in ('affine','compact'):\\n es=[]\\n for fold in range(5):\\n  test=np.arange(len(x))%5==fold; keep=~test\\n  for _ in range(5):\\n   p=[]\\n   for j in range(4):\\n    a=m._bridge_terms(x)\\n    if model=='compact': a=np.column_stack((a,x[:,j]**3,x[:,j]*x[:,(j+1)%4]))\\n    p.append(a@np.linalg.lstsq(a[keep],y[keep,j],rcond=None)[0])\\n   e=np.linalg.norm(np.array(p).T-y,axis=1); keep=(~test)&(e<5*np.median(e[keep]))\\n  es.append(e[test])\\n print('bridge',model,'worst fold median',max(map(np.median,es)),'pooled q',np.quantile(np.concatenate(es),[.5,.9,.95,1]))\\nc=m._fit_bridge(cal); print('coeff',c.round(6)); print('bridge errors',np.quantile(np.linalg.norm(m._bridge_forward(x,c)-y,axis=1),[.5,.9,.95,1]))\\nX=m._aligned_features(tr,te); print('X',X.shape)\\ntrain=m._coupon(tr,X[:len(tr['lab_id'])],c); taus,theta=m._fit(dt,t,train,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']);print('fit',taus,theta)\\ndef combine(a,b): return {k:np.concatenate([a[k],b[k]]) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}\\ndef frozen(g):\\n p=combine(tr,te); x=g['coupon_features_raw'].copy()\\n for lab in np.unique(g['lab_id']):\\n  r=p['ref_coupons'][p['lab_id']==lab]; i=g['lab_id']==lab\\n  x[i]=(x[i]-np.median(np.mean(r,axis=0)))/np.median(np.std(r,axis=0))\\n _,j,n=np.unique(np.column_stack((p['lab_id'],p['stratum'])),axis=0,return_inverse=True,return_counts=True); w=1/n[j,None]\\n raw=p['coupon_features_raw']; fill=np.sum(X[:,1:]*w*~np.isnan(raw),axis=0)/np.sum(w*~np.isnan(raw),axis=0)\\n return np.column_stack((np.ones(len(x)),np.where(np.isnan(x),fill,x)))\\ncy=g['strain_curves_obs']-g['strain_0'][:,None]; ry=g['instant_rate_obs']; G=-np.expm1(-t[:,None]/taus)\\nfor label,z in [('frozen',frozen(g)),('joint_td',m._aligned_features(tr,g)[-len(cy):]),('joint_ttd',m._aligned_features(combine(tr,te),g)[-len(cy):])]:\\n group=m._coupon(g,z,c); past,h,_=group; A,R=m._design(taus,dt,t,group); bas=A@theta; br=R@theta; dr=z@theta[2:]; reset,rr=m._chamber(taus,theta,t,h,z)\\n def score(name,p,q):\\n  print(label,name,'curve median/q90/RMSE',np.median(abs(p-cy)),np.quantile(abs(p-cy),.9),np.sqrt(np.mean((p-cy)**2)),'rate median/RMSE',np.median(abs(q-ry)),np.sqrt(np.mean((q-ry)**2)))\\n score('base',bas,br);score('reset',reset,rr)\\n score('preserve',bas+dr[:,None]*(G@(taus*np.array([.62686,.60591]))-t*(.62686+.60591)),br)\\n # Profile separate initial memory retention and drift redistribution in both branches.\\n reset0=(h[:,None]*theta[:2])@G.T+dr[:,None]*t; rr0=h@(np.ones(1)) if False else h*np.sum(theta[:2]/taus)+dr\\n mem=bas-reset0; Z=np.stack([(A[:,:,j]-(h[:,None]*G[None,:,j]))*theta[j] for j in range(2)]+[dr[:,None]*(G[:,j]*taus[j]-t) for j in range(2)],axis=-1)\\n W=np.column_stack([(R[:,j]-h/taus[j])*theta[j] for j in range(2)]+[np.zeros(len(h))]*2)\\n def fit(rows):\\n  def f(q):return np.r_[((reset0[rows]+Z[rows]@q-cy[rows])/.001).ravel(),(rr0[rows]+W[rows]@q-ry[rows])/.002]\\n  return least_squares(f,[.5,.5,.5,.5],loss='cauchy').x\\n q=fit(np.arange(len(cy))); score('profile '+str(q.round(4)),reset0+Z@q,rr0+W@q)\\n print('LOLO chamber q',[(lab,fit(g['lab_id']!=lab).round(4)) for lab in np.unique(g['lab_id'])])\\n print('offset medians by time',np.median(reset0+Z@q-cy,axis=0).round(6),'rate', (rr0+W@q-ry).round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m98_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 channel-local cubic and adjacent-channel coupling; affine worst-fold median raw error is 0.4561, and the compact model has not yet been scored.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine calibration is adequate for the active bridge.\",\"empirical_witness\":\"Affine worst-fold median error was 0.4561; full-data cubic fits recovered repeatable own-channel cubic and adjacent-channel product terms of 0.142–0.295, with other nonlinear terms below 0.0001.\",\"causal_blanket_diagnosis\":\"Nonlinear terms belong to the measured bridge transfer, independently of the chamber memory and drift law.\",\"sublated_pivot\":\"Fit the supported sparse terms dynamically and measure held-out performance before fitting the material and comparing chamber laws.\",\"risk_kind\":\"transducer model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use all cubic monomials\",\"rejected_reason\":\"The unrestricted model's worst-fold median error reached 2.171 despite a small pooled median; the observed support is much smaller.\"}],\"rationale\":\"The calibration folds test whether the compact bridge generalizes; chamber residuals and leave-one-lab-out fits then distinguish an archived law from a current memory or drift mismatch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b32712f9b4b30276c3f3be6f68445e7fcbe6cc196e43e3c729c9bbde4dc34748",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47430.36,
+      "usage_known": true,
+      "prompt_tokens": 25724,
+      "cached_tokens": 9600,
+      "completion_tokens": 1793
+    }
+  ]
+}

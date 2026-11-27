@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee198fc8676c43b1807c94ac9d3ef122",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:08:39.064090+00:00",
+  "ended_at_utc": "2026-11-27T14:09:12.956257+00:00",
+  "request_sha256": "eefcb61f4df8848dd12a1d281616b15b6ee8b8bf609a16b3cbd84e6e65052d3f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41490,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26365,
+    "cached_tokens": 11136,
+    "completion_tokens": 1297
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/probe98.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom pathlib import Path\\nfrom scipy.linalg import lstsq\\nfrom scipy.optimize import root\\nnp.set_printoptions(precision=5,suppress=True)\\ne=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=e['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; Z=s['Z_nuisance']\\nmods={}\\nfor f in sorted(Path('/tmp/hegel_continual_archive').glob('*_solver.py')):\\n name=f.stem.removeprefix('dev_beta_m98_00_').removesuffix('_solver'); spec=importlib.util.spec_from_file_location(name,f); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);mods[name]=m\\nprint('sweep range',X.min(0),X.max(0),'raw range',Y.min(0),Y.max(0)); print('bank sweep fields',[(k,type(v).__name__,getattr(v,'shape',None),list(v) if isinstance(v,dict) else '') for k,v in c['single_bank_sweeps'].items()]);print('sensor extrema',s['sensor_ij'].min(0),s['sensor_ij'].max(0),'mu',s['mu_shifts']); print('Z/raw norm',np.linalg.norm(Z,axis=0),np.linalg.norm(s['y_obs_raw']))\\nterms={0:lambda x:np.c_[np.ones(len(x)),x],1:mods['batch_04']._rosette_terms,2:lambda x:np.c_[np.ones(len(x)),x,*[(x[:,i]*x[:,j]) for i in range(4) for j in range(i,4)],*[(x[:,i]*x[:,j]*x[:,k]) for i in range(4) for j in range(i,4) for k in range(j,4)]]}\\nys={}\\nfor deg,fn in terms.items():\\n F=fn(X); A=[]; rr=[]\\n for idx in np.array_split(np.arange(len(X)),5)+[np.array([],dtype=int)]:\\n  train=np.ones(len(X),bool);train[idx]=False; keep=train & (np.max(abs(Y),axis=1)<4*np.median(np.max(abs(Y[train]),axis=1)))\\n  for _ in range(5):\\n   fit=np.linalg.lstsq(F[keep],Y[keep],rcond=None)[0];r=np.max(abs(F@fit-Y),axis=1); med=np.median(r[train]); keep=train & (r<=med+8*max(np.median(abs(r[train]-med)),1e-12))\\n  if len(idx):rr.extend(r[idx]);continue\\n  print('cal deg',deg,'heldout abs quantiles',np.quantile(rr,[.5,.8,.9,1]),'kept',keep.sum(),'training median',np.median(r[keep]));\\n  if deg<=1: print('fit',fit)\\n  def invert(raw):\\n   raw=raw.reshape(-1,4); x0=np.linalg.solve(fit[1:5].T,(raw-fit[0]).T).T\\n   out=[root(lambda x:(fn(x[None,:])@fit)[0]-y,x).x for x,y in zip(x0,raw)]; return np.ravel(out)\\n  ys[str(deg)]=[invert(p['y_pulse_raw']) for p in e['campaign_diagnostics']]\\nys['archive04']=[mods['batch_04']._calibrate(dict(s,y_obs_raw=p['y_pulse_raw'])) for p in e['campaign_diagnostics']]\\nfor name,m in mods.items():\\n S,_=m._design(s)\\n for cal,ylist in ys.items():\\n  vals=[]\\n  for p,y in zip(e['campaign_diagnostics'],ylist):\\n   d=y-S@p['w_pulse']; zn=Z@lstsq(Z,d)[0]; vals.append((round(np.linalg.norm(d),6),round(np.linalg.norm(d-zn),6)))\\n  print('pulse raw/projected norms',name,cal,vals)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/probe98.py; sed -n '8,21p' /tmp/hegel_continual_archive/dev_beta_m98_00_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: Wall and rosette factors recur independently -> H2: use held-out calibration sweeps and both known-weight pulses to discriminate factors; pulse error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit new boundary coefficients immediately\",\n      \"rejected_reason\": \"First test whether a known stencil explains both pulses after recalibration; otherwise flexible boundary coefficients could absorb a sensor-model error.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps test whether sensor nonlinearities matter. Known-weight pulses then test the archived stencils without a free source fit, while reporting residuals before and after nuisance projection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "96a4a5798514ede75086a95c335d9f5779a320377259ffdaf28edf89f2590788",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33844.15,
+      "usage_known": true,
+      "prompt_tokens": 26365,
+      "cached_tokens": 11136,
+      "completion_tokens": 1297
+    }
+  ]
+}

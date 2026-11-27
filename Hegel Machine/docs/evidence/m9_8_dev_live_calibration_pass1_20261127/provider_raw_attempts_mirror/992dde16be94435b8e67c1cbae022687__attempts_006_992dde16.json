@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "992dde16be94435b8e67c1cbae022687",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:56:51.680074+00:00",
+  "ended_at_utc": "2026-11-27T12:57:30.106155+00:00",
+  "request_sha256": "3c397f30d805f0ef1b102431e52b13e0c438aca4eda5f49ce6004b98f54742c8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40801,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24877,
+    "cached_tokens": 9600,
+    "completion_tokens": 1535
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_margin_audit.py <<'PY'\\nimport sys, pickle, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\na = up._design(x); rows = np.arange(len(x)); rng = np.random.default_rng(180)\\nfull = up._fit_forward(x,y)\\nclean = np.linalg.norm(a@full-y,axis=1)<1\\nfolds = {'axis':rows[np.count_nonzero(x,axis=1)==1], 'outer':np.argsort(abs(x).max(axis=1))[-12:], 'high total':np.argsort(x.sum(axis=1))[-12:], 'low total':np.argsort(x.sum(axis=1))[:12]}\\nfor k in ('train','test','chamber_verification_trials'):\\n    if d[k] is not None:\\n        for field in ('past_channel_raw','hold_channel_raw'):\\n            r = d[k][field]\\n            print(k,field,'samples',r.size//4)\\noperating = np.concatenate([d[k][f].reshape(-1,4) for k in ('train','test','chamber_verification_trials') if d[k] is not None for f in ('past_channel_raw','hold_channel_raw')]); ref = up._invert(operating,full)\\n# Exact rational challengers, including pairwise sum/difference denominators.\\n# Denominator selection uses only inner folds of the outer training rows.\\nfor name, te in folds.items():\\n    tr = np.setdiff1d(rows,te); te = te[clean[te]]\\n    fit = up._fit_forward(x[tr],y[tr]); good = tr[np.linalg.norm(a[tr]@fit-y[tr],axis=1)<1]\\n    inner = np.array_split(rng.permutation(good),3)\\n    base = a[te]@fit; rational = base.copy(); sparse = base.copy(); selected = []\\n    for j in range(4):\\n        q = x[:,j]; other = x[:,(j+1)%4]\\n        denoms = [np.ones(len(x))] + [1+s*z*z for z in (q,q+other,q-other) for s in (0.02,0.10,0.30)]\\n        test_losses=[]; preds=[]\\n        for den in denoms:\\n            m=a/den[:,None]; loss=[]\\n            for val in inner:\\n                sub=np.setdiff1d(good,val); co=np.linalg.lstsq(m[sub],y[sub,j],rcond=None)[0]\\n                loss.extend((m[val]@co-y[val,j])**2)\\n            test_losses.append(np.mean(loss)); preds.append(m[te]@np.linalg.lstsq(m[good],y[good,j],rcond=None)[0])\\n        best=int(np.argmin(test_losses)); rational[:,j]=preds[best]; selected.append(best)\\n        use = abs(fit[:,j]) > .001\\n        sparse[:,j] = a[te][:,use] @ np.linalg.lstsq(a[good][:,use],y[good,j],rcond=None)[0]\\n    inv=up._invert(y[te],fit)-x[te]; drift=np.max(abs(up._invert(operating,fit)-ref))\\n    print(name, 'n',len(te),'forward RMS current/rational/sparse',*[float(np.sqrt(np.mean((p-y[te])**2))) for p in (base,rational,sparse)], 'rational selections',selected,'inverse peak',np.max(abs(inv)),'operating refit drift',drift)\\n    assert np.max(abs(inv))<.002 and drift<.002\\nout=solve_batch(d)\\nassert np.shape(out['predicted_strain'])==(len(d['test']['lab_id']),len(d['eval_times'])) and all(np.all(np.isfinite(out[k])) for k in ('predicted_strain','initial_rate_pred','hereditary_weights','estimated_taus'))\\nprint('isolated composition passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 coupled quadratic plus channel-local cubic bridge; verified held-out inverse RMSE peaked at 0.000152 and absolute channel error at 0.000457.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, drift-operator, or batch-classification diagnostics\",\n      \"rejected_reason\": \"The upstream task is static calibration on paired, known-load measurements. It has no relay state, evolution operator, class labels, or identified technical-batch strata.\"\n    }\n  ],\n  \"rationale\": \"Hold out high and low total load because total load drives the downstream solver. A large recovery error or refit drift would change the calibration model; a rational or sparse challenger would merit promotion only if it improves the relevant holdouts rather than just fitting calibration noise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d63679c39bad29496af05c6437a24e1364238c024dff831dfa3485a2d21fe556",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38386.39,
+      "usage_known": true,
+      "prompt_tokens": 24877,
+      "cached_tokens": 9600,
+      "completion_tokens": 1535
+    }
+  ]
+}

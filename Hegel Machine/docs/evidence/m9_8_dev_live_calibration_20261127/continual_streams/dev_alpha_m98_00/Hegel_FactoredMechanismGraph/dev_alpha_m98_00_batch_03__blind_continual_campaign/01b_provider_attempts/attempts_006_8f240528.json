@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8f24052860484e66a9ee46e06d48d55f",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:49:26.925714+00:00",
+  "ended_at_utc": "2026-11-27T13:50:05.463195+00:00",
+  "request_sha256": "b11cb498345abcc45f3b510b2073d9d1903aff9a5abc06516f12c933704ec40e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43119,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25287,
+    "cached_tokens": 9600,
+    "completion_tokens": 1225
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/print('\\\\''amplitudes:/,$d' /tmp/probe_rheology.py > /tmp/probe_maps.py\\ncat >> /tmp/probe_maps.py <<'PY'\\ng=np.c_[-np.expm1(-t[:,None]/tau),t]; rates=np.r_[1/tau,1.]; n=len(hold)\\nprint('sizes',len(tr['lab_id']),len(d['test']['lab_id']),n)\\ncat=lambda a,b:{k:np.concatenate((a[k],b[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}\\nempty={k:v[:0] for k,v in cat(tr,tr).items()}; te=d['test']\\nfor label, s in [('train+diag',tr),('diag only',empty),('test+diag',te),('all',cat(tr,te))]:\\n xx=m._aligned_features(s,q)[-n:]; dd=xx@th[2:]; h=hold[:,None]*th[:2]; zm=z*th[:2]; gap=h-zm; obs=np.c_[y,r]\\n print('\\\\n',label, 'missing rows:', np.argwhere(np.isnan(q['coupon_features_raw'])).tolist()); print('projected', np.c_[dd, amps[:,0]-gap[:,0], amps[:,1]-gap[:,1], amps[:,2]].round(4).T)\\n def measure(blocks,offset, name):\\n  F=np.concatenate([np.c_[g[:,b],rates[b]][None,:,None]*B[:,None,:] for b,B in enumerate(blocks)],axis=2); Y=obs-offset; p=F.shape[-1]\\n  beta=np.linalg.lstsq(F.reshape(-1,p),Y.ravel(),rcond=None)[0]; pred=np.empty_like(Y)\\n  for j in range(n):\\n   I=np.arange(n)!=j; pred[j]=F[j]@np.linalg.lstsq(F[I].reshape(-1,p),Y[I].ravel(),rcond=None)[0]\\n  ae=pred-Y; print(name,'beta',beta.round(3),'loo curve/rate/worst',np.round([np.sqrt(np.mean(ae[:,:-1]**2)),np.sqrt(np.mean(ae[:,-1]**2)),np.max(np.sqrt(np.mean(ae**2,axis=1)))],4))\\n D=dd[:,None]; G=np.vstack([g,rates]); off=gap@G[:,:2].T\\n for nm,B in [('linear',D),('signed abs',np.c_[D,abs(D)]),('quadratic',np.c_[D,D**2]),('cubic',np.c_[D,D**2,D**3]),('raw feature',xx)]: measure([B]*3,off,nm)\\n measure([np.c_[h[:,0],zm[:,0],D],np.c_[h[:,1],zm[:,1],D],D],0,'free gap')\\n measure([np.c_[h[:,0],zm,D],np.c_[h[:,1],zm,D],D],0,'cross memory')\\nprint('raw features + lab/stratum'); print(np.c_[q['lab_id'],q['stratum'],q['coupon_features_raw']].T)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_maps.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 linear same-branch amplitudes -> H2 test feature alignment, cross-branch memory, and nonlinear drift by coupon jackknife; current best in-sample joint RMSE is 0.06273.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Retain the in-sample linear chamber fit\",\"rejected_reason\":\"It leaves structured errors well above the fixed-basis residual; held-out coupons can distinguish better predictors from extra flexibility.\"}],\"rationale\":\"Compare plausible diagnostic reference panels and a small set of constitutive extensions. Use coupon-level held-out curve and rate errors to choose which mechanism deserves further testing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "b167bcd28bb6b4cc1ca92d88ecda758f064c3059491cccfd14a65a1a1d373f7b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38497.01,
+      "usage_known": true,
+      "prompt_tokens": 25287,
+      "cached_tokens": 9600,
+      "completion_tokens": 1225
+    }
+  ]
+}

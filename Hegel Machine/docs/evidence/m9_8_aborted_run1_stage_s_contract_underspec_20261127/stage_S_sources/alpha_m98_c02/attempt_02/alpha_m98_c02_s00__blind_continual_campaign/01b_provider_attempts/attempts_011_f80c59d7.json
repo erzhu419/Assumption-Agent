@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f80c59d798be44f4926102e7b02b62b7",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c02__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:33:46.739959+00:00",
+  "ended_at_utc": "2026-11-27T12:34:10.205269+00:00",
+  "request_sha256": "0b854d7704753ace73581c59a0e3d5d0ecb740cec0fba2a099353b9693890ef0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 70292,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37347,
+    "cached_tokens": 11136,
+    "completion_tokens": 839
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/rheo_gain_tradeoff.py <<'PY'\\nexec(open('/tmp/rheo_labgain.py').read().split(\\\"for mode in ['base','centered_gain']:\\\")[0])\\nlab=tr['lab_id']; clab=ch['lab_id']; subsets=[pb[-1]]+[pb[-1]&(lab!=l) for l in np.unique(lab)]\\npairs=[(fit(s,'base'),fit(s,'centered_gain')) for s in subsets]\\nfor mix in (0., .25, .5, .75, 1.):\\n def combined(z):\\n  (t0,w0),(t1,w1)=z; return np.exp((1-mix)*np.log(t0)+mix*np.log(t1)),(1-mix)*w0+mix*w1\\n e,r=errors(ch,pc,combined(pairs[0])); co=report(e,r,pc[-1]); mi=report(e,r,~pc[-1]); worst=np.max([report(e,r,clab==l) for l in np.unique(clab)],axis=0)\\n folds=[]; delta=[]\\n for l,z in zip(np.unique(lab),pairs[1:]):\\n  e,r=errors(tr,pb,combined(z)); folds.append(report(e,r,(lab==l)&pb[-1])); delta.append(combined(z)[0]);\\n print(mix,'chamber complete',co,'missing',mi,'worst lab',worst,'bench worst complete',np.max(folds,axis=0),'slow tau fold range',np.min(delta,axis=0)[1],np.max(delta,axis=0)[1])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_gain_tradeoff.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (direct bench transfer) -> H2 (partial correction for lab-dependent drift gain); full correction improves worst chamber-lab p90 curve/rate from 0.06590/0.01954 to 0.04008/0.01846 but worsens worst held-out bench-lab complete-row p90 from 0.13836/0.04367 to 0.15456/0.05273.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Replace direct transfer with the unconditional full lab-gain correction\",\"rejected_reason\":\"It improves complete-case chamber transfer but worsens both missing-feature chamber endpoints and the worst complete-case bench lab.\"}],\"rationale\":\"Compare partial correction against both endpoints and late-horizon errors. Keep the verified baseline if the chamber gain does not survive without a material loss on the bench or missing-feature slices.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "9ebb1695f803db672fbe72b5c1358af286265296e7c364b549176f0239cee001",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23433.57,
+      "usage_known": true,
+      "prompt_tokens": 37347,
+      "cached_tokens": 11136,
+      "completion_tokens": 839
+    }
+  ]
+}

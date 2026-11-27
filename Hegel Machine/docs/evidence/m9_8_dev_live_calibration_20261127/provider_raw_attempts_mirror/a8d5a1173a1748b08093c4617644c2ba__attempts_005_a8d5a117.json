@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a8d5a1173a1748b08093c4617644c2ba",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:40:50.767374+00:00",
+  "ended_at_utc": "2026-11-27T13:41:26.836958+00:00",
+  "request_sha256": "df06ed37b9e17b77dc6b35d98faa2b07d27fe498efa3df80df821980ae9a1405",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26837,
+    "cached_tokens": 9600,
+    "completion_tokens": 1290
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_law.py <<'PY'\\nexec(open('/tmp/chamber_modes.py').read().split(\\\"for yname\\\")[0])\\nfrom scipy.optimize import least_squares\\nD=x@th[2:]; print('features missing',np.isnan(q['coupon_features_raw']).sum(0)); print('train+test vs train+diag alignment max change',np.max(abs(m['_aligned_features'](tr,te)[:len(tr['lab_id'])]-m['_aligned_features'](tr,q)[:len(tr['lab_id'])]))); print('ref means per lab',[(int(l), np.round([np.mean(g['ref_coupons'][g['lab_id']==l]) for g in (tr,te,q)],3)) for l in [1,2,3]])\\nC,_=project(Y,tau); print('projected amplitude correlations to drift',np.corrcoef(np.column_stack((C,D)).T)[-1]); G=A[:,0,:2]/(-np.expm1(-t[0]/tau)); z=b[:,None]-G\\nfor j in range(3):\\n print('branch',j,'projected range',np.min(C[:,j]),np.max(C[:,j]));\\n for name,Z in [('hold',[b]),('hold,z0,z1',[b,*z.T]),('hold,past',[b,*a.T]),('hold,past,drift',[b,*a.T,D]),('hold,past,x',[b,*a.T,*x[:,1:].T]),('drift',[D]),('drift,hold,z0,z1',[D,b,*z.T])]:\\n  V=np.column_stack((np.ones(n),*Z)); c=np.linalg.lstsq(V,C[:,j],rcond=None)[0]; print(name,np.round(c,4), 'rmse',np.sqrt(np.mean((C[:,j]-V@c)**2)).round(5))\\ndef design(sets, zt=tau):\\n U=basis(zt); return np.concatenate([np.asarray(V).T[:,None,:]*U[None,:,j,None] for j,V in enumerate(sets)],axis=-1)\\none=np.ones(n); H=[one,b]; T=[one,D]; W=[one,*x[:,1:].T]; P=[one,b,*a.T]; Z=[one,b,*z.T];\\nfor name,sets in [('hold/drift',[H,H,T]),('hold/holdX/drift',[H,H+[D],T]),('hold/past/drift',[H,P,T]),('hold,past/hold,past/drift',[P,P,T]),('hold,z/hold,z/drift',[Z,Z,T]),('hold,z/hold,z/fullX',[Z,Z,W]),('hold/hold,meanpast/drift',[H,H+[a.mean(1)],T]),('hold/hold,last/drift',[H,H+[a[:,-1]],T]),('hold/hold,z1/drift',[H,H+[z[:,1]],T]),('hold/hold/fullX',[H,H,W]),('hold/hold/drift,hold',[H,H,T+[b]]),('hold/hold,past,X/drift',[H,P+[D],T])]:\\n S=design(sets); pred=np.empty_like(Y); c=np.linalg.lstsq(S.reshape(-1,S.shape[-1]),Y.ravel(),rcond=None)[0];\\n for i in range(n):\\n  keep=np.arange(n)!=i; sl=S[keep].reshape(-1,S.shape[-1]); cc=np.linalg.lstsq(sl,Y[keep].ravel(),rcond=None)[0]; pred[i]=S[i]@cc\\n e=abs(Y-pred); print(name,'rank',np.linalg.matrix_rank(S.reshape(-1,S.shape[-1])), 'cv med,p90,worst-row-strain,p90-rate,maxrate',np.round([np.median(e[:,:-1]),np.quantile(e[:,:-1],.9),np.max(e[:,:-1].mean(1)),np.quantile(e[:,-1],.9),np.max(e[:,-1])],5),'coef',c.round(4));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_law.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 new chamber relaxation modes -> H2 intrinsic modes with altered memory amplitudes and drift; intrinsic modes fit chamber observations at P90 0.00595 when amplitudes are estimated separately for each coupon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a third relaxation mode\",\n      \"rejected_reason\": \"It improved the per-coupon fit only marginally and converged to the lower time-constant bound.\"\n    }\n  ],\n  \"rationale\": \"The coupon-specific amplitudes identify a viable time basis but do not predict deployment. Compare physically interpretable stress-history and drift laws on held-out chamber coupons, scoring strain and initial rate independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9e7d2aefaa18ef8ac6308d6a9133f2352c19c44ead1fd527440f292528d8aa5b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36035.83,
+      "usage_known": true,
+      "prompt_tokens": 26837,
+      "cached_tokens": 9600,
+      "completion_tokens": 1290
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c92aabc3a47641408deab614994e181e",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:03:30.856399+00:00",
+  "ended_at_utc": "2026-11-27T14:04:12.303815+00:00",
+  "request_sha256": "9192a28845474e35b1d856fb8355c1b24faddd24ce441d59aba8e27ec6a047d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60639,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32423,
+    "cached_tokens": 0,
+    "completion_tokens": 1201
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo ===$(basename \\\"$f\\\"); sed -n '/^def solve_batch/,$p' \\\"$f\\\" | tail -37; done\\ncat > /tmp/chamber06.py <<'PY'\\nfrom constit06 import *\\nfrom scipy.linalg import lstsq\\nlab=g['lab_id']; labs=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); raw=g['coupon_features_raw'].copy();\\nfor j in np.unique(lab):\\n a=refs[labs==j]; raw[lab==j]=(raw[lab==j]-np.median(np.nanmean(a,0)))/np.median(np.nanstd(a,0))\\nprint('diag labs and missing',lab,np.isnan(raw).astype(int)); print('feature change',np.round(raw-xg[:,1:],3));\\nlst=np.r_[tr['stratum'],te['stratum']]; _,cell,cnt=np.unique(np.c_[labs,lst],axis=0,return_inverse=True,return_counts=True); w=1/cnt[cell]; mat=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]); mu=np.array([np.average(xx[~np.isnan(col),j+1],weights=w[~np.isnan(col)]) for j,col in enumerate(mat.T)]); x=np.c_[np.ones(len(lab)),np.where(np.isnan(raw),mu,raw)]; dr=x@theta[2:]; print('obs rate vs new reset',np.round(r-base@(1/tau)-dr,4)); print('drifts',np.round(np.c_[dr,xg@theta[2:],r-base@(1/tau),b[:,2]],4)); print('times',t)\\n# Each column is a distinct observable mechanism, observed both in curves and at the initial derivative.\\nT=np.c_[F,t]; deriv=np.r_[1/tau,1]; base_y=base@F.T; base_r=base@(1/tau); target=np.c_[y-base_y,r-base_r];\\ndef mk(q,j): return q[:,None]*np.r_[T[:,j],deriv[j]]\\ndef evaluate(name,terms,offset=0):\\n A=np.stack(terms,axis=-1); off=np.broadcast_to(offset,target.shape); wt=np.r_[np.ones(len(t)),2.]; E=np.empty_like(target)\\n for j in range(len(x)):\\n  ii=np.arange(len(x))!=j; c=lstsq((A[ii]*wt[None,:,None]).reshape(-1,A.shape[2]),((target-off)[ii]*wt).ravel())[0]; E[j]=(target-off)[j]-A[j]@c\\n c=lstsq((A*wt[None,:,None]).reshape(-1,A.shape[2]),((target-off)*wt).ravel())[0]; print(name,'CV rms',np.sqrt(np.mean(E[:,:-1]**2)),np.sqrt(np.mean(E[:,-1]**2)),'worst coupon',max(np.sqrt(np.mean(E[:,:-1]**2,1))),max(abs(E[:,-1])),'coef',np.round(c,5)); return c\\nfor label, ddr in [('joint',dr),('diag',xg@theta[2:])]:\\n drift=[mk(ddr*tau[j],j) for j in range(2)]+[mk(ddr,2)]; history=[mk(Z[:,j]*theta[j],j) for j in range(2)]; holds=[mk(base[:,j],j) for j in range(2)];\\n evaluate(label+' dr',drift); evaluate(label+' history dr',history+drift); evaluate(label+' stress dr',holds+history+drift); evaluate(label+' full features drift gauge',[sum(mk(x[:,k]*tau[j]*a,j) for j,a in enumerate([.52,.43]))+.05*mk(x[:,k],2) for k in range(5)]); evaluate(label+' history full features drift',history+[mk(x[:,k],j) for j in range(3) for k in range(5)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber06.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (reset plus archived drift fractions) → H2 (current chamber law with deployment-aligned features); after nonlinear bridge inversion, archived chamber strain and rate RMSEs are 0.0796 and 0.0699.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare diagnostic-only and deployment reference statistics, then test drift and memory terms on held-out chamber coupons. This distinguishes a preprocessing mismatch from a missing constitutive term before freezing deployment coefficients.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "60c785c17fc25ce54688004cb912cedb68e2f64a75c8ff556d1dbe94a58e1dfd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41405.19,
+      "usage_known": true,
+      "prompt_tokens": 32423,
+      "cached_tokens": 0,
+      "completion_tokens": 1201
+    }
+  ]
+}

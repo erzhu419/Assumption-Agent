@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "857d9fe2c1774df4961e9b39ce699707",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:43:33.749950+00:00",
+  "ended_at_utc": "2026-11-27T13:44:07.526183+00:00",
+  "request_sha256": "a2dad082cce99e468adb62ba10adaefec9c5c1360d95dbd1d9f50c7ab40c53d9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33768,
+    "cached_tokens": 9600,
+    "completion_tokens": 1217
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rheo_margin_audit.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py')\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr=d['train']; q=p['campaign_diagnostics']; dt=d['past_dt']; t=d['eval_times']\\ntrc,tec=m['_prepare'](d); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; idx=np.arange(len(y)); cal=d['calibration_load_cells']; raw=cal['bridge_raw']; target=cal['true_channel_loads'].sum(1)\\nlin=np.c_[np.ones(len(raw)),raw]; pair=np.column_stack([raw[:,i]*raw[:,j] for i in range(4) for j in range(i,4)]); quad=np.c_[lin,pair]; order=np.argsort(target); folds=np.array_split(order,5)\\nfor name,X in [('affine',lin),('quadratic + channel interactions',quad)]:\\n e=[]\\n for fold in folds:\\n  k=np.setdiff1d(np.arange(len(raw)),fold); a=np.linalg.lstsq(X[k],target[k],rcond=None)[0]; e.append(abs(X[fold]@a-target[fold]));\\n print('bridge',name,'worst stress-block P90',max(np.quantile(a,.9) for a in e))\\n\\ndef fit(c, y, r, mode):\\n tau, th=m['_fit'](dt,t,c,y,r)\\n if mode=='current': return tau,th\\n k=y.size\\n def err(a):\\n  C,R=m['_design'](np.exp(a[:2]),dt,t,c); return np.r_[(C@a[2:]-y).ravel(),R@a[2:]-r]\\n a=np.r_[np.log(tau),th]; e=err(a); noise=[1.4826*np.median(abs(v-np.median(v))) for v in (e[:k],e[k:])]; s=np.repeat(np.maximum(noise,1e-6),[k,len(r)]); loss,curve,cut=mode\\n s[:k]*=curve\\n a=least_squares(lambda a:err(a)/s,a,bounds=([np.log(.050001)]*2+[-np.inf]*7,[np.log(24.9999)]*2+[np.inf]*7),loss=loss,f_scale=cut,x_scale='jac').x\\n j=np.argsort(a[:2]); return np.exp(a[j]),np.r_[a[2+j],a[4:]]\\nfor mode in ['current',('soft_l1',1,1),('cauchy',1,1.5),('cauchy',1.7,2.5)]:\\n tau,th=fit(trc,y,r,mode); stats=[]; masks=[]\\n for name in ['lab_id','stratum']:\\n  for lab in np.unique(tr[name]): masks.append(tr[name]==lab)\\n for k in masks:\\n  a,b=fit(tuple(x[~k] for x in trc),y[~k],r[~k],mode); C,R=m['_design'](a,dt,t,tuple(x[k] for x in trc)); e=abs(C@b-y[k]); v=abs(R@b-r[k]); stats.append([np.quantile(e,.9),np.quantile(v,.9),a[1],np.quantile(e[:,-3:],.9)])\\n stats=np.array(stats); print('material',mode,'full tau',tau.round(5),'held-out worst strain/rate/late',stats[:,[0,1,3]].max(0).round(5),'tau1 range',stats[:,2].min(),stats[:,2].max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_margin_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge and chamber reset -> H2 retain that law unless bridge curvature or robust weighting improves blocked validation; current worst diagnostic-group P90 is 0.03233 for strain and 0.02181 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay, HJB, or balanced-accuracy checks\",\"rejected_reason\":\"This task has continuous rheology observations, no relay state, and no class labels. The relevant nuisance check is whether held-out labs or strata destabilize the material fit.\"}],\"rationale\":\"Stress-blocked calibration validation would expose hidden bridge curvature or cross-channel interactions; add them only if they reduce held-out stress error materially. Grouped refits test whether the robust loss masks slow-mode instability or late-horizon error; change weighting only if it improves that margin without worsening rate prediction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "286dcd0121eb3a1411fbfa44800ba9b1205e1e665f49b64202be10e4419b713b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33738.56,
+      "usage_known": true,
+      "prompt_tokens": 33768,
+      "cached_tokens": 9600,
+      "completion_tokens": 1217
+    }
+  ]
+}

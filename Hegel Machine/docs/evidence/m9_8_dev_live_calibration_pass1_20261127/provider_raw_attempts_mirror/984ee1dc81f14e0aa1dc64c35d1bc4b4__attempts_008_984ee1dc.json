@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "984ee1dc81f14e0aa1dc64c35d1bc4b4",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:57:51.332966+00:00",
+  "ended_at_utc": "2026-11-27T12:58:21.206914+00:00",
+  "request_sha256": "518fd750e86da5b0723e91da046202a9f9ec0482967f0f851f45b714d6a36b34",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41523,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23836,
+    "cached_tokens": 5504,
+    "completion_tokens": 1146
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_spike_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\n\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\na = up._design(x)\\nfit = up._fit_forward(x, y)\\nspikes = np.linalg.norm(a @ fit - y, axis=1) > 1\\nassert np.any(spikes)\\nblocks = [(k, f) for k in ('train', 'test', 'chamber_verification_trials') if ds.get(k) is not None for f in ('past_channel_raw', 'hold_channel_raw')]\\noperating = np.concatenate([ds[k][f].reshape(-1, 4) for k, f in blocks])\\nobserved = up._invert(operating, fit)\\nclean_fit = up._fit_forward(x[~spikes], y[~spikes])\\nspike_shift = np.max(np.abs(observed - up._invert(operating, clean_fit)))\\nprint('Observed-spike sensitivity, max operating channel shift:', spike_shift)\\nassert spike_shift < 0.002\\n\\n# Keep all mixed-load measurements in the fit and hold out each axis sweep in turn.\\naxis = np.count_nonzero(x, axis=1) == 1\\nworst = 0.0\\nfor j in range(4):\\n    test = axis & (x[:, j] != 0)\\n    fold_fit = up._fit_forward(x[~test], y[~test])\\n    score = test & ~spikes\\n    err = up._invert(y[score], fold_fit) - x[score]\\n    reduced = fold_fit.copy()\\n    # Refit the quadratic-only null on the same training data without gross spikes.\\n    keep = ~test & ~spikes\\n    reduced[:15] = np.linalg.lstsq(a[keep, :15], y[keep], rcond=None)[0]\\n    reduced[15:] = 0\\n    quadratic_rmse = np.sqrt(np.mean((a[score] @ reduced - y[score])**2))\\n    cubic_rmse = np.sqrt(np.mean((a[score] @ fold_fit - y[score])**2))\\n    peak = np.max(np.abs(err))\\n    worst = max(worst, peak)\\n    print(f'axis {j}: n={score.sum()}, quadratic/cubic forward RMSE={quadratic_rmse:.6g}/{cubic_rmse:.6g}, inverse peak={peak:.6g}, total-load peak={np.max(np.abs(err.sum(axis=1))):.6g}')\\n    assert cubic_rmse < quadratic_rmse\\nassert worst < 0.002\\nout = solve_batch(ds)\\nassert all(np.all(np.isfinite(out[k])) for k in ('estimated_taus', 'hereditary_weights', 'predicted_strain', 'initial_rate_pred'))\\nprint('Isolated composition passed; worst leave-one-axis-out inverse peak:', worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_spike_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 coupled quadratic bridge with channel-local cubic terms; worst held-out channel error is 0.000457 and worst targeted operating-load refit drift is 0.000226.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational-term search\",\n      \"rejected_reason\": \"The previous nested audit already selected the polynomial denominator in every channel and targeted fold.\"\n    },\n    {\n      \"option\": \"Apply relay, drift-operator, and within-batch classification checks\",\n      \"rejected_reason\": \"The paired static calibration has no relay state, stochastic evolution operator, or classification outcome.\"\n    }\n  ],\n  \"rationale\": \"Measure whether the observed spikes still bias operating loads and whether any one channel depends on its own axis sweep for recovery. Excessive spike sensitivity would justify a clean-row refit; a failed axis holdout would justify revisiting the bridge basis. The audit does not modify either deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "678685ba4e79adb76b80fbb5b3b6fd53598018f676f00303f250d92dc97ce8d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29828.28,
+      "usage_known": true,
+      "prompt_tokens": 23836,
+      "cached_tokens": 5504,
+      "completion_tokens": 1146
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ae2bc19d5834e5fa44ae7db1025125f",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:58:21.513392+00:00",
+  "ended_at_utc": "2026-11-27T12:58:52.332244+00:00",
+  "request_sha256": "bf27a59be15b4db7a0ab7278f720badc0ff7167e704fe4401ab850bc9e5c6cfb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67834,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33482,
+    "cached_tokens": 0,
+    "completion_tokens": 1163
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit98.py <<'PY'\\nimport pickle, runpy, numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nm=runpy.run_path('/holdout_task/batch_solver.py'); globals().update({k:v for k,v in m.items() if k.startswith('_') and callable(v)})\\nC=D['calibration_load_cells']; U,R=C['true_channel_loads'],C['bridge_raw']; fit=_calibration(C); ordinary=fit[-1]; err=R-fit[2](U)@fit[0]\\nprint('calibration excluded true/raw/residual',np.round(np.c_[U,R,err][~ordinary],5)); print('residual norms ordinary max vs excluded',np.linalg.norm(err[ordinary],axis=1).max(),np.linalg.norm(err[~ordinary],axis=1)); print('excluded total residual',err[~ordinary].sum(1))\\n# Check if omitted cubic or rational/pair-difference terms transfer to real held-out calibration slices.\\na=fit[2](U)\\nfull=np.column_stack([U[:,I].prod(1) for k in (2,3) for I in combinations_with_replacement(range(4),k)])\\npairs=[(i,j) for i in range(4) for j in range(i+1,4)]\\nrat=np.column_stack([z for i,j in pairs for q in (U[:,i]-U[:,j],U[:,i]+U[:,j]) for z in (q/(1+.25*q*q),q/(1+q*q))])\\naxis=np.count_nonzero(U,axis=1)==1\\nfolds=np.array_split(np.random.default_rng(12).permutation(np.flatnonzero(ordinary)),8)\\nfor name,A in [('sparse',a),('full3',np.c_[a,full]),('rational',np.c_[a,rat])]:\\n e=np.full_like(R,np.nan)\\n for ii in folds:\\n  train=ordinary.copy(); train[ii]=False\\n  e[ii]=A[ii]@np.linalg.lstsq(A[train],R[train],rcond=None)[0]-R[ii]\\n print(name,'heldout axial-forward rmse ordinary/single-axis/multiaxis and max',*[np.sqrt(np.mean(e[g].sum(1)**2)) for g in (ordinary,ordinary&axis,ordinary&~axis)],np.max(np.abs(e[ordinary].sum(1))))\\ntr,te,pi=(D[k] for k in ('train','test','chamber_verification_trials')); dt,t=D['past_dt'],D['eval_times']; xtr,xte=_features(tr,te); a=_inputs(tr,xtr,fit); xp,=_features(pi,balanced=False); p=_inputs(pi,xp,fit); tau,th,s=_material(tr,a,dt,t)\\nfor b,z in [(tr,a),(pi,p)]:\\n y,r=_predict(z,dt,t,tau,th); e=b['strain_curves_obs']-b['strain_0'][:,None]-y; er=b['instant_rate_obs']-r\\n print('lab, count, curve median, rate median, curve RMSE, rate RMSE',[(int(j),int(g.sum()),round(np.median(e[g]),6),round(np.median(er[g]),6),round(np.sqrt(np.mean(e[g]**2)),6),round(np.sqrt(np.mean(er[g]**2)),6)) for j in np.unique(b['lab_id']) for g in [b['lab_id']==j]])\\nprint('spectrum',tau,'weights',th)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit98.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 robust sparse cubic inversion; prior held-out axial RMSE was 0.000169 and worst-lab pilot strain RMSE was 0.00456.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run classification, relay-state, or Fokker–Planck diagnostics\",\"rejected_reason\":\"This dataset has continuous strain and rate outcomes and no relay or diffusion process. Lab-stratified residuals and held-out calibration sweeps test the relevant failure modes.\"}],\"rationale\":\"Test whether omitted cubic or rational terms reduce held-out calibration error, and inspect the excluded sweeps and lab residuals. Promote an alternative only if it improves a relevant slice or explains a systematic residual.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "46a0723ed5b51e59be91019ad4800f18d6805924a39a931429163d5338a97294",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30777.83,
+      "usage_known": true,
+      "prompt_tokens": 33482,
+      "cached_tokens": 0,
+      "completion_tokens": 1163
+    }
+  ]
+}

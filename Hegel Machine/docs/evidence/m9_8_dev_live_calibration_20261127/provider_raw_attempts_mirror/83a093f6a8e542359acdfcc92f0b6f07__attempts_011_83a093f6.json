@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83a093f6a8e542359acdfcc92f0b6f07",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:01:44.648539+00:00",
+  "ended_at_utc": "2026-11-27T14:02:06.992835+00:00",
+  "request_sha256": "2b99afe9323a540b03754fd850f41413062e0673935698f84b82df4659d7850a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53478,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28244,
+    "cached_tokens": 9600,
+    "completion_tokens": 796
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_batch.pkl','rb')):\\n    s=item['study']; banks=np.asarray(s['row_bank_id']); z=s['Z_nuisance']; out=m.solve_batch(s); w=out['weights']; S,_=m._design(s); r=m._calibrate(s)-S@w\\n    gam=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@r)\\n    print('bank label shape',banks.shape,'observation count',len(r),'rosette count',len(r)//4)\\n    if banks.size==len(r)//4: banks=np.repeat(banks.ravel(),4)\\n    elif banks.size==len(r): banks=banks.ravel()\\n    for bank in np.unique(banks) if banks.size==len(r) else []:\\n        test=banks==bank; train=~test\\n        if not train.any(): continue\\n        zt=z[train]; coef=np.linalg.solve(zt.T@zt+s['nuisance_ridge']*np.eye(z.shape[1]),zt.T@r[train]); identifiable=np.linalg.norm(z[test]-z[test]@np.linalg.pinv(zt)@zt)/max(np.linalg.norm(z[test]),1e-30)\\n        print('bank',bank,'n',test.sum(),'raw_rmse',np.sqrt(np.mean(r[test]**2)),'projected_rmse',np.sqrt(np.mean((r-z@gam)[test]**2)),'held_out_nuisance_rmse_at_fixed_weights',np.sqrt(np.mean((r[test]-z[test]@coef)**2)),'unsupported_nuisance_fraction',identifiable)\\n    print('certificate_gap',out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 pooled residuals may hide bank-specific nuisance mismatch -> H2 test the prescribed projection by sensor bank; current worst pulse-by-shift RMSE is 1.92e-6 and host KKT gap is 5.76e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the calibration expansion or run relay-mode tests\",\"rejected_reason\":\"Held-out sweeps already rejected the expansion, and this steady-state experiment has no relay modes or classification labels.\"}],\"rationale\":\"Check whether pooled nuisance adjustment hides a real bank-specific residual and distinguish poor transfer from nuisance directions absent in the training banks. A large residual in a bank with identifiable nuisance directions would warrant inspecting that bank's calibration or sensor indexing before changing the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f3ecdf023d81005f94436ed9ea31ac42da1f5c0292cef68abd2628facf9019e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22304.52,
+      "usage_known": true,
+      "prompt_tokens": 28244,
+      "cached_tokens": 9600,
+      "completion_tokens": 796
+    }
+  ]
+}

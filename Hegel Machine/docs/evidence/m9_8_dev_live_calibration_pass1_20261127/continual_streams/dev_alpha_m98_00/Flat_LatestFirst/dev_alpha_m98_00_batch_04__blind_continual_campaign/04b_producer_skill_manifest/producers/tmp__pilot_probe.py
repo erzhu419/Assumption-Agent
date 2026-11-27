@@ -1,0 +1,5 @@
+import sys,pickle,numpy as np
+sys.path.insert(0,'/holdout_task');import batch_solver as m
+d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'];tr,te,pi=[d[k] for k in ('train','test','chamber_verification_trials')];dt,t=d['past_dt'],d['eval_times'];cal=m._calibration(d['calibration_load_cells']);x,_=m._features(tr,te);a=m._inputs(tr,x,cal);tau,theta,scale=m._material(tr,a,dt,t);print('material',tau,theta,scale);xp,=m._features(pi,balanced=False);b=m._inputs(pi,xp,cal);y,r=m._predict(b,dt,t,tau,theta);D=np.c_[pi['strain_curves_obs']-pi['strain_0'][:,None]-y,pi['instant_rate_obs']-r];print('pilot residual RMSE',np.sqrt(np.mean(D**2,axis=0)));print('pilot residual rows first/mid/last/rate\n',D[:,[0,5,-2,-1]].round(5));print('archive selection',m._pilot_choice(b,pi,dt,t,tau,theta,scale));
+for lab in np.unique(pi['lab_id']):
+ mask=pi['lab_id']==lab;mem,dr,coef,cv=m._pilot_choice(b,pi,dt,t,tau,theta,scale,np.flatnonzero(~mask)); pred=m._chamber_design(b,dt,t,tau,theta,mem,dr)@coef; print('held-out lab',lab,mem,dr,[(np.sqrt(np.mean(e[mask,:-1]**2)),np.sqrt(np.mean(e[mask,-1]**2))) for e in (D,D-pred)]);

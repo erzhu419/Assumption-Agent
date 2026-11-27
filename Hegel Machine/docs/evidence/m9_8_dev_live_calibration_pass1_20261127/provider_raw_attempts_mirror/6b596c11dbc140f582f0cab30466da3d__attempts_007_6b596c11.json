@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b596c11dbc140f582f0cab30466da3d",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:20:33.835146+00:00",
+  "ended_at_utc": "2026-11-27T13:20:56.589129+00:00",
+  "request_sha256": "863299c027984486ef836e77d2cb42489b07ded2a812f30d2e4634693e58f930",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49427,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28238,
+    "cached_tokens": 9600,
+    "completion_tokens": 777
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _Rosette, _cyclic_design, _robust_fit\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    sweeps = item['study']['sensor_calibration_sweeps']\\n    x, y = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    fit = _Rosette(x[~axis], y[~axis])\\n    designs = [_cyclic_design(x, j)[:, :-1] for j in range(4)]\\n    coef, _ = _robust_fit([a[~axis] for a in designs], y[~axis])\\n    quadratic = np.column_stack([a @ coef[:, j] for j, a in enumerate(designs)])\\n    tested = axis & (np.max(np.abs(y), axis=1) < 7)\\n    cubic_err = fit.predict(x[tested]) - y[tested]\\n    quadratic_err = quadratic[tested] - y[tested]\\n    inverse_err = fit.invert(y[tested]) - x[tested]\\n    worst_rms = lambda r: np.sqrt(np.mean(r**2, axis=0)).max()\\n    print(f'Axis sweeps withheld as a group ({tested.sum()} measured clean rows): quadratic forward RMS={worst_rms(quadratic_err):.6g}; cubic forward RMS={worst_rms(cubic_err):.6g}; cubic inverse RMS={worst_rms(inverse_err):.6g}')\\n    assert worst_rms(inverse_err) < 1e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic response → H2 robust cyclic cubic response; worst interleaved held-out inverse channel RMS was 1.80e-5, with whole-axis-sweep transfer still untested.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Withhold the entire axis-sweep group to test whether the cyclic cubic response transfers from mixed inputs to single-channel excitation. If it fails, revisit the basis rather than relying on interleaved folds that include axis rows in training. This read-only probe changes neither artifact nor fixture.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "727bcacdadf31d71ac65397de0c81bd3a270a32b01647089c6a72a554ecbf214",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22713.78,
+      "usage_known": true,
+      "prompt_tokens": 28238,
+      "cached_tokens": 9600,
+      "completion_tokens": 777
+    }
+  ]
+}

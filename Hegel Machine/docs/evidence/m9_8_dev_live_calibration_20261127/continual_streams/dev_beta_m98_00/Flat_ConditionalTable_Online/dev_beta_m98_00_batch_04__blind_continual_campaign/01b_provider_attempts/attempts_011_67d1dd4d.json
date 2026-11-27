@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "67d1dd4d53dd426c9e8858e1602a24d1",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:55:50.628364+00:00",
+  "ended_at_utc": "2026-11-27T13:56:31.443335+00:00",
+  "request_sha256": "c16102445c45d75f2d89c9bcf71e4bb6263fd8b56f46ce81b27c2f1d0864ba6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63251,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32033,
+    "cached_tokens": 0,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/m98_margin_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\nseed = np.c_[np.ones(len(x)), x]\\nerr = np.linalg.norm(raw - seed @ np.linalg.lstsq(seed, raw, rcond=None)[0], axis=1)\\nclean = err <= 6 * np.median(err)\\nfor ch in range(4):\\n    a = m._rosette_terms(x[clean], ch)\\n    y = raw[clean, ch]\\n    options = [(0., a)]\\n    for q in (a[:,1], a[:,1]+a[:,2], a[:,1]-a[:,2], a[:,1]+a[:,3], a[:,1]-a[:,3]):\\n        for strength in (1e-5, 1e-4, 1e-3, 1e-2):\\n            options.append((strength, a / (1 + strength * q[:,None]**2)))\\n    baseline, selected, strengths = [], [], []\\n    for j in range(len(y)):\\n        train = np.arange(len(y)) != j\\n        scores, predictions = [], []\\n        for strength, design in options:\\n            fit = design[train]\\n            residual = y[train] - fit @ np.linalg.lstsq(fit, y[train], rcond=None)[0]\\n            leverage = np.sum(np.linalg.qr(fit, mode='reduced')[0]**2, axis=1)\\n            scores.append(np.mean((residual/(1-leverage))**2))\\n            predictions.append(design[j] @ np.linalg.lstsq(fit, y[train], rcond=None)[0])\\n        k = int(np.argmin(scores))\\n        baseline.append(predictions[0]-y[j]); selected.append(predictions[k]-y[j]); strengths.append(options[k][0])\\n    print(f'channel {ch}: clean sweep max LOO cubic={max(np.abs(baseline)):.3g}, nested rational={max(np.abs(selected)):.3g}, nonzero rational selections={np.count_nonzero(strengths)}/{len(y)}')\\n\\nbank = c['single_bank_sweeps']\\ncoef = m._fit_rosette(x, raw)\\nfor ch in range(4):\\n    mask = bank['bank_id'] == ch\\n    refs = np.zeros((mask.sum(),4)); refs[:,ch] = bank['ref_signal'][mask]\\n    e = np.sort(np.abs(m._rosette_terms(refs,ch) @ coef[:,ch] - bank['raw_readout'][mask]))\\n    print(f'bank {ch}: sorted independent sweep absolute errors {np.array2string(e, precision=4)}')\\n\\nD, _ = m._design(s); y = m._calibrate(s); Z = s['Z_nuisance']\\nns = len(s['mu_shifts']); groups = np.arange(len(y)).reshape(ns,-1,4).transpose(1,0,2)\\nfor profile in (False, True):\\n    errors = []\\n    for block in groups:\\n        test = block.ravel(); keep = np.ones(len(y), bool); keep[test] = False\\n        a, b, z = D[keep], y[keep], Z[keep]\\n        if profile:\\n            p = np.linalg.solve(z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1]), z.T)\\n            T, r = a-z@(p@a), b-z@(p@b)\\n        else:\\n            T, r = a, b\\n        w, _ = m._box_qp(T.T@T+s['source_ridge']*np.eye(T.shape[1]), -T.T@r, s['u_box'], s['total_budget'])\\n        pred = D[test]@w\\n        if profile:\\n            pred += Z[test]@(p@(b-a@w))\\n        errors.append((pred-y[test]).reshape(ns,4)**2)\\n    e = np.array(errors)\\n    print(f'profile={profile}: shift RMSE={np.sqrt(e.mean(axis=(0,2)))}; worst shift/location RMSE={np.sqrt(e.mean(axis=2)).max():.6g}')\\nPY\\npython3 -I /tmp/m98_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted rational sensor response or nuisance-driven fit -> H2 cyclic cubic calibration with profiled nuisance; current worst held-out rosette RMSE is 0.01839 and worst retained-sweep error is 3.05e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, drift operators, or within-batch classification accuracy\",\n      \"rejected_reason\": \"This steady transport regression has no relay state, stochastic drift, or class labels. Nuisance effects can instead be checked by comparing prediction errors within each measured shift.\"\n    }\n  ],\n  \"rationale\": \"Use the actual sweeps to test whether pairwise rational terms improve held-out calibration and whether the fitted model transfers to independent single-bank measurements. Compare nuisance profiling within each shift on held-out locations; a reproducible calibration bias or degradation concentrated in one shift would identify what to revisit. The audit leaves the verified deliverable unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "0f02485b3ee9908670a7287cf3752235db3982c070924001b6f85dbecf596ab6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40774.42,
+      "usage_known": true,
+      "prompt_tokens": 32033,
+      "cached_tokens": 0,
+      "completion_tokens": 1521
+    }
+  ]
+}

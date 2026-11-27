@@ -1,0 +1,174 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_beta_m98_00_batch_03_a2a734b0acb3",
+    "source_hash": "a2a734b0acb37051c21756a029696efafe1aab737a20ec563f266ebd198449fb",
+    "parent_ids": [],
+    "source_episode_id": "dev_beta_m98_00_batch_03__blind_continual_campaign",
+    "task_id": "dev_beta_m98_00_batch_03__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rosette_v01.py",
+        "archived_relpath": "producers/tmp__rosette_v01.py",
+        "bytes": 6402,
+        "sha256": "21753a9899719c8b427cc9b294e1a00369a3c55be17f29609c0bf968b2021b09"
+      },
+      {
+        "container_path": "/tmp/stress_rosette.py",
+        "archived_relpath": "producers/tmp__stress_rosette.py",
+        "bytes": 3028,
+        "sha256": "6b34dc4ea19ea5381519dcc09d50eb3d69ce576f2eb944a37f509a16c61b673f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m98_00_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m98_00_batch_01_solver.py",
+        "bytes": 12622,
+        "sha256": "55094f8d9bcf9456b408acad6fcf2e6c54f1c1a83cff5592db443668faa941e3"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m98_00_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m98_00_batch_02_solver.py",
+        "bytes": 12622,
+        "sha256": "55094f8d9bcf9456b408acad6fcf2e6c54f1c1a83cff5592db443668faa941e3"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m98_00_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m98_00_s00_solver.py",
+        "bytes": 12622,
+        "sha256": "55094f8d9bcf9456b408acad6fcf2e6c54f1c1a83cff5592db443668faa941e3"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat batch_solver.py validate_public_schema.py public_asset_index.json && grep -nE 'calib|pulse|raw|solve_batch' _verified_downstream.py && ls -l /tmp/hegel_continual_archive && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS Cauchy calibration' ; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nx=pickle.load(open('public_batch.pkl','rb'))\ndef shape(o,d=0):\n if isinstance(o,dict) and d<3:\n  for k,v in o.items():\n   print('  '*d,k,end=': ');shape(v,d+1)\n elif isinstance(o,np.ndarray):\n  print(o.shape,o.dtype, (np.nanmin(o),np.nanm",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; print('calibration:',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in c.items()]); x=c['ref_rosette']; y=c['raw_rosette']; print('sweep extent:',x.min(0),x.max(0), 'active-channel counts:',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('first 16 reference/raw pairs:'); print(np.round(np.c_[x,y][:16],5)); print('pulses:',[[(k,np.shape(v)) for k,v in p.items()] for p in s['reference_tracer_pulses']]); print(",
+      "python3 - <<'PY'\nfrom pathlib import Path\nimport json, subprocess, os\nroot=Path('/tmp/hegel_continual_archive')\nterms=('rosette','tanh','saturat','y_pulse_raw','raw_readout','least_squares','soft_l1')\nfor p in sorted(root.glob('*solver.py'))+ [Path('/holdout_task/_verified_downstream.py')]:\n print('\\n---',p.name,'---')\n lines=p.read_text().splitlines()\n for i,l in enumerate(lines,1):\n  if any(t in l for t in terms): print(f'{i}: {l}')\nfor p in root.glob('*.json'):\n d=json.loads(p.read_text()); print('\\n---',p.name,'---',str(d)[:2600])\nprint('\\n--- primitive contract ---', flush=True)\nr=subproc",
+      "sed -n '1,175p' /tmp/hegel_continual_archive/dev_beta_m98_00_batch_02_solver.py; grep -nE 'calib|rosette|y_obs_raw|y_pulse_raw' /holdout_task/_verified_downstream.py; python3 - <<'PY'\nimport json\nfrom pathlib import Path\nfor p in Path('/tmp/hegel_continual_archive').glob('*.json'):\n d=json.loads(p.read_text()); print(p.name, list(d) if isinstance(d,dict) else len(d)); a=next(iter(d.values()),None) if isinstance(d,dict) else d[0]; print(list(a) if isinstance(a,dict) else type(a).__name__)\nPY",
+      "cat > /holdout_task/upstream_transducer.py <<'PY'\n\"\"\"Robust forward calibration and inversion of the four-channel rosette.\"\"\"\nfrom itertools import combinations_with_replacement\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_TERMS = tuple(np.array(list(combinations_with_replacement(range(4), d)))\n               for d in (2, 3))\n_EYE = np.eye(4)\n\n\ndef _basis(x):\n    return np.column_stack((np.ones(len(x)), x,\n                            *(x[:, t].prod(axis=2) for t in _TERMS)))\n\n\ndef _row_size(r):\n    return np.sqrt(np.mean(r * r, axis=1)) if r.ndim == 2 else np.abs(r)\n\n\ndef _ro",
+      "cat > /tmp/stress_rosette.py <<'PY'\nimport sys, pickle, time\nsys.path.insert(0, '/holdout_task')\nimport numpy as np\nimport upstream_transducer as u\nfrom batch_solver import solve_batch\nbase = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\nbank = base['sensor_calibration_sweeps']['single_bank_sweeps']\ncal = base['sensor_calibration_sweeps']; x, y = cal['ref_rosette'], cal['raw_rosette']\na = u._basis(x)[:, :5]\npub = np.empty_like(y)\nfor i in range(len(x)):\n    use = np.arange(len(x)) != i\n    c = u._robust_linear(a[use], y[use])\n    pub[i] = np.linalg.solve(c[1:].T, y[i]-c",
+      "cp /holdout_task/upstream_transducer.py /tmp/rosette_v01.py\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/upstream_transducer.py')\ns = p.read_text()\ns = s.replace('def _ordinary_fit(a, y):\\n    return _robust_linear(a, y)\\n', '''def _clean_rows(a, y):\n    \"\"\"Screen EMI jointly using a low-leverage fit before fitting richer models.\"\"\"\n    quadratic = a[:, :15]\n    residual = _row_size(quadratic @ _robust_linear(quadratic, y) - y)\n    return residual <= max(1e-4, 5 * np.median(residual))\n''')\ns = s.replace('affine = _ordinary_fit(a[:, :5], y)', 'affine = _robust_linear(a[:, :",
+      "set -e\ncd /holdout_task\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, runpy, sys\nimport numpy as np\nroot = '/holdout_task'\nsys.path.insert(0, root)\nfrom upstream_transducer import calibrate_upstream\nwith open(root + '/public_batch.pkl', 'rb') as f:\n    for item in pickle.load(f):\n        study = item['study']\n        calibrated = calibrate_upstream(study)\n        twice = calibrate_upstream(calibrated)\n        np.testing.assert_allclose(twice['y_obs_raw'], calibrated['y_obs_raw'], atol=1e-12, rtol=0)\n     ",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as u\nwith open('/holdout_task/public_batch.pkl','rb') as f:\n    batch = pickle.load(f)\nfor item in batch:\n    s = item['study']; cal = s['sensor_calibration_sweeps']; x, y = (cal[k] for k in ('ref_rosette','raw_rosette'))\n    axis = np.count_nonzero(x, axis=1) == 1\n    peak = np.max(np.abs(x),axis=1)\n    groups = [(f'axis_{j}',axis & (x[:,j]!=0)) for j in range(4)]\n    groups += [(f'mixed_{label}',mask & ~axis) for label,mask i"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_beta_m98_00_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_beta_m98_00_s00_solver.py",
+      "selected_channels": [
+        "fam_elliptic_transport_and_factored_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 199,
+        "sha256": "c2321c6511b98b0d97289ff550b5622cc6e61c4d03f115359c7c0142881f9edc",
+        "content_addressed_ref": "content_addressed_blobs/c2321c6511b98b0d97289ff550b5622cc6e61c4d03f115359c7c0142881f9edc.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 6814,
+        "sha256": "52f168bcc099cb09c73267ff3be672a6431a9f43cf2432a20ac5c8e158e18bf6",
+        "content_addressed_ref": "content_addressed_blobs/52f168bcc099cb09c73267ff3be672a6431a9f43cf2432a20ac5c8e158e18bf6.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": [
+      "_rational_predict",
+      "_axis",
+      "_response",
+      "_powers",
+      "_features",
+      "_rational_fit",
+      "_calibration",
+      "_walls"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a2a734b0acb37051c21756a029696efafe1aab737a20ec563f266ebd198449fb",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nfrom pathlib import Path\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as u\nwith open('/holdout_task/public_batch.pkl','rb') as f:\n    batch =",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a2a734b0acb37051c21756a029696efafe1aab737a20ec563f266ebd198449fb",
+        "expected_candidate_sha256": "a2a734b0acb37051c21756a029696efafe1aab737a20ec563f266ebd198449fb",
+        "computed_candidate_sha256": "a2a734b0acb37051c21756a029696efafe1aab737a20ec563f266ebd198449fb",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 199
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 6814
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_a2a734b0"
+    }
+  },
+  "structure": {
+    "full_producer_count": 5,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_rational_predict",
+        "code": "def _rational_predict(x, a, q, c):\n    return a[:, :5] @ c[:5] + a[:, 5:15] @ c[5:] / (1 + (x @ q) ** 2)"
+      },
+      {
+        "name": "_axis",
+        "code": "def _axis(k, v, h, robin, wall):\n    from scipy.sparse import diags\n    face = 0.5 * (k[1:] + k[:-1]) / h ** 2\n    left = -np.r_[face[:-1] + np.maximum(v[1:-1], 0) / h, k[-1] * wall[3] / h ** 2]\n    right = -np.r_[k[0] * wall[2] / h ** 2, face[1:] + np.maximum(-v[1:-1], 0) / h]\n    center = np.r_[-right[0] + robin * wall[0] / h, face[:-1] + face[1:] + np.abs(v[1:-1]) / h, -left[-1] + robin * wall[1] / h]\n    return diags((left, center, right), (-1, 0, 1), format='csc')"
+      },
+      {
+        "name": "_response",
+        "code": "def _response(study, wall, modes):\n    from scipy.sparse import diags\n    from scipy.sparse import eye\n    from scipy.sparse import kron\n    from scipy.sparse.linalg import splu\n    (nx, ny) = (study['nx'], study['ny'])\n    ax = _axis(study['kappa_x'], study['vel_x'], study['Lx'] / (nx - 1), study['robin_x'], wall[:4])\n    ay = _axis(study['kappa_y'], study['vel_y'], study['Ly'] / (ny - 1), study['robin_y'], wall[4:])\n    operator = (kron(eye(ny), ax) + kron(ay, eye(nx)) + diags(np.asarray(study['V_reaction_2d']).ravel(order='F'))).tocsc()\n    identity = eye(nx * ny, format='csc')\n    rhs = modes.transpose(0, 2, 1).reshape(len(modes), -1).T\n    ij = np.asarray(study['sensor_ij'])\n    shifts = study['mu_shifts']\n    count = len(study['y_obs_raw']) // len(shifts)\n    blocks = []\n    for (i, mu) in enumerate(shifts):\n        field = splu(operator + mu * identity).solve(rhs)\n        sensors = ij if len(ij) == count else ij[i * count:(i + 1) * count]\n        blocks.append(field[sensors[:, 0] + nx * sensors[:, 1]])\n    return (np.vstack(blocks), field.T.reshape(-1, ny, nx).transpose(0, 2, 1))"
+      },
+      {
+        "name": "_powers",
+        "code": "def _powers(degree):\n    from itertools import combinations_with_replacement\n    return np.array([np.bincount(c, minlength=4) for d in range(degree + 1) for c in combinations_with_replacement(range(4), d)])"
+      },
+      {
+        "name": "_features",
+        "code": "def _features(x, powers):\n    return np.prod(x[:, None, :] ** powers[None, :, :], axis=-1)"
+      },
+      {
+        "name": "_rational_fit",
+        "code": "def _rational_fit(x, target):\n    \"\"\"Profile linear coefficients for a quadratic coupling with saturating gain.\"\"\"\n    from scipy.optimize import least_squares\n    affine = np.column_stack((np.ones(len(x)), x))\n    powers = _powers(2)[5:]\n    quadratic = _features(x, powers)\n\n    def design(q):\n        return np.column_stack((affine, quadratic / (1.0 + (x @ q) ** 2)[:, None]))\n\n    def profile(q):\n        a = design(q)\n        c = np.linalg.lstsq(a, target, rcond=1e-10)[0]\n        return (a @ c - target, c)\n\n    def cost(q):\n        (r, _) = profile(q)\n        return r @ r\n    eye4 = np.eye(4)\n    starts = list(eye4 * 0.75)\n    starts += [0.55 * (eye4[i] + sign * eye4[j]) for i in range(4) for j in range(i + 1, 4) for sign in (-1, 1)]\n    starts.sort(key=cost)\n    best = min((least_squares(lambda q: profile(q)[0], start, bounds=(-6.0, 6.0), max_nfev=45, gtol=1e-12, ftol=1e-09, xtol=1e-09) for start in starts[:3]), key=lambda opt: opt.cost)\n    return (best.x, profile(best.x)[1])"
+      },
+      {
+        "name": "_calibration",
+        "code": "def _calibration(sweeps):\n    from scipy.optimize import least_squares\n    x = np.asarray(sweeps['ref_rosette'], dtype=float)\n    y = np.asarray(sweeps['raw_rosette'], dtype=float)\n    folds = np.arange(len(x)) % 4\n    models = [None] + [_powers(d) for d in range(1, 4)]\n    errors = []\n    for p in models:\n        if p is None:\n            err = x - y\n        else:\n            a = _features(x, p)\n            err = np.empty_like(y)\n            for k in range(4):\n                train = folds != k\n                err[~train] = a[~train] @ np.linalg.lstsq(a[train], (y - x)[train], rcond=None)[0] + x[~train] - y[~train]\n        errors.append(np.max([np.sqrt(np.mean(err[folds == k] ** 2)) for k in range(4)]))\n    selected = next((i for (i, e) in enumerate(errors) if e <= 1.12 * min(errors) + 1e-12))\n    p = models[selected]\n    rational = [None] * 4\n    if errors[selected] > 5e-05:\n        reference = np.asarray(sweeps.get('single_bank_sweeps', {}).get('ref_signal', []))\n        raw_bank = np.asarray(sweeps.get('single_bank_sweeps', {}).get('raw_readout', []))\n        noise = np.median(np.abs(raw_bank - reference)) if reference.size else 0.0\n        if errors[selected] > max(5e-05, min(0.0001, 4 * noise)):\n            err = np.empty_like(y)\n            poly_err = np.empty_like(y)\n            for k in range(4):\n                train = folds != k\n                if p is None:\n                    poly_err[~train] = x[~train] - y[~train]\n                else:\n                    a = _features(x, p)\n                    poly_err[~train] = a[~train] @ np.linalg.lstsq(a[train], (y - x)[train], rcond=None)[0] + x[~train] - y[~train]\n                for j in range(4):\n                    (q, c) = _rational_fit(x[train], (y - x)[train, j])\n                    err[~train, j] = _rational_predict(x[~train], q, c) + x[~train, j] - y[~train, j]\n            for j in range(4):\n                score = lambda e: max((np.sqrt(np.mean(e[folds == k, j] ** 2)) for k in range(4)))\n                if score(err) < 0.7 * score(poly_err):\n                    rational[j] = _rational_fit(x, (y - x)[:, j])\n    if any((item is not None for item in rational)):\n        powers = _powers(1) if p is None else p\n        coeff = np.linalg.lstsq(_features(x, powers), y - x, rcond=None)[0]\n        affine = coeff[:5].copy()\n        for (j, item) in enumerate(rational):\n            if item is not None:\n                affine[:, j] = item[1][:5]\n\n        def unmix(raw):\n            values = np.asarray(raw, dtype=float).reshape(-1, 4)\n            initial = np.linalg.solve((np.eye(4) + affine[1:]).T, (values - affine[0]).T).T\n\n            def predict(z):\n                z = z[None, :]\n                delta = (_features(z, powers) @ coeff)[0]\n                for (j, item) in enumerate(rational):\n                    if item is not None:\n                        delta[j] = _rational_predict(z, *item)[0]\n                return z[0] + delta\n            estimate = [least_squares(lambda z: predict(z) - goal, start, gtol=1e-12).x for (goal, start) in zip(values, initial)]\n            return np.asarray(estimate).reshape(np.shape(raw))\n        return unmix\n    if p is None:\n        return lambda raw: np.array(raw, dtype=float, copy=True)\n    coeff = np.linalg.lstsq(_features(x, p), y - x, rcond=None)[0]\n    matrix = np.eye(4) + coeff[1:5]\n    derivative_powers = [np.maximum(0, p - e) for e in np.eye(4, dtype=int)]\n\n    def unmix(raw):\n        values = np.asarray(raw, dtype=float).reshape(-1, 4)\n        estimate = np.linalg.solve(matrix.T, (values - coeff[0]).T).T\n        if len(p) > 5:\n            for (i, goal) in enumerate(values):\n\n                def fun(q):\n                    return q + _features(q[None, :], p)[0] @ coeff - goal\n\n                def jac(q):\n                    delta = np.array([_features(q[None, :], dp)[0] * p[:, j] @ coeff for (j, dp) in enumerate(derivative_powers)])\n                    return np.eye(4) + delta.T\n                estimate[i] = least_squares(fun, estimate[i], jac=jac, gtol=1e-12).x\n        return estimate.reshape(np.shape(raw))\n    return unmix"
+      },
+      {
+        "name": "_walls",
+        "code": "def _walls(study, calibrate, source):\n    from scipy.optimize import least_squares\n    nominal = np.ones(8)\n    pulses = study.get('reference_tracer_pulses')\n    if not pulses:\n        return nominal\n    modes = np.array([np.tensordot(p['w_pulse'], source, axes=1) for p in pulses])\n    observed = np.column_stack([calibrate(p['y_pulse_raw']) for p in pulses])\n    scale = max(np.sqrt(np.mean(observed ** 2)), 0.01)\n    if np.sqrt(np.mean((_response(study, nominal, modes)[0] - observed) ** 2)) < 0.0002 * scale:\n        return nominal\n    groups = (([0, 1], [4, 5]), ([0], [1], [4], [5]), tuple(([i] for i in range(8))))\n    best = (np.inf, nominal)\n    for group in groups:\n\n        def expand(x):\n            result = nominal.copy()\n            for (z, inds) in zip(x, group):\n                result[inds] = z\n            return result\n\n        def fit(columns):\n\n            def residual(x):\n                return ((_response(study, expand(x), modes)[0] - observed)[:, columns] / scale).ravel()\n            return expand(least_squares(residual, np.ones(len(group)), bounds=(0.0, np.inf), max_nfev=60, gtol=1e-10).x)\n        wall = fit(slice(None))\n        if len(pulses) > 1:\n            score = max((np.sqrt(np.mean((_response(study, fit(np.arange(len(pulses)) != i), modes)[0][:, i] - observed[:, i]) ** 2)) for i in range(len(pulses))))\n        else:\n            score = np.sqrt(np.mean((_response(study, wall, modes)[0] - observed) ** 2))\n        if score < best[0]:\n            best = (score, wall)\n        if score < 0.0002 * scale:\n            return wall\n    baseline = np.max(np.sqrt(np.mean((_response(study, nominal, modes)[0] - observed) ** 2, axis=0)))\n    return best[1] if best[0] < baseline else nominal"
+      }
+    ]
+  }
+}

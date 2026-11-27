@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d5153eb2505e42ee88a08e7c7f015fb0",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:02:01.432589+00:00",
+  "ended_at_utc": "2026-11-27T13:02:20.697907+00:00",
+  "request_sha256": "933c434348b8d7581c45cac89cddd1dddaf9be82ce0cf438b545418cbc0a5ded",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51613,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27530,
+    "cached_tokens": 0,
+    "completion_tokens": 593
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nimport json, numpy as np\\nwith open('/tmp/hegel_continual_archive/archive_apparatus_log.json') as f:\\n    log = json.load(f)\\nnp.set_printoptions(precision=4, suppress=True)\\nfor entry in log:\\n    print('batch', entry['completed_batch_index'])\\n    for key, value in entry.items():\\n        if key.startswith('completed_'):\\n            continue\\n        print(' field', key)\\n        if isinstance(value, dict):\\n            print(' named fields', list(value))\\n            fields = value.items()\\n        else:\\n            fields = [(key, value)]\\n        for name, values in fields:\\n            try:\\n                a = np.asarray(values, dtype=float)\\n            except (ValueError, TypeError):\\n                print(' ', name, str(values)[:180]); continue\\n            print(' ', name, a.shape, 'start', a[0] if a.ndim else a, 'end', a[-1] if a.ndim else a, 'mean', a.mean(axis=0), 'std', a.std(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated benchtop response -> H2 blind fallback unless the apparatus log identifies a correction; worst held-out lab median errors were 0.01068 in strain and 0.00759 in initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply an arbitrary correction keyed to the most recent logged state\",\n      \"rejected_reason\": \"The gate localizes the failure but supplies neither the sign nor magnitude of a correction.\"\n    }\n  ],\n  \"rationale\": \"The candidate is schema-verified and matches the benchtop recurrence, but the gate flags the downstream chamber model. Earlier trace details were truncated. Check whether the prefix contains named measurements of memory or creep that can constrain a correction; if it contains only unpaired state traces, retain the verified fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3a8ad3054b26c5f5e19efa0e36ff4a6df1c0bb7c09d8656579596d31d29c4af8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19230.16,
+      "usage_known": true,
+      "prompt_tokens": 27530,
+      "cached_tokens": 0,
+      "completion_tokens": 593
+    }
+  ]
+}

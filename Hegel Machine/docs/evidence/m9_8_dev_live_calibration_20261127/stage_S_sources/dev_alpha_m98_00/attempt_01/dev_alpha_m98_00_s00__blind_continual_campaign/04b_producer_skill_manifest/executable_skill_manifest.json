@@ -1,0 +1,94 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_alpha_m98_00_s00_3b43852b586d",
+    "source_hash": "3b43852b586d1edcca55898895445400c147c3b605db296495b6e42584825412",
+    "parent_ids": [],
+    "source_episode_id": "dev_alpha_m98_00_s00__blind_continual_campaign",
+    "task_id": "dev_alpha_m98_00_s00__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheology_cv.py",
+        "archived_relpath": "producers/tmp__rheology_cv.py",
+        "bytes": 1067,
+        "sha256": "205680334bdcdbe5a0d5beea7ba1119e106246c7f54cf7738556c7416e9fa977"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py public_asset_index.json && if [ -d /tmp/hegel_continual_archive ]; then find /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%p %s bytes\\n' | head -60; fi; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' 2>&1 | head -25; python3 - <<'PY'\nimport pickle, numpy as np\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\ndef show(x,p='',depth=0):\n if isinstance(x,dict) and depth<4:\n  for k,v in x.items(): show(v,p+'/'+str(k),depth+1)\n elif hasattr(x,'shape'):\n  a=np.asarray(x); p",
+      "if [ -d /tmp/hegel_continual_archive ]; then du -ah /tmp/hegel_continual_archive | sort -h | tail -35; else echo 'No continual archive'; fi; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation standardized coupon' 2>&1 | cut -c1-360 | head -14; python3 - <<'PY'\nimport numpy as np,pickle\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('items:',len(x)); d=x[0]['dataset']; print('keys:', list(d)); print('times:',d['eval_times']); c=d['calibration_load_cells']; a=c['bridge_raw']; y=c['true_channel_loads']; print('cal affine coef:',np.li",
+      "export PYTHONPATH=/tmp; for f in align_reference_panel balanced_cell_weights weighted_column_fill; do python3 -m hegel_wormhole_skills --describe autogenous_prim_reference_panel_balancing.$f | head -45; done; python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection exponential relaxation' | cut -c1-340 | head -8; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nwith open('/holdout_task/public_batch.pkl','rb') as f:d=pickle.load(f)[0]['dataset']\na,b=d['train'],d['test']; t=d['eval_times']; dt=d['past_dt']; c=d['c",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Estimate the benchtop relaxation spectrum and predict blind deployment.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _aligned_features(train, test):\n    lab = np.concatenate([train['lab_id'], test['lab_id']])\n    strata = np.concatenate([train['stratum'], test['stratum']])\n    raw = np.vstack([train['coupon_features_raw'], test['coupon_features_raw']])\n    refs = np.vstack([train['ref_coupons'], test['ref_coupons']])\n    for group in np.unique(lab):\n        rows = lab == group\n        panel = refs[rows]\n        center = np.",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\np = '/holdout_task/batch_solver.py'\nspec = importlib.util.spec_from_file_location('batch_solver', p)\ns = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(s)\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    d = pickle.load(f)[0]['dataset']\nout = s.solve_batch(d)\nu, b = out['estimated_taus'], out['hereditary_weights']\nassert .05 < u[0] < u[1] < 25\nh = 1e-6\nshifted = s.solve_batch(dict(d, eval_times=np.r_[d['eval_times'], h])) if False else None\n_, coupon = s._prepare(d)\ncurve",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, json\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', p+'batch_solver.py')\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nwith open(p+'public_batch.pkl','rb') as f:\n    item = pickle.load(f)[0]\nd = item['dataset']\nwith open(p+'public_asset_index.json') as f:\n    index = json.load(f)\nprint('Public index keys:', list(index), '; dataset keys:', list(d))\ncal = d['calibration_load_cells']; raw = cal['bridge_raw']; true = cal['true_channel_loads']\nprint('Cal",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', p+'batch_solver.py')\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\nwith open(p+'public_batch.pkl','rb') as f:\n    d = pickle.load(f)[0]['dataset']\ncal = d['calibration_load_cells']; a = cal['bridge_raw']; y = cal['true_channel_loads'].sum(axis=1)\nbase = np.c_[a, np.ones(len(a))]\ni,j = np.triu_indices(a.shape[1]); quadratic = np.c_[base, a[:,i]*a[:,j]]\nfor name, A in [('affine', base), ('quadratic', quadr"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rheology_cv.py",
+      "primary_producer_container_path": "/tmp/rheology_cv.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4713,
+        "sha256": "72c200a42b306d2d174ddf65f3af65270b91041e4cf0f6d5f66b007ea37628d0",
+        "content_addressed_ref": "content_addressed_blobs/72c200a42b306d2d174ddf65f3af65270b91041e4cf0f6d5f66b007ea37628d0.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3b43852b586d1edcca55898895445400c147c3b605db296495b6e42584825412",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\np = '/holdout_task/'\nspec = importlib.util.spec_from_file_location('solver', p+'batch_solver.py')\ns = importlib.util.module_from_spec(spec); spec.lo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "3b43852b586d1edcca55898895445400c147c3b605db296495b6e42584825412",
+        "expected_candidate_sha256": "3b43852b586d1edcca55898895445400c147c3b605db296495b6e42584825412",
+        "computed_candidate_sha256": "3b43852b586d1edcca55898895445400c147c3b605db296495b6e42584825412",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4713
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_3b43852b"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": []
+  }
+}

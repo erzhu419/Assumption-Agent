@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a7d6a7081f014e3ea4613e6671f9c540",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:55:54.324235+00:00",
+  "ended_at_utc": "2026-11-27T12:56:20.800456+00:00",
+  "request_sha256": "c647cb36f6cce472c15a7cf636b2b43401c587756df9cd0b8bdcc1caffd2eec8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40890,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26659,
+    "cached_tokens": 11136,
+    "completion_tokens": 948
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; L=c['true_channel_loads']; R=c['bridge_raw'];\\nfor k,v in c['single_channel_sweeps'].items(): print('sweep',k,v.shape,np.asarray(v).ravel()[:24]);\\nfor name,a in [('cal L',L),('cal R',R),('train hold',D['train']['hold_channel_raw']),('train past',D['train']['past_channel_raw'].reshape(-1,4)),('pilot hold',D['chamber_verification_trials']['hold_channel_raw']),('test hold',D['test']['hold_channel_raw'])]: print(name,np.percentile(a,[0,10,50,90,100],axis=0).round(3));\\nprint('first calibration rows',np.c_[L,R][:12].round(3));\\ndef des(x,kind):\\n x=np.atleast_2d(x); cols=[np.ones(len(x)),*x.T];\\n if kind in ('diag','quad','cubic','diag3'): cols += list((x*x).T)\\n if kind in ('quad','cubic'): cols += [x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)]\\n if kind=='cubic': cols += [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i,4) for k in range(j,4)]\\n if kind=='diag3': cols += list((x**3).T)\\n return np.column_stack(cols)\\nfor kind in ('affine','diag','quad','diag3','cubic'):\\n for fwd in (False,True):\\n  err=[]\\n  for k in range(5):\\n   ix=np.arange(len(R))%5==k; t=~ix; X,Y=(L,R) if fwd else (R,L); b=np.linalg.lstsq(des(X[t],kind),Y[t],rcond=None)[0]; z0=des(R[ix],'affine')@np.linalg.lstsq(des(R[t],'affine'),L[t],rcond=None)[0];\\n   z=np.array([least_squares(lambda x: (des(x,kind)@b).ravel()-r,a).x for r,a in zip(R[ix],z0)]) if fwd else des(R[ix],kind)@b;err.extend(z-L[ix]);\\n  e=np.asarray(err); print(kind,'forward' if fwd else 'inverse',np.sqrt(np.mean(e**2,axis=0)).round(4), 'total RMSE/max',np.sqrt(np.mean(e.sum(1)**2)).round(5),np.max(abs(e.sum(1))).round(5));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge inversion -> H2 invert the nonlinear forward bridge before estimating rheology; archived worst held-out pilot lab RMSE is 0.23645 strain and 0.39624 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the unconstrained quadratic inverse\",\"rejected_reason\":\"It worsens held-out total-stress RMSE from 0.4023 to 0.5404 despite improving several individual channels.\"}],\"rationale\":\"Compare calibration fits on held-out total stress, the quantity driving rheology. The archived fit pushes the slow timescale to its upper bound; a better bridge inversion would let us test whether calibration error caused that result before adding chamber corrections.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d1470e909691b01b5b972395b7ac0cf86f3448175ace48dddd5bb5190af76c4f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26435.41,
+      "usage_known": true,
+      "prompt_tokens": 26659,
+      "cached_tokens": 11136,
+      "completion_tokens": 948
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0fcf68ba07ed44139b35062604e8bc2a",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:03:43.420709+00:00",
+  "ended_at_utc": "2026-11-27T13:04:16.284138+00:00",
+  "request_sha256": "7608759dc8990fc320a7dc1db524d3696f87d1dd8e502e38b4ed65e702bf6692",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 47811,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28852,
+    "cached_tokens": 9600,
+    "completion_tokens": 1313
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,copy\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f: batch=pickle.load(f)\\nfor entry in batch:\\n s=entry['study']; sw=s['sensor_calibration_sweeps']; x,y=(np.asarray(sw[k]) for k in ('ref_rosette','raw_rosette'))\\n idx=np.arange(len(x)); axis=(np.count_nonzero(x,axis=1)==1); n=np.linalg.norm(x,axis=1); outer=n>=np.quantile(n,.8)\\n splits={**{f'interleaved_{k}':idx%4==k for k in range(4)},'axis_only':axis,'outer_radius':outer}\\n worst=0\\n for name,va in splits.items():\\n  p,c=u._fit(x[~va],y[~va]); pred=u._features(x[va],p)@c\\n  e=np.linalg.norm(pred-y[va],axis=1); gross=e>1\\n  est=u._invert(y[va][~gross],p,c); delta=est-x[va][~gross]; per_channel=np.sqrt(np.mean(delta**2,axis=0)); err=np.max(per_channel); worst=max(worst,err)\\n  print(name,'clean',sum(~gross),'spikes',idx[va][gross].tolist(),'worst channel inverse RMS',err,'max abs',np.max(np.abs(delta)))\\n  assert err < 1e-4 and np.max(np.abs(delta)) < 3e-4\\n bank=sw['single_bank_sweeps']; j=np.asarray(bank['bank_id'],int); z=np.eye(4)[j]*np.asarray(bank['ref_signal'])[:,None]; p,c=u._fit(x,y); er=(u._features(z,p)@c)[np.arange(len(j)),j]-bank['raw_readout']; gross_bank=np.abs(er)>1\\n print('independent bank max clean residual',np.max(np.abs(er[~gross_bank])),'spikes',sum(gross_bank)); assert np.max(np.abs(er[~gross_bank]))<1e-4\\n raw_snapshot=copy.deepcopy(s); calibrated=u.calibrate_upstream(s)\\n for key in ('raw_rosette','ref_rosette'):\\n  np.testing.assert_array_equal(sw[key],raw_snapshot['sensor_calibration_sweeps'][key])\\n for key in ('raw_readout','ref_signal'):\\n  np.testing.assert_array_equal(bank[key],raw_snapshot['sensor_calibration_sweeps']['single_bank_sweeps'][key])\\n norm=calibrated['sensor_calibration_sweeps']; np.testing.assert_array_equal(norm['raw_rosette'],sw['ref_rosette']); np.testing.assert_array_equal(norm['single_bank_sweeps']['raw_readout'],bank['ref_signal']); assert not np.shares_memory(norm['raw_rosette'],sw['ref_rosette']); assert not np.shares_memory(norm['single_bank_sweeps']['raw_readout'],bank['ref_signal'])\\n pairs=[('obs',s['y_obs_raw'],calibrated['y_obs_raw'],raw_snapshot['y_obs_raw'])]+[(f'pulse{i}',q['y_pulse_raw'],r['y_pulse_raw'],t['y_pulse_raw']) for i,(q,r,t) in enumerate(zip(s['reference_tracer_pulses'],calibrated['reference_tracer_pulses'],raw_snapshot['reference_tracer_pulses']))]\\n for name,raw,ref,before in pairs:\\n  np.testing.assert_array_equal(raw,before); assert raw.shape==ref.shape\\n  err=np.max(np.abs((u._features(ref.reshape(-1,4),p)@c).reshape(raw.shape)-raw)); assert err<1e-10\\n  print(name,'max fitted forward round-trip',err)\\n assert u.calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n missing=dict(s['reference_tracer_pulses'][0],y_pulse_raw=None)\\n assert u.calibrate_upstream(dict(s,reference_tracer_pulses=[missing]))['reference_tracer_pulses'][0]['y_pulse_raw'] is None\\n out=solve_batch(s); print('composed outputs',list(out),'worst slice inverse RMS',worst)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic rational transfer → H2 sparse coupled cubic with rowwise EMI rejection; the full cubic achieved about 2e-5 worst-channel held-out RMS, and the composed public schema passed.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Test the exact implementation in an isolated process with model selection inside each training fold. Axis and outer-radius holdouts can expose missing terms or unstable inversion; failures there would warrant revising the fit. The bank readings, observation and pulse round-trips, and identity normalization independently test the calibration contract.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "515ca40d02521945305b3e16f6c45d16d9623189f6418bb5a00d93d72d82f91c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32825.14,
+      "usage_known": true,
+      "prompt_tokens": 28852,
+      "cached_tokens": 9600,
+      "completion_tokens": 1313
+    }
+  ]
+}

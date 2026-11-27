@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f52e588197944f58b65858433d3a860",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c01__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:35:00.089229+00:00",
+  "ended_at_utc": "2026-11-27T12:35:20.696293+00:00",
+  "request_sha256": "df77e0a4cb61e2c2fe6541988aa5bd21fd329a8696f4440ddb6e80ea0da7946f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 86005,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42514,
+    "cached_tokens": 0,
+    "completion_tokens": 715
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /holdout_task/batch_solver.py /tmp/rheo_local_only.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('    correction =', s.index('def _transfer('))\\nb = s.index('\\\\n\\\\ndef solve_batch', a)\\ns = s[:a] + '''    if not len(lab):\\n        return np.zeros(len(score_new))\\n    keys = np.unique(lab)\\n    cells = (lab[:, None] == keys).astype(float)\\n    cells_new = (lab_new[:, None] == keys).astype(float)\\n    # Pool only the gain on the drift score. Offset corrections need local evidence.\\n    design = np.column_stack((cells, cells * score[:, None], score))\\n    design_new = np.column_stack((cells_new, cells_new * score_new[:, None], score_new))\\n    penalty = np.diag(np.r_[np.full(2 * len(keys), .08), .16])\\n    coef = np.linalg.lstsq(np.vstack((design, penalty)),\\n                          np.r_[slope, np.zeros(len(penalty))], rcond=None)[0]\\n    return design_new @ coef\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rheology.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Local gain and offset → partially pooled gain with local offsets; the prototype reduced worst leave-lab-out strain/rate MAE from 0.5591/0.2631 to 0.5237/0.2464.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool both gain and offset\",\"rejected_reason\":\"Pooling offsets worsened overall leave-lab-out errors; the shared-gain-only prototype improved them.\"},{\"option\":\"Keep the local-only solver\",\"rejected_reason\":\"It did better on the singleton-lab holdout, but was worse on the largest leave-lab-out error and on aggregate coupon, stratum, and lab holdouts.\"}],\"rationale\":\"Test the shared gain in the exact deliverable while preserving lab-specific gains and offsets and leaving the no-pilot path unchanged. Compare curve, rate, and endpoint errors with the previous implementation; revert if the prototype gains do not carry over or another measured slice regresses materially.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "4cc9c8427408b3e0101765a45c24e4ba7cbcadcff3f976f8e124b53512b35ebc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20577.66,
+      "usage_known": true,
+      "prompt_tokens": 42514,
+      "cached_tokens": 0,
+      "completion_tokens": 715
+    }
+  ]
+}

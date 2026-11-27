@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4a3e063748c4835a49ab06392ea9496",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:57:14.181854+00:00",
+  "ended_at_utc": "2026-11-27T12:57:50.404125+00:00",
+  "request_sha256": "5992fd0d0371e25a2de2c38d8981ae57cc769448d794780a7c8d0f3fa8a6c479",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26971,
+    "cached_tokens": 0,
+    "completion_tokens": 1452
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress_rosette.py <<'PY'\\nimport sys, pickle, time\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\nbase = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nbank = base['sensor_calibration_sweeps']['single_bank_sweeps']\\ncal = base['sensor_calibration_sweeps']; x, y = cal['ref_rosette'], cal['raw_rosette']\\na = u._basis(x)[:, :5]\\npub = np.empty_like(y)\\nfor i in range(len(x)):\\n    use = np.arange(len(x)) != i\\n    c = u._robust_linear(a[use], y[use])\\n    pub[i] = np.linalg.solve(c[1:].T, y[i]-c[0]) - x[i]\\nprint('Public LOOCV max abs axis/mixed:', *(np.max(np.abs(pub[s])) for s in (slice(16), slice(16,None))), flush=True)\\nfor seed in range(3):\\n    rng = np.random.default_rng(seed + 738)\\n    z = rng.uniform(-.8, .8, (96,4)); z[64:] = rng.uniform(-1.3,1.65,(32,4))\\n    m = np.diag([1.29,.78,1.15,.83])+rng.uniform(-.09,.09,(4,4))\\n    b = np.array([.08,-.07,.06,-.09]); d = rng.normal(0,.032,(10,4)); e = rng.normal(0,.014,(20,4))\\n    q = np.array([[.72,-.25,.45,.26],[.47,.9,-.23,.2],[-.22,-.12,.74,.58],[.2,.38,-.15,.78]])\\n    for family in ('affine', 'quadratic', 'cubic', 'rational', 'mixed'):\\n        def f(v):\\n            a = u._basis(v); main = v@m+b; quad = a[:,5:15]@d; cubic = a[:,15:]@e\\n            if family == 'affine': return main\\n            if family == 'quadratic': return main+quad\\n            if family == 'cubic': return main+quad+cubic\\n            if family == 'rational': return main+quad/(1+(v@q)**2)\\n            return main+np.column_stack((quad[:,0]/(1+(v@q[:,0])**2), quad[:,1]+cubic[:,1], quad[:,2], np.zeros(len(v))))\\n        raw = f(x)+rng.normal(0,1e-5,x.shape)\\n        idx = rng.choice(len(x), 5 if seed < 2 else 9, replace=False)\\n        raw[idx] += rng.uniform(.5,1.7,(len(idx),4))*rng.choice([-1,1],(len(idx),4))\\n        obs = f(z[:24]).ravel(); pulses = [{'y_pulse_raw':f(z[24:48]).ravel()}, {'y_pulse_raw':f(z[48:]).reshape(-1,4)}, {'y_pulse_raw':None}]\\n        study = dict(base, y_obs_raw=obs, sensor_calibration_sweeps=dict(cal, raw_rosette=raw), reference_tracer_pulses=pulses)\\n        t = time.monotonic(); got = u.calibrate_upstream(study); dt = time.monotonic()-t\\n        pp = got['reference_tracer_pulses']; err = np.vstack((got['y_obs_raw'].reshape(-1,4), pp[0]['y_pulse_raw'].reshape(-1,4), pp[1]['y_pulse_raw']))-z\\n        assert pp[1]['y_pulse_raw'].shape == pulses[1]['y_pulse_raw'].shape and pp[2]['y_pulse_raw'] is None\\n        assert study['y_obs_raw'] is obs and study['sensor_calibration_sweeps']['raw_rosette'] is raw\\n        sw = got['sensor_calibration_sweeps']; assert np.array_equal(sw['raw_rosette'], x) and sw['raw_rosette'] is not x\\n        assert np.array_equal(sw['single_bank_sweeps']['raw_readout'], bank['ref_signal']) and sw['single_bank_sweeps']['raw_readout'] is not bank['ref_signal']\\n        print(seed,family,'EMI',len(idx),'worst core/edge',*(f'{np.max(np.abs(err[s])):.3g}' for s in (slice(64),slice(64,None))),'RMSE',f'{np.sqrt(np.mean(err**2)):.3g}','sec',round(dt,2),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine-only → H2 robust affine, polynomial, or saturating calibration; public schema passed and the worst public fitted row residual is 3.76e-5 L2.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public schema pass\",\n      \"rejected_reason\": \"The public study is effectively affine and does not exercise either nonlinear model selection or robustness to EMI.\"\n    }\n  ],\n  \"rationale\": \"Measure leave-one-row-out inversion error on the real axis and mixed sweeps, then test known nonlinear responses with injected EMI. High error in the core would shift attention to fitting or model selection; error isolated to the edge would shift attention to inverse branch selection.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "553f5e843c10eddcf867ef79a0502273f42e62ac4adecb43942f1edc36d84927",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36185.31,
+      "usage_known": true,
+      "prompt_tokens": 26971,
+      "cached_tokens": 0,
+      "completion_tokens": 1452
+    }
+  ]
+}

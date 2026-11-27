@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1a5e2ff277f41b18f9c10f11ebda2fd",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:58:27.797016+00:00",
+  "ended_at_utc": "2026-11-27T13:58:45.202334+00:00",
+  "request_sha256": "71e8f7d6aa6818b86c7f1b2c359e4c7dae2f53fb834af50d25ccece97e978dff",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 25040,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20016,
+    "cached_tokens": 9600,
+    "completion_tokens": 453
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo ==== \\\"$f\\\"; sed -n '1,/^def _cal/p' \\\"$f\\\" | head -38; done; python3 - <<'PY'\\nimport json,pickle,numpy as np\\nj=json.load(open('archive_apparatus_log.json')); print('log metadata', {k:v for k,v in j.items() if not isinstance(v,list)} if isinstance(j,dict) else 'list'); rows=next(v for v in j.values() if isinstance(v,list) and v and isinstance(v[0],dict)) if isinstance(j,dict) else j\\nfor r in rows:\\n x=np.array(r['facility_telemetry_trace']); print(r['completed_short_name'],x.shape,'mean',np.round(x.mean(0),3),'std',np.round(x.std(0),3))\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('item keys',list(b[0]),'diagnostics',type(b[0].get('campaign_diagnostics')).__name__)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 open-wall default -> H2 boundary transfer from the matching telemetry lineage; quantitative validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Copy the most recent solver unchanged\",\"rejected_reason\":\"The prefix may encode boundary and sensor changes independently; the latest solver alone does not establish which boundary to transfer.\"}],\"rationale\":\"The previous log was truncated before the boundary-to-telemetry comparison. Print only operator definitions and per-channel summaries to detect mixed lineage; if channels disagree, compare the boundary candidates against calibrated observations rather than matching the whole trace.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "65b457b4d23aee51ced91e15d84689b91bd25faedb44503025126f4376885086",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17368.69,
+      "usage_known": true,
+      "prompt_tokens": 20016,
+      "cached_tokens": 9600,
+      "completion_tokens": 453
+    }
+  ]
+}

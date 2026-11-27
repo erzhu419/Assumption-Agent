@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a052f26f6bdb4c39be13f2c361f6db53",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:14:09.281018+00:00",
+  "ended_at_utc": "2026-11-27T14:14:47.770307+00:00",
+  "request_sha256": "82c67c52259fb2c18dd3d6dc226cfbb777cc69c63c49f1710f4397181fd59095",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48576,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28823,
+    "cached_tokens": 11136,
+    "completion_tokens": 1526
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; sed -n '138,170p' dev_alpha_m98_00_batch_05_solver.py; cd /holdout_task; cat validate_public_schema.py; cat > /tmp/probe07.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('m','/tmp/hegel_continual_archive/dev_alpha_m98_00_batch_06_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=a['dataset']; tr,te,g=d['train'],d['test'],a['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; tx,ex=m._prepare(d); tau,b=m._fit(dt,t,tx,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); P,H,_=m._prepare(dict(d,test=g))[1]; Y=g['strain_curves_obs']-g['strain_0'][:,None]; R=g['instant_rate_obs']; labs=g['lab_id']; Z=np.zeros((len(H),2))\\nfor ds,p in zip(dt,P.T): Z+=-np.expm1(-ds/tau)*(p[:,None]-Z)\\nG=-np.expm1(-t[:,None]/tau); C=G-t[:,None]/tau; RM=lambda e:np.sqrt(np.mean(e**2)); print('tau,b',tau,b); print('diag keys:',list(g)); print('reference shape:',*[h['ref_coupons'].shape for h in [tr,te,g]])\\nfor k in np.unique(labs):\\n print('panel',k,[(round(np.median(np.nanmean((p:=h['ref_coupons'][h['lab_id']==k]),0)),4),round(np.median(np.nanstd(p,0)),4)) for h in [tr,te,g]])\\nkeys=['lab_id','stratum','coupon_features_raw','ref_coupons']; merge=lambda *hs:{k:np.concatenate([h[k] for h in hs]) for k in keys}; ng=len(H)\\nXall={'tr+diag':m._aligned_features(tr,g)[-ng:], 'all':m._aligned_features(merge(tr,te),g)[-ng:], 'diag':m._aligned_features(g,g)[-ng:]}\\nraw=np.array(g['coupon_features_raw']); lab=np.r_[tr['lab_id'],te['lab_id']]; refs=np.vstack([tr['ref_coupons'],te['ref_coupons']]); fr=np.vstack([tr['coupon_features_raw'],te['coupon_features_raw']]);\\nfor k in np.unique(labs):\\n p=refs[lab==k]; ctr=np.median(np.nanmean(p,0)); sd=np.median(np.nanstd(p,0)); raw[labs==k]=(raw[labs==k]-ctr)/sd; fr[lab==k]=(fr[lab==k]-ctr)/sd\\n_,ids,n=np.unique(np.c_[lab,np.r_[tr['stratum'],te['stratum']]],return_inverse=True,return_counts=True,axis=0); w=1/n[ids,None]; fill=np.nansum(fr*w,0)/np.sum(w*~np.isnan(fr),0); Xall['deploy panel']=np.c_[np.ones(ng),np.where(np.isnan(raw),fill,raw)]\\nfor name,X in Xall.items():\\n drift=X@b[2:]; amp=(H[:,None]-Z)*b[:2]; C0=amp@G.T+drift[:,None]*t; R0=(amp/tau).sum(1)+drift; YY=Y-C0; RR=R-R0; print('\\\\n',name,'base rate',RM(RR),'no missing',RM(RR[~np.isnan(raw).any(1)])); print('rate errors',np.round(RR,3)); print('corr rate',np.round(np.corrcoef(np.c_[RR,drift,H,Z,X[:,1:]].T)[0,1:],2));\\n for model,M in [('force',drift[:,None,None]*C[None,:,:]),('force+drift scale',np.concatenate([drift[:,None,None]*C[None,:,:],drift[:,None,None]*t[None,:,None]],2)),('force+z scale',np.concatenate([drift[:,None,None]*C[None,:,:],Z[:,None,:]*G[None,:,:]],2))]:\\n  M=M.reshape(ng,len(t),-1); Es=np.zeros_like(YY); pars=[]\\n  for k in np.unique(labs):\\n   fit=labs!=k; V=M[fit].reshape(-1,M.shape[-1]); v=YY[fit].ravel(); p=least_squares(lambda q: (V@q-v)/.014,np.zeros(M.shape[-1]),loss='soft_l1').x; pars.append(p); Es[~fit]=YY[~fit]-M[~fit]@p\\n  print(model,'pars',np.round(pars,4),'worst curve',max(RM(Es[labs==k]) for k in np.unique(labs)),'med',np.median(abs(Es)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe07.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived reset chamber -> H2 carried memory with separately tested drift and feature alignment; the best archived worst-lab strain/rate RMSE is 0.0742/0.0888.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a more flexible bridge model\",\n      \"rejected_reason\": \"The current inverse recovers calibration loads within 0.00029 per channel, too small to explain the chamber residuals.\"\n    }\n  ],\n  \"rationale\": \"Use the initial rate to test feature alignment independently of forcing terms whose derivative vanishes at zero. Compare forcing and memory corrections on held-out chamber labs before choosing the deployment equation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "df441139fe0be64cdca9282aa992162040b30f6cdda5c218eba2a13dbf717bf8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38449.64,
+      "usage_known": true,
+      "prompt_tokens": 28823,
+      "cached_tokens": 11136,
+      "completion_tokens": 1526
+    }
+  ]
+}

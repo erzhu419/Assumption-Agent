@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "44c85d1751064a7fafbe1497d6f2ad7e",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__beta_m98_c02__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:33:46.474208+00:00",
+  "ended_at_utc": "2026-11-27T12:34:13.595588+00:00",
+  "request_sha256": "5280d66639cbfba37a2daa819dd8f801aec2c538f61f21547aaa98f0c0d2d89e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73288,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38387,
+    "cached_tokens": 11136,
+    "completion_tokens": 1012
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); b=importlib.util.module_from_spec(spec); spec.loader.exec_module(b)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=b._Chamber(s); cal=b._calibration(s['sensor_calibration_sweeps']); y=cal(s['y_obs_raw']); p=s['reference_tracer_pulses']; R=c.rhs@np.column_stack([q['w_pulse'] for q in p]); Y=np.column_stack([cal(q['y_pulse_raw']) for q in p]); E=c.edges@np.repeat(np.eye(2),2,axis=0); errs=[]\\nfor j in range(len(p)):\\n    keep=np.arange(len(p))!=j\\n    bs=least_squares(lambda a:(c.response(E@a,R[:,keep])[0]-Y[:,keep]).ravel(),c.nominal[::2],gtol=1e-11).x\\n    dc=b._fit_boundary(c,dict(s,reference_tracer_pulses=[q for i,q in enumerate(p) if i!=j]),y,cal)\\n    errs.append([np.sqrt(np.mean((c.response(d,R[:,j])[0]-Y[:,j])**2)) for d in (E@bs,dc)])\\nprint('Leave-one-tracer-out worst RMSE: symmetric ablation, delivered independent-wall fit:',np.max(errs,axis=0)); assert np.max(errs,axis=0)[1]<np.max(errs,axis=0)[0]\\nrng=np.random.default_rng(549); worst=np.zeros(5)\\nfor k in range(450):\\n    m=int(rng.integers(2,40)); Ac=rng.normal(size=(int(rng.integers(1,60)),m))*10.**rng.uniform(-2,1); r=rng.normal(size=len(Ac)); cap=rng.uniform(.05,1,m); cap[rng.random(m)<.15]=0; cap[0]=.42\\n    budget=[0.,cap.sum(),cap.sum()*1e-8,cap.sum()*(1-1e-8),rng.random()*cap.sum(),cap[:m//2].sum()][k%6]; ridge=10.**rng.uniform(-5,0)\\n    cert=b._quadratic(Ac,r,ridge,budget,cap); w=cert['weights']; lo=cert['lam_lower']; hi=cert['lam_upper']; grad=Ac.T@(Ac@w-r)+ridge*w\\n    metrics=[abs(w.sum()-budget),max(0.,-w.min(),np.max(w-cap)),np.max(abs(grad+cert['nu_sum']-lo+hi)),max(np.max(abs(lo*w)),np.max(abs(hi*(cap-w)))),abs(cert['primal_objective']-cert['dual_lower_bound'])]\\n    worst=np.maximum(worst,metrics); assert np.min(lo)>=0 and np.min(hi)>=0\\nprint('450 QP stress instances: worst budget, bound, stationarity, complementarity, dual gap:',worst); assert np.all(worst<1e-8)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unregularized blind leakage → H2 residual-scaled leakage, with 0.199% public pulse-withheld field disagreement and 1.46% worst noisy constructed-slice disagreement.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"Test the exact artifact against its symmetric-wall ablation on unseen tracer mixtures. Independently stress the certificate near budget endpoints and with zero-cap coordinates, where the active-set refinement could otherwise pass the public schema while returning invalid multipliers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "079030adcd5de56fa2d57a47e6bfa72974678e8c7b99f38aebfb244e98ddb003",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27090.11,
+      "usage_known": true,
+      "prompt_tokens": 38387,
+      "cached_tokens": 11136,
+      "completion_tokens": 1012
+    }
+  ]
+}

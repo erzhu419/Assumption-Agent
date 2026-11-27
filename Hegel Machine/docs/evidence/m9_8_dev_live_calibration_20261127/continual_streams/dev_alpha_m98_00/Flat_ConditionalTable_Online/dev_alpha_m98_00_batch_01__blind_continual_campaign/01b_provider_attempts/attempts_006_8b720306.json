@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b720306bbf44fe1ba43a1a5ec77710f",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:41:28.235965+00:00",
+  "ended_at_utc": "2026-11-27T13:42:03.091200+00:00",
+  "request_sha256": "957f80db252a2c83523c1ea6859ac181a9ba32be8def59199c312d8104d39c18",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46896,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29260,
+    "cached_tokens": 12672,
+    "completion_tokens": 1259
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/archive_apparatus_log.json; cat > /tmp/chamber_reset.py <<'PY'\\nexec(open('/tmp/chamber_modes.py').read().split('for yname')[0])\\nfor mode in ('train+diag','train+test+diag','diag-only','fixed-train+test'):\\n if mode=='train+diag': X=x\\n elif mode=='diag-only': X=m['_aligned_features'](q,q)[n:]\\n elif mode=='train+test+diag':\\n  joint={k:np.concatenate((tr[k],te[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; X=m['_aligned_features'](joint,q)[-n:]\\n else:\\n  joint={k:np.concatenate((tr[k],te[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; raw=q['coupon_features_raw'].copy()\\n  for l in np.unique(q['lab_id']):\\n   ref=joint['ref_coupons'][joint['lab_id']==l]; raw[q['lab_id']==l]=(raw[q['lab_id']==l]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n  xj=m['_aligned_features'](tr,te)[:,1:]; labs=joint['lab_id']; st=joint['stratum']; _,ix,cnt=np.unique(np.c_[labs,st],axis=0,return_inverse=True,return_counts=True); wj=1/cnt[ix]; fill=[]\\n  for j in range(4):\\n   good=~np.isnan(joint['coupon_features_raw'][:,j]); fill.append(np.average(xj[good,j],weights=wj[good]))\\n  X=np.c_[np.ones(n),np.where(np.isnan(raw),fill,raw)]\\n D=X@th[2:]; u=basis(tau); ones=np.ones(n); z=b[:,None]-A[:,0,:2]/u[0,:2]; Y0=Y-b[:,None]*(u[:,:2]@th[:2]); print('\\\\nALIGN',mode)\\n for name, terms in [('reset+drift-modes',[[D],[D],[D]]),('reset+affine-drift-modes',[[ones,D],[ones,D],[ones,D]]),('reset+full-X',[[*X.T],[*X.T],[*X.T]]),('reset+nonlinear-drift',[[D,D**2,D**3],[D,D**2,D**3],[D,D**2,D**3]]),('reset+residual-memory',[[D,z[:,0]],[D,z[:,1]],[D]]),('free-hold+drift',[[b,D],[b,D],[D]]),('reset+drift-modes+cross',[[D,b*D],[D,b*D],[D,b*D]])]:\\n  S=np.concatenate([np.array(V).T[:,None,:]*u[None,:,j,None] for j,V in enumerate(terms)],axis=-1); p=S.shape[-1]; pred=np.empty_like(Y)\\n  def fit(k): return np.linalg.lstsq(S[k].reshape(-1,p),Y0[k].ravel(),rcond=None)[0]\\n  for i in range(n): pred[i]=S[i]@fit(np.arange(n)!=i)\\n  e=abs(Y0-pred); print(name,'CV p90 strain/rate',np.round([np.quantile(e[:,:-1],.9),np.quantile(e[:,-1],.9)],5),'worst row strain MAE/rate',np.round([e[:,:-1].mean(1).max(),e[:,-1].max()],5),'coef',fit(slice(None)).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_reset.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 chamber retains benchtop memory -> H2 chamber nearly resets both branches and redistributes coupon drift into the transient; prior predictive leave-one-coupon-out P90 was 0.0968 for strain and 0.0964 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use six unconstrained chronological stress coefficients per branch\",\n      \"rejected_reason\": \"The previous leave-one-coupon-out test worsened, while the fast branch amplitude is close to its intrinsic weight times hold stress plus a multiple of intrinsic drift.\"\n    }\n  ],\n  \"rationale\": \"Test the reset law with independent strain and rate errors. Compare reference-panel conventions because the diagnostics lack an explicit alignment convention and drift errors can masquerade as residual memory. Retain memory or nonlinear terms only if they improve held-out predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "606ad78281622e6a0dba30df42919994258eb3bf4ad20de829eb1bd6283e10a3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34820.4,
+      "usage_known": true,
+      "prompt_tokens": 29260,
+      "cached_tokens": 12672,
+      "completion_tokens": 1259
+    }
+  ]
+}

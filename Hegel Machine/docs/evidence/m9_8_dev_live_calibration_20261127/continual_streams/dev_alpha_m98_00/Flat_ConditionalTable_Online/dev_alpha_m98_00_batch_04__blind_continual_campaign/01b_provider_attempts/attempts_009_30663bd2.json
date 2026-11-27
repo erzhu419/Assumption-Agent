@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "30663bd222e344bc8e9d7d17df0ee932",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:55:38.755074+00:00",
+  "ended_at_utc": "2026-11-27T13:56:04.890375+00:00",
+  "request_sha256": "5209c1456816a1bd57e87bfeb5d803bbdfd06a2d7391d3d5a01fbbbfa9796d88",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58391,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31194,
+    "cached_tokens": 9600,
+    "completion_tokens": 946
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/m98_candidate.py'); s=p.read_text(); a=s.index('def _stress_calibration'); b=s.index('def _bridge_basis',a); s=s[:a]+s[b:]; s=s.replace('features = _aligned_features(train, test)','features = np.split(_aligned_features(train, test), [len(train[\\\\'lab_id\\\\'])])').replace('np.column_stack((np.ones(len(x)), x))','x'); p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /tmp/m98_candidate.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys; sys.path.insert(0,'/tmp')\\nimport m98_candidate as m, pickle,json,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; o=m.solve_batch(d); print('material',o['estimated_taus'],o['hereditary_weights']); print('keys',list(d)); c=d['calibration_load_cells']; u=c['bridge_raw']; l=c['true_channel_loads']; b=m._fit_bridge(u,l)\\ne=np.linalg.norm(np.sum(m._bridge_basis(l)*b,axis=-1)-u,axis=1); ok=e<.001; err=[]\\nfor i in np.flatnonzero(ok):\\n h=np.arange(len(u))!=i; ci=m._fit_bridge(u[h],l[h]); xi=m._channel_loads(u[i],ci); err.append(xi-l[i]);\\nerr=np.asarray(err); print('LOO clean sweeps max channel error',abs(err).max(),'max and RMS total',abs(err.sum(1)).max(),np.sqrt(np.mean(err.sum(1)**2)))\\nfor group in (d['train'],d['test']):\\n u=np.vstack((group['past_channel_raw'].reshape(-1,4),group['hold_channel_raw'])); l=m._channel_loads(u,b); print('coupon min/max load',l.min(0),l.max(0),'max inversion residual',np.max(abs(np.sum(m._bridge_basis(l)*b,axis=-1)-u)))\\nidx=json.load(open('/holdout_task/public_asset_index.json')); print('asset index:',{k:(list(v) if isinstance(v,dict) else str(v)[:350]) for k,v in idx.items()})\\nq=np.array([r['facility_telemetry_trace'] for r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))]);\\nfor i in range(len(q)):\\n z=q[i][:,[0,3,6]].mean(1); f=np.abs(np.fft.rfft(z-z.mean())); print(i,'shape',z.round(2),'spectrum',f.round(2),'codes',np.median(q[i][:,[1,2,4,5,7]],axis=0).round(3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: validate the sparse cyclic bridge on held-out calibration sweeps and look for distinct lineage information in the apparatus waveform; the current inlier forward RMS is 0.000073.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The archived feature routine already returns one intercept-augmented matrix, so split it by coupon count. Held-out inverse errors and deployment round-trip residuals will reveal whether to keep the cubic inverse. Inspect the trace waveforms separately from their offsets to see whether either distinguishes archived chamber regimes.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "86137bbd1421a8fd1becd28c6165788fc4fa2d74092fb3be4a53def80b4a9831",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26097.3,
+      "usage_known": true,
+      "prompt_tokens": 31194,
+      "cached_tokens": 9600,
+      "completion_tokens": 946
+    }
+  ]
+}

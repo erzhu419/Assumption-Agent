@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "06d87bbbbbcb47f9b33401bb1b09d46d",
+  "call_seq": 3,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:39:42.898110+00:00",
+  "ended_at_utc": "2026-11-27T13:40:10.645823+00:00",
+  "request_sha256": "871bb4eb1675839db7b00bb4e0d1cf0b17ee7abb9419d0d7a6f221639ba91251",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23392,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18847,
+    "cached_tokens": 9600,
+    "completion_tokens": 874
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '55,180p' /tmp/hegel_continual_archive/dev_alpha_m98_00_s00_solver.py; python3 - <<'PY'\\nimport json\\np=json.load(open('/holdout_task/public_asset_index.json')); print('index keys', list(p)); print([(k,str(v)[:350]) for k,v in p.items()]); q=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('log metadata', [{k:v for k,v in r.items() if 'trace' not in k} for r in q]);\\nPY\\ncat > /tmp/rheo_probe.py <<'PY'\\nimport runpy,pickle,numpy as np\\nm=runpy.run_path('/tmp/hegel_continual_archive/dev_alpha_m98_00_s00_solver.py'); p=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; q=p['campaign_diagnostics']; tr=d['train']; dt=d['past_dt']; t=d['eval_times']; o=m['solve_batch'](d); tau=o['estimated_taus']; th=o['hereditary_weights']; print('taus and theta',tau,th)\\ncal=m['_stress_calibration'](d['calibration_load_cells']); c=d['calibration_load_cells']; print('affine bridge rmse', np.sqrt(np.mean((c['bridge_raw']@cal[:-1]+cal[-1]-c['true_channel_loads'].sum(1))**2))); print('sweeps',[(k,type(v).__name__,getattr(v,'shape',None)) for k,v in c['single_channel_sweeps'].items()]);\\nfor label,g,xx in [('train',tr,m['_aligned_features'](tr,d['test'])[:len(tr['lab_id'])]),('diag',q,m['_aligned_features'](tr,q)[len(tr['lab_id']):])]:\\n a=g['past_channel_raw']@cal[:-1]+cal[-1]; b=g['hold_channel_raw']@cal[:-1]+cal[-1]; A,R=m['_design'](tau,dt,t,(a,b,xx)); y=g['strain_curves_obs']-g['strain_0'][:,None]; v=g['instant_rate_obs']; e=y-A@th; r=v-R@th; print(label,'curve residual abs quantiles',np.quantile(abs(e),[.5,.9,.95,1]),'rate residual abs quantiles',np.quantile(abs(r),[.5,.9,.95,1])); print(label,'median residual by time',np.median(e,0)); print(label,'ranges past/hold',np.min(a),np.max(a),np.min(b),np.max(b)); print(label,'residual offsets by row:\\\\n',np.round(np.column_stack((g['lab_id'],g['stratum'],b,e[:,[0,5,-1]],r))[:20],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived benchtop predictor -> H2 empirically separated chamber memory and drift; baseline residual quantiles pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted predictor to the 18 chamber coupons\",\"rejected_reason\":\"A baseline residual profile can distinguish calibration error, transient memory, and persistent drift before adding parameters.\"}],\"rationale\":\"Measure bridge error and compare train versus chamber residuals by time and initial rate. If the bridge fit is poor, correct it before attributing residuals to chamber physics; otherwise use their time dependence to select the chamber terms to test.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2d6895feeb4d0edc94813bab0b0cdf85987158eadc7ebafa38ad7e14a53f7e1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27708.38,
+      "usage_known": true,
+      "prompt_tokens": 18847,
+      "cached_tokens": 9600,
+      "completion_tokens": 874
+    }
+  ]
+}

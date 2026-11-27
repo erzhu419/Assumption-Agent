@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "929b2b77644642cba6239f2a21a3def4",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:01:32.045683+00:00",
+  "ended_at_utc": "2026-11-27T13:01:58.610291+00:00",
+  "request_sha256": "af0dbbc8d8197f27a64c952ac406c956981a70599931f94061f097c9b61291ee",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51821,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28177,
+    "cached_tokens": 9600,
+    "completion_tokens": 981
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\na, b = d['train'], d['test']; dt, t = d['past_dt'], d['eval_times']\\nxa, xb = m._features(a, b); cal = m._calibration(d['calibration_load_cells']); inp = m._inputs(a, xa, cal)\\nworst = np.zeros(4)\\nfor lab in np.unique(a['lab_id']):\\n    j = a['lab_id']==lab\\n    tau, th, scale = m._material(a, inp, dt, t, ~j)\\n    y, r = m._predict(tuple(v[j] for v in inp), dt, t, tau, th)\\n    e = np.abs(y+a['strain_0'][j,None]-a['strain_curves_obs'][j]); er=np.abs(r-a['instant_rate_obs'][j]); k=len(t)\\n    v=[np.median(e[:,:k//3]), np.median(e[:,k//3:2*k//3]), np.median(e[:,2*k//3:]), np.median(er)]\\n    worst=np.maximum(worst,v)\\n    assert .05<tau[0]<tau[1]<25 and np.all(np.isfinite(th))\\nprint('Worst lab median absolute errors (early/mid/late/rate):',worst)\\nout=m.solve_batch(d); tau, th=out['estimated_taus'],out['hereditary_weights']; past, hold, X=m._inputs(b,xb,cal)\\nz=np.zeros((len(hold),2))\\nfor j, step in enumerate(dt):\\n    decay=np.exp(-step/tau); z=z*decay+past[:,j,None]*(1-decay)\\namp=(hold[:,None]-z)*th[:2]; drift=X@th[2:]\\nnp.testing.assert_allclose(out['initial_rate_pred'],amp@(1/tau)+drift,rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(out['predicted_strain'], b['strain_0'][:,None]+amp@(1-np.exp(-t[:,None]/tau)).T+drift[:,None]*t,rtol=0,atol=1e-12)\\nprint('Public predictions agree with chronological recurrence and analytic initial rate.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated benchtop response -> H2 retain the bench prediction on blind campaigns unless a chamber transfer rule is identifiable; worst leave-one-lab-out median errors are 0.79× curve noise and 1.06× rate noise.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply a chamber correction from unlabeled telemetry\",\n      \"rejected_reason\": \"The observed apparatus states do not identify a constitutive correction; inspect the complete gate diagnostic for a quantitative constraint before changing the prediction.\"\n    }\n  ],\n  \"rationale\": \"Verify the exact artifact in an isolated process. Compare against the direct recurrence to catch ordering or initial-rate errors, and split held-out lab errors by time horizon to detect a concentrated material-fit failure that a pooled curve statistic could hide.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "91b0162b3b8253e4cfed0405ca23f8f31885bbf5452dc739f76997cf98a88052",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26525.08,
+      "usage_known": true,
+      "prompt_tokens": 28177,
+      "cached_tokens": 9600,
+      "completion_tokens": 981
+    }
+  ]
+}

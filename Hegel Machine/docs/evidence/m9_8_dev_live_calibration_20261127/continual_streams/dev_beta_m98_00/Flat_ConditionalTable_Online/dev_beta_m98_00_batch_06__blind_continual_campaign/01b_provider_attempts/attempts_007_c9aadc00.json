@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c9aadc00c7494bdab6cd59cbefc5289a",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:00:00.257548+00:00",
+  "ended_at_utc": "2026-11-27T14:00:34.479042+00:00",
+  "request_sha256": "73816720871e20b7d98040cc2031dea09385dceee2e4fc557611b55295137792",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27327,
+    "cached_tokens": 9600,
+    "completion_tokens": 1268
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitems=pickle.load(open(p+'public_batch.pkl','rb'))\\nfor item in items:\\n    s=item['study']; nx,ny=s['nx'],s['ny']; n=nx*ny\\n    L=np.diag(s['V_reaction_2d'].flatten(order='F'))\\n    for x in range(nx):\\n        for y in range(ny):\\n            row=x+nx*y\\n            for i, sz, step, a in [(x,nx,1,'x'),(y,ny,nx,'y')]:\\n                k=s['kappa_'+a]; v=s['vel_'+a]; h=s['L'+a]/(sz-1)\\n                for d in (-1,1):\\n                    j=i+d\\n                    if 0<=j<sz:\\n                        rate=k[i]/h**2 if i in (0,sz-1) else (k[i]+k[j])/(2*h**2)+max(-d*v[i],0)/h\\n                        L[row,row+d*step]-=rate\\n                        L[row,row]+=rate\\n    rhs=np.stack([mode.flatten(order='F') for mode in s['source_modes']],axis=1)\\n    fields=[np.linalg.solve(L+mu*np.eye(n),rhs) for mu in s['mu_shifts']]\\n    ij=s['sensor_ij']; S=np.vstack([u[ij[:,0]+nx*ij[:,1]] for u in fields]); nf=len(ij)\\n    worst=0.\\n    for pulse in item['campaign_diagnostics'] or []:\\n        observed=m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))\\n        err=(S@pulse['w_pulse']-observed).reshape(-1,nf)\\n        worst=max(worst,np.sqrt(np.mean(err**2,axis=1)).max())\\n    out=m.solve_batch(s); w=out['weights']; c=out['kkt_certificate']; z=s['Z_nuisance']\\n    y=m._calibrate(s); data=np.column_stack((S,y)); data-=z@np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@data)\\n    A,b=data[:,:-1],data[:,-1]; r=A@w-b; ridge=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); g=A.T@r+ridge*w\\n    obj=(r@r+ridge*(w@w))/2; dual=obj-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\n    field_err=np.max(np.abs(out['terminal_field']-(fields[-1]@w).reshape(nx,ny,order='F')))\\n    station=np.max(np.abs(g-nu-lo+hi)); comp=max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w)))); budget_err=abs(w.sum()-budget)\\n    print(dict(worst_pulse_shift_rmse=worst,field_max_error=field_err,stationarity=station,complementarity=comp,budget_error=budget_err,duality_gap=obj-dual,active_lower=int(np.sum(w<1e-12)),active_upper=int(np.sum(w>cap-1e-12))))\\n    assert worst<1e-5 and max(field_err,station,comp,budget_err,abs(obj-dual))<1e-8\\n    assert min(w)>=-1e-12 and max(w)<=cap+1e-12 and min(lo)>=0 and min(hi)>=0\\n    np.testing.assert_allclose(c['weights'],w,rtol=0,atol=1e-12)\\n    np.testing.assert_allclose([c['primal_objective'],c['dual_lower_bound']],[obj,dual],rtol=0,atol=1e-10)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 Robin walls and affine readout -> H2 sealed walls and independently fitted nonlinear rosette; worst pulse-by-shift RMSE is 1.92e-6, versus 0.0404 for the nearest competing wall stencil.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema pass\",\"rejected_reason\":\"The schema does not check field orientation, stationarity, or complementary slackness.\"}],\"rationale\":\"Check the exact saved artifact in an isolated process against an independently assembled dense operator. A pulse or field discrepancy would point to stencil or indexing errors; a certificate discrepancy would point to projection, multiplier, or active-set errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "4592caec41dd137c7f43dfd32838ce885b51638abdb103587aeabda734d3dcd1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34180.87,
+      "usage_known": true,
+      "prompt_tokens": 27327,
+      "cached_tokens": 9600,
+      "completion_tokens": 1268
+    }
+  ]
+}

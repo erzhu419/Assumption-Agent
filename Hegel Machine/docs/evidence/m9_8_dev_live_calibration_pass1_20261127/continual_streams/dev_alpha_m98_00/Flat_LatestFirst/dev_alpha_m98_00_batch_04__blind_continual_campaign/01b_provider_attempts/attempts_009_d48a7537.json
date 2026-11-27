@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d48a75379a084bbfad7eeef099647fd7",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:57:51.705001+00:00",
+  "ended_at_utc": "2026-11-27T12:58:26.320788+00:00",
+  "request_sha256": "54a320d22ff1a87b87b0d999b84f56cd3d66159428ffed7f108623a5be8ece79",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59309,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35713,
+    "cached_tokens": 11136,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/hegel_continual_archive/dev_alpha_m98_00_batch_03_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\np='/holdout_task/batch_solver.py'; s=open(p).read(); a=s.index('def _calibration'); b=s.index('def _kernel',a); s=s[:a]+'''def _bridge_basis(x):\\n    return np.column_stack((np.ones(len(x)), x, x**2, x**3,\\n                            *(x[:, i]*x[:, j] for i in range(4) for j in range(i+1, 4))))\\n\\n\\ndef _calibration(panel):\\n    loads, raw = panel['true_channel_loads'], panel['bridge_raw']\\n    a = _bridge_basis(loads)\\n    coefficient = []\\n    for y in raw.T:\\n        residual = lambda b: a @ b - y\\n        start = np.linalg.lstsq(a, y, rcond=None)[0]\\n        for loss, scale in (('soft_l1', .05), ('cauchy', .002)):\\n            start = least_squares(residual, start, jac=lambda _: a.copy(),\\n                                  loss=loss, f_scale=scale).x\\n        coefficient.append(start)\\n    return np.column_stack(coefficient)\\n\\n\\ndef _stress(raw, cal):\\n    flat = raw.reshape(-1, 4)\\n    x = np.linalg.solve(cal[1:5].T, (flat-cal[0]).T).T\\n    pairs = [(i,j) for i in range(4) for j in range(i+1,4)]\\n    for _ in range(20):\\n        error = _bridge_basis(x) @ cal - flat\\n        jac = cal[1:5] + 2*x[:,:,None]*cal[5:9] + 3*x[:,:,None]**2*cal[9:13]\\n        for (i,j), c in zip(pairs, cal[13:]):\\n            jac[:,i] += x[:,j,None]*c\\n            jac[:,j] += x[:,i,None]*c\\n        delta = np.linalg.solve(jac.transpose(0,2,1), error[...,None])[...,0]\\n        x -= delta / np.maximum(1., np.max(np.abs(delta),axis=1,keepdims=True)/.6)\\n        if np.max(np.abs(delta),initial=0.) < 1e-10:\\n            break\\n    return x.sum(axis=1).reshape(raw.shape[:-1])\\n\\n\\ndef _inputs(block, x, cal):\\n    return (_stress(block['past_channel_raw'], cal), _stress(block['hold_channel_raw'], cal),\\n            np.column_stack((np.ones(len(x)), x)))\\n\\n\\n'''+s[b:];open(p,'w').write(s)\\nPY\\ncat > /tmp/pilot_probe.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task');import batch_solver as m\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset'];tr,te,pi=[d[k] for k in ('train','test','chamber_verification_trials')];dt,t=d['past_dt'],d['eval_times'];cal=m._calibration(d['calibration_load_cells']);x,_=m._features(tr,te);a=m._inputs(tr,x,cal);tau,theta,scale=m._material(tr,a,dt,t);print('material',tau,theta,scale);xp,=m._features(pi,balanced=False);b=m._inputs(pi,xp,cal);y,r=m._predict(b,dt,t,tau,theta);D=np.c_[pi['strain_curves_obs']-pi['strain_0'][:,None]-y,pi['instant_rate_obs']-r];print('pilot residual RMSE',np.sqrt(np.mean(D**2,axis=0)));print('pilot residual rows first/mid/last/rate\\\\n',D[:,[0,5,-2,-1]].round(5));print('archive selection',m._pilot_choice(b,pi,dt,t,tau,theta,scale));\\nfor lab in np.unique(pi['lab_id']):\\n mask=pi['lab_id']==lab;mem,dr,coef,cv=m._pilot_choice(b,pi,dt,t,tau,theta,scale,np.flatnonzero(~mask)); pred=m._chamber_design(b,dt,t,tau,theta,mem,dr)@coef; print('held-out lab',lab,mem,dr,[(np.sqrt(np.mean(e[mask,:-1]**2)),np.sqrt(np.mean(e[mask,-1]**2))) for e in (D,D-pred)]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pilot_probe.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nsed -n '/^kind 3/,+17p' /tmp/bridge_results.txt | tail -4\\nsed -n '/^def _chamber_design/,/^def _pilot_choice/p' /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine inversion -> H2 robust forward calibration with diagonal cubic and pairwise terms; the archived worst held-out pilot lab RMSE is 0.23645 strain and 0.39624 initial rate, pending remeasurement after calibration.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Add mixed cubic terms to the bridge\",\"rejected_reason\":\"The smaller pairwise basis already fits 78 of 80 sweeps near measurement precision; additional terms are not needed to explain the two gross excursions.\"}],\"rationale\":\"Install the compact forward bridge and test whether it removes the material timescale boundary fit and improves both pilot outcomes. Hold out entire pilot labs so that any remaining chamber mismatch is measured separately from calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bb674fbd6d8f322575dbbae84e4c99e3fa4d048d176172f0a9be4d6d71d11d95",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34573.41,
+      "usage_known": true,
+      "prompt_tokens": 35713,
+      "cached_tokens": 11136,
+      "completion_tokens": 1387
+    }
+  ]
+}

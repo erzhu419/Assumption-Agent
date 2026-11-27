@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53efbd64c2cd4deaae804991b9cdafdf",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:59:09.304618+00:00",
+  "ended_at_utc": "2026-11-27T12:59:45.403506+00:00",
+  "request_sha256": "81de94b4bdd8cde00a42032b6db086262d0f6a58df78a69286638360090062ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66234,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33643,
+    "cached_tokens": 0,
+    "completion_tokens": 1452
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/chamber_margin_audit.py <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\n\\ndef load(name,path):\\n spec=importlib.util.spec_from_file_location(name,path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nroot='/tmp/hegel_continual_archive/'\\nm=load('solver','/holdout_task/batch_solver.py'); a=load('archive',root+'dev_beta_m98_00_batch_02_solver.py')\\nfor entry in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n s=entry['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; folds=np.arange(len(x))%4\\n b=c['single_bank_sweeps']; banks=np.asarray(b['bank_id']); bf=np.empty(len(banks),int)\\n for j in range(4): bf[banks==j]=np.arange(sum(banks==j))%4\\n worst={name:0. for name in ('pooled_affine','affine','quadratic','rational')}\\n for f in range(4):\\n  tr=folds!=f; te=~tr\\n  xx,yy=x[tr],y[tr]; xt,yt=x[te],y[te]\\n  clipped=dict(ref_rosette=xx,raw_rosette=yy,single_bank_sweeps={k:np.asarray(v)[bf!=f] for k,v in b.items()})\\n  # Score all candidates in raw coordinates on the same held-out rosettes.\\n  pool_inverse=m._calibration(clipped); offset=pool_inverse(np.zeros((1,4))); inverse=pool_inverse(np.eye(4)).reshape(4,4)-offset\\n  preds={'pooled_affine':np.linalg.solve(inverse.T,(xt-offset).T).T}\\n  for d,name in ((1,'affine'),(2,'quadratic')):\\n   p=a._powers(d); preds[name]=a._features(xt,p)@np.linalg.lstsq(a._features(xx,p),yy,rcond=None)[0]\\n  preds['rational']=np.column_stack([a._rational_predict(xt,*a._rational_fit(xx,yy[:,j]-xx[:,j]))+xt[:,j] for j in range(4)])\\n  for name,pred in preds.items(): worst[name]=max(worst[name],np.sqrt(np.mean((pred-yt)**2,axis=0)).max())\\n print('worst held-out calibration RMSE over fold/channel:',worst)\\n pulses=s['reference_tracer_pulses']; cal=m._calibration(c); modes=np.tensordot(np.stack([p['w_pulse'] for p in pulses]),s['source_modes'],axes=1)\\n obs=np.column_stack([cal(p['y_pulse_raw']) for p in pulses]).reshape(len(s['mu_shifts']),len(s['sensor_ij']),-1)\\n from itertools import product\\n pred={pair:m._response(s,pair,modes)[0].reshape(obs.shape) for pair in product(('periodic','open','sealed'),repeat=2)}\\n selections={}; worst_abs=0.; margin=float('inf')\\n for j in range(len(pulses)):\\n  for i in range(len(s['sensor_ij'])):\\n   keep_s=np.arange(len(s['sensor_ij']))!=i; keep_p=np.arange(len(pulses))!=j\\n   scores=sorted((np.sqrt(np.mean((p[:,keep_s][:,:,keep_p]-obs[:,keep_s][:,:,keep_p])**2)),k) for k,p in pred.items())\\n   (best,k),(runner,_)=scores[:2]; selections[k]=selections.get(k,0)+1; margin=min(margin,runner-best)\\n   worst_abs=max(worst_abs,np.max(abs(pred[k][:,i,j]-obs[:,i,j])))\\n print('joint leave-sensor-and-pulse-out:',selections,'min train RMSE margin',margin,'worst held-out absolute residual',worst_abs)\\n Z=s['Z_nuisance']; S=m._response(s,('periodic','periodic'),s['source_modes'])[0]; P=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\n print('nuisance rank, projected source minimum singular value:',np.linalg.matrix_rank(Z),np.linalg.svd(P@S,compute_uv=False)[-1])\\nlog=json.load(open(root+'archive_apparatus_log.json')); print('log entry metadata:',[{k:v for k,v in r.items() if not isinstance(v,(list,dict))} for r in log]); print('log array sizes:',[{k:np.shape(v) for k,v in r.items() if isinstance(v,list)} for r in log])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/chamber_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local Robin walls and potentially nonlinear rosettes -> H2 periodic upwinding with pooled affine calibration; latest worst held-out pulse/shift RMSE was 1.17e-6 and host-measured KKT gap was 4.74e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, drift-operator, or classification diagnostics.\",\n      \"rejected_reason\": \"This is a steady continuous inversion with no relay states or class labels; the relevant confounding check is source identifiability after nuisance projection.\"\n    }\n  ],\n  \"rationale\": \"Compare affine, quadratic cross-channel, and rational calibration on identical held-out sweeps; a material worst-channel improvement would change the calibrator. Jointly hold out a sensor and a tracer pulse to detect unstable boundary selection. Check whether nuisance projection erases any source direction and whether the prefix log explicitly identifies a regime that could justify changing the pulse-free default.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c0bf8c371d9b88ff0df7e935801a5466172e60c63f0b34748d947f1018631de2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36059.8,
+      "usage_known": true,
+      "prompt_tokens": 33643,
+      "cached_tokens": 0,
+      "completion_tokens": 1452
+    }
+  ]
+}

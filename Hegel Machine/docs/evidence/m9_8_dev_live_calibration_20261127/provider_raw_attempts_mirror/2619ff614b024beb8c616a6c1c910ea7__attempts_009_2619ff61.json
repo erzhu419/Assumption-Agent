@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2619ff614b024beb8c616a6c1c910ea7",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:53:30.101427+00:00",
+  "ended_at_utc": "2026-11-27T13:54:16.787595+00:00",
+  "request_sha256": "d295ca5a0ca4cc4fdb756cfe72232991eebc31687f384ad2451c254cd7f4f959",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46618,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28152,
+    "cached_tokens": 11136,
+    "completion_tokens": 1762
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_margin.py <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\nlog = json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text())\\nfor entry in log:\\n    t = np.asarray(entry['facility_telemetry_trace'])\\n    print('prefix', entry['completed_batch_index'], 'mean', t.mean(axis=0).round(5), 'std', t.std(axis=0).round(5), 'last', t[-1].round(5))\\nfor item in batch:\\n    s = item['study']\\n    t = s['aux_manifold_telemetry']\\n    print('current telemetry mean/std/last', t.mean(axis=0).round(5), t.std(axis=0).round(5), t[-1].round(5))\\n    S, U = m._design(s)\\n    Z = s['Z_nuisance']\\n    projector = np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\n    A = S - Z @ (projector @ S)\\n    nx, ny = s['nx'], s['ny']\\n    max_conservation_error = 0.\\n    for key, length, grid in [('x', s['Lx'], nx), ('y', s['Ly'], ny)]:\\n        import inspect\\n        axis_args = list(inspect.signature(m._axis).parameters)\\n        k, v = (s[next(a for a in (f'{prefix}_{key}', f'{prefix}{key}') if a in s)] for prefix in ('kap', 'vel'))\\n        h = length / (grid - 1)\\n        stencil = m._axis(k, v, h).toarray()\\n        ref = np.zeros_like(stencil)\\n        for i in range(grid):\\n            for step in (-1, 1):\\n                j = (i + step) % grid\\n                coeff = (k[i] + k[j]) / (2*h*h) + max(-step*v[i], 0.) / h\\n                ref[i, j] -= coeff\\n                ref[i, i] += coeff\\n        np.testing.assert_allclose(stencil, ref, rtol=1e-13, atol=1e-12)\\n        max_conservation_error = max(max_conservation_error, np.max(abs(stencil @ np.ones(grid))))\\n    cals = s['sensor_calibration_sweeps']; x = cals['ref_rosette']; y = cals['raw_rosette']\\n    F = np.column_stack((np.ones(len(x)), x))\\n    Q = np.column_stack([np.ones(len(x)), *x.T, *[x[:, i]*x[:, j] for i in range(4) for j in range(i, 4)]])\\n    calibration = {'affine': 0., 'quadratic': 0.}\\n    max_gap = max_comp = max_field_error = 0.\\n    b = s['u_box']; budget = s['total_budget']; ridge = s['source_ridge']\\n    for fold in np.array_split(np.arange(len(x)), 5):\\n        train = np.setdiff1d(np.arange(len(x)), fold)\\n        for name, design in [('affine', F), ('quadratic', Q)]:\\n            coeff = np.linalg.lstsq(design[train], y[train], rcond=None)[0]\\n            rms = np.sqrt(np.mean((design[fold] @ coeff - y[fold])**2, axis=0)).max()\\n            calibration[name] = max(calibration[name], rms)\\n    for raw in [s['y_obs_raw'], *[p['y_pulse_raw'] for p in item.get('campaign_diagnostics') or []]]:\\n        st = dict(s, y_obs_raw=raw)\\n        result = m.solve_batch(st); w = result['weights']; c = result['kkt_certificate']\\n        yy = m._calibrate(st); r = yy - Z @ (projector @ yy)\\n        e = A @ w - r; g = A.T @ e + ridge*w\\n        J = .5*(e@e + ridge*(w@w)); nu = c['nu_sum']\\n        lo = np.asarray(c['lam_lower']); hi = np.asarray(c['lam_upper'])\\n        dl = J - g@w + nu*budget + b*np.minimum(0., g-nu).sum()\\n        comp = max(np.max(abs(lo*w)), np.max(abs(hi*(b-w))))\\n        field_error = np.max(abs(result['terminal_field'] - np.tensordot(w, U, axes=(0, 0))))\\n        np.testing.assert_allclose(c['weights'], w, atol=1e-12, rtol=0)\\n        np.testing.assert_allclose([c['primal_objective'], c['dual_lower_bound']], [J, dl], atol=1e-11, rtol=0)\\n        assert abs(w.sum()-budget)<1e-10 and w.min()>-1e-10 and w.max()<b+1e-10\\n        assert lo.min()>=0 and hi.min()>=0 and np.max(abs(g-nu-lo+hi))<1e-10\\n        assert -1e-9 <= J-dl <= 2e-4 and comp<2e-4 and field_error<1e-12\\n        max_gap = max(max_gap, J-dl); max_comp = max(max_comp, comp); max_field_error = max(max_field_error, field_error)\\n    print('max periodic row-sum error:', max_conservation_error, 'worst calibration fold/channel RMSE:', calibration)\\n    print('worst observation/pulse KKT gap:', max_gap, 'complementarity error:', max_comp, 'terminal-field assembly error:', max_field_error)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fitted wrap coupling → coefficient-free periodic upwinding; verified worst per-shift tracer RMSE is 1.07e-6 and the independent KKT gap is 5.67e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit classification balance, relay modes, or HJB drift\",\n      \"rejected_reason\": \"This study has continuous tracer observations, no class labels or relays, and a steady transport operator. Those checks cannot expose a failure here.\"\n    }\n  ],\n  \"rationale\": \"A mismatch against an independent periodic stencil would warrant correcting the operator; a certificate failure on a measured pulse would warrant correcting the bounded fit. Compare affine and quadratic calibration on held-out sweeps before considering any calibration change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "8baeb5fb89a3d22540030bec6f16a5acfe746be5dfb131a7adb1974e32481daa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46654.0,
+      "usage_known": true,
+      "prompt_tokens": 28152,
+      "cached_tokens": 11136,
+      "completion_tokens": 1762
+    }
+  ]
+}

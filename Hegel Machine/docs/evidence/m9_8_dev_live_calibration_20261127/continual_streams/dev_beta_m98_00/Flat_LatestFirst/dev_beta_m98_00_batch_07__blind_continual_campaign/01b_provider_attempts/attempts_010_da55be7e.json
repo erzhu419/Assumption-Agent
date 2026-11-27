@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da55be7efe1146788b875decb229f7f5",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:15:43.633788+00:00",
+  "ended_at_utc": "2026-11-27T14:16:09.876274+00:00",
+  "request_sha256": "a0578bacb1530e0d8267df1e03ed2c293d30de5cd265d74a5484c84c43b80147",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58004,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30765,
+    "cached_tokens": 11136,
+    "completion_tokens": 870
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem, = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\na = m._rosette_terms(x)\\nS, _ = m._design(s)\\nfull = m._fit_rosette(x, y)\\nerrors = np.empty_like(y)\\nworst_pulse = 0.\\nfor hold in np.array_split(np.random.default_rng(98).permutation(len(x)), 5):\\n    fit = np.setdiff1d(np.arange(len(x)), hold)\\n    coef = m._fit_rosette(x[fit], y[fit])\\n    errors[hold] = abs(a[hold] @ coef - y[hold])\\n    for p in item['campaign_diagnostics']:\\n        signal = (S @ p['w_pulse']).reshape(-1, 4)\\n        raw = p['y_pulse_raw'].reshape(-1, 4)\\n        terms = m._rosette_terms(signal)\\n        e = (terms @ coef - raw).reshape(len(s['mu_shifts']), -1, 4)\\n        scale = np.linalg.norm(raw.reshape(e.shape), axis=1)\\n        worst_pulse = max(worst_pulse, float(np.max(np.linalg.norm(e, axis=1)/scale)))\\nprint('production held-out absolute errors (median, p90, p95, max by bank):', np.quantile(errors, [.5,.9,.95,1], axis=0))\\nprint('held-out rows exceeding 0.01 in any channel:', np.flatnonzero(errors.max(axis=1) > .01).tolist())\\nprint('full fit rows exceeding 0.01 in any channel:', np.flatnonzero(abs(a @ full-y).max(axis=1) > .01).tolist())\\nprint('worst fold-fit raw pulse shift/channel relative L2:', worst_pulse)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 broad calibration underfit -> H2 sparse sweep contamination; the verified solver’s worst public pulse shift/channel relative error is 2.54e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational terms based on the previous fold audit\",\n      \"rejected_reason\": \"That audit used ordinary least squares rather than the production fitter, so its large errors do not establish that the production basis is incomplete.\"\n    }\n  ],\n  \"rationale\": \"Run the production calibration fitter inside each fold to see whether the large sweep errors are confined to isolated rows or recur on clean tracer pulses. Revisit the calibration only if the discrepancy persists across clean pulse slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d15709329f879a55afe0eb29c822795059c26b61adc50a782ebb1d4e909c1184",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26202.75,
+      "usage_known": true,
+      "prompt_tokens": 30765,
+      "cached_tokens": 11136,
+      "completion_tokens": 870
+    }
+  ]
+}

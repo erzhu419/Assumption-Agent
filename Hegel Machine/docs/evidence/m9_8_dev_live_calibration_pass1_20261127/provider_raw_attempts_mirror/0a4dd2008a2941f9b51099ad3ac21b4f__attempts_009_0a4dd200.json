@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0a4dd2008a2941f9b51099ad3ac21b4f",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:21:16.913129+00:00",
+  "ended_at_utc": "2026-11-27T13:21:53.555909+00:00",
+  "request_sha256": "dcea6312986dda9a5e0ecc216662916cf900a11983a4bb2d937714c2e0eecb87",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45423,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24214,
+    "cached_tokens": 0,
+    "completion_tokens": 1495
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rosette_margin_audit.py <<'PY'\\nimport itertools\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _Rosette, _cyclic_design, _robust_fit\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\npairs = list(itertools.combinations_with_replacement(range(4), 2))\\ndef designs(x, family, q=None, strength=0.):\\n    base = [_cyclic_design(x, j) for j in range(4)]\\n    if family == 'cyclic cubic':\\n        return base\\n    if family == 'all quadratic contrasts':\\n        # All quadratic monomials span the squared pairwise sums/differences.\\n        quad = np.column_stack([x[:, i]*x[:, j] for i,j in pairs])\\n        return [np.column_stack((a[:, :4], quad, a[:, -1])) for a in base]\\n    return [np.column_stack((a[:, :4], a[:, 4:] / (1 + strength*(x @ q[j])**2)[:, None])) for j,a in enumerate(base)]\\neye = np.eye(4)\\nconfigs = [(np.roll(eye, -1, axis=0), t) for t in (.05, .2, .8)]\\nconfigs += [(eye, t) for t in (.05, .2, .8)]\\nconfigs += [(eye + sign*np.roll(eye, -1, axis=0), t) for sign in (-1, 1) for t in (.05, .2, .8)]\\ndef prediction(x, y, tr, te, family, config=()):\\n    a = designs(x, family, *config)\\n    c, _ = _robust_fit([z[tr] for z in a], y[tr])\\n    return np.column_stack([z[te] @ c[:, j] for j,z in enumerate(a)])\\ndef rms(r):\\n    return np.sqrt(np.mean(r*r, axis=0)).max()\\nfor item in items:\\n    study = item['study']\\n    s = study['sensor_calibration_sweeps']; x, y = s['ref_rosette'], s['raw_rosette']\\n    n = np.arange(len(x)); axis = np.count_nonzero(x, axis=1) == 1\\n    # Published fixture's gross spikes are separated from valid readings by amplitude.\\n    clean = np.max(np.abs(y), axis=1) < 7\\n    families = ('cyclic cubic', 'all quadratic contrasts', 'rational saturation')\\n    worst = {name: 0. for name in families}; inv_worst = 0.\\n    for held in [n%4 == k for k in range(4)] + [axis]:\\n        tr = ~held\\n        for family in families:\\n            config = ()\\n            if family == 'rational saturation':\\n                def inner_score(cfg):\\n                    scores = []\\n                    for k in range(3):\\n                        val = tr & (n%3 == k)\\n                        pred = prediction(x,y,tr & ~val,val,family,cfg)\\n                        # Use a robust score for selecting saturation without using outer labels.\\n                        scores.append(np.median(np.linalg.norm(pred-y[val], axis=1)))\\n                    return max(scores)\\n                config = min(configs, key=inner_score)\\n            for slice_mask in (axis, ~axis):\\n                te = held & clean & slice_mask\\n                if np.any(te):\\n                    err = rms(prediction(x,y,tr,te,family,config)-y[te])\\n                    worst[family] = max(worst[family],err)\\n                    if family == 'cyclic cubic':\\n                        inv_worst = max(inv_worst, rms(_Rosette(x[tr],y[tr]).invert(y[te])-x[te]))\\n    fit = _Rosette(x,y)\\n    raw_blocks = [study['y_obs_raw']] + [p['y_pulse_raw'] for p in study.get('reference_tracer_pulses',[]) if p['y_pulse_raw'] is not None]\\n    ref_blocks = [fit.invert(b).reshape(-1,4) for b in raw_blocks]\\n    sigma_min = min(np.linalg.svd(fit.jacobian(b),compute_uv=False)[:,-1].min() for b in ref_blocks)\\n    print('Worst held-out forward channel RMSE by family:',worst)\\n    print('Worst cyclic inverse channel RMSE:',inv_worst,'; smallest Jacobian singular value on measurement and pulse blocks:',sigma_min)\\n    print('Study fields:', ', '.join(sorted(study)))\\n    assert inv_worst < 1e-4\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/rosette_margin_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -B /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic response → H2 robust cyclic cubic response; worst held-out inverse channel RMSE is 1.80e-5 before the challenger audit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, control-drift, or class-balance tests\",\n      \"rejected_reason\": \"Those mechanisms do not describe this continuous rosette calibration. The relevant nuisance is gross EMI in the paired sweeps.\"\n    }\n  ],\n  \"rationale\": \"Test whether extra pairwise contrasts or rational saturation materially improve the worst measured sweep slice, with saturation selection inside each training fold. Check the inverse Jacobian on actual observation and pulse blocks so small forward residuals are not mistaken for a well-conditioned inverse. Leave both artifacts and the fixture unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "fabcb1fd304872c78cdc7cda15b1cbc23f4d1db89419cdec5789cd1814390292",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36606.6,
+      "usage_known": true,
+      "prompt_tokens": 24214,
+      "cached_tokens": 0,
+      "completion_tokens": 1495
+    }
+  ]
+}

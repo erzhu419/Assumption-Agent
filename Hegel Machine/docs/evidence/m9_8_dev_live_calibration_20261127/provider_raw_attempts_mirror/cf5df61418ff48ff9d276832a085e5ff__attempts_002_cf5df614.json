@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cf5df61418ff48ff9d276832a085e5ff",
+  "call_seq": 2,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:54:07.318496+00:00",
+  "ended_at_utc": "2026-11-27T13:54:35.286241+00:00",
+  "request_sha256": "b9a0e9dc1149bd9cc2a1edce43e6902773127fe4501dfd73124aacc7546f0b53",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12362,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14929,
+    "cached_tokens": 9600,
+    "completion_tokens": 780
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport pickle\\nimport numpy as np\\nitems=pickle.load(open('public_batch.pkl','rb'))\\ndef show(d, prefix='', depth=0):\\n for k,v in d.items():\\n  if isinstance(v,dict):\\n   print(prefix+k+':')\\n   if depth<2: show(v,prefix+'  ',depth+1)\\n  elif isinstance(v,np.ndarray):\\n   print(prefix+k,v.shape,v.dtype, np.round(np.nanpercentile(v,[0,5,50,95,100]),5) if v.size and v.dtype.kind in 'fiu' else '')\\n  else: print(prefix+k,type(v).__name__,str(v)[:180])\\nprint('batch count',len(items))\\nfor item in items:\\n print('item keys',list(item)); show(item['dataset'])\\n c=item['dataset']['calibration_load_cells']; x=np.asarray(c['true_channel_loads']); y=np.asarray(c['bridge_raw']); print('calibration sample true/raw\\\\n',np.column_stack([x,y])[:12]); print('true covariance\\\\n',np.cov(x.T))\\n a=np.column_stack([np.ones(len(x)),x]); w=np.ones(len(x));\\n for _ in range(20):\\n  b=np.linalg.lstsq(a*w[:,None]**.5,y*w[:,None]**.5,rcond=None)[0]; e=y-a@b; s=1.4826*np.median(abs(e-np.median(e,axis=0)),axis=0)+1e-12; w=1/(1+np.mean((e/(2.5*s))**2,axis=1))\\n print('robust affine coefficients\\\\n',b); print('absolute residual quantiles by channel\\\\n',np.percentile(abs(e),[10,50,80,90,95,99,100],axis=0)); print('largest residual row indices',np.argsort(np.linalg.norm(e,axis=1))[-12:])\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo ==== \\\"$f\\\"; grep -nE '^def ' \\\"$f\\\" | head -35; done\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.robust_residual_weights\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: measure robust affine residuals and deployment load ranges before choosing nonlinear terms; held-out error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived affine calibration unchanged\",\n      \"rejected_reason\": \"The public gate reports an upstream mismatch, so transfer needs support from this batch's calibration measurements.\"\n    }\n  ],\n  \"rationale\": \"The shape and range audit detects missed trial fields and calibration support gaps; the robust affine residual distribution establishes whether to test smooth nonlinear terms or retain the simpler map.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "1a2832f0620c8f627b27342b2baa7a1e3f85cf9964f54794e9a71787b0913510",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27933.04,
+      "usage_known": true,
+      "prompt_tokens": 14929,
+      "cached_tokens": 9600,
+      "completion_tokens": 780
+    }
+  ]
+}

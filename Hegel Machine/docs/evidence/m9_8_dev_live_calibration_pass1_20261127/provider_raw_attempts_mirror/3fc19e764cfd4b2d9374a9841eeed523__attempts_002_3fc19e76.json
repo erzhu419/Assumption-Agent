@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3fc19e764cfd4b2d9374a9841eeed523",
+  "call_seq": 2,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:54:44.196092+00:00",
+  "ended_at_utc": "2026-11-27T12:55:10.818879+00:00",
+  "request_sha256": "3ddc046f68247f3318a485840ea299ffa38666dc0e769aef5fa61a401afa3f4c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 13001,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15428,
+    "cached_tokens": 0,
+    "completion_tokens": 706
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; print('calibration:',[(k,np.shape(v) if not isinstance(v,dict) else list(v)) for k,v in c.items()]); x=c['ref_rosette']; y=c['raw_rosette']; print('sweep extent:',x.min(0),x.max(0), 'active-channel counts:',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('first 16 reference/raw pairs:'); print(np.round(np.c_[x,y][:16],5)); print('pulses:',[[(k,np.shape(v)) for k,v in p.items()] for p in s['reference_tracer_pulses']]); print('bank layout:',s['row_bank_id'].reshape(-1,4)[:12]); print('best affine residual quantiles:',np.quantile(np.linalg.norm(y-np.c_[np.ones(len(x)),x]@np.linalg.lstsq(np.c_[np.ones(len(x)),x],y,rcond=None)[0],axis=1),[0,.25,.5,.75,.9,.95,1])); print('single-bank shapes:',[(k,np.shape(v)) for k,v in c['single_bank_sweeps'].items()] if isinstance(c.get('single_bank_sweeps'),dict) else type(c.get('single_bank_sweeps')))\\nPY\\nprintf '\\\\n--- archive calibration landmarks ---\\\\nrg -n 'def .*calib|def .*rosette|tanh|saturat|y_pulse_raw|raw_readout' /tmp/hegel_continual_archive/*solver.py _verified_downstream.py | head -85\\nprintf '\\\\n--- apparatus log keys ---\\\\npython3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; d=json.load(open(p)); print(str(d)[:1800])\\nPY\\nprintf '\\\\n--- primitive contract ---\\\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_robust_affine_projection.profile_weighted_affine | head -18\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine channel mixing → H2 robust nonlinear rosette mapping; worst-slice error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a broad polynomial immediately\",\"rejected_reason\":\"The sweep layout may leave cross-channel terms unidentified; inspect mixed-channel support and prior model forms first.\"}],\"rationale\":\"Check sweep geometry to decide which terms can be estimated, and inspect paired readings and affine residuals to distinguish smooth curvature from spike rows. Check pulse and bank layouts before implementing an inverse so reshaping does not mix channels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "042b07a8f95ecb210efe970320c1220c99495830bb2f35da0cc21621e6a13dd7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26580.85,
+      "usage_known": true,
+      "prompt_tokens": 15428,
+      "cached_tokens": 0,
+      "completion_tokens": 706
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8185facea214f3babc25110f96ef946",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:49:51.634623+00:00",
+  "ended_at_utc": "2026-11-27T13:50:19.935764+00:00",
+  "request_sha256": "0d6c0db811c1f77e646902f28012f5efc1497d0bf6bab8606fe7156d7d0cd55f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53885,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30523,
+    "cached_tokens": 11136,
+    "completion_tokens": 878
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; a,b=m._prepare(d); out=m.solve_batch(d)\\nraw=c['bridge_raw']; loads=c['true_channel_loads']; z=np.c_[raw,np.ones(len(raw))]; err=z@np.linalg.lstsq(z,loads,rcond=None)[0]-loads\\nprint('bridge per-channel RMSE',np.sqrt(np.mean(err**2,axis=0)),'total RMSE',np.sqrt(np.mean(err.sum(1)**2))); print('fit',out['estimated_taus'],out['hereditary_weights']); print('timing',d['past_dt'],d['eval_times'])\\nfor k,v in c['single_channel_sweeps'].items(): print('sweep',k,np.shape(v),np.asarray(v)[:8]);\\nfor name,u in [('train',a),('test',b)]:\\n g=d[name]; q=g['aux_chamber_telemetry']; print(name,'aux means',q.mean(0).round(3),'std',q.std(0).round(3),'quartiles',np.quantile(q,[.25,.75],axis=0).round(3)); print('corr with lab, stratum, hold, drift',np.corrcoef(np.c_[q,g['lab_id'],g['stratum'],u[1],u[2]@out['hereditary_weights'][2:]].T)[:4,4:].round(2))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: shared benchtop material law → H2: the reversal in the prefix trace favors a return to carried chamber memory; worst held-out median absolute errors are 0.01418 for strain and 0.00760 for rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Force the latest archived reset law\",\"rejected_reason\":\"The prefix indicator reversed after the prior reset campaign, and the public gate rejected latest-first transfer.\"}],\"rationale\":\"Check whether a non-affine bridge or a strong coupon-level telemetry dependence provides a concrete reason to alter the carried-memory baseline. A poor calibration fit would trigger a bridge-model comparison; otherwise the observed apparatus reversal, rather than calibration, should drive the chamber choice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "14f4bf4d439771172bbd3cafbf046b9d557d128173dc85413fd71a0fc85a4b06",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28265.47,
+      "usage_known": true,
+      "prompt_tokens": 30523,
+      "cached_tokens": 11136,
+      "completion_tokens": 878
+    }
+  ]
+}

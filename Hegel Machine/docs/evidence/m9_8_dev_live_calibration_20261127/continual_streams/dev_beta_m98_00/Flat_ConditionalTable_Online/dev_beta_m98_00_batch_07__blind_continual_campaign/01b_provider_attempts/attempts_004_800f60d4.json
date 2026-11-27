@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "800f60d46aa842768d593f04ac677121",
+  "call_seq": 4,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:04:43.115248+00:00",
+  "ended_at_utc": "2026-11-27T14:05:13.913833+00:00",
+  "request_sha256": "c8e9d6e0f0605439a6377ceb257af615a5a5a2288d850969bade973bb5f7aefb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 33409,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22924,
+    "cached_tokens": 9600,
+    "completion_tokens": 1013
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/pulse_compare.py <<'PY'\\nimport glob, importlib.util, pickle\\nimport numpy as np\\np='/tmp/hegel_continual_archive/'\\ndef load(pattern):\\n    spec=importlib.util.spec_from_file_location('m',glob.glob(p+pattern)[0]); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nmods={k:load(s) for k,s in [('robin','*s00_solver.py'),('sealed','*01_solver.py'),('periodic','*03_solver.py'),('nonlinear','*06_solver.py')]}\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; sweeps=s['sensor_calibration_sweeps']; x,y=sweeps['ref_rosette'],sweeps['raw_rosette']; Z=s['Z_nuisance']; n=len(x); idx=np.arange(n)\\ndef fit(x,y,nonlinear):\\n    X=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(X,y,rcond=None)[0]; err=np.linalg.norm(y-X@b,axis=1); keep=err<=max(6*np.median(err),1e-12)\\n    if nonlinear: return mods['nonlinear']._fit_rosette(x,y)\\n    return np.linalg.lstsq(X[keep],y[keep],rcond=None)[0]\\nfor nonlinear in [False,True]:\\n    errs=[]\\n    for fold in range(5):\\n        test=idx%5==fold; b=fit(x[~test],y[~test],nonlinear)\\n        pred=np.column_stack([mods['nonlinear']._rosette_terms(x[test],i)@b[:,i] for i in range(4)]) if nonlinear else np.c_[np.ones(test.sum()),x[test]]@b\\n        errs.extend(np.linalg.norm(y[test]-pred,axis=1))\\n    print('cal nonlinear=',nonlinear,'error q50/80/90/max',np.quantile(errs,[.5,.8,.9,1])); print('coefficients',fit(x,y,nonlinear).round(6))\\n    for boundary in ('robin','sealed','periodic'):\\n        D,_=mods[boundary]._design(s); stats=[]\\n        for pulse in a['campaign_diagnostics']:\\n            if nonlinear: yc=mods['nonlinear']._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw']))\\n            else:\\n                b=fit(x,y,False); yc=np.linalg.solve(b[1:].T,(pulse['y_pulse_raw'].reshape(-1,4)-b[0]).T).T.ravel()\\n            d=yc-D@pulse['w_pulse']; err=[]\\n            for group in np.array_split(np.arange(len(d)),len(d)//4):\\n                keep=~np.isin(np.arange(len(d)),group); gamma=np.linalg.lstsq(Z[keep],d[keep],rcond=None)[0]; err.extend(d[group]-Z[group]@gamma)\\n            err=np.asarray(err).reshape(-1,4); stats.append((np.sqrt(np.mean(err**2)),np.max(np.sqrt(np.mean(err**2,axis=1))),np.sqrt(np.mean(d*d))))\\n        print(boundary,stats)\\nprint('single-bank sweep layout', {k:np.shape(v) for k,v in sweeps['single_bank_sweeps'].items()})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/pulse_compare.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived boundary candidates -> known-source pulse discrimination with held-out rosette residuals; comparison is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Compare fits to production observations\",\"rejected_reason\":\"Re-estimating the unknown weights can hide a wrong boundary; the diagnostic pulses hold the weights fixed.\"}],\"rationale\":\"Cross-fit the calibration on the reference sweeps and fit pulse nuisance coefficients outside each held-out rosette. If none of the archived boundaries predicts both pulses well, test mixed-axis or modified wall stencils before choosing an operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "b21d89ed6a86986214d280eb4cfd995742bb838a3d44103ae8015208885d97dd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30761.63,
+      "usage_known": true,
+      "prompt_tokens": 22924,
+      "cached_tokens": 9600,
+      "completion_tokens": 1013
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "127abf6fad5342d0ba2f36f6c2663de3",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:12:29.331667+00:00",
+  "ended_at_utc": "2026-11-27T13:13:07.380155+00:00",
+  "request_sha256": "1538e1ae48d8f00f3b27e2a33f2a400c2dda5ece5ef97676e26a89f07942059d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50842,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29982,
+    "cached_tokens": 11136,
+    "completion_tokens": 1257
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/wall_effect.py <<'PY'\\nexec(open('/tmp/wall_diag.py').read().split(\\\"F={'base'\\\")[0])\\nnp.set_printoptions(precision=5,suppress=True)\\nridge=s['source_ridge']; P=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(nz),z.T); yy=y-z@(P@y)\\ndef certificate(wall):\\n S,U=m._response(s,wall,src); A=S-z@(P@S); w=m._weights(A,yy,ridge,cap,total); r=A@w-yy; G=A.T@r+ridge*w; J=(r@r+ridge*(w@w))/2; return w,w@U.reshape(n,-1),G,J,A\\nw0,f0,g0,j0,A0=certificate(np.ones(8)); print('nominal solution',w0,'objective',j0,'gradient',g0)\\n_,e0,q0=fit(()); print('nominal empirical residual by shift (RMS then mean):',np.sqrt(np.mean(e0.reshape(3,-1)**2,axis=1)),e0.reshape(3,-1).mean(1)); print('nominal empirical residual by routing bank:',np.sqrt(np.mean(e0.reshape(-1,4)**2,axis=0))); print('cross-shift empirical residual corr:',np.corrcoef(e0.reshape(3,-1)))\\nfor name,groups in [('shared robin',((0,1,4,5),)),('axis robin',((0,1),(4,5))),('separate robin',((0,),(1,),(4,),(5,))),('all',tuple((j,) for j in range(8)))]:\\n wall,e,q=fit(groups); w,f,g,j,A=certificate(wall); d=g0-m._dual(g0,w0,cap); gap_ref=np.maximum(d,0)@w+np.maximum(-d,0)@(cap-w)+.5*np.linalg.norm(A0@(w-w0))**2+.5*ridge*np.linalg.norm(w-w0)**2\\n print(name,'relative S change',np.linalg.norm(A-A0)/np.linalg.norm(A0),'weight max shift',np.max(abs(w-w0)),'field rel shift',np.linalg.norm(f-f0)/np.linalg.norm(f0),'objective',j,'nominal objective excess',gap_ref)\\n print('  held-shift RMS',np.array([np.sqrt(np.mean(fit(groups,np.arange(len(y))//32!=k)[1][k*32:(k+1)*32]**2)) for k in range(3)]))\\nprint('nominal held-shift RMS',np.array([np.sqrt(np.mean(fit((),np.arange(len(y))//32!=k)[1][k*32:(k+1)*32]**2)) for k in range(3)]))\\nprint('nominal baseline wall-tangent distinguishability')\\nS0=m._response(s,np.ones(8),src)[0]; T=np.c_[S0[:,1:]-S0[:,:1],z]; D=[]\\nfor j in range(8):\\n wall=np.ones(8); wall[j]+=1e-3; D.append((m._response(s,wall,src)[0]-S0)@q0[:n]/1e-3)\\nD=np.array(D).T; D-=T@np.linalg.lstsq(T,D,rcond=None)[0]; print(np.linalg.svd(D,compute_uv=False)); print(np.corrcoef(D.T))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/wall_effect.py; cat /tmp/hegel_continual_archive/archive_manifest.json\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (free asymmetric boundary fit) -> H2 (retain nominal unless wall changes predict unseen shifts and materially affect the solution); nominal worst held-rosette RMSE is 0.010308, versus 0.0107136 for the full eight-parameter wall.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Promote the smallest training-residual wall\",\"rejected_reason\":\"The eight-parameter fit improves training RMSE by 4.2% but worsens worst held-rosette RMSE.\"}],\"rationale\":\"Check whether holding out entire shifts reveals a wall effect hidden by the rosette split. Measure how much the competing walls change the weights and terminal field, and whether Robin and wall-face parameters are separately identifiable.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "bd6316cb4a7e00f8bd1e5c0a2252289e81e83bf426fb7523f680663aec586510",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38009.53,
+      "usage_known": true,
+      "prompt_tokens": 29982,
+      "cached_tokens": 11136,
+      "completion_tokens": 1257
+    }
+  ]
+}

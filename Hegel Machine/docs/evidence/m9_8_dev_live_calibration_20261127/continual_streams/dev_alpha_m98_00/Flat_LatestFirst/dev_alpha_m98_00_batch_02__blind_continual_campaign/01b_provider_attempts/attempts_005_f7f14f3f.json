@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7f14f3f7c314471abac9e8cc58128ef",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:47:34.363397+00:00",
+  "ended_at_utc": "2026-11-27T13:48:03.537796+00:00",
+  "request_sha256": "ff416218a6bd580dfa7ac67bb21c9dd51391c0add6f6038245d533fa17931eec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41054,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26221,
+    "cached_tokens": 11136,
+    "completion_tokens": 1097
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/hegel_continual_archive/dev_alpha_m98_00_s00_solver.py /holdout_task/batch_solver.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'control panel alignment' | cut -c1-270 | head -4\\npython3 - <<'PY'\\nimport importlib.util,pickle,numpy as np,json\\np='/holdout_task/batch_solver.py'; s=importlib.util.spec_from_file_location('candidate',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr=d['train']; dt,t=d['past_dt'],d['eval_times']; a,b=m._prepare(d); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d)\\nprint('fit',out['estimated_taus'],out['hereditary_weights']); c=d['calibration_load_cells']; z=np.c_[c['bridge_raw'],np.ones(len(c['bridge_raw']))]; e=z@m._stress_calibration(c)-c['true_channel_loads'].sum(1);print('cal rms/max',np.sqrt(np.mean(e**2)),abs(e).max()); print('sweep',[(k,v[:12].round(4)) for k,v in c['single_channel_sweeps'].items()]);print('missing',np.isnan(np.vstack([d[g]['coupon_features_raw'] for g in ('train','test')])).sum(0));\\nfor field in ('lab_id','stratum'):\\n for val in np.unique(tr[field]):\\n  j=tr[field]==val; ta,th=m._fit(dt,t,tuple(v[~j] for v in a),y[~j],r[~j]); A,R=m._design(ta,dt,t,tuple(v[j] for v in a));print('fold',field,val,'tau',ta.round(6),'curve median by time',np.median(abs(A@th-y[j]),axis=0).round(7),'rate median',np.median(abs(R@th-r[j])))\\nfor g,u in [('train',a),('test',b)]:\\n q=d[g]['aux_chamber_telemetry']; print(g,'aux mean/std',q.mean(0).round(4),q.std(0).round(4),'aux corr with hold, drift, past, strain0',np.corrcoef(np.c_[q,u[1],u[2]@out['hereditary_weights'][2:],u[0],d[g]['strain_0']].T)[:4,4:].round(2));print(g,'aux first',q[:4].round(4))\\nfor entry in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n q=np.asarray(entry['facility_telemetry_trace']);print(entry['completed_batch_index'],'half means',q[:8].mean(0).round(3),q[8:].mean(0).round(3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived benchtop fit → H2: independently selected chamber law; leave-one-lab and leave-one-stratum metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Immediately copy the latest chamber reset law\",\"rejected_reason\":\"A recency-based transfer was rejected by the public gate; that does not identify which component failed.\"}],\"rationale\":\"Establish a runnable baseline and use held-out benchtop slices to detect an unstable fit or calibration error. Compare coupon telemetry against measured covariates and inspect the trace for temporal changes before deciding whether the archived chamber law transfers.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "c8d9da6cf2e619e66f83d9048b7dc033271958a04df23cf334130e3059f160e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29138.59,
+      "usage_known": true,
+      "prompt_tokens": 26221,
+      "cached_tokens": 11136,
+      "completion_tokens": 1097
+    }
+  ]
+}

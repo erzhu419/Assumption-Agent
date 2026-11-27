@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c442140a45254e7e9deec1e3ba5f341c",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:00:50.094590+00:00",
+  "ended_at_utc": "2026-11-27T14:01:22.781012+00:00",
+  "request_sha256": "5a6a27d7f76b281fa76d34491a8994fc6793a3b481b85dfb86e807409b27098d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45553,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26034,
+    "cached_tokens": 9600,
+    "completion_tokens": 1304
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/audit_m98_calibration.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', root + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open(root + 'public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nref = s['sensor_calibration_sweeps']['ref_rosette']\\nraw = s['sensor_calibration_sweeps']['raw_rosette']\\n\\ndef features(x, i, extended):\\n    base = m._rosette_terms(x, i)\\n    if not extended:\\n        return base\\n    a = x[:, i]\\n    b = x[:, (i+1)%4]\\n    c = x[:, (i-1)%4]\\n    d = x[:, (i+2)%4]\\n    return np.column_stack((base, d, a*b*c, (a-b)/(1+(a-b)**2), (a+b)/(1+(a+b)**2)))\\n\\n# Hold out contiguous amplitude bands, including the strongest sweep band.\\nfolds = np.array_split(np.argsort(np.max(np.abs(ref), axis=1)), 5)\\nfor label, ext in [('current', False), ('extended', True)]:\\n    worst = 0.\\n    for j, test in enumerate(folds):\\n        train = np.concatenate([f for i,f in enumerate(folds) if i != j])\\n        x, y = ref[train], raw[train]\\n        coeff = m._fit_rosette(x, y)\\n        fitted = np.column_stack([features(x,i,False)@coeff[:,i] for i in range(4)])\\n        rowerr = np.linalg.norm(y-fitted,axis=1)\\n        keep = rowerr <= max(10*np.median(rowerr),1e-5)\\n        if ext:\\n            coeff = np.column_stack([np.linalg.lstsq(features(x[keep],i,True),y[keep,i],rcond=None)[0] for i in range(4)])\\n        pred = np.column_stack([features(ref[test],i,ext)@coeff[:,i] for i in range(4)])\\n        residual = raw[test]-pred\\n        # Report gross discrepancies separately instead of letting them mask the ordinary sweeps.\\n        gross = np.max(np.abs(residual),axis=1)>0.05\\n        rmse = np.sqrt(np.mean(residual[~gross]**2,axis=0))\\n        worst = max(worst,rmse.max())\\n        print(label,'band',j,'ordinary channel RMSE',rmse,'gross rows',gross.sum())\\n    print(label,'worst ordinary band/channel RMSE',worst)\\n\\ncoef=m._fit_rosette(ref,raw)\\nfor label, trace in [('observation',s['y_obs_raw'])]+[(f'pulse{i}',p['y_pulse_raw']) for i,p in enumerate(item['campaign_diagnostics'] or [])]:\\n    x=m._calibrate(dict(s,y_obs_raw=trace)).reshape(-1,4)\\n    f=np.column_stack([features(x,i,False)@coef[:,i] for i in range(4)])\\n    err=np.max(np.abs(f-trace.reshape(-1,4)))\\n    print(label,'maximum inverse round-trip error',err,'maximum calibrated amplitude',np.abs(x).max())\\n    assert err < 1e-8\\nprint('study fields',sorted(s.keys()))\\nPY\\npython3 -I /tmp/audit_m98_calibration.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 Robin walls and affine readout -> H2 sealed walls and nonlinear rosette calibration; worst pulse-by-shift RMSE is 1.92e-6 and the verified KKT duality gap is 3.11e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode or within-cohort classification checks\",\n      \"rejected_reason\": \"The specified experiment is steady-state tomography with continuous observations and an explicit nuisance design, not a switched process or classification task.\"\n    }\n  ],\n  \"rationale\": \"Hold out real calibration sweeps by amplitude to test whether omitted rational, pairwise, or three-channel terms matter at the strongest excitation. If the challenger materially improves the worst slice, compare its tracer-pulse predictions before editing. Check observed and pulse round trips separately to detect a failure of the deployed nonlinear inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9461eb1e7ef0e5684b7e142266e96e36ddc7e4fd3c96b6f9492fac1856c79df5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32644.64,
+      "usage_known": true,
+      "prompt_tokens": 26034,
+      "cached_tokens": 9600,
+      "completion_tokens": 1304
+    }
+  ]
+}

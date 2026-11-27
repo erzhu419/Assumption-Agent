@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4f08767d5d8a46c19e8c8fdff08d6ba0",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:17:26.759376+00:00",
+  "ended_at_utc": "2026-11-27T14:17:56.253838+00:00",
+  "request_sha256": "2942fec894624a81c705604f6dfd9a41e4956343203e2c2bdcfcf748a6947342",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71286,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34946,
+    "cached_tokens": 11136,
+    "completion_tokens": 1029
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; loads=c['true_channel_loads']; _,cut=m._stress_calibration(c); shifted=np.max(np.abs(raw),axis=1)>cut; magnitude=np.max(np.abs(loads),axis=1); order=np.argsort(magnitude); fold=np.empty(len(raw),int)\\nfor state in (False,True):\\n    rows=order[shifted[order]==state]; fold[rows]=np.arange(len(rows))%4\\nerr=np.empty_like(loads)\\nfor k in range(4):\\n    train=fold!=k; cal=m._stress_calibration(dict(bridge_raw=raw[train],true_channel_loads=loads[train])); err[~train]=m._channel_loads(raw[~train],cal)-loads[~train]\\nfor state in (False,True):\\n    e=err[shifted==state]; print('held-out bridge state',state,'n',len(e),'max channel/total stress error',np.max(abs(e)),np.max(abs(e.sum(axis=1))))\\nfor group in ('train','test'):\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        a=np.max(np.abs(d[group][key]),axis=-1); print(group,key,'state counts',[(a<=cut).sum(),(a>cut).sum()],'minimum gap to bridge split',np.min(abs(a-cut)))\\ntest=m.solve_batch(d); p,_=m._prepare(d); tr=d['train']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; dt,t=d['past_dt'],d['eval_times']; tau0=test['estimated_taus']; fits=[]\\nfor key in ('lab_id','stratum'):\\n    stats=[]\\n    for v in np.unique(tr[key]):\\n        a=tr[key]==v; tau,b=m._fit(dt,t,tuple(x[~a] for x in p),y[~a],r[~a]); C,R=m._design(tau,dt,t,tuple(x[a] for x in p)); ec=C@b-y[a]; er=R@b-r[a]; stats.append([*abs(tau/tau0-1),np.median(abs(ec)),np.sqrt(np.mean(er**2))]); fits.append(tau)\\n    print(key,'worst fractional tau shifts (fast/slow), median abs strain, rate RMSE',np.max(stats,axis=0))\\nprint('full-fit spectrum',tau0,'jackknife extrema',np.min(fits,axis=0),np.max(fits,axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reset chamber → H2 carried memory with linear forcing; worst diagnostic-lab strain and initial-rate RMSE are 0.01186 and 0.01073, and this audit targets independent bridge and spectrum margins.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the saturation and signed-state tests\",\n      \"rejected_reason\": \"The previous audit already tested both on held-out labs; neither materially improved the strain or rate bottleneck.\"\n    }\n  ],\n  \"rationale\": \"Held-out calibration rows can reveal bridge inversion errors hidden by in-sample fit, especially near the offset split. Lab and stratum jackknives can reveal instability in the two estimated time constants even when prediction error stays low. Change the solver only if either test exposes a material failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "8971eaf6a169df67c86f0d43c23ef76d03ea9bddce5a0461f8915f7c7d7affe0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29453.58,
+      "usage_known": true,
+      "prompt_tokens": 34946,
+      "cached_tokens": 11136,
+      "completion_tokens": 1029
+    }
+  ]
+}

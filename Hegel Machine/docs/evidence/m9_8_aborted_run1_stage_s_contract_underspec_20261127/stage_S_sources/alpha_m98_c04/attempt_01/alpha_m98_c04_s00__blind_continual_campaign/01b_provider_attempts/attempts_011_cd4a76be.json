@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd4a76be7f144fbf91f912e740de874c",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c04__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:25:04.136573+00:00",
+  "ended_at_utc": "2026-11-27T12:25:29.166663+00:00",
+  "request_sha256": "f80cb0a594bf71a9dfd513aa422e192e33b8953b365ed94c5cc2d31b6c9ad077",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66669,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36891,
+    "cached_tokens": 0,
+    "completion_tokens": 929
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rheo_loadcheck.py <<'PY'\\nexec(open('/tmp/rheo_factor.py').read().split(\\\"for mode,spec in\\\")[0])\\nfor mode,spec in [('load','fixed'),('cell','fixed'),('load','soft')]:\\n pars=factor(allix,mode,spec); print(mode,spec,'drift coefficients',np.round(pars[2]*np.r_[[.1]+[.08]*4+[.12]*12, ([.045]+[.035]*12) if mode=='load' else []],4));\\n for tags in (np.arange(len(cell)),cell,pi['lab_id']):\\n  yp=np.zeros_like(s._obs(pi))\\n  for k in np.unique(tags):\\n   ix=tags==k; yp[ix]=pred({key:v[ix] for key,v in pi.items()},x[2][ix],factor(~ix,mode,spec),mode)\\n  r=abs(yp-s._obs(pi)); c=r[:,:-1]; v=r[:,-1]\\n  print('folds',len(np.unique(tags)),'p90',np.round([np.quantile(c,.9),np.quantile(v,.9)],4),'worst cell',np.round([max(c[cell==i].mean() for i in np.unique(cell)),max(v[cell==i].mean() for i in np.unique(cell))],4))\\ntrain_hold=tr['hold_channel_raw']@b[1:]+b[0]\\nfor name,g in [('pilot',pi),('test',te)]:\\n hold=g['hold_channel_raw']@b[1:]+b[0]; c=g['lab_id']*3+g['stratum']; print(name,'hold support',[(int(i),np.round([min(hold[c==i]),max(hold[c==i])],2).tolist()) for i in np.unique(c)])\\nprint('train hold median',np.median(train_hold))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_loadcheck.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cell offsets with a refitted spectrum → H2 cell offsets and held-load interactions with a bench-anchored spectrum; worst cell-held-out strain MAE is 0.399 for fixed-spectrum cell offsets versus 0.407 for soft-spectrum load interactions.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use cell-specific drift gains\",\"rejected_reason\":\"They increased coupon-held-out worst-cell strain MAE from 0.121 to 0.148 and cell-held-out worst-cell MAE from 0.399 to 0.432.\"}],\"rationale\":\"Cross the best drift structure with the better-conditioned fixed spectrum. Check test load coverage because sparse cell-specific load slopes should not extrapolate unchecked beyond pilot loads.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b99ecf6f093f7f35590453c0f42e499c5b71f57f65b336043879b343b684d87e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24999.51,
+      "usage_known": true,
+      "prompt_tokens": 36891,
+      "cached_tokens": 0,
+      "completion_tokens": 929
+    }
+  ]
+}

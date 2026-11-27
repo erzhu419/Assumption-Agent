@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aeb72d666812471098b2f11d0b49fd93",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:43:59.815207+00:00",
+  "ended_at_utc": "2026-11-27T13:44:37.391916+00:00",
+  "request_sha256": "d002dd1d3564e90b2e6035db4d9dfecd8d473c1627c293ce43ce4d0dbfbc52df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58929,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33063,
+    "cached_tokens": 5504,
+    "completion_tokens": 1440
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_gate_audit.py <<'PY'\\nexec(open('/tmp/m98_final_probe.py').read().split('A,base=data()')[0])\\nA,base=data()\\n_, _, vh = np.linalg.svd(A.reshape(-1,3),full_matrices=False)\\nraw=g['coupon_features_raw']; p=g['past_channel_raw']@cal[:-1]+cal[-1]\\nx=m._aligned_features({k:g[k][:0] for k in keys},g)[:,1:]; drift=w[2]+x@w[3:]\\nb0,b1=-np.expm1(-t[:,None]/ts).T\\nanchor=np.r_[t,1.]; b=np.c_[np.r_[b0-t/ts[0],0.],np.r_[b1-t/ts[1],0.]]\\ntarget=y-base; split=[(f'lab{v}',labs==v) for v in np.unique(labs)]+[(f'stratum{v}',strata==v) for v in np.unique(strata)]+[('missing',~complete)]\\ndef feature(s,B): return s[:,None,None]*B[None,:,:]\\nF=feature(drift,b); offset=drift[:,None]*anchor\\nmodels={'unit_reset':(F,offset),'rational_time':(np.concatenate((F,feature(drift,np.r_[t/(1+(t/ts[0])**2)-t,0.][:,None])),2),offset), 'rational_drift':(np.concatenate((F,feature(drift/(1+drift**2)-drift,np.c_[anchor,b])),2),offset), 'boundary_difference':(np.concatenate((F,feature(h-p[:,-1],np.c_[np.r_[b0,1/ts[0]],np.r_[b1,1/ts[1]]])),2),offset), 'triple':(np.concatenate((F,feature(drift*h*(p[:,-1]-p[:,-2]),b)),2),offset)}\\nfor name,(D,off) in models.items():\\n    scores=[]\\n    for label,mask in split:\\n        f=D[~mask].reshape(-1,D.shape[2]); c=np.linalg.lstsq(f,(target-off)[~mask].ravel(),rcond=None)[0]; scores.append(score((D@c+off-target)[mask]))\\n    print(name,'worst blocked',np.round(np.max(scores,0),6),'folds',np.round(scores,5).tolist())\\n# Use measured initial rate only as a diagnostic instrument: a large reduction points to drift inputs, not the temporal basis.\\nproxy=target[:,-1]; e=target-(proxy[:,None]*(anchor+b@np.array([.34880024,1.63895287]))); print('observed-rate proxy curve RMSE complete/missing',score(e[complete])[0],score(e[~complete])[0]); drerr=target[:,-1]-drift\\nprint('rate residual means by lab (all,complete), pooled',[(int(v),float(drerr[labs==v].mean()),float(drerr[(labs==v)&complete].mean())) for v in np.unique(labs)],drerr.mean())\\n# An affine bridge should not leave a reproducible quadratic signature on held-out load levels.\\ncaldata=d['calibration_load_cells']; X=caldata['bridge_raw']; Y=caldata['true_channel_loads'].sum(1)\\nlevel=np.argsort(np.argsort(Y))*5//len(Y); fields=[X,np.c_[X,*[X[:,a]*X[:,c] for a in range(4) for c in range(a,4)]]]\\nfor f in fields:\\n    f=np.c_[f,np.ones(len(f))]; errs=[]\\n    for v in range(5):\\n        keep=level!=v; co=np.linalg.lstsq(f[keep],Y[keep],rcond=None)[0]; errs.append(np.sqrt(np.mean((f[~keep]@co-Y[~keep])**2)))\\n    print('bridge terms',f.shape[1],'worst load block RMSE',max(errs))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_gate_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: chamber reset with unit initial drift gain → H2: test whether omitted algebraic terms or lab alignment explain residuals; current worst blocked strain/rate RMSE is 0.02266/0.01831.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, PDE drift, or balanced-accuracy tests\",\n      \"rejected_reason\": \"The supplied task has continuous strain and rate targets, with no relay state, PDE, or class labels. Lab-stratified regression errors test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"Compare rational, boundary-difference, and triple-product terms against the reset law on the same blocked folds; promote an extension only if it improves the weak slices. The rate proxy distinguishes uncertain drift inputs from temporal misspecification, and held-out calibration load blocks test whether the affine bridge misses reproducible curvature.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a53940c8e47e2896da6dc7bdd4670ec52eddbe7ecdf4418106063f3a661b4ce1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37540.94,
+      "usage_known": true,
+      "prompt_tokens": 33063,
+      "cached_tokens": 5504,
+      "completion_tokens": 1440
+    }
+  ]
+}

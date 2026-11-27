@@ -12,6 +12,9 @@ from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_M971_DIR = REPO_ROOT / "docs/evidence/m9_7_1_audit_closure_and_paid_pool_attribution_20261127"
+DEFAULT_M98_RUN1_DIR = REPO_ROOT / "docs/evidence/m9_8_aborted_run1_stage_s_contract_underspec_20261127"
+DEFAULT_M98_DEV_PASS1_DIR = REPO_ROOT / "docs/evidence/m9_8_dev_live_calibration_pass1_20261127"
+DEFAULT_M98_DEV_DIR = REPO_ROOT / "docs/evidence/m9_8_dev_live_calibration_20261127"
 DEFAULT_M98_DIR = REPO_ROOT / "docs/evidence/m9_8_blind_mismatch_factored_graph_20261127"
 OUT_EN = REPO_ROOT / "docs/54_M9_7_1_Closure_and_M9_8_Blind_Mismatch_and_Factored_Mechanism_Graph_Report.md"
 OUT_ZH = REPO_ROOT / "docs/54_M9_7_1_Closure_and_M9_8_Blind_Mismatch_and_Factored_Mechanism_Graph_Report_ZH.md"
@@ -34,6 +37,30 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 
     m98_j = json.loads((m98_dir / "m9_8_continual_summary.json").read_text(encoding="utf-8"))
     m98_mask_j = json.loads((m98_dir / "m9_8_history_masked_ablation.json").read_text(encoding="utf-8"))
+    run1_j = json.loads((DEFAULT_M98_RUN1_DIR / "aborted_run1_forensic_summary.json").read_text(encoding="utf-8"))
+    dev1_j = json.loads((DEFAULT_M98_DEV_PASS1_DIR / "dev_pass1_forensic_summary.json").read_text(encoding="utf-8"))
+    dev_j = json.loads((DEFAULT_M98_DEV_DIR / "m9_8_continual_summary.json").read_text(encoding="utf-8"))
+
+    run1_led = run1_j["total_provider_ledger"]
+    dev1_led = dev1_j["total_provider_ledger"]
+    dev_calls_total = int(dev1_led["call_count"]) + int(dev_j["stage_S_shared_ledger"]["call_count"]) + sum(
+        int(dev_j["arm_cost_ledgers"][a]["scope1_in_stream_total"]["call_count"])
+        for a in ("Flat_LatestFirst", "Flat_ConditionalTable_Online", "Hegel_FactoredMechanismGraph")
+    )
+    dev_v2_total = float(dev1_led["proxy_v2_u_010c_4o"]) + float(dev_j["stage_S_shared_ledger"]["proxy_v2_u_010c_4o"]) + sum(
+        float(dev_j["arm_cost_ledgers"][a]["scope1_in_stream_total"]["proxy_v2_u_010c_4o"])
+        for a in ("Flat_LatestFirst", "Flat_ConditionalTable_Online", "Hegel_FactoredMechanismGraph")
+    )
+    conf_calls_total = int(m98_j["stage_S_shared_ledger"]["call_count"]) + sum(
+        int(m98_j["arm_cost_ledgers"][a]["scope1_in_stream_total"]["call_count"])
+        for a in ("Flat_LatestFirst", "Flat_ConditionalTable_Online", "Hegel_FactoredMechanismGraph")
+    )
+    conf_v2_total = float(m98_j["stage_S_shared_ledger"]["proxy_v2_u_010c_4o"]) + sum(
+        float(m98_j["arm_cost_ledgers"][a]["scope1_in_stream_total"]["proxy_v2_u_010c_4o"])
+        for a in ("Flat_LatestFirst", "Flat_ConditionalTable_Online", "Hegel_FactoredMechanismGraph")
+    )
+    grand_calls_total = int(run1_led["call_count"]) + dev_calls_total + conf_calls_total
+    grand_v2_total = float(run1_led["proxy_v2_u_010c_4o"]) + dev_v2_total + conf_v2_total
 
     arms = ("Flat_LatestFirst", "Flat_ConditionalTable_Online", "Hegel_FactoredMechanismGraph")
     out_tot = m98_j["arm_outcome_totals"]
@@ -166,7 +193,12 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 
 ## 2. Scope-1 Continual Cost, Call-Role & Non-LLM Container Wall-Clock Ledger (`A05`, `A12`)
 
-> **Shared `Stage S` Initialization Cost (Identical Across All 3 Arms)**: `{s_led['call_count']}` calls, `v1 = {_fmt_int(s_led['proxy_v1_u_025c_3o'])}`, `v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`, LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`.
+> **Shared `Stage S` Initialization Cost (Identical Across All 3 Arms)**: `{s_led['call_count']}` calls, `v1 = {_fmt_int(s_led['proxy_v1_u_025c_1o'])}`, `v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`, LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`.
+> **Full `M9.8` Grand Campaign Cost Ledger (`A05` Zero-Hidden-Run Accounting)**:
+> - `m9_8_aborted_run1_stage_s_contract_underspec_20261127` (aborted in `Stage S` on retired seed block `911000..924000`, `0` continual episodes): `{run1_led['call_count']}` calls, `v2 = {_fmt_int(run1_led['proxy_v2_u_010c_4o'])}` (`usage_completeness = {run1_j['usage_completeness']}`).
+> - `m9_8_dev_live_calibration_20261127` (`DEV_M98_WORLD_SPECS` `810100, 820100` pre-freeze calibration): `{dev_calls_total}` calls, `v2 = {_fmt_int(dev_v2_total)}` (`usage_completeness = {dev_j['usage_completeness']}`).
+> - `m9_8_blind_mismatch_factored_graph_20261127` (frozen confirmation run on fresh unexposed seed block `931000..944000`): `{conf_calls_total}` calls, `v2 = {_fmt_int(conf_v2_total)}` (`usage_completeness = {m98_j['usage_completeness']}`).
+> - **Grand Total Across All `M9.8` Runs**: **`{grand_calls_total}` calls, `v2 = {_fmt_int(grand_v2_total)}`** (`100%` mirrored with `SHA256SUMS.txt`).
 
 | Metric (`56` Continual Episodes / Arm across `n = 8` Clusters) | `Flat_LatestFirst` | `Flat_ConditionalTable_Online` | `Hegel_FactoredMechanismGraph` | `Hegel` vs `Flat_Table` | `Hegel` vs `Flat_Latest` |
 |---|---:|---:|---:|---:|---:|
@@ -175,7 +207,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 | Solve LLM Calls (`stream_solve`) | `{fl_solve['call_count']}` | `{ft_solve['call_count']}` | `{hg_solve['call_count']}` | `{_fmt_pct(hg_solve['call_count'] - ft_solve['call_count'], ft_solve['call_count'])}` | `{_fmt_pct(hg_solve['call_count'] - fl_solve['call_count'], fl_solve['call_count'])}` |
 | Guard Induction LLM Calls (`autonomous_guard_induction`) | `0` | `{ft_guard['call_count']}` | `{hg_guard['call_count']}` | `{_fmt_pct(hg_guard['call_count'] - ft_guard['call_count'], ft_guard['call_count'])}` | — |
 | **Total Scope-1 Continual LLM Calls (`solve + guard`)** | **`{fl_tot['call_count']}`** | **`{ft_tot['call_count']}`** | **`{hg_tot['call_count']}`** | **`{_fmt_pct(hg_tot['call_count'] - ft_tot['call_count'], ft_tot['call_count'])}`** | **`{_fmt_pct(hg_tot['call_count'] - fl_tot['call_count'], fl_tot['call_count'])}`** |
-| Scope-1 `proxy_v1_u_025c_3o` | `{_fmt_int(fl_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_int(ft_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_int(hg_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_3o'] - ft_tot['proxy_v1_u_025c_3o'], ft_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_3o'] - fl_tot['proxy_v1_u_025c_3o'], fl_tot['proxy_v1_u_025c_3o'])}` |
+| Scope-1 `proxy_v1_u_025c_1o` | `{_fmt_int(fl_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_int(ft_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_int(hg_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_1o'] - ft_tot['proxy_v1_u_025c_1o'], ft_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_1o'] - fl_tot['proxy_v1_u_025c_1o'], fl_tot['proxy_v1_u_025c_1o'])}` |
 | **Scope-1 `proxy_v2_u_010c_4o` (Primary)** | **`{_fmt_int(fl_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_int(ft_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_int(hg_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - ft_tot['proxy_v2_u_010c_4o'], ft_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - fl_tot['proxy_v2_u_010c_4o'], fl_tot['proxy_v2_u_010c_4o'])}`** |
 | — Family Alpha (`n = 4` clusters) `proxy_v2` | `{_fmt_int(alpha_fl_v2)}` | `{_fmt_int(alpha_ft_v2)}` | `{_fmt_int(alpha_hg_v2)}` | `{_fmt_pct(alpha_hg_v2 - alpha_ft_v2, alpha_ft_v2)}` | `{_fmt_pct(alpha_hg_v2 - alpha_fl_v2, alpha_fl_v2)}` |
 | — Family Beta (`n = 4` clusters) `proxy_v2` | `{_fmt_int(beta_fl_v2)}` | `{_fmt_int(beta_ft_v2)}` | `{_fmt_int(beta_hg_v2)}` | `{_fmt_pct(beta_hg_v2 - beta_ft_v2, beta_ft_v2)}` | `{_fmt_pct(beta_hg_v2 - beta_fl_v2, beta_fl_v2)}` |
@@ -264,7 +296,12 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 
 ## 2. Scope-1 持续流总账、调用角色拆分与非 LLM 容器耗时（`A05`, `A12`）
 
-> **共享源任务 `Stage S` 初始化开销（三臂完全共享）**：`{s_led['call_count']}` 次调用，`v1 = {_fmt_int(s_led['proxy_v1_u_025c_3o'])}`，`v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`，LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`。
+> **共享源任务 `Stage S` 初始化开销（三臂完全共享）**：`{s_led['call_count']}` 次调用，`v1 = {_fmt_int(s_led['proxy_v1_u_025c_1o'])}`，`v2 = {_fmt_int(s_led['proxy_v2_u_010c_4o'])}`，LLM `wall_ms = {_fmt_int(s_led['wall_ms'])}`。
+> **`M9.8` 全周期透明总账（`A05` 零隐藏运行核算）**：
+> - `m9_8_aborted_run1_stage_s_contract_underspec_20261127`（旧种子段 `911000..924000` 在 `Stage S` 因基线符号约定未写明中止，`0` 个持续流 episode，旧种子段已永久退役）：`{run1_led['call_count']}` 次调用，`v2 = {_fmt_int(run1_led['proxy_v2_u_010c_4o'])}`（`usage_completeness = {run1_j['usage_completeness']}`）。
+> - `m9_8_dev_live_calibration_20261127`（冻结前仅在 `DEV_M98_WORLD_SPECS` `810100, 820100` 上的在线校准验证）：`{dev_calls_total}` 次调用，`v2 = {_fmt_int(dev_v2_total)}`（`usage_completeness = {dev_j['usage_completeness']}`）。
+> - `m9_8_blind_mismatch_factored_graph_20261127`（全新未曝光种子段 `931000..944000` 单次冻结确认集实验）：`{conf_calls_total}` 次调用，`v2 = {_fmt_int(conf_v2_total)}`（`usage_completeness = {m98_j['usage_completeness']}`）。
+> - **`M9.8` 全部运行累计总计**：**`{grand_calls_total}` 次调用，`v2 = {_fmt_int(grand_v2_total)}`**（`100%` 原始回执镜像与 `SHA256SUMS.txt` 封存）。
 
 | 指标（每臂 `56` 个持续 episode，`n = 8` 簇） | `Flat_LatestFirst` | `Flat_ConditionalTable_Online` | `Hegel_FactoredMechanismGraph` | `Hegel` 对比 `Flat_Table` | `Hegel` 对比 `Flat_Latest` |
 |---|---:|---:|---:|---:|---:|
@@ -273,7 +310,7 @@ def build_reports(m971_dir: Path, m98_dir: Path) -> tuple[str, str]:
 | 求解 LLM 调用数 (`stream_solve`) | `{fl_solve['call_count']}` | `{ft_solve['call_count']}` | `{hg_solve['call_count']}` | `{_fmt_pct(hg_solve['call_count'] - ft_solve['call_count'], ft_solve['call_count'])}` | `{_fmt_pct(hg_solve['call_count'] - fl_solve['call_count'], fl_solve['call_count'])}` |
 | 守卫归纳 LLM 调用数 (`autonomous_guard_induction`) | `0` | `{ft_guard['call_count']}` | `{hg_guard['call_count']}` | `{_fmt_pct(hg_guard['call_count'] - ft_guard['call_count'], ft_guard['call_count'])}` | — |
 | **Scope-1 总 LLM 调用数 (`solve + guard`)** | **`{fl_tot['call_count']}`** | **`{ft_tot['call_count']}`** | **`{hg_tot['call_count']}`** | **`{_fmt_pct(hg_tot['call_count'] - ft_tot['call_count'], ft_tot['call_count'])}`** | **`{_fmt_pct(hg_tot['call_count'] - fl_tot['call_count'], fl_tot['call_count'])}`** |
-| Scope-1 `proxy_v1_u_025c_3o` | `{_fmt_int(fl_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_int(ft_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_int(hg_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_3o'] - ft_tot['proxy_v1_u_025c_3o'], ft_tot['proxy_v1_u_025c_3o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_3o'] - fl_tot['proxy_v1_u_025c_3o'], fl_tot['proxy_v1_u_025c_3o'])}` |
+| Scope-1 `proxy_v1_u_025c_1o` | `{_fmt_int(fl_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_int(ft_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_int(hg_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_1o'] - ft_tot['proxy_v1_u_025c_1o'], ft_tot['proxy_v1_u_025c_1o'])}` | `{_fmt_pct(hg_tot['proxy_v1_u_025c_1o'] - fl_tot['proxy_v1_u_025c_1o'], fl_tot['proxy_v1_u_025c_1o'])}` |
 | **Scope-1 `proxy_v2_u_010c_4o`（主口径）** | **`{_fmt_int(fl_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_int(ft_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_int(hg_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - ft_tot['proxy_v2_u_010c_4o'], ft_tot['proxy_v2_u_010c_4o'])}`** | **`{_fmt_pct(hg_tot['proxy_v2_u_010c_4o'] - fl_tot['proxy_v2_u_010c_4o'], fl_tot['proxy_v2_u_010c_4o'])}`** |
 | — Alpha 家族（`n = 4` 簇）`proxy_v2` | `{_fmt_int(alpha_fl_v2)}` | `{_fmt_int(alpha_ft_v2)}` | `{_fmt_int(alpha_hg_v2)}` | `{_fmt_pct(alpha_hg_v2 - alpha_ft_v2, alpha_ft_v2)}` | `{_fmt_pct(alpha_hg_v2 - alpha_fl_v2, alpha_fl_v2)}` |
 | — Beta 家族（`n = 4` 簇）`proxy_v2` | `{_fmt_int(beta_fl_v2)}` | `{_fmt_int(beta_ft_v2)}` | `{_fmt_int(beta_hg_v2)}` | `{_fmt_pct(beta_hg_v2 - beta_ft_v2, beta_ft_v2)}` | `{_fmt_pct(beta_hg_v2 - beta_fl_v2, beta_fl_v2)}` |

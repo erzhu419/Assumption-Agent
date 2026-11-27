@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "76a2f68a9ddd4715b2ed83739ea0a57d",
+  "call_seq": 14,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:16:37.002811+00:00",
+  "ended_at_utc": "2026-11-27T13:17:04.066226+00:00",
+  "request_sha256": "8c91356bdba58fede5aa8f513abd7bd3a826f61577602b2798b7631fc2336ca1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75823,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37396,
+    "cached_tokens": 10112,
+    "completion_tokens": 978
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nsrc = s['source_modes']; n = len(src)\\n# Exact affine sensor map isolates the wall and pulse path from sweep noise.\\nsweeps = s['sensor_calibration_sweeps']; ref = sweeps['ref_rosette']\\nM = np.linalg.lstsq(np.c_[np.ones(len(ref)), ref], sweeps['raw_rosette'], rcond=None)[0]\\ndef raw(y):\\n    return (y.reshape(-1, 4) @ M[1:] + M[0]).ravel()\\nbase = dict(s, sensor_calibration_sweeps=dict(sweeps, raw_rosette=raw(ref).reshape(-1, 4)))\\nZ = s['Z_nuisance']; P = np.linalg.solve(Z.T @ Z + s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nfor factors in ((1., 1.), (1.3, .75)):\\n    wall = np.ones(8); wall[[0,1]] = factors[0]; wall[[4,5]] = factors[1]\\n    S, U = m._response(s, wall, src)\\n    pulse_weights = np.eye(n)[[0, 3, n-1]] * .3\\n    y = S @ np.full(n, s['total_budget']/n) + Z @ np.array([.02, -.03, .01])\\n    study = dict(base, y_obs_raw=raw(y), reference_tracer_pulses=[dict(w_pulse=p, y_pulse_raw=raw(S@p)) for p in pulse_weights])\\n    result = m.solve_batch(study); w = result['weights']; k = result['kkt_certificate']\\n    A = S-Z@(P@S); obs = y-Z@(P@y); e = A@w-obs\\n    J = .5*(e@e+s['source_ridge']*(w@w)); g = A.T@e+s['source_ridge']*w\\n    field_error = np.max(np.abs(result['terminal_field']-np.tensordot(w,U,axes=1)))\\n    stationarity = np.max(np.abs(g-k['nu_sum']-np.array(k['lam_lower'])+np.array(k['lam_upper'])))\\n    print(f'{factors}: field error={field_error:.3g}, stationarity={stationarity:.3g}, objective error={abs(J-k[\\\"primal_objective\\\"]):.3g}')\\n    assert field_error < 1e-6 and stationarity < 1e-7 and abs(J-k['primal_objective']) < 1e-8\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (unrestricted blind wall fit) -> H2 (nominal blind stencil, pulse-fitted walls when observed); the independent public check found a maximum field error of 2.78e-16 and a maximum duality gap of 8.33e-16 across five budget slices.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public data verified the blind path but contain no tracer pulses. Test that a known non-nominal wall reaches the returned field and certificate through the tracer path; a failure would require fixing that path before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "217a2c94cdafefdc526ae6bb0ec5e09dacbbf9ed8391b4b16acbba7b228d404c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27025.92,
+      "usage_known": true,
+      "prompt_tokens": 37396,
+      "cached_tokens": 10112,
+      "completion_tokens": 978
+    }
+  ]
+}

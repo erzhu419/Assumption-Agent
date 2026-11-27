@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8caf94234ac44ddeafd21148c8c69d56",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:10:18.217950+00:00",
+  "ended_at_utc": "2026-11-27T14:10:52.926791+00:00",
+  "request_sha256": "e452ad12b62d8226fc654f4e5de5c3c47d46ef0f26b3eb59e1e0fe0a5bf087d8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43895,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27041,
+    "cached_tokens": 11136,
+    "completion_tokens": 1251
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/audit98.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    batch = pickle.load(f)\\n\\ndef extra(x, j):\\n    a,b,c,d = (x[:,(j+k)%4] for k in range(4))\\n    return np.column_stack((a*b,a*d,b*d,a*a*b,a*a*d,a*b*d, a/(1+.1*(b-d)**2)-a, a/(1+(b-d)**2)-a))\\n\\nfor e in batch:\\n    s = e['study']; sw = s['sensor_calibration_sweeps']; x,y = sw['ref_rosette'],sw['raw_rosette']\\n    F = m._rosette_terms(x); err = np.empty_like(y); ext = np.empty_like(y)\\n    for test in np.array_split(np.random.default_rng(98).permutation(len(x)), 5):\\n        tr = np.ones(len(x), dtype=bool); tr[test] = False\\n        fit = m._fit_rosette(x[tr],y[tr]); residual = y-F@fit\\n        err[test] = residual[test]\\n        r = np.max(abs(residual[tr]),axis=1); med = np.median(r)\\n        clean = tr & (np.max(abs(residual),axis=1) <= med + 10*max(med,1e-12))\\n        for j in range(4):\\n            cols = [0,1+j,1+(j-1)%4,1+(j+1)%4,5+j,9+j]\\n            G = np.column_stack((F[:,cols],extra(x,j)))\\n            coef = np.linalg.lstsq(G[clean],y[clean,j],rcond=None)[0]\\n            ext[test,j] = y[test,j]-G[test]@coef\\n    # Report contamination separately; compare the same held-out rows for both models.\\n    inlier = np.max(abs(err),axis=1) < .01\\n    print('sweep rows / gross outliers:', len(x), np.count_nonzero(~inlier))\\n    for name,E in [('structured',err),('pair/triple/rational extension',ext)]:\\n        print(name,'per-channel held-out inlier RMSE:',np.sqrt(np.mean(E[inlier]**2,axis=0)), 'worst inlier absolute:',np.max(abs(E[inlier])))\\n    S,U = m._design(s); fit = m._fit_rosette(x,y)\\n    for i,p in enumerate(e['campaign_diagnostics'] or []):\\n        q = (S@p['w_pulse']).reshape(-1,4)\\n        pred = (m._rosette_terms(q)@fit).ravel()\\n        print('raw forward pulse',i,'bank RMSE:',[float(np.sqrt(np.mean((pred-p['y_pulse_raw'])[s['row_bank_id']==k]**2))) for k in np.unique(s['row_bank_id'])])\\n    r=m.solve_batch(s); w=np.asarray(r['weights']); c=r['kkt_certificate']; Z=s['Z_nuisance']\\n    d=S@w-m._calibrate(s); Pz=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); d2=d-Z@(Pz@d)\\n    print('observation residual RMSE before/after projection, by bank:',[(float(np.sqrt(np.mean(d[ix]**2))),float(np.sqrt(np.mean(d2[ix]**2)))) for k in np.unique(s['row_bank_id']) for ix in [s['row_bank_id']==k]])\\n    print('isolated public dual gap:', c['primal_objective']-c['dual_lower_bound'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit98.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: Open Robin walls -> H2: Reflecting walls with fitted nonlinear rosettes; verified worst pulse L2 is 1.65e-5, with a focused calibration and per-bank audit pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use balanced accuracy or test relay-mode dynamics\",\"rejected_reason\":\"The study has continuous measurements and no class labels or relay states; bank-stratified residuals test the relevant nuisance failure.\"}],\"rationale\":\"Test whether pairwise, three-way, or rational terms improve real held-out calibration sweeps, and inspect raw forward pulse errors per bank so pooling or nuisance projection cannot hide a bank-specific mismatch. Change the solver only if the audit identifies a material improvement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "96b6154f88605c61de06c72c452de1e897fefbb86ac96f6a7b547bac7bf37db3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34668.51,
+      "usage_known": true,
+      "prompt_tokens": 27041,
+      "cached_tokens": 11136,
+      "completion_tokens": 1251
+    }
+  ]
+}

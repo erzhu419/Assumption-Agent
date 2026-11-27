@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "902eef0043564cd6800ea98964b1dd9e",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:59:44.185579+00:00",
+  "ended_at_utc": "2026-11-27T14:00:30.590447+00:00",
+  "request_sha256": "3df4ec326ca68faf8d25a34f28fca8cc5aed5845f2c9bd57df1290637c03905d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54312,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30141,
+    "cached_tokens": 11136,
+    "completion_tokens": 1811
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('candidate', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('/holdout_task/batch_solver.py')\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\nrow = np.arange(len(x))\\namp = np.max(np.abs(raw), axis=1)\\nclean = amp <= 4*np.median(amp)\\nbase = m._rosette_terms(x)\\nmonomials = [t for d in range(4) for t in combinations_with_replacement(range(4), d)]\\nfull = np.column_stack([np.prod(x[:,t], axis=1) for t in monomials])\\n# Products and cubes of pairwise sums and differences are already spanned by full.\\n# Add rational corrections to test what that polynomial span might miss.\\nchoices = [(np.empty((len(x),0)), 'none')]\\nfor shift in (-1,1):\\n    for scale in (-1.,-.5,0.,.5,1.):\\n        q = x + scale*np.roll(x,shift,axis=1)\\n        for a in (.01,.1,1.):\\n            choices.append((x**3/(1+a*q*q), (shift,scale,a)))\\n\\ndef alternatives(train, test):\\n    fp = np.linalg.lstsq(full[train],raw[train],rcond=None)[0]\\n    pred_full = full[test]@fp\\n    # Select the rational form by inner leave-one-out, never by the outer row.\\n    score = []\\n    for f,_ in choices:\\n        D = np.column_stack((base, f))[train]\\n        Q,R = np.linalg.qr(D,mode='reduced')\\n        h = np.sum(Q*Q,axis=1)\\n        e = raw[train]-Q@(Q.T@raw[train])\\n        score.append(np.mean((e/(1-h[:,None]))**2) if np.min(abs(np.diag(R)))>1e-10 else np.inf)\\n    idx = np.argmin(score)\\n    f, label = choices[idx]\\n    D = np.column_stack((base,f))\\n    pred_rat = D[test]@np.linalg.lstsq(D[train],raw[train],rcond=None)[0]\\n    return pred_full, pred_rat, label\\n\\nerr = []\\nforms = {}\\nfor j in np.flatnonzero(clean):\\n    train = row != j\\n    fc = m._fit_rosette(x[train],raw[train])\\n    train &= amp <= 4*np.median(amp[train])\\n    pf, pr, label = alternatives(train,j)\\n    forms[label] = forms.get(label,0)+1\\n    err.append(np.array([base[j]@fc,pf,pr])-raw[j])\\ne = np.asarray(err)\\nprint('calibration outer LOO (cyclic, full cubic, nested rational): RMSE',np.sqrt(np.mean(e**2,axis=(0,2))), 'max abs',np.max(abs(e),axis=(0,2)), 'selected rational corrections',len(e)-forms.get('none',0))\\n\\narc='/tmp/hegel_continual_archive/dev_beta_m98_00_'\\nmodels={'Robin':m,'reflecting':load(arc+'batch_01_solver.py'),'periodic':load(arc+'batch_03_solver.py')}\\ny=m._calibrate(s)\\nZ=s['Z_nuisance']\\nns=len(s['sensor_ij'])\\ncap, budget, ridge, nr=(s[k] for k in ('u_box','total_budget','source_ridge','nuisance_ridge'))\\ncoords=s['sensor_ij']\\nwall=((coords==0)|(coords==[s['nx']-1,s['ny']-1])).any(axis=1)\\nfor name, mod in models.items():\\n    S,_=mod._design(s)\\n    for profile in ([True,False] if name=='Robin' else [True]):\\n        errors=[]\\n        for j in range(ns):\\n            test=np.arange(len(y))%ns==j\\n            A,b,z=S[~test],y[~test],Z[~test]\\n            if profile:\\n                P=np.linalg.solve(z.T@z+nr*np.eye(z.shape[1]),z.T)\\n                At,bt=A-z@(P@A),b-z@(P@b)\\n            else:\\n                At,bt=A,b\\n            w,_=m._box_qp(At.T@At+ridge*np.eye(S.shape[1]),-At.T@bt,cap,budget)\\n            prediction=S[test]@w\\n            if profile:\\n                prediction+=Z[test]@(P@(b-A@w))\\n            errors.append(prediction-y[test])\\n        err=np.asarray(errors)\\n        print(name,'profiled' if profile else 'unprofiled','shift RMSE',np.sqrt(np.mean(err**2,axis=0)), 'worst sensor',np.sqrt(np.mean(err**2,axis=1)).max(), 'wall/interior',[(int(sl.sum()),float(np.sqrt(np.mean(err[sl]**2)))) for sl in (wall,~wall) if sl.any()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 trace-selected reflecting walls and a broader rosette basis -> H2 open Robin walls with robust cyclic cubic calibration; verified worst sensor RMSE is 0.03015 and worst clean calibration error is 3.05e-5 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit classification balance, relay modes, or stochastic drift\",\n      \"rejected_reason\": \"The study has no class labels, relay state, or stochastic control operator. The applicable confounding check compares nuisance-profiled and unprofiled regressions on held-out sensors.\"\n    }\n  ],\n  \"rationale\": \"Compare polynomial and rational alternatives on held-out calibration readings; a meaningful improvement would justify revising the sensor law. Compare wall laws and nuisance treatments on the same held-out sensors to see whether pooled residuals conceal a wall-adjacent or shift-specific failure. The audit leaves the verified artifact unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "54348eddbbd251e55cc0a4a2969042f29032c6b9c5c2b8482cdd6ceedeae8539",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46369.69,
+      "usage_known": true,
+      "prompt_tokens": 30141,
+      "cached_tokens": 11136,
+      "completion_tokens": 1811
+    }
+  ]
+}

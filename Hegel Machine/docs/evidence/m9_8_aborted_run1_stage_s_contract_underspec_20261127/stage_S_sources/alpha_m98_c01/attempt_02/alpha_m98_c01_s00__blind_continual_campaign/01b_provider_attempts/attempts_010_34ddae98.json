@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "34ddae981c324db9aa560a6c9fe9a3ba",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c01__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:32:41.748515+00:00",
+  "ended_at_utc": "2026-11-27T12:33:17.357204+00:00",
+  "request_sha256": "dca2f242bfd837f7870ec5897e67f8d1ad794daf577a054f0e2bc74afa71bf8d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 72512,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39068,
+    "cached_tokens": 11136,
+    "completion_tokens": 1459
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/verify_rheology.py <<'PY'\\nimport importlib.util,pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\\ns=importlib.util.module_from_spec(spec);spec.loader.exec_module(s)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\ntr=d['train']; ch=d['chamber_verification_trials']; te=d['test']; t=d['eval_times']\\n\\ndef subset(block, mask):\\n    return {k:v[mask] for k,v in block.items()}\\n\\ndef report(label,b,e):\\n    groups={'all':np.ones(len(e),bool),'missing':np.isnan(b['coupon_features_raw']).any(axis=1),'complete':~np.isnan(b['coupon_features_raw']).any(axis=1)}\\n    groups.update({f'lab_{v}':b['lab_id']==v for v in np.unique(b['lab_id'])})\\n    print(label,{k:np.round([np.mean(abs(e[m,:-1])), np.mean(abs(e[m,-1])),np.mean(abs(e[m,-2]))],5).tolist() for k,m in groups.items() if m.any()})\\n\\ndef eval_folds(b,labels,pilot):\\n    result=np.zeros_like(s._target(b)); base=result.copy()\\n    for label in np.unique(labels):\\n        m=labels==label; target=subset(b,m)\\n        test={k:v for k,v in target.items() if k not in ('strain_curves_obs','instant_rate_obs')}\\n        q=dict(d,train=tr if pilot else subset(b,~m),test=test,chamber_verification_trials=subset(b,~m) if pilot else None)\\n        for buf,challenge in ((result,q),(base,dict(q,chamber_verification_trials=None))) if pilot else ((result,q),):\\n            out=s.solve_batch(challenge)\\n            tau=out['estimated_taus']; assert .05<tau[0]<tau[1]<25\\n            buf[m]=np.c_[out['predicted_strain']-target['strain_curves_obs'],out['initial_rate_pred']-target['instant_rate_obs']]\\n    return result,base\\n\\nprint('MAE order: curve, initial rate, endpoint')\\nreport('benchtop leave-lab-out (no pilot)',tr,eval_folds(tr,tr['lab_id'],False)[0])\\nfor name,labels in [('coupon',np.arange(len(ch['lab_id']))),('stratum',ch['stratum']),('lab',ch['lab_id'])]:\\n    a,b=eval_folds(ch,labels,True);report('chamber leave-'+name+'-out',ch,a);report('matched no-pilot',ch,b)\\n\\n# A different affine bridge presentation must not alter any physical prediction.\\nout=s.solve_batch(d)\\nM=np.array([[1.25,.14,-.05,.08],[.05,.71,.12,-.05],[.06,-.12,1.57,.06],[-.1,.09,.17,.9]])\\nu=np.array([.3,-.5,.1,.45]); cal=dict(d['calibration_load_cells']); cal['bridge_raw']=cal['bridge_raw']@M+u\\nalt=dict(d,calibration_load_cells=cal)\\nfor k in ('train','test','chamber_verification_trials'):\\n    alt[k]=dict(d[k]);\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        alt[k][key]=d[k][key]@M+u\\nnew=s.solve_batch(alt); diff={k:float(np.max(abs(out[k]-new[k]))) for k in out}; print('bridge re-encoding max absolute changes',diff)\\nassert max(diff.values()) < 1e-5\\nage=np.r_[np.cumsum(d['past_dt'][::-1])[::-1],0.]; tau=out['estimated_taus']; theta=out['hereditary_weights']; x=np.ones((3,5)); load=(np.arange(18).reshape(3,6)*.3,np.array([1.,3.,-2.]))\\ny=s._design(load,x,tau,age,np.array([0.,1e-6]))@theta\\nassert np.allclose(y[:,0],0) and np.allclose(y[:,1]/1e-6,y[:,-1],atol=1e-5)\\nprint('zero-time initial condition and analytical rate verified')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rheology.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nif test -f /tmp/hegel_continual_archive/archive_apparatus_log.json; then head -c 2400 /tmp/hegel_continual_archive/archive_apparatus_log.json; fi\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Free lab slopes → regularized lab gain and offset; the prototype’s held-out stratum MAE is 0.0362 strain and 0.0173 rate, with exact-solver validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after schema validation alone\",\"rejected_reason\":\"The schema cannot detect errors in stress calibration, the initial derivative, or prediction when a pilot or coupon feature is missing.\"}],\"rationale\":\"Run the exact solver on held-out coupons, strata and labs, with separate curve, rate and endpoint errors. If pilot transfer harms a supported slice, revise its regularization; if affine re-encoding or the derivative check fails, fix the corresponding physical calculation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "4bfddd3ecf6d19e679f21a002eea7873d4ffcbce6f0d3e53469d31dd9745b346",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35576.52,
+      "usage_known": true,
+      "prompt_tokens": 39068,
+      "cached_tokens": 11136,
+      "completion_tokens": 1459
+    }
+  ]
+}

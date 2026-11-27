@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95986184b31c4d6ea1822e34776d560b",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:56:11.681848+00:00",
+  "ended_at_utc": "2026-11-27T13:56:32.978210+00:00",
+  "request_sha256": "3c459ac8e9006475b86ceb365819185688bfc8e02fffac46d691f668debf5185",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48357,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28904,
+    "cached_tokens": 11136,
+    "completion_tokens": 703
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 /tmp/probe_align03.py | sed -n \\\"/anchor ('diag',)/,+6p\\\"; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json';log=json.load(open(p))\\nfor r in log:\\n print('log', {k:v for k,v in r.items() if not isinstance(v,list)},[(k,np.asarray(v).shape,np.mean(v,axis=0).round(3).tolist()) for k,v in r.items() if isinstance(v,list)])\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=i['dataset'];tr=d['train'];te=d['test'];a=i['campaign_diagnostics'];keys=('lab_id','stratum','ref_coupons','coupon_features_raw');joint={k:np.concatenate((tr[k],te[k])) for k in keys}\\nfor name,g in [('train',tr),('test',te),('joint',joint),('diagnostic',a)]:\\n print(name,[(int(j),int(sum(g['lab_id']==j)),round(np.median(g['ref_coupons'][g['lab_id']==j].mean(0)),3),round(np.median(g['ref_coupons'][g['lab_id']==j].std(0)),3)) for j in np.unique(g['lab_id'])]);\\nprint('deployment telemetry shape, min/max',te['aux_chamber_telemetry'].shape,te['aux_chamber_telemetry'].min(0).round(4),te['aux_chamber_telemetry'].max(0).round(4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared train/test feature anchors for diagnostics → H2 diagnostic-local alignment with unchanged hereditary memory; initial drift mismatch falls from 0.1048 to 0.0083 pooled RMSE, and worst-lab chamber RMSE under local alignment is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Refit branch memory coefficients\",\"rejected_reason\":\"With branch memory fixed, the chamber residual is nearly rank one and tracks locally aligned drift; free memory coefficients could absorb reference-panel mismatch.\"}],\"rationale\":\"Recover the diagnostic-local held-out fit and inspect the reference summaries. If conserved initial drift is competitive with free forcing, use that constraint and fit only two chamber coefficients, while preserving the mandated joint train/test preprocessing at runtime.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "de7bf29cbb1cfb9d631fe48f5736edda98b945ac3ba6883383bc036deeaa227d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21257.75,
+      "usage_known": true,
+      "prompt_tokens": 28904,
+      "cached_tokens": 11136,
+      "completion_tokens": 703
+    }
+  ]
+}

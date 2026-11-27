@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4e4f651e787f4d43b7c5a7499054c6f9",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:16:27.707423+00:00",
+  "ended_at_utc": "2026-11-27T14:16:56.738694+00:00",
+  "request_sha256": "72ee7d0cd8b103a68deabab03c50bfaaaca611cf966d349308532302a4f3aab0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57790,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30645,
+    "cached_tokens": 11136,
+    "completion_tokens": 988
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom itertools import combinations\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item, = pickle.load(f)\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nS, _ = m._design(s)\\ndef expanded(x):\\n    terms = [m._rosette_terms(x)]\\n    for i, j in combinations(range(4), 2):\\n        u, v = x[:, i], x[:, j]\\n        for q in (u-v, u+v):\\n            terms.extend([q/(1+q*q), (u*v)/(1+q*q)])\\n    return np.column_stack(terms)\\npulses = [( (S @ p['w_pulse']).reshape(-1, 4), p['y_pulse_raw'].reshape(len(s['mu_shifts']), -1, 4)) for p in item['campaign_diagnostics']]\\nbase = m._rosette_terms(x)\\nwide = expanded(x)\\nerrors = [np.empty_like(y), np.empty_like(y)]\\nworst = np.zeros(2)\\nfor hold in np.array_split(np.random.default_rng(98).permutation(len(x)), 5):\\n    fit = np.setdiff1d(np.arange(len(x)), hold)\\n    baseline = m._fit_rosette(x[fit], y[fit])\\n    clean = fit[np.max(abs(base[fit]@baseline-y[fit]), axis=1)<0.01]\\n    challenger = np.linalg.lstsq(wide[clean], y[clean], rcond=None)[0]\\n    for i, (coef, design, terms) in enumerate(((baseline, base, m._rosette_terms), (challenger, wide, expanded))):\\n        errors[i][hold] = abs(design[hold]@coef-y[hold])\\n        for signal, raw in pulses:\\n            diff = (terms(signal)@coef).reshape(raw.shape)-raw\\n            worst[i] = max(worst[i], np.max(np.linalg.norm(diff, axis=1)/np.linalg.norm(raw, axis=1)))\\nfor name, err, pulse in zip(('production', 'rational challenger'), errors, worst):\\n    print(name, 'worst bank sweep MAE p95', np.max(np.quantile(err, .95, axis=0)), 'worst fold/pulse/shift/bank relative error', pulse)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 omitted pairwise rational terms -> H2 sparse sweep contamination with an adequate periodic model; the production fitter’s worst held-out-fold tracer error by shift and channel is 1.19e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat schema and KKT checks\",\n      \"rejected_reason\": \"The unchanged artifact already passed isolated schema validation and independent KKT verification.\"\n    }\n  ],\n  \"rationale\": \"The earlier rational comparison used ordinary least squares on contaminated sweeps. This audit screens only training rows and compares both models on held-out sweeps and independent tracer pulses. Revisit the basis only if the challenger materially improves the worst tracer slice without worsening held-out calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a4b587ad87584d600c9f5fed331350a9a689e6301eca406fd7a73130ae3d2556",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28984.44,
+      "usage_known": true,
+      "prompt_tokens": 30645,
+      "cached_tokens": 11136,
+      "completion_tokens": 988
+    }
+  ]
+}

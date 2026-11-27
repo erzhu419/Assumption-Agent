@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b00c03892d7e49469f79a505f9c2bf27",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:24:09.416647+00:00",
+  "ended_at_utc": "2026-11-27T13:24:54.415608+00:00",
+  "request_sha256": "89590aa28120bfcd970beedfbdb4511492943a1ac9eb52fe6b72d74e6b856c21",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78525,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38906,
+    "cached_tokens": 11136,
+    "completion_tokens": 1740
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit98.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, raw = c['ref_rosette'], c['raw_rosette']\\nb = c['single_bank_sweeps']\\nsource = s['source_modes']\\npulses = s['reference_tracer_pulses']\\nmodes = np.array([np.tensordot(p['w_pulse'], source, axes=1) for p in pulses])\\nexpected = m._response(s, 'periodic', modes)[0]\\nrmse = {key: [] for key in ('deployed_inverse', 'sparse_forward', 'enlarged_forward', 'periodic_pulse')}\\ngross_total = 0\\nfor fold in range(5):\\n    hold = np.arange(len(x)) % 5 == fold\\n    bank_hold = np.arange(len(b['bank_id'])) % 5 == fold\\n    sub = dict(ref_rosette=x[~hold], raw_rosette=raw[~hold], single_bank_sweeps={k: np.asarray(v)[~bank_hold] for k, v in b.items()})\\n    inv = m._calibration(sub)\\n    # Keep gross excursions as a separate validation slice, not Gaussian sweep noise.\\n    clean_rows = np.ones(hold.sum(), dtype=bool)\\n    sparse_error, enlarged_error = [], []\\n    for j in range(4):\\n        def features(t):\\n            return np.c_[np.ones(len(t)), t, t[:, j]**3, t[:, j]*t[:, (j+1)%4]]\\n        def extra(t):\\n            return np.column_stack([t[:, a]*t[:, d] for a,d in combinations(range(4), 2) if {a,d} != {j,(j+1)%4}] + [t[:, j]**2] + [t[:, j]*t[:, k]/(1+(t[:, j]+sign*t[:, k])**2) for k in range(4) if k != j for sign in (-1,1)])\\n        keep_bank = ~bank_hold & (b['bank_id'] == j)\\n        bank_x = np.eye(4)[j]*b['ref_signal'][keep_bank,None]\\n        train_x = np.vstack((x[~hold], bank_x))\\n        y = np.r_[raw[~hold,j], b['raw_readout'][keep_bank]]\\n        A = features(train_x)\\n        p0 = np.linalg.lstsq(A,y,rcond=None)[0]\\n        p = least_squares(lambda p: A@p-y,p0,jac=lambda p: A.copy(),loss='cauchy',f_scale=.03,max_nfev=250).x\\n        use = abs(A@p-y) < .003\\n        assert use.sum() >= .85*len(y)\\n        D = np.c_[A, extra(train_x)]\\n        p = np.linalg.lstsq(A[use],y[use],rcond=None)[0]\\n        q = np.linalg.lstsq(D[use],y[use],rcond=None)[0]\\n        E = features(x[hold])\\n        e = E@p-raw[hold,j]\\n        ee = np.c_[E,extra(x[hold])]@q-raw[hold,j]\\n        valid = abs(e) < .003\\n        sparse_error.append(np.sqrt(np.mean(e[valid]**2)))\\n        enlarged_error.append(np.sqrt(np.mean(ee[valid]**2)))\\n        clean_rows &= valid\\n    gross_total += int((~clean_rows).sum())\\n    test_x, test_raw = x[hold][clean_rows], raw[hold][clean_rows]\\n    rmse['deployed_inverse'].append(np.sqrt(np.mean((inv(test_raw.ravel()).reshape(-1,4)-test_x)**2,axis=0)).max())\\n    rmse['sparse_forward'].append(max(sparse_error))\\n    rmse['enlarged_forward'].append(max(enlarged_error))\\n    measured = np.column_stack([inv(p['y_pulse_raw']) for p in pulses])\\n    rmse['periodic_pulse'].append(np.sqrt(np.mean((expected-measured).reshape(len(s['mu_shifts']),-1,len(pulses))**2,axis=1)).max())\\nprint('worst fold/channel or shift/pulse RMSE', {k: max(v) for k,v in rmse.items()}, 'gross validation rows', gross_total)\\nassert max(rmse['deployed_inverse']) < 1e-4 and max(rmse['periodic_pulse']) < 2e-5\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit98.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: fitted wraparound fluxes → H2: exact periodic upwind stencil; worst leave-one-pulse-out shift RMSE was 1.86e-6, and the new audit tests sensitivity to held-out calibration sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run a within-batch classification or relay-mode audit\",\n      \"rejected_reason\": \"The public input is one continuous tomography study with no class labels or relay states. Its relevant nuisance terms are the supplied columns of Z_nuisance.\"\n    }\n  ],\n  \"rationale\": \"Hold out paired and single-bank sweeps together to detect whether the deployed inverse depends on particular calibration rows. Compare the sparse law with added pairwise and rational terms, and propagate each calibration fold through the measured tracer pulses. Revisit calibration if the added terms improve prediction materially or if any fold erodes the periodic model's measured margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "593accb88dda27ddadaab24a26c13641a58a783a3d97d41ac90a144c190c1898",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44959.48,
+      "usage_known": true,
+      "prompt_tokens": 38906,
+      "cached_tokens": 11136,
+      "completion_tokens": 1740
+    }
+  ]
+}

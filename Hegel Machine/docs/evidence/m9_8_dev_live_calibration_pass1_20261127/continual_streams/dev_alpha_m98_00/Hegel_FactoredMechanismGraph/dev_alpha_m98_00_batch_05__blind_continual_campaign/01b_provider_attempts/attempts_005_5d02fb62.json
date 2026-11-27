@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d02fb6235c643bf8a9e2a42141b2794",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:00:28.120256+00:00",
+  "ended_at_utc": "2026-11-27T13:00:55.274906+00:00",
+  "request_sha256": "3f55c9cc733ee5ad333098b82b3cdd98a6a62db8add8003fe4eb1b70348a9f7a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39998,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24889,
+    "cached_tokens": 9600,
+    "completion_tokens": 986
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"tail -37 /tmp/hegel_continual_archive/dev_alpha_m98_00_batch_03_solver.py; cat /tmp/hegel_continual_archive/archive_manifest.json; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np,sys\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import dev_alpha_m98_00_batch_03_solver as m\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print('LOG TYPE',type(a).__name__); print('LOG NONTRACE METADATA', {k:v for k,v in a.items() if not isinstance(v,list)} if isinstance(a,dict) else [{k:v for k,v in e.items() if 'trace' not in k} for e in a]);\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; dt,t=d['past_dt'],d['eval_times']; x,z=m._features(tr,te); cal=m._calibration(c); ci=np.c_[np.ones(len(c['bridge_raw'])),c['bridge_raw']]@cal-c['true_channel_loads']; print('bridge error RMS channel and total',np.sqrt(np.mean(ci**2,0)),np.sqrt(np.mean(ci.sum(1)**2)))\\np,q=m._inputs(tr,x,cal),m._inputs(te,z,cal); ta,th,sc=m._material(tr,p,dt,t); print('tau theta scale',ta,th,sc); print('train/telem dependence (feature, history, hold, starting strain):');\\nfor b,inp in ((tr,p),(te,q)):\\n v=np.column_stack((b['aux_chamber_telemetry'],inp[2][:,1:],inp[0],inp[1],b['strain_0'])); print(np.round(np.corrcoef(v.T)[:4,4:],2)); print('stress range',np.quantile(inp[0],[.05,.5,.95]),np.quantile(inp[1],[.05,.5,.95])); print('strain0 range',np.quantile(b['strain_0'],[0,.5,1]))\\nprint('OOF lab normalized median abs curve/rate, late bias and auxiliary correlation');\\nfor j in np.unique(tr['lab_id']):\\n idx=tr['lab_id']==j; a,b,s=m._material(tr,p,dt,t,~idx); cy,cr=m._predict(tuple(z[idx] for z in p),dt,t,a,b); ey=tr['strain_curves_obs'][idx]-tr['strain_0'][idx,None]-cy; er=tr['instant_rate_obs'][idx]-cr; aux=tr['aux_chamber_telemetry'][idx]; cor=np.corrcoef(np.c_[aux,np.clip(ey[:,-1]/s[0],-4,4),np.clip(er/s[1],-4,4)].T)[:4,4:]; print(j,a,np.median(abs(ey))/s[0],np.median(abs(er))/s[1],np.median(ey[:,-1]),np.round(cor,2).tolist())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 calibrated benchtop response -> H2 chamber correction from prefix state; no public chamber outcomes are available for validation.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit coupon telemetry directly as a chamber effect\",\"rejected_reason\":\"Auxiliary telemetry has no paired chamber outcomes in the current batch; benchtop observations can diagnose confounding but cannot identify a deployment-only coefficient.\"}],\"rationale\":\"Check whether the known calibration and material model transfer across labs, and whether the archive provides a labeled link between apparatus telemetry and chamber response. A failure in the first check would require fixing the material fit before considering a chamber correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "053bdc083681a78e3e442893927cdc75e09ef596a4c46c737b32aa20f9d7054c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27112.16,
+      "usage_known": true,
+      "prompt_tokens": 24889,
+      "cached_tokens": 9600,
+      "completion_tokens": 986
+    }
+  ]
+}

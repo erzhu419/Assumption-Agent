@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "46b5fbd495fc437d8b165b1d7a16486b",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:25:17.674366+00:00",
+  "ended_at_utc": "2026-11-27T12:25:54.948167+00:00",
+  "request_sha256": "12f6a40f3dfabc64b2b9d30fe8dca8fa017e58e2233df7c05851ae99ab0d4f24",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62840,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33428,
+    "cached_tokens": 11136,
+    "completion_tokens": 1524
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology_gate.py <<'PY'\\nimport runpy\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nz = runpy.run_path('/tmp/rheology_final_witness.py', run_name='setup')\\nm,d,b,dt,t,tr,p,take = [z[k] for k in ('m','d','b','dt','t','tr','p','take')]\\nc=d['calibration_load_cells']; R=c['bridge_raw']; L=c['true_channel_loads'].sum(axis=1)\\ndef basis(r,kind):\\n    parts=[np.ones(len(r)),*r.T]\\n    if kind in ('quadratic','rational'):\\n        parts.extend(r[:,i]*r[:,j] for i in range(4) for j in range(i,4))\\n    if kind=='cubic':\\n        parts.extend(r[:,i]*r[:,j]*r[:,k] for i in range(4) for j in range(i,4) for k in range(j,4))\\n    return np.column_stack(parts)\\nfor kind in ('affine','quadratic','cubic','rational'):\\n    scores=[]\\n    for seed in range(4):\\n        ix=np.random.default_rng(seed).permutation(len(R)); a,j=ix[:60],ix[60:]\\n        X=basis(R,kind); y=L\\n        if kind=='rational':\\n            Q=np.column_stack([R[:,i]-R[:,k] for i in range(4) for k in range(i+1,4)])**2\\n            U=np.column_stack([X,-y[:,None]*Q]); co=np.linalg.lstsq(U[a],y[a],rcond=None)[0]\\n            pred=(X[j]@co[:X.shape[1]])/(1+Q[j]@co[X.shape[1]:])\\n        else:\\n            pred=X[j]@np.linalg.lstsq(X[a],y[a],rcond=None)[0]\\n        scores.append(np.sqrt(np.mean((pred-y[j])**2)))\\n    print('bridge held-out axial RMSE',kind,'median/worst',np.median(scores),max(scores))\\n\\ndef prepare(g): return m._prepare(g,b)\\ndef summary(rows): return np.round(np.max(rows,axis=0),6)\\nfor g in (tr,p):\\n    scores={k:[] for k in ('base','load_rational','pairwise_contrast','telemetry_pooled','telemetry_centered')}\\n    for lab in np.unique(g['lab_id']):\\n        mask=g['lab_id']==lab; old,new=take(g,~mask),take(g,mask)\\n        a,v=prepare(old),prepare(new)\\n        tau,theta=m._estimate(a,None,dt,t) if g is tr else m._estimate(prepare(tr),a,dt,t)\\n        F,G=[m._design(x,tau,dt,t) for x in (a,v)]\\n        residual=a[4]-F@theta; target=v[4]-G@theta\\n        time=np.r_[1.,t]; scales=np.r_[.012,np.full(len(t),.027)] if g is tr else np.r_[.0025,np.full(len(t),.005)]\\n        def add(k,e): scores[k].append([np.median(abs(e[:,0])),np.median(abs(e[:,1:])),np.median(abs(e[:,-1]))])\\n        add('base',target)\\n        for kind in ('load_rational','pairwise_contrast','telemetry_pooled','telemetry_centered'):\\n            if kind.startswith('telemetry') and 'aux_chamber_telemetry' not in old: continue\\n            def feature(raw,x,center=None):\\n                if kind=='load_rational': return (1/(1+(x[1]/4)**2))[:,None]-.5\\n                if kind=='pairwise_contrast':\\n                    h=raw['hold_channel_raw']@b[1:]+b[0]\\n                    return np.column_stack([h[:,i]-h[:,j] for i in range(3) for j in range(i+1,4)])\\n                q=raw['aux_chamber_telemetry'].copy()\\n                if kind=='telemetry_centered':\\n                    for lab_id in np.unique(raw['lab_id']):\\n                        j=raw['lab_id']==lab_id; q[j]-=q[j].mean(axis=0)\\n                return q\\n            X,Y=feature(old,a),feature(new,v)\\n            A=X[:,None,:]*time[None,:,None]; B=Y[:,None,:]*time[None,:,None]\\n            w=np.sqrt(a[5])[:,None]/scales\\n            f=least_squares(lambda co: ((A@co-residual)*w).ravel(),np.zeros(X.shape[1]),loss='cauchy')\\n            add(kind,target-B@f.x)\\n    for kind,r in scores.items():\\n        if r: print('worst held-out lab rate/strain/terminal', 'bench' if g is tr else 'pilot', kind, summary(r))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_gate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 axial-load Prony response → H2 split-local alignment and pilot-weighted fitting; worst held-out chamber-lab median errors are 0.00506 strain, 0.00426 onset rate, and 0.00985 terminal strain.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay-mode, classification, or Fokker–Planck checks\",\n      \"rejected_reason\": \"The dataset contains continuous strain and onset-rate measurements, with no relay state, class label, or stochastic state-density target. Lab-centered telemetry regression is the applicable nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Test whether nonlinear bridge terms reduce held-out axial-load error or whether channel contrasts, load saturation, or lab-centered telemetry reduce worst-lab response errors. A material held-out gain would justify changing the solver; an in-fit gain alone would not.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f777f98eeae3cce1946b50c510f4c109db541e5317f968e0865f27767ac0843e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37243.09,
+      "usage_known": true,
+      "prompt_tokens": 33428,
+      "cached_tokens": 11136,
+      "completion_tokens": 1524
+    }
+  ]
+}

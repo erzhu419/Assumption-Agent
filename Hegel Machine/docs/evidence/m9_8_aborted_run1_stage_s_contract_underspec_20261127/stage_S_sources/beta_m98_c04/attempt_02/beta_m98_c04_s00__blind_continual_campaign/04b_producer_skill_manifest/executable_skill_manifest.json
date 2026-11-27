@@ -1,0 +1,134 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m98_c04_s00_d4de75e26815",
+    "source_hash": "d4de75e268156b7573d11ee13ee8913d7d6917c2c10330d25d1b30c8c0c86f98",
+    "parent_ids": [],
+    "source_episode_id": "beta_m98_c04_s00__blind_continual_campaign",
+    "task_id": "beta_m98_c04_s00__blind_continual_campaign",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/blind_crosscheck.py",
+        "archived_relpath": "producers/tmp__blind_crosscheck.py",
+        "bytes": 2774,
+        "sha256": "98364f4839848c389949d314e8a69a104f4d8ec408b9e6dbad0da19c62971c54"
+      },
+      {
+        "container_path": "/tmp/blind_margin.py",
+        "archived_relpath": "producers/tmp__blind_margin.py",
+        "bytes": 2658,
+        "sha256": "4c8cab850e4b8d36baa11ca7de08539747421b81b5c70ac9b9477a1e93e251fe"
+      },
+      {
+        "container_path": "/tmp/blind_probe.py",
+        "archived_relpath": "producers/tmp__blind_probe.py",
+        "bytes": 2947,
+        "sha256": "f88f0164ccfd5c552dd66c32399b7b16ad69e0051819d82f2b98502d1dd7a367"
+      },
+      {
+        "container_path": "/tmp/boundary_probe.py",
+        "archived_relpath": "producers/tmp__boundary_probe.py",
+        "bytes": 1784,
+        "sha256": "ee6e8b07a05ecdf3de4d6a37964ab45a69c95f6ea1ac15d17fa80eac984daa05"
+      },
+      {
+        "container_path": "/tmp/gate_audit.py",
+        "archived_relpath": "producers/tmp__gate_audit.py",
+        "bytes": 2430,
+        "sha256": "4d3b32b736903d588d565374a48077298b66cb3a9f6d1933a8172e0661a4bb9a"
+      },
+      {
+        "container_path": "/tmp/transport_probe.py",
+        "archived_relpath": "producers/tmp__transport_probe.py",
+        "bytes": 2494,
+        "sha256": "743c89163a9071686cd458c52d8caf643573c574ff14b5b351e542b17b6e004f"
+      },
+      {
+        "container_path": "/tmp/verify_batch.py",
+        "archived_relpath": "producers/tmp__verify_batch.py",
+        "bytes": 3023,
+        "sha256": "cf186d9d2ea8b7586251c26660d5c57881bf105b76540fafa53866df900bfae3"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py; ls -la /tmp/hegel_continual_archive /pretrain_task; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling box simplex KKT' 2>&1; python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\ndef show(v,level=0):\n if isinstance(v,dict):\n  for k,x in v.items():\n   print(' '*level,k,end=': '); show(x,level+2)\n elif isinstance(v,np.ndarray): print(v.shape,v.dtype,v.ravel()[:8])\n elif isinstance(v,(list,tuple)) and len(v)>0:\n  print(type(v).__name__,len(v)",
+      "cd /holdout_task; cat validate_public_schema.py; python3 - <<'PY'\nimport pickle,numpy as np,os\np=pickle.load(open('public_batch.pkl','rb')); print('wrapper:',[(list(a), {k:type(v).__name__ for k,v in a.items()}) for a in p]); s=p[0]['study']; print('pulse weights', [a['w_pulse'] for a in s['reference_tracer_pulses']]); print('sensor indices',s['sensor_ij'].tolist()); print('telemetry first six',s['aux_manifold_telemetry'][:6]); print('source sums',s['source_modes'].sum((1,2))); print('files',os.listdir('/pretrain_task')); print(open('public_asset_index.json').read()[-1300:]);\nPY\ncat > /tmp/tra",
+      "cat > /tmp/boundary_probe.py <<'PY'\nfrom transport_probe import *\nnp.set_printoptions(precision=7,suppress=True)\nprint('endpoint data [spacing, robin, k_left, k_right, v_left, v_right]')\nfor ax in 'xy':\n h=s['L'+ax]/(s['n'+ax]-1); print(ax,h,s['robin_'+ax],s['kappa_'+ax][[0,-1]],s['vel_'+ax][[0,-1]])\nprint('telemetry column mean/std/range/correlation', np.mean(s['aux_manifold_telemetry'],0), np.std(s['aux_manifold_telemetry'],0), np.ptp(s['aux_manifold_telemetry'],0),np.corrcoef(s['aux_manifold_telemetry'].T))\nN=len(idx); fun=lambda r:pred(1,'arith','local',r)-obs\nfit=lambda mask,init:least_sq",
+      "cat > /tmp/blind_probe.py <<'PY'\nfrom transport_probe import *\nfrom scipy.linalg import cho_factor,cho_solve\nfrom scipy.optimize import minimize\nP=Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\nR=np.eye(len(Z))-P\ny=inv(s['y_obs_raw']); yp=R@y\nrp=[]; boundary_h=[]; ad=[]\nfor ax in 'xy':\n h=s['L'+ax]/(s['n'+ax]-1); v=s['vel_'+ax][[0,-1]]\n rp+= [s['robin_'+ax]]*2; boundary_h += [h]*2; ad.extend(np.maximum(v*[1,-1],0)/h)\nrp=np.array(rp); boundary_h=np.array(boundary_h); ad=np.array(ad)\nfrom transport_probe import __dict__ as probe\nprobe['rhs']=np.column_stack([u.ravel(order='F",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated steady transport and a certified box-simplex source fit.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _calibration(study):\n    sweep = study['sensor_calibration_sweeps']\n    ref = np.asarray(sweep['ref_rosette'])\n    raw = np.asarray(sweep['raw_rosette'])\n    coef = np.linalg.lstsq(np.column_stack((ref, np.ones(len(ref)))), raw, rcond=None)[0]\n\n    def decode(values):\n        groups = np.asarray(values).reshape(-1, 4)\n        return np.",
+      "cat > /tmp/verify_batch.py <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import minimize\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py')\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=m._Transport(s); decode=m._calibration(s)\np=s['reference_tracer_pulses']; b=m._pulse_losses(t,p,decode)\nW=np.stack([i['w_pulse'] for i in p],axis=1); y=np.stack([decode(i['y_pulse_raw']) for i in p],axis=1)\nprint('tracer RMSE by shift and pulse, nominal the",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle,numpy as np\nfrom itertools import combinations_with_replacement\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; single=np.count_nonzero(x,axis=1)==1; folds=np.arange(len(x))%5\nterms=[t for d in range(4) for t in combinations_with_replacement(range(4),d)]\nA=np.column_stack([np.prod(x[:,t],axis=1) for t in terms]); banks=c['single_bank_sweeps']; xr=np.eye(4)[banks['bank_id']]*banks['ref_signal'][:,None]; Ar=np.column_stack([np.prod(xr[:,t],axi",
+      "cd /holdout_task && python3 -I - <<'PY'\nimport json,os,pickle\np=json.load(open('public_asset_index.json')); print('Index keys:',list(p)); print('Non-file metadata:',{k:v for k,v in p.items() if k!='files'}); print('Indexed files:',list(p.get('files',{}))); a='/tmp/hegel_continual_archive'; print('Archive entries:',os.listdir(a) if os.path.isdir(a) else 'not mounted'); log=a+'/archive_apparatus_log.json';\nif os.path.isfile(log):\n with open(log) as f: print('Apparatus log sample:',f.read(3500))\np=pickle.load(open('public_batch.pkl','rb')); print('Public cases:',len(p)); print('Wrapper metadata:'",
+      "cat > /tmp/gate_audit.py <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import least_squares\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=m._Transport(s); decode=m._calibration(s); ps=s['reference_tracer_pulses']; W=np.column_stack([p['w_pulse'] for p in ps]); rhs=t.sources@W; y=np.column_stack([decode(p['y_pulse_raw']) for p in ps]); full=m._pulse_losses(t,ps,decode)\nparams=[]; names=[]",
+      "cat > /tmp/blind_margin.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.optimize import least_squares\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=m._Transport(s); decode=m._calibration(s); b=m._pulse_losses(t,s['reference_tracer_pulses'],decode); Z=s['Z_nuisance']; y=decode(s['y_obs_raw']); S0,U0,_=t.response(b,t.sources)\ncap=s['u_box']; budget=s['total_budget']; w0,_=m._source_fit(s,S0,y); resid",
+      "python3 - <<'PY'\np='/tmp/blind_margin.py'\ns=open(p).read().replace(\"groups=np.tile(np.arange(len(t.sensors))%4,len(t.shifts));\", \"groups=np.tile(np.arange(len(t.sensors))%4,len(t.shifts)); shifts=np.repeat(np.arange(len(t.shifts)),len(t.sensors));\")\ns=s.replace(\"configs=[(0.0,0.0),(0.002,0.002),(0.01,0.01),(0.04,0.04),(0.0,0.01)]\", \"configs=[(0.0,0.0),(0.0,0.001),(0.002,0.002),(0.01,0.01)]\")\ns=s.replace(\"*[groups==g for g in range(4)]\", \"*[a==g for a in (groups,shifts,banks) for g in np.unique(a)]\")\ns=s.replace(\"if np.any(test):out.append(np.sqrt(np.mean((r[test]-Z[test]@gamma)**2)))\", \"if np."
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__blind_probe.py",
+      "primary_producer_container_path": "/tmp/blind_probe.py",
+      "selected_channels": [
+        "fam_elliptic_transport_and_factored_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 7176,
+        "sha256": "ac90f779cc8245b0567c701dd5bda216589fbf9adbcb9fa605a6e224e950ba3e",
+        "content_addressed_ref": "content_addressed_blobs/ac90f779cc8245b0567c701dd5bda216589fbf9adbcb9fa605a6e224e950ba3e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d4de75e268156b7573d11ee13ee8913d7d6917c2c10330d25d1b30c8c0c86f98",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/blind_margin.py <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.optimize import least_squares\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d4de75e268156b7573d11ee13ee8913d7d6917c2c10330d25d1b30c8c0c86f98",
+        "expected_candidate_sha256": "d4de75e268156b7573d11ee13ee8913d7d6917c2c10330d25d1b30c8c0c86f98",
+        "computed_candidate_sha256": "d4de75e268156b7573d11ee13ee8913d7d6917c2c10330d25d1b30c8c0c86f98",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 7176
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_d4de75e2"
+    }
+  },
+  "structure": {
+    "full_producer_count": 7,
+    "reusable_ast_function_closures": []
+  }
+}

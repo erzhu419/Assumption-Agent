@@ -154,132 +154,132 @@ DEV_M98_WORLD_SPECS: tuple[M98WorldSpec, ...] = (
 
 CONFIRMATION_M98_WORLD_SPECS: tuple[M98WorldSpec, ...] = (
     M98WorldSpec(
-        world_id="alpha_m98_c01",
-        cluster_id="cluster_m98_01_alpha",
+        world_id="alpha_m98_v2_c01",
+        cluster_id="cluster_m98_v2_01_alpha",
         family="alpha",
         split="confirmation",
-        seed_base=911000,
-        channel_perm=(3, 1, 0, 2),
-        active_log_channels=(1, 6),
-        v2_gains=(1.28, 0.79, 1.35, 0.76),
-        v2_offsets=(0.15, -0.12, 0.17, -0.14),
-        v3_gains=(0.77, 1.36, 1.21, 0.82),
-        v3_offsets=(-0.16, 0.19, 0.11, -0.13),
-        bridge_offdiag_step4=0.34,
-        bridge_offdiag_step6=-0.32,
-        bridge_offdiag_step7=0.30,
-    ),
-    M98WorldSpec(
-        world_id="alpha_m98_c02",
-        cluster_id="cluster_m98_02_alpha",
-        family="alpha",
-        split="confirmation",
-        seed_base=912000,
-        channel_perm=(1, 2, 3, 0),
-        active_log_channels=(4, 0),
-        v2_gains=(0.78, 1.31, 0.83, 1.29),
-        v2_offsets=(-0.13, 0.16, -0.11, 0.14),
-        v3_gains=(1.33, 0.76, 1.25, 0.81),
-        v3_offsets=(0.17, -0.15, 0.12, -0.10),
-        bridge_offdiag_step4=-0.33,
-        bridge_offdiag_step6=0.31,
-        bridge_offdiag_step7=-0.29,
-    ),
-    M98WorldSpec(
-        world_id="alpha_m98_c03",
-        cluster_id="cluster_m98_03_alpha",
-        family="alpha",
-        split="confirmation",
-        seed_base=913000,
-        channel_perm=(0, 3, 2, 1),
-        active_log_channels=(7, 3),
-        v2_gains=(1.33, 0.82, 0.77, 1.27),
-        v2_offsets=(0.18, -0.10, -0.15, 0.13),
-        v3_gains=(0.80, 1.29, 1.34, 0.78),
-        v3_offsets=(-0.14, 0.15, 0.16, -0.12),
-        bridge_offdiag_step4=0.32,
-        bridge_offdiag_step6=-0.34,
-        bridge_offdiag_step7=0.31,
-    ),
-    M98WorldSpec(
-        world_id="alpha_m98_c04",
-        cluster_id="cluster_m98_04_alpha",
-        family="alpha",
-        split="confirmation",
-        seed_base=914000,
-        channel_perm=(2, 3, 1, 0),
-        active_log_channels=(5, 2),
-        v2_gains=(0.80, 1.27, 1.34, 0.78),
-        v2_offsets=(-0.12, 0.14, 0.18, -0.13),
-        v3_gains=(1.31, 0.81, 0.76, 1.32),
-        v3_offsets=(0.15, -0.11, -0.16, 0.14),
-        bridge_offdiag_step4=-0.31,
-        bridge_offdiag_step6=0.33,
-        bridge_offdiag_step7=-0.30,
-    ),
-    M98WorldSpec(
-        world_id="beta_m98_c01",
-        cluster_id="cluster_m98_05_beta",
-        family="beta",
-        split="confirmation",
-        seed_base=921000,
-        channel_perm=(2, 0, 1, 3),
+        seed_base=931000,
+        channel_perm=(2, 3, 0, 1),
         active_log_channels=(3, 6),
-        v2_gains=(1.30, 0.79, 1.26, 0.82),
-        v2_offsets=(0.09, -0.08, 0.07, -0.06),
-        v3_gains=(0.78, 1.33, 0.81, 1.28),
-        v3_offsets=(-0.08, 0.10, -0.07, 0.09),
+        v2_gains=(1.27, 0.80, 1.34, 0.77),
+        v2_offsets=(0.14, -0.11, 0.16, -0.13),
+        v3_gains=(0.78, 1.35, 1.22, 0.81),
+        v3_offsets=(-0.15, 0.18, 0.10, -0.12),
         bridge_offdiag_step4=0.33,
         bridge_offdiag_step6=-0.31,
         bridge_offdiag_step7=0.29,
     ),
     M98WorldSpec(
-        world_id="beta_m98_c02",
-        cluster_id="cluster_m98_06_beta",
-        family="beta",
+        world_id="alpha_m98_v2_c02",
+        cluster_id="cluster_m98_v2_02_alpha",
+        family="alpha",
         split="confirmation",
-        seed_base=922000,
-        channel_perm=(3, 2, 0, 1),
-        active_log_channels=(0, 5),
-        v2_gains=(0.77, 1.32, 0.81, 1.28),
-        v2_offsets=(-0.08, 0.09, -0.06, 0.07),
-        v3_gains=(1.29, 0.78, 1.31, 0.80),
-        v3_offsets=(0.10, -0.09, 0.08, -0.07),
+        seed_base=932000,
+        channel_perm=(1, 0, 3, 2),
+        active_log_channels=(5, 1),
+        v2_gains=(0.79, 1.30, 0.82, 1.28),
+        v2_offsets=(-0.12, 0.15, -0.10, 0.13),
+        v3_gains=(1.32, 0.77, 1.26, 0.80),
+        v3_offsets=(0.16, -0.14, 0.11, -0.09),
         bridge_offdiag_step4=-0.32,
         bridge_offdiag_step6=0.30,
-        bridge_offdiag_step7=-0.28,
+        bridge_offdiag_step7=-0.29,
     ),
     M98WorldSpec(
-        world_id="beta_m98_c03",
-        cluster_id="cluster_m98_07_beta",
-        family="beta",
+        world_id="alpha_m98_v2_c03",
+        cluster_id="cluster_m98_v2_03_alpha",
+        family="alpha",
         split="confirmation",
-        seed_base=923000,
-        channel_perm=(0, 2, 3, 1),
-        active_log_channels=(6, 1),
-        v2_gains=(1.27, 0.83, 0.78, 1.31),
-        v2_offsets=(0.07, -0.06, -0.09, 0.08),
-        v3_gains=(0.81, 1.28, 1.33, 0.77),
-        v3_offsets=(-0.07, 0.08, 0.10, -0.09),
+        seed_base=933000,
+        channel_perm=(3, 2, 1, 0),
+        active_log_channels=(0, 4),
+        v2_gains=(1.32, 0.81, 0.78, 1.26),
+        v2_offsets=(0.17, -0.09, -0.14, 0.12),
+        v3_gains=(0.81, 1.28, 1.33, 0.79),
+        v3_offsets=(-0.13, 0.14, 0.15, -0.11),
         bridge_offdiag_step4=0.31,
         bridge_offdiag_step6=-0.33,
         bridge_offdiag_step7=0.30,
     ),
     M98WorldSpec(
-        world_id="beta_m98_c04",
-        cluster_id="cluster_m98_08_beta",
-        family="beta",
+        world_id="alpha_m98_v2_c04",
+        cluster_id="cluster_m98_v2_04_alpha",
+        family="alpha",
         split="confirmation",
-        seed_base=924000,
-        channel_perm=(1, 0, 2, 3),
-        active_log_channels=(2, 7),
-        v2_gains=(0.81, 1.29, 1.33, 0.77),
-        v2_offsets=(-0.07, 0.08, 0.09, -0.08),
-        v3_gains=(1.32, 0.79, 0.76, 1.30),
-        v3_offsets=(0.09, -0.08, -0.10, 0.07),
+        seed_base=934000,
+        channel_perm=(0, 2, 3, 1),
+        active_log_channels=(7, 2),
+        v2_gains=(0.81, 1.26, 1.33, 0.79),
+        v2_offsets=(-0.11, 0.13, 0.17, -0.12),
+        v3_gains=(1.30, 0.82, 0.77, 1.31),
+        v3_offsets=(0.14, -0.10, -0.15, 0.13),
         bridge_offdiag_step4=-0.30,
         bridge_offdiag_step6=0.32,
         bridge_offdiag_step7=-0.29,
+    ),
+    M98WorldSpec(
+        world_id="beta_m98_v2_c01",
+        cluster_id="cluster_m98_v2_05_beta",
+        family="beta",
+        split="confirmation",
+        seed_base=941000,
+        channel_perm=(1, 3, 2, 0),
+        active_log_channels=(2, 5),
+        v2_gains=(1.29, 0.80, 1.25, 0.83),
+        v2_offsets=(0.08, -0.07, 0.06, -0.05),
+        v3_gains=(0.79, 1.32, 0.82, 1.27),
+        v3_offsets=(-0.07, 0.09, -0.06, 0.08),
+        bridge_offdiag_step4=0.32,
+        bridge_offdiag_step6=-0.30,
+        bridge_offdiag_step7=0.28,
+    ),
+    M98WorldSpec(
+        world_id="beta_m98_v2_c02",
+        cluster_id="cluster_m98_v2_06_beta",
+        family="beta",
+        split="confirmation",
+        seed_base=942000,
+        channel_perm=(2, 1, 3, 0),
+        active_log_channels=(6, 0),
+        v2_gains=(0.78, 1.31, 0.82, 1.27),
+        v2_offsets=(-0.07, 0.08, -0.05, 0.06),
+        v3_gains=(1.28, 0.79, 1.30, 0.81),
+        v3_offsets=(0.09, -0.08, 0.07, -0.06),
+        bridge_offdiag_step4=-0.31,
+        bridge_offdiag_step6=0.29,
+        bridge_offdiag_step7=-0.28,
+    ),
+    M98WorldSpec(
+        world_id="beta_m98_v2_c03",
+        cluster_id="cluster_m98_v2_07_beta",
+        family="beta",
+        split="confirmation",
+        seed_base=943000,
+        channel_perm=(3, 0, 1, 2),
+        active_log_channels=(4, 7),
+        v2_gains=(1.26, 0.84, 0.79, 1.30),
+        v2_offsets=(0.06, -0.05, -0.08, 0.07),
+        v3_gains=(0.82, 1.27, 1.32, 0.78),
+        v3_offsets=(-0.06, 0.07, 0.09, -0.08),
+        bridge_offdiag_step4=0.30,
+        bridge_offdiag_step6=-0.32,
+        bridge_offdiag_step7=0.29,
+    ),
+    M98WorldSpec(
+        world_id="beta_m98_v2_c04",
+        cluster_id="cluster_m98_v2_08_beta",
+        family="beta",
+        split="confirmation",
+        seed_base=944000,
+        channel_perm=(0, 3, 1, 2),
+        active_log_channels=(1, 3),
+        v2_gains=(0.82, 1.28, 1.32, 0.78),
+        v2_offsets=(-0.06, 0.07, 0.08, -0.07),
+        v3_gains=(1.31, 0.80, 0.77, 1.29),
+        v3_offsets=(0.08, -0.07, -0.09, 0.06),
+        bridge_offdiag_step4=-0.29,
+        bridge_offdiag_step6=0.31,
+        bridge_offdiag_step7=-0.28,
     ),
 )
 
@@ -526,7 +526,7 @@ def _gen_m98_alpha_instance(
             "strain_0": te_p["strain_0"],
             "aux_chamber_telemetry": aux_tel,
         },
-        "chamber_verification_trials": pilot_dict,
+        "_campaign_diagnostics": pilot_dict,
     }
     gt = {
         "taus": taus,
@@ -796,7 +796,7 @@ def _gen_m98_beta_instance(
         },
         "Z_nuisance": Z_nuis,
         "y_obs_raw": y_obs_raw,
-        "reference_tracer_pulses": tracer_pulses,
+        "_campaign_diagnostics": tracer_pulses,
         "aux_manifold_telemetry": rng.normal(0.0, 1.0, size=(24, 4)),
         "nuisance_ridge": lam_z,
         "source_ridge": lam_w,
@@ -814,47 +814,59 @@ def _gen_m98_beta_instance(
 
 BLIND_ALPHA_INSTRUCTION_TEXT = (
     "Write `/holdout_task/batch_solver.py` exposing `solve_batch(dataset: dict) -> dict`.\n"
-    "Inspect `/holdout_task/public_batch.pkl` (`dataset` dict) and `/tmp/hegel_continual_archive/` (when present).\n"
+    "Inspect `/holdout_task/public_batch.pkl` (`item = pickle.load(...)[0]`, containing `item['dataset']` and optional "
+    "`item['campaign_diagnostics']`) and `/tmp/hegel_continual_archive/` (when present). Note that `solve_batch(dataset)` receives ONLY "
+    "`dataset = item['dataset']` (never `campaign_diagnostics`).\n"
     "- `dataset['calibration_load_cells']` contains empirical 4-channel load-bridge calibration sweeps (`bridge_raw` shape `(N_cal, 4)`, "
     "`true_channel_loads` shape `(N_cal, 4)`, plus `single_channel_sweeps`) characterizing the active transducer bridge for this campaign "
     "(always fit transducer calibration dynamically from `calibration_load_cells` rather than hardcoding constants). "
     "Total physical axial stress on any specimen is the sum across the 4 calibrated channel loads `sum(loads_true, axis=-1)`.\n"
-    "- `dataset['train']` (`N_tr` benchtop characterization coupons) provides `lab_id`, `stratum`, `ref_coupons` (`(N_tr, 8)`), "
-    "`coupon_features_raw` (`(N_tr, 4)` with missing `NaN`s), `past_channel_raw` (`(N_tr, S, 4)`), `hold_channel_raw` (`(N_tr, 4)`), "
-    "`strain_0` (`(N_tr,)`), noisy `strain_curves_obs` (`(N_tr, K)` at `dataset['eval_times']` with occasional heavy-tailed outliers), "
-    "and `instant_rate_obs` (`(N_tr,)`). Per-lab coupon standardization uses the median of column means and stds (`ddof=0`) of "
-    "`ref_coupons`, followed by cell-balanced `(lab_id, stratum)` inverse-count weighted mean imputation of missing `coupon_features_raw`; "
-    "baseline coupon drift rate is `theta[2] + X_std @ theta[3:7]` and two-branch Prony spectrum `taus = (tau_0, tau_1)` "
-    "(`0.05 < tau_0 < tau_1 < 25.0`) has weights `theta[0:2]`.\n"
-    "- `dataset['chamber_verification_trials']` (dict when chamber pilot runs were recorded for this campaign, `None` on routine blind "
-    "campaigns) provides empirical `strain_curves_obs` and `instant_rate_obs` measured inside the deployment chamber. Deployment chamber "
-    "constitutive behavior and transducer characteristics may vary across campaigns from benchtop characterization (`train`) and/or depend on "
-    "preceding apparatus state in `/tmp/hegel_continual_archive/archive_apparatus_log.json`.\n"
+    "- `dataset['train']` (`N_tr` benchtop characterization coupons) and `dataset['test']` (`N_te` deployment coupons) share the SAME "
+    "intrinsic material relaxation spectrum `taus = (tau_0, tau_1)` (`0.05 < tau_0 < tau_1 < 25.0`) and 7 hereditary weights `theta` "
+    "(`theta[0:2]` branch weights, `theta[2]` drift intercept, `theta[3:7]` standardized coupon feature weights). Standardize "
+    "`coupon_features_raw` jointly across `vstack([train, test])` per `lab_id` using the median of column means and stds (`ddof=0`) of "
+    "`ref_coupons`, followed by cell-balanced `(lab_id, stratum)` inverse-count weighted mean imputation of missing `NaN`s -> `X_tr, X_te`. "
+    "On benchtop `train` (chronological `past_dt[0 .. S-1]` from `z_0 = 0`: `z_{s+1} = exp(-past_dt[s]/taus)*z_s + "
+    "(1 - exp(-past_dt[s]/taus))*past_stress[:, s]`, `gap = hold_stress[:, None] - z_S`, `r_drift = theta[2] + X_std @ theta[3:7]`), "
+    "`strain_curves_obs` (at `eval_times`, with occasional heavy-tailed sensor outliers) follows `strain_0[:, None] + "
+    "sum_b theta[b]*gap[:, b:b+1]*(1 - exp(-t/tau_b)) + r_drift[:, None]*t` and `instant_rate_obs` follows `sum_b theta[b]*gap[:, b]/tau_b + r_drift`.\n"
+    "- Deployment chamber constitutive behavior (`test`) and transducer characteristics may vary across campaigns from benchtop `train`. "
+    "When `item['campaign_diagnostics']` is a dict of `18` chamber verification coupons (of the SAME material `(taus, theta)`), inspect it "
+    "during development to identify this campaign's chamber memory/drift law so `solve_batch(dataset)` predicts `test` directly from `dataset` "
+    "(when `item['campaign_diagnostics']` is `None` on a blind campaign, consult `/tmp/hegel_continual_archive/` if present, otherwise use "
+    "the baseline benchtop law; keep `(taus, theta)` estimated from `train`).\n"
     "- Return `{'estimated_taus': shape (2,), 'hereditary_weights': shape (7,), 'predicted_strain': shape (N_te, K), "
     "'initial_rate_pred': shape (N_te,)}`. Run `python3 /holdout_task/validate_public_schema.py` to verify output structure."
 )
 
 BLIND_BETA_INSTRUCTION_TEXT = (
     "Write `/holdout_task/batch_solver.py` exposing `solve_batch(study: dict) -> dict`.\n"
-    "Inspect `/holdout_task/public_batch.pkl` (`study` dict) and `/tmp/hegel_continual_archive/` (when present).\n"
-    "- A 2D steady transport-reaction chamber on `[0, Lx] x [0, Ly]` (`nx x ny` uniform grid, column-major `'F'` ordering) has interior "
-    "1D finite-volume upwind advection-diffusion operators along `x` (`kappa_x`, `vel_x`, parameter `robin_x`) and `y` (`kappa_y`, "
-    "`vel_y`, parameter `robin_y`) combined via Kronecker sum `kron(I_ny, Ax) + kron(Ay, I_nx) + diag(V_reaction_2d.ravel(order='F'))` "
-    "and shifts `mu_shifts[k] * I`.\n"
+    "Inspect `/holdout_task/public_batch.pkl` (`item = pickle.load(...)[0]`, containing `item['study']` and optional "
+    "`item['campaign_diagnostics']`) and `/tmp/hegel_continual_archive/` (when present). Note that `solve_batch(study)` receives ONLY "
+    "`study = item['study']` (never `campaign_diagnostics`).\n"
+    "- A 2D steady transport-reaction chamber on `[0, Lx] x [0, Ly]` (`nx x ny` uniform grid, `dx = Lx/(nx-1)`, `dy = Ly/(ny-1)`, "
+    "column-major `'F'` ordering) combines 1D operators `Ax`, `Ay` via `L = kron(I_ny, Ax) + kron(Ay, I_nx) + "
+    "diag(V_reaction_2d.ravel(order='F'))` and solves `(L + mu_shifts[k] * I) u = mode.ravel(order='F')`. For interior indices "
+    "`1 <= i <= n-2`, 1D row-local upwind FVM uses `kp = 0.5*(kap[i]+kap[i+1])`, `km = 0.5*(kap[i]+kap[i-1])`, "
+    "`A[i, i-1] = -km/h^2 - max(vel[i], 0)/h`, `A[i, i+1] = -kp/h^2 - max(-vel[i], 0)/h`, `A[i, i] = (kp+km)/h^2 + abs(vel[i])/h`. "
+    "Under open-wall Robin baseline, boundary rows `0, n-1` satisfy `A[0,0] = kap[0]/h^2 + rob/h`, `A[0,1] = -kap[0]/h^2`, "
+    "`A[n-1,n-1] = kap[-1]/h^2 + rob/h`, `A[n-1,n-2] = -kap[-1]/h^2`.\n"
     "- `study['sensor_calibration_sweeps']` provides empirical 4-channel sensor rosette calibration sweeps (`ref_rosette` shape `(N_cal, 4)`, "
     "`raw_rosette` shape `(N_cal, 4)`, plus `single_bank_sweeps`) characterizing the active sensor rosette for this campaign "
     "(always fit sensor calibration dynamically from `sensor_calibration_sweeps` rather than hardcoding constants). `study['y_obs_raw']` "
     "(`(N_obs,)`, stacked across `mu_shifts` at `sensor_ij`, organized in consecutive 4-channel rosettes `reshape(-1, 4)`) measures "
-    "linear superposition of `M` `source_modes` plus nuisance `Z_nuisance @ gamma`.\n"
-    "- `study['reference_tracer_pulses']` (list of `{w_pulse, y_pulse_raw}` when diagnostic tracer pulses were fired in this campaign, "
-    "`None` on routine blind campaigns) records measured chamber responses to known `w_pulse`. Chamber boundary conditions and sensor "
-    "rosette characteristics may vary across campaigns and/or depend on preceding apparatus state in "
-    "`/tmp/hegel_continual_archive/archive_apparatus_log.json`.\n"
-    "- After nuisance ridge projection (`Pz = solve(Z.T @ Z + nuisance_ridge * I, Z.T)`, `S_tilde = S - Z @ (Pz @ S)`, "
-    "`r_y = y_cal - Z @ (Pz @ y_cal)`), solve the Box-Simplex QP `min_{0 <= w <= u_box, sum(w) == total_budget} "
-    "0.5 * ||S_tilde @ w - r_y||_2^2 + 0.5 * source_ridge * ||w||_2^2` and return `{'weights': w, 'terminal_field': "
-    "tensordot(w, U_last, axes=(0, 0)), 'kkt_certificate': {'weights': ..., 'nu_sum': ..., 'lam_lower': ..., 'lam_upper': ..., "
-    "'primal_objective': ..., 'dual_lower_bound': ...}}`. Run `python3 /holdout_task/validate_public_schema.py` to verify output structure."
+    "`S @ w + Z_nuisance @ gamma + noise`.\n"
+    "- Chamber boundary conditions at `i in {0, n-1}` and sensor rosette characteristics may vary across campaigns from the open-wall baseline. "
+    "When `item['campaign_diagnostics']` is a list of diagnostic tracer pulses `[{w_pulse, y_pulse_raw}, ...]`, inspect it during development "
+    "to identify this campaign's boundary operator at `i in {0, n-1}` so `solve_batch(study)` solves directly from `study` (when "
+    "`item['campaign_diagnostics']` is `None` on a blind campaign, consult `/tmp/hegel_continual_archive/` if present, otherwise use the "
+    "open-wall Robin baseline).\n"
+    "- Project nuisance (`Pz = solve(Z.T @ Z + nuisance_ridge * I, Z.T)`, `S_tilde = S - Z @ (Pz @ S)`, `r_y = y_cal - Z @ (Pz @ y_cal)`), "
+    "solve `min_{0 <= w <= u_box, sum(w) == total_budget} J(w)` where `J(w) = 0.5*||S_tilde @ w - r_y||_2^2 + 0.5*source_ridge*||w||_2^2`, "
+    "and return `{'weights': w, 'terminal_field': tensordot(w, U_last, axes=(0, 0)), 'kkt_certificate': {'weights': w.tolist(), "
+    "'nu_sum': nu, 'lam_lower': max(0, g - nu), 'lam_upper': max(0, nu - g), 'primal_objective': J(w), "
+    "'dual_lower_bound': J(w) - g @ w + nu * total_budget + u_box * sum(min(0, g - nu))}}` with `g = S_tilde.T @ (S_tilde @ w - r_y) + "
+    "source_ridge * w` and `g - nu - lam_lower + lam_upper = 0`. Run `python3 /holdout_task/validate_public_schema.py` to verify."
 )
 
 
@@ -878,6 +890,7 @@ def _build_m98_alpha_task(
 t0 = time.monotonic()
 valid = True; max_tau_rel = 0.0; max_mae = 0.0; max_rate_mae = 0.0; rows = []
 for sd, ds, gt in cases:
+    ds.pop("_campaign_diagnostics", None)
     out = cand_mod.solve_batch(ds)
     if not isinstance(out, dict) or not {"estimated_taus", "hereditary_weights", "predicted_strain", "initial_rate_pred"} <= set(out.keys()):
         valid = False; rows.append({"seed": sd, "error": "MISSING_KEYS"}); continue
@@ -914,8 +927,9 @@ print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_tau_rel_
         "import json, math, os, pickle, sys\nimport numpy as np\n"
         + _M98_ALPHA_GEN_PY
         + f"\npub_ds, _unused_gt = {pub_call_expr}\n"
+        'pub_diag = pub_ds.pop("_campaign_diagnostics", None)\n'
         'with open("/holdout_task/public_batch.pkl", "wb") as fh:\n'
-        '    pickle.dump([{"dataset": pub_ds}], fh)\n'
+        '    pickle.dump([{"dataset": pub_ds, "campaign_diagnostics": pub_diag}], fh)\n'
         'open("/holdout_task/validate_public_schema.py", "w").write("""import importlib.util, json, os, pickle, sys\nimport numpy as np\n'
         '_d = os.path.dirname(os.path.abspath(__file__))\n'
         'cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_d, "batch_solver.py")\n'
@@ -978,6 +992,7 @@ def _build_m98_beta_task(
 t0 = time.monotonic()
 valid = True; max_w_rel = 0.0; max_f_rel = 0.0; max_gap = 0.0; rows = []
 for sd, st, gt in cases:
+    st.pop("_campaign_diagnostics", None)
     out = cand_mod.solve_batch(st)
     if not isinstance(out, dict) or not {"weights", "terminal_field", "kkt_certificate"} <= set(out.keys()):
         valid = False; rows.append({"seed": sd, "error": "MISSING_KEYS"}); continue
@@ -1002,8 +1017,9 @@ print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2
         "import json, math, os, pickle, sys\nimport numpy as np\n"
         + _M98_BETA_GEN_PY
         + f"\npub_st, _unused_gt = {pub_call_expr}\n"
+        'pub_diag = pub_st.pop("_campaign_diagnostics", None)\n'
         'with open("/holdout_task/public_batch.pkl", "wb") as fh:\n'
-        '    pickle.dump([{"study": pub_st}], fh)\n'
+        '    pickle.dump([{"study": pub_st, "campaign_diagnostics": pub_diag}], fh)\n'
         'open("/holdout_task/validate_public_schema.py", "w").write("""import importlib.util, json, os, pickle, sys\nimport numpy as np\n'
         '_d = os.path.dirname(os.path.abspath(__file__))\n'
         'cand_p = sys.argv[1] if len(sys.argv) > 1 else os.path.join(_d, "batch_solver.py")\n'
@@ -1021,6 +1037,17 @@ print(json.dumps({"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_w_rel_l2
         '        a = np.asarray(out[k], dtype=float)\n'
         '        if a.shape != shp or not np.all(np.isfinite(a)): errs.append(f"bad:{k}:{a.shape}")\n'
         '    if "kkt_certificate" not in out or not isinstance(out["kkt_certificate"], dict): errs.append("missing:kkt_certificate")\n'
+        '    else:\n'
+        '        kc = out["kkt_certificate"]\n'
+        '        for kk in ("weights", "nu_sum", "lam_lower", "lam_upper", "primal_objective", "dual_lower_bound"):\n'
+        '            if kk not in kc: errs.append(f"missing_kkt:{kk}")\n'
+        '        if not errs:\n'
+        '            kw = np.asarray(kc["weights"], dtype=float); ll = np.asarray(kc["lam_lower"], dtype=float); lu = np.asarray(kc["lam_upper"], dtype=float)\n'
+        '            po = float(kc["primal_objective"]); dl = float(kc["dual_lower_bound"])\n'
+        '            if np.min(kw) < -1e-6 or np.max(kw) > float(st["u_box"]) + 1e-6: errs.append("kkt_box_violation")\n'
+        '            if abs(float(np.sum(kw)) - float(st["total_budget"])) > 1e-5: errs.append("kkt_budget_violation")\n'
+        '            if np.min(ll) < -1e-6 or np.min(lu) < -1e-6: errs.append("kkt_neg_multiplier")\n'
+        '            if dl < -1e-7 or po < dl - 1e-6 or (po - dl) > 2e-4: errs.append(f"kkt_duality_gap_or_sign:{po:.6f}_vs_{dl:.6f}")\n'
         'print(json.dumps({"schema_valid": len(errs) == 0, "errors": errs}))\n'
         'sys.exit(0 if len(errs) == 0 else 1)\n'
         '""")\n'
@@ -1226,7 +1253,7 @@ def build_m98_world_tasks(spec: M98WorldSpec) -> tuple[HoldoutOODTask, tuple[Hol
             priv_cases_py=priv_cb,
         )
 
-    s_task = _mk_task(f"{wid}_s00", sb + 10, sb + 11, sb + 12, "U0", "D0", id_g, id_b, 0.0, True, 0)
+    s_task = _mk_task(f"{wid}_s00", sb + 10, sb + 11, sb + 12, "U0", "D0", id_g, id_b, 0.0, False, 0)
 
     # CRITICAL (`A03`): `R0` (`Step 2`) and `U_iso` (`Step 5`) use the EXACT SAME `pub_seed = sb + 200` AND `priv_seeds = (sb + 201, sb + 202)`!
     twin_pub_s, twin_p1, twin_p2 = sb + 200, sb + 201, sb + 202
@@ -1235,10 +1262,10 @@ def build_m98_world_tasks(spec: M98WorldSpec) -> tuple[HoldoutOODTask, tuple[Hol
         ("C1_down", "U0", "D1", spec.v2_gains, spec.v2_offsets, 0.0, True, 0, sb + 110, sb + 111, sb + 112, "downstream_discovery_1"),
         ("R0", "U0", "D0", spec.v2_gains, spec.v2_offsets, 0.0, False, 0, twin_pub_s, twin_p1, twin_p2, "byte_identical_present_twin_D0"),
         ("C2_down", "U0", "D2", spec.v2_gains, spec.v2_offsets, 0.0, True, 0, sb + 310, sb + 311, sb + 312, "downstream_discovery_2"),
-        ("C_up", "U1", "D0", spec.v2_gains, spec.v2_offsets, spec.bridge_offdiag_step4, True, 2, sb + 410, sb + 411, sb + 412, "upstream_transducer_discovery"),
+        ("C_up", "U1", "D0", spec.v2_gains, spec.v2_offsets, spec.bridge_offdiag_step4, False, 3, sb + 410, sb + 411, sb + 412, "upstream_transducer_discovery"),
         ("U_iso", "U0", "D1", spec.v2_gains, spec.v2_offsets, 0.0, False, 0, twin_pub_s, twin_p1, twin_p2, "byte_identical_present_twin_D1"),
-        ("M_comb1", "U1", "D1", spec.v3_gains, spec.v3_offsets, spec.bridge_offdiag_step6, True, 2, sb + 610, sb + 611, sb + 612, "unseen_cross_factor_U1_x_D1"),
-        ("M_comb2", "U1", "D2", spec.v3_gains, spec.v3_offsets, spec.bridge_offdiag_step7, True, 2, sb + 710, sb + 711, sb + 712, "unseen_cross_factor_U1_x_D2"),
+        ("M_comb1", "U1", "D1", spec.v3_gains, spec.v3_offsets, spec.bridge_offdiag_step6, True, 3, sb + 610, sb + 611, sb + 612, "unseen_cross_factor_U1_x_D1"),
+        ("M_comb2", "U1", "D2", spec.v3_gains, spec.v3_offsets, spec.bridge_offdiag_step7, True, 3, sb + 710, sb + 711, sb + 712, "unseen_cross_factor_U1_x_D2"),
     ]
 
     tasks: list[HoldoutOODTask] = []
@@ -1644,21 +1671,95 @@ def compose_m98_two_stage_solver_code(
     )
 
 
-def diagnose_m98_factored_conflict_locus(family: str, public_item: dict[str, Any]) -> dict[str, Any]:
+def diagnose_m98_factored_conflict_locus(
+    family: str,
+    public_item: dict[str, Any],
+    *,
+    chosen_up_code: str | None = None,
+    chosen_up_entrypoint: str = "calibrate_upstream",
+    diag_payload: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Causal parent holdout residual localization (`0` private peek!):
-    Checks whether the diagonal upstream transducer assumption `U0` explains the non-outlier calibration sweep table!
-    - If `up_stat_01_diagonal_ols_r2 < 0.96` (unexplained cross-channel calibration variance > 4%), conflict locus is
-      `upstream_transducer` (downstream constitutive mechanisms remain unrefuted!).
-    - Otherwise, `u0` calibration is empirically valid and conflict locus is `downstream_constitutive`!
+    1. Computes `up_stat_01_diagonal_ols_r2` on trimmed calibration sweeps (`r2_diag >= 0.96` on `U0` -> `u0` diagonal transducer
+       is empirically exact, so conflict locus is strictly `downstream_constitutive` with `0.0%` white-noise false positives!).
+    2. When `r2_diag < 0.96` AND `chosen_up_code` is provided, empirically tests `chosen_up_code` inside `hegel-clean-scipy:m7v1`
+       on a `56/24` split of the public calibration sweep table (`bridge_raw -> true_channel_loads` / `raw_rosette -> ref_rosette`)!
+       - If `chosen_up` already inverts the held-out calibration sweeps (`holdout_rmse <= 0.03`, e.g. `u1` is already selected!),
+         then `chosen_up` is NOT broken and the conflict locus is `downstream_constitutive`!
+       - Otherwise (`holdout_rmse > 0.03`), `chosen_up` failed transducer calibration and locus is `upstream_transducer`!
     """
+    import subprocess
+
     up_obs = compute_m98_upstream_observables(family, public_item)
     r2_diag = float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0)
     off_corr = float(up_obs["up_stat_02_off_diagonal_corr_max"] or 0.0)
-    is_upstream = bool(r2_diag < 0.96 or off_corr > 0.25)
+    if r2_diag >= 0.96:
+        return {
+            "locus": "downstream_constitutive",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": 0.0,
+            "upstream_observables": up_obs,
+        }
+    if not chosen_up_code:
+        return {
+            "locus": "upstream_transducer",
+            "diagonal_ols_r2": r2_diag,
+            "off_diagonal_corr_max": off_corr,
+            "chosen_up_holdout_rmse": None,
+            "upstream_observables": up_obs,
+        }
+
+    # Empirical `56/24` calibration sweep holdout check of `chosen_up_code` inside `hegel-clean-scipy:m7v1` (`scipy` supported!)
+    with tempfile.TemporaryDirectory(prefix="m98_uploc_") as td:
+        td_p = Path(td)
+        (td_p / "up_mod.py").write_text(chosen_up_code, encoding="utf-8")
+        with open(td_p / "item.pkl", "wb") as fh:
+            pickle.dump({"family": family, "item": public_item, "ep": chosen_up_entrypoint, "pay": diag_payload or {}}, fh)
+        chk_py = (
+            "import copy, inspect, json, pickle, sys\nimport numpy as np\nsys.path.insert(0, '/work')\nimport up_mod\n"
+            "b = pickle.load(open('/work/item.pkl', 'rb'))\nfam = b['family']; fn = getattr(up_mod, b['ep']); pay = b['pay']\n"
+            "if fam == 'alpha':\n"
+            "    ds = copy.deepcopy(b['item']['dataset']); cal = ds['calibration_load_cells']\n"
+            "    raw = np.asarray(cal['bridge_raw'], float); tru = np.asarray(cal['true_channel_loads'], float)\n"
+            "    kp = np.flatnonzero(np.max(np.abs(raw), axis=1) <= 8.5)\n"
+            "    tr_i, ho_i = np.arange(56), kp[kp >= 56]\n"
+            "    cal['bridge_raw'] = raw[tr_i]; cal['true_channel_loads'] = tru[tr_i]\n"
+            "    ds['test'] = dict(ds['test']); ds['test']['hold_channel_raw'] = raw[ho_i]\n"
+            "    out = fn(ds, pay) if len(inspect.signature(fn).parameters) >= 2 else fn(ds)\n"
+            "    pred = np.asarray(out['test']['hold_channel_raw'], float); ref = tru[ho_i]\n"
+            "else:\n"
+            "    st = copy.deepcopy(b['item']['study']); cal = st['sensor_calibration_sweeps']\n"
+            "    raw = np.asarray(cal['raw_rosette'], float); tru = np.asarray(cal['ref_rosette'], float)\n"
+            "    kp = np.flatnonzero(np.max(np.abs(raw), axis=1) <= 8.5)\n"
+            "    tr_i, ho_i = np.arange(56), kp[kp >= 56]\n"
+            "    cal['raw_rosette'] = raw[tr_i]; cal['ref_rosette'] = tru[tr_i]\n"
+            "    st['y_obs_raw'] = raw[ho_i].ravel()\n"
+            "    out = fn(st, pay) if len(inspect.signature(fn).parameters) >= 2 else fn(st)\n"
+            "    pred = np.asarray(out['y_obs_raw'], float).reshape(-1, 4); ref = tru[ho_i]\n"
+            "rmse = float(np.sqrt(np.mean((pred - ref) ** 2))) if len(ref) else 0.0\n"
+            "print(json.dumps({'rmse': rmse}))\n"
+        )
+        (td_p / "run_chk.py").write_text(chk_py, encoding="utf-8")
+        proc = subprocess.run(
+            ["docker", "run", "--rm", "--network", "none", "-v", f"{td_p}:/work:ro", CLEAN_SCIPY_SANDBOX_IMAGE, "python3", "/work/run_chk.py"],
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+        rmse_val = 999.0
+        if proc.returncode == 0 and proc.stdout.strip():
+            try:
+                rmse_val = float(json.loads(proc.stdout.strip().splitlines()[-1])["rmse"])
+            except Exception:
+                rmse_val = 999.0
+
+    is_upstream = bool(rmse_val > 0.03)
     return {
         "locus": ("upstream_transducer" if is_upstream else "downstream_constitutive"),
         "diagonal_ols_r2": r2_diag,
         "off_diagonal_corr_max": off_corr,
+        "chosen_up_holdout_rmse": round(rmse_val, 6),
         "upstream_observables": up_obs,
     }
 
@@ -2047,7 +2148,17 @@ def run_m98_equal_capability_pre_llm_trial(
     )
     pr_ms = round((monotonic() - t0) * 1000.0, 2)
     f_kind = classify_public_probe_failure(pr)["failure_kind"]
-    locus_diag = diagnose_m98_factored_conflict_locus(spec.family, public_item)
+    locus_diag = (
+        {"locus": "none", "diagonal_ols_r2": float(up_obs["up_stat_01_diagonal_ols_r2"] or 0.0), "chosen_up_holdout_rmse": 0.0}
+        if pr["accepted"]
+        else diagnose_m98_factored_conflict_locus(
+            spec.family,
+            public_item,
+            chosen_up_code=(chosen_up.canonical_algorithm_code or chosen_up.parameterized_closure_code),
+            chosen_up_entrypoint=(chosen_up.canonical_entrypoint or chosen_up.parameterized_entrypoint),
+            diag_payload=diag_pay,
+        )
+    )
 
     if pr["accepted"]:
         up_wit = up_ctrl.record_tested_witness(

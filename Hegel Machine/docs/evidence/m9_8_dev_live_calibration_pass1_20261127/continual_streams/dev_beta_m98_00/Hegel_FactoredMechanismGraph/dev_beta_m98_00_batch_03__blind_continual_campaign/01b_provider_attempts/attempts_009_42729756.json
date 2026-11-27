@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42729756755b4172a6809b61705fc07a",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:58:39.955005+00:00",
+  "ended_at_utc": "2026-11-27T12:59:01.620964+00:00",
+  "request_sha256": "63316ce8d3438fff6925dff110aa4396b5c50db481853da432b8a16bd5429499",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51857,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27950,
+    "cached_tokens": 0,
+    "completion_tokens": 705
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nroot = '/holdout_task'\\nsys.path.insert(0, root)\\nfrom upstream_transducer import calibrate_upstream\\nwith open(root + '/public_batch.pkl', 'rb') as f:\\n    for item in pickle.load(f):\\n        study = item['study']\\n        calibrated = calibrate_upstream(study)\\n        twice = calibrate_upstream(calibrated)\\n        np.testing.assert_allclose(twice['y_obs_raw'], calibrated['y_obs_raw'], atol=1e-12, rtol=0)\\n        for a, b in zip(twice['reference_tracer_pulses'], calibrated['reference_tracer_pulses']):\\n            np.testing.assert_allclose(a['y_pulse_raw'], b['y_pulse_raw'], atol=1e-12, rtol=0)\\n        without_pulses = calibrate_upstream(dict(study, reference_tracer_pulses=None))\\n        assert without_pulses['reference_tracer_pulses'] is None\\n        np.testing.assert_array_equal(without_pulses['y_obs_raw'], calibrated['y_obs_raw'])\\nprint('Canonical reapplication and absent-pulse handling passed.', flush=True)\\nsys.argv = [root + '/validate_public_schema.py', root + '/batch_solver.py']\\nrunpy.run_path(sys.argv[0], run_name='__main__')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 model-specific spike weighting → H2 shared EMI screening within each training fold; worst synthetic core/edge inversion errors are 2.74e-5/6.90e-5, and worst public leave-one-out error is 3.46e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Shared EMI screening reduced the worst cubic inversion error from 0.311 to 6.90e-5. Verify the revised composition in an isolated process: a schema failure would point to the adapter, while a change on canonical reapplication would point to incomplete normalization or double calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bb434ec578a0322cebde0009613802297698fd40e63df62f3e796e06a2957632",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21621.84,
+      "usage_known": true,
+      "prompt_tokens": 27950,
+      "cached_tokens": 0,
+      "completion_tokens": 705
+    }
+  ]
+}

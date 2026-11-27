@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c0e1b58def94c94be7f0310069e12e4",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:51:46.153373+00:00",
+  "ended_at_utc": "2026-11-27T13:52:18.274199+00:00",
+  "request_sha256": "5772da7dd569536e5b09d2611d4d3f24a504bb4e6248a3235794f860fe660a81",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59272,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31230,
+    "cached_tokens": 11136,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\ncat > /tmp/audit_rheology.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\n\\ns = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nz, target = c['bridge_raw'], c['true_channel_loads'].sum(1)\\nz = (z-z.mean(0))/z.std(0)\\nlinear = np.c_[np.ones(len(z)), z]\\na, b = np.triu_indices(4)\\nquad = np.c_[linear, z[:,a]*z[:,b]]\\nqs = [*z.T] + [z[:,i]+sign*z[:,j] for i,j in combinations(range(4),2) for sign in [-1,1]]\\nsat = np.c_[linear, *[q/(1+.2*q*q) for q in qs]]\\norder = np.argsort(target)\\nblocks = [np.arange(len(z))[i::5] for i in range(5)] + [order[:16],order[-16:]]\\nfor name, mat in [('affine',linear),('quadratic',quad),('pair saturation',sat)]:\\n    err = []\\n    for idx in blocks:\\n        tr = np.ones(len(z),dtype=bool); tr[idx] = False\\n        p = np.linalg.lstsq(mat[tr],target[tr],rcond=None)[0]\\n        err.append(np.sqrt(np.mean((mat[idx]@p-target[idx])**2)))\\n    print(name, 'bridge held-out RMSE, interleaved then stress tails:', np.round(err,7))\\n\\ntr = d['train']; dt,t = d['past_dt'],d['eval_times']; coupon,_ = m._prepare(d)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:,None]; r = tr['instant_rate_obs']\\nfor key in ('lab_id','stratum'):\\n    for v in np.unique(tr[key]):\\n        keep = tr[key]!=v\\n        tau,theta = m._fit(dt,t,tuple(a[keep] for a in coupon),y[keep],r[keep])\\n        A,B = m._design(tau,dt,t,tuple(a[~keep] for a in coupon))\\n        ec,er = A@theta-y[~keep], B@theta-r[~keep]\\n        print(key,v,'n',len(er),'curve worst-horizon MdAE',round(np.median(abs(ec),axis=0).max(),7),'curve largest signed horizon median',round(abs(np.median(ec,axis=0)).max(),7),'rate MdAE',round(np.median(abs(er)),7),'rate signed median',round(np.median(er),7))\\nPY\\npython3 -I /tmp/audit_rheology.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: shared intrinsic relaxation with affine bridge calibration → H2: carried chamber memory from the reversed prefix; prior worst held-out benchtop median absolute errors were 0.01418 for strain and 0.00760 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a nonlinear bridge correction or lab-specific fit without held-out evidence\",\n      \"rejected_reason\": \"Extra terms need to improve withheld bridge stress tails or address a measurable lab residual bias; a better in-sample fit is insufficient.\"\n    },\n    {\n      \"option\": \"Run relay, classification, or diffusion-operator checks\",\n      \"rejected_reason\": \"The supplied data contain continuous rheology responses, with no relay state, class labels, or diffusion operator.\"\n    }\n  ],\n  \"rationale\": \"Use the real calibration sweeps to test whether bridge cross-terms or pairwise saturation improve stress-tail predictions, and use signed held-out lab and stratum residuals to test for a group offset that pooled errors could hide. Alter the estimator only if those tests reveal a meaningful failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "7ba724142b6ec1eb74221d7aedb229371eb0387534b0451990970828459e3399",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32082.03,
+      "usage_known": true,
+      "prompt_tokens": 31230,
+      "cached_tokens": 11136,
+      "completion_tokens": 1144
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3d843030880942819ff319cbbf47e664",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__beta_m98_c01__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m98_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:25:57.481173+00:00",
+  "ended_at_utc": "2026-11-27T12:26:25.719047+00:00",
+  "request_sha256": "38729c4dcb176fc0b245f2c0aaa093e8ddf6480eb573061c3516e5b46082e142",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 65972,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35561,
+    "cached_tokens": 11136,
+    "completion_tokens": 1062
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; print('study keys',list(s))\\nfor k,v in s.items():\\n if not isinstance(v,(np.ndarray,list,dict)) and k not in ('reference_tracer_pulses',): print(k,v)\\nx=s['sensor_calibration_sweeps']['ref_rosette']; R,F,a=m._chamber(s); S,U=R(a); Z=s['Z_nuisance']; u=np.broadcast_to(s['u_box'],(F.shape[1],)); w=u*s['total_budget']/u.sum(); y=S@w+Z@np.array([.02,-.03,.04]); G=np.array([[1.06,.03,0,-.02],[.02,.94,.04,0],[0,-.03,1.03,.02],[.01,0,-.03,.98]])\\ndef encode(v,nonlinear):\\n shape=v.shape; z=v.reshape(-1,4); out=z@G+np.array([.015,-.025,.012,.004]);\\n if nonlinear: out+=np.column_stack((.05*z[:,1]*z[:,2],-.04*z[:,0]*z[:,3],.03*z[:,2]**3,.06*z[:,0]*z[:,1]*z[:,2]))\\n return out.reshape(shape)\\nref=m.solve_batch(dict(s,reference_tracer_pulses=None,y_obs_raw=y,sensor_calibration_sweeps=dict(s['sensor_calibration_sweeps'],raw_rosette=x)))\\nfor nonlinear in (False,True):\\n q=m.solve_batch(dict(s, reference_tracer_pulses=None,y_obs_raw=encode(y,nonlinear),sensor_calibration_sweeps=dict(s['sensor_calibration_sweeps'],raw_rosette=encode(x,nonlinear))))\\n dw=np.max(abs(ref['weights']-q['weights'])); df=np.max(abs(ref['terminal_field']-q['terminal_field'])); print('blind planted rosette nonlinear',nonlinear,'weight and field deviation',dw,df); assert max(dw,df)<1e-8\\nq=m.solve_batch(dict(s, reference_tracer_pulses=None)); c=q['kkt_certificate']; w=q['weights']; gap=c['primal_objective']-c['dual_lower_bound']; err=np.max(abs(np.tensordot(w,U,axes=(0,0))-q['terminal_field'])); print('public blind feasibility, gap, field error',abs(w.sum()-s['total_budget']),gap,err); assert abs(gap)<1e-10 and err<1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: fit interior corrections or infer blind walls from routine residuals → H2: retain the measured stencil and validate the nominal blind fallback; worst held-out tracer RMSE is 4.91e-5 versus 4.70e-5 with five additional interior terms.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add five fitted interior terms\",\n      \"rejected_reason\": \"The worst-fold gain is below calibration noise, and held-out pulse error increases.\"\n    }\n  ],\n  \"rationale\": \"Test the pulse-free path end to end on public observations and on planted affine and nonlinear sweeps. A failed invariance check would point to calibration inversion; a failed field or gap check would point to the blind solver path.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "c6259300ab3288169024f646e3a9c535f57e8487dfe8b9cb183a9378bd72bfab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28204.01,
+      "usage_known": true,
+      "prompt_tokens": 35561,
+      "cached_tokens": 11136,
+      "completion_tokens": 1062
+    }
+  ]
+}

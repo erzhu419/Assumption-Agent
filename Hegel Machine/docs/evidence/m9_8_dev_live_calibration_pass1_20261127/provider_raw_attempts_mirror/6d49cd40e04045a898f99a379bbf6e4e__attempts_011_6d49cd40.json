@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d49cd40e04045a898f99a379bbf6e4e",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:13:27.717088+00:00",
+  "ended_at_utc": "2026-11-27T13:13:59.608827+00:00",
+  "request_sha256": "28a906472267511b813d5563959325f446d3a47440bb7023e6ba02a3bb05069b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 66352,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34786,
+    "cached_tokens": 9600,
+    "completion_tokens": 1092
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('candidate', p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; modes=s['source_modes']; z=s['Z_nuisance']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']; sweeps=s['sensor_calibration_sweeps']; x=np.asarray(sweeps['ref_rosette']); raw=np.asarray(sweeps['raw_rosette']); affine=np.linalg.lstsq(np.c_[np.ones(len(x)),x],raw,rcond=None)[0]\\nencode=lambda y:(y.reshape(-1,4)@affine[1:]+affine[0]).ravel()\\nproj=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); Q=lambda a:a-z@(proj@a)\\ntruth=np.asarray([0,0,.08,.17,.14,.4,.18,.43]); truth=np.clip(truth,0,cap); truth[6]+=budget-truth.sum()\\nfor factor in (.6,1.,1.6):\\n wall=np.ones(8); wall[1]=factor; a,U=m._response(s,wall,modes); obs=a@truth+z@np.array([.02,-.03,.04]); cases=(None,[{'w_pulse':w,'y_pulse_raw':encode(a@w)} for w in np.eye(len(modes))[[0,3,7]]]); X=Q(a); Y=Q(obs); expected=m._weights(X,Y,ridge,cap,budget)\\n for pulses in cases:\\n  test=dict(s,y_obs_raw=encode(obs),reference_tracer_pulses=pulses); out=m.solve_batch(test); w=out['weights']; k=out['kkt_certificate']; d=X.T@(X@w-Y)+ridge*w-k['nu_sum']; gap=np.maximum(d,0)@w+np.maximum(-d,0)@(cap-w); field_err=np.max(np.abs(out['terminal_field']-np.einsum('i,ijk->jk',expected,U))); weight_err=np.max(np.abs(w-expected)); print('wall',factor,'tracer',bool(pulses),'field error',field_err,'weight error',weight_err,'true-model gap',gap); assert field_err<1e-5 and weight_err<1e-4 and abs(w.sum()-budget)<1e-10 and gap<1e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal walls -> H2 high-x Robin correction; worst public held-out rosette RMSE is 0.009967, worst shift RMSE is 0.011593, and the recomputed public KKT gap is 1.63e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run another public schema or hash check\",\n      \"rejected_reason\": \"The exact artifact already passed both; neither check would detect biased recovery of stronger or weaker wall leakage.\"\n    }\n  ],\n  \"rationale\": \"Test both blind and tracer branches against known wall coefficients on the public geometry. A failure against the known forward model would distinguish wall-identification bias from an output or certificate error. This test does not assume that the blind campaign’s true wall law is known.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c2c3a6f4e1d55aed630aeacbe24942c564077ad82ed90c43bd168a69d55ab47c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31850.16,
+      "usage_known": true,
+      "prompt_tokens": 34786,
+      "cached_tokens": 9600,
+      "completion_tokens": 1092
+    }
+  ]
+}

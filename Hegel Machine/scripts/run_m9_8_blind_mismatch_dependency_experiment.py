@@ -79,6 +79,7 @@ from hegel_machine.cognition.m9_6_autonomous_structure_continual_world import (
 )
 from hegel_machine.cognition.m9_8_blind_mismatch_and_selective_dependency_world import (
     CONFIRMATION_M98_WORLD_SPECS,
+    DEV_M98_WORLD_SPECS,
     M98_ALL_OBSERVABLE_NAMES,
     M98_ARMS,
     M98_DOWNSTREAM_OBSERVABLE_NAMES,
@@ -181,7 +182,9 @@ def _inject_equal_info_archive_into_m98_task(
         f"- Prior publicly-verified canonical solvers (you may inspect, reuse, or compose freely): {[r['solver_path'] for r in manifest_rows]}.\n"
         "- Manifest: `/tmp/hegel_continual_archive/archive_manifest.json`.\n"
         "- Read-only (`0444`) prefix apparatus equilibration log (`<= t-1`, also mounted in private verifier): "
-        "`/tmp/hegel_continual_archive/archive_apparatus_log.json`."
+        "`/tmp/hegel_continual_archive/archive_apparatus_log.json` (when `item['campaign_diagnostics']` is `None` on a blind campaign, "
+        "compare the latest entry of `archive_apparatus_log.json` against prior campaigns' entries to identify which prior campaign's "
+        "constitutive/boundary regime is active!)."
     )
     if pre_llm_diagnostic is not None:
         header += f"\n- Pre-LLM Public Gate Diagnostic: `{json.dumps(pre_llm_diagnostic)}`."
@@ -944,6 +947,7 @@ def _run_one_m98_world_arm_stream(
 
 def run_m98_history_masked_ablation_on_sealed_streams(
     *,
+    world_specs: tuple[M98WorldSpec, ...],
     built_worlds: dict[str, Any],
     out_dir: Path,
 ) -> dict[str, Any]:
@@ -952,7 +956,7 @@ def run_m98_history_masked_ablation_on_sealed_streams(
     `graph_ckpt_after_step_04.json` when `archive_apparatus_log.json` is masked (`[]`)!
     """
     rows = []
-    for spec in CONFIRMATION_M98_WORLD_SPECS:
+    for spec in world_specs:
         wid = spec.world_id
         _, tasks, manifest, _ = built_worlds[wid]
         r0_idx = next(i for i, m in enumerate(manifest) if m["causal_event"] == "R0")
@@ -1017,6 +1021,7 @@ def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--out-dir", type=Path, default=DEFAULT_OUT_DIR)
     ap.add_argument("--v7-bundle", type=Path, default=DEFAULT_V7_BUNDLE)
+    ap.add_argument("--split", type=str, default="confirmation", choices=["dev", "confirmation"])
     ap.add_argument("--model", type=str, default="gpt-6.2-sol")
     ap.add_argument("--reasoning-effort", type=str, default="medium")
     ap.add_argument("--max-turns", type=int, default=18)
@@ -1024,13 +1029,14 @@ def main() -> None:
     ap.add_argument("--max-stream-workers", type=int, default=24)
     args = ap.parse_args()
 
+    selected_specs: tuple[M98WorldSpec, ...] = DEV_M98_WORLD_SPECS if args.split == "dev" else CONFIRMATION_M98_WORLD_SPECS
     os.environ["HEGEL_MAX_CODEX_CONCURRENCY"] = str(args.max_codex_concurrency)
     out_dir: Path = args.out_dir.resolve()
     if out_dir.exists() and any(out_dir.iterdir()):
         raise FileExistsError(f"Refusing to overwrite non-empty output directory `{out_dir}`!")
 
     git_sha, is_dirty, src_tree_sha = _git_and_source_tree_state()
-    if is_dirty:
+    if is_dirty and args.split == "confirmation":
         raise RuntimeError("Refusing to start M9.8 confirmation experiment on a dirty working tree!")
 
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -1110,11 +1116,11 @@ def main() -> None:
     run_id = f"m98_run_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')}"
     t_campaign0 = monotonic()
 
-    print(f"[M9.8] Building 8 unexposed confirmation clusters (`commit={git_sha[:10]}`, `dirty={is_dirty}`)...", flush=True)
-    built_worlds = {spec.world_id: build_m98_world_tasks(spec) for spec in CONFIRMATION_M98_WORLD_SPECS}
+    print(f"[M9.8] Building {len(selected_specs)} {args.split} clusters (`commit={git_sha[:10]}`, `dirty={is_dirty}`)...", flush=True)
+    built_worlds = {spec.world_id: build_m98_world_tasks(spec) for spec in selected_specs}
 
-    # Phase 1: Parallel `Stage S` Shared Source Synthesis (`8` clusters)
-    print("[M9.8] Phase 1: Running 8 shared Stage S source tasks in parallel...", flush=True)
+    # Phase 1: Parallel `Stage S` Shared Source Synthesis
+    print(f"[M9.8] Phase 1: Running {len(selected_specs)} shared Stage S source tasks in parallel...", flush=True)
     stage_s_results: dict[str, dict[str, Any]] = {}
 
     def _run_stage_s(spec: M98WorldSpec) -> tuple[str, dict[str, Any]]:
@@ -1269,15 +1275,15 @@ def main() -> None:
                 }
         raise RuntimeError(f"Stage S failed after 2 attempts on {wid}")
 
-    with ThreadPoolExecutor(max_workers=8) as s_pool:
-        s_futs = [s_pool.submit(_run_stage_s, sp) for sp in CONFIRMATION_M98_WORLD_SPECS]
+    with ThreadPoolExecutor(max_workers=len(selected_specs)) as s_pool:
+        s_futs = [s_pool.submit(_run_stage_s, sp) for sp in selected_specs]
         for sf in as_completed(s_futs):
             w_k, s_info = sf.result()
             stage_s_results[w_k] = s_info
 
-    # Phase 2: Parallel `24` Continual Streams (`8` Clusters × `3` Online Arms) at `32`-Way Codex Concurrency!
-    print("[M9.8] Phase 2: Launching 24 continual streams (8 clusters x 3 online arms) at 32-way Codex concurrency...", flush=True)
-    stream_jobs = [(sp, arm_nm) for sp in CONFIRMATION_M98_WORLD_SPECS for arm_nm in M98_ARMS]
+    # Phase 2: Parallel Continual Streams at `32`-Way Codex Concurrency!
+    print(f"[M9.8] Phase 2: Launching {len(selected_specs) * len(M98_ARMS)} continual streams at 32-way Codex concurrency...", flush=True)
+    stream_jobs = [(sp, arm_nm) for sp in selected_specs for arm_nm in M98_ARMS]
     streams_out: list[dict[str, Any]] = []
 
     def _exec_stream(job_tup: tuple[M98WorldSpec, str]) -> dict[str, Any]:
@@ -1317,7 +1323,9 @@ def main() -> None:
 
     # Phase 3: Executed `HistoryMasked_CurrentOnly` Ablation Control (`A03`, `0` LLM calls)
     print("[M9.8] Phase 3: Running executed HistoryMasked_CurrentOnly Docker ablation on byte-identical (R0, U_iso)...", flush=True)
-    masked_ctrl = run_m98_history_masked_ablation_on_sealed_streams(built_worlds=built_worlds, out_dir=out_dir)
+    masked_ctrl = run_m98_history_masked_ablation_on_sealed_streams(
+        world_specs=selected_specs, built_worlds=built_worlds, out_dir=out_dir
+    )
     (out_dir / "m9_8_history_masked_ablation.json").write_text(json.dumps(masked_ctrl, indent=2) + "\n", encoding="utf-8")
 
     shutil.rmtree(out_dir / "_codex_stage", ignore_errors=True)
@@ -1330,7 +1338,7 @@ def main() -> None:
         ep_ledgers = {}
         ev_ledgers = {}
         cl_ledgers = {}
-        for sp in CONFIRMATION_M98_WORLD_SPECS:
+        for sp in selected_specs:
             _, _, man_sp, _ = built_worlds[sp.world_id]
             for m_sp in man_sp:
                 sn_m = m_sp["short_name"]
@@ -1339,19 +1347,22 @@ def main() -> None:
         for ev_nm in ("C1_down", "R0", "C2_down", "C_up", "U_iso", "M_comb1", "M_comb2"):
             ev_sns = {
                 m_sp["short_name"]
-                for sp in CONFIRMATION_M98_WORLD_SPECS
+                for sp in selected_specs
                 for m_sp in built_worlds[sp.world_id][2]
                 if m_sp["causal_event"] == ev_nm
             }
             ev_ledgers[ev_nm] = aggregate_call_usages([r for r in arm_calls if r["episode_short_name"] in ev_sns], deduplicate_uuid=True)
-        for sp in CONFIRMATION_M98_WORLD_SPECS:
+        for sp in selected_specs:
             cl_ledgers[sp.world_id] = aggregate_call_usages([r for r in arm_calls if r["world_id"] == sp.world_id], deduplicate_uuid=True)
         arm_tot = aggregate_call_usages(arm_calls, deduplicate_uuid=True)
         assert_hierarchical_ledger_conservation(
-            arm_ledger=arm_tot,
-            episode_ledgers=ep_ledgers,
-            event_ledgers=ev_ledgers,
-            cluster_ledgers=cl_ledgers,
+            reference_arm_ledger=arm_tot,
+            named_partition_ledgers={
+                "episodes": ep_ledgers.values(),
+                "events": ev_ledgers.values(),
+                "clusters": cl_ledgers.values(),
+            },
+            context_label=arm_nm,
         )
         arm_ledgers[arm_nm] = {
             "scope1_in_stream_total": arm_tot,
@@ -1369,12 +1380,24 @@ def main() -> None:
     diffs_vs_table = [
         arm_ledgers["Hegel_FactoredMechanismGraph"]["by_cluster"][sp.world_id]["proxy_v2_u_010c_4o"]
         - arm_ledgers["Flat_ConditionalTable_Online"]["by_cluster"][sp.world_id]["proxy_v2_u_010c_4o"]
-        for sp in CONFIRMATION_M98_WORLD_SPECS
+        for sp in selected_specs
     ]
     diffs_vs_latest = [
         arm_ledgers["Hegel_FactoredMechanismGraph"]["by_cluster"][sp.world_id]["proxy_v2_u_010c_4o"]
         - arm_ledgers["Flat_LatestFirst"]["by_cluster"][sp.world_id]["proxy_v2_u_010c_4o"]
-        for sp in CONFIRMATION_M98_WORLD_SPECS
+        for sp in selected_specs
+    ]
+    alpha_diffs_tbl = [
+        d for sp, d in zip(selected_specs, diffs_vs_table) if sp.family == "alpha"
+    ]
+    beta_diffs_tbl = [
+        d for sp, d in zip(selected_specs, diffs_vs_table) if sp.family == "beta"
+    ]
+    alpha_diffs_lat = [
+        d for sp, d in zip(selected_specs, diffs_vs_latest) if sp.family == "alpha"
+    ]
+    beta_diffs_lat = [
+        d for sp, d in zip(selected_specs, diffs_vs_latest) if sp.family == "beta"
     ]
 
     summary_payload = {
@@ -1416,16 +1439,16 @@ def main() -> None:
                 "mean_diff": round(float(np.mean(diffs_vs_table)), 2),
                 "bootstrap_95ci": _bootstrap_mean_ci([float(x) for x in diffs_vs_table]),
                 "two_sided_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_table]),
-                "alpha_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_table[:4]]),
-                "beta_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_table[4:]]),
+                "alpha_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in alpha_diffs_tbl]),
+                "beta_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in beta_diffs_tbl]),
             },
             "Hegel_minus_Flat_LatestFirst_v2": {
                 "cluster_diffs": diffs_vs_latest,
                 "mean_diff": round(float(np.mean(diffs_vs_latest)), 2),
                 "bootstrap_95ci": _bootstrap_mean_ci([float(x) for x in diffs_vs_latest]),
                 "two_sided_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_latest]),
-                "alpha_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_latest[:4]]),
-                "beta_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in diffs_vs_latest[4:]]),
+                "alpha_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in alpha_diffs_lat]),
+                "beta_n4_sign_flip_p": _exact_two_sided_sign_flip_p([float(x) for x in beta_diffs_lat]),
             },
         },
         "history_masked_ablation_summary": {

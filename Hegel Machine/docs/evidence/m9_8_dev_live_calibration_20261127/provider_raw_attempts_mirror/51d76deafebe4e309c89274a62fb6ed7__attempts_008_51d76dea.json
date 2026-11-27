@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "51d76deafebe4e309c89274a62fb6ed7",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:54:11.392086+00:00",
+  "ended_at_utc": "2026-11-27T13:54:49.206200+00:00",
+  "request_sha256": "fa6c322373c3468419f15bd2d9008593e7766c1b6b405744fe526d9bd5b71817",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49116,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28422,
+    "cached_tokens": 5504,
+    "completion_tokens": 1118
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/dev_beta_m98_00_batch_02_solver.py /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py'); s=p.read_text(); a=s.index('def _calibrate('); b=s.index('def _box_qp(',a)\\ns=s[:a]+'''def _rosette_terms(ref, channel):\\n    own = ref[:, channel]\\n    following = ref[:, (channel + 1) % 4]\\n    preceding = ref[:, (channel - 1) % 4]\\n    return np.column_stack((np.ones(len(ref)), own, following, preceding,\\n                            own * following, own**3))\\n\\n\\ndef _fit_rosette(ref, raw):\\n    # Identify whole-sweep corruption before estimating nonlinear terms.\\n    seed = np.column_stack((np.ones(len(ref)), ref))\\n    residual = np.linalg.norm(raw - seed @ np.linalg.lstsq(seed, raw, rcond=None)[0], axis=1)\\n    clean = residual <= max(6 * np.median(residual), 1e-12)\\n    return np.column_stack([\\n        np.linalg.lstsq(_rosette_terms(ref[clean], i), raw[clean, i], rcond=None)[0]\\n        for i in range(4)\\n    ])\\n\\n\\ndef _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    bias, gain, forward, backward, mixed, cubic = _fit_rosette(\\n        sweeps['ref_rosette'], sweeps['raw_rosette'])\\n    raw = study['y_obs_raw'].reshape(-1, 4)\\n    i = np.arange(4)\\n    nxt, prev = (i + 1) % 4, (i - 1) % 4\\n    jac = np.zeros((len(raw), 4, 4))\\n    ref = np.zeros_like(raw, dtype=float)\\n    for _ in range(12):\\n        after = ref[:, nxt]\\n        residual = (bias + gain * ref + forward * after + backward * ref[:, prev]\\n                    + mixed * ref * after + cubic * ref**3 - raw)\\n        jac[:, i, i] = gain + mixed * after + 3 * cubic * ref**2\\n        jac[:, i, nxt] = forward + mixed * ref\\n        jac[:, i, prev] = backward\\n        delta = np.linalg.solve(jac, residual[..., None])[..., 0]\\n        ref -= delta\\n        if np.max(np.abs(delta)) < 1e-12:\\n            break\\n    return ref.ravel()\\n\\n\\n'''+s[b:]; p.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nsed -n '1,41p;74,180p' /holdout_task/batch_solver.py\\npython3 - <<'PY'\\nimport json, numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p))\\nfor record in a:\\n x=np.asarray(record['facility_telemetry_trace']); print(record['completed_short_name'],np.round(x.mean(0),3),np.round(x.std(0),3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared non-Robin or mixed walls -> H2 open Robin on both axes after nonlinear calibration; worst held-out rosette RMSE is 0.01839 versus 0.03009 for the nearest competing operator.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\n      \"ng_t06\"\n    ]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse sealed or periodic walls based on proximity between whole archive traces\",\n      \"rejected_reason\": \"Those regimes predict substantially worse after calibration, and whole-trace distance can mix wall indicators with other apparatus changes.\"\n    }\n  ],\n  \"rationale\": \"Build the candidate from the best held-out wall operator and the cyclic calibration identified in the sweeps. Run the public schema check to catch integration errors, and inspect compact per-channel archive statistics to see whether the physical wall signature corroborates the predictive ranking.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "cb2624d6070c29b8e286a93486ade748499b1acf62c14bdf0461896f871306b5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37780.46,
+      "usage_known": true,
+      "prompt_tokens": 28422,
+      "cached_tokens": 5504,
+      "completion_tokens": 1118
+    }
+  ]
+}

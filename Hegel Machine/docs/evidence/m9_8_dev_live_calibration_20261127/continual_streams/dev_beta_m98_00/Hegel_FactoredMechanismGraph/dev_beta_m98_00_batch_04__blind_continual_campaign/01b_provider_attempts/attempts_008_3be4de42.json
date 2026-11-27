@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3be4de42d95e4ddc9e79e67cb4a87b63",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:54:57.892524+00:00",
+  "ended_at_utc": "2026-11-27T13:55:32.798060+00:00",
+  "request_sha256": "f1309f390a6bd0b4b4c709fb4c38aec431320a97b18a10d17d92163f3ad93f51",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39204,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24000,
+    "cached_tokens": 5504,
+    "completion_tokens": 1389
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rosette_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\n\\nitem = pickle.load(open('public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nclean = np.max(np.abs(y), axis=1) < 8  # Public EMI rows are visibly separated.\\naxial = np.count_nonzero(x, axis=1) == 1\\nedge = np.max(np.abs(x), axis=1) >= np.quantile(np.max(np.abs(x), axis=1), .8)\\nprint('study regime fields:', [k for k in s if any(t in k for t in ('batch', 'relay', 'meter', 'cohort', 'bank'))])\\nprint('diagnostics present:', item['campaign_diagnostics'] is not None)\\n\\ndef rms(a):\\n    return np.sqrt(np.mean(a**2))\\n\\n# Compare prespecified nonlinear extensions on the same held-out rows. The\\n# baseline support and training outlier mask are selected inside each fold.\\nfor name, hold in [('all axial', axial), ('outer radius', edge), ('positive/negative difference tail', np.abs(x[:, 0]-x[:, 1]) >= np.quantile(np.abs(x[:, 0]-x[:, 1]), .8))]:\\n    train, val = ~hold, hold & clean\\n    coef = up._fit(x[train], y[train])\\n    a = up._features(x)\\n    err = np.linalg.norm(a @ coef - y, axis=1)\\n    use = train & (err <= 6 * np.median(err[train]))\\n    inv = np.linalg.norm(up._invert(y[val], coef) - x[val], axis=1).max()\\n    scores = {}\\n    for kind in ('coordinate rational', 'pair difference rational', 'three-way'):\\n        pred = np.empty_like(y[val])\\n        for j in range(4):\\n            base = a[:, coef[:, j] != 0]\\n            q = x[:, j] - x[:, (j+1)%4]\\n            if kind == 'coordinate rational':\\n                z = x[:, j]**3 / (1 + .5*x[:, j]**2)\\n            elif kind == 'pair difference rational':\\n                z = q / (1 + .5*q**2)\\n            else:\\n                z = x[:, j] * x[:, (j+1)%4] * x[:, (j+2)%4]\\n            aug = np.column_stack((base, z))\\n            pred[:, j] = aug[val] @ np.linalg.lstsq(aug[use], y[use, j], rcond=None)[0]\\n        scores[kind] = rms(pred - y[val])\\n    print(name, 'n:', val.sum(), 'baseline forward RMS:', rms((a @ coef - y)[val]), 'inverse worst L2:', inv, 'extension forward RMS:', scores)\\n    assert inv < 2e-4\\n\\n# Detect actual observation rows with a poorly conditioned or stalled inverse.\\ncoef = up._fit(x, y)\\nraw = np.asarray(s['y_obs_raw']).reshape(-1, 4)\\nz = up._invert(raw, coef)\\nh = 1e-5\\njac = np.stack([(up._features(z+d) - up._features(z-d)) @ coef / (2*h) for d in h*np.eye(4)], axis=-1)\\nmin_sigma = np.linalg.svd(jac, compute_uv=False)[:, -1].min()\\nreplay = np.abs(up._features(z) @ coef - raw).max()\\nprint('observation inverse: min Jacobian singular value:', min_sigma, 'max replay residual:', replay)\\nassert min_sigma > .1 and replay < 1e-10\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_margin_audit.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response -> H2 coupled quadratic and coordinate-cubic response with rowwise EMI rejection; verified worst held-out inverse L2 error is 3.32e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, drift-operator, or classification audits\",\n      \"rejected_reason\": \"The deliverable fits a static continuous sensor transfer map, not a relay, a drift operator, or a classifier.\"\n    }\n  ],\n  \"rationale\": \"Test whether rational saturation, pair-difference terms, or three-way interactions reduce errors on real sweep extremes. A consistent gain would justify revising the model; a small Jacobian singular value or a stalled replay on actual observations would instead call for revising the inverse.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "06421280bebd4be8d49dff357ba4b9fff31cd469949e653f96b9c2a50d9c32d6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34865.02,
+      "usage_known": true,
+      "prompt_tokens": 24000,
+      "cached_tokens": 5504,
+      "completion_tokens": 1389
+    }
+  ]
+}

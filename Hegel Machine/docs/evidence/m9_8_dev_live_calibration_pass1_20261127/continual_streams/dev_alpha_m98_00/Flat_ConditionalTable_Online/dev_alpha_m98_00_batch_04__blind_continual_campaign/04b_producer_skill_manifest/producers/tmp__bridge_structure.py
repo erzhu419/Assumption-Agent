@@ -1,0 +1,5 @@
+import pickle,numpy as np
+from itertools import combinations_with_replacement
+d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; cal=d['calibration_load_cells']; u=cal['true_channel_loads']; r=cal['bridge_raw']; terms=[()] + [j for k in range(1,4) for j in combinations_with_replacement(range(4),k)]; A=np.column_stack([u[:,j].prod(1) for j in terms]); c=np.linalg.lstsq(A,r,rcond=None)[0]; e=A@c-r; print('full rank',np.linalg.matrix_rank(A),'rmse',np.sqrt(np.mean(e**2,0))); print('largest residual rows',sorted(enumerate(np.linalg.norm(e,axis=1)),key=lambda p:-p[1])[:8]);
+for j,ci in zip(terms,c): print(j,np.round(ci,5),round(ci.sum(),6))
+print('largest forward-fit deviations from affine:'); lin=A[:,:5]@c[:5]; idx=np.argsort(np.linalg.norm(r-lin,axis=1))[-14:]; print(np.round(np.c_[u,r,r-lin][idx],4)); print('raw/true sample',np.round(np.c_[u,r][16:30],4)); print('calibration singular values',np.round(np.linalg.svd(e,compute_uv=False),5)); print('other public items',len(pickle.load(open('/holdout_task/public_batch.pkl','rb'))))

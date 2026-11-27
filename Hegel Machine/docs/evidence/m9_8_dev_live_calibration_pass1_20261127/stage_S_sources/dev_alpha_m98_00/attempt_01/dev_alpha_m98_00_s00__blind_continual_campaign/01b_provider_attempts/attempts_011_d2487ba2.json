@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d2487ba2d59c4b6aa6d0cbabb4b9ddae",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__stageS__dev_alpha_m98_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:51:38.905454+00:00",
+  "ended_at_utc": "2026-11-27T12:52:14.755280+00:00",
+  "request_sha256": "3c9516229429870573b1cfa45cdf02ce2cf4effef2d059a1a189443b27ad66c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64945,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34374,
+    "cached_tokens": 0,
+    "completion_tokens": 1471
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_public.py <<'PY'\\nimport importlib.util, pickle, pathlib, numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te,pi=(p[k] for k in ('train','test','chamber_verification_trials')); dt,t=p['past_dt'],p['eval_times']\\narchive=pathlib.Path('/tmp/hegel_continual_archive'); print('archive files',[(f.name,f.stat().st_size) for f in archive.iterdir() if f.is_file()] if archive.is_dir() else None)\\nlog=archive/'archive_apparatus_log.json'\\nif log.is_file():\\n    with log.open() as f: print('apparatus log preview',f.read(3500))\\nc=p['calibration_load_cells']; raw,true=c['bridge_raw'],c['true_channel_loads']; single=np.count_nonzero(true,axis=1)==1\\n# Coherent nonlinear bridge terms must improve independently held-out sweep geometries.\\ndef bridge(x, mode):\\n    cols=[np.ones(len(x)),*x.T]\\n    if mode=='quadratic': cols += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]\\n    if mode=='rational':\\n        cols += [(x[:,i]+sign*x[:,j])/(1+.25*(x[:,i]-sign*x[:,j])**2) for i in range(4) for j in range(i+1,4) for sign in (-1,1)]\\n    return np.column_stack(cols)\\nfold=np.arange(len(raw))%5\\nfor mode in ('affine','quadratic','rational'):\\n    a=bridge(raw,mode); e=np.zeros(len(raw))\\n    for k in np.unique(fold):\\n        keep=fold!=k; b=np.linalg.lstsq(a[keep],true[keep].sum(axis=1),rcond=None)[0]; e[~keep]=a[~keep]@b-true[~keep].sum(axis=1)\\n    print('bridge',mode,'single/mixed p95',*[round(np.quantile(abs(e[mask]),.95),7) for mask in (single,~single)])\\ncal=m._calibration(c); a,b=[m._inputs(z,x,cal) for z,x in zip((tr,te),m._features(tr,te))]; d=m._inputs(pi,m._features(pi,balanced=False)[0],cal)\\ntau,th,scale=m._material(tr,a,dt,t)\\n# Check order and initial derivative independently against a literal recurrence.\\nz=np.zeros((len(b[0]),2))\\nfor delta,stress in zip(dt,b[0].T):\\n    decay=np.exp(-delta/tau); z=decay*z+(1-decay)*stress[:,None]\\n_,r=m._predict(b,dt,t,tau,th); print('recurrence state and rate discrepancy',np.max(abs(z-b[0]@m._kernel(dt,tau))),np.max(abs(r-((b[1][:,None]-z)*th[:2]/tau).sum(axis=1)-b[2]@th[2:])))\\n# Check supported real slices: late-time drift and rates, by lab and missingness.\\nfor name,blk,inp in [('train',tr,a),('pilot',pi,d)]:\\n    er=np.empty(len(blk['lab_id'])); ec=np.empty_like(blk['strain_curves_obs'])\\n    for lab in np.unique(blk['lab_id']):\\n        mask=blk['lab_id']==lab; ta,tt=(tau,th) if name=='pilot' else m._material(tr,a,dt,t,~mask)[:2]; yy,rr=m._predict(tuple(v[mask] for v in inp),dt,t,ta,tt); ec[mask]=blk['strain_curves_obs'][mask]-blk['strain_0'][mask,None]-yy; er[mask]=blk['instant_rate_obs'][mask]-rr\\n        print(name,'lab',lab,'early/late p90',np.round(np.quantile(abs(ec[mask][:,[0,-1]]),.9,axis=0),6),'rate rmse',round(np.sqrt(np.mean(er[mask]**2)),6))\\n    missing=np.isnan(blk['coupon_features_raw']).any(axis=1)\\n    for mask in (missing,~missing):\\n        if mask.any(): print(name,'slice size',int(mask.sum()),'late signed median',round(np.median(ec[mask,-1]),6),'rate rmse',round(np.sqrt(np.mean(er[mask]**2)),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_public.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine calibration and chronological material memory → H2 add chamber corrections only with evidence; worst held-out stress-test RMSE was 0.00699 for strain and 0.00542 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classification or relay-mode checks\",\n      \"rejected_reason\": \"The supplied outcomes are continuous strain and rate, and the documented recurrence has no relay mode. Lab-level signed residuals and missing-feature slices test the relevant nuisance effects.\"\n    }\n  ],\n  \"rationale\": \"Compare nonlinear bridge terms against affine calibration on held-out real sweeps; promote them only if they improve calibration across sweep geometries. Check the chronological state and initial rate against the literal recurrence, and look for lab-specific late drift or missing-feature bias that pooled metrics could obscure. Inspect the apparatus log if present, then verify the exact candidate in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ceb0935df9786d4c1b1eb09eb90740b21f556342412183b67f78effa75084075",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35809.31,
+      "usage_known": true,
+      "prompt_tokens": 34374,
+      "cached_tokens": 0,
+      "completion_tokens": 1471
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3c8bad5a6f944654a450f710dda0d642",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:16:59.376059+00:00",
+  "ended_at_utc": "2026-11-27T13:17:25.229975+00:00",
+  "request_sha256": "8ca7366e281750c46406bf1d7d67c15195e91b4c4737fef6f2c20a2d94be43e6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48692,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26519,
+    "cached_tokens": 9600,
+    "completion_tokens": 749
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,72p;160,250p' /holdout_task/batch_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; inv,fwd,_=m._calibration(sw)\\nx,y=sw['ref_rosette'],sw['raw_rosette']; err=fwd(x)-y\\nprint('Calibration residual rms/max by channel:',np.sqrt(np.mean(err**2,0)),np.max(abs(err),0))\\nfor i in range(4):\\n print('channel',i,'signed residual correlations, linear/quadratic/fourth-order:',np.corrcoef(np.column_stack((err[:,i],x,x*x,x**4)).T)[0,1:].round(3))\\nsingle=sw['single_bank_sweeps']; print('single-bank levels by channel:',[np.asarray(single['ref_signal'])[np.asarray(single['bank_id'])==i].round(3).tolist() for i in range(4)])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('archive keys:',list(a) if isinstance(a,dict) else 'list'); rows=a if isinstance(a,list) else next(v for v in a.values() if isinstance(v,list) and v and isinstance(v[0],dict)); print('entry keys:',list(rows[0]));\\nfor row in rows:\\n t=np.asarray(row['facility_telemetry_trace']); print('prefix',row['completed_batch_index'],'mean:',t.mean(0).round(3),'std:',t.std(0).round(3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open Robin → sealed walls; worst held-out tracer/shift RMSE is 1.74e-6, and the independent KKT gap is 8.48e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, drift equations, or classification balance\",\n      \"rejected_reason\": \"This study exposes steady transport, rosette measurements, and a constrained regression; it has no relay states, stochastic drift, or class labels.\"\n    }\n  ],\n  \"rationale\": \"Check whether the rosette fit leaves channel-specific structure that could explain the remaining inverse error and whether the archive contains comparable evidence for tracer-free transfer. If a calibration channel shows systematic residuals, compare plausible cross-channel and rational terms on held-out sweeps and tracers before changing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "13ae42345d4c2b0d01322de1c1326dde285be7ff82ed921db3b2a8bc65576bc9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25816.6,
+      "usage_known": true,
+      "prompt_tokens": 26519,
+      "cached_tokens": 9600,
+      "completion_tokens": 749
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a938ed00cc384414a6a8754f445ebad7",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c02__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:24:18.124505+00:00",
+  "ended_at_utc": "2026-11-27T12:24:52.427385+00:00",
+  "request_sha256": "cd8e0ba20cc4b781ca627b64af8df657cd359ac20485790637e2975fc6829e49",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62719,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34060,
+    "cached_tokens": 11136,
+    "completion_tokens": 1377
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology_final_witness.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nb = m._calibrate(d['calibration_load_cells'])\\ntr, p = [d[k] for k in ('train', 'chamber_verification_trials')]\\ndt, t = d['past_dt'], d['eval_times']\\ntrain = m._prepare(tr, b)\\nr = tr['ref_coupons']\\nref = {g: (np.median(r[tr['lab_id']==g].mean(0)), np.median(r[tr['lab_id']==g].std(0))) for g in np.unique(tr['lab_id'])}\\ndef take(a, j):\\n    return {k:v[j] for k,v in a.items() if isinstance(v,np.ndarray) and v.ndim and len(v)==len(j)}\\ndef stats(e):\\n    return [np.median(abs(e[:,0])), np.median(abs(e[:,1:])), np.median(abs(e[:,-1]))]\\nerrors = {'split_local': [], 'benchtop_panel': [], 'no_pilot': []}\\nbench = m._estimate(train, None, dt, t)\\nfor lab in np.unique(p['lab_id']):\\n    j = p['lab_id'] == lab\\n    for name in errors:\\n        panel = ref if name == 'benchtop_panel' else None\\n        held = m._prepare(take(p,j), b, reference=panel)\\n        fit = bench if name == 'no_pilot' else m._estimate(train, m._prepare(take(p,~j),b,reference=panel),dt,t)\\n        err = m._design(held, fit[0], dt,t) @ fit[1] - held[4]\\n        errors[name].append(stats(err))\\nfor name, rows in errors.items():\\n    print(name, 'worst held-out chamber lab median [rate, strain, terminal]:', np.max(rows,axis=0))\\nassert np.max(errors['split_local'],axis=0)[1] < np.max(errors['benchtop_panel'],axis=0)[1]\\n\\n# Apply a known cross-talk and offset change to all raw samples and to the\\n# calibration sweeps. Dynamic calibration should preserve physical outputs.\\nA = np.array([[1.16,.12,-.06,.04],[-.09,.81,.13,.08],[.04,-.07,1.24,.06],[.11,.05,-.1,.91]])\\nc = np.array([.19,-.28,.08,.23])\\nchanged = dict(d)\\ncal = d['calibration_load_cells']\\nchanged['calibration_load_cells'] = {**cal, 'bridge_raw': cal['bridge_raw'] @ A + c}\\nfor key in ('train','test','chamber_verification_trials'):\\n    q = d[key]\\n    changed[key] = {**q, **{k:q[k] @ A + c for k in ('past_channel_raw','hold_channel_raw')}}\\nfor pilot in (True,False):\\n    a,z = d,changed\\n    if not pilot:\\n        a,z = ({**q,'chamber_verification_trials':None} for q in (a,z))\\n    x,y = m.solve_batch(a),m.solve_batch(z)\\n    diffs = {k:float(np.max(abs(x[k]-y[k]))) for k in x}\\n    print('affine bridge invariance', 'pilot' if pilot else 'blind', diffs)\\n    assert all(np.allclose(x[k],y[k],atol=2e-5,rtol=2e-5) for k in x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_final_witness.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated causal Prony response → H2 split-local alignment and chamber-weighted fitting; the exact artifact's worst held-out chamber-lab median errors are 0.00506 strain, 0.00426 onset rate, and 0.00985 terminal strain.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Infer a blind chamber correction from auxiliary telemetry\",\n      \"rejected_reason\": \"The public pilot has no matching telemetry and the apparatus archive is absent, so the public data do not support a transfer correction.\"\n    }\n  ],\n  \"rationale\": \"Run a paired held-out chamber comparison to isolate the reference-panel fix. Stress the calibration with known cross-talk and offsets; failure would require correcting the bridge fit or its propagation before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "43089770fd23f816dd419d1f53bf422ac908d829aecfcfb709d893fe17499288",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34269.55,
+      "usage_known": true,
+      "prompt_tokens": 34060,
+      "cached_tokens": 11136,
+      "completion_tokens": 1377
+    }
+  ]
+}

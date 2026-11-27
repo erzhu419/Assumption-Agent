@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e19a3fb28a294f6d818f667c2758120c",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:52:27.314101+00:00",
+  "ended_at_utc": "2026-11-27T13:52:57.689126+00:00",
+  "request_sha256": "e8833331c34adf41d7bffeb6886ee119fb9a58c9d56ff59061abc23abeed613a",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24990,
+    "cached_tokens": 9600,
+    "completion_tokens": 914
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; np.set_printoptions(precision=4,suppress=True,linewidth=130)\\nprint('ref/raw quantiles',np.quantile(x,[0,.05,.5,.95,1],axis=0),np.quantile(y,[0,.05,.5,.95,1],axis=0)); print('obs quantiles',np.quantile(s['y_obs_raw'].reshape(-1,4),[0,.5,1],axis=0));\\nfor i in np.unique(b['bank_id']):\\n m=b['bank_id']==i; print('bank',i,np.c_[b['ref_signal'][m],b['raw_readout'][m]])\\nterms=[np.ones(len(x)),*x.T]; names=['affine']; X=[np.column_stack(terms)]; terms += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]; X.append(np.column_stack(terms)); names.append('quadratic'); terms += [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i,4) for k in range(j,4)]; X.append(np.column_stack(terms)); names.append('cubic');\\nfor name,a in zip(names,X):\\n f=np.linalg.lstsq(a,y,rcond=None)[0]; r=y-a@f; h=(np.linalg.qr(a)[0]**2).sum(1); r=r/(1-h[:,None]); q=np.linalg.norm(r,axis=1); print(name,'LOO row-norm quantiles',np.quantile(q,[0,.25,.5,.75,.85,.9,.95,1]));\\n if name=='affine':\\n  for i in np.argsort(q)[-12:]: print(i,x[i],y[i],r[i]);\\n  keep=np.ones(len(x),bool)\\n  for _ in range(5):\\n   f=np.linalg.lstsq(a[keep],y[keep],rcond=None)[0]; q=np.linalg.norm(y-a@f,axis=1); med=np.median(q); keep=q < 3*med\\n  print('trim affine',keep.sum(),f,'row norm sorted',np.sort(q).round(5))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust calibration Cauchy IRLS' 2>&1 | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 plain affine calibration -> H2 distinguish sparse sweep corruption from nonlinear response; affine leave-one-sweep-out error reaches 13.30 in one channel, so the wall-model ranking is provisional.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select periodic walls from the current held-out residuals\",\n      \"rejected_reason\": \"Those residuals use a calibration with large held-out sweep errors. Re-rank the wall models after resolving the calibration mismatch.\"\n    }\n  ],\n  \"rationale\": \"Inspect error concentration, single-bank sweep response, and held-out polynomial fits. Concentrated errors with a tight affine fit on the remaining sweeps would motivate robust fitting; systematic errors across clean sweeps would motivate a nonlinear calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "6783491cfb75221e9cfd2e11baf0687a58cbca24ee3e8928598f7f02c638f8d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30337.73,
+      "usage_known": true,
+      "prompt_tokens": 24990,
+      "cached_tokens": 9600,
+      "completion_tokens": 914
+    }
+  ]
+}

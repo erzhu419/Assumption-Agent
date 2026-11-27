@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ad559cd25c84a129137331a10cc6322",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:47:44.995107+00:00",
+  "ended_at_utc": "2026-11-27T13:48:23.427916+00:00",
+  "request_sha256": "3670fcee1f5bdfc889decfd4651819bbfcd1e842198b4405c2be9a9a19ed1e54",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39956,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24593,
+    "cached_tokens": 9600,
+    "completion_tokens": 1516
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_fit.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n exec(open('/tmp/chamber_probe.py').read())\\nfrom scipy.optimize import least_squares\\n\\ndef diagnostic_drift(mode):\\n if mode=='deployment':return drift\\n def combine(*groups):return {k:np.concatenate([gg[k] for gg in groups]) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}\\n if mode=='diagnostic':\\n  mask=np.arange(len(hold))<len(hold)//2\\n  parts=[{k:q[k][j] for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')} for j in (mask,~mask)]\\n  return m._aligned_features(*parts)@theta[2:]\\n return m._aligned_features(combine(tr,te),q)[-len(hold):]@theta[2:]\\n\\ndef fit_model(dr, form, train, test):\\n def predictors(par):\\n  tt=tau*np.exp(par) if form.endswith('time') else tau\\n  G=-np.expm1(-t[:,None]/tt)\\n  def branch(a,b):return np.column_stack((a[:,None]*G[:,b],a/tt[b]))\\n  def lin(a):return np.column_stack((a[:,None]*t,a))\\n  A=[hold*theta[b] for b in range(2)]\\n  H=[-z[:,b]*theta[b] for b in range(2)]\\n  base=branch(A[0],0)+branch(A[1],1)+lin(dr)\\n  cols=[branch(dr*tt[b],b)-lin(dr) for b in range(2)]\\n  if form.startswith('fixed'):base+=branch(H[0],0)+branch(H[1],1)\\n  elif form.startswith('shared'):cols += [branch(H[0],0)+branch(H[1],1)]\\n  else:cols += [branch(H[0],0),branch(H[1],1)]\\n  if 'free' in form: cols += [lin(dr)]\\n  if 'shift' in form:cols += [lin(np.ones_like(dr)),branch(np.ones_like(dr),0),branch(np.ones_like(dr),1)]\\n  return base,np.stack(cols,axis=2)\\n obs=np.c_[y,v]; start=np.zeros(2) if form.endswith('time') else np.empty(0)\\n base,P=predictors(start); k=P.shape[-1]; C=P[train].reshape(-1,k); target=(obs-base)[train].ravel(); beta=np.linalg.lstsq(C,target,rcond=None)[0];\\n def predict(p):\\n  base,P=predictors(p[k:]); return base+P@p[:k]\\n p=least_squares(lambda p:(predict(p)-obs)[train].ravel(),np.r_[beta,start],loss='soft_l1',f_scale=.02,max_nfev=400,x_scale='jac').x\\n return p,(predict(p)-obs)[test]\\n\\nallrows=np.arange(len(hold)); labs_q=q['lab_id']; results=[]\\nfor mode in ('deployment','diagnostic','combined'):\\n dr=diagnostic_drift(mode)\\n print('drift',mode,np.round(dr,3))\\n for form in ('fixed','shared','split','fixedfree','splitfree','splitshift','fixedtime','splittime','splitfreetime'):\\n  beta,err=fit_model(dr,form,allrows,allrows)\\n  cv=[fit_model(dr,form,allrows[labs_q!=lab],allrows[labs_q==lab])[1] for lab in np.unique(labs_q)]\\n  c=np.array([[np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2))] for e in cv]); worst=c.max(0); rms=np.sqrt(np.mean(err**2,axis=0)); score=worst.sum()\\n  results.append((score,mode,form,beta,np.sqrt(np.mean(err[:,:-1]**2)),rms[-1],worst))\\nfor _,mode,form,beta,cr,rr,worst in sorted(results):print(mode,form,'params',np.round(beta,5),'in',np.round([cr,rr],5),'worst LOLO',np.round(worst,5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_fit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct transfer of archived chamber laws -> H2 retained memory with redistributed drift; aggregate diagnostic RMSE is 0.6573 strain and 0.1048 rate for benchtop, versus 0.8064 and 1.1367 for archived reset.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The current deployment chamber either follows the unchanged benchtop law or fully resets branch memory as in batch 01.\",\n    \"empirical_witness\": \"Unchanged benchtop curve RMSE is 0.6573; full reset with archived drift redistribution gives curve RMSE 0.8064 and initial-rate RMSE 1.1367, versus 0.1048 for benchtop rate.\",\n    \"causal_blanket_diagnosis\": \"A chamber effect changes the trajectory without the large derivative shift predicted by complete memory reset.\",\n    \"sublated_pivot\": \"Keep the intrinsic fit and calibrated history, then test branch-resolved memory and drift redistribution against held-out diagnostic labs.\",\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unconstrained correction to deployment strain\",\n      \"rejected_reason\": \"First test whether a shared chamber law explains both trajectories and their measured initial derivatives.\"\n    }\n  ],\n  \"rationale\": \"Held-out diagnostic labs will show whether extra memory, drift, or time-scale parameters generalize rather than absorb differences in reference-panel alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "491cf1ec82e9008c2f3e635416c163a2e48b75f36256205f8d83ebc3f8af0f5f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38398.27,
+      "usage_known": true,
+      "prompt_tokens": 24593,
+      "cached_tokens": 9600,
+      "completion_tokens": 1516
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab588c49d7c84012a8ae732eacf1b5cc",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:03:25.830322+00:00",
+  "ended_at_utc": "2026-11-27T13:04:13.041153+00:00",
+  "request_sha256": "19795fb7df38f217522e4fdd8a86bc8b2ca27ae779e957d7dd8db043cd65da5d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60672,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32054,
+    "cached_tokens": 9600,
+    "completion_tokens": 1666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_calibration.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _calibration(sweeps):\\n    ref = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    raw = np.asarray(sweeps['raw_rosette'], dtype=float)\\n    bank = sweeps['single_bank_sweeps']\\n    ids = np.asarray(bank['bank_id'])\\n    signal = np.asarray(bank['ref_signal'])\\n    readout = np.asarray(bank['raw_readout'])\\n    bank_ref = np.eye(4)[ids] * signal[:, None]\\n\\n    def design(x, j):\\n        return np.column_stack((np.ones(len(x)), x, x[:, j] * x[:, (j+1)%4], x[:, j]**3))\\n\\n    def fit(j, keep):\\n        own = ids == j\\n        x = np.vstack((ref[keep], bank_ref[own]))\\n        y = np.r_[raw[keep, j], readout[own]]\\n        a = design(x, j)\\n        # Gross sweep offsets are sparse; clip only for initialization.\\n        start = np.linalg.lstsq(a, np.clip(y, -6, 6), rcond=None)[0]\\n        c = least_squares(lambda c: a @ c - y, start, jac=lambda c: a,\\n                          loss='soft_l1', f_scale=.002).x\\n        r = a @ c - y\\n        inlier = abs(r - np.median(r)) < max(.001, 8*np.median(abs(r - np.median(r))))\\n        return np.linalg.lstsq(a[inlier], y[inlier], rcond=None)[0]\\n\\n    c = np.stack([fit(j, np.ones(len(ref), dtype=bool)) for j in range(4)], axis=1)\\n\\n    def forward(x):\\n        return x @ c[1:5] + c[0] + c[5] * x * np.roll(x, -1, axis=1) + c[6] * x**3\\n\\n    def invert(values):\\n        r = np.asarray(values, dtype=float).reshape(-1, 4)\\n        x = np.linalg.solve(c[1:5].T, (r-c[0]).T).T\\n        for _ in range(25):\\n            err = forward(x) - r\\n            if np.max(abs(err)) < 1e-12:\\n                break\\n            jac = np.broadcast_to(c[1:5].T, (len(x), 4, 4)).copy()\\n            j = np.arange(4)\\n            jac[:, j, j] += c[5]*np.roll(x, -1, axis=1) + 3*c[6]*x*x\\n            jac[:, j, (j+1)%4] += c[5]*x\\n            step = np.linalg.solve(jac, err[..., None])[..., 0]\\n            trial = x - step\\n            for _ in range(10):\\n                bad = np.sum((forward(trial)-r)**2, axis=1) > np.sum(err**2, axis=1)\\n                if not np.any(bad):\\n                    break\\n                step[bad] *= .5\\n                trial = x-step\\n            x = trial\\n        return x.reshape(np.shape(values))\\n\\n    return invert, forward, fit\\nPY\\ncat > /tmp/compare_chamber.py <<'PY'\\nimport numpy as np, pickle, importlib.util\\nfrom itertools import product\\nfrom chamber_calibration import _calibration\\n\\ndef archived(n):\\n    p='/tmp/hegel_continual_archive/dev_beta_m98_00_batch_0'+str(n)+'_solver.py'\\n    spec=importlib.util.spec_from_file_location('prior',p)\\n    m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; modes=s['source_modes']; inv,fwd,fit=_calibration(s['sensor_calibration_sweeps']); sw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; ii=np.arange(len(x));\\ndef design(x,j): return np.column_stack((np.ones(len(x)),x,x[:,j]*x[:,(j+1)%4],x[:,j]**3))\\nr=np.empty_like(y)\\nfor k in range(4):\\n    tr=ii%4!=k\\n    for j in range(4): r[~tr,j]=design(x[~tr],j)@fit(j,tr)-y[~tr,j]\\nprint('sweep worst fold inlier RMSE',max(np.sqrt(np.mean(r[(ii%4==k)&(abs(r).max(1)<.01)]**2)) for k in range(4)), 'outlier rows',ii[abs(r).max(1)>=.01]); p=s['reference_tracer_pulses']; y=np.column_stack([inv(t['y_pulse_raw']) for t in p]); w=np.column_stack([t['w_pulse'] for t in p]); print('inverse reproduction',max(np.max(abs(fwd(y[:,j].reshape(-1,4)).ravel()-p[j]['y_pulse_raw'])) for j in range(len(p))))\\nm=archived(3)\\nfor pair in product(('open','sealed','periodic'),repeat=2):\\n    S,_=m._response(s,pair,modes); r=(S@w-y).reshape(len(s['mu_shifts']),-1,len(p)); print(pair,np.sqrt(np.mean(r*r,axis=1)).round(7).tolist())\\nm=archived(2); wall=m._walls(s,inv,modes); S,_=m._response(s,wall,modes); print('graded',wall,np.sqrt(np.mean((S@w-y)**2,axis=0))); print('rosette aux shape',s['aux_manifold_telemetry'].shape)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 contaminated sweeps fitted globally → H2 robust cyclic quadratic–cubic calibration; cubic inlier sweep RMSE is at most 8.57e-6 in-sample, with held-out errors and tracer prediction pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Fit all coefficients from the current sweeps and test on held-out rosettes. Then re-score the discrete and graded wall operators by tracer and shift; this determines whether the calibration fix is sufficient or the wall model also needs to change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c31b458d38334bd2ecb7d9299b14f0a7079ca99936aa142c3faafaba4bf6932e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47172.72,
+      "usage_known": true,
+      "prompt_tokens": 32054,
+      "cached_tokens": 9600,
+      "completion_tokens": 1666
+    }
+  ]
+}

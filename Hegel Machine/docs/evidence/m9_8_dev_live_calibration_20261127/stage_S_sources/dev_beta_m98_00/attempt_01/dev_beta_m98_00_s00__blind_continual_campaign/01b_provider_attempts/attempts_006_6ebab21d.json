@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ebab21dc4644d1b8d83d5944f1ee69b",
+  "call_seq": 6,
+  "stage_subdir": "m98_run_20261127T133321Z__stageS__dev_beta_m98_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:36:25.057349+00:00",
+  "ended_at_utc": "2026-11-27T13:36:57.764374+00:00",
+  "request_sha256": "fad3b40972e952975d72f9dca58157904f68e4fab5a35362a8f49560e16c0de5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 39841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25307,
+    "cached_tokens": 11136,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/rosette_audit.py <<'PY'\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p + 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nr = s['sensor_calibration_sweeps']['ref_rosette']\\ny = s['sensor_calibration_sweeps']['raw_rosette']\\nsingle = np.count_nonzero(r, axis=1) == 1\\nrng = np.random.default_rng(98)\\nfolds = [np.r_[i,j] for i,j in zip(np.array_split(rng.permutation(np.flatnonzero(single)), 4), np.array_split(rng.permutation(np.flatnonzero(~single)), 4))]\\naff = np.c_[np.ones(len(r)), r]\\npairs = list(itertools.combinations(range(4), 2))\\ncontrasts = [r[:,i] + sign*r[:,j] for i,j in pairs for sign in (-1,1)]\\nmodels = {'affine': aff, 'pair_products_and_curvature': np.column_stack([aff, r*r] + [r[:,i]*r[:,j] for i,j in pairs])}\\nfor a in (.001,.01,.1):\\n    for j,q in enumerate([*r.T, *contrasts]):\\n        models[f'quotient_{a}_{j}'] = np.column_stack([aff, r*q[:,None]**2/(1+a*q[:,None]**2)])\\n\\ndef predict(x, fit, test):\\n    return x[test] @ np.linalg.lstsq(x[fit], y[fit], rcond=None)[0]\\n\\ndef nested(names):\\n    errors = np.empty_like(y)\\n    selected = []\\n    for k,test in enumerate(folds):\\n        train_folds = [fold for j,fold in enumerate(folds) if j != k]\\n        fit = np.concatenate(train_folds)\\n        def score(name):\\n            x = models[name]\\n            return sum(np.sum((predict(x, np.concatenate([b for j,b in enumerate(train_folds) if i!=j]), a)-y[a])**2) for i,a in enumerate(train_folds))\\n        name = min(names, key=score)\\n        selected.append(name)\\n        errors[test] = predict(models[name],fit,test)-y[test]\\n    slices = [np.sqrt(np.mean(errors[mask]**2,axis=0)) for mask in (single,~single) if mask.any()]\\n    return float(np.sqrt(np.mean(errors**2))), float(np.max(slices)), selected\\n\\nprint('Calibration pooled and worst sweep-type/channel outer RMSE:')\\nfor label,names in [('affine',['affine']), ('paired curvature',['pair_products_and_curvature']), ('rational',[n for n in models if n.startswith('quotient')])]:\\n    print(label, nested(names))\\nX,_ = m._design(s)\\nyc = m._calibrate(s)\\nz = s['Z_nuisance']\\nP = np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\nout = m.solve_batch(s)\\nres = X@out['weights']-yc\\nraw = lambda t: [float(np.sqrt(np.mean(a*a))) for a in np.split(t,len(s['mu_shifts']))]\\nprint('Study keys:', sorted(s))\\nprint('Measured residual RMSE by shift, before and after profiling:', raw(res), raw(res-z@(P@res)))\\nprint('Public certificate gap:', out['kkt_certificate']['primal_objective']-out['kkt_certificate']['dual_lower_bound'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_audit.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine rosette plus Robin transport -> compare pairwise and rational calibration models on held-out sweep types; prior worst-channel calibration RMSE was 1.12e-5 and worst projected shift RMSE was 8.93e-3.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, Fokker–Planck/HJB drift, or classification accuracy\",\"rejected_reason\":\"This study specifies a steady transport inverse problem with continuous measurements, not a relay, stochastic-control model, or labeled classification cohorts.\"}],\"rationale\":\"The additional audit tests whether pairwise or rational effects improve the worst observed calibration slice, with rational-model selection inside the outer folds. The shift-level residuals quantify the effect of profiling the supplied nuisance covariates without inventing batch labels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3790b5939af93c9873b9c9d91a5cc1819a9eef88ff5bc68a15635c1ee4c644f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32666.05,
+      "usage_known": true,
+      "prompt_tokens": 25307,
+      "cached_tokens": 11136,
+      "completion_tokens": 1267
+    }
+  ]
+}

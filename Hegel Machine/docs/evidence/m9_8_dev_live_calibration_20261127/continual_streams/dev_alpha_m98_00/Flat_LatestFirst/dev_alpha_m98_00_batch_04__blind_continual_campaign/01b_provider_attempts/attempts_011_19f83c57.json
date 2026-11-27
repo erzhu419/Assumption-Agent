@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19f83c57a49c46809a02639708f9a3c5",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:03:31.119818+00:00",
+  "ended_at_utc": "2026-11-27T14:04:16.290785+00:00",
+  "request_sha256": "a798729d53bc1344baa28db58c16906c355aeaf87be07d8c640308ce2340d5c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68657,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37294,
+    "cached_tokens": 11136,
+    "completion_tokens": 1602
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/# Chamber forcing/,$p' /tmp/hegel_continual_archive/dev_alpha_m98_00_batch_03_solver.py\\ncat >/tmp/bridge_sparse_check.py <<'PY'\\nimport sys\\nsys.path.insert(0,'/tmp')\\nfrom bridge_study import D,x,y,state,features,fit,inv\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\npairs=((0,1),(1,2),(2,3),(0,3))\\ndef calibrate(x,y,state):\\n    coefficients=[]\\n    for j,(i,k) in enumerate(pairs):\\n        s=np.column_stack([np.ones(len(y)),y,y[:,j]**3,y[:,i]*y[:,k],state])\\n        coefficients.append(np.linalg.lstsq(s,x[:,j],rcond=None)[0])\\n    return np.array(coefficients).T\\n\\ndef predict(y,w):\\n    return w[0]+y@w[1:5]+y**3*w[5]+np.stack([y[:,i]*y[:,j] for i,j in pairs],axis=1)*w[6]\\n\\ndef recover(x,w):\\n    z=(x-w[0])@np.linalg.inv(w[1:5]); z=np.clip(z,-1.8,1.8)\\n    for _ in range(30):\\n        jac=np.broadcast_to(w[1:5].T,(len(z),4,4)).copy()\\n        for j,(i,k) in enumerate(pairs):\\n            jac[:,j,j]+=3*w[5,j]*z[:,j]**2\\n            jac[:,j,i]+=w[6,j]*z[:,k]\\n            jac[:,j,k]+=w[6,j]*z[:,i]\\n        step=np.linalg.solve(jac,(x-predict(z,w))[...,None])[...,0]\\n        z+=np.clip(step,-.5,.5)\\n        if np.max(abs(step))<1e-10:break\\n    return z\\n\\nif __name__=='__main__':\\n    rng=np.random.default_rng(14)\\n    random=np.array_split(rng.permutation(len(y)),5)\\n    balanced=[np.r_[a,b] for a,b in zip(np.array_split(rng.permutation(np.flatnonzero(~state)),3),np.array_split(rng.permutation(np.flatnonzero(state)),3))]\\n    for label,folds in [('random',random),('state-balanced',balanced)]:\\n        for f in folds:\\n            tr=np.setdiff1d(np.arange(len(y)),f); w=calibrate(x[tr],y[tr],state[tr]); z=recover(x[f]-state[f,None]*w[-1],w); e=z-y[f]\\n            print(label,'shifted train/test',state[tr].sum(),state[f].sum(),'total/channel RMSE',np.sqrt(np.mean(e.sum(1)**2)),np.sqrt(np.mean(e**2)),'worst row',f[np.argmax(np.linalg.norm(e,axis=1))])\\n    w=calibrate(x,y,state)\\n    print('coefficients',w)\\n    for g in ('train','test'):\\n        for key in ('past_channel_raw','hold_channel_raw'):\\n            raw=D[g][key].reshape(-1,4); z=recover(raw,w); print(g,key,'worst closure',np.max(abs(predict(z,w)-raw)),'load extent',z.min(),z.max())\\n    import importlib.util\\n    spec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n    tr=D['train']; t=D['eval_times']; dt=D['past_dt']; a=m._aligned_features(tr,D['test'])[:len(tr['lab_id'])]; c=(recover(tr['past_channel_raw'].reshape(-1,4),w).sum(1).reshape(tr['past_channel_raw'].shape[:-1]),recover(tr['hold_channel_raw'],w).sum(1),a); Y=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; tau,beta=m._fit(dt,t,c,Y,R); print('full intrinsic',tau,beta)\\n    for lab in np.unique(tr['lab_id']):\\n        mask=tr['lab_id']==lab; tau,beta=m._fit(dt,t,tuple(a[~mask] for a in c),Y[~mask],R[~mask]); A,B=m._design(tau,dt,t,tuple(a[mask] for a in c)); e=abs(A@beta-Y[mask]); er=abs(B@beta-R[mask]); print('held lab',lab,'taus',tau,'errors',np.max(np.median(e,axis=0)),np.median(er),np.quantile(e,.9),np.quantile(er,.9))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_sparse_check.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine inverse bridge → H2 channelwise cubic response, adjacent-pair coupling, and a shared calibration offset; the expanded forward model fits at 8.87e-5 RMSE, but its worst held-out total-load inverse RMSE is still 0.413.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote the expanded polynomial on forward RMSE alone\",\n      \"rejected_reason\": \"The solver uses the inverse, and the reported inverse errors are too large. Test the sparse basis on folds that retain calibration measurements from both raw-offset groups, then check inversion on specimen inputs.\"\n    }\n  ],\n  \"rationale\": \"The forward fit identifies four adjacent-pair terms and one cubic per channel. Test that compact basis on held-out loads, distinguish missing offset coverage from inverse failure, and refit the material on corrected stresses to see whether the 25 s boundary disappears.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "71c766e12daf8d4ab9384ddc7ab786793b959948133fef911a0b802e7c79f1ad",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45131.24,
+      "usage_known": true,
+      "prompt_tokens": 37294,
+      "cached_tokens": 11136,
+      "completion_tokens": 1602
+    }
+  ]
+}

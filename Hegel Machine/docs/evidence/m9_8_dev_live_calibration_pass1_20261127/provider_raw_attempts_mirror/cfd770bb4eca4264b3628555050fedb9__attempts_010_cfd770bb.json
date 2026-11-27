@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cfd770bb4eca4264b3628555050fedb9",
+  "call_seq": 10,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_LatestFirst__dev_beta_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:06:24.412675+00:00",
+  "ended_at_utc": "2026-11-27T13:06:47.147048+00:00",
+  "request_sha256": "f52d6e3cf5dc260fa7fdc2bd9d70d7c63765642374a5eef610cc27dbadffdcae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33099,
+    "cached_tokens": 11136,
+    "completion_tokens": 737
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=3,suppress=True)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; print('single-bank',[(k,np.shape(v),np.asarray(v).ravel()[:10]) for k,v in b.items()]); print('sweeps rows',len(c['ref_rosette'])); print('aux range',s['aux_manifold_telemetry'].mean(0),s['aux_manifold_telemetry'].std(0)); a=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); t=np.arange(16); A=np.c_[np.ones(16),np.sin(2*np.pi*t/16),np.cos(2*np.pi*t/16)]\\nfor row in a:\\n y=np.array(row['facility_telemetry_trace']); k=np.linalg.lstsq(A,y,rcond=None)[0]; print('batch',row['completed_batch_index'],'offsets',k[0],'sin',k[1],'cos',k[2],'resid',np.std(y-A@k,axis=0)); print('common',np.mean(y[:,[0,3,6]],axis=1))\\nPY\\nsed -n '45,178p' /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 nominal-wall fallback → H2 separate measurable apparatus state from unidentifiable wall coefficients; worst public tracer RMSE is 3.23e-6, while four profiled wall directions have RMS sensitivity below 3e-4 per unit.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Estimate all wall coefficients from the blind transport observations\",\n      \"rejected_reason\": \"The weakest four directions have sensitivity more than an order of magnitude below the measured public noise; fitting them freely would confound wall state with source weights.\"\n    }\n  ],\n  \"rationale\": \"Separate cyclic telemetry from persistent offsets to see which logged channels can serve as state indicators. The log alone does not establish a mapping from those indicators to wall coefficients. Inspect the single-bank sweeps to see whether they independently constrain calibration when mixed sweeps are contaminated.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "48b3dfa1bc952a1c87a519704d50ff014a1ed5f662a5d470ba98a84043190667",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22692.87,
+      "usage_known": true,
+      "prompt_tokens": 33099,
+      "cached_tokens": 11136,
+      "completion_tokens": 737
+    }
+  ]
+}

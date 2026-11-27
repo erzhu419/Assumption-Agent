@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "caea837733174009b93d50696457201b",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c01__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:34:31.429082+00:00",
+  "ended_at_utc": "2026-11-27T12:34:58.577409+00:00",
+  "request_sha256": "f3615d23bdfd12905ef7979a3cc0e99f428d97e98a4bdead91051d75c54b3711",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 79405,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 39655,
+    "cached_tokens": 0,
+    "completion_tokens": 1024
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat >/tmp/rheo_transfer_audit.py <<'PY'\\nexec(open('/tmp/rheo_margin.py').read().split(\\\"models=\\\")[0])\\nfor name,v in [('train',tr),('chamber',ch),('test',te)]:\\n print(name,'fields and shapes',[(k,np.shape(a)) for k,a in v.items()]); print('lab sample counts',np.unique(v['lab_id'],return_counts=True));\\n if 'aux_chamber_telemetry' in v:\\n  u=v['aux_chamber_telemetry']; print('telemetry mean and spread by lab',[(int(k),np.round(np.mean(u[v['lab_id']==k],axis=0),3).tolist(),np.round(np.std(u[v['lab_id']==k],axis=0),3).tolist()) for k in np.unique(v['lab_id'])]);\\nprint('pilot lab/stratum/score/slope',np.c_[g,ch['stratum'],score,y].round(4).tolist());\\nfor l in L:\\n j=g==l; xx,_=s._standardize(te,ref,fill); testscore=xx[te['lab_id']==l,1:]@b[3:]; print('lab and score range',l,np.round([score[j].min(),score[j].max(),testscore.min(),testscore.max()],3));\\n\\ndef measure(F,pen,groups):\\n er=E.copy()\\n for k in np.unique(groups):\\n  j=groups==k; er[j]-=ridge(F,~j,j,pen)[:,None]*z\\n by=np.array([[np.mean(abs(er[g==l,:-1])),np.mean(abs(er[g==l,-1]))] for l in L]);return np.r_[[np.mean(abs(er[:,:-1])),np.mean(abs(er[:,-1]))],by.max(axis=0)].round(4).tolist()\\nfolds=(np.arange(len(g)),ch['stratum'],g)\\nfor name,F,p in [('base',local,.08),('gain-prior',local,np.r_[np.full(len(L),.08),np.full(len(L),.16)]),('shared gain only',np.c_[local,score],np.r_[np.full(2*len(L),.08),.16]),('shared offset only',np.c_[local,np.ones(len(g))],np.r_[np.full(2*len(L),.08),.16]),('lab-stratum',np.c_[local,np.equal.outer(ch['stratum'],np.unique(ch['stratum']))],np.r_[np.full(2*len(L),.08),np.full(len(np.unique(ch['stratum'])),.35)])]:\\n print(name,[measure(F,p,f) for f in folds]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_transfer_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Local chamber gain and offset → test whether a shared gain helps without pooling offsets; the reference-spread challenger reduced worst leave-lab-out strain MAE from 0.5591 to 0.5084 but worsened aggregate leave-lab-out MAE from 0.1989 to 0.2156.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add reference-spread transfer after the first screen\",\"rejected_reason\":\"A shared correction without reference spread gave nearly the same worst-lab improvement, so the screen did not establish that reference spread explains it.\"}],\"rationale\":\"Separate shared gain from shared offset to find out which, if either, improves the unrepresented-lab bottleneck without hurting labs with trials. Compare pilot and deployment score ranges to identify extrapolation in sparsely sampled labs. If neither shared term improves that trade-off, retain the verified local model.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "9cc876d105a057bf84945c5fff346136e0e0f19fc85e01b43f2302c7b52c7017",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27124.78,
+      "usage_known": true,
+      "prompt_tokens": 39655,
+      "cached_tokens": 0,
+      "completion_tokens": 1024
+    }
+  ]
+}

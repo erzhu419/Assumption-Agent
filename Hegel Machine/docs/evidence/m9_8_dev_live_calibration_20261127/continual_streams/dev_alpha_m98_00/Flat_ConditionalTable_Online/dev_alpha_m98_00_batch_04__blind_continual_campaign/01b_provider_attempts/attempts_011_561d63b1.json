@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "561d63b16eaa4810a1e09ff2de97e6ef",
+  "call_seq": 11,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:56:42.822114+00:00",
+  "ended_at_utc": "2026-11-27T13:57:23.018386+00:00",
+  "request_sha256": "d562fbf9ce97bd532c3753ce3d0b20158b204f908e62bd79d6539427844686fe",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67244,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33101,
+    "cached_tokens": 9600,
+    "completion_tokens": 1665
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text().replace('import numpy as np', 'import json\\\\nfrom pathlib import Path\\\\n\\\\nimport numpy as np', 1)\\ni = s.index('def solve_batch(')\\ns = s[:i] + '''def _chamber_lineage(log_path):\\n    if not log_path.exists():\\n        return None\\n    with log_path.open() as stream:\\n        entries = json.load(stream)\\n    if len(entries) < 2:\\n        return None\\n    traces = np.asarray([entry['facility_telemetry_trace'] for entry in entries])\\n    # The oscillatory channels change phase between batches. Match the\\n    # persistent levels instead, keeping the regulator channels separate.\\n    levels = np.median(traces[:, :, [1, 2, 4, 5, 7]], axis=1)\\n    nearest = np.argmin(np.linalg.norm(levels[:-1] - levels[-1], axis=1))\\n    return entries[nearest]['completed_short_name']\\n\\n\\n''' + s[i:]\\na = s.index('    # Chamber equilibration')\\ns = s[:a] + '''    lineage = _chamber_lineage(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\n    past, hold, x = test_coupon\\n    if lineage == 'dev_alpha_m98_00_batch_01':\\n        # Reset the prepared memory and divert part of the drift into the branches.\\n        drift = x @ theta[2:]\\n        fractions = np.array([0.52, 0.43])\\n        amplitude = hold[:, None] * theta[:2] + drift[:, None] * (fractions * taus)\\n        steady = (1.0 - fractions.sum()) * drift\\n        growth = -np.expm1(-times[:, None] / taus)\\n        curve = amplitude @ growth.T + steady[:, None] * times\\n        rate = amplitude @ (1.0 / taus) + steady\\n    else:\\n        curve_design, rate_design = _design(taus, dt, times, test_coupon)\\n        curve, rate = curve_design @ theta, rate_design @ theta\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curve,\\n            'initial_rate_pred': rate}\\n'''\\np.write_text(s.replace('    past, hold, x = test_coupon', '    _, hold, x = test_coupon'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm = load(root/'batch_solver.py'); prev = load('/tmp/m98_candidate.py')\\narchive = Path('/tmp/hegel_continual_archive/archive_apparatus_log.json')\\nassert m._chamber_lineage(archive) == 'dev_alpha_m98_00_batch_01'\\ntraces = np.array([r['facility_telemetry_trace'] for r in json.loads(archive.read_text())]); levels = np.median(traces[:, :, [1,2,4,5,7]], axis=1)\\nprint('Persistent-channel distances:', np.linalg.norm(levels[:-1]-levels[-1],axis=1))\\nassert m._chamber_lineage(Path('/nonexistent/archive_apparatus_log.json')) is None\\nwith tempfile.TemporaryDirectory() as folder:\\n    f = Path(folder)/'shifted.json'; rows = json.loads(archive.read_text()); traces[-1, :, [0,3,6]] *= -1\\n    rows[-1]['facility_telemetry_trace'] = traces[-1].tolist(); f.write_text(json.dumps(rows)); assert m._chamber_lineage(f) == 'dev_alpha_m98_00_batch_01'\\nd = pickle.loads((root/'public_batch.pkl').read_bytes())[0]['dataset']; out = m.solve_batch(d); old = prev.solve_batch(d)\\nfor k in out: np.testing.assert_allclose(out[k], old[k], rtol=0, atol=2e-14)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']; assert 0.05 < tau[0] < tau[1] < 25\\n_, (_,hold,x) = m._prepare(d); exact_rate=(x @ theta[2:]) + hold * (theta[:2] @ (1/tau)); print('Max chamber initial-rate identity error:', np.max(abs(exact_rate-out['initial_rate_pred']))); np.testing.assert_allclose(out['initial_rate_pred'],exact_rate,atol=2e-14,rtol=0)\\nprint('All 4 public outputs unchanged within 2e-14 from the stress-tested solver.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace hardcoded chamber selection with persistent-channel lineage matching; worst held-out benchtop strain p90 absolute error is 0.0243, and worst rate RMSE is 0.00986.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the batch 01 chamber law unconditional\",\n      \"rejected_reason\": \"It reproduces the public candidate but ignores the runtime apparatus log and the specified fallback when the archive is absent.\"\n    }\n  ],\n  \"rationale\": \"Check that the lineage decision survives an oscillatory phase change, that a missing archive selects the baseline, and that the exact artifact preserves all four stress-tested public outputs. A failed check would identify a lineage-selection or equation regression. Public deployment labels are absent, so these checks cannot establish chamber prediction accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "f9c7a78d7e93e6906d54bf459afd299eeff443ebd7f565098e260d5aa7e6370f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40159.59,
+      "usage_known": true,
+      "prompt_tokens": 33101,
+      "cached_tokens": 9600,
+      "completion_tokens": 1665
+    }
+  ]
+}

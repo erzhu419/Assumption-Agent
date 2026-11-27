@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "baa741fd731b460594704178226eef88",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T121930Z__stageS__alpha_m98_c04__att2__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m98_c04_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:30:03.634232+00:00",
+  "ended_at_utc": "2026-11-27T12:30:44.264086+00:00",
+  "request_sha256": "19236bb4bc4eeb053ff6ef1ab1ca4ba7259b52d0897012c92d7d522ca54ae248",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50283,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30814,
+    "cached_tokens": 11136,
+    "completion_tokens": 1703
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Estimate chamber strain and onset rate from calibrated load histories.\\\"\\\"\\\"\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _bridge(calibration):\\n    raw = np.asarray(calibration['bridge_raw'])\\n    loads = np.asarray(calibration['true_channel_loads'])\\n    return np.linalg.lstsq(np.c_[np.ones(len(raw)), raw], loads, rcond=None)[0]\\n\\n\\ndef _prepare(cohort, bridge):\\n    lab = np.asarray(cohort['lab_id'])\\n    ref = np.asarray(cohort['ref_coupons'])\\n    x = np.array(cohort['coupon_features_raw'], dtype=float, copy=True)\\n    for label in np.unique(lab):\\n        rows = lab == label\\n        panel = ref[rows]\\n        center = np.median(panel.mean(axis=0))\\n        scale = np.median(panel.std(axis=0, ddof=0))\\n        x[rows] = (x[rows] - center) / (scale if scale > 0 else 1.)\\n\\n    cells = np.stack([lab, cohort['stratum']], axis=1)\\n    _, index, counts = np.unique(cells, axis=0, return_inverse=True, return_counts=True)\\n    w = 1. / counts[index, None]\\n    seen = np.isfinite(x)\\n    total = (w * seen).sum(axis=0)\\n    fill = np.divide((w * np.where(seen, x, 0.)).sum(axis=0), total,\\n                     out=np.zeros(x.shape[1]), where=total > 0)\\n    x = np.where(seen, x, fill)\\n\\n    # Summing the calibrated channel outputs commutes with the affine map.\\n    slope = bridge[1:].sum(axis=1)\\n    offset = bridge[0].sum()\\n    return (cohort['past_channel_raw'] @ slope + offset,\\n            cohort['hold_channel_raw'] @ slope + offset,\\n            np.c_[np.ones(len(x)), x])\\n\\n\\ndef _design(inputs, elapsed, times, taus):\\n    past, hold, drift = inputs\\n    # Each history interval contributes its exact exponentially decayed mass.\\n    history = np.diff(np.exp(-elapsed[:, None] / taus), axis=0)\\n    gap = hold[:, None] - past @ history\\n    memory = gap[:, None, :] * -np.expm1(-times[:, None] / taus)\\n    curve = np.concatenate((memory, times[None, :, None] * drift[:, None, :]), axis=2)\\n    rate = np.c_[gap / taus, drift]\\n    return np.concatenate((curve, rate[:, None, :]), axis=1)\\n\\n\\ndef _fit(inputs, elapsed, times, cohort, pilot):\\n    y = np.c_[cohort['strain_curves_obs'] - cohort['strain_0'][:, None],\\n              cohort['instant_rate_obs']]\\n    scales = (np.r_[np.hypot(.004, .003 * times), .006] if pilot else\\n              np.r_[np.hypot(.010, .007 * times), .015])\\n    lower = np.r_[np.full(2, np.log(.05001)), np.full(7, -np.inf)]\\n    upper = np.r_[np.full(2, np.log(24.999)), np.full(7, np.inf)]\\n\\n    def residual(z):\\n        design = _design(inputs, elapsed, times, np.exp(z[:2]))\\n        return ((design @ z[2:] - y) / scales).ravel()\\n\\n    best = None\\n    for start in ([.25, 1.5], [.65, 4.], [1.4, 12.]):\\n        design = _design(inputs, elapsed, times, np.array(start)) / scales[None, :, None]\\n        weights = np.linalg.lstsq(design.reshape(-1, 7), (y / scales).ravel(), rcond=None)[0]\\n        fit = least_squares(residual, np.r_[np.log(start), weights], bounds=(lower, upper),\\n                            loss='soft_l1', max_nfev=180)\\n        if best is None or fit.cost < best.cost:\\n            best = fit\\n    z = best.x\\n    order = np.argsort(z[:2])\\n    taus = np.exp(z[:2][order])\\n    if taus[0] == taus[1]:\\n        taus[1] = np.nextafter(taus[1], np.inf)\\n    return taus, np.r_[z[2:4][order], z[4:]]\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return the fitted deployment spectrum and predictions for the test coupons.\\\"\\\"\\\"\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    times = np.asarray(dataset['eval_times'])\\n    elapsed = np.r_[np.cumsum(np.asarray(dataset['past_dt'])[::-1])[::-1], 0.]\\n    pilot = dataset.get('chamber_verification_trials')\\n    fit_cohort = dataset['train'] if pilot is None else pilot\\n    taus, weights = _fit(_prepare(fit_cohort, bridge), elapsed, times, fit_cohort,\\n                         pilot is not None)\\n    test = dataset['test']\\n    response = _design(_prepare(test, bridge), elapsed, times, taus) @ weights\\n    return {'estimated_taus': taus, 'hereditary_weights': weights,\\n            'predicted_strain': response[:, :-1] + test['strain_0'][:, None],\\n            'initial_rate_pred': response[:, -1]}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (pooled references and benchtop transfer) -> H2 (cohort-local reference normalization and exact calibrated history); pilot leave-lab-out strain/rate MAE is 0.01271/0.01121 on the worst lab and 0.01664/0.00761 on missing-feature rows.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\",\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Use polynomial corrections for the observed bridge\",\"rejected_reason\":\"Affine calibration has the lowest held-out axial stress RMSE (0.00018874) on the public sweeps.\"},{\"option\":\"Infer an apparatus correction without pilot or archive evidence\",\"rejected_reason\":\"No archive is mounted in this snapshot, and benchtop observations alone cannot identify a chamber-specific shift.\"}],\"rationale\":\"Implement the empirically supported operator and normalization, fit to chamber observations when available, and use robust benchtop fitting otherwise. Run the public validator in an isolated process to catch import, output-shape, or nonfinite-output failures before testing the blind branch.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6a953849835938e7b4003dbd31c1d4c65553e7ffeed6968545445d8152eaefce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40599.44,
+      "usage_known": true,
+      "prompt_tokens": 30814,
+      "cached_tokens": 11136,
+      "completion_tokens": 1703
+    }
+  ]
+}

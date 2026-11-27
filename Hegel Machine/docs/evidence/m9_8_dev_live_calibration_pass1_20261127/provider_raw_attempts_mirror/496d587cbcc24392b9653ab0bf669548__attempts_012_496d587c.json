@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "496d587cbcc24392b9653ab0bf669548",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Hegel_FactoredMechanismGraph__dev_beta_m98_00_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_07__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:22:33.753627+00:00",
+  "ended_at_utc": "2026-11-27T13:23:05.702074+00:00",
+  "request_sha256": "c4e8dbc535f374a3174e649b8b72c672bea5015f4fac6fae181bc5b05902793b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56346,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27276,
+    "cached_tokens": 5504,
+    "completion_tokens": 1068
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncat > /tmp/rosette_excitation_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _Rosette, _cyclic_design, _robust_fit\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    public = pickle.load(f)\\n\\ndef rms(r):\\n    return float(np.sqrt(np.mean(r*r, axis=0)).max())\\n\\nfor item in public:\\n    s = item['study']['sensor_calibration_sweeps']\\n    x, y = s['ref_rosette'], s['raw_rosette']\\n    clean = np.max(np.abs(y), axis=1) < 7\\n    amplitude = np.max(np.abs(x), axis=1)\\n    lo, hi = np.quantile(amplitude, [.25, .75])\\n    max_inverse = 0.\\n    for name, held in [('low excitation', amplitude <= lo), ('high excitation', amplitude >= hi)]:\\n        train, test = ~held, held & clean\\n        m = _Rosette(x[train], y[train])\\n        base = [_cyclic_design(x, j) for j in range(4)]\\n        spec = {'quadratic ablation': [a[:, :-1] for a in base]}\\n        for sign in (-1, 1):\\n            spec[f'cubic plus rational contrast {sign:+d}'] = [\\n                np.column_stack((a, a[:, 4] / (1 + .2*(x[:, j] + sign*x[:, (j+1)%4])**2)))\\n                for j, a in enumerate(base)]\\n        errors = {}\\n        for label, designs in spec.items():\\n            coeff, _ = _robust_fit([a[train] for a in designs], y[train])\\n            pred = np.column_stack([a[test] @ coeff[:, j] for j, a in enumerate(designs)])\\n            errors[label] = rms(pred - y[test])\\n        cubic = rms(m.predict(x[test]) - y[test]); inv = rms(m.invert(y[test]) - x[test])\\n        max_inverse = max(max_inverse, inv)\\n        print(name, 'clean test rows', test.sum(), 'cubic forward RMSE', cubic, 'cubic inverse RMSE', inv, 'challenger forward RMSE', errors)\\n    print('Worst excitation-block inverse channel RMSE:', max_inverse)\\n    assert max_inverse < 1e-4, 'Reopen calibration: inverse error exceeds the existing audit threshold on a held-out excitation band'\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I -B /tmp/rosette_excitation_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 quadratic response → H2 robust cyclic cubic response; the preceding audit found worst held-out inverse channel RMSE of 1.80e-5, with excitation-band holdouts not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the interleaved sweep and schema checks\",\"rejected_reason\":\"Both already passed on the unchanged bundle; they do not test transfer to unseen excitation bands.\"},{\"option\":\"Run relay-mode or class-balance tests\",\"rejected_reason\":\"The available measurements are paired continuous rosette sweeps, with no relay modes or class labels.\"}],\"rationale\":\"Hold out entire low- and high-amplitude bands from the public measurements to detect extrapolation errors hidden by interleaved folds. Compare the cubic against a quadratic ablation and fixed rational additions to the cubic, which the prior rational replacement did not test. Reopen calibration if the inverse exceeds the existing audit threshold or a challenger fixes a meaningful error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "d22f5502d2d3b256aa4ba7174ad3f81e812a8bed983e8d04a90df4b6511e9461",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31910.11,
+      "usage_known": true,
+      "prompt_tokens": 27276,
+      "cached_tokens": 5504,
+      "completion_tokens": 1068
+    }
+  ]
+}

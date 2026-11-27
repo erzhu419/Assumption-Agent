@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b3ec7ef067a04247b9ccc98bda7f1811",
+  "call_seq": 5,
+  "stage_subdir": "m98_run_20261127T124624Z__stageS__dev_beta_m98_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:49:10.285968+00:00",
+  "ended_at_utc": "2026-11-27T12:49:51.828925+00:00",
+  "request_sha256": "50533a5731d882d7790ba37690b42eda11ae597c982b0754be39bebbd1c2afaa",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43388,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28059,
+    "cached_tokens": 11136,
+    "completion_tokens": 1673
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/stress_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import minimize\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns0 = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nrng = np.random.default_rng(32)\\nx = s0['sensor_calibration_sweeps']['ref_rosette']\\na = np.eye(4) + rng.normal(0, .08, (4, 4))\\nb = np.array([.023, -.036, .04, .01])\\ndef transform(z, mode):\\n    x = np.asarray(z).reshape(-1,4)\\n    if mode == 'identity':\\n        return np.asarray(z).copy()\\n    y = x @ a + b\\n    for j in range(4):\\n        p,q,r = (j+1)%4,(j+2)%4,(j+3)%4\\n        if mode == 'cubic':\\n            y[:,j] += .19*x[:,p]*x[:,q] + .12*x[:,p]*x[:,q]*x[:,r]\\n        if mode == 'rational':\\n            y[:,j] += .19*x[:,p]*x[:,q]/(1+.8*(x[:,r]-.4*x[:,j])**2)\\n    return y.reshape(np.shape(z))\\nsource = s0['source_modes']\\nw0 = np.array([.42,.24,0,.08,.42,0,.24,0])\\nW = np.array([p['w_pulse'] for p in s0['reference_tracer_pulses']])\\nZ = s0['Z_nuisance']; rho = s0['nuisance_ridge']; R = np.eye(len(Z))-Z @ np.linalg.solve(Z.T@Z+rho*np.eye(Z.shape[1]),Z.T)\\nmax_gap = 0\\nfor mode, wall, pulses in [('identity',[1]*8,False),('affine',[1]*8,True),('cubic',[.75,.75,1,1,1.55,1.55,1,1],True),('affine',[.7,1.4,.52,1.25,1.6,.65,1.3,.6],True),('rational',[1]*8,True)]:\\n    s = dict(s0)\\n    s['sensor_calibration_sweeps'] = dict(s0['sensor_calibration_sweeps'],raw_rosette=transform(x,mode)+rng.normal(0,1e-5,x.shape))\\n    S, U = m._response(s, np.asarray(wall), source)\\n    yc = S @ w0 + Z @ [.02,-.015,.06] + rng.normal(0,.005,len(Z))\\n    s['y_obs_raw'] = transform(yc,mode)\\n    s['reference_tracer_pulses'] = [dict(w_pulse=w,y_pulse_raw=transform(S @ w,mode)) for w in W] if pulses else None\\n    out = m.solve_batch(s)\\n    S2,y2 = R @ S,R @ yc\\n    ridge = s['source_ridge']\\n    H, f = S2.T @ S2 + ridge*np.eye(len(w0)), S2.T @ y2\\n    opt = minimize(lambda w: .5*w@H@w-f@w+w[0]*0.,np.ones(len(w0))*s['total_budget']/len(w0),jac=lambda w: H@w-f,method='SLSQP',bounds=[(0,s['u_box'])]*len(w0),constraints=[dict(type='eq',fun=lambda w:w.sum()-s['total_budget'],jac=lambda w:np.ones_like(w))],options={'ftol':1e-14,'maxiter':300})\\n    cert=out['kkt_certificate']; gap=cert['primal_objective']-cert['dual_lower_bound']; max_gap=max(max_gap,gap)\\n    cal=m._calibration(s['sensor_calibration_sweeps']); fitted_wall = m._walls(s,cal,source)\\n    g=S2.T@(S2@out['weights']-y2)+ridge*out['weights']\\n    stat=g-cert['nu_sum']-np.array(cert['lam_lower'])+np.array(cert['lam_upper'])\\n    print(mode,'pulses',pulses,'cal max',np.max(abs(cal(s['y_obs_raw'])-yc)),'wall max',np.max(abs(fitted_wall-wall)),'weight max',np.max(abs(out['weights']-opt.x)),'field max',np.max(abs(out['terminal_field']-np.tensordot(opt.x,U,axes=1))),'oracle KKT residual',np.max(abs(stat)),'internal gap',gap)\\n    assert opt.success and abs(sum(out['weights'])-s['total_budget']) < 1e-9 and abs(gap)<1e-8\\nprint('max internal gap',max_gap)\\nfor cap,total in [(.3,0.),(.3,.3),(.3,1.7),(.3,2.4)]:\\n    X=np.eye(8); y=np.arange(8.)\\n    w=m._weights(X,y,.04,cap,total)\\n    g=1.04*w-y; nu=m._dual(g,w,cap); d=g-nu\\n    gap=np.maximum(d,0)@w+np.maximum(-d,0)@(cap-w)\\n    print('active-face total',total,'gap',gap,'budget error',abs(w.sum()-total))\\n    assert abs(w.sum()-total)<1e-9 and gap<1e-8\\narchive=Path('/tmp/hegel_continual_archive/archive_apparatus_log.json')\\nprint('apparatus log present:',archive.is_file())\\nif archive.is_file():\\n    with archive.open() as f: print(f.read(3500))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_batch.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 nominal FVM and identity rosettes -> H2 dynamically calibrated rosettes and pulse-validated walls; public worst pulse-row error is 5.83e-16 and the schema passes.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Stress the exact artifact in an isolated process on altered sensor and wall models, comparing recovered weights and fields with an independent optimizer. This distinguishes calibration or wall errors from an internally valid but physically mismatched KKT certificate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "471969f3cdfb0c6778ec12acd665c280d8fb4916dc87cabb13376a3ae0e7fe6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41501.17,
+      "usage_known": true,
+      "prompt_tokens": 28059,
+      "cached_tokens": 11136,
+      "completion_tokens": 1673
+    }
+  ]
+}

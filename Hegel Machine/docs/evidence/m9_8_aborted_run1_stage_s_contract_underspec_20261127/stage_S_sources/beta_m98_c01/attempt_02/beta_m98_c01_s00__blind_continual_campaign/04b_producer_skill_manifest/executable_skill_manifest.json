@@ -1,0 +1,116 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m98_c01_s00_c45a2d5fc284",
+    "source_hash": "c45a2d5fc284a74b2dc02c20d4e2ce06f3ce0cb744a95db8ec51db137346f7f6",
+    "parent_ids": [],
+    "source_episode_id": "beta_m98_c01_s00__blind_continual_campaign",
+    "task_id": "beta_m98_c01_s00__blind_continual_campaign",
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_m98_margin.py",
+        "archived_relpath": "producers/tmp__audit_m98_margin.py",
+        "bytes": 3006,
+        "sha256": "c029452f2b74cdbe522bafb6707f97b9519565efdc54fb7f73a5a13b1c618843"
+      },
+      {
+        "container_path": "/tmp/probe98.py",
+        "archived_relpath": "producers/tmp__probe98.py",
+        "bytes": 2402,
+        "sha256": "df14937f495057c067c456790785958a95cad01256c84fcbea0a6a0d92e4e5ca"
+      },
+      {
+        "container_path": "/tmp/validate98.py",
+        "archived_relpath": "producers/tmp__validate98.py",
+        "bytes": 2626,
+        "sha256": "a5a2e552e3920ced79edff582b6659e4e7a5fcf0e52022f565d3c6629edd8de4"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle\ns=pickle.load(open('public_batch.pkl','rb'))\nfor k,v in s.items():\n if isinstance(v,dict): print(k, {a:(type(b).__name__,getattr(b,'shape',None),len(b) if isinstance(b,(list,dict)) else '') for a,b in v.items()})\n elif isinstance(v,list): print(k,len(v), list(v[0]) if v and isinstance(v[0],dict) else str(v[:2])[:200])\n elif hasattr(v,'shape'): print(k,v.shape,v.dtype,v.ravel()[:8])\n else: print(k,repr(v)[:400])\nPY\nif test -d /tmp/hegel_continual_archive; then du -ah /tmp/hegel_continual_",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\nbatch=pickle.load(open('public_batch.pkl','rb')); print('batch',len(batch));\ndef show(v,depth=0):\n if isinstance(v,dict):\n  for k,x in v.items(): print(' '*depth,k,end=': '); show(x,depth+2)\n elif isinstance(v,list) and v and isinstance(v[0],dict): print('list',len(v)); show(v[0],depth+2)\n elif hasattr(v,'shape'): print(v.shape,v.dtype,np.asarray(v).ravel()[:12])\n else: print(str(v)[:350])\nshow(batch[0]); print('batch entries:',[list(e) for e in batch]);\nPY\nif test -d /tmp/hegel_continual_archive; t",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport numpy as np,pickle\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=7,suppress=True,linewidth=130)\nprint('all keys',list(s)); print('unique levels', [np.unique(x[:,j]).size for j in range(4)]); print('sweep activation counts',np.unique(np.count_nonzero(x,axis=1),return_counts=True)); print('sweeps',np.c_[x,y][:22]);\nfor k,v in c['single_bank_sweeps'].items(): print('single',k,v.shape,v[:16]);\na=np.c_[np.ones(len(x)),",
+      "cat >/tmp/probe98.py <<'PY'\nimport itertools,pickle,numpy as np\nfrom scipy.sparse import diags,kron,eye\nfrom scipy.sparse.linalg import splu\nfrom scipy.optimize import least_squares\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; nx,ny=s['nx'],s['ny']; V=diags(s['V_reaction_2d'].ravel(order='F'),format='csc'); ij=s['sensor_ij']; idx=ij[:,0]+nx*ij[:,1]; p=s['reference_tracer_pulses']; B=np.array([np.tensordot(a['w_pulse'],s['source_modes'],axes=1).ravel(order='F') for a in p]).T; Y=np.array([a['y_pulse_raw'] for a in p]).T\n\ndef axis(k,v,h,mean,adv,sign):\n    k=(k[:-1]+k[",
+      "cat >/tmp/validate98.py <<'PY'\nfrom probe98 import *\nfrom scipy.linalg import null_space\nkey,A,h=next(t for t in candidates() if t[0]==(1,0,2,1)); nom=np.repeat([s['robin_x'],s['robin_y']],2)/h\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']; des=np.c_[np.ones(len(x)),x]; affine=np.linalg.lstsq(des,raw,rcond=None)[0]; cal=lambda y:np.linalg.solve(affine[1:].T,(y.reshape(-1,4)-affine[0]).T).T.ravel(); Y=np.array([cal(p['y_pulse_raw']) for p in p]).T; y=cal(s['y_obs_raw']); Z=s['Z_nuisance']; Q=np.linalg.qr(Z)[0]; F=np.column_stack([m.ravel(order='F') for m in s['sourc",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrate the rosettes, reconstruct the chamber, and certify the source QP.\"\"\"\nimport itertools\n\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\ndef _monomials(degree):\n    return np.array([[idx.count(j) for j in range(4)]\n                     for d in range(degree + 1)\n                     for idx in itertools.combinations_with_replacement(range(4), d)])\n\n\ndef _features(x, powers):\n    return np.prod(x[:, None, :] ** powers[None, :, :], axis=-1)\n\n\ndef _cal",
+      "ls -la /tmp/hegel_continual_archive 2>/dev/null || echo 'No continual archive mounted'; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nimport batch_solver as m\nb=pickle.load(open('public_batch.pkl','rb')); print('batch length:', len(b)); s=b[0]['study']; print('scalars:', {k:v for k,v in s.items() if np.isscalar(v)}); print('item metadata:',{k:str(v)[:300] for k,v in b[0].items() if k!='study'}); print('row bank:',s['row_bank_id'].shape,s['row_bank_id'].ravel()[:24]); print('upper:',s['u_box']); print('shifts:',s['mu_shifts']); print('nuisance head:',s['Z",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle, numpy as np\nfrom scipy.linalg import null_space\nfrom scipy.optimize import least_squares\nimport batch_solver as m\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; inv=m._calibration(s['sensor_calibration_sweeps']); f,r0,F=m._chamber(s); rp=m._pulse_fit(s['reference_tracer_pulses'],inv,f,r0,F); y=inv(s['y_obs_raw']); Z=s['Z_nuisance']; M=F.shape[1]; b=s['total_budget']; u=np.broadcast_to(s['u_box'],(M,)); n=len(y); g=len(s['sensor_ij']); ix=np.arange(n); ridge=s['source_ridge']; rms=lambda x:np.sqrt(np.mean(x*x)",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy.optimize import minimize, least_squares\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; rms=lambda a:np.sqrt(np.mean(a*a)); inv=m._calibration(s['sensor_calibration_sweeps']); f,r0,F=m._chamber(s); P=s['reference_tracer_pulses']; worst=0.\nfor train,test in ((0,1),(1,0)):\n r=m._pulse_fit([P[train]],inv,f,r0,F); err=",
+      "cat >/tmp/audit_m98_margin.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\np = '/holdout_task/batch_solver.py'\nspec = importlib.util.spec_from_file_location('candidate', p)\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\nc = s['sensor_calibration_sweeps']\nx, raw = c['ref_rosette'], c['raw_rosette']\ny = raw - x\nrms = lambda a: np.sqrt(np.mean(a*a))\np2, p3 = m._monomials(2), m._monomials(3)\nphi2, phi3 = m._features(x, p2), m._features(x, p3)\nmodels = {'affine': phi2[:, :5], 'quadratic"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_m98_margin.py",
+      "primary_producer_container_path": "/tmp/audit_m98_margin.py",
+      "selected_channels": [
+        "fam_elliptic_transport_and_factored_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 7411,
+        "sha256": "64457bd76165db8afe270228f5dabe45b53f0aee698fef372d4ae8d37bec3483",
+        "content_addressed_ref": "content_addressed_blobs/64457bd76165db8afe270228f5dabe45b53f0aee698fef372d4ae8d37bec3483.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "axis"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_elliptic_transport_and_factored_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "c45a2d5fc284a74b2dc02c20d4e2ce06f3ce0cb744a95db8ec51db137346f7f6",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat >/tmp/audit_m98_margin.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\np = '/holdout_task/batch_solver.py'\nspec = importlib.util.spec_from_file_location('candidate', p)\nm = importlib.util.module_from_spec(spec)\nspec.lo",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "c45a2d5fc284a74b2dc02c20d4e2ce06f3ce0cb744a95db8ec51db137346f7f6",
+        "expected_candidate_sha256": "c45a2d5fc284a74b2dc02c20d4e2ce06f3ce0cb744a95db8ec51db137346f7f6",
+        "computed_candidate_sha256": "c45a2d5fc284a74b2dc02c20d4e2ce06f3ce0cb744a95db8ec51db137346f7f6",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 7411
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_c45a2d5f"
+    }
+  },
+  "structure": {
+    "full_producer_count": 3,
+    "reusable_ast_function_closures": [
+      {
+        "name": "axis",
+        "code": "def axis(k, v, h, mean, adv, sign):\n    from scipy.sparse import diags\n    k = (k[:-1] + k[1:]) / 2 if mean == 0 else 2 * k[:-1] * k[1:] / (k[:-1] + k[1:])\n    d = k / h ** 2\n    v = v * sign / h\n    a = (v[:-1] + v[1:]) / 2\n    pos = np.maximum(a, 0)\n    neg = np.minimum(a, 0)\n    if adv == 0:\n        lo = -d - pos\n        hi = -d + neg\n        mid = np.r_[d + pos, 0] + np.r_[0, d - neg]\n    if adv == 1:\n        lo = -d - pos\n        hi = -d + neg\n        mid = -np.r_[hi, 0] - np.r_[0, lo]\n    if adv == 2:\n        lo = -d - np.maximum(v[1:], 0)\n        hi = -d + np.minimum(v[:-1], 0)\n        mid = -np.r_[hi, 0] - np.r_[0, lo]\n    if adv == 3:\n        lo = -d - np.maximum(v[:-1], 0)\n        hi = -d + np.minimum(v[1:], 0)\n        mid = np.r_[d + np.maximum(v[:-1], 0), 0] + np.r_[0, d - np.minimum(v[1:], 0)]\n    return diags([lo, mid, hi], [-1, 0, 1], format='csc')"
+      }
+    ]
+  }
+}

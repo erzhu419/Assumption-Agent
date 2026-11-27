@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7eab8033dafe4b35b8ed66bb68ac8169",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:01:53.205325+00:00",
+  "ended_at_utc": "2026-11-27T13:02:29.833274+00:00",
+  "request_sha256": "c9dca2af98e11ef7c6d3fb35ed2d9b594c12357afbd84d0277527a7ad87bf3d5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50794,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28811,
+    "cached_tokens": 0,
+    "completion_tokens": 1442
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; set -e; python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('batch_solver.py')\\ns = p.read_text()\\na = \\\"    c = np.linalg.lstsq(a[keep], raw[keep], rcond=None)[0]\\\\n    return c, pairs, basis, keep\\\"\\nb = \\\"\\\"\\\"    c = np.linalg.lstsq(a[keep], raw[keep], rcond=None)[0]\\n    # Fit the nested affine model on the same clean forward-calibration rows.\\n    # Keep nonlinear terms only when they resolve error above sweep noise.\\n    affine = np.linalg.lstsq(a[keep, :5], raw[keep], rcond=None)[0]\\n    affine_rms = np.sqrt(np.mean((a[keep, :5] @ affine - raw[keep])**2))\\n    nonlinear_rms = np.sqrt(np.mean((a[keep] @ c - raw[keep])**2))\\n    if affine_rms <= 1.25 * nonlinear_rms + 1e-10 * np.std(raw):\\n        c[:5] = affine\\n        c[5:] = 0.\\n    return c, pairs, basis, keep\\\"\\\"\\\"\\nassert a in s\\np.write_text(s.replace(a, b))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, numpy as np, pickle\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te = d['train'],d['test']; dt,t = d['past_dt'],d['eval_times']; cd = d['calibration_load_cells']; u,raw = cd['true_channel_loads'],cd['bridge_raw']; cal = m._calibration(cd)\\nprint('affine bridge selected:', not np.any(cal[0][5:]))\\nerrs = []\\nfor held in np.array_split(np.random.default_rng(14).permutation(len(u)),5):\\n    fit = np.setdiff1d(np.arange(len(u)),held); c = m._calibration({'true_channel_loads':u[fit],'bridge_raw':raw[fit]}); errs.append(np.max(np.abs((m._invert_bridge(raw[held],c)-u[held]).sum(-1))))\\nprint('Worst held-out total-load absolute error:', max(errs))\\nxtr,xte = m._features(tr,te); inp = m._inputs(tr,xtr,cal); te_inp = m._inputs(te,xte,cal)\\nerr = []\\nfor lab in np.unique(tr['lab_id']):\\n    q = tr['lab_id']==lab; fit = ~q\\n    tau,th,_ = m._material({k:v[fit] for k,v in tr.items()},tuple(v[fit] for v in inp),dt,t)\\n    y,r = m._predict(tuple(v[q] for v in inp),dt,t,tau,th)\\n    e = y + tr['strain_0'][q,None] - tr['strain_curves_obs'][q]; f = r-tr['instant_rate_obs'][q]\\n    err.append([np.sqrt(np.mean(e**2)),np.sqrt(np.mean(f**2)),np.median(abs(e)),np.median(abs(f))])\\nprint('Worst lab strain/rate RMSE and medAE:', np.max(err,axis=0))\\nout=m.solve_batch(d); tau,th=out['estimated_taus'],out['hereditary_weights']; print('material:',tau,th)\\nassert .05 < tau[0] < tau[1] < 25\\nh=1e-6; y,_=m._predict(te_inp,dt,np.array([0.,h]),tau,th)\\nprint('Max derivative discrepancy:',np.max(np.abs((y[:,1]-y[:,0])/h-out['initial_rate_pred'])))\\nassert np.max(np.abs((y[:,1]-y[:,0])/h-out['initial_rate_pred'])) < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unrestricted nonlinear calibration → dynamically select an affine bridge when curvature does not resolve sweep noise; baseline worst held-out lab RMSE was 0.0615 for strain and 0.00910 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use the affine bridge\",\n      \"rejected_reason\": \"The public sweep supports affine calibration, but retaining the nonlinear basis lets campaigns with measurable curvature use it.\"\n    }\n  ],\n  \"rationale\": \"Public specimen loads are within the calibrated range, and the affine fit leaves only about 0.0001 RMS per channel. Select the simpler fit at that noise level, then verify that held-out total loads, held-out lab predictions, and the reported initial derivative remain accurate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "25d8aa834f2e3f4629d082f08e0975b0292bdcc654d566ce6595db3e636dd48e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36587.35,
+      "usage_known": true,
+      "prompt_tokens": 28811,
+      "cached_tokens": 0,
+      "completion_tokens": 1442
+    }
+  ]
+}

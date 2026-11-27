@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df1f69452f914c8f97d7df41ea7745c9",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:11:50.679887+00:00",
+  "ended_at_utc": "2026-11-27T13:12:26.813976+00:00",
+  "request_sha256": "a7846ceecd42203f44308228f5666142b6f0a735c7ce587c5652a2b5f251388f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 64841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32672,
+    "cached_tokens": 9600,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit98_cal.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=np.asarray(c['ref_rosette']); raw=np.asarray(c['raw_rosette']); rng=np.random.default_rng(98); folds=np.array_split(rng.permutation(len(x)),5); folds.append(np.argsort(np.linalg.norm(x,axis=1))[-16:]); bank=c['single_bank_sweeps']; ids=np.asarray(bank['bank_id']); bx=np.eye(4)[ids]*np.asarray(bank['ref_signal'])[:,None]; br=np.asarray(bank['raw_readout']); records={k:[] for k in ('affine','pair_polynomial','contrast_rational')}\\ndef basis(x, quadratic=False):\\n    terms=[np.ones(len(x)),*x.T]\\n    if quadratic: terms += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)] + [x[:,i]**3 for i in range(4)]\\n    return np.column_stack(terms)\\nfor test in folds:\\n    tr=np.ones(len(x),bool); tr[test]=False\\n    for j in range(4):\\n        own=ids==j; xx=np.r_[x[tr],bx[own]]; yy=np.r_[raw[tr,j],br[own]]; xt=x[test]; yt=raw[test,j]\\n        for name in ('affine','pair_polynomial'):\\n            quad=name!='affine'; coef=np.linalg.lstsq(basis(xx,quad),yy,rcond=None)[0]; records[name].append(np.sqrt(np.mean((basis(xt,quad)@coef-yt)**2)))\\n        # Choose the contrast and denominator strength using training rows only.\\n        inner=np.arange(len(xx))%4; best=(np.inf,None)\\n        for k in range(4):\\n            if k==j: continue\\n            for sign in (-1,1):\\n                for a in (0.,1e-5,1e-4,1e-3,1e-2,.1):\\n                    def design(v): return basis(v,True)/(1+a*(v[:,j]+sign*v[:,k])**2)[:,None]\\n                    D=design(xx); errors=[]\\n                    for f in range(4):\\n                        keep=inner!=f; coef=np.linalg.lstsq(D[keep],yy[keep],rcond=None)[0]; errors.extend((D[~keep]@coef-yy[~keep])**2)\\n                    loss=np.mean(errors)\\n                    if loss<best[0]: best=(loss,(k,sign,a))\\n        k,sign,a=best[1]; D=basis(xx,True)/(1+a*(xx[:,j]+sign*xx[:,k])**2)[:,None]; T=basis(xt,True)/(1+a*(xt[:,j]+sign*xt[:,k])**2)[:,None]; coef=np.linalg.lstsq(D,yy,rcond=None)[0]; records['contrast_rational'].append(np.sqrt(np.mean((T@coef-yt)**2)))\\nfor key, vals in records.items(): print(key,'worst held sweep/channel RMSE',max(vals),'outer RMS',np.sqrt(np.mean(np.square(vals))),'high-amplitude worst',max(vals[-4:]))\\ncal=m._calibration(c); y=cal(s['y_obs_raw']); S,_=m._response(s,np.ones(8),s['source_modes']); Z=s['Z_nuisance']; PZ=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); X=S-Z@(PZ@S); t=y-Z@(PZ@y); w=m.solve_batch(s)['weights']; rr=(X@w-t).reshape(len(s['mu_shifts']),-1,4);print('nuisance-profiled RMSE by shift and channel:',np.sqrt(np.mean(rr**2,axis=1))); print('target calibration range inside sweeps',np.all(y.reshape(-1,4)>=x.min(0)) and np.all(y.reshape(-1,4)<=x.max(0))); print('weight sensitivity bound per unit calibrated error',np.linalg.norm(X.T@(np.eye(len(y))-Z@PZ),2)/s['source_ridge'])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit98_cal.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 sweep-fitted affine calibration and nominal Robin walls -> H2 promote nonlinear calibration only if it improves held-out sweeps enough to affect inversion; prior worst held-out transport shift RMSE was 0.011786.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous sweep comparison was in-sample. Test pairwise products and rational contrasts on withheld sweep rows, including the largest reference amplitudes, to detect nonlinear calibration error that could affect the weights. Report residuals by shift and channel after nuisance projection. There are no classification cohorts, relay states, or stochastic-control drift operators in this study.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "382f3fe312d5173ada03d5fd980f1efbd62bba2235a6d35e798c48e5fa2f4d67",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36089.01,
+      "usage_known": true,
+      "prompt_tokens": 32672,
+      "cached_tokens": 9600,
+      "completion_tokens": 1401
+    }
+  ]
+}

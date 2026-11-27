@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82a17d167bbf4fa182f6b766e32a56c2",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_ConditionalTable_Online__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:57:51.535133+00:00",
+  "ended_at_utc": "2026-11-27T13:58:29.094857+00:00",
+  "request_sha256": "1e64bf5d5e1b416894acf56593d578e9588f22343b3fcdd7bd5618cced3ed566",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71345,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33670,
+    "cached_tokens": 0,
+    "completion_tokens": 1452
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/m98_margin.py <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nroot = Path('/holdout_task')\\ns = importlib.util.spec_from_file_location('solver', root/'batch_solver.py'); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd = pickle.loads((root/'public_batch.pkl').read_bytes())[0]['dataset']\\nc = d['calibration_load_cells']; raw, true = c['bridge_raw'], c['true_channel_loads']; basis = m._bridge_basis(true)\\ncoef = m._fit_bridge(raw, true); resid = raw - (basis*coef).sum(-1)\\nclean = np.linalg.norm(resid, axis=1) < 0.001\\nprint('Rejected sweep count:', (~clean).sum(), 'max absolute raw sum deviation on rejected sweeps:', np.max(np.abs(resid[~clean].sum(1))))\\nrng = np.random.default_rng(17); folds = np.array_split(rng.permutation(len(raw)), 8)\\ne_aff, e_cyc, e_rat = [np.zeros_like(raw) for _ in range(3)]\\nfor h in folds:\\n    keep = np.ones(len(raw), bool); keep[h] = False\\n    b = m._fit_bridge(raw[keep], true[keep]); fitted = m._channel_loads(raw[h[clean[h]]], b)\\n    e_cyc[h[clean[h]]] = fitted - true[h[clean[h]]]\\n    affine = np.linalg.lstsq(np.c_[raw[keep], np.ones(sum(keep))], true[keep], rcond=None)[0]\\n    e_aff[h] = np.c_[raw[h], np.ones(len(h))] @ affine - true[h]\\n    good = keep & (np.linalg.norm(raw - (basis*b).sum(-1), axis=1) < 0.001)\\n    # Test saturating adjacent-channel difference, nested around the cyclic cubic model.\\n    def forward(v, b, sat):\\n        B = m._bridge_basis(v)\\n        out = (B*b).sum(-1)\\n        return out + b[:,4]*B[...,4]*(1/(1+sat*(B[...,1]-B[...,3])**2)-1)\\n    p = least_squares(lambda p: (forward(true[good],p[:24].reshape(4,6),p[24:])-raw[good]).ravel(), np.r_[b.ravel(), np.zeros(4)], bounds=(np.r_[np.full(24,-np.inf),np.zeros(4)], np.full(28,np.inf)), gtol=1e-10).x\\n    for j,v in zip(h[clean[h]], fitted):\\n        e_rat[j] = least_squares(lambda v: forward(v,p[:24].reshape(4,6),p[24:])-raw[j],v,gtol=1e-12).x - true[j]\\nfor mask,name in [(clean & (np.count_nonzero(true,axis=1)==1),'single'),(clean & (np.count_nonzero(true,axis=1)==4),'mixed'),(clean & (np.max(abs(true),axis=1)>1.25),'extreme')]:\\n    print(name,int(mask.sum()),'axial RMSE affine/cyclic/rational',*[f'{np.sqrt(np.mean(e[mask].sum(1)**2)):.8g}' for e in (e_aff,e_cyc,e_rat)],'cyclic max channel',np.max(np.abs(e_cyc[mask])))\\nentries=json.loads(Path('/tmp/hegel_continual_archive/archive_apparatus_log.json').read_text()); traces=np.array([e['facility_telemetry_trace'] for e in entries]); labels=[e['completed_short_name'] for e in entries[:-1]]\\nfor cols in ([1,4,7],[2],[5],[1,2,4,5,7]):\\n    levels=np.median(traces[:,:,cols],axis=1); dist=np.linalg.norm(levels[:-1]-levels[-1],axis=1); print('lineage channels',cols,dict(zip(labels,dist.round(4))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/m98_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: audit whether a saturating contrast improves the cyclic cubic bridge and whether separate apparatus channels agree on the lineage; prior held-out clean-sweep axial RMSE was 0.000159.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift operators, or within-batch balanced accuracy\",\n      \"rejected_reason\": \"The measured outputs are continuous strain and strain rate; the supplied model and data have no relay, stochastic drift operator, or classification labels. Leave-one-lab-out regression is the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Compare calibration alternatives on held-out single-channel, mixed-channel, and extreme sweeps. A meaningful improvement on the worst slice would justify changing the bridge. Separating the apparatus channels tests whether the closest lineage depends on pooling signals that disagree.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "70ef73b5376d8de01d1e9b662efdaa23b7751ee99cb4e58400ee466a313987da",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37520.16,
+      "usage_known": true,
+      "prompt_tokens": 33670,
+      "cached_tokens": 0,
+      "completion_tokens": 1452
+    }
+  ]
+}

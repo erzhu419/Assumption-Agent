@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b8664d6b13d4521acc5f3a8cce5d0c0",
+  "call_seq": 8,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T14:09:59.851478+00:00",
+  "ended_at_utc": "2026-11-27T14:10:37.918075+00:00",
+  "request_sha256": "a0916da7d3b13e83043352b3c88539107499eee72ec569111504820f13cb7c72",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50727,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29291,
+    "cached_tokens": 11136,
+    "completion_tokens": 1385
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\nfrom scipy.optimize import least_squares\\nm=runpy.run_path('/holdout_task/batch_solver.py'); p=pickle.load(open('public_batch.pkl','rb'))[0]; d=p['dataset']; a=p['campaign_diagnostics']; out=m['solve_batch'](d); tau=out['estimated_taus']; th=out['hereditary_weights']; t=d['eval_times']; cal=m['_stress_calibration'](d['calibration_load_cells']); c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; mag=np.max(abs(y),1); shifted=mag>cal[1]; ids=np.arange(len(x)); pairs=m['_BRIDGE_PAIRS']\\nfor name in ('current','pairwise-square','three-way','rational'):\\n pred=np.empty_like(y)\\n for j,(i,k) in enumerate(pairs):\\n  prod=x[:,i]*x[:,k]; u,v=x[:,i]+x[:,k],x[:,i]-x[:,k]; z=x[:,j]; base=np.c_[np.ones(len(x)),x,z**3,prod,shifted]\\n  add={'current':[], 'pairwise-square':[u*u,v*v], 'three-way':[z*prod], 'rational':[z/(1+u*u),prod/(1+v*v)]}[name]; D=np.column_stack([base,*add])\\n  for fold in range(5):\\n   mask=ids%5==fold; pred[mask,j]=D[mask]@np.linalg.lstsq(D[~mask],y[~mask,j],rcond=None)[0]\\n e=abs(pred-y); print('bridge held-out',name,'regular max/shifted max',*[float(e[k].max()) for k in (~shifted,shifted)],'regular channel RMSE',np.sqrt(np.mean(e[~shifted]**2,0)))\\nX=m['_aligned_features'](a,a)[:len(a['lab_id'])]; hold=m['_channel_loads'](a['hold_channel_raw'],cal).sum(-1); past=m['_channel_loads'](a['past_channel_raw'],cal).sum(-1); pred,rate=m['_deployment'](tau,th,t,(past,hold,X)); ec=pred-(a['strain_curves_obs']-a['strain_0'][:,None]); er=rate-a['instant_rate_obs']; lab=a['lab_id']; drift=X@th[2:]; u=-np.expm1(-t[:,None]/tau)-t[:,None]/tau; pair=hold-past[:,-1]; hold_s=hold/np.median(abs(hold)); late=np.arange(len(t))>=len(t)//2\\n# These residual terms preserve the independently verified initial-rate boundary.\\nfor name,C in [('archive',None),('pairwise interaction',u[None,:,:]*(drift*pair)[:,None,None]),('rational load modulation',u[None,:,:]*(drift*(1/(1+hold_s**2)-.5))[:,None,None]),('three-way interaction',u[None,:,:]*(drift*pair*hold_s)[:,None,None])]:\\n e=ec.copy()\\n if C is not None:\\n  for j in np.unique(lab):\\n   k=lab==j\\n   b=least_squares(lambda b:((ec[~k]+C[~k]@b)/.018).ravel(),np.zeros(2),loss='soft_l1').x\\n   e[k]+=C[k]@b\\n print('chamber LOLO',name,'worst lab median',max(np.median(abs(e[lab==j])) for j in np.unique(lab)),'worst late lab median',max(np.median(abs(e[lab==j][:,late])) for j in np.unique(lab)))\\nfor key in ('lab_id','stratum'):\\n print('signed residual location by',key,[(int(j),float(np.median(ec[a[key]==j])),float(np.median(er[a[key]==j]))) for j in np.unique(a[key])])\\nprint('deployment/diagnostic stress range',[(float(v.min()),float(v.max())) for v in (m['_channel_loads'](d['test']['hold_channel_raw'],cal).sum(-1),hold)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full reset with archived forced drift -> H2 retain it unless a load-dependent term improves held-out chamber slices; current worst-lab median absolute errors are 0.00976 for strain and 0.01056 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classifier, relay, or stochastic-control checks\",\n      \"rejected_reason\": \"This is continuous rheology regression with no class labels, relay states, or stochastic-control operator. Lab and stratum residuals are the relevant nuisance checks.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted pairwise, three-way, or rational terms improve held-out bridge errors or late-horizon chamber errors without changing the initial-rate boundary. Check signed residuals by lab and stratum for a systematic offset hidden by pooled errors.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "07ca74902a01367049febb01b2b2df313e169b2a4da1c1625847140d16179195",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38023.02,
+      "usage_known": true,
+      "prompt_tokens": 29291,
+      "cached_tokens": 11136,
+      "completion_tokens": 1385
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6ec58ab1b06b426ba2a8e9376a61337c",
+  "call_seq": 7,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:56:46.453162+00:00",
+  "ended_at_utc": "2026-11-27T13:57:21.824533+00:00",
+  "request_sha256": "48cbe0c371e177d931514fe347568cf9153f385f8f0245e869dcf73aae4ca113",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39198,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23987,
+    "cached_tokens": 5504,
+    "completion_tokens": 1246
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _invert\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\na = _basis(x); ids = np.arange(len(x)); spike = np.max(abs(y),axis=1)>6\\n# Alternative denominators are fit using only each outer training fold.\\n# Include all channel axes and pairwise sums and differences as directions.\\ndirs = list(np.eye(4))\\nfor i in range(4):\\n    for j in range(i+1,4):\\n        for s in (-1,1):\\n            dirs.append((np.eye(4)[i]+s*np.eye(4)[j])/np.sqrt(2))\\nq2 = (x @ np.array(dirs).T)**2\\nrng = np.random.default_rng(942)\\nbase, rational, extrema = [], [], []\\nfor held in np.array_split(rng.permutation(ids), 5):\\n    tr = np.setdiff1d(ids, held); clean = tr[~spike[tr]]; te = held[~spike[held]]\\n    b = _fit_bridge(x[tr], y[tr]); err = a[te] @ b-y[te]; base.extend(np.max(abs(err),axis=1)); extrema.extend(np.max(abs(_invert(y[te], b)-x[te]),axis=1))\\n    e = np.empty_like(err)\\n    for ch in range(4):\\n        keep = b[:,ch] != 0; p = a[:,keep]\\n        # Compare candidates on inner folds; a nonnegative denominator avoids poles.\\n        def fit_predict(train, test, d):\\n            yy = y[train,ch]; z = q2[train,d]; pp = p[train]\\n            fit = np.linalg.lstsq(np.column_stack((pp,-yy*z)), yy, rcond=None)[0]\\n            if fit[-1] < 0:\\n                return p[test] @ np.linalg.lstsq(pp, yy, rcond=None)[0]\\n            return (p[test] @ fit[:-1])/(1+fit[-1]*q2[test,d])\\n        inner = np.array_split(rng.permutation(clean), 3)\\n        scores = [sum(np.sum((fit_predict(np.setdiff1d(clean,v),v,d)-y[v,ch])**2) for v in inner) for d in range(len(dirs))]\\n        e[:,ch] = fit_predict(clean,te,int(np.argmin(scores)))-y[te,ch]\\n    rational.extend(np.max(abs(e),axis=1))\\nprint('Measured clean-row OOF abs p95 and max (polynomial, rational):', [np.percentile(v,[95,100]).tolist() for v in (base,rational)])\\nprint('Worst held-out inverse error:', max(extrema))\\nassert max(extrema)<.002\\nclean_c = dict(c,bridge_raw=y[~spike],true_channel_loads=x[~spike]); clean_ds = dict(ds,calibration_load_cells=clean_c)\\nactual, clean_only = solve_batch(ds), solve_batch(clean_ds)\\nfor key in ('estimated_taus','hereditary_weights','predicted_strain','initial_rate_pred'):\\n    first=np.asarray(actual[key]); second=np.asarray(clean_only[key]); assert np.isfinite(first).all(); print('Downstream max difference from excluding measured gross spikes:',key,float(np.max(abs(first-second))))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 quadratic coupling with per-channel cubics → H2 test a rational correction along channel axes and pairwise sums and differences; the latest worst held-out load error is 0.0006409.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, drift, and within-batch classification checks\",\n      \"rejected_reason\": \"This deliverable is a static calibration from paired four-channel measurements; it has no relay states, time-evolution operator, or classification outcome.\"\n    }\n  ],\n  \"rationale\": \"Nested held-out comparison checks whether a rational correction explains residual structure well enough to justify changing the bridge. Removing measured spike rows and comparing downstream outputs checks whether residual calibration sensitivity propagates into a deliverable metric.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f048f53564284de6ce9b188a970faa1acec2fa769b8b856413487afe6e54416d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35336.36,
+      "usage_known": true,
+      "prompt_tokens": 23987,
+      "cached_tokens": 5504,
+      "completion_tokens": 1246
+    }
+  ]
+}

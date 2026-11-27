@@ -1,0 +1,170 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m98_c02_s00_3f63c02414bd",
+    "source_hash": "3f63c02414bd8ea874bd99622bb4bec8ecbe317923990299298327185b033e91",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m98_c02_s00__blind_continual_campaign",
+    "task_id": "alpha_m98_c02_s00__blind_continual_campaign",
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/rheology_artifact_cv.py",
+        "archived_relpath": "producers/tmp__rheology_artifact_cv.py",
+        "bytes": 2162,
+        "sha256": "05b9515f421ca5f8a87e84004d8fb398157e683c9536470d50df214b534a92fe"
+      },
+      {
+        "container_path": "/tmp/rheology_cv.py",
+        "archived_relpath": "producers/tmp__rheology_cv.py",
+        "bytes": 2878,
+        "sha256": "9dc3c4ea547bab251da4a3925b5bbe3f1fcea874e33464010507711df2fa03c1"
+      },
+      {
+        "container_path": "/tmp/rheology_final_witness.py",
+        "archived_relpath": "producers/tmp__rheology_final_witness.py",
+        "bytes": 2541,
+        "sha256": "d5e20a71e6eb8079c0dbca34ab96a37bc19d230e16f1dde2f32ed3ac1cbb7d5b"
+      },
+      {
+        "container_path": "/tmp/rheology_gate.py",
+        "archived_relpath": "producers/tmp__rheology_gate.py",
+        "bytes": 3387,
+        "sha256": "d404d583d5c5e267760aae7a149b8242ed13cbca3bcf58fe52b4546eeab14b48"
+      },
+      {
+        "container_path": "/tmp/rheology_missing.py",
+        "archived_relpath": "producers/tmp__rheology_missing.py",
+        "bytes": 762,
+        "sha256": "9ceed83bff67a95ec635b1a1c82584b544f26b659b1065d4ead5b99eba22fbe9"
+      },
+      {
+        "container_path": "/tmp/rheology_probe.py",
+        "archived_relpath": "producers/tmp__rheology_probe.py",
+        "bytes": 2796,
+        "sha256": "be8f7d032010f8cb05f1ca90fec01f11a1f84728cff5bf06adfeac7e3a9c15ce"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nfrom pathlib import Path\np=pickle.load(open('public_batch.pkl','rb'))\ndef show(v,key='',d=0):\n if isinstance(v,dict):\n  print(' '*d,key,'dict',list(v));\n  if d<4:\n   for k,w in v.items(): show(w,k,d+1)\n elif isinstance(v,np.ndarray):\n  print(' '*d,key,v.shape,v.dtype, str(v if v.size<=35 else v[:2]).replace('\\n',' ')[:300])\n elif isinstance(v,(list,tuple)):\n  print(' '*d,key,type(v).__name__,len(v),str(v[:2])[:300])\n else: print(' '*d,key,repr(v)[:500])\nshow(p)\na=Path('/tmp/hegel_continual_archive'",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nD=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']\nfor k,v in D.items():\n print(k)\n for j,x in (v.items() if isinstance(v,dict) else [('',v)]):\n  if isinstance(x,np.ndarray):\n   print(' ',j,x.shape, ('unique '+str(np.unique(x)[:24])) if x.ndim==1 and len(np.unique(x))<25 else str(x[:2]).replace('\\n',' ')[:240], 'missing', np.sum(~np.isfinite(x)) if x.dtype.kind in 'fiu' else '')\n  else: print(' ',j,str(x)[:800])\nc=D['calibration_load_cells']; L=c['true_channel_loads']; R=c['bridge_raw']; n=len(L); rng=np.random.default_rng(",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb'))[0]; d=p['dataset']; print('item metadata',[(k,str(v)[:600]) for k,v in p.items() if k!='dataset']); print('dataset keys',list(d))\nfor name in ('train','test','chamber_verification_trials'):\n a=d[name]; print(name,list(a) if a else a)\n if not a: continue\n for k,x in a.items():\n  if isinstance(x,np.ndarray):\n   print(k,x.shape, 'range',np.nanmin(x,axis=0).round(4).tolist() if x.ndim==2 and x.shape[1]<=4 else round(np.nanmin(x).item(),4),np.nanmax(x,axis=0).round(4).tolist() if x.ndim==2 an",
+      "cat > /tmp/rheology_probe.py <<'PY'\nimport pickle, numpy as np\nfrom scipy.optimize import least_squares\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; dt=D['past_dt']; t=np.r_[0.,D['eval_times']]; cal=D['calibration_load_cells']; B=np.linalg.lstsq(np.c_[np.ones(len(cal['bridge_raw'])),cal['bridge_raw']],cal['true_channel_loads'],rcond=None)[0]\ndef prep(a):\n g=a['lab_id']; s=a['stratum']; x=a['coupon_features_raw'].copy(); ref=a['ref_coupons']; _,inv,c=np.unique(np.c_[g,s],axis=0,return_counts=True,return_inverse=True); w=1/c[inv]; w/=w.mean()\n for lab in np.unique(g)",
+      "cat > /tmp/rheology_cv.py <<'PY'\nfrom rheology_probe import D, B, t, design\nimport numpy as np\nfrom scipy.optimize import least_squares\ntrain=D['train']; pilot=D['chamber_verification_trials']; test=D['test']\n\ndef panel(pool):\n g=np.concatenate([a['lab_id'] for a in pool]); r=np.concatenate([a['ref_coupons'] for a in pool]); return {lab:(np.median(r[g==lab].mean(0)),np.median(r[g==lab].std(0))) for lab in np.unique(g)}\n\ndef prep(a,ref,fill=None):\n g=a['lab_id']; s=a['stratum']; x=a['coupon_features_raw'].copy(); _,i,n=np.unique(np.c_[g,s],axis=0,return_counts=True,return_inverse=True); w=1/n[i",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nfrom pathlib import Path\np=json.loads(Path('public_asset_index.json').read_text())\nprint(json.dumps(p,indent=2)[:7500])\na=Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); print('apparatus log present:', a.exists())\nPY\ncat > /tmp/rheology_missing.py <<'PY'\nfrom rheology_cv import *\nrefs=[panel([train]),panel([pilot])]\natr,ft=prep(train,refs[0]); ap,fp=prep(pilot,refs[1]); zt=fit([(atr,np.r_[.012,np.full(len(t)-1,.027)])]); zp=fit([(ap,np.r_[.0025,np.full(len(t)-1,.005)])]); print('train fit',zt,'pilot fit',zp,'fills',ft,fp)\nfor na",
+      "cat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Calibrated two-branch creep model for a characterization campaign.\"\"\"\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _calibrate(calibration):\n    raw = np.asarray(calibration['bridge_raw'], dtype=float)\n    true = np.asarray(calibration['true_channel_loads'], dtype=float)\n    return np.linalg.lstsq(np.c_[np.ones(len(raw)), raw], true, rcond=None)[0]\n\n\ndef _axial(raw, bridge):\n    return (np.asarray(raw) @ bridge[1:] + bridge[0]).sum(axis=-1)\n\n\ndef _prepare(group, bridge, *, reference=None):\n    labs = np.asarray(group['lab_id'])",
+      "cat > /tmp/rheology_artifact_cv.py <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py')\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\nfor name in ('train','chamber_verification_trials','test'):\n a=d[name]; q=a.get('aux_chamber_telemetry'); print('telemetry',name,type(q).__name__,str(q)[:950])\n print('lab counts',np.unique(a['lab_id'],return_counts=True),'missing rows',np.sum(np.any(~np.is",
+      "cat > /tmp/rheology_final_witness.py <<'PY'\nimport importlib.util\nimport pickle\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\nb = m._calibrate(d['calibration_load_cells'])\ntr, p = [d[k] for k in ('train', 'chamber_verification_trials')]\ndt, t = d['past_dt'], d['eval_times']\ntrain = m._prepare(tr, b)\nr = tr['ref_coupons']\nref = {g: (np.median(r[tr['lab_id']==g].mean(0)), np.median(r[tr['lab",
+      "cat > /tmp/rheology_gate.py <<'PY'\nimport runpy\nimport numpy as np\nfrom scipy.optimize import least_squares\nz = runpy.run_path('/tmp/rheology_final_witness.py', run_name='setup')\nm,d,b,dt,t,tr,p,take = [z[k] for k in ('m','d','b','dt','t','tr','p','take')]\nc=d['calibration_load_cells']; R=c['bridge_raw']; L=c['true_channel_loads'].sum(axis=1)\ndef basis(r,kind):\n    parts=[np.ones(len(r)),*r.T]\n    if kind in ('quadratic','rational'):\n        parts.extend(r[:,i]*r[:,j] for i in range(4) for j in range(i,4))\n    if kind=='cubic':\n        parts.extend(r[:,i]*r[:,j]*r[:,k] for i in range(4) for j ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nwith open('/holdout_task/public_batch.pkl','rb') as f:\n    d = pickle.load(f)[0]['dataset']\np = d['chamber_verification_trials']; t = np.asarray(d['eval_times']); shift = .18\nshifted = {**d, 'chamber_verification_trials': {**p, 'instant_rate_obs': p['instant_rate_ob"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__rheology_gate.py",
+      "primary_producer_container_path": "/tmp/rheology_gate.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_factored_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 5951,
+        "sha256": "0455079efdbced24500aaee606d0c84518f1a90ae2f032d29e525147e8716661",
+        "content_addressed_ref": "content_addressed_blobs/0455079efdbced24500aaee606d0c84518f1a90ae2f032d29e525147e8716661.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "subset",
+      "stats",
+      "panel",
+      "sub",
+      "report",
+      "take",
+      "basis",
+      "summary"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_factored_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "3f63c02414bd8ea874bd99622bb4bec8ecbe317923990299298327185b033e91",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', '/holdout",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "3f63c02414bd8ea874bd99622bb4bec8ecbe317923990299298327185b033e91",
+        "expected_candidate_sha256": "3f63c02414bd8ea874bd99622bb4bec8ecbe317923990299298327185b033e91",
+        "computed_candidate_sha256": "3f63c02414bd8ea874bd99622bb4bec8ecbe317923990299298327185b033e91",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 5951
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_3f63c024"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "subset",
+        "code": "def subset(a, mask):\n    return {k: v[mask] for (k, v) in a.items() if isinstance(v, np.ndarray) and v.ndim and (len(v) == len(mask))}"
+      },
+      {
+        "name": "stats",
+        "code": "def stats(e):\n    return (np.median(abs(e[:, 0])), np.median(abs(e[:, 1:])), np.median(abs(e[:, -1])))"
+      },
+      {
+        "name": "panel",
+        "code": "def panel(pool):\n    g = np.concatenate([a['lab_id'] for a in pool])\n    r = np.concatenate([a['ref_coupons'] for a in pool])\n    return {lab: (np.median(r[g == lab].mean(0)), np.median(r[g == lab].std(0))) for lab in np.unique(g)}"
+      },
+      {
+        "name": "sub",
+        "code": "def sub(a, idx):\n    return tuple((x[idx] for x in a))"
+      },
+      {
+        "name": "report",
+        "code": "def report(e):\n    return np.array([np.median(abs(e[:, 0])), np.median(abs(e[:, 1:])), np.max(np.median(abs(e[:, 1:]), axis=1)), np.median(abs(e[:, -1]))]).round(5)"
+      },
+      {
+        "name": "take",
+        "code": "def take(a, j):\n    return {k: v[j] for (k, v) in a.items() if isinstance(v, np.ndarray) and v.ndim and (len(v) == len(j))}"
+      },
+      {
+        "name": "basis",
+        "code": "def basis(r, kind):\n    parts = [np.ones(len(r)), *r.T]\n    if kind in ('quadratic', 'rational'):\n        parts.extend((r[:, i] * r[:, j] for i in range(4) for j in range(i, 4)))\n    if kind == 'cubic':\n        parts.extend((r[:, i] * r[:, j] * r[:, k] for i in range(4) for j in range(i, 4) for k in range(j, 4)))\n    return np.column_stack(parts)"
+      },
+      {
+        "name": "summary",
+        "code": "def summary(rows):\n    return np.round(np.max(rows, axis=0), 6)"
+      }
+    ]
+  }
+}

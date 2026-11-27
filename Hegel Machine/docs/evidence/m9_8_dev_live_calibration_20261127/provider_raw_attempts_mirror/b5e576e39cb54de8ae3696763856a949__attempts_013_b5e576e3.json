@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b5e576e39cb54de8ae3696763856a949",
+  "call_seq": 13,
+  "stage_subdir": "m98_run_20261127T133321Z__dev_alpha_m98_00__Hegel_FactoredMechanismGraph__dev_alpha_m98_00_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:45:34.828215+00:00",
+  "ended_at_utc": "2026-11-27T13:46:03.933845+00:00",
+  "request_sha256": "bf94a287e53664b5d9e7333d52a82d8a07b711c08f2246b5edf2ead7f2070d27",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 85992,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 43394,
+    "cached_tokens": 9600,
+    "completion_tokens": 1140
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_batch.pkl','rb'))[0]; d=i['dataset']; q=i['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; c=m._stress_calibration(d['calibration_load_cells']); H=q['hold_channel_raw']@c[:-1]+c[-1]; ptrain,ptest=m._prepare(d); out=m.solve_batch(d); tau,b=out['estimated_taus'],out['hereditary_weights']; labs=q['lab_id']; missing=np.isnan(q['coupon_features_raw']).any(1); Y=np.c_[q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs']]\\ndef err(e):return np.round([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),np.max(np.sqrt(np.mean(e[:,:-1]**2,axis=1))),np.max(abs(e[:,-1]))],5)\\ndef response(X):return np.column_stack(m._chamber_response(tau,t,H,X,b))\\nfor name,X in [('matched chamber panel',m._aligned_features(q,q)[:len(H)]),('chamber plus deployment panel',m._aligned_features(q,te)[:len(H)]),('diagnostics as deployment',m._aligned_features(tr,q)[len(tr['lab_id']):])]:\\n e=response(X)-Y; print(name,'all',err(e),'complete',err(e[~missing]),'missing',err(e[missing]),'labs',[(int(l),err(e[labs==l]).tolist()) for l in np.unique(labs)])\\ndef subset(p,mask):return tuple(a[mask] for a in p)\\nfor l in np.unique(tr['lab_id']):\\n k=tr['lab_id']!=l; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; tau2,b2=m._fit(dt,t,subset(ptrain,k),y[k],r[k]); A,B=m._design(tau2,dt,t,subset(ptrain,~k)); e=np.c_[A@b2-y[~k],B@b2-r[~k]]; print('bench held-out lab',int(l),'tau',tau2.round(5),'max theta shift',round(np.max(abs(b2-b)),5),'curve/rate median abs',np.round([np.median(abs(e[:,:-1])),np.median(abs(e[:,-1]))],5))\\nassert all(np.all(np.isfinite(v)) for v in out.values()); assert .05<tau[0]<tau[1]<25\\n_,h,x=ptest; step=1e-6; base,rate=m._chamber_response(tau,np.array([0.,step]),h,x,b); assert np.allclose(base[:,0],0) and np.allclose(base[:,1]/step,rate,rtol=2e-6)\\nprint('deployment derivative max discrepancy',np.max(abs(base[:,1]/step-rate)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 direct bench transfer -> H2 hold-stress reset and drift-driven branch amplitudes; complete chamber coupons give strain/rate RMSE 0.00493/0.00322 under matched alignment.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace joint deployment alignment with chamber-only alignment\",\n      \"rejected_reason\": \"The entry point has no diagnostic panel, and the task explicitly specifies train-plus-test alignment.\"\n    }\n  ],\n  \"rationale\": \"Measure the saved law separately on complete and incomplete chamber coupons under matched and deployment-style alignment. A gap between those panels would identify alignment sensitivity rather than a reason to add memory terms. Held-out bench labs test material-fit stability, and the finite-difference check verifies that the separately returned initial rate matches the strain law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "700b27bb5675045dd87f1a1fb4bce0f8760988c95379310ae68621b07c424501",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29068.44,
+      "usage_known": true,
+      "prompt_tokens": 43394,
+      "cached_tokens": 9600,
+      "completion_tokens": 1140
+    }
+  ]
+}

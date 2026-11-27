@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bc56a4c9c5be4016ae8a33acfbe80f90",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_alpha_m98_00__Flat_LatestFirst__dev_alpha_m98_00_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m98_00_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:59:17.029364+00:00",
+  "ended_at_utc": "2026-11-27T12:59:48.635977+00:00",
+  "request_sha256": "598d850f0f213ecd5fb58e156a29aff674d31afd71384e5f8b2cf95e2b93b08b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 68159,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35811,
+    "cached_tokens": 11136,
+    "completion_tokens": 1172
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nexport OPENBLAS_NUM_THREADS=1\\nsed -n '1,130p' /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; L,R=c['true_channel_loads'],c['bridge_raw']; e0=np.empty_like(R); e1=np.empty_like(R); s0=np.empty(len(R)); s1=np.empty(len(R))\\n# Compare the calibrated polynomial to a challenger with rational pair-sum/difference response terms. Each residual fit and outlier mask uses only the training sweeps.\\ndef extra(x):\\n z=np.column_stack([x[:,i]+sign*x[:,j] for i in range(4) for j in range(i+1,4) for sign in (-1,1)])\\n return z/(1+z*z)\\nfrom scipy.optimize import least_squares\\nfor k in range(5):\\n q=np.arange(len(L))%5==k; b=m._calibration({'true_channel_loads':L[~q], 'bridge_raw':R[~q]}); E=R[~q]-m._bridge_basis(L[~q])@b; keep=np.max(abs(E),axis=1)<.01\\n X=np.c_[m._bridge_basis(L[~q][keep]),extra(L[~q][keep])]; B=np.linalg.lstsq(X,R[~q][keep],rcond=None)[0]; e0[q]=m._bridge_basis(L[q])@b-R[q]; e1[q]=np.c_[m._bridge_basis(L[q]),extra(L[q])]@B-R[q]\\n for i in np.flatnonzero(q):\\n  s0[i]=m._stress(R[i:i+1],b)[0]-L[i].sum()\\n  if np.max(abs(e0[i]))<.01:\\n   def res(x):\\n    x=x[None,:]; return (np.c_[m._bridge_basis(x),extra(x)]@B-R[i])[0]\\n   s1[i]=least_squares(res,np.linalg.solve(b[1:5].T,R[i]-b[0]),gtol=1e-12).x.sum()-L[i].sum()\\nclean=np.max(abs(e0),axis=1)<.01\\nfor name,e,s in [('polynomial',e0,s0),('rational challenger',e1,s1)]: print(name,'clean count',sum(clean),'raw RMSE',np.sqrt(np.mean(e[clean]**2)),'stress RMSE/max',np.sqrt(np.mean(s[clean]**2)),np.max(abs(s[clean])))\\ntr,te,pi=(d[k] for k in ('train','test','chamber_verification_trials')); dt,t=d['past_dt'],d['eval_times']; cal=m._calibration(c); x,_=m._features(tr,te); a=m._inputs(tr,x,cal); tau,theta,_=m._material(tr,a,dt,t); xp,=m._features(pi,balanced=False); b=m._inputs(pi,xp,cal); y,r=m._predict(b,dt,t,tau,theta); e=y+pi['strain_0'][:,None]-pi['strain_curves_obs']; q=r-pi['instant_rate_obs'];\\nfor field in ('lab_id','stratum'):\\n for level in np.unique(pi[field]):\\n  i=pi[field]==level; print('pilot',field,level,'early/late/rate RMSE',*[np.sqrt(np.mean(z*z)) for z in (e[i,:len(t)//2],e[i,len(t)//2:],q[i])],'signed curve/rate mean',e[i].mean(),q[i].mean())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 apparent chamber mismatch -> H2 nonlinear bridge calibration explains it; worst held-out pilot-lab RMSE is 0.00456 strain and 0.00343 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay-mode, Fokker–Planck/HJB, or balanced-accuracy checks\",\"rejected_reason\":\"The supplied measurements are continuous rheology outcomes with no relay state, stochastic control operator, or class label.\"}],\"rationale\":\"The rational challenger tests whether the bridge still lacks pairwise response terms; adopt it only if held-out total-stress errors show a meaningful improvement. Pilot lab, stratum, and time slices test whether the small pooled residual hides a coherent nuisance or drift effect that would justify a chamber correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5d2234728cb85f9eb2a6a31e612e92d764700e997d366354e1914a04b02dcd39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31562.3,
+      "usage_known": true,
+      "prompt_tokens": 35811,
+      "cached_tokens": 11136,
+      "completion_tokens": 1172
+    }
+  ]
+}

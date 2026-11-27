@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a13134e74764cec8560bc014879b3e8",
+  "call_seq": 9,
+  "stage_subdir": "m98_run_20261127T124624Z__stageS__dev_beta_m98_00__att1__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T12:51:33.383745+00:00",
+  "ended_at_utc": "2026-11-27T12:52:12.583101+00:00",
+  "request_sha256": "c906f982c987616b93d88b607fa82bff498811c03bc4164eeb14109e561e6854",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54235,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30544,
+    "cached_tokens": 11136,
+    "completion_tokens": 1570
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_public_batch.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\nfrom scipy.optimize import minimize\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('batch_solver', root / 'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith (root / 'public_batch.pkl').open('rb') as f:\\n    batch = pickle.load(f)\\nfor index, item in enumerate(batch):\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    x, raw = map(np.asarray, (c['ref_rosette'], c['raw_rosette']))\\n    folds = np.arange(len(x)) % 4\\n    corrected = np.empty_like(x)\\n    rational = np.empty_like(x)\\n    for fold in range(4):\\n        t = folds != fold\\n        fit = m._calibration({'ref_rosette': x[t], 'raw_rosette': raw[t], 'single_bank_sweeps': c.get('single_bank_sweeps', {})})\\n        corrected[~t] = fit(raw[~t]) - x[~t]\\n        for j in range(4):\\n            q, a = m._rational_fit(x[t], (raw-x)[t, j])\\n            rational[~t, j] = m._rational_predict(x[~t], q, a) + x[~t, j] - raw[~t, j]\\n    score = lambda e: float(np.max([np.sqrt(np.mean(e[folds == k]**2, axis=0)) for k in range(4)]))\\n    print('study', index, 'worst fold/channel sweep RMSE, identity / nested selected inverse / forced rational forward:', score(raw-x), score(corrected), score(rational))\\n    source = np.asarray(s['source_modes'])\\n    unmix = m._calibration(c)\\n    response, fields = m._response(s, np.ones(8), source)\\n    for j, p in enumerate(s.get('reference_tracer_pulses') or []):\\n        e = (response @ p['w_pulse'] - unmix(p['y_pulse_raw'])).reshape(len(s['mu_shifts']), -1, 4)\\n        print('pulse', j, 'worst shift/channel RMSE', np.sqrt(np.mean(e**2, axis=1)).max(), 'worst row', np.max(abs(e)))\\n    Z = s['Z_nuisance']; y = unmix(s['y_obs_raw']); nr = s['nuisance_ridge']\\n    rr = s['source_ridge']; cap = s['u_box']; budget = s['total_budget']\\n    P = np.eye(len(Z)) - Z @ np.linalg.solve(Z.T @ Z + nr * np.eye(Z.shape[1]), Z.T)\\n    X, Y = P @ response, P @ y\\n    def objective(w):\\n        r = X @ w - Y\\n        return float((r @ r + rr * (w @ w)) / 2)\\n    def grad(w):\\n        return X.T @ (X @ w - Y) + rr*w\\n    out = m.solve_batch(s); w = out['weights']; cert = out['kkt_certificate']\\n    oracle = minimize(objective, np.full(len(w), budget / len(w)), jac=grad, method='SLSQP', bounds=[(0, cap)] * len(w), constraints=[{'type': 'eq', 'fun': lambda p: p.sum()-budget, 'jac': lambda p: np.ones_like(p)}], options={'ftol': 1e-14, 'maxiter': 300})\\n    lo, hi = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper'])\\n    stationarity = np.max(abs(grad(w) - cert['nu_sum'] - lo + hi))\\n    gap = cert['primal_objective'] - cert['dual_lower_bound']\\n    field_error = np.max(abs(out['terminal_field'] - np.tensordot(oracle.x, fields, axes=1)))\\n    print('public oracle:', {'success': oracle.success, 'budget_error': abs(w.sum()-budget), 'weight_max_error': np.max(abs(w-oracle.x)), 'terminal_field_max_error': field_error, 'certificate_stationarity': stationarity, 'certificate_gap': gap})\\n    assert oracle.success and abs(w.sum()-budget) < 1e-9 and np.min(w) >= -1e-10 and np.max(w) <= cap + 1e-10\\n    assert abs(objective(w)-cert['primal_objective']) < 1e-9 and abs(gap) < 1e-9 and stationarity < 1e-9\\n    assert np.max(abs(w-oracle.x)) < 1e-5 and field_error < 1e-5\\n    print('nuisance rank:', np.linalg.matrix_rank(Z), 'ridge projection algebra residual:', np.max(abs(P @ Z - nr * Z @ np.linalg.inv(Z.T @ Z + nr*np.eye(Z.shape[1])))))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_public_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic-only calibration → H2 sweep-selected polynomial or rational calibration; worst synthetic weight error is 1.27e-5, with the independent public-data comparison pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run batch-classification, relay-mode, or HJB checks\",\n      \"rejected_reason\": \"The public study is a continuous steady-state inverse problem with one campaign, no class labels or relay modes, and a specified discrete transport operator.\"\n    }\n  ],\n  \"rationale\": \"Use real sweeps to test whether rational coupling improves held-out calibration, and real pulses to detect wall mismatch by shift and channel. An independent constrained solve checks whether the public weights, terminal field, and certificate agree with the specified nuisance-projected objective. A mismatch would identify which stage needs revision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "e655f5a5785daa081a16cf5becef37521834cec372b89b86296d1c1dd7768237",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39162.95,
+      "usage_known": true,
+      "prompt_tokens": 30544,
+      "cached_tokens": 11136,
+      "completion_tokens": 1570
+    }
+  ]
+}

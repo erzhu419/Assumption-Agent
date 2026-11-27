@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9179ebf5a30f491db1197f0f6aedaaec",
+  "call_seq": 12,
+  "stage_subdir": "m98_run_20261127T124624Z__dev_beta_m98_00__Flat_ConditionalTable_Online__dev_beta_m98_00_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m98_00_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T13:17:26.968545+00:00",
+  "ended_at_utc": "2026-11-27T13:17:55.823372+00:00",
+  "request_sha256": "535dc0b4f9bfc02d50411d2baa3e2a26ca83d7513415c30ea93d904f839a33d5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58233,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29869,
+    "cached_tokens": 9600,
+    "completion_tokens": 993
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('candidate',root+'batch_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_batch.pkl','rb') as f: s=pickle.load(f)[0]['study']\\nsw=s['sensor_calibration_sweeps']; x=sw['ref_rosette']; y=sw['raw_rosette']; b=sw['single_bank_sweeps']; ids=b['bank_id']; xb=np.eye(4)[ids]*b['ref_signal'][:,None]\\ninv,fwd,_=m._calibration(sw)\\nr=fwd(x)-y\\nprint('Gross-offset rows/residuals:', np.flatnonzero(np.max(abs(r),axis=1)>8).tolist(), r[np.max(abs(r),axis=1)>8].round(4).tolist())\\nprint('Clean full-fit RMS by channel:', [float(np.sqrt(np.mean(r[abs(r[:,j])<8,j]**2))) for j in range(4)])\\ndef features(x,j,family):\\n    a=[np.ones(len(x)),*x.T,x[:,j]*x[:,(j+1)%4],x[:,j]**3]\\n    if family=='cross':\\n        a.extend(x[:,p]*x[:,q] for p in range(4) for q in range(p,4) if {p,q}!={j,(j+1)%4})\\n        a.extend(x[:,p]**3 for p in range(4) if p!=j)\\n    if family=='rational':\\n        own=x[:,j]; neigh=x[:,(j+1)%4]\\n        a.extend((own**3/(1+own**2), (own-neigh)/(1+(own+neigh)**2), own*neigh/(1+(own-neigh)**2)))\\n    return np.column_stack(a)\\nfor family in ('baseline','cross','rational'):\\n    errors=[]\\n    for fold in range(5):\\n        hold=np.arange(len(x))%5==fold; out=[]\\n        for j in range(4):\\n            train=(~hold)&(abs(y[:,j])<8); bank=(ids==j)&(abs(b['raw_readout'])<8)\\n            a=features(np.vstack((x[train],xb[bank])),j,family)\\n            target=np.r_[y[train,j],b['raw_readout'][bank]]\\n            c=np.linalg.lstsq(a,target,rcond=None)[0]\\n            test=hold&(abs(y[:,j])<8)\\n            out.append(np.sqrt(np.mean((features(x[test],j,family)@c-y[test,j])**2)))\\n        errors.append(out)\\n    print(family, 'worst fold per channel:', np.max(errors,axis=0), 'aggregate fold RMS:',np.sqrt(np.mean(np.square(errors))))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Open Robin → sealed walls; worst held-out tracer/shift RMSE remains 1.74e-6, with an independent KKT gap of 8.48e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Judge the rosette grammar from pooled residual correlations\",\"rejected_reason\":\"The shared gross-offset cluster dominates those correlations and can mimic missing cross-channel terms.\"}],\"rationale\":\"Test whether cross-channel products or rational terms improve held-out clean calibration sweeps after separating gross offsets. A consistent improvement would justify testing the challenger on tracers; otherwise retain the verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a9ae38a0db9c46d1376ab594adcf42300d20513162dedc9106f27ed1f165cd01",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28814.84,
+      "usage_known": true,
+      "prompt_tokens": 29869,
+      "cached_tokens": 9600,
+      "completion_tokens": 993
+    }
+  ]
+}
