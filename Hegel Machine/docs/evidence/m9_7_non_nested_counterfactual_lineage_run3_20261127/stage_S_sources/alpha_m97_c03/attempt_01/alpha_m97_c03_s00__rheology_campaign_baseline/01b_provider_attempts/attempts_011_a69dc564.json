@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a69dc5646a3a49199d9887b918df85ef",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:43:49.585226+00:00",
+  "ended_at_utc": "2026-11-27T08:44:32.281287+00:00",
+  "request_sha256": "66e44c497345680f18137545c9a85cc4de923d588aaff4424f450e2930b7f381",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 50232,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28252,
+    "cached_tokens": 0,
+    "completion_tokens": 1744
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_s00_solver.py')\\ns = p.read_text()\\nstart = s.index('        archived = _archive_calibration(lab) if len(x) < 2 or emi else None')\\ns = s[:start] + '''        archived = None\\n        if not emi and 3 <= len(x) <= 4 and np.ptp(x) > 0:\\n            # A spike can rotate a sparse fit enough to mask its own residual.\\n            # Do not extrapolate from every pair in an already clean batch.\\n            fit_all = np.polyfit(x, y, 1)\\n            if np.max(np.abs(y - np.polyval(fit_all, x))) > 0.01:\\n                candidates = []\\n                for j in range(len(x)):\\n                    keep = np.arange(len(x)) != j\\n                    if np.ptp(x[keep]) == 0:\\n                        continue\\n                    fit_j = np.polyfit(x[keep], y[keep], 1)\\n                    err = np.abs(y - np.polyval(fit_j, x))\\n                    if err[j] > 3.0 and np.max(err[keep]) <= 0.01:\\n                        candidates.append(j)\\n                if candidates:\\n                    prior = _archive_calibration(lab)\\n                    if prior is not None:\\n                        err = np.abs(y - np.polyval(prior, x))\\n                        j = np.argmax(err)\\n                        if j in candidates and err[j] > 3.0 and np.max(np.delete(err, j)) <= 0.01:\\n                            archived = prior\\n                    elif len(candidates) == 1:\\n                        keep = np.arange(len(x)) != candidates[0]\\n                        x, y = x[keep], y[keep]\\n        if len(x) < 2 or emi:\\n            archived = _archive_calibration(lab)\\n''' + s[start:].split('\\\\n', 1)[1]\\np.write_text(s)\\nPY\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np = '/holdout_task/'\\ns = importlib.util.spec_from_file_location('solver', p+'alpha_m97_c03_s00_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_alpha_m97_c03_s00.pkl','rb') as f: item = pickle.load(f)[0]\\nd = item['dataset']; cal = d['calibration_load_cells']; nominal = m._calibrate(cal)\\ncalls = []\\ndef archive(lab):\\n    calls.append(lab)\\n    return nominal[lab]\\nm._archive_calibration = archive\\nfor count in (0,1,2,3,4,5,10):\\n    clean_max = spike_max = 0.0\\n    for lab in range(4):\\n        ix = np.flatnonzero(cal['lab_id'] == lab)\\n        keep = (cal['lab_id'] != lab) | np.isin(np.arange(len(cal['lab_id'])), ix[:count])\\n        trial = {k: v[keep].copy() for k,v in cal.items()}\\n        calls.clear()\\n        clean_max = max(clean_max, np.max(np.abs(m._calibrate(trial)[lab] - nominal[lab])))\\n        assert calls == ([lab] if count < 2 else []), (count,lab,calls)\\n        if count >= 3:\\n            for row in np.flatnonzero(trial['lab_id'] == lab):\\n                for delta in (-4., -3.05, 3.05, 4.):\\n                    bad = {k: v.copy() for k,v in trial.items()}\\n                    bad['true_stress'][row] += delta\\n                    error = np.max(np.abs(m._calibrate(bad)[lab] - nominal[lab]))\\n                    if error >= 0.01: print('miss',count,lab,row,delta,round(error,6))\\n                    spike_max = max(spike_max, error)\\n    print('rows',count,'clean max',clean_max,'EMI max',spike_max)\\n    assert clean_max < 0.002 and spike_max < 0.002\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Median-slope screening → test explicit single-spike hypotheses on sparse channels; the previous worst coefficient shifts were 1.9372 with three readings and 1.1781 with four.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use archive calibration on sparse channels\",\n      \"rejected_reason\": \"Clean two- and three-reading channels are identifiable in batch and do not meet the archive-use criteria.\"\n    }\n  ],\n  \"rationale\": \"A single spike can tilt a sparse fit enough to evade residual screening. Test leave-one-out hypotheses only when the full sparse fit is inconsistent with the observed calibration precision, and use archive agreement to resolve ambiguous candidates. Stress across all four measured channels to detect missed spikes or unnecessary archive calls before accepting the edit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "04711727a1db47b53bf812e26a7c36919b315e91536d3a82f440a2497bbb7d9c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44793.64,
+      "usage_known": true,
+      "prompt_tokens": 28252,
+      "cached_tokens": 0,
+      "completion_tokens": 1744
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4161b8fbefed4bc7b64a2d6eb33d8a3d",
+  "call_seq": 14,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:05:24.090808+00:00",
+  "ended_at_utc": "2026-11-27T09:06:00.444358+00:00",
+  "request_sha256": "4a02d947ce7dda1b43829e4cd4ffa86d06ce5493fe9fca17d983aa912ca2a495",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 68684,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34210,
+    "cached_tokens": 6784,
+    "completion_tokens": 1476
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c02_batch_03_solver.py')\\ns = p.read_text()\\nold = '            clean = np.abs(y - gain*x - offset) <= 3.0\\\\n'\\nassert s.count(old) == 1\\ns = s.replace(old, old + '''            # With one transient in a small sweep, a fit that includes\\n            # the spike can mask it. Select the most self-consistent\\n            # leave-one-out sweep before testing its omitted row.\\n            if len(x) >= 4:\\n                best_error = np.inf\\n                omitted = None\\n                for k in range(len(x)):\\n                    keep = np.arange(len(x)) != k\\n                    if np.ptp(x[keep]) == 0:\\n                        continue\\n                    g, b = _affine(x[keep], y[keep])\\n                    error = np.max(np.abs(y[keep] - (g*x[keep] + b)))\\n                    if error < best_error:\\n                        best_error = error\\n                        omitted = k\\n                        deleted_error = abs(y[k] - (g*x[k] + b))\\n                if omitted is not None and best_error <= 3.0 < deleted_error:\\n                    clean = np.arange(len(x)) != omitted\\n''')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I /tmp/audit_rheology_b03.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp = importlib.util.spec_from_file_location('solver', 'alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\na = pickle.load(open('public_alpha_m97_c02_batch_03.pkl', 'rb'))[0]\\nd, gt = a['dataset'], a['gt']; sweep = d['calibration_load_cells']; base = m._calibrate(sweep)\\nlookup = m._historical; calls = []\\ndef record(lab):\\n    calls.append(lab)\\n    return lookup(lab)\\nm._historical = record\\nworst = (0., None)\\nfor size in (4, 5, 10):\\n    for lab in range(4):\\n        ix = np.flatnonzero(sweep['lab_id'] == lab)\\n        ix = ix[np.argsort(sweep['cmd_stress'][ix])]\\n        chosen = ix[np.rint(np.linspace(0, len(ix)-1, size)).astype(int)]\\n        keep = sweep['lab_id'] != lab; keep[chosen] = True\\n        for amplitude in (0., 2.99, 3.01, 3.10, 8.):\\n            for point in range(size):\\n                for sign in (-1, 1):\\n                    calls.clear()\\n                    c = {k: v[keep].copy() for k, v in sweep.items()}\\n                    j = np.flatnonzero(np.flatnonzero(keep) == chosen[point])[0]\\n                    c['true_stress'][j] += sign*amplitude\\n                    cal = m._calibrate(c)\\n                    assert calls == ([lab] if amplitude > 3 and size == 4 else []), (size, lab, point, sign, amplitude, calls)\\n                    np.testing.assert_array_equal(cal[np.arange(4) != lab], base[np.arange(4) != lab])\\n                    if amplitude == 0 or amplitude > 3:\\n                        error = np.max(abs(cal[lab]-base[lab]))\\n                        if error > worst[0]:\\n                            worst = (error, (size, lab, point, sign, amplitude))\\n                        assert error < .002, worst\\nprint('Worst clean or EMI-corrected calibration deviation:', worst)\\nout = m.solve_alpha_m97_c02_batch_03(d)\\nmissing = ~np.isfinite(d['test']['coupon_features_raw']).all(axis=1)\\nfor k, ref in [('predicted_strain','te_clean'), ('initial_rate_pred','te_true_rate0')]:\\n    print(k, 'missing-feature RMSE:', np.sqrt(np.mean((out[k][missing] - gt[ref][missing])**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (leave-one-out detection of sparse-sweep EMI) -> H2 (unchanged jammed-slip fit); the pre-fix worst four-row gain/bias deviation was 0.9950, and public missing-feature strain/rate RMSE was 0.0760/0.0973.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use the archive for four-row sweeps\",\n      \"rejected_reason\": \"Four clean in-batch points must be fitted directly; the archive is appropriate only when contamination is detected and too few clean points remain.\"\n    }\n  ],\n  \"rationale\": \"Test each candidate spike against the affine fit that excludes it, so it cannot suppress its own residual. Verify both sides of the 3.0 threshold, unchanged neighboring channels, and clean-process prediction. If the new detector misroutes a clean or below-threshold sweep, narrow it before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "fedbc0d7b9a4f8ca47e5732a8e74cee5566fc91a766565a2c25a5fdab8e25c1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38390.01,
+      "usage_known": true,
+      "prompt_tokens": 34210,
+      "cached_tokens": 6784,
+      "completion_tokens": 1476
+    }
+  ]
+}

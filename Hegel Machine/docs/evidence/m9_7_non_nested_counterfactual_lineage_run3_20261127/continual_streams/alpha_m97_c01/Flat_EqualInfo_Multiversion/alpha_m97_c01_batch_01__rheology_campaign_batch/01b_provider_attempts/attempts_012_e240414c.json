@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e240414c67c5490faa4196ee8629391a",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:52:02.780916+00:00",
+  "ended_at_utc": "2026-11-27T08:52:28.755726+00:00",
+  "request_sha256": "44dc515a23fad2e09eae026c63b138662caeaa100037e22d98710532c50b1dc7",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 62685,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32802,
+    "cached_tokens": 6784,
+    "completion_tokens": 975
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',root+'alpha_m97_c01_batch_01_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c01_batch_01.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']\\nfor ch in range(4):\\n    q=c['lab_id']==ch; x=c['cmd_stress'][q]; y=c['true_stress'][q]; base=m._line(x,y); prior=m._archived_calibration(ch)\\n    delta=max(np.max(abs((x*base[0]+base[1])-(x*prior[0]+prior[1]))),0.)\\n    jack=max(np.max(abs((m._line(np.delete(x,i),np.delete(y,i))-base)@np.vstack((x,np.ones(len(x)))))) for i in range(len(x)))\\n    failures={}\\n    for n in (3,4,5,10):\\n        errors=[]\\n        for ids in itertools.combinations(range(len(x)),n):\\n            xx=x[list(ids)]; yy=y[list(ids)]\\n            for i in range(n):\\n                for spike in (-8.,8.):\\n                    zz=yy.copy(); zz[i]+=spike\\n                    est=m._calibrate(xx,zz,ch)\\n                    errors.append(np.max(abs((est-base)@np.vstack((x,np.ones(len(x)))))))\\n        failures[n]=(sum(e>.01 for e in errors),len(errors),round(float(max(errors)),5))\\n    print('lab',ch,'max prior vs batch stress difference',round(float(delta),6),'max clean jackknife shift',round(float(jack),6),'EMI: rows -> (errors >0.01, trials, worst stress error)',failures)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: damage gates baseline flow → H2: low banding sets logarithmic baseline flow and damage gates the network terms; worst held-out lab-by-damage median absolute errors are 0.0167 for strain and 0.0184 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the held-out flow-law and basis comparison\",\n      \"rejected_reason\": \"The existing held-out results and host probe already verify the constitutive basis and parameter handoff; the calibration check used only one spike position in a full sweep.\"\n    }\n  ],\n  \"rationale\": \"Use the real calibration sweeps to quantify clean-point sensitivity and test whether a transient can corrupt a sparse channel fit. If it can, improve only the permitted archive-backed EMI branch and preserve the verified clean fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "37ca80cd7688cc2bbb945a5c0299f6c671d38a926b593b35cae594ffc8b00a27",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28286.55,
+      "usage_known": true,
+      "prompt_tokens": 32802,
+      "cached_tokens": 6784,
+      "completion_tokens": 975
+    }
+  ]
+}

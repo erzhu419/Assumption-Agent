@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b942b59556b949638e9f4e2592ca6dd5",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:16:38.974762+00:00",
+  "ended_at_utc": "2026-11-27T09:17:12.890024+00:00",
+  "request_sha256": "4fef2a3eb2ad4ce9e7c2c578d6fe7d63f49f93c96097171179ed7755828d3273",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 54555,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30553,
+    "cached_tokens": 6784,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_06_solver.py')\\ns = p.read_text()\\nold = \\\"    logtau, weights = _fit(past[:n], hold[:n], features[:n], dt, times,\\\\n                           train['strain_curves_obs'] - offset[:n, None],\\\\n                           train['instant_rate_obs'])\\\"\\nnew = \\\"    # Fit on measured coupons; use cell-balanced imputations for prediction.\\\\n    measured = np.isfinite(train['coupon_features_raw']).all(axis=1)\\\\n    logtau, weights = _fit(past[:n][measured], hold[:n][measured], features[:n][measured],\\\\n                           dt, times, (train['strain_curves_obs'] - offset[:n, None])[measured],\\\\n                           train['instant_rate_obs'][measured])\\\"\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_06_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('public_alpha_m97_c03_batch_06.pkl','rb') as f: item=pickle.load(f)[0]\\nd,g=item['dataset'],item['gt']; o=m.solve_alpha_m97_c03_batch_06(d); p,h,x,offset,dt,t=m._prepare(d); n=len(d['train']['lab_id']); test=d['test']; lab=test['lab_id']; stratum=test['stratum']; missing=~np.isfinite(test['coupon_features_raw']).all(axis=1)\\ncal=m._calibration(d['calibration_load_cells']); cal_err=np.max(np.abs(cal-np.c_[g['stress_gains'],g['stress_biases']]),axis=0); print('max calibration errors (gain,bias)',cal_err); assert max(cal_err)<1e-4\\nweights=np.r_[o['hereditary_weights'],o['regime_mode_weights']]; taus=o['estimated_taus']; print('taus',taus,'hereditary',weights[:7],'regime',weights[7:]); print('max relative tau error',np.max(abs(taus/g['taus']-1)),'max abs HW/RW errors',np.max(abs(weights[:7]-g['theta'])),np.max(abs(weights[7:]-g['vp_theta'])))\\ne=o['predicted_strain']-g['te_clean']; r=o['initial_rate_pred']-g['te_true_rate0']; rmse=lambda a: np.sqrt(np.mean(np.square(a))); print('pooled curve/rate RMSE',rmse(e),rmse(r)); print('complete and missing curve/rate RMSE',[(rmse(e[q]),rmse(r[q])) for q in (~missing,missing)]); print('worst lab-stratum curve/rate RMSE',np.max([(rmse(e[q]),rmse(r[q])) for a,b in set(zip(lab,stratum)) if (q:=(lab==a)&(stratum==b)).any()],axis=0)); print('worst horizon RMSE',np.max(np.sqrt(np.mean(e*e,axis=0)))); assert rmse(e[~missing])<0.006 and rmse(r[~missing])<0.007 and rmse(e[missing])<0.115 and rmse(r[missing])<0.148\\nstep=1e-7; basis,_=m._design(np.log(taus),p[n:],h[n:],x[n:],dt,np.array([0.,step])); derivative=(basis[:,1]-basis[:,0])@weights/step; np.testing.assert_allclose(o['initial_rate_pred'],derivative,atol=2e-6,rtol=2e-6)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: affine calibration and cell-balanced imputation -> H2: fit jammed-slip parameters on measured coupons; leave-one-lab-out masked rate RMSE improves from 0.17177 to 0.16979, while public missing-row rate RMSE stays at 0.14698.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit on all rows with imputed coupons\",\"rejected_reason\":\"It gives higher leave-one-lab-out worst-slice rate error and higher public complete-row errors, with no meaningful advantage on missing rows.\"},{\"option\":\"Use each lab–stratum cell's own mean\",\"rejected_reason\":\"It raises the worst masked rate RMSE in leave-one-lab-out validation from 0.16979 to 0.18098.\"}],\"rationale\":\"Promote the measured-coupon fit supported by leave-one-lab-out validation and retain cell-balanced imputation for prediction. Verify the revised artifact in isolation; the public slices will detect an imputation regression, and a finite difference will detect an incorrect initial-rate formula.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1b0f8ccddffa729e9cbd82ca6ebc55ee7fd73bee8bc0671bf4d279ee8a6cfd5a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36142.64,
+      "usage_known": true,
+      "prompt_tokens": 30553,
+      "cached_tokens": 6784,
+      "completion_tokens": 1319
+    }
+  ]
+}

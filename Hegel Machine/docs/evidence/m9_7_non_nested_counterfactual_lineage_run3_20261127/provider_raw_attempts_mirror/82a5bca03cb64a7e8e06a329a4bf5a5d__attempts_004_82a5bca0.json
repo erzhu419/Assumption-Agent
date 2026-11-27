@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82a5bca03cb64a7e8e06a329a4bf5a5d",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:05:50.590797+00:00",
+  "ended_at_utc": "2026-11-27T09:06:35.159388+00:00",
+  "request_sha256": "e8fa549073ebe73d7da58b694045a465e3e0a9aef23fffea6d98dc55e8cedbcd",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 29165,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22696,
+    "cached_tokens": 6784,
+    "completion_tokens": 1862
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed '/^def _basis(/,$d' /tmp/hegel_continual_archive/alpha_m97_c01_batch_02_solver.py > alpha_m97_c01_batch_03_solver.py\\ncat >> alpha_m97_c01_batch_03_solver.py <<'PY'\\ndef _basis(tau, dt, t, past, hold, x):\\n    h = dt[:, None] / tau\\n    decay = np.exp(-h)\\n    drive = -np.expm1(-h)\\n    memory = np.zeros((len(hold), 2))\\n    for s in range(len(dt)):\\n        memory = decay[s] * memory + drive[s] * past[:, s, None]\\n    gap = hold[:, None] - memory\\n    contrast = gap[:, 0] - gap[:, 1]\\n    drift_slip = np.column_stack((np.ones(len(hold)), x, np.sign(hold) * np.sqrt(np.abs(hold))))\\n    relaxation = -np.expm1(-t[:, None] / tau)\\n    flow = t / (1 + 0.85 * t)\\n    curves = np.concatenate((gap[:, None, :] * relaxation,\\n                             drift_slip[:, None, :] * flow[None, :, None],\\n                             contrast[:, None, None] * relaxation[None, :, :1]), axis=2)\\n    rates = np.column_stack((gap / tau, drift_slip, contrast / tau[0]))\\n    return curves, rates\\n\\n\\ndef _fit(dt, t, past, hold, x, yc, yr):\\n    y = np.r_[yc.ravel(), yr]\\n    low = min(dt.min(), t[t > 0].min()) / 20\\n    high = (dt.sum() + t.max()) * 20\\n    # Search ordered branches directly: the ninth basis term is tied to the fast branch.\\n    def decode(v):\\n        fast, separation = np.exp(v)\\n        return np.array([fast, fast + separation])\\n\\n    def design(v):\\n        c, r = _basis(decode(v), dt, t, past, hold, x)\\n        return np.concatenate((c.reshape(-1, 9), r))\\n\\n    def profile(v):\\n        a = design(v)\\n        w = np.linalg.lstsq(a, y, rcond=None)[0]\\n        return a @ w - y, w\\n\\n    best = None\\n    for fast, separation in ((0.5, 3), (0.2, 1), (1.0, 8)):\\n        v0 = np.log(np.clip([fast, separation], low, high))\\n        opt = least_squares(lambda v: profile(v)[0], v0,\\n                            bounds=(np.log(low), np.log(high)), max_nfev=100)\\n        if best is None or opt.cost < best.cost:\\n            best = opt\\n    return decode(best.x), profile(best.x)[1]\\n\\n\\ndef solve_alpha_m97_c01_batch_03(dataset: dict) -> dict:\\n    dt, t, past, hold, x = _prepare(dataset)\\n    train, test = dataset['train'], dataset['test']\\n    n = len(train['strain_0'])\\n    yc = np.asarray(train['strain_curves_obs']) - np.asarray(train['strain_0'])[:, None]\\n    yr = np.asarray(train['instant_rate_obs'])\\n    tau, w = _fit(dt, t, past[:n], hold[:n], x[:n], yc, yr)\\n    curves, rates = _basis(tau, dt, t, past[n:], hold[n:], x[n:])\\n    return {'estimated_taus': tau, 'hereditary_weights': w[:7], 'regime_mode_weights': w[7:],\\n            'predicted_strain': np.asarray(test['strain_0'])[:, None] + curves @ w,\\n            'initial_rate_pred': rates @ w}\\nPY\\ngrep '^def ' alpha_m97_c01_batch_03_solver.py\\nif ! grep -q '^def _prepare(' alpha_m97_c01_batch_03_solver.py; then sed -i -E \\\"s/ = _prepare\\\\(dataset\\\\)/ = $(grep -E '^def .*\\\\(dataset\\\\):' alpha_m97_c01_batch_03_solver.py | head -1 | cut -d' ' -f2 | cut -d'(' -f1)(dataset)/\\\" alpha_m97_c01_batch_03_solver.py; fi\\ngrep 'dt, t, past, hold, x =' alpha_m97_c01_batch_03_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np,alpha_m97_c01_batch_03_solver as s\\np=pickle.load(open('public_alpha_m97_c01_batch_03.pkl','rb'))[0]\\nd=p['dataset']; out=s.solve_alpha_m97_c01_batch_03(d)\\nfor k in ('estimated_taus','hereditary_weights','regime_mode_weights'): print(k,out[k])\\nprint('Public evaluation targets:',[(k,np.shape(v)) for k,v in p['gt'].items()])\\nprepare=next(getattr(s,n) for n in ('_prepare','_aligned','_preprocess') if hasattr(s,n)) if hasattr(s,'_prepare') else [v for k,v in vars(s).items() if k.startswith('_') and callable(v) and getattr(v,'__code__',None) and v.__code__.co_argcount==1][0]\\ndt,t,past,hold,x=prepare(d); tr=d['train']; n=len(tr['lab_id']); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\nfor c in range(4):\\n test=tr['lab_id']==c; fit=~test\\n tau,w=s._fit(dt,t,past[:n][fit],hold[:n][fit],x[:n][fit],yc[fit],yr[fit]); ac,ar=s._basis(tau,dt,t,past[:n][test],hold[:n][test],x[:n][test]); ec,er=ac@w-yc[test],ar@w-yr[test]; print('held lab',c,'tau',tau,'curve/rate RMSE',*[float(np.sqrt(np.mean(e**2))) for e in (ec,er)],'p95/max abs',*[np.quantile(abs(e),[.95,1]) for e in (ec,er)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived measurement alignment -> exact jammed-slip variable projection; leave-one-lab-out error is pending, and the worst current calibration residual is 0.00022 stress units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the prior episode's response basis\",\n      \"rejected_reason\": \"It uses linear flow and lacks the signed slip and fast-branch contrast terms specified for this episode.\"\n    }\n  ],\n  \"rationale\": \"Fit only the two relaxation times nonlinearly and solve the nine response weights by least squares. The isolated schema check will catch import or output-contract errors; leave-one-lab-out residuals will show whether alignment transfers across labs and whether robust weighting warrants a comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "9ac352cd5eb596f8d0b67e1d5eb2548eb35c58c4ab9e1a252fb0cc643a2f1a6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46710.76,
+      "usage_known": true,
+      "prompt_tokens": 22696,
+      "cached_tokens": 6784,
+      "completion_tokens": 1862
+    }
+  ]
+}

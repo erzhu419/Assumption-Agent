@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9fd7c2cb9f334ab181a22a28264a5bf8",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:09:55.321718+00:00",
+  "ended_at_utc": "2026-11-27T09:10:27.249536+00:00",
+  "request_sha256": "3adc3f2f2129f718d76805ca06200a7fcee0ae365418b796879150e8b99b68c4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 58498,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31432,
+    "cached_tokens": 6784,
+    "completion_tokens": 1007
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\nsed '/^for mode in /,$d' /tmp/rheo_validate.py > /tmp/rheo_margin.py\\ncat >> /tmp/rheo_margin.py <<'PY'\\nimport json\\nfrom unittest.mock import patch\\n\\n# Look for transfer failures specific to intersections or to missing coupons.\\ne = np.empty_like(y)\\nfor c, s in np.unique(np.column_stack((lab, st)), axis=0):\\n    v = (lab == c) & (st == s)\\n    pp, w = m._fit((*args(~v), True), y[~v])\\n    e[v] = m._basis(pp, *args(v), True) @ w - y[v]\\nmissing = np.isnan(tr['coupon_features_raw']).any(axis=1)\\nfor miss in (False, True):\\n    for active in (False, True):\\n        v = (missing == miss) & ((D > 0) == active)\\n        a = e[v]\\n        if len(a):\\n            print('missing/active/n', miss, active, len(a), 'max horizon median abs', round(np.median(np.abs(a[:, :-1]), axis=0).max(), 6), 'rate median abs', round(np.median(np.abs(a[:, -1])), 6), 'signed medians', np.round(np.median(a, axis=0), 5).tolist())\\n\\n# Use prior sweeps separately rather than assuming their differences are negligible.\\nreference = m.solve_alpha_m97_c03_batch_04(d)\\nwith open(m._ARCHIVE) as f:\\n    history = json.load(f)\\nfor sweep in history[:-1]:\\n    def prior(c):\\n        v = np.asarray(sweep['lab_id']) == c\\n        return np.polyfit(np.asarray(sweep['cmd_stress'])[v], np.asarray(sweep['true_stress'])[v], 1)\\n    with patch.object(m, '_prior_calibration', side_effect=prior):\\n        other = m.solve_alpha_m97_c03_batch_04(d)\\n    print('prefix sweep', sweep['episode_short_name'], 'max absolute changes', {k: round(float(np.max(np.abs(np.asarray(other[k]) - reference[k]))), 7) for k in reference})\\nPY\\npython3 -I /tmp/rheo_margin.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The calibrated logarithmic model passes held-out lab and stratum tests separately (worst median absolute errors 0.0157 strain and 0.0215 rate); test whether lab–stratum intersections, missing coupons, or calibration-sweep choice reveal a material weakness.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and interaction challenger or apply relay and class-balance diagnostics\",\n      \"rejected_reason\": \"The previous fold-local challenger found no material gain, and the dataset has neither relay states nor class labels. The remaining question is whether joint nuisance strata or sparse calibration hide a prediction failure.\"\n    }\n  ],\n  \"rationale\": \"Hold out whole lab–stratum cells and inspect each horizon by missingness and damage status. A sustained missing-coupon bias would motivate revisiting imputation; material output shifts across legitimate prefix sweeps would motivate revisiting calibration transfer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bbc97dc47ea0ca69267eabac9fa408d00da8d70d27efb8166e8d962f8d9c55e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34135.62,
+      "usage_known": true,
+      "prompt_tokens": 31432,
+      "cached_tokens": 6784,
+      "completion_tokens": 1007
+    }
+  ]
+}

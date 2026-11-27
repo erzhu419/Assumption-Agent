@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "daac191a24d747919ed7181f498e2ab9",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:12:57.025819+00:00",
+  "ended_at_utc": "2026-11-27T09:13:32.098664+00:00",
+  "request_sha256": "38115bf50c1669fe11b73f83dff27dc86a2abf2feeb73e84f27f6acef6ab80d5",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74712,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36510,
+    "cached_tokens": 6784,
+    "completion_tokens": 1323
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_batch_04.pkl','rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nt = d['train']; lab = t['lab_id']; n = len(lab)\\na = tuple(v[:n] for v in m._prepare(d)); x, past, hold, act = a\\nok = np.isfinite(t['coupon_features_raw']).all(1)\\ndt, ts = d['past_dt'], d['eval_times']\\ny = t['strain_curves_obs'] - t['strain_0'][:,None]; r = t['instant_rate_obs']\\n# Test one structured departure at a time, with the same added term in\\n# the curve and its analytic initial derivative.\\nerrors = {key:(np.empty_like(y), np.empty_like(r)) for key in ('exact','rational_stress','pairwise_drift')}\\nfor c in np.unique(lab):\\n    tr, va = ok & (lab != c), ok & (lab == c)\\n    tau, w = m._fit(*(v[tr] for v in a), dt, ts, y[tr], r[tr], True)\\n    for key, shape, impulse in (\\n        ('exact', None, None),\\n        ('rational_stress', -np.expm1(-ts/tau[0]), (hold/(1+(hold/d['crit_stress'])**2)-hold)*act),\\n        ('pairwise_drift', np.log1p(ts), (x[:,0]-x[:,1])*(x[:,2]-x[:,3])),\\n    ):\\n        def predict(mask):\\n            cx, rx = m._design(*(v[mask] for v in a), dt, ts, tau, True)\\n            return cx@w, rx@w\\n        py, pr = predict(va)\\n        if shape is not None:\\n            fy, fr = predict(tr)\\n            derivative = 1/tau[0] if key == 'rational_stress' else 1.\\n            design = np.r_[(impulse[tr,None]*shape).ravel(), impulse[tr]*derivative]\\n            residual = np.r_[(y[tr]-fy).ravel(), r[tr]-fr]\\n            scales = np.r_[np.full(fy.size,.055), np.full(fr.size,.13)]\\n            beta = 0.\\n            for _ in range(20):\\n                weights = 1/(scales**2+(residual-beta*design)**2)\\n                beta = np.dot(weights*design,residual)/np.dot(weights*design,design)\\n            py += beta*impulse[va,None]*shape\\n            pr += beta*impulse[va]*derivative\\n        ey, er = errors[key]; ey[va] = y[va]-py; er[va] = r[va]-pr\\nfor key,(ey,er) in errors.items():\\n    groups = [ok & (lab==c) & ((act>0)==g) for c in np.unique(lab) for g in (False,True)]\\n    scores = np.array([(np.quantile(np.abs(ey[q]),.9), np.sqrt(np.mean(er[q]**2))) for q in groups if q.any()])\\n    print(key, 'worst complete lab x damage strain p90 / rate RMSE', scores.max(0).round(6).tolist(), 'pooled medians', np.round([np.median(abs(ey[ok])),np.median(abs(er[ok]))],6).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Exact Prony–logarithmic law → test for residual stress saturation or pairwise feature interactions; verified worst held-out strain p90 and rate RMSE are 0.05345 and 0.02013 on complete rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retest archive pooling, panel gauge invariance, or relay modes\",\n      \"rejected_reason\": \"Calibration and gauge transfer were already tested. The campaign has no relay state, stochastic drift equation, or classification labels.\"\n    }\n  ],\n  \"rationale\": \"Use real held-out lab measurements to test two plausible missing terms without editing the verified solver. Fit each correction using only the training labs and require it to improve both strain and its initial derivative before reconsidering the specified law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a03df81d3546a2963e3d379fedfd5756f8ae195cbbb35fc390d52481d5047e97",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37214.2,
+      "usage_known": true,
+      "prompt_tokens": 36510,
+      "cached_tokens": 6784,
+      "completion_tokens": 1323
+    }
+  ]
+}

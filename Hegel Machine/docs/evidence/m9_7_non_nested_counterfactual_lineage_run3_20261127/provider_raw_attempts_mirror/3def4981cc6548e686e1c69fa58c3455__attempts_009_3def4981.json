@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3def4981cc6548e686e1c69fa58c3455",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:14:35.887853+00:00",
+  "ended_at_utc": "2026-11-27T09:15:17.147856+00:00",
+  "request_sha256": "fe5cb22e8cb5d90fe19b8a090e8e6b4db8a163d30f77f8fc5581b76bb5ccb2f8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 58804,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34005,
+    "cached_tokens": 6784,
+    "completion_tokens": 1409
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '32,112p' /holdout_task/alpha_m97_c01_batch_04_solver.py\\ncat > /tmp/rheo_stress_audit.py <<'PY'\\nexec(open('/tmp/rheo_cv_final.py').read().split('for lab in (*np.unique(labs), -1):')[0])\\nout=s.solve_alpha_m97_c01_batch_04(d)\\nnt=len(d['test']['lab_id'])\\nfor key,shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'regime_mode_weights':(2,), 'predicted_strain':(nt,len(t)), 'initial_rate_pred':(nt,)}.items():\\n    assert out[key].shape==shape and np.isfinite(out[key]).all(),key\\nu=out['estimated_taus']; h=out['hereditary_weights']; r=out['regime_mode_weights']\\nz=np.zeros((nt,2))\\nfor j,delta in enumerate(dt):\\n    e=np.exp(-delta/u)\\n    z=z*e+(1-e)*past[n:,j,None]\\na=np.tanh(np.sum(np.maximum(np.abs(past[n:])-d['crit_stress'],0)**2*dt,axis=1))\\nfast=h[0]*(hold[n:]-z[:,0])+r[0]*a*hold[n:]\\nslow=h[1]*(hold[n:]-z[:,1]); drift=h[2]+x[n:]@h[3:]+r[1]*a*z[:,0]\\nbase=np.asarray(d['test']['strain_0'])\\ndef curve(t):\\n    t=np.asarray(t)\\n    return base[:,None]-fast[:,None]*np.expm1(-t/u[0])-slow[:,None]*np.expm1(-t/u[1])+drift[:,None]*np.log1p(t)\\nnp.testing.assert_allclose(out['predicted_strain'],curve(t),atol=1e-12,rtol=0)\\nnp.testing.assert_allclose(out['initial_rate_pred'],fast/u[0]+slow/u[1]+drift,atol=1e-12,rtol=0)\\nfd=(curve([1e-5])[:,0]-curve([0.0])[:,0])/1e-5\\nfor label,mask in [('undamaged',a==0),('damaged',a>0)]:\\n    delta=np.max(np.abs(fd[mask]-out['initial_rate_pred'][mask]))\\n    print(label,'test rows',mask.sum(),'max rate/finite-difference error',delta); assert delta<1e-4\\n# Fit omitted drift terms inside each outer fold. A transferable improvement\\n# on complete coupons would warrant revisiting the stated linear drift.\\nv=x[:n]\\npairs=[(v[:,i],v[:,j]) for i in range(4) for j in range(i+1,4)]\\nextra=np.column_stack([term for p,q in pairs for term in (p*q,(p+q)/(1+(p-q)**2),(p-q)/(1+(p+q)**2))]+[v[:,i]*v[:,j]*v[:,k] for i,j,k in [(0,1,2),(0,1,3),(0,2,3),(1,2,3)]])\\nloss=[]\\nfor lab in np.unique(labs):\\n    f=(labs!=lab)&~missing; g=(labs==lab)&~missing\\n    tau,w=s._fit(dt,t,*(a[f] for a in args),yc[f],yr[f],~missing[f])\\n    c,b=s._design(tau,dt,t,*args)\\n    ec=yc-c@w; er=yr-b@w\\n    row=np.median(ec/np.log1p(t),axis=1)\\n    adjustment=extra@np.linalg.solve(extra[f].T@extra[f]+np.eye(extra.shape[1]),extra[f].T@np.clip(row[f],-.07,.07))\\n    metrics=[np.median(np.abs(ec[g])),np.median(np.abs(ec[g]-adjustment[g,None]*np.log1p(t))),np.median(np.abs(er[g])),np.median(np.abs(er[g]-adjustment[g]))]\\n    loss.append(metrics); print('lab',lab,'curve baseline/augmented, rate baseline/augmented',np.round(metrics,6))\\nprint('worst lab',np.max(loss,axis=0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_stress_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test the calibrated linear-drift plateau model for omitted nonlinear terms and curve–rate inconsistency; worst held-out lab median absolute errors are 0.01376 for strain and 0.01416 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, transport PDEs, or within-batch classification accuracy\",\n      \"rejected_reason\": \"The measured task is continuous rheology regression with no relay state, PDE, or classification label. Held-out labs test whether residual corrections transfer across calibration groups.\"\n    }\n  ],\n  \"rationale\": \"Run the exact artifact in isolation and independently reconstruct both predictions to catch coefficient-order, gating, or derivative errors. Test nonlinear corrections on held-out labs; revisit the drift law only if the corrections transfer and improve the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a8cc2580dca4b4ae5a6b443ea1d9f7e7b8aa4eba8d024946c26390f641270199",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45655.01,
+      "usage_known": true,
+      "prompt_tokens": 34005,
+      "cached_tokens": 6784,
+      "completion_tokens": 1409
+    }
+  ]
+}

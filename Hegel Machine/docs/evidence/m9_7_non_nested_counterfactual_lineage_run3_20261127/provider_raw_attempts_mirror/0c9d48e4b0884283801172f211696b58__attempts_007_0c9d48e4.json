@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0c9d48e4b0884283801172f211696b58",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:49:45.838195+00:00",
+  "ended_at_utc": "2026-11-27T08:50:12.242309+00:00",
+  "request_sha256": "18f218a7742d68cc0449e0172a054aadfecc1ef067cba640ea4ba99009b7248c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46222,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28326,
+    "cached_tokens": 11136,
+    "completion_tokens": 986
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/zero_damage_batch01.py <<'PY'\\nexec(open('/tmp/check_batch01.py').read().split('out = m.solve')[0])\\ny = train['strain_curves_obs'] - train['strain_0'][:,None]\\nr = train['instant_rate_obs']\\nt = data[-1]\\nprint('times',t)\\nwref = np.r_[gt['theta'],gt['vp_theta']]\\nc,a = m._design(*data,gt['taus'])\\nmask = ~data[3][n:] & np.isfinite(test['coupon_features_raw']).all(1)\\no = gt['te_clean'] - test['strain_0'][:,None]\\nrate_error = gt['te_true_rate0'] - a[n:] @ wref\\nbase = c[n:] @ wref\\nb = wref[2] + data[2][n:] @ wref[3:7]\\nfor name, phi in [('linear',t),('log',np.log1p(t)),('sqrt',2*(np.sqrt(1+t)-1)),('exp',-np.expm1(-t)),('sat',t/(1+t)),('asinh',np.arcsinh(t))]:\\n    e=o-base-b[:,None]*(phi-t)-rate_error[:,None]*phi\\n    print(name,'zero damage diagnostic RMSE',np.sqrt(np.mean(e[mask]**2)))\\nknown_prony = c[n:,:,:2] @ wref[:2]\\ntrue_drift = b + rate_error\\nratio = (o-known_prony)[mask] / true_drift[mask,None]\\nprint('implied terminal function median',np.median(ratio,axis=0),'spread',np.ptp(ratio,axis=0))\\ncomplete=np.isfinite(train['coupon_features_raw']).all(1)\\nfor label, mask in [('active-complete',data[3][:n]&complete),('active-all',data[3][:n])]:\\n    taus,w=m._fit(tuple(x[:n][mask] for x in data[:5])+data[5:],y[mask],r[mask]); print(label,taus,w)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/zero_damage_batch01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear zero-damage flow → H2 a terminal basis consistent with the rates and curves; even at reference parameters, complete zero-damage rows reach 0.455 curve RMSE within a lab, versus at most 0.0083 initial-rate RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Zero-damage rows inherit linear terminal flow from the prior episode.\",\n    \"empirical_witness\": \"At the public reference parameters, zero-damage complete rows show curve RMSE of 0.330–0.455 across labs despite initial-rate RMSE of only 0.002–0.0083; active-row residuals instead follow the specified logarithmic drift basis.\",\n    \"causal_blanket_diagnosis\": \"The discrepancy is tied to time evolution and the damage gate, not primarily to stress calibration or a common drift-amplitude error.\",\n    \"sublated_pivot\": \"Separate the damage-amplitude gate from the terminal time-basis choice and test candidate time bases against both measurements.\",\n    \"risk_kind\": \"Constitutive basis mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit the linear fallback with a different robust loss\",\n      \"rejected_reason\": \"The zero-damage curve discrepancy persists even when the public reference coefficients are supplied.\"\n    }\n  ],\n  \"rationale\": \"Use the initial-rate residual to remove drift-amplitude error, then test whether a common zero-damage time basis explains the remaining curve discrepancy. Fit active rows separately to check whether the current fallback is also biasing the shared relaxation times.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "50e6ca33e05cd3a069002a9085d2bb7673653c870570164427ea55f943bef754",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28445.26,
+      "usage_known": true,
+      "prompt_tokens": 28326,
+      "cached_tokens": 11136,
+      "completion_tokens": 986
+    }
+  ]
+}

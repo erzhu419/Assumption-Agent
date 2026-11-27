@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c31cb6425a4f4cd983193c53b0d8e372",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:00:52.811562+00:00",
+  "ended_at_utc": "2026-11-27T09:01:37.213928+00:00",
+  "request_sha256": "f0eb051d98b2ba4c0dd22ce882a3b1ef7d4bfcc3a044222dc36e1a4471e8fc79",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 58325,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31835,
+    "cached_tokens": 6784,
+    "completion_tokens": 1590
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/alpha_m97_c01_batch_02_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]; d=i['dataset']; g=i['gt']; tr=d['train']; te=d['test']; a=m.solve_alpha_m97_c01_batch_02(d); dt,t,past,hold,x=m._prepare(d); n=len(tr['lab_id']); tau=a['estimated_taus']; w=a['hereditary_weights']\\n# Closed-form convolution checks history order, stress coordinates, signs, and the initial derivative independently.\\nends=np.cumsum(dt); lag=ends[-1]-ends\\nmem=past[n:] @ ((1-np.exp(-dt[:,None]/tau))*np.exp(-lag[:,None]/tau))\\ngap=hold[n:,None]-mem; drift=w[2]+x[n:]@w[3:]; curve=te['strain_0'][:,None]+(gap*w[:2])@(1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t\\nrate=(gap*w[:2])@(1/tau)+drift\\nnp.testing.assert_allclose(curve,a['predicted_strain'],rtol=1e-12,atol=1e-12); np.testing.assert_allclose(rate,a['initial_rate_pred'],rtol=1e-12,atol=1e-12); np.testing.assert_array_equal(a['regime_mode_weights'],[0,0]); print('Independent convolution and derivative passed')\\nprint('regime inputs', {k:d[k] for k in d if ('band' in k.lower() or 'cryst' in k.lower()) and np.size(d[k])==1}); print('top-level fields',sorted(d))\\n# Test pairwise/three-way drift, a rational saturation correction, and a nonlinear time correction against held-out labs.\\nmasks=np.isfinite(tr['coupon_features_raw']).all(1); lab=tr['lab_id']; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; X=x[:n]; ii,jj=np.triu_indices(X.shape[1],1); terms=np.column_stack((X[:,ii]*X[:,jj],np.prod(X[:,[0,1,2]],axis=1),np.prod(X[:,[0,1,3]],axis=1),np.prod(X[:,[0,2,3]],axis=1),np.prod(X[:,[1,2,3]],axis=1),X/(1+X**2)-X)); y=np.column_stack((yc,yr)); score=[]\\nfor c in np.unique(lab):\\n fit=lab!=c; take=fit&masks; test=~fit&masks\\n p=m._fit(dt,t,past[:n][fit],hold[:n][fit],X[fit],yc[fit],yr[fit],masks[fit]); b,r,*_=m._basis(p[:2],dt,t,past[:n],hold[:n],X); resid=y-np.column_stack((b@p[2:],r@p[2:])); scale=np.maximum(1.4826*np.median(abs(resid[take]-np.median(resid[take],axis=0)),axis=0),1e-6)\\n f=np.r_[t,1.]; ar=terms[:,None,:]*f[None,:,None]; arc=np.broadcast_to(np.r_[np.log1p(t)-t,0][None,:,None],(n,len(f),1)); design=np.concatenate((ar,arc),axis=2); model=least_squares(lambda v:((design[take]@v-resid[take])/scale).ravel(),np.zeros(design.shape[-1]),loss='cauchy',f_scale=2.5,max_nfev=60); ext=resid-design@model.x\\n pair=[]\\n for z in (resid[test],ext[test]): pair.append(np.array([np.quantile(abs(z[:,:-1]),.9),np.quantile(abs(z[:,-1]),.9)]))\\n score.append(pair); print('held-out lab',int(c),'base/augmented P90',np.round(pair,6),'base signed median late/rate',np.round(np.median(resid[test][:,[-2,-1]],axis=0),6))\\nprint('worst P90 by model',np.max(score,axis=0))\\nfor k,j in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n e=a[k]-g[j]; print(k,'pooled RMSE',np.sqrt(np.mean(e**2)))\\nprint('absolute tau/weight margins',np.max(abs(tau-g['taus'])),np.max(abs(w-g['theta'])))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine load-cell calibration and prescribed cell-mean imputation → H2: robust two-branch Prony flow; worst leave-one-lab-out complete-row P90 strain/rate errors are 0.04481/0.03875.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, HJB, and classification audits\",\n      \"rejected_reason\": \"The specified model has continuous strain and rate outcomes, no relay or control state, and no class labels. Lab-held-out residuals are the applicable nuisance check.\"\n    },\n    {\n      \"option\": \"Add pairwise sums and differences as standalone terms\",\n      \"rejected_reason\": \"These are already spanned by the four linear coupon features; nonlinear interactions and saturation supply a meaningful completeness test.\"\n    }\n  ],\n  \"rationale\": \"An independent convolution can reveal a stress-coordinate, history-order, sign, or derivative error that would require a solver correction. Fit nonlinear residual terms only inside training-lab folds to check whether a missing basis term improves held-out margins rather than fitting nuisance variation. Leave the artifact unchanged during this audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ec51c917f39207fda5652bc02a17b83733ad121bfccbe4cded2acf250efb37e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46534.47,
+      "usage_known": true,
+      "prompt_tokens": 31835,
+      "cached_tokens": 6784,
+      "completion_tokens": 1590
+    }
+  ]
+}

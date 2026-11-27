@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1c30ac3ab3d4466f994a3abcb5b0baa4",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:25:16.626052+00:00",
+  "ended_at_utc": "2026-11-27T09:25:57.897827+00:00",
+  "request_sha256": "bf2e40e2e0edc70dba6bb838c5fc98169d322ed8cbb9a0b66053bad23af25551",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65923,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33963,
+    "cached_tokens": 11136,
+    "completion_tokens": 1782
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_batch07_basis.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch07', root + 'alpha_m97_c03_batch_07_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c03_batch_07.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ns = d['train']; lab = s['lab_id']; n = len(lab)\\npast, hold, x, act, offset, dt, t = m._prepare(d)\\npast, hold, x, act = (a[:n] for a in (past, hold, x, act))\\ny = s['strain_curves_obs'] - offset[:n, None]\\nr = s['instant_rate_obs']\\ncomplete = np.isfinite(s['coupon_features_raw']).all(1)\\nD = np.maximum(0, np.abs(past) - d['crit_stress'])**2 @ dt\\nseen = {'inactive': D == 0, 'weak': (D > 0) & (D < 2), 'strong': D >= 2}\\nprint('Complete-coupon damage counts:', {k: int((v & complete).sum()) for k, v in seen.items()})\\nerrors = {k: (np.zeros_like(y), np.zeros_like(r)) for k in ('saved', 'refit', 'gap_quotient', 'damage_quotient')}\\nfor j in np.unique(lab):\\n    h = lab == j; f = ~h & complete\\n    p, w = m._fit((past[f], hold[f], x[f], act[f], dt, t), y[f], r[f])\\n    c, b = m._design(p, past, hold, x, act, dt, t)\\n    errors['saved'][0][h] = c[h] @ w - y[h]\\n    errors['saved'][1][h] = b[h] @ w - r[h]\\n    tau = np.exp(p)\\n    z = np.zeros((n, 2))\\n    for i, delta in enumerate(dt):\\n        a = np.exp(-delta / tau)\\n        z = a*z + (1-a)*past[:, i, None]\\n    gap = hold[:, None] - z\\n    q = gap[:, 0] - gap[:, 1]\\n    # Alternative bases retain zero strain increment and the exact derivative at t=0.\\n    exp_basis = -np.expm1(-t/tau[0]); log_basis = np.log1p(t)\\n    sat = D / np.sqrt(1+D**2) - act\\n    extras = {\\n        'refit': (c, b),\\n        'gap_quotient': (np.concatenate((c, (q/(1+q*q))[:, None, None]*exp_basis[None, :, None]), axis=2), np.column_stack((b, q/(1+q*q)/tau[0]))),\\n        'damage_quotient': (np.concatenate((c, (sat*hold)[:, None, None]*exp_basis[None, :, None], (sat*z[:, 0])[:, None, None]*log_basis[None, :, None]), axis=2), np.column_stack((b, sat*hold/tau[0], sat*z[:, 0])))\\n    }\\n    e, er = c[f] @ w - y[f], b[f] @ w - r[f]\\n    nc = e.size\\n    target = np.r_[y[f].ravel(), r[f]]\\n    for name, (ac, ar) in extras.items():\\n        a = np.vstack((ac[f].reshape(nc, -1), ar[f]))\\n        err = np.r_[e.ravel(), er]\\n        for _ in range(5):\\n            weight = np.empty(len(err))\\n            for sl in (slice(None, nc), slice(nc, None)):\\n                mid = np.median(err[sl]); scale = max(1e-7, 1.4826*np.median(abs(err[sl]-mid)))\\n                weight[sl] = np.sqrt(np.minimum(1., 2.5*scale/np.maximum(1e-12, abs(err[sl]-mid)))) / scale\\n            coef = np.linalg.lstsq(a*weight[:,None], target*weight, rcond=1e-10)[0]\\n            err = a @ coef - target\\n        errors[name][0][h] = ac[h] @ coef - y[h]\\n        errors[name][1][h] = ar[h] @ coef - r[h]\\nfor name, (e, er) in errors.items():\\n    def metrics(mask):\\n        return tuple(round(float(v), 5) for v in (np.median(abs(e[mask])), np.quantile(abs(e[mask]), .9), np.median(abs(er[mask])), np.quantile(abs(er[mask]), .9)))\\n    print(name, 'curve median/p90, rate median/p90 by complete lab:', {int(j): metrics((lab == j) & complete) for j in np.unique(lab)})\\n    print(name, 'curve median/p90, rate median/p90 by complete damage slice:', {k: metrics(v & complete) for k,v in seen.items() if (v & complete).sum() >= 5})\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch07_basis.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (shared logarithmic drift with damage-gated regime terms) -> H2 (an omitted branch-gap or saturation term improves held-out fits); the current public worst slice is imputed coupons, with p90 errors of 0.324 strain and 0.219 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reopen load-cell calibration or test relay modes\",\n      \"rejected_reason\": \"The measured maximum stress error was below 0.00017, and the dataset has no relay state or classification labels.\"\n    }\n  ],\n  \"rationale\": \"Test whether the supplied basis leaves a reproducible nonlinear residual even when coupon features are fully measured. Fit the extra terms only within each training fold and compare against an equally refitted control; reconsider the saved basis only if a challenger consistently improves held-out strain and rate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "2789f5a5fd66aec3ff47949fe44f57c036b405b285d6bdffeae7bb2c47ae59a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46131.46,
+      "usage_known": true,
+      "prompt_tokens": 33963,
+      "cached_tokens": 11136,
+      "completion_tokens": 1782
+    }
+  ]
+}

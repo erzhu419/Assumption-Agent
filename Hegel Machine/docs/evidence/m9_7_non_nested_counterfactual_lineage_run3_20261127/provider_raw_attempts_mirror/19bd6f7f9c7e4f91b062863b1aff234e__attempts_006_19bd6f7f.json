@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19bd6f7f9c7e4f91b062863b1aff234e",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:09:08.703272+00:00",
+  "ended_at_utc": "2026-11-27T09:09:49.514440+00:00",
+  "request_sha256": "57b2a8d1aceac9ccc796ab2d7371c979638260d002547ee02aec7d666b2f3518",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 49326,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30403,
+    "cached_tokens": 6784,
+    "completion_tokens": 1743
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >/tmp/rheo_robust_probe.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nspec=importlib.util.spec_from_file_location('m','/holdout_task/alpha_m97_c02_batch_04_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n\\ndef design(data,dt,times,tau,mode):\\n    x,z=m._design(*data,dt,times,tau)\\n    if mode=='log':\\n        inactive=data[-1]<=0\\n        x[inactive,:,2:7] *= (np.log1p(times)/times)[None,:,None]\\n    return x,z\\n\\ndef fit(data,dt,times,y,r,mode,curve_scale=.055,rate_scale=.13):\\n    response=np.r_[y.ravel(),r]; n=y.size\\n    scales=np.r_[np.full(n,curve_scale),np.full(len(r),rate_scale)]\\n    def matrix(p):\\n        c,z=design(data,dt,times,np.exp(p),mode)\\n        return np.vstack((c.reshape(-1,9),z))\\n    p=np.log([.6,3.5]); sw=np.ones(len(response)); bounds=(np.log(.035),np.log(60.))\\n    for step in range(25):\\n        b=sw*response\\n        def profile(p,ret=False):\\n            a=matrix(p)*sw[:,None]\\n            w=np.linalg.lstsq(a,b,rcond=None)[0]\\n            return w if ret else np.einsum('ij,j->i',a,w)-b\\n        p=least_squares(profile,p,bounds=bounds,max_nfev=45,ftol=1.e-8,xtol=1.e-8).x\\n        w=profile(p,True)\\n        e=matrix(p)@w-response\\n        s=scales*(3 if step<3 else 1)\\n        new=1/np.sqrt(s*s+e*e)\\n        if step>4 and np.max(abs(new/sw-1)) < 1.e-4: break\\n        sw=new\\n    return np.exp(p),w\\n\\nif __name__=='__main__':\\n    with open('/holdout_task/public_alpha_m97_c02_batch_04.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\n    t=d['train']; n=len(t['lab_id']); a=tuple(x[:n] for x in m._prepare(d)); dt,ts=d['past_dt'],d['eval_times']; y=t['strain_curves_obs']-t['strain_0'][:,None]; r=t['instant_rate_obs']; ok=np.isfinite(t['coupon_features_raw']).all(1)\\n    errs={}\\n    for mode in ('baseline','linear','log'):\\n        e=np.empty_like(y); er=np.empty_like(r)\\n        for c in (0,1,2,3,None):\\n            tr=ok if c is None else ok&(t['lab_id']!=c); va=np.ones(n,dtype=bool) if c is None else (t['lab_id']==c)\\n            data=tuple(x[tr] for x in a)\\n            if mode=='baseline': tau,w=m._fit(*data,dt,ts,y[tr],r[tr])\\n            else: tau,w=fit(data,dt,ts,y[tr],r[tr],mode)\\n            if c is None:\\n                print(mode,'full parameters',tau.round(5),w.round(5)); continue\\n            x,z=design(tuple(x[va] for x in a),dt,ts,tau,mode); e[va]=y[va]-x@w; er[va]=r[va]-z@w\\n        errs[mode]=(e,er)\\n        print(mode,'complete damage/time residual signed medians',[np.median(e[ok&((a[-1]>0)==p)],axis=0).round(3).tolist() for p in (True,False)])\\n    # Compare all models on identical observations, retaining an uncensored rate metric.\\n    common=abs(errs['linear'][0])<.6\\n    for mode,(e,er) in errs.items():\\n        scores=[]\\n        for c in range(4):\\n            for complete in (True,False):\\n                for active in (True,False):\\n                    row=(t['lab_id']==c)&(ok==complete)&((a[-1]>0)==active)\\n                    if not row.any(): continue\\n                    ec=e[row]; kept=common[row]\\n                    scores.append((round(np.sqrt(np.mean(ec[kept]**2)),4),round(np.sqrt(np.mean(er[row]**2)),4),c,complete,active,int(row.sum())))\\n        print(mode,'worst clean curve',max(scores),'worst rate',max(scores,key=lambda x:x[1]),'pooled median abs curve/rate',np.median(abs(e)),np.median(abs(er)))\\n        for active in (True,False):\\n            row=ok&((a[-1]>0)==active)\\n            print(mode,'complete active',active,'curve/rate clean rms',np.sqrt(np.mean(e[row][common[row]]**2)),np.sqrt(np.mean(er[row]**2)))\\n    print('common mask omitted points',int((~common).sum()),'of',common.size)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rheo_robust_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unweighted least squares → pointwise robust fitting of the same Prony law; current worst leave-one-lab-out strain RMSE is 4.432 on imputed rows and 1.404 on complete rows, with worst rate RMSE 0.202.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Drop entire curves with large residuals\",\n      \"rejected_reason\": \"Several of the largest excursions affect one measurement while adjacent times remain coherent; pointwise weighting preserves those usable observations.\"\n    }\n  ],\n  \"rationale\": \"Test whether isolated spikes, including a 34.25-unit excursion, explain the failure of ordinary least squares. Compare the robust fit on the same held-out labs and check whether damage-inactive rows retain a systematic time trend after spike downweighting; that would change the terminal basis, not the calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "35a8f2ea87f4c5066754e6c6af0b2486ff726b518034cea4f58533f29a7f1202",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45093.23,
+      "usage_known": true,
+      "prompt_tokens": 30403,
+      "cached_tokens": 6784,
+      "completion_tokens": 1743
+    }
+  ]
+}

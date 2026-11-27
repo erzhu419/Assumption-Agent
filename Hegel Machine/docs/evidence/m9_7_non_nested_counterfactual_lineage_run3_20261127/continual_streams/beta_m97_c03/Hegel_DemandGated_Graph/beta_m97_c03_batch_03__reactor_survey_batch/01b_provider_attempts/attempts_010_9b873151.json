@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9b873151da974a1da53b2f49210230f8",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:57:42.619776+00:00",
+  "ended_at_utc": "2026-11-27T08:58:02.917005+00:00",
+  "request_sha256": "017a160e5bc08c72ed448fae40637a61c499c5f5eb0772d7b74b936a99fc9b93",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 43940,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26302,
+    "cached_tokens": 6784,
+    "completion_tokens": 506
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,85p' /holdout_task/beta_m97_c03_batch_03_solver.py && python3 -I - <<'PY'\\nimport json\\nimport numpy as np\\nwith open('/tmp/hegel_continual_archive/archive_calibration_history.json') as f:\\n    history = json.load(f)\\nfor sweep in history:\\n    b, x, y = (np.asarray(sweep[k]) for k in ('bank_id','ref_signal','raw_readout'))\\n    print(sweep['episode_short_name'], [(int(i), np.round(np.polyfit(x[b==i],y[b==i],1),7).tolist()) for i in np.unique(b)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived boundary stencil -> H2 periodic stencil with bank-specific calibration; public KKT gap is 4.03e-7 and the largest leave-one-sweep-out weight shift is 1.27e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat boundary conservation, telemetry invariance, and the public schema check\",\n      \"rejected_reason\": \"Those checks already passed on the unchanged artifact; repeating them would not address an untested failure mode.\"\n    }\n  ],\n  \"rationale\": \"The previous audit tested two clean points and EMI with at least three points, but not their intersection. Two points alone fit an affine line exactly even if one is corrupted. Inspect whether the sparse-sweep branch already detects that case and whether real prefix calibration is stable enough to distinguish EMI from a legitimate fit before considering a change.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "49ffa3eceaef56ba06704d83b0f2ad4d1795b358035bcccd9fbb7a7f258a6eb8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20208.0,
+      "usage_known": true,
+      "prompt_tokens": 26302,
+      "cached_tokens": 6784,
+      "completion_tokens": 506
+    }
+  ]
+}

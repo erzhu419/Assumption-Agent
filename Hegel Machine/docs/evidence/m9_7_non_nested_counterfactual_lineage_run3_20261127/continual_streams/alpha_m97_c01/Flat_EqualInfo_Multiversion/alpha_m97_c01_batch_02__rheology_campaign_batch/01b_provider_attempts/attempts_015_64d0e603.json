@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "64d0e603deab458eb58aa93fc55a37ac",
+  "call_seq": 15,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:03:40.207406+00:00",
+  "ended_at_utc": "2026-11-27T09:04:12.749976+00:00",
+  "request_sha256": "62473013ed6881a6ee3c1356bac16c45d957bbea494242c710d7c84c015af02a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 80846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38362,
+    "cached_tokens": 6784,
+    "completion_tokens": 1300
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_02_solver.py')\\ns = p.read_text()\\nold = '''        # A short command span cannot reliably estimate a slope after spike\\n        # removal. Use the archived slope only if compatible with the clean\\n        # in-batch contrasts, and retain the in-batch level.\\n        x_centered = clean_x - clean_x.mean()\\n        span = np.ptp(clean_x)\\n        if keep.sum() < 4 and span < 0.2:\\n'''\\nnew = '''        # With fewer than four clean readings after EMI rejection, borrow\\n        # the archived slope only if supported by the in-batch contrasts.\\n        # Keep the stress level anchored to the current measurements.\\n        x_centered = clean_x - clean_x.mean()\\n        if keep.sum() < 4:\\n'''\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/rheology_emi_compare.py > /tmp/rheology_emi_final.log\\ncat /tmp/rheology_emi_final.log\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, re\\nfrom pathlib import Path\\nimport numpy as np\\nlines = Path('/tmp/rheology_emi_final.log').read_text()\\nrows = re.findall(r'^(\\\\d) current above \\\\.01 (\\\\d+) / (\\\\d+) worst [^\\\\n]+\\\\((\\\\d+\\\\.\\\\d+(?:e[+-]\\\\d+)?), \\\\(', lines, re.M)\\nassert [(int(k), int(n)) for k, _, n, _ in rows] == [(3,2880),(4,6720),(5,10080)], rows\\nassert all(int(bad) == 0 and float(worst) < cap for (_,bad,_,worst),cap in zip(rows,[.0004,.0004,.0023])), rows\\npath = '/holdout_task/alpha_m97_c01_batch_02_solver.py'\\nspec = importlib.util.spec_from_file_location('solver',path)\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb') as f:\\n    item = pickle.load(f)[0]\\nd, g = item['dataset'], item['gt']; te = d['test']; cal = d['calibration_load_cells']\\na = m.solve_alpha_m97_c01_batch_02(d)\\nassert all(np.isfinite(v).all() for v in a.values())\\nnp.testing.assert_array_equal(a['regime_mode_weights'], [0,0])\\nassert np.max(abs(a['estimated_taus']-g['taus'])) < .002\\nassert np.max(abs(a['hereditary_weights']-g['theta'])) < .005\\ncomplete = np.isfinite(te['coupon_features_raw']).all(1)\\nfor k,j,limit,clean_limit in [('predicted_strain','te_clean',.305,.01),('initial_rate_pred','te_true_rate0',.097,.004)]:\\n    e = a[k]-g[j]\\n    def worst(mask):\\n        return max(np.sqrt(np.mean(e[q]**2)) for c in range(4) if (q := ((te['lab_id']==c)&mask)).any())\\n    full, clean = worst(np.ones_like(complete)), worst(complete)\\n    print(k, 'worst-lab RMSE all/complete', full, clean)\\n    assert full < limit and clean < clean_limit\\nfor c in range(4):\\n    q = cal['lab_id']==c; x=cal['cmd_stress'][q]; y=cal['true_stress'][q]; t=te['lab_id']==c\\n    for n in [0,1,2]:\\n        gain,bias=m._calibrate(x[:n],y[:n],c)\\n        assert np.max(abs(gain*te['stress_hold_cmd'][t]+bias-g['te_hold_true'][t])) < .01\\nprint('Exact artifact passed clean-process public and sparse/EMI checks.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: use a compatible archived slope when EMI leaves fewer than four clean readings → H2: retain the linear Prony model; the trial rule reduced worst stress error to 0.000305 for three-row sweeps and 0.000270 for four-row sweeps.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the fixed command-span cutoff\",\n      \"rejected_reason\": \"It left 30 three- and four-row cases above 0.01 stress error. The contrast-based rule eliminated all 30 without changing the five-row results.\"\n    }\n  ],\n  \"rationale\": \"Apply the tested contrast rule while preserving direct in-batch fitting whenever four clean readings remain. Verify the saved file in isolated processes to catch both sparse-calibration regressions and any unintended change to public predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "c2a6c19ba4394a696b1a86210a9d26c5885241b63f1a0541ac5cf353d12aa5a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34659.52,
+      "usage_known": true,
+      "prompt_tokens": 38362,
+      "cached_tokens": 6784,
+      "completion_tokens": 1300
+    }
+  ]
+}

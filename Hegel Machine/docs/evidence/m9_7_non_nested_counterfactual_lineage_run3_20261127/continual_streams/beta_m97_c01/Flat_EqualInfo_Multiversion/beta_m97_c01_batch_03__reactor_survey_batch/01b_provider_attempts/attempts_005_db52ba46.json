@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db52ba4680eb43e5873ec6c933e2d07b",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:53:44.013704+00:00",
+  "ended_at_utc": "2026-11-27T08:54:21.024077+00:00",
+  "request_sha256": "d365d212e8e7fa5b19fc3cc73d7509912153d9d967ed99d8d48a1371cd884cab",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25101,
+    "cached_tokens": 0,
+    "completion_tokens": 1453
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nfrom pathlib import Path\\nimport importlib.util, inspect, pickle\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', root / 'beta_m97_c01_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ncase = pickle.loads((root / 'public_beta_m97_c01_batch_03.pkl').read_bytes())[0]\\ns, gt = case['study'], case['gt']\\nns = {}\\nexec((root / 'validate_public_schema.py').read_text().split('\\\\n_d = ')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nprint('Verifier signature:', inspect.signature(verify))\\nout = m.solve_beta_m97_c01_batch_03(s)\\nparams = dict(cert=out['kkt_certificate'], S_tilde=gt['S_tilde'], r_y=gt['r_y'], u_box=s['u_box'], b_tot=s['total_budget'], lam_w=s['source_ridge'])\\nresult = verify(**params)\\nprint('Public certificate:', result)\\nassert result['valid'], result\\nassert np.max(np.abs(out['weights'] - gt['w_opt'])) < 1e-6\\nassert np.max(np.abs(out['terminal_field'] - gt['terminal_field_A'])) < 1e-7\\nrng = np.random.default_rng(534)\\nmax_gap = 0.\\nfor scale in (0.01, 1., 10.):\\n    for cap in (0.4, 1.):\\n        for budget in (0., 0.0001, 2*cap, 5.3*cap, 12*cap-0.0001, 12*cap):\\n            for _ in range(20):\\n                S, y = scale*rng.normal(size=(30,12)), rng.normal(size=30)\\n                w, nu = m._box_simplex(S, y, .04, cap, budget)\\n                g = S.T @ (S @ w-y) + .04*w\\n                gap = float(g @ w - nu*budget - cap*np.minimum(0.,g-nu).sum())\\n                max_gap = max(max_gap, abs(gap))\\n                assert abs(w.sum()-budget) < 1e-9 and w.min() >= -1e-10 and w.max() <= cap+1e-10\\n                assert abs(gap) < 1e-8, (scale, cap, budget, gap)\\nprint('720 box-simplex stress solves; max supporting-plane gap:', max_gap)\\nsweep = s['sensor_calibration_sweeps']\\nbank = 0\\nsel = np.flatnonzero(sweep['bank_id']==bank)\\nrows = s['row_bank_id']==bank\\nref_y = m._calibrated_observations(s)\\ncal_err = []\\nfor keep_n, emi in ((12, False), (12, True), (3, False), (3, True), (1, False), (0, False)):\\n    keep = (sweep['bank_id']!=bank) | np.isin(np.arange(len(sweep['bank_id'])), sel[:keep_n])\\n    trial = dict(s, sensor_calibration_sweeps={k: v[keep].copy() for k,v in sweep.items()}, y_obs_raw=s['y_obs_raw'].copy())\\n    trial_sweep = trial['sensor_calibration_sweeps']\\n    local = trial_sweep['bank_id']==bank\\n    if keep_n < 2 or (emi and keep_n < 5):\\n        gain, offset = m._archived_affine(bank)\\n        trial_sweep['raw_readout'][local] = gain*trial_sweep['ref_signal'][local]+offset\\n        trial['y_obs_raw'][rows] = gain*ref_y[rows]+offset\\n    if emi:\\n        trial_sweep['raw_readout'][np.flatnonzero(local)[0]] += 8.\\n    err = np.max(np.abs(m._calibrated_observations(trial)-ref_y))\\n    cal_err.append(err)\\n    assert err < 1e-6, (keep_n, emi, err)\\ntrial = dict(s, aux_manifold_telemetry=np.full_like(s['aux_manifold_telemetry'], 1000.))\\nnp.testing.assert_array_equal(m.solve_beta_m97_c01_batch_03(trial)['weights'], out['weights'])\\nprint('Calibration slices; max absolute error:', max(cal_err))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin operator → H2 periodic closure on both axes; public projected operator agrees to 1.74e-16 max absolute error, weights to 3.31e-7, and terminal field to 2.12e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Revise the certificate based on the previous verifier result\",\n      \"rejected_reason\": \"The previous positional call passed the arguments in the wrong order; verify by keyword before changing the solver.\"\n    }\n  ],\n  \"rationale\": \"Verify the public certificate against the supplied reference data, then stress the active-set solver at bound-heavy budgets and test the calibration branches not exercised by the public case. A failure will identify whether to revise certificate assembly, the active set, or the fallback decision.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7770f4ded840216878e1ad64168591c5e40462863919cd6ffbfb3e4d001a201b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38956.94,
+      "usage_known": true,
+      "prompt_tokens": 25101,
+      "cached_tokens": 0,
+      "completion_tokens": 1453
+    }
+  ]
+}

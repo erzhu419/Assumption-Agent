@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7c9646de059949fa9cc012b50f0dc517",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:53:20.953439+00:00",
+  "ended_at_utc": "2026-11-27T08:53:55.942994+00:00",
+  "request_sha256": "6c069014ea6e87efc5864c2c36347d310d38508ea4f0ec176f0ff022487eb29c",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 37762,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25295,
+    "cached_tokens": 6784,
+    "completion_tokens": 1352
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 -I - <<'PY'\\nfrom pathlib import Path\\nfrom copy import deepcopy\\nfrom unittest.mock import patch\\nimport importlib.util, pickle, numpy as np\\nroot=Path('/holdout_task'); archive=Path('/tmp/hegel_continual_archive')\\ndef load(path):\\n spec=importlib.util.spec_from_file_location(path.stem,path); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load(root/'beta_m97_c03_batch_03_solver.py'); prev=load(archive/'beta_m97_c03_batch_02_solver.py')\\nns={}; exec((root/'validate_public_schema.py').read_text().split('\\\\n_d =')[0],ns)\\nverify=ns['verify_box_simplex_kkt_certificate']\\nmax_gap=0.; max_cal=0.; max_branch=0.; n=0\\nfor item in pickle.load((root/'public_beta_m97_c03_batch_03.pkl').open('rb')):\\n s,g=item['study'],item['gt']; y=m._calibrate(s); w=s['sensor_calibration_sweeps']; b=np.asarray(w['bank_id']); raw=np.asarray(w['raw_readout']); rb=np.asarray(s['row_bank_id']); ix=np.flatnonzero(b==0)\\n for j in ix[[np.argmin(np.asarray(w['ref_signal'])[ix]),np.argmax(np.asarray(w['ref_signal'])[ix])]]:\\n  for spike in (-8.,8.):\\n   t=deepcopy(s); t['sensor_calibration_sweeps']['raw_readout']=raw.copy(); t['sensor_calibration_sweeps']['raw_readout'][j]+=spike\\n   with patch.object(m,'_archived_calibration',side_effect=AssertionError('history read despite enough clean points')):\\n    err=np.max(np.abs(m._calibrate(t)-y)); max_cal=max(max_cal,err); assert err<1e-6\\n for bank in np.unique(b):\\n  mask=(b!=bank); mask[np.flatnonzero(b==bank)[0]]=True; t=deepcopy(s)\\n  t['sensor_calibration_sweeps']={k:np.asarray(v)[mask] for k,v in w.items()}\\n  gain,offset=m._archived_calibration(bank); expected=y.copy(); expected[rb==bank]=(s['y_obs_raw'][rb==bank]-offset)/gain\\n  err=np.max(np.abs(m._calibrate(t)-expected)); max_cal=max(max_cal,err); assert err<1e-10\\n for loop, high in [(0.5,False),(0.,False),(0.,True),(np.nextafter(0.5,1.),True),(0.85,False)]:\\n  t=deepcopy(s); t['recirculation_loop_mode']=loop\\n  if high: t['past_vortex_circulation_trace']=np.asarray(t['past_vortex_circulation_trace'])+0.8\\n  S,F=m._forward(t)\\n  if loop<=0.5:\\n   oldS,oldF=prev._forward(t); err=max(np.max(np.abs(S-oldS)),np.max(np.abs(F-oldF))); max_branch=max(max_branch,err); assert err<1e-12\\n  else:\\n   for axis in 'xy':\\n    A=m._periodic_axis(t['kappa_'+axis],t['vel_'+axis],t['L'+axis]); assert A[0,-1]<0 and A[-1,0]<0; assert np.max(np.abs(A.sum(axis=1)))<1e-12\\n  Z=t['Z_nuisance']; dat=np.column_stack((m._calibrate(t),S)); dat-=Z@np.linalg.solve(Z.T@Z+t['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@dat); ry,St=dat[:,0],dat[:,1:]\\n  for budget in (0., 1e-8, t['u_box'], s['total_budget'], 6*t['u_box'], 11*t['u_box']+0.99*t['u_box'], 12*t['u_box']):\\n   t['total_budget']=budget; out=m.solve_beta_m97_c03_batch_03(t); c=out['kkt_certificate']; ww=out['weights']; assert np.array_equal(ww,c['weights']); assert abs(ww.sum()-budget)<1e-9; assert np.allclose((F@ww).reshape(t['nx'],t['ny'],order='F'),out['terminal_field']); rec=verify(St,ry,t['source_ridge'],t['u_box'],budget,c); assert rec['valid'],(loop,budget,rec); max_gap=max(max_gap,rec['gap']); n+=1\\nprint(f'{n} mode/budget certificates; worst gap={max_gap:.3e}; worst calibration slice error={max_cal:.3e}; archived nonperiodic branch max diff={max_branch:.3e}')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived Robin transport -> H2 mode-gated periodic closure; public maximum weight error is 5.08e-7 and the verified KKT gap is 4.03e-7.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The public case passes but exercises only one mode and a well-populated calibration sweep. Stress threshold switching, sparse and spiked calibration, and saturated simplex budgets; any failure identifies the branch that needs correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6153bdf497a4bb377e01b9048b066dfb42287734039e5197d32048df25500a0d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37092.18,
+      "usage_known": true,
+      "prompt_tokens": 25295,
+      "cached_tokens": 6784,
+      "completion_tokens": 1352
+    }
+  ]
+}

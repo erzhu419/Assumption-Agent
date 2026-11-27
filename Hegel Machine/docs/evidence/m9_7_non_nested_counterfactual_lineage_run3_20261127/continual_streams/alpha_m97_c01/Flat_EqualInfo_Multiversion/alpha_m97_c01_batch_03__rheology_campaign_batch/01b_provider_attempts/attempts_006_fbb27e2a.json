@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbb27e2ab6674e9a81985301ab0fcc0b",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:07:13.451450+00:00",
+  "ended_at_utc": "2026-11-27T09:07:56.103271+00:00",
+  "request_sha256": "7105602bf69564b347c6c9c09d9ee4e8bf6289399d0cace7b6c0bfbdb60e7fa8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45693,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28819,
+    "cached_tokens": 11136,
+    "completion_tokens": 1740
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_batch_03_solver.py')\\ns = p.read_text()\\na = s.index('    return decode(best.x), profile(best.x)[1]')\\nb = a + len('    return decode(best.x), profile(best.x)[1]')\\ns = s[:a] + '''    initial = np.r_[best.x, profile(best.x)[1]]\\n    n_curve = yc.size\\n    scale = np.ones_like(y)\\n\\n    def residual(p):\\n        return np.einsum('ij,j->i', design(p[:2]), p[2:]) - y\\n\\n    def mad(e):\\n        return max(1e-8, 1.4826 * np.median(np.abs(e - np.median(e))))\\n\\n    bounds = (np.r_[[np.log(low)] * 2, [-np.inf] * 9],\\n              np.r_[[np.log(high)] * 2, [np.inf] * 9])\\n    p = initial\\n    # Fit separate noise scales for the curve and instantaneous-rate instruments.\\n    # The Cauchy loss limits the influence of transient curve spikes.\\n    for _ in range(3):\\n        e = residual(p)\\n        scale[:n_curve] = mad(e[:n_curve])\\n        scale[n_curve:] = mad(e[n_curve:])\\n        p = least_squares(lambda q: residual(q) / scale, p, bounds=bounds,\\n                          loss='cauchy', f_scale=2, max_nfev=120).x\\n    return decode(p[:2]), p[2:]''' + s[b:]\\ns = s.replace('return a @ w - y, w', \\\"return np.einsum('ij,j->i', a, w) - y, w\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/alpha_m97_c01_batch_03_solver.py'\\nspec=importlib.util.spec_from_file_location('rheology',p); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_03.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\no=s.solve_alpha_m97_c01_batch_03(d); ntest=len(d['test']['strain_0']); k=len(d['eval_times'])\\nfor name, shape in {'estimated_taus':(2,), 'hereditary_weights':(7,), 'regime_mode_weights':(2,), 'predicted_strain':(ntest,k), 'initial_rate_pred':(ntest,)}.items():\\n assert o[name].shape==shape and np.isfinite(o[name]).all(), name\\ntr=d['train']; n=len(tr['strain_0']); lab=tr['lab_id']; missing=~np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ndt,t,past,hold,x=s._prepare(d); past,hold,x=past[:n],hold[:n],x[:n]\\nyc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\nmetrics=[]\\nfor c in np.unique(lab):\\n te=lab==c; m=~te\\n tau,w=s._fit(dt,t,past[m],hold[m],x[m],yc[m],yr[m]); assert 0<tau[0]<tau[1]\\n ac,ar=s._basis(tau,dt,t,past[te],hold[te],x[te]); ec,er=abs(ac@w-yc[te]),abs(ar@w-yr[te]); keep=~missing[te]\\n values=[np.quantile(ec,.5),np.quantile(er,.5),np.quantile(ec,.95),np.quantile(er,.95),np.quantile(ec[keep],.95),np.quantile(er[keep],.95),np.quantile(ec[~keep],.95),np.quantile(er[~keep],.95),np.quantile(ec[:,-1],.90)]\\n metrics.append(values); print('held lab',c,'tau',tau.round(5),'metrics',np.round(values,5))\\n h=1e-6; a0,_=s._basis(tau,dt,np.array([0.,h]),past[te],hold[te],x[te]); np.testing.assert_allclose((a0[:,1]@w-a0[:,0]@w)/h,ar@w,rtol=1e-5,atol=5e-6)\\nprint('worst: median curve/rate, p95 curve/rate, p95 complete curve/rate, p95 missing curve/rate, p90 last horizon:',np.max(metrics,axis=0).round(5))\\nprint('taus',o['estimated_taus'],'hereditary',o['hereditary_weights'],'regime',o['regime_mode_weights'])\\n# A noiseless constitutive case tests ordered-branch parameter recovery and weight indexing.\\ntarget_tau=np.array([.7,3.4]); target_w=np.array([.61,.47,.11,.14,-.12,.09,-.07,.27,-.19]); ac,ar=s._basis(target_tau,dt,t,past,hold,x)\\ntau,w=s._fit(dt,t,past,hold,x,ac@target_w,ar@target_w)\\nnp.testing.assert_allclose(tau,target_tau,rtol=1e-5); np.testing.assert_allclose(w,target_w,atol=1e-6)\\nprint('Noiseless recovery and initial-rate derivative verified.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Ordinary fitting -> Cauchy fitting of the same jammed-slip basis; worst held-lab median curve and rate errors in the robust comparison were 0.0161 and 0.0175.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit only complete coupons\",\n      \"rejected_reason\": \"It worsened worst-lab median rate error without a material improvement in the curve tail.\"\n    }\n  ],\n  \"rationale\": \"Promote the all-coupon robust fit, which retains the specified response basis while reducing the influence of transient spikes. Verify the exact saved artifact in isolation, score missing-coupon and late-horizon slices, and test noiseless parameter recovery and the initial-rate derivative independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "44b244eb8d0b25cd5fccaef93f4a22ba6386d672276be3660b905f304bf8d869",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46795.36,
+      "usage_known": true,
+      "prompt_tokens": 28819,
+      "cached_tokens": 11136,
+      "completion_tokens": 1740
+    }
+  ]
+}

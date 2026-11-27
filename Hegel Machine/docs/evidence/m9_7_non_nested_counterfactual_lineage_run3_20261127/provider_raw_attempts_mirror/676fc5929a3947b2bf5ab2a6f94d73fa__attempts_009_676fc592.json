@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "676fc5929a3947b2bf5ab2a6f94d73fa",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:49.881088+00:00",
+  "ended_at_utc": "2026-11-27T08:51:20.989463+00:00",
+  "request_sha256": "6397b905b1b2b77142dc9f47c7aa3fa3defd6c7aa86257e57514efb28142d763",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 61260,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32250,
+    "cached_tokens": 6784,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport ast\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\npath = root / 'beta_m97_c02_batch_01_solver.py'\\nspec = importlib.util.spec_from_file_location('candidate', path)\\nmod = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(mod)\\nnodes = ast.parse((root / 'validate_public_schema.py').read_text()).body\\nns = {}\\nexec(compile(ast.Module(body=[n for n in nodes if isinstance(n, (ast.Import, ast.ImportFrom)) or isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate'], type_ignores=[]), 'public_checker', 'exec'), ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nwith (root / 'public_beta_m97_c02_batch_01.pkl').open('rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    d, g = case['study'], case['gt']\\n    out = mod.solve_beta_m97_c02_batch_01(d)\\n    cert = verify(g['S_tilde'], g['r_y'], d['source_ridge'], d['u_box'], d['total_budget'], out['kkt_certificate'])\\n    assert cert['valid'], cert\\n    np.testing.assert_array_equal(out['weights'], out['kkt_certificate']['weights'])\\n    errors = {k: float(np.linalg.norm(out[k] - g[r]) / np.linalg.norm(g[r])) for k, r in [('weights', 'w_opt'), ('terminal_field', 'terminal_field_A')]}\\n    assert max(errors.values()) < 1e-4, errors\\n    print('public reference gap', cert['gap'], 'relative errors', errors)\\n\\nrng = np.random.default_rng(873)\\nworst = 0.0\\nfor trial in range(120):\\n    S = rng.normal(size=(24, 12)) * 0.1\\n    y = rng.normal(size=24) * (0.01 if trial % 2 else 1.0)\\n    ridge, upper = (1e-6 if trial % 3 else 0.02), 0.2\\n    budget = [0.0, 0.001, 0.8, 1.137, 2.399, 12*upper][trial % 6]\\n    w, nu = mod._box_simplex(S, y, ridge, upper, budget)\\n    res = S @ w - y\\n    gradient = S.T @ res + ridge*w\\n    feasible = max(abs(w.sum()-budget), -w.min(), w.max()-upper)\\n    gap = gradient@w - nu*budget - upper*np.minimum(0, gradient-nu).sum()\\n    assert feasible < 1e-10 and abs(gap) < 1e-9, (trial, feasible, gap)\\n    worst = max(worst, abs(gap))\\nprint('active-set stress: 120 trials; max absolute tangential gap', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Both-axis sealing with x-localized sorption → retain the transport and archived-sweep fallback; the preceding public reference KKT gap was 4.62e-7, and the current artifact passed all tested calibration routes with maximum error 7.24e-15.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact final file in an isolated Python process. A public-reference failure would identify a regression from the calibration edit; an endpoint or mixed-bound failure would identify an active-set defect that the public budget does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c0bcb0ebc5f999f3ca4a470af47d17a6649024fc2e3b39eff62808f4de85e4bd",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33108.92,
+      "usage_known": true,
+      "prompt_tokens": 32250,
+      "cached_tokens": 6784,
+      "completion_tokens": 1069
+    }
+  ]
+}

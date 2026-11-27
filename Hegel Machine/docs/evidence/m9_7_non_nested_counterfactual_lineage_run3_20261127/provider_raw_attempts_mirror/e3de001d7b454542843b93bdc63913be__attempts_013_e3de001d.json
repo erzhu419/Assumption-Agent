@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e3de001d7b454542843b93bdc63913be",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:52:35.272220+00:00",
+  "ended_at_utc": "2026-11-27T08:53:12.190526+00:00",
+  "request_sha256": "e8c9c1330c11a331ac310d6153233b3e16e0f01d40f082d62664aa8df0065258",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 67248,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34265,
+    "cached_tokens": 6784,
+    "completion_tokens": 1583
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\nold = '''def _calibrate(cmd, true, channel):\\n    clean = _clean_calibration(cmd, true)\\n'''\\nnew = '''def _calibrate(cmd, true, channel):\\n    if len(cmd) == 3:\\n        # Two points define a line exactly, so a three-point sweep cannot\\n        # identify a single EMI spike by its median residual alone.\\n        i, j = np.triu_indices(3, 1)\\n        distinct = cmd[i] != cmd[j]\\n        i, j = i[distinct], j[distinct]\\n        k = 3 - i - j\\n        slopes = (true[j] - true[i]) / (cmd[j] - cmd[i])\\n        offsets = true[i] - slopes * cmd[i]\\n        if np.any(np.abs(true[k] - slopes * cmd[k] - offsets) > 3.0):\\n            gain, bias = _archived_calibration(channel)\\n            # Use the archive to identify the clean pair, not to replace\\n            # the current calibration of that pair.\\n            distance = np.max(np.abs((slopes - gain)[:, None] * cmd +\\n                                     (offsets - bias)[:, None]), axis=1)\\n            best = np.argmin(distance)\\n            if abs(true[k[best]] - slopes[best] * cmd[k[best]] - offsets[best]) > 3.0:\\n                return np.array([slopes[best], offsets[best]])\\n        return _line(cmd, true)\\n    clean = _clean_calibration(cmd, true)\\n'''\\nassert old in s\\np.write_text(s.replace(old, new, 1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\nfrom unittest.mock import patch\\nroot = '/holdout_task/'\\ns = importlib.util.spec_from_file_location('solver', root+'alpha_m97_c01_batch_01_solver.py'); m = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nfor ch in range(4):\\n    lab = c['lab_id']==ch; x=c['cmd_stress'][lab]; y=c['true_stress'][lab]; full=m._line(x,y); grid=np.vstack((x,np.ones(len(x))))\\n    err=[]; recovery=[]\\n    for ids in itertools.combinations(range(len(x)),3):\\n        xx=x[list(ids)]; yy=y[list(ids)]\\n        with patch.object(m, '_archived_calibration', side_effect=AssertionError('archive consulted on a clean public sweep')):\\n            np.testing.assert_allclose(m._calibrate(xx,yy,ch),m._line(xx,yy),atol=1e-12,rtol=0)\\n        for i in range(3):\\n            clean=np.arange(3)!=i; expected=m._line(xx[clean],yy[clean]);\\n            for spike in (-8.,-3.01,3.01,8.):\\n                zz=yy.copy(); zz[i]+=spike; actual=m._calibrate(xx,zz,ch)\\n                recovery.append(np.max(abs((actual-expected)@grid))); err.append(np.max(abs((actual-full)@grid)))\\n    print('lab',ch,'three-point EMI trials',len(err),'max discrepancy vs clean pair',max(recovery),'vs full sweep',max(err),flush=True)\\n    np.testing.assert_allclose(recovery,0,atol=1e-10,rtol=0)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: classify three-point EMI by in-sweep median residual → H2: use the permitted archive to identify the clean pair and refit in-batch; the previous sparse-sweep stress test reached 259.31 maximum stress error while clean jackknife shifts stayed below 0.0001.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use archive coefficients as the final calibration whenever an EMI spike is suspected\",\"rejected_reason\":\"Even on the measured command grid, the archive differs from the current batch by up to 0.792 stress units; the surviving current points should determine the final coefficients.\"}],\"rationale\":\"A three-point sweep gives a residual tie because any two points define a line. Resolve the tie only in the suspected-EMI branch. The exhaustive test on measured command triplets detects whether the archive selects the wrong pair, including for spikes just over threshold; the clean-triplet test catches unintended archive access.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "1c6df429486c382077a84b2d8046887fdc4c4367fe0c70daad426b4882e970c7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41070.95,
+      "usage_known": true,
+      "prompt_tokens": 34265,
+      "cached_tokens": 6784,
+      "completion_tokens": 1583
+    }
+  ]
+}

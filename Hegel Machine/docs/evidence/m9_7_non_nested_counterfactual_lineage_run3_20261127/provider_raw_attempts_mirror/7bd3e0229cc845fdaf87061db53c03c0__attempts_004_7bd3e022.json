@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7bd3e0229cc845fdaf87061db53c03c0",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:13:15.543118+00:00",
+  "ended_at_utc": "2026-11-27T09:13:35.284598+00:00",
+  "request_sha256": "b2692d1861cf4e1a00b2022a5cafcdab396f7336c466200e72ca7fc58f07990e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 31565,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23522,
+    "cached_tokens": 11136,
+    "completion_tokens": 586
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,88p' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py; python3 - <<'PY'\\nimport json,numpy as np\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nprint('history keys:', list(h))\\nfor k,v in h.items():\\n if isinstance(v,list) and v and isinstance(v[0],dict):\\n  print(k,'entry keys:',list(v[0]))\\n  for r in v:\\n   if all(i in r for i in ('lab_id','cmd_stress','true_stress')):\\n    l,x,y=map(np.asarray,(r['lab_id'],r['cmd_stress'],r['true_stress'])); print({i:np.round(np.polyfit(x[l==i],y[l==i],1),6).tolist() for i in (1,2) if np.sum(l==i)>=2})\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Prony viscoelastic relaxation variable projection' | head -10\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine calibration with EMI-restricted historical fallback -> H2: jammed-slip variable projection; in-batch OLS residuals reach 2.969 stress units on the sparse channels and prediction validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Estimate both affine parameters from the surviving in-batch point\",\n      \"rejected_reason\": \"One point cannot identify both gain and bias. Historical sweeps can supply the missing information if the channels meet the EMI condition.\"\n    }\n  ],\n  \"rationale\": \"The previous output truncated the archived preprocessing and sweep structure. Read only the relevant archived functions and summarize historical slopes to determine whether pooling the sweeps would bias the sparse-channel calibration.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5eed965be1b305152fc06510c653e54223790678ad8b04aea9b4c77415f15228",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21886.82,
+      "usage_known": true,
+      "prompt_tokens": 23522,
+      "cached_tokens": 11136,
+      "completion_tokens": 586
+    }
+  ]
+}

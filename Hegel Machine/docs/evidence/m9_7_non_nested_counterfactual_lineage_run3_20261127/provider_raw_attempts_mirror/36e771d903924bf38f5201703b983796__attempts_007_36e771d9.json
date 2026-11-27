@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36e771d903924bf38f5201703b983796",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:14:52.109661+00:00",
+  "ended_at_utc": "2026-11-27T09:15:19.099779+00:00",
+  "request_sha256": "77cc43a6533958900a85a2860f9da717db17d9b6029ebe300d3795bb20c3769b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46610,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28433,
+    "cached_tokens": 6784,
+    "completion_tokens": 1022
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat >> alpha_m97_c03_batch_06_solver.py <<'PY'\\n\\n\\ndef solve_alpha_m97_c03_batch_06(dataset: dict) -> dict:\\n    past, hold, features, offset, dt, times = _prepare(dataset)\\n    train = dataset['train']\\n    n = len(train['lab_id'])\\n    logtau, weights = _fit(past[:n], hold[:n], features[:n], dt, times,\\n                           train['strain_curves_obs'] - offset[:n, None],\\n                           train['instant_rate_obs'])\\n    curves, rates = _design(logtau, past[n:], hold[n:], features[n:], dt, times)\\n    return {\\n        'estimated_taus': np.exp(logtau),\\n        'hereditary_weights': weights[:7],\\n        'regime_mode_weights': weights[7:],\\n        'predicted_strain': offset[n:, None] + curves @ weights,\\n        'initial_rate_pred': rates @ weights,\\n    }\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, time\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m97_c03_batch_06_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('public_alpha_m97_c03_batch_06.pkl','rb'))[0]; d=i['dataset']; g=i['gt']; start=time.monotonic(); o=m.solve_alpha_m97_c03_batch_06(d); print('seconds',round(time.monotonic()-start,3))\\ncal=m._calibration(d['calibration_load_cells']); print('calibration',cal,'max gain and bias errors',np.max(np.abs(cal-np.column_stack((g['stress_gains'],g['stress_biases']))),axis=0))\\nfor k in ('taus','theta','vp_theta'): print(k,np.asarray(g[k]).shape,g[k])\\nfor k in ('estimated_taus','hereditary_weights','regime_mode_weights'): print(k,o[k])\\ne=o['predicted_strain']-g['te_clean']; r=o['initial_rate_pred']-g['te_true_rate0']; rmse=lambda a: np.sqrt(np.mean(a*a)); print('overall RMSE curve/rate',rmse(e),rmse(r),'per horizon',np.sqrt(np.mean(e*e,axis=0)))\\nl=d['test']['lab_id']; z=d['test']['stratum']; missing=np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\nfor j in range(4):\\n for k in np.unique(z[l==j]):\\n  q=(l==j)&(z==k); print('lab/stratum',j,k,q.sum(),rmse(e[q]),rmse(r[q]))\\nfor q in (missing,~missing):\\n if q.any(): print('missing/nonmissing',q.sum(),rmse(e[q]),rmse(r[q]))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: current-batch calibration with EMI-restricted history and lab panel alignment -> H2: exact jammed-slip variable projection; sparse-channel OLS residuals peak at 2.969 stress units, and predictive slice metrics are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Stop after the schema validator passes\",\n      \"rejected_reason\": \"Valid shapes cannot detect a swapped coefficient, a calibration error confined to one lab, or an incorrect initial-rate derivative.\"\n    }\n  ],\n  \"rationale\": \"Wire the confirmed training targets and run the validator in an isolated process. Compare both predictions to public references by lab, stratum, horizon, and feature missingness to identify whether any remaining failure comes from calibration, alignment, or the fitted response.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "54bcdd95b60d2c9995ecd3bdd7e0c1bd75630009457906e4f6b367598c189221",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29217.15,
+      "usage_known": true,
+      "prompt_tokens": 28433,
+      "cached_tokens": 6784,
+      "completion_tokens": 1022
+    }
+  ]
+}

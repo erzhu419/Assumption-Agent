@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f5a469ac3c554716a1307cd0233b0d89",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:57:29.838179+00:00",
+  "ended_at_utc": "2026-11-27T08:58:04.455439+00:00",
+  "request_sha256": "77230e54401cb8d1f28ddae53eb90916de9ae7305da234e6fd9447c9cfecebf6",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 48981,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28001,
+    "cached_tokens": 11136,
+    "completion_tokens": 1246
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c03_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(p+'public_alpha_m97_c03_batch_02.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\npast,hold,x,offset,dt,t=m._prepare(d)\\nout=m.solve_alpha_m97_c03_batch_02(d); tau=out['estimated_taus']; w=out['hereditary_weights']; n=len(d['train']['lab_id'])\\n# Independent closed form: each historical step is attenuated by all later dwell times.\\nremaining=np.cumsum(dt[::-1])[::-1]-dt\\nkernel=(1-np.exp(-dt[:,None]/tau))*np.exp(-remaining[:,None]/tau)\\namplitude=(hold[n:,None]-past[n:]@kernel)*w[:2]\\ndrift=w[2]+x[n:]@w[3:]\\ncurve=offset[n:,None]+amplitude@(1-np.exp(-t[None,:]/tau[:,None]))+drift[:,None]*t\\nrate=amplitude@(1/tau)+drift\\nprint('max exact closure errors, strain/rate:',np.max(np.abs(curve-out['predicted_strain'])),np.max(np.abs(rate-out['initial_rate_pred'])))\\nnp.testing.assert_allclose(curve,out['predicted_strain'],atol=1e-12,rtol=0)\\nnp.testing.assert_allclose(rate,out['initial_rate_pred'],atol=1e-12,rtol=0)\\nnp.testing.assert_array_equal(out['regime_mode_weights'],[0,0])\\nc=d['calibration_load_cells']; ids=c['lab_id']; base=m._calibration(c); prior=m._prior_calibration\\n\\ndef forbid_archive(lab):\\n    raise AssertionError(f'Archive consulted despite identifiable in-batch calibration: {lab}')\\n\\nm._prior_calibration=forbid_archive\\nworst={2:0.,3:0.,'4_clean_plus_EMI':0.}\\nfor lab in range(4):\\n    ix=np.flatnonzero(ids==lab); ix=ix[np.argsort(c['cmd_stress'][ix])]\\n    for size in (2,3,5):\\n        take=ix[np.rint(np.linspace(0,len(ix)-1,size)).astype(int)]\\n        keep=(ids!=lab)|np.isin(np.arange(len(ids)),take)\\n        for spike in ((-3.05,3.05) if size==5 else (0.,)):\\n            tab={k:v[keep].copy() for k,v in c.items()}\\n            if spike:\\n                j=np.flatnonzero(tab['lab_id']==lab); endpoint=j[np.argmax(tab['cmd_stress'][j])]\\n                tab['true_stress'][endpoint]+=spike\\n            err=np.max(np.abs(m._calibration(tab)[lab]-base[lab]))\\n            key='4_clean_plus_EMI' if spike else size\\n            worst[key]=max(worst[key],err)\\nprint('worst coefficients vs full clean sweep:',worst)\\nassert max(worst.values())<5e-4,worst\\nm._prior_calibration=prior\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 command-scale fitting → H2 calibrated two-branch linear creep; worst leave-one-lab-out median errors are 0.04777 strain and 0.01330 initial rate, and clean imputed-coupon strain MAE is 0.30576.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational flow terms, relay states, or batch classification\",\n      \"rejected_reason\": \"The contract specifies linear terminal flow and continuous strain and rate outputs; it defines no relay state or classification target.\"\n    }\n  ],\n  \"rationale\": \"An independently summed memory kernel can detect an indexing, decay, sign, or rate-basis error that refitting the same implementation would hide. Calibration sweeps thinned from the measured rows test whether the solver uses in-batch data when it should and still identifies four clean points beside a near-threshold EMI spike. A failure would prompt a targeted fix to the basis or calibration logic.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "ad76db7a6277c2c92ba71b65f8cc415afcf7ef7dbcb81ba069a90047ebce8e21",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36711.15,
+      "usage_known": true,
+      "prompt_tokens": 28001,
+      "cached_tokens": 11136,
+      "completion_tokens": 1246
+    }
+  ]
+}

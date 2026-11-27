@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fd2164865d114d86866bf3d05018a518",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:26:59.387404+00:00",
+  "ended_at_utc": "2026-11-27T09:27:38.502541+00:00",
+  "request_sha256": "66b02b305ae63eefc2d37c0f2606516612f3b3859f84ec4b4d76715b79a3e649",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 71284,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34781,
+    "cached_tokens": 6784,
+    "completion_tokens": 1546
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c02_batch_07_solver.py')\\ns = p.read_text()\\nstart = s.index('def _calibrate(sweep):')\\nend = s.index('\\\\n\\\\ndef _prepare', start)\\ns = s[:start] + '''def _calibrate(sweep):\\n    coeffs = []\\n    history = None\\n    for lab in range(4):\\n        x, y = _channel(sweep, lab)\\n        coeff = _line(x, y, archived=True)\\n        if coeff is None:\\n            # With two spikes in three rows, an in-batch fit can absorb both.\\n            # A prior line can identify that pattern if a clean point anchors it.\\n            if history is None:\\n                history = json.loads(_HISTORY.read_text())\\n            direct = _line(x, y)\\n            for past_sweep in reversed(history):\\n                px, py = _channel(past_sweep, lab)\\n                prior = _line(px, py, archived=True)\\n                if prior is None:\\n                    continue\\n                if direct is None:\\n                    direct = prior\\n                    break\\n                residual = np.abs(y - (prior[0] * x + prior[1]))\\n                clean = residual <= 0.02\\n                if len(px) >= 4 and clean.any() and (residual > 3.0).any():\\n                    direct = _line(x[clean], y[clean], archived=True)\\n                    if direct is None:\\n                        direct = prior\\n                    break\\n            if direct is None:\\n                raise ValueError(f'No clean calibration for load cell {lab}')\\n            coeff = direct\\n        coeffs.append(coeff)\\n    return np.asarray(coeffs)\\n''' + s[end:]\\ns = s.replace('def _line(x, y, archived=False):','def _line(x, y, strict=False):').replace('if archived else 3.0','if strict else 3.0').replace('archived=True','strict=True')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location('solver',path)\\n    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)\\n    return module\\npath=root/'alpha_m97_c02_batch_07_solver.py'\\nm=load(path)\\nold=load(next(Path('/tmp/.hegel_candidate_archive/v02_34e42e97').rglob(path.name)))\\nhistory=json.loads(m._HISTORY.read_text())\\nitem=pickle.loads((root/'public_alpha_m97_c02_batch_07.pkl').read_bytes())[0]\\nd=item['dataset']; g=item['gt']\\nfor lab in (0,3):\\n    x,y=m._channel(history[6],lab)\\n    prior=next(c for h in reversed(history[:6]) if len(m._channel(h,lab)[0])>=4 and (c:=m._line(*m._channel(h,lab),strict=True)) is not None)\\n    sweep=dict(lab_id=np.full(len(x),lab),cmd_stress=x,true_stress=y)\\n    assert np.count_nonzero(np.abs(y-(prior[0]*x+prior[1]))>3)==2\\n    np.testing.assert_allclose(m._calibrate(sweep)[lab],prior,atol=1e-10,rtol=0)\\n    print('EMI replay lab',lab,'maximum line shift before/after',np.max(np.abs((old._calibrate(sweep)[lab]-prior)@[x,np.ones_like(x)])),np.max(np.abs((m._calibrate(sweep)[lab]-prior)@[x,np.ones_like(x)])))\\na=m.solve_alpha_m97_c02_batch_07(d); b=old.solve_alpha_m97_c02_batch_07(d)\\nfor k in a: np.testing.assert_allclose(a[k],b[k],rtol=0,atol=1e-9)\\nmissing=np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\nfor k,t in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    e=a[k]-g[t]; print(k,'overall/missing RMSE',np.sqrt(np.mean(e**2)),np.sqrt(np.mean(e[missing]**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: reject sparse calibration lines that absorb two EMI spikes by requiring a clean anchor to a prior sweep; the verified baseline missing-coupon strain RMSE is 0.18954.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace any sparse calibration that disagrees with history\",\n      \"rejected_reason\": \"A disagreement can reflect a real calibration shift; the fallback requires a point that agrees with the prior line and another that differs by more than 3.0.\"\n    }\n  ],\n  \"rationale\": \"Two real three-point sweeps passed the direct fit despite spikes above 4.5. Replay both to verify that the change recovers the anchored line, then compare every public output against the verified baseline to catch any unintended effect on clean calibration or rheology predictions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "1108b0f7cdff85bef3095eed66567e85dc907b68eaa634ede6cc383ef0e1624e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41672.23,
+      "usage_known": true,
+      "prompt_tokens": 34781,
+      "cached_tokens": 6784,
+      "completion_tokens": 1546
+    }
+  ]
+}

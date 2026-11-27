@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3eeb14a9659241f5a9850690b36039b7",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:19:36.051195+00:00",
+  "ended_at_utc": "2026-11-27T09:20:10.924818+00:00",
+  "request_sha256": "0032a767655b32cdd00ffe346203876e90e717e0bb3c40cd7a0b274f957205e5",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46937,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28297,
+    "cached_tokens": 11136,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > /tmp/alpha06_check.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', root/'alpha_m97_c01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith (root/'public_alpha_m97_c01_batch_06.pkl').open('rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntrain, test = d['train'], d['test']\\ninputs = tuple(test)\\nlab, st = train['lab_id'], train['stratum']\\nmissing = ~np.isfinite(train['coupon_features_raw']).all(axis=1)\\n\\ndef rmse(x):\\n    return np.sqrt(np.mean(x*x))\\n\\nfor title, group in [('lab', lab), ('stratum', st)]:\\n    curve_err = np.empty_like(train['strain_curves_obs'])\\n    rate_err = np.empty_like(train['instant_rate_obs'])\\n    for value in np.unique(group):\\n        valid = group == value\\n        fold = dict(d, train={k: v[~valid] for k, v in train.items()},\\n                    test={k: np.concatenate((test[k], train[k][valid])) for k in inputs})\\n        pred = m.solve_alpha_m97_c01_batch_06(fold)\\n        n = len(test['lab_id'])\\n        curve_err[valid] = pred['predicted_strain'][n:] - train['strain_curves_obs'][valid]\\n        rate_err[valid] = pred['initial_rate_pred'][n:] - train['instant_rate_obs'][valid]\\n        print(title, value, 'tau', np.round(pred['estimated_taus'], 4), 'curve/rate RMSE', *(round(v, 5) for v in (rmse(curve_err[valid]), rmse(rate_err[valid]))))\\n    for label, take in [('complete', ~missing), ('imputed', missing)]:\\n        print(title, label, 'curve/rate RMSE', *(round(v, 5) for v in (rmse(curve_err[take]), rmse(rate_err[take]))))\\n    worst = max((rmse(curve_err[(lab==i)&(st==j)]), i, j) for i,j in set(zip(lab,st)))\\n    worst_rate = max((rmse(rate_err[(lab==i)&(st==j)]), i, j) for i,j in set(zip(lab,st)))\\n    horizons = np.sqrt(np.mean(curve_err**2, axis=0))\\n    print(title, 'worst cell curve/rate (RMSE, lab, stratum)', worst, worst_rate, 'worst horizon', float(horizons.max()), int(horizons.argmax()))\\n\\n# Independent vectorized memory and zero-time derivative, with reversed and near-zero holds.\\nrng = np.random.default_rng(906)\\ndt = rng.uniform(.1,.9,18)\\nt = np.array([0.,1e-7,.3,4.7])\\ntau = np.array([.57,3.9])\\npast = rng.normal(size=(5,18))\\nhold = np.array([-2.,-1e-8,0.,1e-8,2.])\\nx = rng.normal(size=(5,4))\\nw = np.array([.66,.55,.14,.16,-.12,.12,-.09,.3,-.2])\\nfuture_dt = np.r_[np.cumsum(dt[:0:-1])[::-1],0.]\\nmem = past @ ((1-np.exp(-dt[:,None]/tau))*np.exp(-future_dt[:,None]/tau))\\ng0,g1 = (hold[:,None]-mem).T\\nphi = t/(1+.85*t)\\nflow = w[2]+x@w[3:7]+w[7]*np.copysign(np.sqrt(abs(hold)),hold)\\nref = np.outer(w[0]*g0+w[8]*(g0-g1), 1-np.exp(-t/tau[0])) + np.outer(w[1]*g1,1-np.exp(-t/tau[1]))+np.outer(flow,phi)\\nc,r = m._design(tau,dt,t,past,hold,x)\\nnp.testing.assert_allclose(c@w,ref,atol=2e-14)\\nderiv_error = np.max(np.abs((c[:,1]@w)/t[1]-r@w))\\nassert deriv_error < 1e-6\\nprint('independent kernel maximum error', np.max(np.abs(c@w-ref)), 'zero-time finite-difference maximum error', deriv_error)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha06_check.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (sparse in-batch affine calibration) -> H2 (archive-assisted EMI rejection and exact jammed-slip regression); public schema passes, with held-out lab and stratum errors pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Stop at the schema pass\",\"rejected_reason\":\"Shape checks cannot reveal a lab-specific calibration error, an imputation bias, or an incorrect rate derivative.\"}],\"rationale\":\"Refit with each lab and stratum held out to test whether this phase transfers across panels and material groups. Separate imputed from complete coupons to locate any prediction bottleneck, and check the kernel and derivative independently so a shared fitting and prediction error cannot pass unnoticed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "47121ed78e1ebdf9f484dff63300cc604835a51786406be382cda65ac4474baa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37089.38,
+      "usage_known": true,
+      "prompt_tokens": 28297,
+      "cached_tokens": 11136,
+      "completion_tokens": 1401
+    }
+  ]
+}

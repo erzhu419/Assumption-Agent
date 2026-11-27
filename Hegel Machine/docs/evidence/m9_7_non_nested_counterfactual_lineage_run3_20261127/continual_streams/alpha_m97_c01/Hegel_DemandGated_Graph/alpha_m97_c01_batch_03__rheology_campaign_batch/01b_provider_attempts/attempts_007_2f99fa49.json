@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2f99fa4944ab4c96b8b5bc1511886d83",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:03:20.056340+00:00",
+  "ended_at_utc": "2026-11-27T09:03:45.287942+00:00",
+  "request_sha256": "e2ab250ad7f7c390433fd21393de19a421b5ab5559335a4098a72518e088b7f6",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44217,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27260,
+    "cached_tokens": 6784,
+    "completion_tokens": 939
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_alpha_m97_c01_batch_03.pkl','rb')):\\n d=item['dataset']; tr=d['train']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; a,h,x=(v[:n] for v in m._prepare(d)); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; z,w=m._fit(dt,t,a,h,x,y,r); c,q=m._basis(z,dt,t,a,h,x); e=c@w-y; f=q@w-r\\n print('times',t.round(4)); print('strain absolute p50',np.quantile(abs(e),.50,axis=0).round(5)); print('strain absolute p90',np.quantile(abs(e),.90,axis=0).round(5)); print('rate absolute p50/p90',np.quantile(abs(f),[.50,.90]).round(5)); print('largest residual trajectories',np.sort(np.max(abs(e),axis=1))[-10:].round(4))\\n complete=~np.isnan(tr['coupon_features_raw']).any(axis=1)\\n for k in (complete,~complete):\\n  print('rows',k.sum(),'strain and rate absolute p50/p90',np.quantile(abs(e[k]),[.50,.90]).round(5),np.quantile(abs(f[k]),[.50,.90]).round(5))\\n cal=d['calibration_load_cells']\\n for npts in (3,4,10):\\n  for ch in range(4):\\n   k=cal['lab_id']==ch; cx=cal['cmd_stress'][k]; cy=cal['true_stress'][k]; ref=m._calibrate(cx,cy,ch); worst=0.\\n   for i in range(npts):\\n    for delta in (-5.,5.):\\n     noisy=cy[:npts].copy(); noisy[i]+=delta; est=m._calibrate(cx[:npts],noisy,ch); worst=max(worst,np.max(abs(est-ref)))\\n   print('EMI points, lab, worst coefficient deviation',npts,ch,round(worst,6))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Robust joint fitting preserves the calibrated jammed-slip law; worst held-out lab/stratum RMSE is 0.8743 strain and 0.05904 initial rate, versus 0.1031 worst initial-rate RMSE for ordinary least squares.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a correction for high-error strain trajectories\",\n      \"rejected_reason\": \"The raw RMSE alone cannot distinguish a systematic time-dependent mismatch from corrupted or imputed observations.\"\n    }\n  ],\n  \"rationale\": \"Distinguish typical late-time error from a small number of extreme trajectories before changing the physical fit. Exercise the same documented EMI case with sparse in-batch sweeps: if the fitted calibration is pulled toward a spike, revise the fallback rather than changing the constitutive model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "6903065c84ed2dc4a3d2e2f8100152b4c6caf9315316bb38f9441d0dd5ebd3ce",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27245.29,
+      "usage_known": true,
+      "prompt_tokens": 27260,
+      "cached_tokens": 6784,
+      "completion_tokens": 939
+    }
+  ]
+}

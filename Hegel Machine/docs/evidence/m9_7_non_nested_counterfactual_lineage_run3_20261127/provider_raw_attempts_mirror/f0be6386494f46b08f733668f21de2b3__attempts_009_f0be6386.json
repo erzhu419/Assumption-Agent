@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0be6386494f46b08f733668f21de2b3",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:43:08.660739+00:00",
+  "ended_at_utc": "2026-11-27T08:43:46.443802+00:00",
+  "request_sha256": "d0adbadcdc072c146206ab8633491495022bfe06126457ec2de736e4521bc543",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 44533,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26430,
+    "cached_tokens": 6784,
+    "completion_tokens": 1537
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('beta_m97_c03_s00_solver.py')\\ns = p.read_text()\\nold = '        if xb.size < 2 or not np.all(clean):\\\\n'\\nnew = ('        # Prefer four or more clean current points to historical coefficients.\\\\n'\\n       '        if xb.size < 2 or (not np.all(clean) and np.count_nonzero(clean) < 4):\\\\n')\\nassert s.count(old) == 1\\np.write_text(s.replace(old, new))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\n\\np = Path.cwd()\\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c03_s00_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d =')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\nwith (p/'public_beta_m97_c03_s00.pkl').open('rb') as f:\\n    items = pickle.load(f)\\npublic_worst = np.zeros(3)\\nslices = {}\\nfor item in items:\\n    s, gt = item['study'], item['gt']\\n    out = m.solve_beta_m97_c03_s00(s)\\n    checked = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n    assert checked['valid'], checked\\n    np.testing.assert_array_equal(out['weights'], out['kkt_certificate']['weights'])\\n    public_worst = np.maximum(public_worst, [np.max(abs(out['weights'] - gt['w_opt'])), np.max(abs(out['terminal_field'] - gt['terminal_field_A'])), abs(checked['gap'])])\\n    x = s['sensor_calibration_sweeps']['ref_signal']\\n    b = s['sensor_calibration_sweeps']['bank_id']\\n    rb = s['row_bank_id']\\n    gain, offset = np.array([.72, 1.28, 1.53, .88]), np.array([.31, -.4, .19, .55])\\n    with tempfile.TemporaryDirectory() as d:\\n        m._ARCHIVE = Path(d)/'calibration.json'\\n        for bank in range(4):\\n            rows = np.flatnonzero(b == bank)\\n            for case in ('clean', '0 points', '1 point', '2 points', '3 points', '3 clean plus EMI', '4 clean plus EMI', 'full plus EMI', 'negative EMI'):\\n                raw = gain[b]*x + offset[b]\\n                keep = np.ones(len(x), dtype=bool)\\n                if case.endswith('points') or case == '1 point':\\n                    keep[rows[int(case[0]):]] = False\\n                elif 'EMI' in case:\\n                    if case[0].isdigit():\\n                        keep[rows[int(case[0])+1:]] = False\\n                    raw[rows[0]] += -8 if case == 'negative EMI' else 8\\n                use_archive = case in ('0 points', '1 point', '3 clean plus EMI')\\n                m._ARCHIVE.write_text(json.dumps({str(i): {'gain': gain[i] if use_archive and i == bank else 1.1, 'offset': offset[i] if use_archive and i == bank else .2} for i in range(4)}))\\n                changed = dict(s, sensor_calibration_sweeps=dict(bank_id=b[keep], ref_signal=x[keep], raw_readout=raw[keep]), y_obs_raw=gain[rb]*s['y_obs_raw']+offset[rb])\\n                err = np.max(abs(m._calibrate(changed) - s['y_obs_raw']))\\n                assert err < 1e-12, (case, bank, err)\\n                slices[case] = max(slices.get(case, 0), err)\\n                actual = m.solve_beta_m97_c03_s00(changed)\\n                np.testing.assert_allclose(actual['weights'], gt['w_opt'], rtol=0, atol=1e-10)\\n                np.testing.assert_allclose(actual['terminal_field'], gt['terminal_field_A'], rtol=0, atol=1e-10)\\n                checked = verify(gt['S_tilde'], gt['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], actual['kkt_certificate'])\\n                assert checked['valid'], (case, bank, checked)\\nassert max(public_worst) < 1e-6, public_worst\\nprint('Public worst weight error, field error, KKT gap:', public_worst)\\nprint('Worst calibration errors across four banks by slice:', slices)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archive-first EMI fallback → fit from at least four clean in-batch points; the prior candidate's worst stale-archive calibration error was 0.5733, and its worst public KKT gap was 6.58e-9.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always override an EMI-affected sweep with archive coefficients\",\n      \"rejected_reason\": \"A stale archive caused large calibration errors even when the current sweep retained enough clean points.\"\n    }\n  ],\n  \"rationale\": \"Fix calibration precedence without changing the verified operator or inversion. Check both sides of the four-clean-point threshold and verify that the corrected calibration preserves public weights, terminal fields, and KKT certificates.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "cb8e5375ec5178cba5eeff0d823426f824ca47abce1f8bd4ddf2022ab8f0573f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40159.59,
+      "usage_known": true,
+      "prompt_tokens": 26430,
+      "cached_tokens": 6784,
+      "completion_tokens": 1537
+    }
+  ]
+}

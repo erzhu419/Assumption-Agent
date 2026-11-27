@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "176b49544e6547b6ad086b304bda814a",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:57:56.968944+00:00",
+  "ended_at_utc": "2026-11-27T08:58:24.431791+00:00",
+  "request_sha256": "fb2bb41ae3a6236a68680de875c0434a578f57ad2c60b35311731887f133a9b6",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63272,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32586,
+    "cached_tokens": 6784,
+    "completion_tokens": 1046
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rheology_batch01_boundary_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_01_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nq = d['train']\\nlab = q['lab_id']\\nn = len(lab)\\na = tuple(v[:n] for v in s._prepare(d))\\ndt, t = d['past_dt'], d['eval_times']\\ny = q['strain_curves_obs'] - q['strain_0'][:, None]\\nr = q['instant_rate_obs']\\ne = np.empty_like(y)\\ner = np.empty_like(r)\\nfor j in np.unique(lab):\\n    m = lab == j\\n    train = tuple(v[~m] for v in a)\\n    test = tuple(v[m] for v in a)\\n    p, w = s._fit(dt, t, train, y[~m], r[~m])\\n    c, b = s._basis(p, dt, t, test)\\n    e[m] = c @ w - y[m]\\n    er[m] = b @ w - r[m]\\nact = a[-1]\\nshear = np.asarray(d['shear_banding_index'])[:n]\\nmissing = np.isnan(q['coupon_features_raw']).any(axis=1)\\nslices = {'no missing features': ~missing, 'imputed features': missing,\\n          'partial activation': (act > 0) & (act < .95), 'saturated activation': act >= .95,\\n          'near gate, lower side': (shear >= .4) & (shear <= .5),\\n          'near gate, upper side': (shear > .5) & (shear <= .6)}\\nslices.update({f'stratum {v}': q['stratum'] == v for v in np.unique(q['stratum'])})\\nfor name, m in slices.items():\\n    if m.any():\\n        print(name, 'n=', m.sum(), 'curve/rate median abs, worst horizon median abs and bias=',\\n              np.round([np.median(abs(e[m])), np.median(abs(er[m])),\\n                        np.max(np.median(abs(e[m]), axis=0)),\\n                        np.max(abs(np.median(e[m], axis=0)) )], 5))\\n    else:\\n        print(name, 'n=0; unsupported by public labels')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_batch01_boundary_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: retain batch-wide logarithmic drift and test whether held-out errors concentrate near the crystalline gate or in imputed coupons; verified worst lab-by-activation median absolute errors are 0.0167 for strain and 0.0184 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear basis audit\",\n      \"rejected_reason\": \"The measured product and rational augmentation already worsened both worst-slice response medians. Relay modes and classification metrics do not apply to these measurements.\"\n    }\n  ],\n  \"rationale\": \"Binary activation summaries can hide errors near the specified shear boundary or on imputed coupons. Slice the real held-out-lab residuals by those conditions and by stratum; a material concentration would identify whether to investigate the gate or panel fill. Leave the verified artifact unchanged during the audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "6f37fd90aa884a4d82aa34d776bef332a45350c69a91159fd719c5888f2ab5d4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29426.42,
+      "usage_known": true,
+      "prompt_tokens": 32586,
+      "cached_tokens": 6784,
+      "completion_tokens": 1046
+    }
+  ]
+}

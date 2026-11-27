@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "78e1d9099fab464e845855fd0e4ebb47",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:03:47.702506+00:00",
+  "ended_at_utc": "2026-11-27T09:04:32.062688+00:00",
+  "request_sha256": "a3306a90c7b23ebe5167c80ec8bf97ec11bf8ec7b6afd96d07935dd48ad97139",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27333,
+    "cached_tokens": 6784,
+    "completion_tokens": 1797
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_03_solver.py')\\ns = p.read_text()\\na, b = s.index('def _calibrate('), s.index('\\\\ndef _prepare(')\\ns = s[:a] + '''def _calibrate(cmd, true, channel):\\n    if np.unique(cmd).size < 2:\\n        return _prior_calibration(channel)\\n    direct = np.polyfit(cmd, true, 1)\\n    # Clean public sweeps are affine within 0.00022 stress units. A loose\\n    # consensus tolerance separates clean points from plausible EMI without\\n    # assuming that the least-squares line is unbiased in a sparse sweep.\\n    consensus_tol = 0.01\\n    if np.max(np.abs(true - np.polyval(direct, cmd))) <= consensus_tol:\\n        return direct\\n    i, j = np.triu_indices(len(cmd), 1)\\n    distinct = cmd[i] != cmd[j]\\n    i, j = i[distinct], j[distinct]\\n    slopes = (true[j] - true[i]) / (cmd[j] - cmd[i])\\n    offsets = true[i] - cmd[i] * slopes\\n    errors = np.abs(true[:, None] - cmd[:, None] * slopes - offsets)\\n    support = np.sum(errors <= consensus_tol, axis=0)\\n    best = np.argmax(support)\\n    clean = errors[:, best] <= consensus_tol\\n    if clean.sum() >= 4:\\n        return np.polyfit(cmd[clean], true[clean], 1)\\n    # A noisy three-point sweep cannot distinguish competing two-point lines.\\n    prior = _prior_calibration(channel)\\n    clean = np.abs(true - np.polyval(prior, cmd)) <= 3.0\\n    if clean.all():\\n        return direct\\n    if np.unique(cmd[clean]).size >= 2:\\n        return np.polyfit(cmd[clean], true[clean], 1)\\n    return prior\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_alpha_m97_c01_batch_03.pkl','rb')):\\n d=item['dataset']; cal=d['calibration_load_cells']; worst={}\\n for ch in range(4):\\n  k=cal['lab_id']==ch; x=cal['cmd_stress'][k]; y=cal['true_stress'][k]; ref=np.polyfit(x,y,1)\\n  for n in (0,1,3,4,10):\\n   if n<2:\\n    worst[n]=max(worst.get(n,0),np.max(abs(m._calibrate(x[:n],y[:n],ch)-ref))); continue\\n   for subset in itertools.combinations(range(len(x)),n):\\n    ii=np.array(subset); a,b=x[ii],y[ii];\\n    assert np.allclose(m._calibrate(a,b,ch),np.polyfit(a,b,1))\\n    for j in range(n):\\n     clean=np.arange(n)!=j; expected=np.polyfit(a[clean],b[clean],1)\\n     for delta in (-5.,-3.01,3.01,5.):\\n      z=b.copy(); z[j]+=delta\\n      worst[n]=max(worst.get(n,0),np.max(abs(m._calibrate(a,z,ch)-expected)))\\n print('maximum calibration coefficient error by sweep size',worst)\\n assert max(worst.values()) < 0.001\\n tr=d['train']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; past,hold,x=(a[:n] for a in m._prepare(d)); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; scores=[]\\n for group in ('lab_id','stratum'):\\n  for level in np.unique(tr[group]):\\n   k=tr[group]!=level; z,w=m._fit(dt,t,past[k],hold[k],x[k],yc[k],yr[k]); c,r=m._basis(z,dt,t,past[~k],hold[~k],x[~k]); ec=c@w-yc[~k]; er=r@w-yr[~k]; scores.append([np.sqrt(np.mean(ec**2)),np.sqrt(np.mean(er**2)),np.quantile(abs(ec),.5),np.quantile(abs(er),.5)])\\n worst_cv=np.max(scores,axis=0); print('worst held-out strain/rate RMSE and median absolute errors',worst_cv)\\n assert np.all(worst_cv[:2] < [0.875,0.060])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Use clean affine consensus and archived calibration to resolve ambiguous EMI spikes; the previous three-point fit missed by up to 3.502 coefficient units, with worst held-out strain and rate RMSE of 0.8743 and 0.05904.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use archived calibration for three-point sweeps\",\n      \"rejected_reason\": \"A clean three-point sweep identifies the line directly. Archive data is needed when competing lines make spike assignment ambiguous.\"\n    }\n  ],\n  \"rationale\": \"The three-point EMI test exposed an ambiguity in calibration, not a failure of the constitutive law. Test both spike signs just above the specified threshold and at larger amplitudes, across subsets of the measured sweeps. If the exact candidate fails those tests or regresses on held-out strain or rate, revise the calibration before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "4a77900adc90df321c79dce07a7bcbd687056ad713469cf881d3f9d9839a16ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46479.67,
+      "usage_known": true,
+      "prompt_tokens": 27333,
+      "cached_tokens": 6784,
+      "completion_tokens": 1797
+    }
+  ]
+}

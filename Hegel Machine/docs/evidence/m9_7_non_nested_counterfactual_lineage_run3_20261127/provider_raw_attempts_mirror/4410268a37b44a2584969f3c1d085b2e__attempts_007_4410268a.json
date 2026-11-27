@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4410268a37b44a2584969f3c1d085b2e",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:58:08.649200+00:00",
+  "ended_at_utc": "2026-11-27T08:58:45.327208+00:00",
+  "request_sha256": "ff8d083cc7a21304f6cbdd1b532302fe3d0de7401a90d3aba5f66da91ba89c58",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 51931,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29941,
+    "cached_tokens": 6784,
+    "completion_tokens": 1522
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nbase = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', base + 'alpha_m97_c02_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(base + 'public_alpha_m97_c02_batch_03.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\ncal = m._calibrate(d['calibration_load_cells'])\\nx = m._align(tr, te)\\nn = len(tr['lab_id'])\\n\\ndef forward(split, features, taus, hw, rw):\\n    g, b = cal[split['lab_id']].T\\n    hold = g * split['stress_hold_cmd'] + b\\n    z = np.zeros((len(hold), 2))\\n    for j, step in enumerate(dt):\\n        q = np.exp(-step / taus)\\n        z = q * z + (1 - q) * (g * split['past_stress_cmd'][:, j] + b)[:, None]\\n    gap = hold[:, None] - z\\n    slip = np.sign(hold) * np.sqrt(abs(hold))\\n    drift = hw[2] + features @ hw[3:] + rw[0] * slip\\n    a = hw[0] * gap[:, 0] + rw[1] * (gap[:, 0] - gap[:, 1])\\n    b = hw[1] * gap[:, 1]\\n    curves = (split['strain_0'][:, None] + a[:, None] * (1 - np.exp(-t / taus[0]))\\n              + b[:, None] * (1 - np.exp(-t / taus[1])) + drift[:, None] * t / (1 + .85 * t))\\n    return curves, a / taus[0] + b / taus[1] + drift\\n\\nout = m.solve_alpha_m97_c02_batch_03(d)\\ncurves, rates = forward(te, x[n:], out['estimated_taus'], out['hereditary_weights'], out['regime_mode_weights'])\\nfor key, expected, shape in [('predicted_strain', curves, (len(te['lab_id']), len(t))), ('initial_rate_pred', rates, (len(te['lab_id']),))]:\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\n    np.testing.assert_allclose(out[key], expected, atol=1e-12, rtol=0)\\nprint('Public outputs match independent sequential recurrence and analytic initial rate')\\n\\ns = {k: np.array(v, copy=True) for k, v in d['calibration_load_cells'].items()}\\nids = s['lab_id']; s['true_stress'][np.flatnonzero(ids == 1)[0]] += 7.\\nkeep = (ids != 0); keep[np.flatnonzero(ids == 0)[0]] = True\\nstressed = m._calibrate({k:v[keep] for k,v in s.items()})\\nnp.testing.assert_allclose(stressed, cal, atol=2e-4, rtol=0)\\nprint('Sparse-channel archive fallback and in-batch EMI rejection pass')\\n\\nhw = np.array([.67, .55, .14, .16, -.13, .12, -.088]); rw = np.array([.31, -.22])\\nfor taus in (np.array([.58, 4.2]), np.array([4.2, .58])):\\n    y, r = forward(tr, x[:n], taus, hw, rw)\\n    result = m.solve_alpha_m97_c02_batch_03(dict(d, train=dict(tr, strain_curves_obs=y, instant_rate_obs=r)))\\n    for key, truth in zip(('estimated_taus', 'hereditary_weights', 'regime_mode_weights'), (taus, hw, rw)):\\n        np.testing.assert_allclose(result[key], truth, atol=1e-5, rtol=0)\\nprint('Noise-free coefficient recovery passes in both branch orders')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 complete-coupon-only fit -> H2 retain all rows with robust weighting; worst held-out lab rate RMSE is 0.0534, and the missing-coupon rate RMSE is 0.1245 versus 0.1267 for complete-only fitting.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit only complete-coupon specimens\",\n      \"rejected_reason\": \"It worsens held-out missing-coupon rate RMSE and provides no material gain on complete coupons.\"\n    }\n  ],\n  \"rationale\": \"Keep the measured-data winner. Check the untested sparse and EMI calibration paths, compare both prediction outputs against a sequential recurrence, and test coefficient recovery in both branch orders. A failure would identify a concrete calibration, equation, or optimization defect to fix before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "068384515ff85401ffdb381bf71fecbb4a5e3a1a10a6178390f34f8adf25d29b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40762.98,
+      "usage_known": true,
+      "prompt_tokens": 29941,
+      "cached_tokens": 6784,
+      "completion_tokens": 1522
+    }
+  ]
+}

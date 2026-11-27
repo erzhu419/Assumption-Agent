@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c2e9906f52a34b918101ae733d5ed114",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:06.316533+00:00",
+  "ended_at_utc": "2026-11-27T08:50:47.421066+00:00",
+  "request_sha256": "73ecafcd19ec1364b8bfbe868252efb737164162161f1167e811a719a0add58b",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 51465,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29298,
+    "cached_tokens": 6784,
+    "completion_tokens": 1553
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c02_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('def _historical_calibration(')\\nb = s.index('\\\\n\\\\ndef _calibrate(', a)\\ns = s[:a] + '''def _historical_calibration(bank):\\n    with _HISTORY.open() as handle:\\n        records = json.load(handle)\\n    for sweep in reversed(records):\\n        banks, x, y = (np.asarray(sweep[k]) for k in ('bank_id', 'ref_signal', 'raw_readout'))\\n        selected = banks == bank\\n        if np.count_nonzero(selected) >= 2 and np.ptp(x[selected]) > 0:\\n            return _fit_line(x[selected], y[selected])\\n    raise ValueError(f'No archived calibration for bank {bank}')\\n\\n\\ndef _fit_line(x, y):\\n    return np.linalg.lstsq(np.column_stack((x, np.ones_like(x))), y, rcond=None)[0]\\n''' + s[b:]\\na = s.index('        clean = np.ones')\\nb = s.index('    rows = ', a)\\ns = s[:a] + '''        clean = np.ones(x.size, dtype=bool)\\n        if x.size >= 3:\\n            # Repeated-median slope keeps a spike from displacing the affine fit.\\n            slopes = []\\n            for i in range(x.size):\\n                different = x != x[i]\\n                if different.any():\\n                    slopes.append(np.median((y[different] - y[i]) / (x[different] - x[i])))\\n            if slopes:\\n                delta = y - np.median(slopes) * x\\n                clean = np.abs(delta - np.median(delta)) <= 3.0\\n        if clean.sum() >= 4 or (x.size >= 2 and clean.all()):\\n            gains[bank], offsets[bank] = _fit_line(x[clean], y[clean])\\n        else:\\n            gains[bank], offsets[bank] = _historical_calibration(bank)\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'beta_m97_c02_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_beta_m97_c02_batch_01.pkl','rb') as f: d=pickle.load(f)[0]['study']\\nbank,x,_=(np.asarray(d['sensor_calibration_sweeps'][k]) for k in ('bank_id','ref_signal','raw_readout'))\\nrb=np.asarray(d['row_bank_id']); truth=np.linspace(-.1,.2,len(rb)); gains=np.array([.81,1.33,.86,1.2]); offs=np.array([-.15,.14,.11,-.12]); y=gains[bank]*x+offs[bank]\\nworst=0.\\nfor j in range(4):\\n    idx=np.flatnonzero(bank==j)\\n    for kind in ['missing','single','two-clean','three-clean','four-clean','four-with-spike','five-with-spike','full-with-spike']:\\n        count={'missing':0,'single':1,'two-clean':2,'three-clean':3,'four-clean':4,'four-with-spike':4,'five-with-spike':5}.get(kind,len(idx))\\n        keep=(bank!=j); keep[idx[:count]]=True\\n        for spike in idx[:count] if 'spike' in kind else [None]:\\n            z=y.copy()\\n            if spike is not None: z[spike]+=8\\n            raw=gains[rb]*truth+offs[rb]\\n            if kind in ('missing','single','four-with-spike'): raw[rb==j]=truth[rb==j]\\n            branch=dict(d,sensor_calibration_sweeps=dict(bank_id=bank[keep],ref_signal=x[keep],raw_readout=z[keep]),y_obs_raw=raw)\\n            err=float(np.max(np.abs(m._calibrate(branch)-truth))); worst=max(err,worst)\\n            assert err < 1e-12,(j,kind,spike,err)\\nprint('calibration routing max absolute error',worst)\\nPY\\nsed -n '96,205p' /holdout_task/beta_m97_c02_batch_01_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Both-axis sealing with x-localized sorption → retain the verified transport and repair sparse/EMI calibration routing; the public reference KKT gap is 4.62e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the inherited history parser\",\n      \"rejected_reason\": \"The mounted history stores sweep columns, not scalar bank IDs or fitted gain and offset records.\"\n    }\n  ],\n  \"rationale\": \"Fit fallback coefficients from the actual archived sweeps. Test every bank with missing, sparse, and spiked calibration rows to detect incorrect fallback or accidental replacement of valid in-batch fits. Leave the verified transport unchanged.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8ae802a7dc9b244bae96c93548825c70de7130cbb80bee7f02d4ef64c1d9f08a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43192.47,
+      "usage_known": true,
+      "prompt_tokens": 29298,
+      "cached_tokens": 6784,
+      "completion_tokens": 1553
+    }
+  ]
+}

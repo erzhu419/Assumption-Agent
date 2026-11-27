@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "58c4e0597684401e8003744e6e5390aa",
+  "call_seq": 3,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:24:13.635152+00:00",
+  "ended_at_utc": "2026-11-27T09:24:32.046384+00:00",
+  "request_sha256": "7082d96e0f0540dfa0792c39056a438119873b5d8ac5aea63e89c7cacca3b38d",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 23894,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20586,
+    "cached_tokens": 6784,
+    "completion_tokens": 579
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '1,115p' /tmp/hegel_continual_archive/alpha_m97_c01_batch_06_solver.py; cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_calibration_history.json'\\nfor h in json.load(open(p)):\\n print(h['episode_short_name'],end=': ')\\n for c in range(4):\\n  i=np.asarray(h['lab_id'])==c;x=np.asarray(h['cmd_stress'])[i];y=np.asarray(h['true_stress'])[i];\\n  if len(x)>=2:\\n   a,b=np.polyfit(x,y,1);print(c,len(x),np.round([a,b,max(abs(y-a*x-b))],5),end='; ')\\n  else: print(c,len(x),end='; ')\\n print()\\nd=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]['dataset']\\nfor s in ('train','test'):\\n v=d[s]; print(s, 'lab/strata/counts',np.unique(np.column_stack([v['lab_id'],v['stratum']]),axis=0,return_counts=True));print('missing',[(k,int(np.isnan(a).sum())) for k,a in v.items() if np.issubdtype(a.dtype,np.floating)])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection viscoelastic prony' | grep -Ei 'cauchy|viscoelastic|prony|projection' | head -15\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Sparse current sweeps require channel-specific historical calibration before fitting the crystallization model; no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool every historical sweep\",\"rejected_reason\":\"Pooling is inappropriate if channel gains or biases changed over the stream; inspect per-episode fits before selecting the fallback.\"}],\"rationale\":\"Summarize historical sweeps to detect calibration changes or EMI that would change fallback selection. Check panel cell coverage and missingness to determine which rows can support fitting and which require imputation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "679a3d573045a529d6f746191c29518339a1351902213b7ab961dac8ebbe96ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20718.33,
+      "usage_known": true,
+      "prompt_tokens": 20586,
+      "cached_tokens": 6784,
+      "completion_tokens": 579
+    }
+  ]
+}

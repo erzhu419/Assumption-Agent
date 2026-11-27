@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f0060f8723d3416086352fe41009d262",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:21.419109+00:00",
+  "ended_at_utc": "2026-11-27T08:50:56.726425+00:00",
+  "request_sha256": "c6cc29a1620920321a1276cc1222c130876f74b26df680bf091c30034b501296",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 48670,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27635,
+    "cached_tokens": 0,
+    "completion_tokens": 1393
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('candidate',p/'beta_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nns={}; exec((p/'validate_public_schema.py').read_text().split('\\\\n_d = ')[0],ns)\\nit=pickle.loads((p/'public_beta_m97_c03_batch_01.pkl').read_bytes())[0]; s,g=it['study'],it['gt']; out=m.solve_beta_m97_c03_batch_01(s)\\ncert=ns['verify_box_simplex_kkt_certificate'](g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],s['total_budget'],out['kkt_certificate']); assert cert['valid'],cert\\nerrs={k:float(np.max(np.abs(out[k]-g[r]))) for k,r in [('weights','w_opt'),('terminal_field','terminal_field_A')]}; assert max(errs.values()) < 1e-6,errs\\nprint('public errors',errs,'reference KKT gap',cert['gap'])\\ncal=s['sensor_calibration_sweeps']; banks=cal['bank_id']; raw=s['y_obs_raw']; baseline=m._calibrate(s); worst={}\\nfor bank in range(4):\\n idx=np.flatnonzero(banks==bank); row=s['row_bank_id']==bank\\n ah,ao=m._archived_fit(bank)\\n for n in [0,1,2,3,4,5,len(idx)]:\\n  for i in idx:\\n   retained=np.r_[i,idx[idx!=i]][:n]\\n   for spike in ([0] if n<3 else [0,-12,-3.01,3.01,12]):\\n    t={k:np.array(v,copy=True) for k,v in cal.items()}; keep=banks!=bank; keep[retained]=True; t['raw_readout'][i]+=spike\\n    if n<2 or (spike and n<5):\\n     expected=(raw[row]-ao)/ah; label='archive'\\n    elif n==2:\\n     j,k=retained; x,y=t['ref_signal'],t['raw_readout']; h=(y[k]-y[j])/(x[k]-x[j]); o=y[j]-h*x[j]\\n     expected=(raw[row]-o)/h; label='two-point affine'\\n    else:\\n     expected=baseline[row]; label='EMI with sufficient clean points' if spike else 'clean in-batch'\\n    trial=dict(s,sensor_calibration_sweeps={k:v[keep] for k,v in t.items()}); err=float(np.max(np.abs(m._calibrate(trial)[row]-expected))); worst[label]=max(worst.get(label,0),err)\\nprint('bank stress maximum absolute errors',worst)\\nassert max(worst['archive'],worst['two-point affine'])<1e-8,worst\\nassert max(worst['EMI with sufficient clean points'],worst['clean in-batch'])<1e-5,worst\\nrng=np.random.default_rng(731); worst_kkt=0.0\\nfor cap in [0.2,1.0,1.7]:\\n for budget in [0,cap*1e-5,cap,2.6*cap,6*cap,cap*(12-1e-5),12*cap]:\\n  for repeat in range(30):\\n   a=rng.normal(size=(8,12)); H=a.T@a+0.04*np.eye(12); c=rng.normal(size=12)*(30 if repeat%2 else 1)\\n   w,nu=m._box_simplex(H,c,cap,budget); d=H@w+c-nu\\n   residual=max(abs(w.sum()-budget),float(np.max(-w)),float(np.max(w-cap)),float(np.max(np.abs(w-np.clip(w-d,0,cap)))))\\n   worst_kkt=max(worst_kkt,residual)\\nprint('active-set worst projected KKT residual across 630 cases',worst_kkt)\\nassert worst_kkt<1e-9,worst_kkt\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 threshold-hit calibration → H2 clean-majority line estimation; worst post-fix EMI error with enough clean points is 3.09e-7, and the public reference KKT gap is 6.44e-8.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the archive for close or noisy two-point sweeps\",\n      \"rejected_reason\": \"The contract allows archive use only below two points or when EMI is detected. A two-point fit should match the affine line through those measurements, not the 12-point fit.\"\n    }\n  ],\n  \"rationale\": \"The prior check compared a sparse calibration fit with the full-sweep fit. Verify the two-point branch against an independent affine calculation instead; a mismatch would warrant a calibration fix. Check projected KKT residuals at vertex, near-endpoint, and mixed-bound budgets, where a failure would identify an active-set defect. No candidate change is needed unless these checks fail.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "dc5783da51966f4a80a07e16c6d37b33e1761039d5b0b8acb9a1612a55fff7a3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37399.35,
+      "usage_known": true,
+      "prompt_tokens": 27635,
+      "cached_tokens": 0,
+      "completion_tokens": 1393
+    }
+  ]
+}

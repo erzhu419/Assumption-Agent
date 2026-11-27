@@ -1,0 +1,81 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m97_c01_s00_f929bfb8a0dc",
+    "source_hash": "f929bfb8a0dc5c744f11f45c3997615cf2ae616c7434329d18e9e43e5f67ff05",
+    "parent_ids": [],
+    "source_episode_id": "beta_m97_c01_s00__reactor_tomography_baseline",
+    "task_id": "beta_m97_c01_s00__reactor_tomography_baseline",
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_m97_c01_s00.pkl','rb') as f: s=pickle.load(f)\nfor k,v in s.items():\n    if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:8])\n    elif isinstance(v,(list,tuple)): print(k,type(v).__name__,len(v),repr(v[:1])[:500])\n    elif isinstance(v,dict): print(k,[(x,getattr(y,'shape',type(y).__name__)) for x,y in v.items()])\n    else: print(k,repr(v)[:500])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling'; ls -l",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_beta_m97_c01_s00.pkl','rb') as f:\n    cases = pickle.load(f)\nprint('case count:',len(cases))\nfor i,c in enumerate(cases):\n    print('case',i,'keys',list(c))\n    for k,v in c['study'].items():\n        if isinstance(v,np.ndarray):\n            print(k,v.shape,v.dtype,v.ravel()[:6])\n        else:\n            print(k,repr(v)[:650])\n    print('reference weights:',c['gt']['w_opt'])\nPY\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matchin",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle, numpy as np\ncs=pickle.load(open('public_beta_m97_c01_s00.pkl','rb'))\nfor i,c in enumerate(cs):\n s=c['study']; print('case',i,'gt keys',list(c['gt']))\n for k,v in s.items():\n  if isinstance(v,dict): print(k,[(j,np.shape(a),str(a)[:160]) for j,a in v.items()]); continue\n  if isinstance(v,(list,tuple)):\n   print(k,'len',len(v),'first',repr(v[0])[:250] if len(v) else None)\n   if 'calibration' in k:\n    for q in v: print(' ',repr(q)[:260])\n   continue\n  if isinstance(v,np.ndarray): print(k,v.shape,v.dtype,v.ravel()[:3]); continue\n  print(k,repr(v)",
+      "cd /holdout_task && cat > beta_m97_c01_s00_solver.py <<'PY'\n\"\"\"Open-Robin reactor tomography with a box-simplex optimality certificate.\"\"\"\n\nfrom pathlib import Path\nimport json\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\n_CALIBRATION_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _affine(x, y):\n    return np.linalg.lstsq(np.column_stack((x, np.ones(len(x)))), y, rcond=None)[0]\n\n\ndef _archived_affine(bank):\n    history = json.loads(_CALIBRATION_ARCHIVE.read_text())\n    if isinstance(history, dict):\n ",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom pathlib import Path\nspec=importlib.util.spec_from_file_location('solver', Path('beta_m97_c01_s00_solver.py').resolve())\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\n# Load the verifier function without running the validator's CLI, which calls sys.exit.\nns={}; exec(Path('validate_public_schema.py').read_text().split('\\n_d =',1)[0],ns)\nverify=ns['verify_box_simplex_kkt_certificate']\nfor i,item in enumerate(pickle.load(open('public_beta_m97_c01_s00.pkl','rb'))):\n s",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\np=Path('beta_m97_c01_s00_solver.py').resolve()\nspec=importlib.util.spec_from_file_location('solver', p)\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nns={}; exec(Path('validate_public_schema.py').read_text().split('\\n_d =',1)[0],ns)\nverify=ns['verify_box_simplex_kkt_certificate']\nst=pickle.load(open('public_beta_m97_c01_s00.pkl','rb'))[0]['study']\nbase=m.solve_beta_m97_c01_s00(st)\ny=m._calibrated_observations(st)\nsw=st['s",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver',Path('beta_m97_c01_s00_solver.py').resolve()); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open('public_beta_m97_c01_s00.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; bank=np.asarray(sw['bank_id']); ref=np.asarray(sw['ref_signal']); rows=np.asarray(s['row_bank_id']); y=m._calibrated_observations(s)\ngain=np.array([.73,1.53,.91,1.21]); offset",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m97_c01_s00_solver.py')\ns = p.read_text()\nold = '''            if len(x) >= 3:\n                i, j = np.triu_indices(len(x), 1)'''\nnew = '''            if len(x) == 4:\n                # One spike contaminates half the pairwise slopes. Fit each\n                # three-row subset and test the omitted row of the best fit.\n                best_error = np.inf\n                for omitted in range(4):\n                    kept = np.arange(4) != omitted\n                    trial_gain, trial_offset = _affine(x[kept], z[kept])\n",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', Path('beta_m97_c01_s00_solver.py').resolve())\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\nns = {}; exec(Path('validate_public_schema.py').read_text().split('\\n_d =', 1)[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nfor i, item in enumerate(pickle.load(open('public_beta_m97_c01_s00.pkl', 'rb'))):\n    s, gt = item['study'], item['gt']\n    base = m.solve_beta_m97_c01_s0"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m97_c01_s00_solver.py",
+        "filename": "beta_m97_c01_s00_solver.py",
+        "bytes": 8153,
+        "sha256": "e1b2d70665db414a8858cb02472eec2e66e3a852449b93085df8b01fe6e07c4f",
+        "content_addressed_ref": "content_addressed_blobs/e1b2d70665db414a8858cb02472eec2e66e3a852449b93085df8b01fe6e07c4f.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m97_c01_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f929bfb8a0dc5c744f11f45c3997615cf2ae616c7434329d18e9e43e5f67ff05",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', Path('beta_m97_c01_s00_solver.py').resolve())\nm",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f929bfb8a0dc5c744f11f45c3997615cf2ae616c7434329d18e9e43e5f67ff05",
+        "expected_candidate_sha256": "f929bfb8a0dc5c744f11f45c3997615cf2ae616c7434329d18e9e43e5f67ff05",
+        "computed_candidate_sha256": "f929bfb8a0dc5c744f11f45c3997615cf2ae616c7434329d18e9e43e5f67ff05",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m97_c01_s00_solver.py",
+            "bytes": 8153
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_f929bfb8"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

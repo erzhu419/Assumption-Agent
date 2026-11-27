@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "db5f513c751644138ebfb35bb29049ee",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:24:53.048049+00:00",
+  "ended_at_utc": "2026-11-27T09:25:36.143593+00:00",
+  "request_sha256": "18fc6ab3e8ec9ebdcfe300dd4262b8826960112539849016c1abc6f1c35fc8be",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 38757,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25751,
+    "cached_tokens": 6784,
+    "completion_tokens": 1718
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\nsrc = Path('/tmp/hegel_continual_archive/alpha_m97_c01_batch_06_solver.py').read_text()\\nhead = src[:src.index('def _prior_line')].replace('jammed-slip response', 'strain-crystallized plateau response')\\nprepare = src[src.index('def _prepare'):src.index('def _design')]\\nfit = src[src.index('def _fit'):src.index('def solve_')].replace('def _fit(dt, time, past, hold, x, yc, yr):','def _fit(dt, time, past, hold, x, act, yc, yr):').replace('_design(np.exp(u), dt, time, past, hold, x)', '_design(np.exp(u), dt, time, past, hold, x, act)')\\nsolve = src[src.index('def solve_'):].replace('batch_06', 'batch_07').replace('    n = len(train', \\\"    damage = np.maximum(np.abs(past) - dataset['crit_stress'], 0.0)**2 @ dt\\\\n    act = np.tanh(damage) if dataset['shear_banding_index'] <= 0.50 else np.zeros_like(damage)\\\\n    n = len(train\\\").replace('x[:n][keep], yc[keep]', 'x[:n][keep], act[:n][keep], yc[keep]').replace('hold[n:], x[n:])','hold[n:], x[n:], act[n:])')\\ncalib = '''def _prior_line(channel):\\n    prior = None\\n    for sweep in json.loads(_ARCHIVE.read_text()):\\n        take = np.asarray(sweep['lab_id']) == channel\\n        x = np.asarray(sweep['cmd_stress'])[take]\\n        y = np.asarray(sweep['true_stress'])[take]\\n        if len(x) >= 4:\\n            clean = ~_spikes(x, y)\\n        elif prior is not None:\\n            clean = np.abs(y - np.polyval(prior, x)) <= 3.0\\n        else:\\n            clean = np.ones(len(x), dtype=bool)\\n        if np.unique(x[clean]).size >= 2:\\n            prior = _line(x[clean], y[clean])\\n    if prior is None:\\n        raise ValueError(f'No usable archived calibration for channel {channel}')\\n    return prior\\n\\n\\ndef _calibrate(x, y, channel):\\n    if len(x) >= 4:\\n        clean = ~_spikes(x, y)\\n        if clean.sum() >= 4 or clean.all():\\n            return _line(x[clean], y[clean])\\n    elif len(x) == 3:\\n        line = _line(x, y)\\n        if np.max(np.abs(y - np.polyval(line, x))) <= 0.01:\\n            return line\\n        errors = [abs(y[i] - np.polyval(_line(np.delete(x, i), np.delete(y, i)), x[i]))\\n                  for i in range(3) if np.unique(np.delete(x, i)).size == 2]\\n        if max(errors, default=0) <= 3.0:\\n            return line\\n    elif len(x) == 2:\\n        return _line(x, y)\\n\\n    gain, bias = _prior_line(channel)\\n    clean = np.abs(y - (gain * x + bias)) <= 3.0\\n    if np.unique(x[clean]).size >= 2:\\n        return _line(x[clean], y[clean])\\n    if clean.any():\\n        bias = np.mean(y[clean] - gain * x[clean])\\n    return gain, bias\\n\\n\\n'''\\ndesign = '''def _design(tau, dt, time, past, hold, x, act):\\n    decay = np.exp(-dt[:, None] / tau)\\n    step = -np.expm1(-dt[:, None] / tau)\\n    memory = np.zeros((len(hold), 2))\\n    for j in range(len(dt)):\\n        memory = decay[j] * memory + step[j] * past[:, j, None]\\n    gap = hold[:, None] - memory\\n    transient = -np.expm1(-time[:, None] / tau)\\n    phi = np.log1p(time)\\n    drift = np.column_stack((np.ones(len(x)), x))\\n    extra = act * hold\\n    plateau = act * memory[:, 0]\\n    curves = np.concatenate((gap[:, None, :] * transient[None, :, :],\\n                             drift[:, None, :] * phi[None, :, None],\\n                             extra[:, None, None] * transient[None, :, :1],\\n                             plateau[:, None, None] * phi[None, :, None]), axis=2)\\n    rates = np.column_stack((gap / tau, drift, extra / tau[0], plateau))\\n    return curves, rates\\n\\n\\n'''\\nPath('alpha_m97_c01_batch_07_solver.py').write_text(head + calib + prepare + design + fit + solve)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c01_batch_07_solver as mod\\nitem=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]\\no=mod.solve_alpha_m97_c01_batch_07(item['dataset'])\\nprint('prediction parameters', {k:v.tolist() for k,v in o.items() if v.ndim==1 and v.size<10})\\nprint('public reference fields',[(k,np.shape(v)) for k,v in item['gt'].items()])\\nprint('historical lines', [mod._prior_line(c) for c in range(4)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Replace indiscriminate latest-sweep calibration with EMI-filtered channel lines, then fit the specified logarithmic response; worst-slice validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the latest archived sweep without filtering\",\n      \"rejected_reason\": \"Four rows on channels 0 and 2 deviate from their preceding clean lines by 4.55–4.90 stress units.\"\n    }\n  ],\n  \"rationale\": \"Implement the exact memory, plateau, and instantaneous-rate terms with a shared coefficient fit. Run the public schema check now to catch shape, finiteness, and import failures before evaluating predictive accuracy by lab and horizon.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "23cdfd86070df05898c55c1d86def73ebbbe27a92e7acda684e2365d9454bea5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45410.34,
+      "usage_known": true,
+      "prompt_tokens": 25751,
+      "cached_tokens": 6784,
+      "completion_tokens": 1718
+    }
+  ]
+}

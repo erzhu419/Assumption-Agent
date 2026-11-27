@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "41410f114df4462aac3792cec3d6e679",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:21:35.005425+00:00",
+  "ended_at_utc": "2026-11-27T09:21:59.603382+00:00",
+  "request_sha256": "6e6316692cdcbe22fc9bfd3e2d953148e562bf51c6237268f4540b1e944de47e",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 61181,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32912,
+    "cached_tokens": 6784,
+    "completion_tokens": 819
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp /tmp/alpha06_cauchy.py alpha_m97_c01_batch_06_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('candidate', 'alpha_m97_c01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_06.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nout = m.solve_alpha_m97_c01_batch_06(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\nassert 0 < out['estimated_taus'][0] < out['estimated_taus'][1]\\n# Independently exercise both permitted archive paths: affected current sweeps and a single clean anchor.\\ncal = d['calibration_load_cells']\\nfor lab in (0, 2):\\n    take = cal['lab_id'] == lab\\n    x, y = cal['cmd_stress'][take], cal['true_stress'][take]\\n    prior = m._prior_line(lab)\\n    clean = np.abs(y - np.polyval(prior, x)) <= 3\\n    assert clean.sum() == 1 and (~clean).sum() > 0\\n    full = m._calibrate(x, y, lab)\\n    single = m._calibrate(x[clean], y[clean], lab)\\n    np.testing.assert_allclose(full, single, atol=1e-12)\\n    np.testing.assert_allclose(np.polyval(full, x[clean]), y[clean], atol=1e-12)\\nprint('Taus:', out['estimated_taus'], '| finite outputs and both sparse-calibration paths passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/alpha06_compare.py /holdout_task/alpha_m97_c01_batch_06_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pseudo-Huber profiling) -> H2 (Cauchy profiling): across held-out labs and strata, the slow-tau range narrows from 3.698–3.993 to 3.923–4.086, worst cell median curve error drops from 0.01990 to 0.01766, and worst imputed-cell rate RMSE drops from 0.18178 to 0.17369.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Hard curve rejection\",\n      \"rejected_reason\": \"Its worst imputed-cell rate RMSE was 0.18356, versus 0.17369 with Cauchy profiling.\"\n    }\n  ],\n  \"rationale\": \"Promote Cauchy profiling because it stabilizes the slow relaxation branch and improves the worst imputed-rate slice without changing the specified response or imputation. Verify the exact installed file in isolated Python, including the archive fallback on contaminated and single-point sweeps; retain the previous candidate if those checks regress.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "83b04942e0688286a90bea9bcebeebd71f7d1450fc382e081541473580db663c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26878.22,
+      "usage_known": true,
+      "prompt_tokens": 32912,
+      "cached_tokens": 6784,
+      "completion_tokens": 819
+    }
+  ]
+}

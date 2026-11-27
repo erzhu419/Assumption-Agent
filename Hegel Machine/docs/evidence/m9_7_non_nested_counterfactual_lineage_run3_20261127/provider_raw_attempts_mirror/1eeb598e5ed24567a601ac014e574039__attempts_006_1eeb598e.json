@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1eeb598e5ed24567a601ac014e574039",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:25:38.849358+00:00",
+  "ended_at_utc": "2026-11-27T09:26:07.697532+00:00",
+  "request_sha256": "00fd0eba5a9e17ce04b157b2bf1f5bf64fad2a5c83e0067e9f320d04a825100f",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40991,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26511,
+    "cached_tokens": 6784,
+    "completion_tokens": 1093
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c01_batch_07_solver as m\\nitems=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))\\ndef rm(e): return np.sqrt(np.mean(e*e))\\nfor i,item in enumerate(items):\\n d,g=item['dataset'],item['gt']; o=m.solve_alpha_m97_c01_batch_07(d)\\n dt,t=d['past_dt'],d['eval_times']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); p,h,x,complete=m._prepare(d); damage=np.maximum(np.abs(p)-d['crit_stress'],0)**2@dt; a=np.tanh(damage) if d['shear_banding_index']<=0.5 else np.zeros_like(damage)\\n print('item',i,'counts',n,len(h)-n,'damage positive',np.count_nonzero(a[:n]),np.count_nonzero(a[n:]))\\n for ok,gk in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(ok,'public reference',g[gk],'error',o[ok]-g[gk])\\n print('calibration gains/bias reference',g['stress_gains'],g['stress_biases'],'max past/hold errors',np.max(abs(p[n:]-g['te_hist_true'])),np.max(abs(h[n:]-g['te_hold_true'])))\\n ec=o['predicted_strain']-g['te_clean']; er=o['initial_rate_pred']-g['te_true_rate0']; print('test RMSE',rm(ec),rm(er),'per horizon RMSE',np.round(np.sqrt(np.mean(ec**2,axis=0)),6))\\n for name,labels in [('lab',te['lab_id']),('stratum',te['stratum']),('damage positive',a[n:]>0),('complete',complete[n:])]:\\n  print(name,[(str(v),int(np.sum(labels==v)),round(rm(ec[labels==v]),6),round(rm(er[labels==v]),6)) for v in np.unique(labels)])\\n yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; want=complete[:n]; tau=o['estimated_taus']; w=np.r_[o['hereditary_weights'],o['regime_mode_weights']]; c,r=m._design(tau,dt,t,p[:n],h[:n],x[:n],a[:n]); rc=c@w-yc; rr=r@w-yr\\n print('training abs residual percentiles complete curves/rates',np.percentile(abs(rc[want]),[50,90,95,99,100]),np.percentile(abs(rr[want]),[50,90,95,99,100]))\\n for lab in np.unique(tr['lab_id']):\\n  j=(tr['lab_id']!=lab)&want; k=(tr['lab_id']==lab)&want\\n  u,v=m._fit(dt,t,p[:n][j],h[:n][j],x[:n][j],a[:n][j],yc[j],yr[j]); c,r=m._design(u,dt,t,p[:n][k],h[:n][k],x[:n][k],a[:n][k]); e=c@v-yc[k]; z=r@v-yr[k]; print('LOLO lab',lab,'n',k.sum(),'tau',u,'RMSE',rm(e),rm(z),'median abs',np.median(abs(e)),np.median(abs(z)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: EMI-filtered channel calibration and the exact logarithmic response pass the schema check; predictive error by lab, horizon, damage, and missingness is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after schema validation\",\"rejected_reason\":\"Valid shapes do not detect calibration drift, misestimated relaxation times, or prediction failures in specific labs or horizons.\"}],\"rationale\":\"Separate calibration error from model error using the public reference outputs, then assess coefficient stability on measured leave-one-lab-out folds. The residual breakdown will determine whether the current fit needs revision.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "39bd1840db2a6f533fe9e24a3a73b070e4e05c4239545558ffae96dd3b579d0f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31348.59,
+      "usage_known": true,
+      "prompt_tokens": 26511,
+      "cached_tokens": 6784,
+      "completion_tokens": 1093
+    }
+  ]
+}

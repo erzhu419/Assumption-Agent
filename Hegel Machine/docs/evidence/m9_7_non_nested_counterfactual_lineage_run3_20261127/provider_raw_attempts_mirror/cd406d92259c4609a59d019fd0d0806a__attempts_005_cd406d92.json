@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cd406d92259c4609a59d019fd0d0806a",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:55:17.894691+00:00",
+  "ended_at_utc": "2026-11-27T08:55:53.439247+00:00",
+  "request_sha256": "78580cdce7b8a56d05cca7872e61665f9f7f2d84a19295fbff7c6af4b34c3aa8",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 40917,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26226,
+    "cached_tokens": 11136,
+    "completion_tokens": 1381
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nm = load('candidate', '/holdout_task/beta_m97_c03_batch_03_solver.py')\\nwith open('validate_public_schema.py') as f:\\n    src = f.read()\\nns = {}\\nexec(src[:src.index('\\\\ndef verify_box_simplex_kkt_certificate')] + '\\\\n' + src[src.index('def verify_box_simplex_kkt_certificate'):src.index('\\\\n    # Unconditional convex supporting-hyperplane')], ns)\\nwith open('public_beta_m97_c03_batch_03.pkl', 'rb') as f:\\n    case = pickle.load(f)[0]\\ns, g = case['study'], case['gt']\\nz = s['Z_nuisance']; gram = z.T @ z + s['nuisance_ridge'] * np.eye(z.shape[1])\\ndef project(x): return x - z @ np.linalg.solve(gram, z.T @ x)\\nS = project(m._forward(s)[0]); r = project(m._calibrate(s))\\nprint('public matrices: max S error', np.max(abs(S - g['S_tilde'])), 'max r error', np.max(abs(r - g['r_y'])))\\nassert np.max(abs(S - g['S_tilde'])) < 1e-10\\n\\ndef check(result, A, y, budget):\\n    cert = result['kkt_certificate']; w = np.asarray(cert['weights']); nu = cert['nu_sum']; u = s['u_box']; ridge = s['source_ridge']\\n    np.testing.assert_array_equal(w, result['weights'])\\n    res = A @ w - y; grad = A.T @ res + ridge*w\\n    p = float((res @ res + ridge*(w @ w))/2)\\n    d = float(p - grad @ w + nu*budget + u*np.minimum(0,grad-nu).sum())\\n    ll, lu = np.array(cert['lam_lower']), np.array(cert['lam_upper'])\\n    stat = np.max(abs(grad-nu-ll+lu))\\n    assert max(abs(w.sum()-budget), -w.min(), w.max()-u, -ll.min(), -lu.min()) < 1e-9\\n    assert max(np.max(abs(ll*w)),np.max(abs(lu*(u-w)))) < 1e-9\\n    assert stat < 1e-6 and -1e-9 <= p-d < 1e-6\\n    assert max(abs(cert['primal_objective']-p),abs(cert['dual_lower_bound']-d)) < 1e-6\\n    return p-d, stat\\n\\nout = m.solve_beta_m97_c03_batch_03(s)\\nprint('public independent reference gap and stationarity',check(out,g['S_tilde'],g['r_y'],s['total_budget']))\\nbase = m._calibrate(s); sweep = s['sensor_calibration_sweeps']; banks = sweep['bank_id']\\nworst = 0.0\\nfor bank in range(4):\\n    idx = np.flatnonzero(banks == bank)\\n    for kind, dropped, spike in [('absent',idx,0),('one',idx[1:],0),('two_clean',idx[2:],0),('spike_majority_clean',[],8),('spike_three_points',idx[3:],8)]:\\n        mask = np.ones(len(banks), dtype=bool); mask[dropped] = False\\n        sw = {k: np.asarray(v)[mask].copy() for k,v in sweep.items()}\\n        sw['raw_readout'][np.flatnonzero(sw['bank_id']==bank)[0]] += spike if kind != 'absent' else 0 if np.any(sw['bank_id']==bank) else 0\\n        trial = dict(s,sensor_calibration_sweeps=sw)\\n        err = np.max(abs(m._calibrate(trial)-base)); worst=max(worst,err)\\n        assert err < 2e-5, (bank,kind,err)\\n        check(m.solve_beta_m97_c03_batch_03(trial), S, project(m._calibrate(trial)), s['total_budget'])\\nprint('worst calibration perturbation',worst)\\nfor budget in [0., 1., s['total_budget'], 11., 12.]:\\n    check(m.solve_beta_m97_c03_batch_03(dict(s,total_budget=budget)), S, r, budget)\\nprint('budget endpoint and interior certificates passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived boundary stencil -> H2 periodic endpoint-grid stencil; public maximum absolute errors are 5.08e-7 for weights and 2.59e-8 for terminal field.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public outputs already agree closely. Check the forward matrix and certificate independently to detect errors hidden by the fitted weights, then exercise calibration fallback, EMI rejection, and budget endpoints to isolate any failing branch before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "125ec840321f849149efd96ceb66bf73d7850d901a36c4b2b21b27ac741e31a0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37712.25,
+      "usage_known": true,
+      "prompt_tokens": 26226,
+      "cached_tokens": 11136,
+      "completion_tokens": 1381
+    }
+  ]
+}

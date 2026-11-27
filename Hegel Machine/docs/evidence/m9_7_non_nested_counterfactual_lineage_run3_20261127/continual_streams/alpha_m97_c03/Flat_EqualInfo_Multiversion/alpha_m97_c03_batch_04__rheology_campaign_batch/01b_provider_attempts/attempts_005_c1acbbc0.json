@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c1acbbc0b3af454eb7faa7a5eed6bc76",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:07:15.523634+00:00",
+  "ended_at_utc": "2026-11-27T09:07:42.866300+00:00",
+  "request_sha256": "2dc69b9d2f772a3f543a30d67ab8211177140459bc937393bc7629238da5431a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42460,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27682,
+    "cached_tokens": 6784,
+    "completion_tokens": 920
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS variable projection'; export OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1; sed '/^for mode in /,$d' /tmp/rheo_validate.py > /tmp/rheo_robust.py; cat >> /tmp/rheo_robust.py <<'PY'\\n\\ndef scale(e):\\n    return np.maximum(1e-6, 1.4826*np.median(np.abs(e-np.median(e))))\\n\\ndef fit(i, mode):\\n    a=args(i); yy=y[i]\\n    pp,w=m._fit(a,yy,mode)\\n    def resid(): return m._basis(pp,*a,terminal_mode=mode)@w-yy\\n    e=resid(); sc=np.array([scale(e[:,:-1]),scale(e[:,-1])]); sc=np.r_[np.repeat(sc[0],len(t)),sc[1]]\\n    for k in range(12):\\n        mult=1/(sc*np.sqrt(1+(e/(sc*(1.5 if k<3 else 2.385)))**2))\\n        pp,w=m._fit(a,yy,mode,mult); e=resid()\\n        if k in (2,5,8):\\n            sc=np.r_[np.repeat(scale(e[:,:-1]),len(t)),scale(e[:,-1])]\\n    return pp,w,sc\\n\\nfor mode in ('active','all_log'):\\n    pp,w,sc=fit(slice(None),mode); print(mode,'taus',np.exp(pp),'weights',w,'scales',sc[[0,-1]])\\n    for name,g in [('lab',lab),('stratum',st)]:\\n        for k in np.unique(g):\\n            v=g==k; pp,w,sc=fit(~v,mode); e=m._basis(pp,*args(v),terminal_mode=mode)@w-y[v]\\n            for act in (False,True):\\n                q=np.abs(e[(D[v]>0)==act]); a=q[:,:-1]; b=q[:,-1]; print(name,k,int(act),'curve/rate MAE',np.mean(a),np.mean(b),'median',np.median(a),np.median(b),'p90',np.quantile(a,.9),np.quantile(b,.9))\\nPY\\npython3 -I /tmp/rheo_robust.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Gross curve spikes can obscure the inactive-history time law; campaign-wide logarithmic creep improved the worst held-out lab/stratum median curve error from 0.1234 to 0.0840, but its worst raw curve RMSE was still 1.8852.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Switch to campaign-wide logarithmic creep immediately\",\n      \"rejected_reason\": \"The current comparison fits squared error to spikes as large as 39 strain units; repeat it with robust fits before changing the terminal law.\"\n    }\n  ],\n  \"rationale\": \"Fit both time laws with fold-local Cauchy weights and separate curve and rate scales. Compare active and inactive errors on held-out labs and strata to tell whether the logarithmic law improves typical predictions rather than merely changing the fit around isolated spikes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "9f2fe8b92189a8e354c2019a202313c8adf5b03f05d56ed4551f82b138562283",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27305.64,
+      "usage_known": true,
+      "prompt_tokens": 27682,
+      "cached_tokens": 6784,
+      "completion_tokens": 920
+    }
+  ]
+}

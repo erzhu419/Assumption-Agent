@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2a58396f81b74f0485995424282fce2e",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:56:47.214287+00:00",
+  "ended_at_utc": "2026-11-27T08:57:25.724731+00:00",
+  "request_sha256": "537e9d688711c2a96ae64aff5b847c4ec24c89ee36698425e2b80b71517fca32",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39186,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25026,
+    "cached_tokens": 11136,
+    "completion_tokens": 1341
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I /holdout_task/validate_public_schema.py && python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/beta_m97_c03_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('/holdout_task/public_beta_m97_c03_batch_03.pkl', 'rb') as f:\\n    cases = pickle.load(f)\\nfor case in cases:\\n    s, g = case['study'], case['gt']\\n    if s['recirculation_loop_mode'] > 0.5:\\n        for a in ('x', 'y'):\\n            k, v, L = (np.asarray(s[key + a]) for key in ('kappa_', 'vel_', 'L'))\\n            A = m._periodic_axis(k, v, L).toarray()\\n            n = len(k); h = L / (n - 1)\\n            for i in (0, n - 1):\\n                im, ip = (i - 1) % n, (i + 1) % n\\n                row = np.zeros(n)\\n                row[im] = -(k[i] + k[im]) / (2*h*h) - max(v[i], 0)/h\\n                row[ip] = -(k[i] + k[ip]) / (2*h*h) - max(-v[i], 0)/h\\n                row[i] = -row[im] - row[ip]\\n                np.testing.assert_allclose(A[i], row, rtol=0, atol=1e-12)\\n            balance = float(np.max(np.abs(A @ np.ones(n))))\\n            print(a, 'constant-field transport residual', balance)\\n            assert balance < 1e-12\\n    Z = s['Z_nuisance']\\n    gram = Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1])\\n    def project(x):\\n        return x - Z @ np.linalg.solve(gram, Z.T @ x)\\n    design = project(m._forward(s)[0])\\n    np.testing.assert_allclose(design, g['S_tilde'], atol=1e-12, rtol=0)\\n    base = m.solve_beta_m97_c03_batch_03(s)\\n    sweep = s['sensor_calibration_sweeps']\\n    b = np.asarray(sweep['bank_id'])\\n    r = project(m._calibrate(s)); ref = g['r_y']\\n    rows = np.asarray(s['row_bank_id'])\\n    for bank in range(4):\\n        ix = np.flatnonzero(b == bank)\\n        heldout = []\\n        if len(ix) >= 5:\\n            for j in ix:\\n                keep = np.arange(len(b)) != j\\n                sw = {k: np.asarray(v)[keep] for k,v in sweep.items()}\\n                trial = m.solve_beta_m97_c03_batch_03(dict(s, sensor_calibration_sweeps=sw))\\n                heldout.append(float(np.max(np.abs(trial['weights'] - base['weights']))))\\n        print('bank', bank, 'sweep points', len(ix), 'projected target max reference error', float(np.max(np.abs((r-ref)[rows == bank]), initial=0.0)), 'max leave-one-sweep-out weight shift', max(heldout, default=None))\\n        assert max(heldout, default=0) < 2e-5\\n    if 'aux_manifold_telemetry' in s:\\n        without_aux = dict(s)\\n        del without_aux['aux_manifold_telemetry']\\n        ret = m.solve_beta_m97_c03_batch_03(without_aux)\\n        for key in ('weights', 'terminal_field'):\\n            np.testing.assert_array_equal(base[key], ret[key])\\n        assert base['kkt_certificate'] == ret['kkt_certificate']\\n        print('uncoupled auxiliary telemetry: exact output invariance')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived boundary stencil -> H2 periodic endpoint-grid stencil with bank-specific calibration; public KKT gap is 4.03e-7 against the 1e-6 tolerance.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test binary classification, relay modes, or HJB drift\",\n      \"rejected_reason\": \"The reactor contract defines a continuous inverse problem with a specified transport stencil; it supplies no classification labels, relay dynamics, or HJB operator.\"\n    }\n  ],\n  \"rationale\": \"Audit the supported failure modes on public measurements: a seam-sign or conservation failure would require a stencil correction; a large leave-one-sweep-out shift would identify a bank fit to investigate; telemetry dependence would violate the input contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8bfd51e3c41797c00bec165a0687b1ec1e86e7d7b2c37783ea80a702a83a93f9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40633.41,
+      "usage_known": true,
+      "prompt_tokens": 25026,
+      "cached_tokens": 11136,
+      "completion_tokens": 1341
+    }
+  ]
+}

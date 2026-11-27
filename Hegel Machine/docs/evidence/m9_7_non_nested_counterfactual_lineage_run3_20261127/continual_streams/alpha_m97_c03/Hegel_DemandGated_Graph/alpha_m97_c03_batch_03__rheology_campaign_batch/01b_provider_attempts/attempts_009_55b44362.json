@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "55b44362c0e84699bde7a065c9f2eafe",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:01:12.694159+00:00",
+  "ended_at_utc": "2026-11-27T09:01:58.163872+00:00",
+  "request_sha256": "0b0287b850681b3e9b66e039869af0455c5b48668c18873384547e2fe13cc877",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27851,
+    "cached_tokens": 6784,
+    "completion_tokens": 1782
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_batch03.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c03_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open(root + 'public_alpha_m97_c03_batch_03.pkl', 'rb'))[0]['dataset']\\ntr = d['train']\\nn = len(tr['lab_id'])\\ndt, t = d['past_dt'], d['eval_times']\\np, h, x, b = [a[:n] for a in m._prepare(d)]\\ny, r = tr['strain_curves_obs'] - b[:, None], tr['instant_rate_obs']\\nmissing = ~np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nlab = np.asarray(tr['lab_id'])\\nfor field in ('train', 'test'):\\n    print(field, 'fields', sorted(d[field]))\\nprint('dataset fields', sorted(d), 'shear banding index', d['shear_banding_index'])\\nfor g in np.unique(lab):\\n    print('lab', g, 'rows', (lab == g).sum(), 'missing', ((lab == g) & missing).sum(), 'positive stress fraction', np.mean(h[lab == g] > 0))\\n\\nmodes = ('specified', 'linear flow', 'no branch contrast', 'no signed slip')\\nerr = {name: [np.empty_like(y), np.empty_like(r)] for name in modes}\\nfor g in np.unique(lab):\\n    train, val = lab != g, lab == g\\n    tau, w = m._fit(p[train], h[train], x[train], dt, t, y[train], r[train])\\n    a, q = m._design(tau, p, h, x, dt, t)\\n    # Audit the two nontrivial constitutive bases separately, not merely their sum.\\n    np.testing.assert_allclose(a[:, :, 2], t[None, :] / (1 + .85*t[None, :]) * np.ones((n, 1)))\\n    np.testing.assert_allclose(q[:, 2], 1.)\\n    decay = -np.expm1(-t/tau[0])\\n    gap_difference = (q[:, 0] * tau[0] - q[:, 1] * tau[1])\\n    np.testing.assert_allclose(a[:, :, 8], gap_difference[:, None] * decay[None, :], atol=1e-12)\\n    np.testing.assert_allclose(q[:, 8], gap_difference / tau[0], atol=1e-12)\\n    yc = train[:, None] & np.isfinite(y)\\n    yr = train & np.isfinite(r)\\n    targets = np.r_[y[yc], r[yr]]\\n    residual = np.r_[(a @ w - y)[yc], (q @ w - r)[yr]]\\n    def mad(v):\\n        return max(1e-6, 1.4826*np.median(np.abs(v-np.median(v))))\\n    scale = np.r_[np.full(yc.sum(), 2*mad(residual[:yc.sum()])), np.full(yr.sum(), 2*mad(residual[yc.sum():]))]\\n    for name in modes:\\n        A, Q = a.copy(), q.copy()\\n        cols = np.arange(9)\\n        if name == 'linear flow':\\n            A[:, :, 2:8] *= (1 + .85*t[None, :, None])\\n        if name == 'no branch contrast':\\n            cols = cols[cols != 8]\\n        if name == 'no signed slip':\\n            cols = cols[cols != 7]\\n        A, Q = A[:, :, cols], Q[:, cols]\\n        design = np.vstack((A[yc], Q[yr]))\\n        fit = w if name == 'specified' else least_squares(lambda v: (design @ v - targets)/scale, w[cols], loss='cauchy', x_scale='jac').x\\n        err[name][0][val] = (A @ fit - y)[val]\\n        err[name][1][val] = (Q @ fit - r)[val]\\n\\ndef med(a):\\n    return float(np.nanmedian(np.abs(a)))\\nfor name, (e, f) in err.items():\\n    print(name, 'pooled curve/rate medAE', round(med(e), 5), round(med(f), 5), 'worst lab curve/rate medAE', round(max(med(e[lab == g]) for g in np.unique(lab)), 5), round(max(med(f[lab == g]) for g in np.unique(lab)), 5))\\ne, f = err['specified']\\nfor g in np.unique(lab):\\n    for mask, label in ((~missing, 'complete'), (missing, 'missing')):\\n        rows = (lab == g) & mask\\n        if rows.any():\\n            print('held-out lab', g, label, 'n', rows.sum(), 'signed curve/rate medians', np.round([np.nanmedian(e[rows]), np.nanmedian(f[rows])], 5), 'rate medAE', round(med(f[rows]), 5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch03.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (missing or misapplied constitutive terms, or lab nuisance) -> H2 (specified jammed-slip response with isolated strain spikes); worst held-out horizon median absolute error is 0.014 and missing-coupon initial-rate RMSE is 0.170.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay-mode, stochastic-control, or balanced-accuracy tests\",\n      \"rejected_reason\": \"The observed outcomes are continuous strain and initial rate. The applicable checks are the rational flow and branch-gap difference identities, plus signed residuals within held-out labs.\"\n    }\n  ],\n  \"rationale\": \"Verify the two constitutive terms independently and measure what removing them costs on real held-out lab measurements, with parameters fitted only on the other labs. Separate complete and missing coupons to see whether systematic lab offsets persist when predictors are observed. An identity failure would require a basis fix; consistent signed errors on complete coupons would justify revisiting alignment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "6e2c81a22cd80e171526c627fb0468dcac44cda4b1a52df3288cf20c442fc86d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47675.48,
+      "usage_known": true,
+      "prompt_tokens": 27851,
+      "cached_tokens": 6784,
+      "completion_tokens": 1782
+    }
+  ]
+}

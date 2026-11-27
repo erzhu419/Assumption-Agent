@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "526550775e4b4b1f963ab8f59edaa005",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:55:18.819696+00:00",
+  "ended_at_utc": "2026-11-27T08:55:44.749953+00:00",
+  "request_sha256": "ebb5079af54425679fbf4defb799db3674bc1a8ec0eac42ae4f4dba3c00edbaf",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26165,
+    "cached_tokens": 6784,
+    "completion_tokens": 999
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nsp=importlib.util.spec_from_file_location('solver','beta_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ns=pickle.load(open('public_beta_m97_c01_batch_03.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; b=np.asarray(c['bank_id']); r=np.asarray(c['raw_readout']); x=np.asarray(c['ref_signal']); rb=s['row_bank_id']; raw=s['y_obs_raw']\\nfor bank in range(4):\\n idx=np.flatnonzero(b==bank); g,o=m._archived_affine(bank); ga,oa=m._affine(x[idx],r[idx]); print('bank',bank,'archive-vs-current',g-ga,o-oa)\\n for n in (0,1,2,3,4,5,12):\\n  worst=0.; witness=None\\n  for j in range(max(n,1)):\\n   keep=np.r_[np.flatnonzero(b!=bank),idx[:n]]; v=r.copy()\\n   if n>=3: v[idx[j]]+=3.5\\n   z=dict(s,sensor_calibration_sweeps=dict(bank_id=b[keep],ref_signal=x[keep],raw_readout=v[keep])); got=m._calibrated_observations(z)[rb==bank]; clean=np.delete(idx[:n],j) if n>=3 else idx[:n]; p=m._affine(x[clean],r[clean]) if len(clean)>=4 or n==2 else (g,o); expected=(raw[rb==bank]-p[1])/p[0]; err=np.max(abs(got-expected))\\n   if err>worst: worst,witness=err,j\\n  print(' ',n,'worst calibration error',worst,'spike row',witness)\\nrg=np.random.default_rng(12); worst=0.\\nfor n in (4,12):\\n for cap in (0.1,1.):\\n  for budget in (0., .08*cap, cap, 2.6*cap, n*cap-.08*cap,n*cap):\\n   for scale in (.01,1.,50.):\\n    S=rg.normal(size=(30,n)); y=scale*rg.normal(size=30); ridge=.04; w,nu=m._box_simplex(S,y,ridge,cap,budget); g=S.T@(S@w-y)+ridge*w-nu; gap=np.maximum(g,0)@w+np.maximum(-g,0)@(cap-w); worst=max(worst,gap,abs(w.sum()-budget)); assert min(w)>=0 and max(w)<=cap and gap<1e-9 and abs(w.sum()-budget)<1e-12\\nprint('worst QP feasibility/complementarity error',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin/sealed closure → H2 periodic closure with bankwise calibration; public design relative error is 9.39e-16, weight relative error is 6.37e-7, and the reference KKT gap is 1.05e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public study covers only clean, fully sampled banks and one budget. Inject a single qualifying EMI spike into the actual sweep coordinates and thin the sweeps to detect masked spikes or incorrect fallback. Exercise tight and saturated box constraints to detect active-set failures not visible in the public solve.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "954981bee2d3a3c7fb7f65cd816ab1bfdcf6573947f862d3d3395ca42b7655f4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28104.49,
+      "usage_known": true,
+      "prompt_tokens": 26165,
+      "cached_tokens": 6784,
+      "completion_tokens": 999
+    }
+  ]
+}

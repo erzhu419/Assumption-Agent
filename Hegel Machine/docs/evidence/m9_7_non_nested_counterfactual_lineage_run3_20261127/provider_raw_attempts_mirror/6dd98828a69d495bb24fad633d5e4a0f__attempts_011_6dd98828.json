@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6dd98828a69d495bb24fad633d5e4a0f",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:04:14.232267+00:00",
+  "ended_at_utc": "2026-11-27T09:04:48.537295+00:00",
+  "request_sha256": "13d66267d645aacf5d62a2d358ea5ac38e07c8b8b48b9b5433900bbfe2a74ff8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 52421,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29014,
+    "cached_tokens": 6784,
+    "completion_tokens": 1362
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',root+'alpha_m97_c03_batch_03_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c03_batch_03.pkl','rb') as f: item=pickle.load(f)[0]\\nd,g=item['dataset'],item['gt']; out=m.solve_alpha_m97_c03_batch_03(d)\\ntr,te=d['train'],d['test']; n=len(tr['lab_id']); p,h,x,o,dt,t=m._prepare(d)\\ntau=out['estimated_taus']; hw=out['hereditary_weights']; rw=out['regime_mode_weights']\\n# Independent discrete convolution, without the solver's recurrence or basis.\\nafter=np.cumsum(dt[::-1])[::-1]-dt\\ngaps=np.column_stack([h[n:]-p[n:]@((1-np.exp(-dt/u))*np.exp(-after/u)) for u in tau]); a,b=gaps.T\\nflow=hw[2]+x[n:]@hw[3:]+rw[0]*np.sign(h[n:])*np.sqrt(abs(h[n:]))\\ndef direct(times):\\n    f,j=(1-np.exp(-times[:,None]/tau)).T\\n    return o[n:,None]+np.outer(hw[0]*a+rw[1]*(a-b),f)+np.outer(hw[1]*b,j)+np.outer(flow,times/(1+0.85*times))\\nrate=(hw[0]*a+rw[1]*(a-b))/tau[0]+hw[1]*b/tau[1]+flow\\nnp.testing.assert_allclose(out['predicted_strain'],direct(t),rtol=1e-12,atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'],rate,rtol=1e-12,atol=1e-12)\\nnp.testing.assert_allclose(direct(np.array([0.]))[:,0],o[n:]); eps=1e-5\\nnp.testing.assert_allclose((direct(np.array([eps]))[:,0]-direct(np.array([-eps]))[:,0])/(2*eps),rate,atol=1e-8)\\nprint('Exact jammed-slip grammar and zero-time slope passed')\\n# Compare raw vs panel-aligned regressors using held-out lab responses, with identical complete cases.\\ny=np.column_stack((tr['strain_curves_obs']-o[:n,None],tr['instant_rate_obs']))\\nraw=tr['coupon_features_raw']; complete=np.isfinite(raw).all(axis=1); labs=tr['lab_id']; worst={}\\nfor name,features in [('aligned',x[:n]),('raw',raw)]:\\n    scores=[]\\n    for lab in np.unique(labs):\\n        fit=complete&(labs!=lab); val=complete&(labs==lab)\\n        u,w=m._fit((p[:n][fit],h[:n][fit],features[fit],dt,t),y[fit]); B,_,_=m._basis(np.log(u),p[:n][val],h[:n][val],features[val],dt,t)\\n        err=B@w-y[val]; scores.append((np.median(abs(err[:,:-1])),np.median(abs(err[:,-1])))); print(name,'lab',lab,'median absolute strain/rate',np.round(scores[-1],6),'median signed strain/rate',np.round([np.median(err[:,:-1]),np.median(err[:,-1])],6))\\n    worst[name]=np.max(scores,axis=0)\\nprint('Worst complete-case held-out lab errors',worst)\\nfor name,pred,truth in [('strain',out['predicted_strain'],g['te_clean']),('rate',rate,g['te_true_rate0'])]:\\n    err=pred-truth\\n    print('Clean',name,'RMSE by hold stress sign',[(int(mask.sum()),float(np.sqrt(np.mean(err[mask]**2)))) for mask in [h[n:]<0,h[n:]>=0] if mask.any()])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine stress and lab-panel alignment → exact two-branch jammed-slip response; worst clean lab RMSE is 0.04384 for strain and 0.05612 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, PDE drift, or classification recall\",\"rejected_reason\":\"This batch specifies a continuous rheology response with no relay states, PDE operator, or classification target; the relevant checks are the slip denominator, cross-gap term, signed stress slices, and lab transfer.\"}],\"rationale\":\"An independent convolution checks the exact rational and cross-gap terms and the initial derivative; a discrepancy requires correcting the physical basis. A matched raw-versus-aligned leave-one-lab-out comparison tests whether panel correction improves transfer or leaves a lab-specific bias. The isolated schema check verifies the unchanged artifact.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "22444b0a5463999c72564b4933abf35dbcfa2f76acf2497d99dfb70b00be721b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36456.83,
+      "usage_known": true,
+      "prompt_tokens": 29014,
+      "cached_tokens": 6784,
+      "completion_tokens": 1362
+    }
+  ]
+}

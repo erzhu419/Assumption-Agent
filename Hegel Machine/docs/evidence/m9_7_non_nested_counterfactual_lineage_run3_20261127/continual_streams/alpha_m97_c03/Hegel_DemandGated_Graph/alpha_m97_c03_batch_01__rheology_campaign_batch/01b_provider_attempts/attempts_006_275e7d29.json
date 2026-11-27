@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "275e7d29d19f4a09b775498f9626aa49",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:49:06.273424+00:00",
+  "ended_at_utc": "2026-11-27T08:49:38.918531+00:00",
+  "request_sha256": "d439798d476dfc00e1119e915104ad078d8382e4e72e7831cdbb3371ffb7dcc3",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40199,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26072,
+    "cached_tokens": 6784,
+    "completion_tokens": 1319
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '76,115p' alpha_m97_c03_batch_01_solver.py\\nsed -i -e 's/def _design(taus, past, hold, features, dt, t, damage):/def _design(taus, past, hold, features, dt, t, damage, plateau):/' -e '/    active = damage > 0/d' -e 's/clock = np.where(active\\\\[:, None\\\\], np.log1p(t), t)/clock = np.log1p(t)[None, :] if plateau else t[None, :]/' -e 's/def _fit(past, hold, features, dt, t, damage, y, rates):/def _fit(past, hold, features, dt, t, damage, y, rates, plateau):/' -e 's/past, hold, features, dt, t, damage)$/past, hold, features, dt, t, damage, plateau)/' -e \\\"s/if dataset\\\\['shear_banding_index'\\\\] > .50:/plateau = dataset['shear_banding_index'] <= .50\\\\n    if not plateau:/\\\" -e \\\"s/np.asarray(train\\\\['instant_rate_obs'\\\\]))/np.asarray(train['instant_rate_obs']), plateau)/\\\" -e 's/damage\\\\[n:\\\\])$/damage[n:], plateau)/' alpha_m97_c03_batch_01_solver.py\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I validate_public_schema.py\\npython3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c03_batch_01_solver as m\\nitem=pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d,g=item['dataset'],item['gt']; out=m.solve_alpha_m97_c03_batch_01(d)\\nfor key,ref in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]: print(key,out[key],g[ref]);\\np,h,f,b=m._prepare(d); n=len(d['train']['lab_id']); dt,t=d['past_dt'],d['eval_times']; dmg=np.maximum(0,abs(p)-d['crit_stress'])**2@dt\\nmiss=np.isnan(d['test']['coupon_features_raw']).any(1); lab=d['test']['lab_id']; masks={'all':np.ones(len(lab),bool),'missing':miss,'complete':~miss,'damaged':dmg[n:]>0,'undamaged':dmg[n:]==0,**{f'lab{c}':lab==c for c in range(4)}}\\nfor key,ref in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n e=out[key]-g[ref]; print(key,{k:(float(np.sqrt(np.mean(e[i]**2))),float(np.max(abs(e[i])))) for k,i in masks.items()})\\na,r=m._design(out['estimated_taus'],p[:n],h[:n],f[:n],dt,t,dmg[:n],True); w=np.r_[out['hereditary_weights'],out['regime_mode_weights']]; err=b[:n,None]+a@w-d['train']['strain_curves_obs']; er=r@w-d['train']['instant_rate_obs']; missing=np.isnan(d['train']['coupon_features_raw']).any(1)\\nfor label,i in [('complete',~missing),('missing',missing)]: print('train',label,'curve and rate absolute residual quantiles',np.quantile(abs(err[i]),[.25,.5,.9,.99]),np.quantile(abs(er[i]),[.25,.5,.9,.99]));\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Damage-gated clock → campaign-wide logarithmic clock with damage-gated corrections; with reference parameters, the old clock misses the final strain on complete undamaged rows by 1.116 RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Zero damage switches the low-banding campaign’s drift clock back to linear time.\",\n    \"empirical_witness\": \"On 23 complete undamaged public rows, the inferred clock ends at 1.798, close to log1p(5.2) = 1.825 and far from 5.2; substituting the reference parameters into the linear-clock model gives final strain RMSE 1.116.\",\n    \"causal_blanket_diagnosis\": \"The solver applied the sample damage gate to the clock as well as to the two damage-dependent amplitudes.\",\n    \"sublated_pivot\": \"Use the logarithmic clock throughout the low-banding campaign and preserve the damage dependence of the two correction amplitudes.\",\n    \"risk_kind\": \"regime-gate scope\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep linear flow and change coupon alignment\",\n      \"rejected_reason\": \"An alignment correction changes drift amplitude but cannot turn a linear time basis into the observed logarithmic curvature.\"\n    }\n  ],\n  \"rationale\": \"Measure the clock correction separately on damaged, undamaged, complete, and missing-coupon rows. Training residuals on complete versus missing rows will show whether the remaining error warrants further work on alignment or imputation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "2a70e01da64956a59d5fa026bee3ae7b80e5ce3d880966f4f8f77f130093646e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34702.95,
+      "usage_known": true,
+      "prompt_tokens": 26072,
+      "cached_tokens": 6784,
+      "completion_tokens": 1319
+    }
+  ]
+}

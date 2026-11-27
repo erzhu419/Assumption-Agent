@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a470e2ac4dfe43ab9f5c4e1dce92e7d6",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:16:24.055932+00:00",
+  "ended_at_utc": "2026-11-27T09:16:52.269939+00:00",
+  "request_sha256": "9eac479d20672b42b82a7a7d572fbd87b2a9ee633e216901110271b86cab56c0",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42018,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26197,
+    "cached_tokens": 11136,
+    "completion_tokens": 766
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c02_batch_06_solver as m\\nwith open('public_alpha_m97_c02_batch_06.pkl','rb') as f: item=pickle.load(f)[0]\\nd=item['dataset']; tr=d['train']; p,h,x=m._prepare(d); dt,t=d['past_dt'],d['eval_times']; n=len(tr['lab_id']); C=tr['strain_curves_obs']-tr['strain_0'][:,None]; R=tr['instant_rate_obs']; tau,w=m._fit(p[:n],h[:n],x[:n],dt,t,C,R)\\na,b=m._design(p[:n],h[:n],x[:n],dt,t,tau); e=C-a@w; f=R-b@w\\nq=lambda z: np.quantile(np.abs(z),[.25,.5,.75,.9,.95,.99,1],axis=None).round(5)\\nprint('curve and rate abs quantiles',q(e),q(f)); print('time signed median',np.median(e,axis=0).round(4)); print('time RMSE',np.sqrt(np.mean(e*e,axis=0)).round(4)); print('gross curve counts by time', (abs(e)>.35).sum(axis=0)); print('gross counts per-row histogram',np.bincount((abs(e)>.35).sum(axis=1))); print('gross curves sample', [(int(i),int(j),round(float(e[i,j]),3)) for i,j in np.argwhere(abs(e)>1)[:20]])\\nfor c in np.unique(tr['lab_id']):\\n z=tr['lab_id']==c; print('lab',c,z.sum(),q(e[z]),q(f[z]))\\nfor k,v in item.items():\\n if k!='dataset': print('verification resource',k,list(v) if isinstance(v,dict) else type(v).__name__)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated, panel-aligned inputs -> H2 jammed-slip variable projection; public training curve RMSE is 0.885 versus rate RMSE 0.052, with held-out metrics pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Tune the rate-to-curve weight from pooled RMSE alone\",\n      \"rejected_reason\": \"Pooled RMSE cannot distinguish isolated bad measurements from a systematic time- or lab-dependent model error.\"\n    }\n  ],\n  \"rationale\": \"Residual quantiles and concentration by row, time, and lab will determine whether to robustify the observation fit or revisit alignment and the response basis before running held-out validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "aad8c4783682a2c7ff55961a33794a10d357561a5fd217667b834027983f3baa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30441.96,
+      "usage_known": true,
+      "prompt_tokens": 26197,
+      "cached_tokens": 11136,
+      "completion_tokens": 766
+    }
+  ]
+}

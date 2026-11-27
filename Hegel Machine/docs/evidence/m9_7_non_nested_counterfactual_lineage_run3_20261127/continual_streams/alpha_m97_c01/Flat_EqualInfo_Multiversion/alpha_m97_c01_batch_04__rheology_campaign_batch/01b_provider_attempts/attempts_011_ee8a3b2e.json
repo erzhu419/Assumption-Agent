@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ee8a3b2e8d094fada5051a2d790518cb",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:15:35.566094+00:00",
+  "ended_at_utc": "2026-11-27T09:16:09.074021+00:00",
+  "request_sha256": "517ea8ca433880290474f1be7a007a205ff68ee792232f4ce39a4dbf26858706",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63459,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33577,
+    "cached_tokens": 11136,
+    "completion_tokens": 1170
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rheo_margin_audit.py <<'PY'\\nexec(open('/tmp/rheo_cv_final.py').read().split('for lab in (*np.unique(labs), -1):')[0])\\nimport json\\nfrom pathlib import Path\\nfrom types import ModuleType\\nsrc = (p/'alpha_m97_c01_batch_04_solver.py').read_text()\\nsweeps = json.loads(s._ARCHIVE.read_text())[-3:]\\ndef archive_fit(sweeps, lab):\\n    blocks = []\\n    for sw in sweeps:\\n        ix = np.asarray(sw['lab_id']) == lab\\n        u, v = (np.asarray(sw[k])[ix] for k in ('cmd_stress','true_stress'))\\n        keep = ~s._spikes(u,v)\\n        blocks.append(np.stack((u[keep],v[keep])))\\n    return s._line(*np.concatenate(blocks,axis=1))\\nprint('Prefix sweep forecast, maximum physical stress error on clean held-out readings: latest / pooled')\\nfor j in (1,2):\\n    err = [[],[]]\\n    sw = sweeps[j]\\n    for lab in range(4):\\n        ix = np.asarray(sw['lab_id']) == lab\\n        u,v = (np.asarray(sw[k])[ix] for k in ('cmd_stress','true_stress'))\\n        keep = ~s._spikes(u,v)\\n        for k, prefix in enumerate((sweeps[j-1:j],sweeps[:j])):\\n            err[k].extend(np.abs(np.polyval(archive_fit(prefix,lab),u[keep])-v[keep]))\\n    print(sw['episode_short_name'],np.max(err,axis=1))\\nprint('Current channel 3 two-point calibration error from the latest archived line:', np.abs(np.polyval(archive_fit(sweeps[-1:],3),d['calibration_load_cells']['cmd_stress'])-d['calibration_load_cells']['true_stress']))\\nfor cutoff in ('.050','.075','.110'):\\n    m=ModuleType('probe'); exec(src.replace('profile(u, .075)','profile(u, '+cutoff+')').replace('profile(final.x, .075)','profile(final.x, '+cutoff+')'),m.__dict__)\\n    metrics=[]; taus=[]\\n    for lab in np.unique(labs):\\n        f=labs!=lab; g=labs==lab\\n        tau,w=m._fit(dt,t,*(a[f] for a in args),yc[f],yr[f],~missing[f])\\n        c,r=m._design(tau,dt,t,*(a[g] for a in args))\\n        e=np.abs(c@w-yc[g]); z=np.abs(r@w-yr[g]); complete=~missing[g]\\n        metrics.append([np.max(np.median(e[complete],axis=0)),np.median(z[complete]),np.median(e[~complete]),np.median(z[~complete])]); taus.append(tau)\\n    print('cutoff',cutoff,'worst complete horizon strain / complete rate / imputed strain / imputed rate medians',np.max(metrics,axis=0).round(6),'tau fold range',np.ptp(taus,axis=0).round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheo_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Test whether pooling recent calibration sweeps or changing the robust cutoff improves the verified plateau solver; worst held-out lab median absolute errors are 0.01376 for strain and 0.01416 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear drift and curve–rate audit\",\n      \"rejected_reason\": \"Those checks already passed on this artifact. Calibration transfer and sensitivity to the robust cutoff are the remaining questions that could change the solver.\"\n    }\n  ],\n  \"rationale\": \"Forecast later measured calibration sweeps from earlier ones to test whether pooling improves fallback accuracy. Compare nearby loss cutoffs on held-out labs to detect unstable relaxation times or errors concentrated at one horizon. Keep the verified artifact unchanged unless a challenger improves a material bottleneck.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "7945815c6dcf85b252288a15ddb83a682e01254c99eafdb64594d6b4494c67f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35587.45,
+      "usage_known": true,
+      "prompt_tokens": 33577,
+      "cached_tokens": 11136,
+      "completion_tokens": 1170
+    }
+  ]
+}

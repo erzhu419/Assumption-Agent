@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b021f4d6686740eb9b4c179a79b8a0f4",
+  "call_seq": 3,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c02__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_s00__reactor_tomography_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:39:47.633615+00:00",
+  "ended_at_utc": "2026-11-27T08:40:10.021895+00:00",
+  "request_sha256": "fddf353e2fe32a1a002192b0cfbe7670b801e7780cc0e50641f1fdb6f75debef",
+  "system_prompt_chars": 5300,
+  "stdin_payload_chars": 22294,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20178,
+    "cached_tokens": 6784,
+    "completion_tokens": 678
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 -I - <<'PY'\\nimport pickle\\nimport numpy as np\\nitem = pickle.load(open('public_beta_m97_c02_s00.pkl', 'rb'))[0]\\ns = item['study']\\nprint('study keys:', sorted(s))\\nfor k in ('nuisance_ridge', 'source_ridge', 'u_box', 'total_budget', 'recirculation_loop_mode', 'critical_vortex_circulation'):\\n    if k in s:\\n        print(k, s[k])\\nprint('max circulation:', max(s['past_vortex_circulation_trace']))\\nfor k, v in item.get('gt', {}).items():\\n    print('reference:', k, np.shape(v))\\nc = s['sensor_calibration_sweeps']\\nfor bank in range(4):\\n    keep = c['bank_id'] == bank\\n    x, y = c['ref_signal'][keep], c['raw_readout'][keep]\\n    if x.size >= 2:\\n        A = np.column_stack((x, np.ones_like(x)))\\n        p = np.linalg.lstsq(A, y, rcond=None)[0]\\n        print('bank:', bank, 'n:', x.size, 'fit:', p, 'max abs residual:', max(abs(y - A @ p)))\\n    else:\\n        print('bank:', bank, 'n:', x.size)\\nPY\\nsed -n '42,78p' validate_public_schema.py\\nif [ -f /tmp/hegel_continual_archive/archive_calibration_history.json ]; then echo 'Calibration history is available'; else echo 'No calibration history in this container'; fi\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (open-Robin transport) -> H2 (bank-calibrated, ridge-projected box-simplex inversion); no certificate gap measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the general ridge-profiling primitive\",\n      \"rejected_reason\": \"The specified projection requires only one small linear solve shared by the observations and all forward columns.\"\n    }\n  ],\n  \"rationale\": \"The previous output truncated the source constraints and verifier. Check those fields to avoid guessing the input contract, and use per-bank residuals and counts to determine whether any public bank needs the archive fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "e82df7c68ea1e61f2617ccb944c533949caa8cae15e29d2b9e344886512262d7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24303.23,
+      "usage_known": true,
+      "prompt_tokens": 20178,
+      "cached_tokens": 6784,
+      "completion_tokens": 678
+    }
+  ]
+}

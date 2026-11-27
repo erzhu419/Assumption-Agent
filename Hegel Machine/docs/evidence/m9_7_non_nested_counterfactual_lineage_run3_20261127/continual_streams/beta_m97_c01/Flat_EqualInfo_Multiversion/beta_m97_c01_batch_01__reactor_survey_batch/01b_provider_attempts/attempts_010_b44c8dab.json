@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b44c8dab763c45aaaa93612d67420876",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:45.820785+00:00",
+  "ended_at_utc": "2026-11-27T08:51:14.772809+00:00",
+  "request_sha256": "c520b24ed5c8ccf6fe65ab456bd00a56ab21dd2aae223555a19b63c704ec8a2a",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 48210,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27451,
+    "cached_tokens": 6784,
+    "completion_tokens": 1108
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nv = {}; exec((p/'validate_public_schema.py').read_text().split('\\\\n_d =')[0], v)\\nverify = v['verify_box_simplex_kkt_certificate']\\nworst_stencil = worst_gap = 0.\\nfor item in pickle.load((p/'public_beta_m97_c01_batch_01.pkl').open('rb')):\\n    s = item['study']\\n    y = m._calibrated_observations(s)\\n    S, F = m._forward(s)\\n    Z = np.asarray(s['Z_nuisance'])\\n    U, d, _ = np.linalg.svd(Z, full_matrices=False)\\n    ridge = s['nuisance_ridge']\\n    def project(a):\\n        factor = d**2 / (d**2 + ridge)\\n        return a - U @ ((factor if a.ndim == 1 else factor[:, None]) * (U.T @ a))\\n    for axis in ('x', 'y'):\\n        a = s['kap_'+axis] if 'kap_'+axis in s else s['kappa_'+axis]\\n        h = s['L'+axis] / (len(a)-1)\\n        A = m._axis_operator(s['L'+axis], a, s['vel_'+axis], 0.).toarray()\\n        wanted = np.zeros_like(A[[0,-1]])\\n        wanted[0,:2] = np.array([1.,-1.]) * a[0]/h**2\\n        wanted[1,-2:] = np.array([-1.,1.]) * a[-1]/h**2\\n        worst_stencil = max(worst_stencil, np.max(np.abs(A[[0,-1]]-wanted)))\\n        assert np.allclose(A[[0,-1]], wanted, rtol=2e-15, atol=2e-15), axis\\n    for j in range(Z.shape[1]):\\n        dz = Z[:, j] * (np.linalg.norm(y) / max(np.linalg.norm(Z[:, j]), 1e-15))\\n        banks = np.asarray(s['row_bank_id'])\\n        gains = np.array([m._affine(*m._bank_sweep(s['sensor_calibration_sweeps'], b))[0] for b in range(4)])\\n        for sign in (-1., 1.):\\n            variant = dict(s, y_obs_raw=s['y_obs_raw']+sign*dz*gains[banks])\\n            out = m.solve_beta_m97_c01_batch_01(variant)\\n            check = verify(project(S), project(y+sign*dz), s['source_ridge'], s['u_box'], s['total_budget'], out['kkt_certificate'])\\n            assert check['valid'], (j, sign, check)\\n            worst_gap = max(worst_gap, check['gap'])\\nprint('Max sealed boundary stencil error:', worst_stencil)\\nprint('Worst KKT gap under signed measured nuisance-column perturbations:', worst_gap)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The gated sealed-wall operator matches the public forward matrix to 1.18e-16; the worst reference KKT gap across calibration omissions is 5.47e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run a within-batch classification audit\",\n      \"rejected_reason\": \"The study has no class labels; the documented nuisance mechanism is continuous ridge residualization.\"\n    }\n  ],\n  \"rationale\": \"Check the sealed boundary rows directly and independently verify ridge residualization under signed perturbations along the measured nuisance columns. A stencil failure would require a boundary correction; a certificate failure with the independently projected inputs would localize the issue to calibration, residualization, or inversion.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "82cf6a468d20e86183e42942eef88e29ccfd0518e38e94746d975e058fd33e9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30951.46,
+      "usage_known": true,
+      "prompt_tokens": 27451,
+      "cached_tokens": 6784,
+      "completion_tokens": 1108
+    }
+  ]
+}

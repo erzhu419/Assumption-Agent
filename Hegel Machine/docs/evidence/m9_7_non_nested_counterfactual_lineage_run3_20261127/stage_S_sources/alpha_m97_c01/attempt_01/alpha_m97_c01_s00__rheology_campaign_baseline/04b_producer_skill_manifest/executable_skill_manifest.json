@@ -1,0 +1,83 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c01_s00_9e77991532fe",
+    "source_hash": "9e77991532fe4a003da2ca0fb9a7d08f8f23868ff73633d4ddc314a974f301a7",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c01_s00__rheology_campaign_baseline",
+    "task_id": "alpha_m97_c01_s00__rheology_campaign_baseline",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py && cat public_asset_index.json && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS reference-panel alignment imputation viscoelastic relaxation' ; cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))\ndef show(x,depth=0):\n if isinstance(x,dict) and depth<3:\n  for k,v in x.items():\n   print('  '*depth,k,end=': ')\n   if isinstance(v,dict): print();show(v,depth+1)\n   else: show(v,depth+1)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype,repr(x.ravel",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0];print('item keys',p.keys());d=p['dataset']\nfor k,v in d.items():\n print(k, end=': ')\n if isinstance(v,dict):\n  print()\n  for n,a in v.items():\n   x=np.asarray(a);print(' ',n,x.shape,x.dtype,repr(x.flatten()[:8]),'nonfinite',int((~np.isfinite(x)).sum()) if x.dtype.kind in 'iuf' else '-')\n else: print(repr(v)[:350])\nc=d['calibration_load_cells'];\nfor g in np.unique(c['lab_id']):\n i=c['lab_id']==g;x=c['cmd_stress'][i];y=c['true_stress'][i];b=np.polyfit(x,y,1);print('cal',g,le",
+      "cd /holdout_task && cat > alpha_m97_c01_s00_solver.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _prepare(dataset):\n    cal = dataset['calibration_load_cells']\n    train, test = dataset['train'], dataset['test']\n    lab = np.r_[train['lab_id'], test['lab_id']]\n    stratum = np.r_[train['stratum'], test['stratum']]\n    ref = np.vstack((train['ref_coupons'], test['ref_coupons']))\n    x = np.vstack((train['coupon_features_raw'], test['coupon_features_raw']))\n    past = np.vstack((train['past_stress_cmd'], test['past_stress_cmd']))\n    hold = np.r_[train['stress_hold_",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nimport alpha_m97_c01_s00_solver as s\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; y=s.solve_alpha_m97_c01_s00(d)\npa,h,x=s._prepare(d); tr,te=d['train'],d['test']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\nrmse=lambda z: np.sqrt(np.mean(z*z))\nprint('max abs physical stress',abs(pa).max()); print('relative tau errors',y['estimated_taus']/g['taus']-1, 'weight max absolute error',np",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport pickle,numpy as np\nimport alpha_m97_c01_s00_solver as s\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); t=d['eval_times']; _,_,x=s._prepare(d)\nc,r=s._basis(np.log(g['taus']),d['past_dt'],t,g['te_hist_true'],g['te_hold_true'],x[n:]); pred=r@g['theta']; delta=g['te_true_rate0']-pred\nprint('reference curve/rate residual identity max:', np.max(abs(g['te_clean']-(te['strain_0'][:,None]+c@g['theta']+delta[:,None]*t))))\nraw=np.vstack([tr['coupon_fe",
+      "cd /holdout_task && grep -inE -C 2 'archive|calibration|imput|panel|runtime' public_asset_index.json; PYTHONPATH=/tmp python3 - <<'PY'\nimport inspect\nfrom hegel_wormhole_skills.autogenous_prim_reference_panel_balancing import align_reference_panel,weighted_column_fill\nfor fn in (align_reference_panel,weighted_column_fill):\n print(inspect.getsource(fn))\nPY",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m97_c01_s00_solver.py')\ns = p.read_text().replace('import numpy as np', 'import json\\nfrom pathlib import Path\\n\\nimport numpy as np', 1)\nstart = '''_CALIBRATION_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _archived_calibration(channel):\n    if not _CALIBRATION_ARCHIVE.is_file():\n        return None\n    archive = json.loads(_CALIBRATION_ARCHIVE.read_text())\n    if 'stress_gains' in archive and 'stress_biases' in archive:\n        return float(archive['stress_gains'][channel]),",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; n=len(tr['lab_id']); pa,h,x=s._prepare(d); t,dt=d['eval_times'],d['past_dt']; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; observed=~np.isnan(tr['coupon_features_raw']).any(axis=1); print",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('alpha_m97_c01_s00_solver.py')\ns = p.read_text()\nold = 'if prior is not None and len(cmd) >= 2:'\nassert s.count(old) == 1\np.write_text(s.replace(old, 'if prior is not None and len(cmd) >= 2 and clean.sum() < 4:'))\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_s00_solver.py')\ns = importlib.util.module_fr",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_s00_solver.py')\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\np = pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]\nd,g = p['dataset'],p['gt']; tr,te = d['train'],d['test']; t,dt = d['eval_times'],d['past_dt']\npast,hold,x = s._prepare(d); out = s.solve_alpha_m97_c01_s00(d)\ntau = out['estimated_taus']; w = out['hereditary_weights']; n = len(tr['lab_id'])\nz = np.zeros((len(hold),2",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_s00_solver.py'); s=importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; tr,te=d['train'],d['test']; raw=te['coupon_features_raw']; theta=g['theta']; t=d['eval_times']; dt=d['past_dt']; n=len(tr['lab_id']); _,_,x=s._prepare(d)\n_,r=s._basis(np.log(g['taus']),dt,t,g['te_hist_true'],g['te_hold_true'],x[n:]); drift=g['te_tru"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c01_s00_solver.py",
+        "filename": "alpha_m97_c01_s00_solver.py",
+        "bytes": 6002,
+        "sha256": "a510a54653746006d1d7a6ab050f99da5bd944608f05e10c9752a40cc17bf8c2",
+        "content_addressed_ref": "content_addressed_blobs/a510a54653746006d1d7a6ab050f99da5bd944608f05e10c9752a40cc17bf8c2.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c01_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "9e77991532fe4a003da2ca0fb9a7d08f8f23868ff73633d4ddc314a974f301a7",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle\nimport numpy as np\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c01_s00_solver.py'); s=importlib.util.module_from_spec(spec); spe",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "9e77991532fe4a003da2ca0fb9a7d08f8f23868ff73633d4ddc314a974f301a7",
+        "expected_candidate_sha256": "9e77991532fe4a003da2ca0fb9a7d08f8f23868ff73633d4ddc314a974f301a7",
+        "computed_candidate_sha256": "9e77991532fe4a003da2ca0fb9a7d08f8f23868ff73633d4ddc314a974f301a7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c01_s00_solver.py",
+            "bytes": 6002
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_9e779915"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

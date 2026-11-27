@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "44a7b4b6e70a4e4696b759e0ae3ba068",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:13:36.689610+00:00",
+  "ended_at_utc": "2026-11-27T09:14:15.212262+00:00",
+  "request_sha256": "4fd8e14510b097ff55dbbf3bdceab7b4b2f835d2579cc68449c92e810096b553",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 40437,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26883,
+    "cached_tokens": 11136,
+    "completion_tokens": 1668
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed -n '58,85p' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py; python3 - <<'PY'\\nimport json,numpy as np\\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\\nfor r in h:\\n l,x,y=map(np.asarray,(r['lab_id'],r['cmd_stress'],r['true_stress'])); print(r['episode_short_name'],[np.round(np.polyfit(x[l==i],y[l==i],1),6).tolist() if np.sum(l==i)>=2 else None for i in range(4)])\\nPY\\ncat > /tmp/batch06_model.py <<'PY'\\n\\\"\\\"\\\"Load-cell calibrated, two-branch jammed-slip creep solver.\\\"\\\"\\\"\\nimport json\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\ndef _design(logtau, past, hold, features, dt, times):\\n    tau = np.exp(logtau)\\n    z = np.zeros((len(hold), 2))\\n    decay = np.exp(-dt[:, None] / tau)\\n    increment = -np.expm1(-dt[:, None] / tau)\\n    for s, (a, b) in enumerate(zip(decay, increment)):\\n        z = a*z + b*past[:, s, None]\\n    gap = hold[:, None] - z\\n    gap_diff = gap[:, 0] - gap[:, 1]\\n    slip = np.sign(hold)*np.sqrt(np.abs(hold))\\n    responses = -np.expm1(-times[:, None]/tau)\\n    terminal = times/(1 + 0.85*times)\\n    drift_slip = np.column_stack((np.ones(len(hold)), features, slip))\\n    curve = np.concatenate((gap[:, None, :]*responses[None, :, :],\\n                            drift_slip[:, None, :]*terminal[None, :, None],\\n                            (gap_diff[:, None]*responses[None, :, 0])[:, :, None]), axis=2)\\n    rates = np.column_stack((gap/tau, drift_slip, gap_diff/tau[0]))\\n    return curve, rates\\n\\n\\ndef _fit(past, hold, features, dt, times, strain, rate):\\n    use_curve = np.isfinite(strain)\\n    use_rate = np.isfinite(rate)\\n    y = np.r_[strain[use_curve], rate[use_rate]]\\n    ncurve = np.count_nonzero(use_curve)\\n    bounds = np.log([[0.025, 0.025], [60., 60.]])\\n\\n    def design(p):\\n        curves, rates = _design(p, past, hold, features, dt, times)\\n        return np.concatenate((curves[use_curve], rates[use_rate]))\\n\\n    def project(p, weights, robust=False):\\n        a = design(p)\\n        w = weights\\n        for _ in range(7 if robust else 1):\\n            coef = np.linalg.lstsq(a*w[:, None], y*w, rcond=None)[0]\\n            e = a@coef-y\\n            if robust:\\n                w = weights*(1 + (e*weights/2.5)**2)**(-0.25)\\n        if robust:\\n            u = e*weights/2.5\\n            return (e*weights)*np.sqrt(2/(np.hypot(1, u)+1)), coef\\n        return e, coef\\n\\n    plain = np.ones_like(y)\\n    def objective(p):\\n        return project(p, plain)[0]\\n    fits = [least_squares(objective, np.log(start), bounds=bounds, diff_step=1e-4)\\n            for start in ((0.4, 3.), (1., 8.), (0.2, 1.5))]\\n    best = min((f for f in fits if f.x[0] < f.x[1]), key=lambda f: f.cost)\\n    residual = objective(best.x)\\n    def scale(group):\\n        return max(1e-6, 1.4826*np.median(np.abs(group - np.median(group)))) if len(group) else 1.\\n    weights = np.r_[np.full(ncurve, 1/scale(residual[:ncurve])),\\n                    np.full(len(y)-ncurve, 1/scale(residual[ncurve:]))]\\n    result = least_squares(lambda p: project(p, weights, True)[0], best.x,\\n                           bounds=bounds, diff_step=1e-4, max_nfev=100)\\n    p = result.x if result.x[0] < result.x[1] else best.x\\n    return p, project(p, weights, True)[1]\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: clean in-batch calibration plus EMI-restricted prefix recovery -> H2: exact jammed-slip variable projection; sparse-channel OLS residuals reach 2.969 stress units, and prediction validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the latest historical calibration for both sparse channels\",\"rejected_reason\":\"Calibration may drift across sweeps; compare the historical lines against surviving in-batch evidence before choosing a fallback.\"}],\"rationale\":\"Implement the exact strain basis and its initial-time derivative now. Read only the archived alignment function and per-sweep affine summaries to detect whether the latest sweep would miscalibrate the sparse channels.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "3f8ab0070c5fd071d20270c87b85d9096c9e463ebe556290910b4273b874a145",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42929.04,
+      "usage_known": true,
+      "prompt_tokens": 26883,
+      "cached_tokens": 11136,
+      "completion_tokens": 1668
+    }
+  ]
+}

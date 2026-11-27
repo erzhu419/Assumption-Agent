@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6b29027e078f4c5d9185fba22cde875f",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:55:42.796407+00:00",
+  "ended_at_utc": "2026-11-27T08:56:07.422723+00:00",
+  "request_sha256": "5ccc70b817f3515a759bd6426523655107c2fb631172ae4a15377cceb6e2bbed",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42027,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26906,
+    "cached_tokens": 6784,
+    "completion_tokens": 880
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', p + 'alpha_m97_c03_batch_02_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(p + 'public_alpha_m97_c03_batch_02.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']\\nout = m.solve_alpha_m97_c03_batch_02(d)\\nfor key, shape in [('estimated_taus', (2,)), ('hereditary_weights', (7,)), ('regime_mode_weights', (2,)), ('predicted_strain', (len(d['test']['lab_id']), len(d['eval_times']))), ('initial_rate_pred', (len(d['test']['lab_id']),))]:\\n    assert out[key].shape == shape and np.isfinite(out[key]).all(), key\\nassert np.all(out['regime_mode_weights'] == 0) and np.all(out['estimated_taus'] > 0)\\nprint('reference taus / fitted', np.asarray(gt['taus']), out['estimated_taus'])\\nprint('reference hereditary weights / fitted', np.asarray(gt['theta']), out['hereditary_weights'])\\nte = d['test']\\ne = np.abs(out['predicted_strain'] - np.asarray(gt['te_clean']))\\nr = np.abs(out['initial_rate_pred'] - np.asarray(gt['te_true_rate0']).reshape(-1))\\nprint('public clean MAE (strain, rate)', e.mean(), r.mean())\\nfor name, groups in [('lab', te['lab_id']), ('stratum', te['stratum']), ('imputed', np.isnan(te['coupon_features_raw']).any(axis=1))]:\\n    print(name, [(int(k), int((groups == k).sum()), float(e[groups == k].mean()), float(e[groups == k].mean(axis=0).max()), float(r[groups == k].mean())) for k in np.unique(groups)])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 soft-L1 fitting → H2 Cauchy refinement: worst leave-one-lab-out median error improved from 0.05606 to 0.04777 for strain and from 0.01609 to 0.01330 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on schema and leave-one-lab-out results alone\",\n      \"rejected_reason\": \"A clean public reference is available and can distinguish measurement noise from a systematic error in the imputed-coupon or late-time predictions.\"\n    }\n  ],\n  \"rationale\": \"The candidate passes schema, sparse calibration, and eight signed EMI tests. Use the public reference only to verify the fitted artifact, not to fit it. A discrepancy concentrated in imputed rows would warrant revisiting the panel convention; a late-time discrepancy across labs would warrant checking the flow basis.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "80a92bdf5a5719326c9d5e7fed66646c69178acb060b6475a49a54269b8577d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26591.87,
+      "usage_known": true,
+      "prompt_tokens": 26906,
+      "cached_tokens": 6784,
+      "completion_tokens": 880
+    }
+  ]
+}

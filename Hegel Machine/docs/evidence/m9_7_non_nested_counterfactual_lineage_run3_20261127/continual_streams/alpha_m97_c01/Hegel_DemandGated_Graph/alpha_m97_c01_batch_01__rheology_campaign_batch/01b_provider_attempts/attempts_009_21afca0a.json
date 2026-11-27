@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "21afca0a49a947b6939e66d71c759d6c",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:57:01.628385+00:00",
+  "ended_at_utc": "2026-11-27T08:57:36.981551+00:00",
+  "request_sha256": "2cd45b04b81bd6aac764be27aecf4c4d02db84ca900e1f4f18a81a9f931bdd7b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 57776,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31756,
+    "cached_tokens": 6784,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/rheology_batch01_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c01_batch_01_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('/holdout_task/public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nq = d['train']\\nlab = q['lab_id']\\nn = len(lab)\\na = tuple(v[:n] for v in s._prepare(d))\\ndt, t = d['past_dt'], d['eval_times']\\ny = q['strain_curves_obs'] - q['strain_0'][:, None]\\nr = q['instant_rate_obs']\\nprint('Dataset fields:', sorted(d), '; train fields:', sorted(q))\\nout = s.solve_alpha_m97_c01_batch_01(d)\\nassert all(np.isfinite(v).all() for v in out.values())\\nassert (out['estimated_taus'] > 0).all()\\n\\n# A sum or difference of features is already in the linear drift span.\\n# Challenge that span with pairwise products, a three-way product basis, and\\n# a smooth rational hold-stress response, using only training labs for fits.\\nx = a[2][:, 1:]\\nh = a[1]\\nz = np.column_stack([x[:, i]*x[:, j] for i in range(4) for j in range(i+1, 4)] +\\n                    [x[:, i]*x[:, j]*x[:, k] for i in range(4) for j in range(i+1, 4) for k in range(j+1, 4)] +\\n                    [h/(1+h*h), h*h/(1+h*h)])\\nphi = np.log1p(t)\\nresults = {'base': [], 'expanded': []}\\nfor group in np.unique(lab):\\n    test = lab == group\\n    tr = ~test\\n    logtau, w = s._fit(dt, t, tuple(v[tr] for v in a), y[tr], r[tr])\\n    c, b = s._basis(logtau, dt, t, a)\\n    offsets = (c @ w - y, b @ w - r)\\n    scale = [max(1e-7, 2.5*1.4826*np.median(np.abs(e[tr]-np.median(e[tr])))) for e in offsets]\\n    ce = np.concatenate((c, phi[None, :, None]*z[:, None, :]), axis=-1)\\n    be = np.column_stack((b, z))\\n    design = np.vstack((ce[tr].reshape(-1, be.shape[1])/scale[0], be[tr]/scale[1]))\\n    target = np.r_[y[tr].ravel()/scale[0], r[tr]/scale[1]]\\n    ww = least_squares(lambda p: design@p-target, np.r_[w, np.zeros(z.shape[1])],\\n                       jac=lambda p: design.copy(), loss='cauchy', max_nfev=60).x\\n    for mode, (e, er) in [('base', offsets), ('expanded', (ce@ww-y, be@ww-r))]:\\n        for gate in (False, True):\\n            mask = test & ((a[-1] > 0) == gate)\\n            results[mode].append((np.median(abs(e[mask])), np.median(abs(er[mask])),\\n                                  np.max(np.median(abs(e[mask]), axis=0)),\\n                                  np.max(abs(np.median(e[mask], axis=0)))))\\n    print('held-out lab', group, 'signed strain/rate median residuals',\\n          [round(float(np.median(e[test])), 5) for e in offsets])\\nfor mode, rows in results.items():\\n    print(mode, 'worst slice: strain AE, rate AE, horizon AE, horizon bias', np.round(np.max(rows, axis=0), 6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_batch01_audit.py && OPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 → H2: test whether nonlinear drift terms improve on the verified two-memory logarithmic model; its worst held-out lab-by-activation median absolute errors are 0.0167 for strain and 0.0184 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit relay modes, a Fokker–Planck/HJB operator, or a batch classifier\",\n      \"rejected_reason\": \"The task specifies continuous strain and rate from a two-memory recurrence, with no relay state, stochastic drift operator, or classification label. Held-out lab residuals directly test the relevant nuisance effect.\"\n    }\n  ],\n  \"rationale\": \"Pairwise sums and differences are already represented by the four linear drift features. Test omitted products and rational terms on real held-out labs, and inspect signed residuals for lab dependence. A material improvement in the worst slice would warrant a targeted follow-up; otherwise retain the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a5ec02be4c9afbc8c97cdfa6ff61eaeb4df3b99be9a79c88a78611a5778b83f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37485.45,
+      "usage_known": true,
+      "prompt_tokens": 31756,
+      "cached_tokens": 6784,
+      "completion_tokens": 1439
+    }
+  ]
+}

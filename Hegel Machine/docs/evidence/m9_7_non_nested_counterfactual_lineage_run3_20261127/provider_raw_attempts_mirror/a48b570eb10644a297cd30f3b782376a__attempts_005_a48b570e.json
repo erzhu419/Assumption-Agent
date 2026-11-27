@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a48b570eb10644a297cd30f3b782376a",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:23:09.418242+00:00",
+  "ended_at_utc": "2026-11-27T09:23:36.570999+00:00",
+  "request_sha256": "4321942d90bd9d3953132634c6274b779fb17908e02f62f09424209c9f443d94",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45712,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27758,
+    "cached_tokens": 6784,
+    "completion_tokens": 994
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'; s=importlib.util.spec_from_file_location('candidate',p+'alpha_m97_c02_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem=pickle.load(open(p+'public_alpha_m97_c02_batch_07.pkl','rb'))[0]; d=item['dataset']; g=item['gt']; tr=d['train']; te=d['test']; n=len(tr['lab_id']); v=m._prepare(d); t=d['eval_times']; dt=d['past_dt']; out=m.solve_alpha_m97_c02_batch_07(d); w=np.r_[out['hereditary_weights'],out['regime_mode_weights']]; A,B=m._design(*v,dt,t,out['estimated_taus']); C=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=A[:n]@w-C; q=B[:n]@w-tr['instant_rate_obs'];\\ndef stats(a): return np.round([np.median(np.abs(a)),np.quantile(abs(a),.95),np.sqrt(np.mean(a*a)),np.max(abs(a))],5)\\nprint('parameter deltas',[(k,np.round(out[k]-g[j],5)) for k,j in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]])\\nprint('stress errors',stats(v[0][n:]-g['te_hist_true']),stats(v[1][n:]-g['te_hold_true'])); er=out['predicted_strain']-g['te_clean']; eq=out['initial_rate_pred']-g['te_true_rate0'];\\nfor c in range(4):\\n for mode in (False,True):\\n  i=(tr['lab_id']==c)&(v[-1][:n]==mode); j=(te['lab_id']==c)&(v[-1][n:]==mode)\\n  if i.any() and j.any(): print('lab/active',c,mode,'n',sum(i),sum(j),'train curve/rate',stats(r[i]),stats(q[i]),'test curve/rate',stats(er[j]),stats(eq[j]))\\nprint('test missing coupon',stats(er[np.isnan(te['coupon_features_raw']).any(axis=1)]),'fully observed',stats(er[np.isfinite(te['coupon_features_raw']).all(axis=1)]))\\nfor i in np.argsort(np.median(abs(r),axis=1))[-12:][::-1]: print('worst train row',i,tr['lab_id'][i],v[-1][i],np.isnan(tr['coupon_features_raw'][i]).any(),'curve',np.round(r[i],3),'rate',round(q[i],3))\\nfor i in np.argsort(np.median(abs(er),axis=1))[-7:][::-1]: print('worst test row',i,te['lab_id'][i],v[-1][n+i],np.isnan(te['coupon_features_raw'][i]).any(),'curve',np.round(er[i],3),'rate',round(eq[i],3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 → H2: distinguish outlier-driven error from calibration or regime mismatch; training strain absolute error is 0.843 at the 95th percentile and 34.257 at the maximum.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Increase robust downweighting immediately\",\"rejected_reason\":\"A structured mismatch across a lab or activation state would require correcting the design, not downweighting those observations.\"}],\"rationale\":\"Score the fixed solver by lab, plateau activation, and coupon missingness. Signed residuals across time distinguish isolated contamination from a systematic shape error, while the public reference values are used only to evaluate predictions and calibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "f4990f350c8957692fa71eb4b486323302864b5ac1630eb1c9d6dc9e90ce9d95",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29671.55,
+      "usage_known": true,
+      "prompt_tokens": 27758,
+      "cached_tokens": 6784,
+      "completion_tokens": 994
+    }
+  ]
+}

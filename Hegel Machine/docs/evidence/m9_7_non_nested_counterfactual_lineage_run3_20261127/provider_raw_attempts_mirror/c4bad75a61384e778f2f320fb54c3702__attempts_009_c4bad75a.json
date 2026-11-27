@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c4bad75a61384e778f2f320fb54c3702",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Hegel_DemandGated_Graph__alpha_m97_c02_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:51:20.589457+00:00",
+  "ended_at_utc": "2026-11-27T08:51:56.336717+00:00",
+  "request_sha256": "e67fdd8a39bbca67a932d1399a2062e30be5e83eeaf0e907408d409721d6b7a1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 63347,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33858,
+    "cached_tokens": 11136,
+    "completion_tokens": 1419
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compare_rheology_fits.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/alpha_m97_c02_batch_01_solver.py'\\ns = importlib.util.spec_from_file_location('model', p)\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open('/holdout_task/public_alpha_m97_c02_batch_01.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd, gt = item['dataset'], item['gt']\\ntr, te = d['train'], d['test']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\ncal = m._calibrate(d['calibration_load_cells'])\\nx = m._align(tr, te)\\ncommon = tuple(d[k] for k in ('past_dt', 'eval_times', 'crit_stress', 'shear_banding_index'))\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ntest_complete = np.isfinite(te['coupon_features_raw']).all(axis=1)\\n\\ndef design(split, features, mask):\\n    return m._Design(*(v[mask] for v in m._physical(split, cal)), features[mask], *common)\\n\\nn = len(y)\\ntrain_design = design(tr, x[:n], np.ones(n, bool))\\ntest_design = design(te, x[n:], np.ones(len(te['lab_id']), bool))\\nrmse = lambda z: np.sqrt(np.mean(np.square(z)))\\n\\nfor name in ('baseline','complete','complete_refit'):\\n    errors = []\\n    for lab in (-1, 0, 1, 2, 3):\\n        take = (tr['lab_id'] != lab) if lab >= 0 else np.ones(n, bool)\\n        if name != 'baseline':\\n            take &= complete\\n        model = design(tr, x[:n], take)\\n        yy, rr = y[take], r[take]\\n        tau, w = m._fit(model, yy, rr)\\n        if name == 'complete_refit':\\n            a, b = model.matrices(tau)\\n            def retain(obs, fit):\\n                e = obs-fit\\n                center = np.nanmedian(e)\\n                sigma = 1.4826*np.nanmedian(abs(e-center))\\n                return np.where(abs(e-center) <= 4*max(sigma, 1e-5), obs, np.nan)\\n            a_target, b_target = retain(yy, a@w), retain(rr, b@w)\\n            tau, w = m._fit(model, a_target, b_target)\\n        if lab < 0:\\n            a,b = test_design.matrices(tau)\\n            ec = te['strain_0'][:,None] + a@w - gt['te_clean']\\n            er = b@w - gt['te_true_rate0']\\n            print(name, 'public tau max rel err', np.max(abs(tau/gt['taus']-1)), 'hw/rw max abs', np.max(abs(w[:7]-gt['theta'])), np.max(abs(w[7:]-gt['vp_theta'])), 'strain/rate RMSE', rmse(ec),rmse(er), 'complete', rmse(ec[test_complete]),rmse(er[test_complete]))\\n        else:\\n            q = (tr['lab_id'] == lab) & complete\\n            a,b = train_design.matrices(tau)\\n            ec, er = (a@w-y)[q], (b@w-r)[q]\\n            errors.append([np.median(abs(ec)),np.median(abs(er)),rmse(np.clip(ec,-.06,.06)),rmse(er)])\\n    print(name, 'worst held-out lab complete rows: curve/rate median abs, capped curve RMSE, rate RMSE', np.max(errors,axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/compare_rheology_fits.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (robust fitting on all coupons) -> H2 (estimate physical weights on complete coupons and test a gross-outlier refit); worst public lab-by-regime RMSE is 0.0896 for strain and 0.0679 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace cell-balanced imputation\",\n      \"rejected_reason\": \"The specified imputation is correct as implemented, and the observed feature correlations offer little support for a learned replacement.\"\n    },\n    {\n      \"option\": \"Select a fit by raw held-out curve RMSE\",\n      \"rejected_reason\": \"Isolated strain readings exceed 25 units of residual while median errors are near 0.01; raw RMSE mostly measures those readings rather than fit quality.\"\n    }\n  ],\n  \"rationale\": \"Test whether imputed training covariates or gross strain outliers distort the estimated spectrum. Compare three fits without editing the deliverable, using held-out lab metrics and the public clean references for evaluation only. Keep the existing fit unless a challenger improves the limiting metric without materially degrading other outputs.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "99239ec6f14d92783d9368169a06b95d36782e06509625a5b55b7dbcfd559002",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37662.33,
+      "usage_known": true,
+      "prompt_tokens": 33858,
+      "cached_tokens": 11136,
+      "completion_tokens": 1419
+    }
+  ]
+}

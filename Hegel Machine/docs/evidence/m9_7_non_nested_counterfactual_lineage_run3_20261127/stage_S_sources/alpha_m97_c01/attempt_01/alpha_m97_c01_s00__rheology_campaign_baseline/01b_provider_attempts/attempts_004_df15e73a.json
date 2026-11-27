@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "df15e73a883d4c6b94b60c8168b0d7b9",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:40:39.006431+00:00",
+  "ended_at_utc": "2026-11-27T08:41:07.336657+00:00",
+  "request_sha256": "0fa9e04a85747b26c263291019058638ea90c0ca545b99793294100cfe36ce26",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 31345,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23114,
+    "cached_tokens": 6784,
+    "completion_tokens": 1030
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nimport alpha_m97_c01_s00_solver as s\\np=pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]; d,g=p['dataset'],p['gt']; y=s.solve_alpha_m97_c01_s00(d)\\npa,h,x=s._prepare(d); tr,te=d['train'],d['test']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\nrmse=lambda z: np.sqrt(np.mean(z*z))\\nprint('max abs physical stress',abs(pa).max()); print('relative tau errors',y['estimated_taus']/g['taus']-1, 'weight max absolute error',np.max(abs(y['hereditary_weights']-g['theta'])))\\nc,r=s._basis(np.log(g['taus']),dt,t,g['te_hist_true'],g['te_hold_true'],x[n:]); dc=te['strain_0'][:,None]+c@g['theta']-g['te_clean']; dr=r@g['theta']-g['te_true_rate0']; print('reference replay RMSE/max',rmse(dc),abs(dc).max(),rmse(dr),abs(dr).max())\\nec=y['predicted_strain']-g['te_clean']; er=y['initial_rate_pred']-g['te_true_rate0']; m=np.isnan(te['coupon_features_raw']).any(axis=1)\\nprint('public test RMSE overall, missing features, per horizon',rmse(ec),rmse(er),rmse(ec[m]),rmse(er[m]),np.sqrt(np.mean(ec*ec,axis=0)))\\nfor lab in np.unique(te['lab_id']):\\n for st in np.unique(te['stratum']):\\n  i=(te['lab_id']==lab)&(te['stratum']==st)\\n  if i.any(): print('public test lab/stratum',lab,st,i.sum(),round(rmse(ec[i]),5),round(rmse(er[i]),5))\\nfor lab in np.unique(tr['lab_id']):\\n i=tr['lab_id']!=lab; j=~i; tl,w=s._fit(dt,t,pa[:n][i],h[:n][i],x[:n][i],yc[i],yr[i]); c,r=s._basis(tl,dt,t,pa[:n][j],h[:n][j],x[:n][j]); a=c@w-yc[j]; b=r@w-yr[j]; print('OOF lab',lab,'tau',np.exp(tl),'curve/rate MAE median',np.median(abs(a)),np.median(abs(b)),'worst horizon median AE',np.median(abs(a),axis=0).max())\\nPY\\npython3 - <<'PY'\\nfrom pathlib import Path\\nimport json\\np=Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\nif p.is_file():\\n a=json.loads(p.read_text()); print('archive layout:',type(a).__name__,list(a)[:10] if isinstance(a,dict) else len(a)); print('archive sample:',repr(a)[:1300])\\nelse: print('calibration archive not mounted')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 channel-calibrated two-branch memory -> H2 robust joint curve-and-rate fit; schema passes and public relaxation-time errors are 0.38% and 3.98%, with slice errors pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the schema check\",\"rejected_reason\":\"Finite outputs do not establish accuracy for held-out channels or coupons with missing features, and the specified calibration fallback is not implemented yet.\"}],\"rationale\":\"Replay the public reference parameters to separate alignment error from fit error, then measure clean prediction errors by lab, stratum, missingness, and horizon. Hold out each lab's response measurements to test transfer across channels, and inspect only the archive layout needed for the documented fallback.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "756791fb4873626ac77b2781919d527f1b22967277bda3db94f4980123829e90",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30358.34,
+      "usage_known": true,
+      "prompt_tokens": 23114,
+      "cached_tokens": 6784,
+      "completion_tokens": 1030
+    }
+  ]
+}

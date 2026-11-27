@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "16cbc200798346b49dbd5d2de4e915b8",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Flat_EqualInfo_Multiversion__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:49:13.976491+00:00",
+  "ended_at_utc": "2026-11-27T08:49:46.977799+00:00",
+  "request_sha256": "ab47db936f75a2f974caf0f6654838a0bfc082c23a794141e50fb8cee193102d",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42013,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26332,
+    "cached_tokens": 6784,
+    "completion_tokens": 1317
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/^def _box_simplex/,$p' /holdout_task/beta_m97_c01_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport copy, importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task'); arc=Path('/tmp/hegel_continual_archive')\\ndef load(path):\\n spec=importlib.util.spec_from_file_location(path.stem,path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod\\nm=load(p/'beta_m97_c01_batch_01_solver.py'); old=load(arc/'beta_m97_c01_s00_solver.py')\\nv={}; exec((p/'validate_public_schema.py').read_text().split('\\\\n_d =')[0],v); verify=v['verify_box_simplex_kkt_certificate']\\nitem=pickle.load((p/'public_beta_m97_c01_batch_01.pkl').open('rb'))[0]; base=item['study']; gt=item['gt']; ref=m._calibrated_observations(base)\\nfor name,mode,trace in [('sealed',0,base['past_vortex_circulation_trace']),('open_recirculating',1,base['past_vortex_circulation_trace']),('open_no_excursion',0,[base['critical_vortex_circulation']])]:\\n s=dict(base,recirculation_loop_mode=mode,past_vortex_circulation_trace=trace); S,F=m._forward(s)\\n if name!='sealed':\\n  a,b=old._forward(s); assert np.allclose(S,a,rtol=0,atol=1e-13) and np.allclose(F,b,rtol=0,atol=1e-13)\\n z=s['Z_nuisance']; G=z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]); project=lambda a:a-z@np.linalg.solve(G,z.T@a)\\n gaps=[]; cap=s['u_box']; n=S.shape[1]\\n for budget in [0.,0.01,cap,base['total_budget'],n*cap-cap,n*cap-0.01,n*cap]:\\n  s['total_budget']=budget; out=m.solve_beta_m97_c01_batch_01(s); w=out['weights']; cert=out['kkt_certificate']; val=verify(project(S),project(ref),s['source_ridge'],cap,budget,cert); assert val['valid'],(name,budget,val); gaps.append(val['gap']); assert np.array_equal(w,cert['weights']); assert np.allclose(out['terminal_field'],(F@w).reshape(out['terminal_field'].shape,order='F'),rtol=0,atol=1e-13)\\n print(name,'max KKT gap',max(gaps))\\nh=json.loads((arc/'archive_calibration_history.json').read_text())[-1]\\nfor bank in range(4):\\n for case in ['one_row','four_with_emi','twelve_with_emi']:\\n  s=copy.deepcopy(base); d=s['sensor_calibration_sweeps']; rows=np.flatnonzero(d['bank_id']==bank); obs=s['row_bank_id']==bank\\n  if case!='twelve_with_emi':\\n   drop=rows[1:] if case=='one_row' else rows[4:]; mask=np.ones(len(d['bank_id']),bool); mask[drop]=False; d={k:a[mask] for k,a in d.items()}; s['sensor_calibration_sweeps']=d\\n  if case!='one_row':\\n   ix=np.flatnonzero(d['bank_id']==bank); j=ix[np.argmax(np.abs(d['ref_signal'][ix]))]; d['raw_readout'][j]+=9.\\n  expect=ref.copy()\\n  if case!='twelve_with_emi':\\n   mask=np.asarray(h['bank_id'])==bank; x=np.asarray(h['ref_signal'])[mask]; y=np.asarray(h['raw_readout'])[mask]; gain,offset=np.linalg.lstsq(np.column_stack((x,np.ones(len(x)))),y,rcond=None)[0]; expect[obs]=(s['y_obs_raw'][obs]-offset)/gain\\n  err=np.max(np.abs(expect-m._calibrated_observations(s))); assert err<3e-7,(bank,case,err)\\nprint('All four banks pass sparse, EMI fallback, and sufficient-clean-row calibration checks')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Sealed boundaries plus wall sorption reproduce the public forward matrix to 1.18e-16 max error; the public KKT gap is 4.83e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public case passes\",\n      \"rejected_reason\": \"The public study does not exercise archive calibration fallback, inactive fouling, or budgets with more active bounds.\"\n    }\n  ],\n  \"rationale\": \"Test the exact saved artifact in an isolated process. A calibration failure would point to sweep selection, an open-path mismatch to the regime gate, and a certificate failure near a budget boundary to the optimizer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "57be69e5fa1b1ed67124d84b7dbd57ba21ddcf0b24339e937a6df492a550a2f2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35064.36,
+      "usage_known": true,
+      "prompt_tokens": 26332,
+      "cached_tokens": 6784,
+      "completion_tokens": 1317
+    }
+  ]
+}

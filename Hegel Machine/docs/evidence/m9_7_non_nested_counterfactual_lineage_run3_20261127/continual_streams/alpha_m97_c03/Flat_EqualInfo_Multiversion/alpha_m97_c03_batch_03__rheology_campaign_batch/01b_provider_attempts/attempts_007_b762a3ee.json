@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b762a3ee61ea43858d34ad3a27b83de9",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:02:44.615993+00:00",
+  "ended_at_utc": "2026-11-27T09:03:09.795231+00:00",
+  "request_sha256": "c98387769f34ef97e874c8218e016e582f429d24ceac92321fb4afddc67b0c12",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 38196,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25265,
+    "cached_tokens": 11136,
+    "completion_tokens": 804
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, time\\nimport numpy as np\\nroot='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',root+'alpha_m97_c03_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c03_batch_03.pkl','rb') as f:\\n    item=pickle.load(f)[0]\\nd,g=item['dataset'],item['gt']\\nstart=time.monotonic(); out=m.solve_alpha_m97_c03_batch_03(d); print('solve_seconds', round(time.monotonic()-start,3))\\nfor a,b in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta'),('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    ref=np.asarray(g[b]); assert ref.shape==out[a].shape,(a,ref.shape,out[a].shape)\\n    err=out[a]-ref\\n    print(a,'rmse',np.sqrt(np.mean(err**2)),'max_abs',np.max(abs(err)))\\n    if err.ndim==2:\\n        print('worst horizon RMSE',np.max(np.sqrt(np.mean(err**2,axis=0))))\\n    if err.ndim==2 or a=='initial_rate_pred':\\n        print('lab RMSEs',[float(np.sqrt(np.mean(err[d['test']['lab_id']==lab]**2))) for lab in range(4)])\\ncal=d['calibration_load_cells']; clean=m._calibration(cal); emi={k:v.copy() for k,v in cal.items()}; i=np.flatnonzero(emi['lab_id']==1)[0]; emi['true_stress'][i]+=5\\nkeep=np.arange(len(cal['lab_id']))!=i; expected=m._calibration({k:v[keep] for k,v in cal.items()}); np.testing.assert_allclose(m._calibration(emi),expected,atol=1e-10)\\nkeep=cal['lab_id']!=2; keep[np.flatnonzero(~keep)[0]]=True; fallback=m._calibration({k:v[keep] for k,v in cal.items()}); np.testing.assert_allclose(fallback[2],m._prior_calibration(2)); np.testing.assert_allclose(fallback[[0,1,3]],clean[[0,1,3]])\\nprint('EMI and sparse-channel calibration checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Calibrated stress and reference panels → robust jammed-slip fit; worst held-out-lab median absolute errors are 0.01354 for strain and 0.01601 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema passed, but the follow-up audit stopped before testing the solver because it indexed the pickle's outer list as a dictionary. Select its first record and finish the clean-reference and calibration fallback checks; their results will determine whether the solver needs changes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "1690df4874576f8ba2dc57db3ce4c3f4557d22e0663aff9c87c7d6bdbb5f5cf6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25140.54,
+      "usage_known": true,
+      "prompt_tokens": 25265,
+      "cached_tokens": 11136,
+      "completion_tokens": 804
+    }
+  ]
+}

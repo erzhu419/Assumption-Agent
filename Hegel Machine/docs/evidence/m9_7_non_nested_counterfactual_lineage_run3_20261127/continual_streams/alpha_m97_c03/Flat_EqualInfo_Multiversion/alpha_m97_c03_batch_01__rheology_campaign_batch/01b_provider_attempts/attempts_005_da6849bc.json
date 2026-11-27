@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "da6849bcd7cf47edb7620422c0d8e710",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:49:12.997378+00:00",
+  "ended_at_utc": "2026-11-27T08:49:36.536162+00:00",
+  "request_sha256": "00744b78cd0fddb818ec5916e3ceaa60ae102d448093271472f21a34407b42a8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45263,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27613,
+    "cached_tokens": 11136,
+    "completion_tokens": 879
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/diagnose_rheology01.py <<'PY'\\nexec(open('/tmp/check_rheology01.py').read().split(\\\"print('active'\\\")[0])\\nwt=np.r_[g['theta'],g['vp_theta']]; tau=g['taus']; l=d['test']['lab_id']; miss=np.isnan(d['test']['coupon_features_raw']); b=m._basis(np.log(tau),*args,dt,t,'all')[0]@wt\\nerr=b[n:,:-1]+off[n:,None]-g['te_clean']; er=b[n:,-1]-g['te_true_rate0']\\nfor lab in range(4):\\n for missing in (False,True):\\n  k=(l==lab)&(miss.any(1)==missing)\\n  if k.any(): print('oracle coefficient audit',lab,missing,k.sum(),'strain/rate max',abs(err[k]).max(),abs(er[k]).max(),'rate mean',er[k].mean())\\nprint('rate vs curve drift residual',np.max(abs(err-er[:,None]*np.log1p(t))))\\nfor j in np.flatnonzero(miss.any(1)):\\n print('missing',j,'lab',l[j],'stratum',d['test']['stratum'][j],'columns',np.where(miss[j])[0], 'drift error',er[j])\\nfor mode in ('gated','all'):\\n for lab in range(4):\\n  keep=d['train']['lab_id']!=lab\\n  tau,w=m._fit((*[v[:n][keep] for v in args],dt,t),yy[keep].ravel(),mode)\\n  pred=m._basis(np.log(tau),*[v[:n][~keep] for v in args],dt,t,mode)[0]@w\\n  e=pred-yy[~keep]\\n  print('LOLO',mode,lab, 'taus',tau.round(4),'curve/rate MAE medians',np.median(abs(e[:,:-1])),np.median(abs(e[:,-1])))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/diagnose_rheology01.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: gate the crystalline correction, not the crystalline campaign’s logarithmic drift; public curve RMSE improves from 0.217 to 0.037, while maximum error remains 0.278.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"Zero damage switches the base drift from logarithmic to linear within the crystalline campaign.\",\"empirical_witness\":\"Applying the logarithmic drift throughout the campaign reduced the maximum inactive-row curve error from 1.491 to 0.121 and reduced the training curve median absolute residual from 0.0772 to 0.0138.\",\"causal_blanket_diagnosis\":\"The sample-level damage gate was applied to the campaign-level time basis as well as to the damage-dependent correction.\",\"sublated_pivot\":\"Use the logarithmic drift in the low-banding campaign and retain the damage gate on the two regime corrections; confirm on lab-held-out observations.\",\"risk_kind\":\"Wrong scope of constitutive basis gate\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Tighten robust fitting without changing the time basis\",\"rejected_reason\":\"Fitting cannot repair the observed inactive-row time-basis mismatch.\"}],\"rationale\":\"Leave one lab out to test whether the time-basis improvement generalizes. Separately, evaluate the formula at published reference coefficients to distinguish remaining alignment error from parameter-estimation error; those coefficients will not enter the solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "def9291decd1c5e33e7b7f5558c4b2b8841fbbd253c68f67850a6595533d7ff0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25600.9,
+      "usage_known": true,
+      "prompt_tokens": 27613,
+      "cached_tokens": 11136,
+      "completion_tokens": 879
+    }
+  ]
+}

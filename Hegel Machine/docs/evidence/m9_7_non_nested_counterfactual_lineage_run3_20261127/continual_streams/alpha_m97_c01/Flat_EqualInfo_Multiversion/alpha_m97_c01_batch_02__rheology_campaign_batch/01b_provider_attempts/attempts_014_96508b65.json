@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "96508b655e914b2d98cd6264407b76f6",
+  "call_seq": 14,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:03:07.171952+00:00",
+  "ended_at_utc": "2026-11-27T09:03:36.265795+00:00",
+  "request_sha256": "92b178e730e9e18683d52866e6f5fd0760a4b4a6b864c339382f88997392307a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 74430,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36342,
+    "cached_tokens": 11136,
+    "completion_tokens": 1125
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/rheology_emi_compare.py <<'PY'\\nimport functools\\nimport importlib.util\\nimport itertools\\nimport pickle\\nimport numpy as np\\n\\npath = '/holdout_task/alpha_m97_c01_batch_02_solver.py'\\nspec = importlib.util.spec_from_file_location('solver', path)\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl', 'rb'))[0]\\nd, gt = item['dataset'], item['gt']\\ncal, te = d['calibration_load_cells'], d['test']\\nm._prior_line = functools.lru_cache(None)(m._prior_line)\\nsource = open(path).read()\\nneedle = 'if keep.sum() < 4 and span < 0.2:'\\nvariants = {'current': m._calibrate}\\nif needle in source:\\n    scope = {}\\n    exec(compile(source.replace(needle, 'if keep.sum() < 4:' ).replace('        span = np.ptp(clean_x)\\\\n', ''), path, 'exec'), scope)\\n    scope['_prior_line'] = m._prior_line\\n    variants['compatible-prior'] = scope['_calibrate']\\nfor c in range(4):\\n    q = cal['lab_id'] == c\\n    print('channel', c, 'archived minus full in-batch gain/bias', np.array(m._prior_line(c)) - m._line(cal['cmd_stress'][q], cal['true_stress'][q]))\\nfor k in (3, 4, 5):\\n    for name, fit in variants.items():\\n        count = bad = 0\\n        worst = (0., None)\\n        for c in range(4):\\n            q = cal['lab_id'] == c\\n            x, y = cal['cmd_stress'][q], cal['true_stress'][q]\\n            sel = te['lab_id'] == c\\n            probe = np.r_[te['stress_hold_cmd'][sel], te['past_stress_cmd'][sel].ravel()]\\n            ref = np.r_[gt['te_hold_true'][sel], gt['te_hist_true'][sel].ravel()]\\n            for ix in itertools.combinations(range(len(x)), k):\\n                z, w = x[list(ix)], y[list(ix)]\\n                for j in range(k):\\n                    for spike in (-4., 4.):\\n                        v = w.copy(); v[j] += spike\\n                        a, b = fit(z, v, c)\\n                        error = np.max(abs(a*probe + b - ref))\\n                        count += 1; bad += error > .01\\n                        if error > worst[0]:\\n                            keep = np.arange(k) != j\\n                            worst = (error, (c, ix, j, spike, np.ptp(z[keep]), np.ptp(w[keep] - m._prior_line(c)[0]*z[keep])))\\n        print(k, name, 'above .01', bad, '/', count, 'worst (error; channel, rows, spike row, size, clean span, prior contrast range)', worst)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_emi_compare.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: use the archived slope when fewer than four clean EMI-affected readings agree with it → H2: retain the verified linear Prony fit; the current span cutoff leaves 16 of 2,880 three-row cases above 0.01 stress error.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase the command-span cutoff\",\n      \"rejected_reason\": \"A wider fixed cutoff would still be an indirect test. Check whether clean in-batch stress differences directly support the archived slope, while preserving the in-batch intercept.\"\n    }\n  ],\n  \"rationale\": \"Compare the current cutoff with a contrast-only rule on measured calibration subsets and on both hold and history stresses. Print the remaining worst case to distinguish a faulty spike decision from slope extrapolation. Leave the deliverable unchanged until the comparison shows whether the new rule closes the margin.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_014_att0.json",
+      "response_sha256": "a30e161ee8ea3d3353f29dd233553964f6c87b5b64f4a84620299bee95bad909",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31266.0,
+      "usage_known": true,
+      "prompt_tokens": 36342,
+      "cached_tokens": 11136,
+      "completion_tokens": 1125
+    }
+  ]
+}

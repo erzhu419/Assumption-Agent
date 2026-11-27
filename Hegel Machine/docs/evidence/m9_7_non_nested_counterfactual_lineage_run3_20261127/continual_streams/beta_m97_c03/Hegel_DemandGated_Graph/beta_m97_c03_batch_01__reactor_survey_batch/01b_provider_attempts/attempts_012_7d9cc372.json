@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7d9cc3720b6d422eb95e662ab43d0570",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:52:13.432724+00:00",
+  "ended_at_utc": "2026-11-27T08:52:42.998237+00:00",
+  "request_sha256": "2c823f96e9eeda8194d75fb17d9b9ad1ba57a7fce57c2eed7aa813a2a6d16830",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 63002,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32066,
+    "cached_tokens": 6784,
+    "completion_tokens": 1103
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task')\\nspec=importlib.util.spec_from_file_location('candidate',p/'beta_m97_c03_batch_01_solver.py')\\nm=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nns={}; exec((p/'validate_public_schema.py').read_text().split('\\\\n_d = ')[0],ns)\\nverify=ns['verify_box_simplex_kkt_certificate']\\nitem=pickle.loads((p/'public_beta_m97_c03_batch_01.pkl').read_bytes())[0]\\ns,g=item['study'],item['gt']; cal=s['sensor_calibration_sweeps']; b,x,y=(np.asarray(cal[k]) for k in ('bank_id','ref_signal','raw_readout'))\\na=json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())[-1]; ab,ax,ay=(np.asarray(a[k]) for k in ('bank_id','ref_signal','raw_readout'))\\nz=s['Z_nuisance']; gram=z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]); obs=s['y_obs_raw']; rb=s['row_bank_id']\\nworst_y=worst_gap=0.0\\nfor turn in range(4):\\n    keep=np.ones(b.size,dtype=bool); raw=y.copy(); expected=np.empty_like(obs)\\n    for bank in range(4):\\n        i=np.flatnonzero(b==bank); role=(bank-turn)%4\\n        if role==0:\\n            keep[i]=False; j=ab==bank; h,o=np.polyfit(ax[j],ay[j],1)\\n        elif role==1:\\n            keep[i[1:]]=False; j=ab==bank; h,o=np.polyfit(ax[j],ay[j],1)\\n        elif role==2:\\n            contaminated=i[-1]; raw[contaminated]+=(-1)**turn*3.01; j=i[:-1]; h,o=np.polyfit(x[j],y[j],1)\\n        else:\\n            h,o=np.polyfit(x[i],y[i],1)\\n        expected[rb==bank]=(obs[rb==bank]-o)/h\\n    q=dict(s,sensor_calibration_sweeps=dict(bank_id=b[keep],ref_signal=x[keep],raw_readout=raw[keep]))\\n    actual=m._calibrate(q); worst_y=max(worst_y,float(np.max(np.abs(actual-expected))))\\n    target=expected-z@np.linalg.solve(gram,z.T@expected)\\n    out=m.solve_beta_m97_c03_batch_01(q)\\n    cert=verify(g['S_tilde'],target,s['source_ridge'],s['u_box'],s['total_budget'],out['kkt_certificate']); assert cert['valid'],cert\\n    worst_gap=max(worst_gap,cert['gap'])\\n    # The contract explicitly declares this telemetry uncoupled.\\n    q.pop('aux_manifold_telemetry',None)\\n    no_aux=m.solve_beta_m97_c03_batch_01(q)\\n    for k in ('weights','terminal_field'):\\n        np.testing.assert_array_equal(out[k],no_aux[k])\\nassert worst_y<1e-9 and worst_gap<1e-9,(worst_y,worst_gap)\\nprint('rotating joint bank slices: worst calibration error',worst_y,'worst reference-design KKT gap',worst_gap,'telemetry invariant')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 individually verified bank calibration → H2 joint sparse-bank and EMI calibration before nuisance projection; the worst previously measured cross-mode projected KKT residual was 4.44e-16.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat the transport-mode audit or add classification tests\",\"rejected_reason\":\"Both transport modes already matched an independent assembly, and this single public inverse problem has no classification labels.\"}],\"rationale\":\"Stress the full inversion with simultaneous missing-bank, one-point, and near-threshold EMI cases, rotating roles across the measured banks. A mismatch against independently fitted calibration or the reference-design certificate would identify a bank-indexing or nuisance-projection defect; an output change after removing auxiliary telemetry would reveal an unintended dependency.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "fb5dbdda7e9779748cfd4235084913993b4b4f3ed57b17b3cd094af4b3400cc4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31698.56,
+      "usage_known": true,
+      "prompt_tokens": 32066,
+      "cached_tokens": 6784,
+      "completion_tokens": 1103
+    }
+  ]
+}

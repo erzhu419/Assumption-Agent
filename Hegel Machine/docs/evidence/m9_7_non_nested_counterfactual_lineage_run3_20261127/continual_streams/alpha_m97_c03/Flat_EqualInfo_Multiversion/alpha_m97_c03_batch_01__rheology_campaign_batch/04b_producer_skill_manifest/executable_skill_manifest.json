@@ -1,0 +1,143 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_alpha_m97_c03_batch_01_d8415e456b3b",
+    "source_hash": "d8415e456b3b959e34d68e0e53d045f900e2c6df2968dc249bced1cebb8f1c57",
+    "parent_ids": [],
+    "source_episode_id": "alpha_m97_c03_batch_01__rheology_campaign_batch",
+    "task_id": "alpha_m97_c03_batch_01__rheology_campaign_batch",
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_rheology01.py",
+        "archived_relpath": "producers/tmp__audit_rheology01.py",
+        "bytes": 2087,
+        "sha256": "a1e1f4e8eebea403ee8fef34e01f83bd78b8413c2762797df039d8c1c2d88b24"
+      },
+      {
+        "container_path": "/tmp/check_rheology01.py",
+        "archived_relpath": "producers/tmp__check_rheology01.py",
+        "bytes": 1273,
+        "sha256": "109e9eebc4de4c06561886bcf5c3c587787a0f6e19f02db00ce8b0110ba228b5"
+      },
+      {
+        "container_path": "/tmp/diagnose_rheology01.py",
+        "archived_relpath": "producers/tmp__diagnose_rheology01.py",
+        "bytes": 1153,
+        "sha256": "26805bac0c48767a438e904a92cc525df1d4aa98c12de78ec93257fa6180e6a5"
+      },
+      {
+        "container_path": "/tmp/stress_rheology01.py",
+        "archived_relpath": "producers/tmp__stress_rheology01.py",
+        "bytes": 1702,
+        "sha256": "20c27cc27c3ddcbdb00b8721fc89527d971514030d99f3c0ae03e21c6cc335b5"
+      },
+      {
+        "container_path": "/tmp/weight_rheology01.py",
+        "archived_relpath": "producers/tmp__weight_rheology01.py",
+        "bytes": 1443,
+        "sha256": "2ce87f5be7a02349358930219269da3c06197f8d156a0b0648f1458084228d3c"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/alpha_m97_c03_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__alpha_m97_c03_s00_solver.py",
+        "bytes": 7980,
+        "sha256": "3421286a58cbb1991453633d4f833f5e494db670386c9aaa3577f991efa397ba"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat validate_public_schema.py && cat public_asset_index.json && ls -l /tmp/hegel_continual_archive && sed -n '1,250p' /tmp/hegel_continual_archive/alpha_m97_c03_s00_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'reference panel alignment imputation viscoelastic relaxation variable projection' ; cd /holdout_task && python3 - <<'PY'\nimport pickle\nimport numpy as np\nwith open('public_alpha_m97_c03_batch_01.pkl','rb') as f: d=pickle.load(f)\ndef show(x,k='',dep=0):\n if isinstance(x,dict) and dep<4:\n  for a,b in x.items(): show(b,k+'/'+str(a),dep+1",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nitems=pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb')); print('items:',len(items),'item keys:',list(items[0]))\nd=items[0]['dataset']\nfor k,v in d.items():\n print(k)\n for name,a in (v.items() if isinstance(v,dict) else [(k,v)]):\n  x=np.asarray(a); print(' ',name,x.shape,x.dtype,('nan='+str(np.isnan(x).sum()) if x.dtype.kind=='f' else ''), x.ravel()[:4] if x.dtype.kind!='O' else type(a).__name__)\nc=d['calibration_load_cells']\nfor lab in range(4):\n m=c['lab_id']==lab;x=c['cmd_stress'][m];y=c['true_stress'][m];p=np.polyfit(x",
+      "sed -n '1,110p' /tmp/hegel_continual_archive/alpha_m97_c03_s00_solver.py; python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/archive_calibration_history.json'\nh=json.load(open(p)); print('CAL HISTORY',str(h)[:2100])\ni=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d=i['dataset']; print('PUBLIC GT FIELDS',[(k,np.shape(v)) for k,v in i['gt'].items()]); print('CELL COUNTS',[(b,s,int(np.sum((d['train']['lab_id']==b)&(d['train']['stratum']==s)))) for b in range(4) for s in range(3)]); print('SCIENCE STACK'); import scipy; print(scipy.__ver",
+      "cat > /holdout_task/alpha_m97_c03_batch_01_solver.py <<'PY'\n\"\"\"Fit a calibrated two-branch creep model to a rheology campaign.\"\"\"\nimport json\n\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\n_ARCHIVE = '/tmp/hegel_continual_archive/archive_calibration_history.json'\n\n\ndef _prior_calibration(lab):\n    with open(_ARCHIVE) as stream:\n        history = json.load(stream)\n    # The prefix is chronological; use the most recent usable sweep.\n    for sweep in reversed(history):\n        rows = np.asarray(sweep['lab_id']) == lab\n        x = np.asarray(sweep['cmd_stress'])[rows]\n        y = n",
+      "cat > /tmp/diagnose_rheology01.py <<'PY'\nexec(open('/tmp/check_rheology01.py').read().split(\"print('active'\")[0])\nwt=np.r_[g['theta'],g['vp_theta']]; tau=g['taus']; l=d['test']['lab_id']; miss=np.isnan(d['test']['coupon_features_raw']); b=m._basis(np.log(tau),*args,dt,t,'all')[0]@wt\nerr=b[n:,:-1]+off[n:,None]-g['te_clean']; er=b[n:,-1]-g['te_true_rate0']\nfor lab in range(4):\n for missing in (False,True):\n  k=(l==lab)&(miss.any(1)==missing)\n  if k.any(): print('oracle coefficient audit',lab,missing,k.sum(),'strain/rate max',abs(err[k]).max(),abs(er[k]).max(),'rate mean',er[k].mean())\nprint('rat",
+      "python3 - <<'PY'\nfrom pathlib import Path\np = Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\ns = p.read_text()\ns = s.replace(\"    taus, weights = _fit((*[x[:n] for x in grouped], dt, t), target.ravel())\\n    basis = _basis(np.log(taus), *[x[n:] for x in grouped], dt, t)[0]\", \"    plateau = 'all' if dataset['shear_banding_index'] <= 0.5 else 'linear'\\n    taus, weights = _fit((*[x[:n] for x in grouped], dt, t), target.ravel(), plateau)\\n    basis = _basis(np.log(taus), *[x[n:] for x in grouped], dt, t, plateau)[0]\")\np.write_text(s)\nPY\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/vali",
+      "cat > /tmp/stress_rheology01.py <<'PY'\nexec(open('/tmp/check_rheology01.py').read().split(\"print('active'\")[0])\nlab=d['train']['lab_id']; miss=np.isnan(d['train']['coupon_features_raw']).any(1)\n# Fit on all observations or on complete coupons, leaving each lab out in turn.\nfor complete_only in (False, True):\n    scores=[]\n    for held in range(4):\n        train=(lab!=held) & (~miss if complete_only else True)\n        test=lab==held\n        tau,w=m._fit((*[v[:n][train] for v in args],dt,t),yy[train].ravel(),'all')\n        err=m._basis(np.log(tau),*[v[:n][test] for v in args],dt,t,'all')[0]@w-yy",
+      "cat > /tmp/audit_rheology01.py <<'PY'\nexec(open('/tmp/check_rheology01.py').read().split(\"print('active'\")[0])\nout = m.solve_alpha_m97_c03_batch_01(d)\ntau = out['estimated_taus']; w = np.r_[out['hereditary_weights'], out['regime_mode_weights']]\n# Independent closed-form convolution, using the time elapsed after each past interval.\nafter = np.cumsum(dt[::-1])[::-1] - dt\nz = p @ ((-np.expm1(-dt[:,None]/tau))*np.exp(-after[:,None]/tau))\ngap = h[:,None] - z\na0 = w[7]*a*h\nslope = w[2] + x @ w[3:7] + w[8]*a*z[:,0]\ndef curve(t):\n    b = -np.expm1(-t[:,None]/tau)\n    return (gap*w[:2]) @ b.T + a0[:,No",
+      "cat > /tmp/weight_rheology01.py <<'PY'\nexec(open('/tmp/check_rheology01.py').read().split(\"print('active'\")[0])\nfrom pathlib import Path\nsource=Path(base+'alpha_m97_c03_batch_01_solver.py').read_text()\nlab=d['train']['lab_id']\ncomplete=~np.isnan(d['train']['coupon_features_raw']).any(1)\nfor rate_weight in (0.5,1.,2.):\n    ns={}\n    s=source.replace(\"    def model(p, jac=False):\", f\"    obs_weight = np.tile(np.r_[np.ones(len(args[-1])), {rate_weight!r}], len(target)//(len(args[-1])+1))\\n    def model(p, jac=False):\")\n    s=s.replace(\"return np.einsum('ij,j->i', a, p[2:]) - target\", \"return obs_"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__alpha_m97_c03_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/alpha_m97_c03_s00_solver.py",
+      "selected_channels": [
+        "fam_hereditary_memory_and_non_nested_rheology"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/alpha_m97_c03_batch_01_solver.py",
+        "filename": "alpha_m97_c03_batch_01_solver.py",
+        "bytes": 7493,
+        "sha256": "769e7ac076c6c3756efe1918283b84227ee9b55915d68dc068fd7fac49d6056e",
+        "content_addressed_ref": "content_addressed_blobs/769e7ac076c6c3756efe1918283b84227ee9b55915d68dc068fd7fac49d6056e.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/alpha_m97_c03_batch_01_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_design",
+      "_mad",
+      "_fit"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_hereditary_memory_and_non_nested_rheology",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "d8415e456b3b959e34d68e0e53d045f900e2c6df2968dc249bced1cebb8f1c57",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cat > /tmp/weight_rheology01.py <<'PY'\nexec(open('/tmp/check_rheology01.py').read().split(\"print('active'\")[0])\nfrom pathlib import Path\nsource=Path(base+'alpha_m97_c03_batch_01_solver.py').read_text()\nlab=d['train']['lab_id']\ncomplete=~np.",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "d8415e456b3b959e34d68e0e53d045f900e2c6df2968dc249bced1cebb8f1c57",
+        "expected_candidate_sha256": "d8415e456b3b959e34d68e0e53d045f900e2c6df2968dc249bced1cebb8f1c57",
+        "computed_candidate_sha256": "d8415e456b3b959e34d68e0e53d045f900e2c6df2968dc249bced1cebb8f1c57",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/alpha_m97_c03_batch_01_solver.py",
+            "bytes": 7493
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_d8415e45"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_design",
+        "code": "def _design(taus, past, hold, features, dt, t):\n    trailing = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\n    memory = past @ (np.exp(-trailing[:, None] / taus) * -np.expm1(-dt[:, None] / taus))\n    gap = hold[:, None] - memory\n    prony = gap[:, None, :] * -np.expm1(-t[None, :, None] / taus)\n    flow = features[:, None, :] * t[None, :, None]\n    return (np.concatenate((prony, flow), axis=2), np.column_stack((gap / taus, features)))"
+      },
+      {
+        "name": "_mad",
+        "code": "def _mad(x):\n    return max(1e-06, 1.4826 * np.median(np.abs(x - np.median(x))))"
+      },
+      {
+        "name": "_fit",
+        "code": "def _fit(past, hold, features, dt, t, y, rates):\n    from scipy.optimize import least_squares\n    ok = np.isfinite(y)\n    rok = np.isfinite(rates)\n    target = np.r_[y[ok], rates[rok]]\n    count = ok.sum()\n\n    def matrix(logtau):\n        a, b = _design(np.exp(logtau), past, hold, features, dt, t)\n        return np.concatenate((a[ok], b[rok]), axis=0)\n\n    def noise(res):\n        s1 = _mad(res[:count])\n        s2 = _mad(res[count:]) if rok.any() else s1\n        return np.r_[np.full(count, s1), np.full(rok.sum(), s2)]\n    tmin = min(t[t > 0].min(), dt[dt > 0].min()) / 20\n    tmax = max(t.max(), dt.sum()) * 20\n    bounds = (np.r_[np.repeat(np.log(tmin), 2), np.full(7, -np.inf)], np.r_[np.repeat(np.log(tmax), 2), np.full(7, np.inf)])\n\n    def optimize(start, scale, loss):\n\n        def residual(p):\n            return (matrix(p[:2]) @ p[2:] - target) / scale\n        return least_squares(residual, start, bounds=bounds, loss=loss, x_scale='jac', max_nfev=200)\n    seeds = t.max() * np.array([[0.05, 0.28], [0.08, 0.65], [0.13, 1.6], [0.24, 0.65], [0.025, 2.0]])\n    starts = []\n    for tau in seeds:\n        logtau = np.log(tau)\n        mat = matrix(logtau)\n        w = np.linalg.lstsq(mat, target, rcond=None)[0]\n        starts.append(np.r_[logtau, w])\n    scale = noise(matrix(starts[0][:2]) @ starts[0][2:] - target)\n    pilot = min((optimize(p, scale, 'soft_l1') for p in starts), key=lambda fit: fit.cost)\n    scale = 2.0 * noise(pilot.fun * scale)\n    fit = min((optimize(p, scale, 'cauchy') for p in [pilot.x, *starts]), key=lambda fit: fit.cost)\n    scale = 2.0 * noise(fit.fun * scale)\n    p = optimize(fit.x, scale, 'cauchy').x\n    order = np.argsort(p[:2])\n    return (np.exp(p[:2][order]), np.r_[p[2:4][order], p[4:]])"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "726a1d74d0504129b65f24ef8f8eb87d",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:01:54.162181+00:00",
+  "ended_at_utc": "2026-11-27T09:02:17.932384+00:00",
+  "request_sha256": "ed18bb1d9d9a058d413a922a427a910fa570b331d8d0b6c8cda42e01aba374cf",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 64668,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33302,
+    "cached_tokens": 11136,
+    "completion_tokens": 828
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,itertools,pickle,numpy as np\\np='/holdout_task/alpha_m97_c01_batch_02_solver.py'; s=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]; d=i['dataset']; cal=d['calibration_load_cells']; te=d['test']; g=i['gt']\\nfor k in (3,4,5):\\n count=bad=0; worst=(0,None)\\n for c in range(4):\\n  q=cal['lab_id']==c; X,Y=cal['cmd_stress'][q],cal['true_stress'][q]; take=te['lab_id']==c; probe=te['stress_hold_cmd'][take]; expected=g['te_hold_true'][take]\\n  for ix in itertools.combinations(range(len(X)),k):\\n   z,w=X[list(ix)],Y[list(ix)]\\n   for j in range(k):\\n    for delta in (-4.,4.):\\n     v=w.copy(); v[j]+=delta; gain,bias=m._calibrate(z,v,c); e=np.max(abs(gain*probe+bias-expected)); count+=1; bad+=e>.01\\n     if e>worst[0]: worst=(e,(c,ix,j,delta,gain,bias))\\n print('calibration rows',k,'stress errors > .01',bad,'/',count,'worst',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: affine load-cell calibration and lab-by-stratum imputation → H2: robust two-branch Prony flow; worst leave-one-lab-out complete-coupon P90 strain and rate errors are 0.04481 and 0.03875.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear basis and lab-confounding audit\",\n      \"rejected_reason\": \"The prior held-out audit tested those alternatives and found no meaningful improvement. Relay states and classification metrics are not part of this regression task.\"\n    }\n  ],\n  \"rationale\": \"The previous calibration check tested sparse sweeps and EMI separately. Combine them using actual calibration subsets and measured test stresses to detect whether a spike can steer a short-sweep fit. If it can, correct the spike-selection rule without changing the verified flow model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a101c156bc88c06daf132aed573b441c516245429ec8a33bbe394fc6face148e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25783.68,
+      "usage_known": true,
+      "prompt_tokens": 33302,
+      "cached_tokens": 11136,
+      "completion_tokens": 828
+    }
+  ]
+}

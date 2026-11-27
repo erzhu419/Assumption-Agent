@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45478d02600541a0b9c530e680393c97",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:43:16.829775+00:00",
+  "ended_at_utc": "2026-11-27T08:43:50.330241+00:00",
+  "request_sha256": "3bdfbda817d7806fac34deb77edab0a31e944d4748cd346869a1bf861dfe562e",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 48625,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28289,
+    "cached_tokens": 6784,
+    "completion_tokens": 1104
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c01_s00_solver.py')\\ns = p.read_text()\\nold = 'if prior is not None and len(cmd) >= 2:'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, 'if prior is not None and len(cmd) >= 2 and clean.sum() < 4:'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, tempfile\\nfrom pathlib import Path\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_s00_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\nx = np.linspace(-2, 2, 8); y = 1.2*x-.25\\nwith tempfile.TemporaryDirectory() as td:\\n    s._CALIBRATION_ARCHIVE = Path(td)/'archive.json'\\n    s._CALIBRATION_ARCHIVE.write_text(json.dumps({'channels': {'2': {'gain': 1.2, 'bias': -.05}}}))\\n    spike = y.copy(); spike[-1] += 3.1\\n    np.testing.assert_allclose(s._calibrate(x, spike, 2), [1.2, -.25])\\n    np.testing.assert_allclose(s._calibrate(x[:1], y[:1], 2), [1.2, -.05])\\n    s._CALIBRATION_ARCHIVE.write_text('unreadable')\\n    np.testing.assert_allclose(s._calibrate(x, y, 2), [1.2, -.25])\\np = pickle.load(open('public_alpha_m97_c01_s00.pkl', 'rb'))[0]\\nd, g = p['dataset'], p['gt']; out = s.solve_alpha_m97_c01_s00(d)\\nnp.testing.assert_array_equal(out['regime_mode_weights'], np.zeros(2))\\nimputed = np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\nfor key, ref, worst in [('predicted_strain', 'te_clean', .547), ('initial_rate_pred', 'te_true_rate0', .172)]:\\n    e = out[key] - g[ref]\\n    rmse = [np.sqrt(np.mean(e[i]**2)) for i in (~imputed, imputed)]\\n    assert max(rmse) < worst, (key, rmse)\\n    print(key, 'complete/imputed RMSE:', rmse)\\nprint('Calibration precedence, sparse fallback, and clean archive bypass passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archive may override a supported in-batch fit under EMI → H2 retain the in-batch fit when at least four clean points remain; worst held-out-lab horizon median absolute error is 0.0593 and imputed-coupon strain RMSE is 0.5461.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Exclude imputed training coupons\",\n      \"rejected_reason\": \"Worst horizon median absolute error improved by 0.00074, but worst rate median absolute error worsened by 0.00044; this does not address the missing-feature drift error.\"\n    }\n  ],\n  \"rationale\": \"A slightly offset archive can classify a just-over-threshold EMI spike as clean and override a well-supported in-batch fit. Enforce the specified precedence and test that case alongside sparse fallback and public prediction slices on the edited artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bd2e8d395e29e5b5cbe099dae51cf92594d66d6bbe663e6f01b7217ab0e933e2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35871.15,
+      "usage_known": true,
+      "prompt_tokens": 28289,
+      "cached_tokens": 6784,
+      "completion_tokens": 1104
+    }
+  ]
+}

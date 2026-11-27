@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d104d1483c4d4f378d91bc5575cfe866",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:59:14.229696+00:00",
+  "ended_at_utc": "2026-11-27T08:59:57.066941+00:00",
+  "request_sha256": "8d9cbd085cb6136c31e73386eae805cdb7b5188c3912aa35d604d02f76b3167c",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 45901,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27252,
+    "cached_tokens": 11136,
+    "completion_tokens": 1659
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/verify_batch03.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c03_batch_03_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open(root + 'public_alpha_m97_c03_batch_03.pkl', 'rb'))[0]['dataset']\\ntrain = d['train']\\nn = len(train['lab_id'])\\nlab = np.asarray(train['lab_id'])\\nstratum = np.asarray(train['stratum'])\\nmissing = ~np.isfinite(train['coupon_features_raw']).all(axis=1)\\ny, rate = train['strain_curves_obs'], train['instant_rate_obs']\\npast, hold, drift, baseline = m._prepare(d)\\ndt, times = d['past_dt'], d['eval_times']\\nfull = m.solve_alpha_m97_c03_batch_03(d)\\ntau = full['estimated_taus']\\nw = np.r_[full['hereditary_weights'], full['regime_mode_weights']]\\nprint('full taus', tau, 'weights', w)\\nassert np.all(tau > 0)\\nz = np.zeros((len(past), 2))\\nfor j, step in enumerate(dt):\\n    a = np.exp(-step / tau)\\n    z = a * z + (1-a) * past[:, j, None]\\ng0, g1 = (hold[:, None] - z).T\\nv = w[2] + drift[:, 1:] @ w[3:7] + w[7] * np.sign(hold) * np.sqrt(np.abs(hold))\\nref_rate = (w[0]*g0 + w[8]*(g0-g1))/tau[0] + w[1]*g1/tau[1] + v\\nref_curve = baseline[:, None] + (w[0]*g0 + w[8]*(g0-g1))[:, None]*(-np.expm1(-times/tau[0])) + (w[1]*g1)[:, None]*(-np.expm1(-times/tau[1])) + v[:, None]*times/(1+.85*times)\\nnp.testing.assert_allclose(full['predicted_strain'], ref_curve[n:], atol=1e-12)\\nnp.testing.assert_allclose(full['initial_rate_pred'], ref_rate[n:], atol=1e-12)\\ncheck_curve, _ = m._design(tau, past[n:], hold[n:], drift[n:], dt, np.array([0., 1e-7]))\\nnp.testing.assert_allclose(check_curve[:, 0] @ w, 0., atol=1e-12)\\nnp.testing.assert_allclose(((check_curve[:, 1]-check_curve[:, 0]) @ w)/1e-7, ref_rate[n:], atol=1e-5, rtol=1e-5)\\n\\ndef error(x):\\n    return 'rmse %.6g, medAE %.6g, q90AE %.6g' % (np.sqrt(np.nanmean(x*x)), np.nanmedian(np.abs(x)), np.nanquantile(np.abs(x), .9))\\n\\nfor group, labels in [('lab', lab), ('stratum', stratum)]:\\n    ec, er = np.empty_like(y), np.empty_like(rate)\\n    for label in np.unique(labels):\\n        val = labels == label\\n        fit, pred = np.flatnonzero(~val), np.flatnonzero(val)\\n        t, coef = m._fit(past[fit], hold[fit], drift[fit], dt, times, y[fit]-baseline[fit,None], rate[fit])\\n        a, b = m._design(t, past[pred], hold[pred], drift[pred], dt, times)\\n        ec[val], er[val] = baseline[pred,None] + a @ coef - y[val], b @ coef - rate[val]\\n        print(group, label, 'taus', t, 'regime', coef[7:], 'curve', error(ec[val]), 'rate', error(er[val]))\\n    print(group, 'worst horizon', np.argmax(np.nanmean(ec*ec, axis=0)), error(ec[:, np.argmax(np.nanmean(ec*ec, axis=0))]))\\n    for name, mask in [('missing coupon', missing), ('complete coupon', ~missing), ('negative hold', hold[:n] < 0), ('nonnegative hold', hold[:n] >= 0)]:\\n        print(group, name, 'n', mask.sum(), 'curve', error(ec[mask]), 'rate', error(er[mask]))\\n\\ncal = d['calibration_load_cells']\\nbase = m._calibrate(cal)\\nfor channel in range(4):\\n    idx = np.flatnonzero(cal['lab_id'] == channel)\\n    struck = {key: np.array(values, copy=True) for key, values in cal.items()}\\n    struck['true_stress'][idx[0]] += 4.5\\n    np.testing.assert_allclose(m._calibrate(struck), base, rtol=0., atol=2e-4)\\n    keep = np.ones(len(cal['lab_id']), dtype=bool)\\n    keep[idx[1:]] = False\\n    sparse = m._calibrate({key: values[keep] for key, values in cal.items()})\\n    np.testing.assert_allclose(sparse[np.arange(4) != channel], base[np.arange(4) != channel])\\n    print('sparse channel', channel, 'archive', sparse[channel], 'current', base[channel])\\nprint('Independent recurrence, initial derivative, and calibration path checks passed.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch03.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (prior terminal flow) -> H2 (calibrated jammed-slip relaxation); isolated schema validation passed and the maximum public calibration residual is 0.000245, with grouped prediction errors pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after schema validation alone\",\n      \"rejected_reason\": \"Shape and finiteness checks cannot detect a wrong derivative, unstable branch estimates, or errors concentrated in one lab, stratum, or horizon.\"\n    }\n  ],\n  \"rationale\": \"Refit within each lab and stratum holdout to measure transfer; check missing-coupon and stress-sign slices for concentrated bias. Compare predictions against an independent memory recurrence and derivative, and exercise the documented sparse and EMI calibration paths. Failures would identify whether to change the fit, alignment, response implementation, or fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "98dd1eb7860b085879fede14ecd12a86a99e412a7d5578faa300ed5a1454d92c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44955.54,
+      "usage_known": true,
+      "prompt_tokens": 27252,
+      "cached_tokens": 11136,
+      "completion_tokens": 1659
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b4fbbd20e724872b10eead1105c1c31",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:23:26.374757+00:00",
+  "ended_at_utc": "2026-11-27T09:24:00.579889+00:00",
+  "request_sha256": "2820cddb98abfcaddcaa23af9af6b48c53ff1b2a197651cd18d4c119c04193ca",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50568,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30187,
+    "cached_tokens": 6784,
+    "completion_tokens": 1306
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_07_solver.py')\\ns = p.read_text()\\nold = '    terminal = np.where(act[:, None] > 0., np.log1p(times), times)\\\\n'\\nassert s.count(old) == 1\\np.write_text(s.replace(old, '    # Damage gates the two extra terms, not the shared plateau basis.\\\\n    terminal = np.broadcast_to(np.log1p(times), (len(hold), len(times)))\\\\n'))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nname = 'alpha_m97_c03_batch_07_solver.py'\\nbase = load('/tmp/.hegel_candidate_archive/v01_25dbf13b/' + name)\\nfinal = load('/holdout_task/' + name)\\nitem = pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_07.pkl', 'rb'))[0]\\nd, gt = item['dataset'], item['gt']\\nfields = dict(estimated_taus='taus', hereditary_weights='theta', regime_mode_weights='vp_theta', predicted_strain='te_clean', initial_rate_pred='te_true_rate0')\\nfor mod in (base, final):\\n    out = mod.solve_alpha_m97_c03_batch_07(d)\\n    print('candidate', mod.__file__)\\n    for key, ref in fields.items():\\n        err = np.abs(out[key] - gt[ref]); assert np.isfinite(err).all()\\n        print(key, 'RMSE', round(np.sqrt(np.mean(err**2)), 6), 'max abs', round(np.max(err), 6))\\n    past, hold, x, act, offset, dt, _ = mod._prepare(d)\\n    n = len(d['train']['lab_id'])\\n    labels = d['test']['lab_id']\\n    missing = np.isnan(d['test']['coupon_features_raw']).any(axis=1)\\n    for label, mask in [(f'lab {i}', labels == i) for i in range(4)] + [('inactive', act[n:] == 0), ('active', act[n:] > 0), ('imputed', missing)]:\\n        print(label, int(mask.sum()), 'strain/rate p90', [round(float(np.quantile(np.abs(out[k][mask] - gt[fields[k]][mask]), .9)), 6) for k in ('predicted_strain', 'initial_rate_pred')])\\n    if mod is final:\\n        w = np.r_[out['hereditary_weights'], out['regime_mode_weights']]\\n        c, r = mod._design(np.log(out['estimated_taus']), past[n:], hold[n:], x[n:], act[n:], dt, np.array([0., 1e-6]))\\n        np.testing.assert_allclose(c[:, 0] @ w, 0., atol=1e-12)\\n        np.testing.assert_allclose((c[:, 1] @ w)/1e-6, out['initial_rate_pred'], atol=1e-5, rtol=1e-5)\\n        print('zero-time value and analytic derivative verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (damage gates the terminal basis) -> H2 (damage gates only the two extra terms); leave-one-lab-out worst p90 fell from 0.484 to 0.244 for strain and from 0.268 to 0.056 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Zero damage restores a linear terminal basis within this low-shear-banding batch.\",\n    \"empirical_witness\": \"With the same calibration and robust fit, the shared logarithmic basis reduced inactive worst-horizon p90 from 0.656 to 0.251 and the signed final-horizon median residual from -0.280 to -0.003.\",\n    \"causal_blanket_diagnosis\": \"The baseline incorrectly tied the shared drift basis to the damage gate, confounding late-time drift with the damage-dependent response.\",\n    \"sublated_pivot\": \"Share log1p(t) across specimens and retain tanh(damage) only on the two regime terms.\",\n    \"risk_kind\": \"misplaced basis gate\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a separate spike-trimming pass\",\n      \"rejected_reason\": \"With the shared logarithmic basis, trimming did not improve the worst-lab strain or rate p90.\"\n    }\n  ],\n  \"rationale\": \"Promote the basis supported by held-out measurements. Check all five outputs against the public reference, including the imputed slice, and verify that the reported initial rate is the derivative of the saved strain model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "0a7bcfd54e75cf896e3d4ed42f1fee0faee2f64c384843b6f6e4606824bd9b3e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36311.16,
+      "usage_known": true,
+      "prompt_tokens": 30187,
+      "cached_tokens": 6784,
+      "completion_tokens": 1306
+    }
+  ]
+}

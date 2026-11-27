@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "14b52c61e1f943b6980041300cdc4739",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:48:31.027941+00:00",
+  "ended_at_utc": "2026-11-27T08:49:07.840220+00:00",
+  "request_sha256": "bac91f0cce8c2a632aaa276f02392e04c18fbd2f890c174e314ff654f588975f",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 38133,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25110,
+    "cached_tokens": 6784,
+    "completion_tokens": 1489
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle, pathlib\\nimport numpy as np\\np = pathlib.Path.cwd()\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\nm = load('candidate', p/'beta_m97_c03_batch_01_solver.py')\\na = load('archive', pathlib.Path('/tmp/hegel_continual_archive/beta_m97_c03_s00_solver.py'))\\nns = {}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d = ')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\ns = pickle.loads((p/'public_beta_m97_c03_batch_01.pkl').read_bytes())[0]['study']\\nsw = {k: np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\nrows = np.asarray(s['row_bank_id']) == 0\\nidx = np.flatnonzero(sw['bank_id'] == 0)\\nclean = m._calibrate(s)\\nhistory = json.loads(pathlib.Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())[-1]\\nmask = np.asarray(history['bank_id']) == 0\\ngain, offset = np.linalg.lstsq(np.column_stack([np.asarray(history['ref_signal'])[mask], np.ones(mask.sum())]), np.asarray(history['raw_readout'])[mask], rcond=None)[0]\\nhistorical = (np.asarray(s['y_obs_raw'])[rows] - offset)/gain\\nworst_cal = 0.\\nfor label, count, spike, expected in [('missing',0,0,historical),('single',1,0,historical),('two clean',2,0,clean[rows]),('three clean',3,0,clean[rows]),('four clean plus EMI',5,20,clean[rows]),('three clean plus EMI',4,20,historical)]:\\n    keep = sw['bank_id'] != 0\\n    keep[idx[:count]] = True\\n    sweep = {k:v[keep].copy() for k,v in sw.items()}\\n    if spike: sweep['raw_readout'][count-1] += spike\\n    measured = m._calibrate(dict(s, sensor_calibration_sweeps=sweep))\\n    err = float(np.max(np.abs(measured[rows] - expected)))\\n    worst_cal = max(err, worst_cal)\\n    print(label, 'max error', err)\\n    assert err < 2e-6 and np.array_equal(measured[~rows], clean[~rows])\\nfor mod, trace in [(0, np.full_like(s['past_vortex_circulation_trace'], s['critical_vortex_circulation'])),(1, s['past_vortex_circulation_trace'])]:\\n    test = dict(s, recirculation_loop_mode=mod, past_vortex_circulation_trace=trace)\\n    for lhs,rhs in zip(m._forward(test),a._forward(test)):\\n        np.testing.assert_array_equal(lhs,rhs)\\nperturbed = dict(s, aux_manifold_telemetry=np.asarray(s['aux_manifold_telemetry']) + 100.)\\nfor key in ('weights','terminal_field'):\\n    np.testing.assert_array_equal(m.solve_beta_m97_c03_batch_01(perturbed)[key],m.solve_beta_m97_c03_batch_01(s)[key])\\nS, T = m._forward(s)\\nZ = s['Z_nuisance']\\nD = np.column_stack([clean, S]); D -= Z @ np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T@D)\\nu = s['u_box']; n = S.shape[1]; max_gap=0.\\nfor budget in [0.,1e-8,0.25*u,u,2*u,s['total_budget'],n*u-1e-8,n*u]:\\n    out = m.solve_beta_m97_c03_batch_01(dict(s,total_budget=budget))\\n    res = verify(D[:,1:],D[:,0],s['source_ridge'],u,budget,out['kkt_certificate'])\\n    assert res['valid'], (budget,res)\\n    max_gap=max(max_gap,res['gap'])\\n    np.testing.assert_array_equal(out['weights'],out['kkt_certificate']['weights'])\\n    np.testing.assert_array_equal(out['terminal_field'],(T@out['weights']).reshape((s['nx'],s['ny']),order='F'))\\nprint('worst stress calibration error',worst_cal,'worst stress KKT gap',max_gap,'Robin and telemetry checks passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin transport → H2 vortex-triggered sealed-wall transport with certified inversion; public KKT gap is 6.44e-08 and terminal-field relative L2 error is 2.54e-07.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the public reference check\",\n      \"rejected_reason\": \"The public study has clean, complete sweeps and an interior budget; it does not exercise history fallback, EMI rejection, or the limiting budget faces.\"\n    }\n  ],\n  \"rationale\": \"Stress the exact saved artifact in an isolated process. A calibration discrepancy would change fallback selection; a Robin or telemetry discrepancy would change branch inputs; a failed certificate at a limiting budget would require correcting the active-set solution.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "203b79dad57ebeb0fe55e8be8807a651cd5138105a00ef499ee1d6d517bd3dcc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40864.47,
+      "usage_known": true,
+      "prompt_tokens": 25110,
+      "cached_tokens": 6784,
+      "completion_tokens": 1489
+    }
+  ]
+}

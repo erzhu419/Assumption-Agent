@@ -1,0 +1,117 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m97_c01_batch_01_2002955341a8",
+    "source_hash": "2002955341a855433c6c5f6314fdf05a5aeba5c1a81eaadb825e68d5d0a565e7",
+    "parent_ids": [],
+    "source_episode_id": "beta_m97_c01_batch_01__reactor_survey_batch",
+    "task_id": "beta_m97_c01_batch_01__reactor_survey_batch",
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__beta_m97_c01_s00_solver.py",
+        "bytes": 8153,
+        "sha256": "e1b2d70665db414a8858cb02472eec2e66e3a852449b93085df8b01fe6e07c4f"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && ls -l && cat public_asset_index.json && sed -n '1,245p' validate_public_schema.py && sed -n '1,260p' /tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'ridge nuisance profiling box simplex KKT'",
+      "sed -n '1,115p' /tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py; cat /holdout_task/validate_public_schema.py; python3 - <<'PY'\nimport json,pickle,numpy as np\np='/tmp/hegel_continual_archive/archive_calibration_history.json'\nh=json.load(open(p)); print('history schema:', type(h).__name__, str(h)[:650])\nd=pickle.load(open('/holdout_task/public_beta_m97_c01_batch_01.pkl','rb')); print('public container:',type(d),len(d));\nif isinstance(d,dict): print('keys:',list(d)); d=d.get('cases',d.get('records',[d]))\nfor obj in d:\n if not isinstance(obj,dict) or 'study' not in obj: print('unexpected e",
+      "set -e\nsed -n '38,114p' /tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -25\npython3 - <<'PY'\nimport json,pickle,numpy as np\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\nprint('history:', type(h).__name__, str(h)[:950])\nd=pickle.load(open('/holdout_task/public_beta_m97_c01_batch_01.pkl','rb'))\nprint('count:',len(d))\nfor row in d:\n s=row['study']; b=s['sensor_calibration_sweeps']\n v=np.maximum(0,np.asarray(s['past_vortex_circu",
+      "set -e\nsed -n '72,114p' /tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py\nhead -14 /holdout_task/validate_public_schema.py\npython3 -I - <<'PY'\nimport json, pickle, numpy as np\nh=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json'))\nprint('archive episodes:',[(r['episode_short_name'],len(r['bank_id']),list(r)) for r in h])\np=pickle.load(open('/holdout_task/public_beta_m97_c01_batch_01.pkl','rb'))[0]\ns=p['study']; d=s['sensor_calibration_sweeps']\nfor b in range(4):\n m=d['bank_id']==b\n x=d['ref_signal'][m]; y=d['raw_readout'][m]; g,o=np.linalg.lstsq(np.column_stac",
+      "set -e\npython3 -I - <<'PY'\nfrom pathlib import Path\nsrc = Path('/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py').read_text()\naxis = src[src.index('def _axis_operator'):src.index('def _forward')]\nforward = src[src.index('def _forward'):src.index('def _box_simplex')]\nforward = forward.replace(\"    axes = [\", \"    excursion = np.maximum(0., np.asarray(study['past_vortex_circulation_trace'])\\n                           - study['critical_vortex_circulation'])\\n    memory = float(excursion @ excursion)\\n    sealed = study['recirculation_loop_mode'] == 0 and memory > 0\\n    reaction = np.asa",
+      "set -e\nsed -n '/^def _box_simplex/,$p' /holdout_task/beta_m97_c01_batch_01_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport copy, importlib.util, json, pickle\nfrom pathlib import Path\nimport numpy as np\np=Path('/holdout_task'); arc=Path('/tmp/hegel_continual_archive')\ndef load(path):\n spec=importlib.util.spec_from_file_location(path.stem,path); mod=importlib.util.module_from_spec(spec); spec.loader.exec_module(mod); return mod\nm=load(p/'beta_m97_c01_batch_01_solver.py'); old=load(arc/'beta_m97_c01_s00_solver.py')\nv={}; exec((p/'validate_public_schema.py').read_text().split('\\n_d =')",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c01_batch_01_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nv = {}; exec((p/'validate_public_schema.py').read_text().split('\\n_d =')[0], v)\nverify = v['verify_box_simplex_kkt_certificate']\nxerr = np.zeros(4); gaps = np.zeros(4); fields = np.zeros(4)\nfor row in pickle.loa",
+      "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c01_batch_01_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nv = {}; exec((p/'validate_public_schema.py').read_text().split('\\n_d =')[0], v)\nverify = v['verify_box_simplex_kkt_certificate']\nworst_stencil = worst_gap = 0.\nfor item in pickle.load((p/'public_beta_m97_c01_batch_01.pkl').open('rb')):\n    s = item['study']\n    y = m._calibrated_obser"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__beta_m97_c01_s00_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/beta_m97_c01_s00_solver.py",
+      "selected_channels": [
+        "fam_kronecker_boundary_regimes_and_kkt"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m97_c01_batch_01_solver.py",
+        "filename": "beta_m97_c01_batch_01_solver.py",
+        "bytes": 7748,
+        "sha256": "d17af98c2276840a5f5d51fa70c630a865e5f8d81fb4e2446cf365eeda5e5702",
+        "content_addressed_ref": "content_addressed_blobs/d17af98c2276840a5f5d51fa70c630a865e5f8d81fb4e2446cf365eeda5e5702.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m97_c01_batch_01_solver.py"
+    ],
+    "exported_pure_functions": [
+      "_affine",
+      "_axis_operator",
+      "_forward",
+      "_box_simplex"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "2002955341a855433c6c5f6314fdf05a5aeba5c1a81eaadb825e68d5d0a565e7",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle\nfrom pathlib import Path\nimport numpy as np\np = Path('/holdout_task')\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c01_batch_01_solver",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "2002955341a855433c6c5f6314fdf05a5aeba5c1a81eaadb825e68d5d0a565e7",
+        "expected_candidate_sha256": "2002955341a855433c6c5f6314fdf05a5aeba5c1a81eaadb825e68d5d0a565e7",
+        "computed_candidate_sha256": "2002955341a855433c6c5f6314fdf05a5aeba5c1a81eaadb825e68d5d0a565e7",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m97_c01_batch_01_solver.py",
+            "bytes": 7748
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_20029553"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "_affine",
+        "code": "def _affine(x, y):\n    return np.linalg.lstsq(np.column_stack((x, np.ones(len(x)))), y, rcond=None)[0]"
+      },
+      {
+        "name": "_axis_operator",
+        "code": "def _axis_operator(length, kappa, velocity, robin):\n    from scipy.sparse import diags\n    kappa = np.asarray(kappa, dtype=float)\n    n = len(kappa)\n    h = length / (n - 1)\n    face = (kappa[:-1] + kappa[1:]) / (2 * h ** 2)\n    v = np.asarray(velocity, dtype=float) / h\n    lower = -face - np.maximum(v[1:], 0)\n    upper = -face - np.maximum(-v[:-1], 0)\n    main = np.empty(n)\n    main[1:-1] = face[:-1] + face[1:] + np.abs(v[1:-1])\n    main[[0, -1]] = kappa[[0, -1]] / h ** 2 + robin / h\n    upper[0] = -kappa[0] / h ** 2\n    lower[-1] = -kappa[-1] / h ** 2\n    return diags((lower, main, upper), (-1, 0, 1), format='csc')"
+      },
+      {
+        "name": "_forward",
+        "code": "def _forward(study):\n    from scipy.sparse import diags\n    from scipy.sparse import eye\n    from scipy.sparse import kron\n    from scipy.sparse.linalg import splu\n    modes = np.asarray(study['source_modes'], dtype=float)\n    m, nx, ny = modes.shape\n    axes = [_axis_operator(study['L' + d], study['kappa_' + d], study['vel_' + d], study['robin_' + d]) for d in 'xy']\n    op = (kron(eye(ny), axes[0]) + kron(axes[1], eye(nx)) + diags(np.asarray(study['V_reaction_2d']).ravel(order='F'))).tocsc()\n    identity = eye(nx * ny, format='csc')\n    rhs = modes.transpose(0, 2, 1).reshape(m, nx * ny).T\n    sensor_i, sensor_j = np.asarray(study['sensor_ij'], dtype=int).T\n    sensor_rows = sensor_i + nx * sensor_j\n    blocks = []\n    for mu in study['mu_shifts']:\n        fields = splu(op + mu * identity).solve(rhs)\n        blocks.append(fields[sensor_rows])\n    return (np.vstack(blocks), fields)"
+      },
+      {
+        "name": "_box_simplex",
+        "code": "def _box_simplex(S, y, ridge, cap, budget):\n    n = S.shape[1]\n    H = S.T @ S + ridge * np.eye(n)\n    c = S.T @ y\n    w = np.full(n, budget / n)\n    if budget == 0 or budget == n * cap:\n        w.fill(0 if budget == 0 else cap)\n        g = H @ w - c\n        return (w, float(np.min(g) if budget == 0 else np.max(g)))\n    state = np.zeros(n, dtype=int)\n    for _ in range(20 * n ** 2):\n        f = np.flatnonzero(state == 0)\n        a = np.flatnonzero(state != 0)\n        if not len(f):\n            g = H @ w - c\n            low, high = (np.flatnonzero(state < 0), np.flatnonzero(state > 0))\n            i, j = (low[np.argmin(g[low])], high[np.argmax(g[high])])\n            if g[i] >= g[j] - 1e-12:\n                return (w, float((g[i] + g[j]) / 2))\n            state[[i, j]] = 0\n            continue\n        k = len(f)\n        K = np.empty((k + 1, k + 1))\n        K[:k, :k] = H[np.ix_(f, f)]\n        K[:k, k], K[k, :k], K[k, k] = (-1, 1, 0)\n        sol = np.linalg.solve(K, np.r_[c[f] - H[np.ix_(f, a)] @ w[a], budget - w[a].sum()])\n        target, nu = (sol[:-1], sol[-1])\n        delta = target - w[f]\n        below, above = (target < -1e-13, target > cap + 1e-13)\n        if np.any(below | above):\n            step = np.full(k, np.inf)\n            step[below] = -w[f[below]] / delta[below]\n            step[above] = (cap - w[f[above]]) / delta[above]\n            hit = np.argmin(step)\n            w[f] = np.clip(w[f] + step[hit] * delta, 0, cap)\n            state[f[hit]] = -1 if below[hit] else 1\n            w[f[hit]] = 0 if below[hit] else cap\n            continue\n        w[f] = np.clip(target, 0, cap)\n        violation = state * (H @ w - c - nu)\n        release = np.argmax(violation)\n        if violation[release] <= 1e-12:\n            return (w, float(nu))\n        state[release] = 0\n    raise RuntimeError('Box-simplex active set did not converge')"
+      }
+    ]
+  }
+}

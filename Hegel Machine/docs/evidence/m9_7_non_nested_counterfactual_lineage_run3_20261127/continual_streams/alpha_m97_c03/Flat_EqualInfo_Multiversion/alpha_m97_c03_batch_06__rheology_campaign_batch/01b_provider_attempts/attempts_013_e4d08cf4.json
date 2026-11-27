@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e4d08cf4a5d34420b7969d1cc4e3e827",
+  "call_seq": 13,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:18:08.577118+00:00",
+  "ended_at_utc": "2026-11-27T09:18:41.252747+00:00",
+  "request_sha256": "746b7c19a2cfe11a426739eff4d67ae84289493187576dbc933ca5c325cdf1e1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 69312,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35100,
+    "cached_tokens": 11136,
+    "completion_tokens": 1216
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\ncat > /tmp/batch06_spike_audit.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nroot = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('solver', root+'alpha_m97_c03_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open(root+'public_alpha_m97_c03_batch_06.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\np,h,x,o,dt,t = m._prepare(d)\\ntr = d['train']; lab = tr['lab_id']; n = len(lab)\\ny = tr['strain_curves_obs']-o[:n,None]; r = tr['instant_rate_obs']\\ncomplete = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nrmse = lambda v: np.sqrt(np.nanmean(np.square(v)))\\ndef mad(v):\\n    return max(1e-6, 1.4826*np.nanmedian(np.abs(v-np.nanmedian(v))))\\ndef fits(rows):\\n    args = p[:n][rows],h[:n][rows],x[:n][rows],dt,t\\n    yy,rr = y[rows],r[rows]\\n    f,w = m._fit(*args,yy,rr)\\n    c,_ = m._design(f,*args); err = c@w-yy\\n    center,scale = np.nanmedian(err),mad(err)\\n    q = np.abs(err-center)>6*scale\\n    return (f,w),m._fit(*args,np.where(q,np.nan,yy),rr),center,scale,int(q.sum())\\nmetrics = [[],[]]\\nfor j in range(4):\\n    a,b,center,scale,ncut = fits((lab!=j)&complete)\\n    rows = (lab==j)&complete\\n    for k,(f,w) in enumerate((a,b)):\\n        c,v = m._design(f,p[:n][rows],h[:n][rows],x[:n][rows],dt,t)\\n        e = c@w-y[rows]; er = v@w-r[rows]\\n        # Also report the error in the central 90% of residuals, so isolated\\n        # spikes in validation cannot dominate the comparison.\\n        cutoff = np.nanquantile(np.abs(e),.90)\\n        vals = (rmse(e[np.abs(e)<=cutoff]),np.nanmedian(np.abs(e)),rmse(er))\\n        metrics[k].append(vals)\\n        print(j,k,'central strain RMSE / median abs strain / rate RMSE',np.round(vals,6),'training spikes removed by challenger',ncut,'tau',np.round(np.exp(f),5))\\nprint('worst observed lab by method',np.max(metrics,axis=1))\\na,b,_,_,ncut = fits(complete)\\ng = item['gt']; missing = ~np.isfinite(d['test']['coupon_features_raw']).all(axis=1)\\nfor k,(f,w) in enumerate((a,b)):\\n    c,v = m._design(f,p[n:],h[n:],x[n:],dt,t); e = o[n:,None]+c@w-g['te_clean']; er = v@w-g['te_true_rate0']; print('public check method',k,'complete/missing RMSE',[(rmse(e[q]),rmse(er[q])) for q in (~missing,missing)],'relative tau max',max(abs(np.exp(f)/g['taus']-1)),'training spikes removed by challenger',ncut)\\nPY\\npython3 -I /tmp/batch06_spike_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: sparse pointwise strain spikes rather than lab-wide drift -> H2: test a training-only spike filter before refitting the same jammed-slip model; current worst held-out lab rate RMSE is 0.02151.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add a lab-specific drift term\",\n      \"rejected_reason\": \"Held-out strain residuals have small signed medians, and the largest errors occur at isolated time points rather than across entire curves.\"\n    }\n  ],\n  \"rationale\": \"The independent convolution confirmed the specified algebra. Check whether isolated training spikes still bias the robust fit by comparing a fixed six-MAD filter against the current estimator in leave-one-lab-out validation. Promote it only if typical strain or rate errors improve across labs without a meaningful regression on the public missing-feature slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "0c0953974020e92e26262d15b9abdaba7cd55a4d83073a74b111d1a88d310bfa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34847.77,
+      "usage_known": true,
+      "prompt_tokens": 35100,
+      "cached_tokens": 11136,
+      "completion_tokens": 1216
+    }
+  ]
+}

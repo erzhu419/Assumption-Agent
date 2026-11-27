@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aba1b5af72b94c60b9560760d3840054",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:51:07.234959+00:00",
+  "ended_at_utc": "2026-11-27T08:51:39.629448+00:00",
+  "request_sha256": "82d7eb18ba080ffcdcf68fe8a8a90553c8f3418ccee2e7eb77644bd0ee6d08bd",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50957,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29136,
+    "cached_tokens": 0,
+    "completion_tokens": 1356
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\ns = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr = d['train']; lab = tr['lab_id']; strata = tr['stratum']; n = len(lab)\\ndt,t,*a = m._prepare(d); a = [v[:n] for v in a]\\nyc = tr['strain_curves_obs'] - tr['strain_0'][:,None]; yr = tr['instant_rate_obs']\\nactive = a[-2] > 0\\nmetrics = {}\\nfor robust in (True, False):\\n    ec = np.empty_like(yc); er = np.empty_like(yr); taus = []; conds = []\\n    for j in np.unique(lab):\\n        q = lab == j\\n        p = m.fit(dt,t,*(v[~q] for v in a),yc[~q],yr[~q],robust=robust)\\n        c,r,*_ = m.basis(p[:2],dt,t,*(v[q] for v in a)); ec[q] = c@p[2:] - yc[q]; er[q] = r@p[2:] - yr[q]\\n        c,r,*_ = m.basis(p[:2],dt,t,*(v[~q] for v in a))\\n        b = np.vstack((c.reshape(-1,9),r)); b /= np.linalg.norm(b,axis=0)\\n        conds.append(np.linalg.cond(b)); taus.append(np.exp(p[:2]))\\n    cells = [(lab == j)&(active == k) for j in np.unique(lab) for k in (False,True)]\\n    print('robust', robust, 'taus by fold', np.round(taus,4).tolist(), 'max normalized basis condition', round(max(conds),2))\\n    for name,e in [('curve',ec),('rate',er)]:\\n        print(name, 'worst cell median/p90 AE and pooled RMSE', *[round(float(v),5) for v in [max(np.median(abs(e[q])) for q in cells),max(np.quantile(abs(e[q]),.9) for q in cells),np.sqrt(np.mean(e**2))]])\\n    metrics[robust] = ec, er\\nprint('banding', d['shear_banding_index'], 'time grid', t)\\nec,er = metrics[True]\\nfor j in np.unique(lab):\\n    for k in (False, True):\\n        q = (lab == j)&(active == k); big = np.sum(abs(ec[q]) > .25,axis=1)\\n        cm = np.median(ec[q],axis=0)\\n        stratum_bias = max(abs(np.median(ec[q & (strata == st)])) for st in np.unique(strata[q]))\\n        print('lab/damage',j,int(k),'coupons',sum(q),'curve excursions: 1 of K / 2-4 of K / 5+ of K',sum(big==1),sum((big>=2)&(big<=4)),sum(big>=5),'max abs signed median across time/strata',round(np.max(abs(cm)),4),round(stratum_bias,4),'signed rate median',round(np.median(er[q]),4))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: damage gates baseline flow → H2: low banding sets logarithmic flow and damage gates the network terms; worst held-out lab-by-damage median absolute errors are 0.0167 for strain and 0.0184 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational terms, relay modes, or classification adjustments\",\n      \"rejected_reason\": \"These are not part of the specified constitutive law or regression outputs. The relevant checks are the conditioning of the nine specified terms and systematic signed errors within held-out labs, damage groups, and strata.\"\n    }\n  ],\n  \"rationale\": \"The unresolved margin is the large strain tail despite low median error. Compare robust and ordinary fits on identical held-out labs, check whether the specified basis is poorly conditioned, and distinguish isolated excursions from persistent signed errors within groups. A persistent pattern would justify a targeted model or alignment correction; isolated excursions favor retaining the robust fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6a748a3f1010657be70cb3b2ccd4e6f0fcb1e23601d1d8d5a8cf18a25bf9ba8f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36344.17,
+      "usage_known": true,
+      "prompt_tokens": 29136,
+      "cached_tokens": 0,
+      "completion_tokens": 1356
+    }
+  ]
+}

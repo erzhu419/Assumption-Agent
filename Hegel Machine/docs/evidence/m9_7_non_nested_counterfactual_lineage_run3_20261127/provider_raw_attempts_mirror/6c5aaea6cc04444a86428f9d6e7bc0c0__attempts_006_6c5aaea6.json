@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c5aaea6cc04444a86428f9d6e7bc0c0",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:49:38.746416+00:00",
+  "ended_at_utc": "2026-11-27T08:50:09.416344+00:00",
+  "request_sha256": "7007cb4b6b0229194d33fc3113cb5e98d72baa630f7e07039cf5ca7608d61710",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47543,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28507,
+    "cached_tokens": 6784,
+    "completion_tokens": 1097
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\ns = s.replace(\\\"    taus, weights = _fit((*[x[:n] for x in grouped], dt, t), target.ravel())\\\\n    basis = _basis(np.log(taus), *[x[n:] for x in grouped], dt, t)[0]\\\", \\\"    plateau = 'all' if dataset['shear_banding_index'] <= 0.5 else 'linear'\\\\n    taus, weights = _fit((*[x[:n] for x in grouped], dt, t), target.ravel(), plateau)\\\\n    basis = _basis(np.log(taus), *[x[n:] for x in grouped], dt, t, plateau)[0]\\\")\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nexec(open('/tmp/check_rheology01.py').read().split(\\\"print('active'\\\")[0])\\nout=m.solve_alpha_m97_c03_batch_01(d)\\ncurve=out['predicted_strain']-g['te_clean']; rate=out['initial_rate_pred']-g['te_true_rate0']\\nmiss=np.isnan(d['test']['coupon_features_raw']).any(1)\\nrmse=lambda e: np.sqrt(np.mean(e**2))\\nfor label, mask in [('all',np.ones(len(miss),bool)),('complete',~miss),('missing',miss)]+[(f'lab {lab}',d['test']['lab_id']==lab) for lab in range(4)]:\\n print(label,'curve/rate RMSE',rmse(curve[mask]),rmse(rate[mask]))\\nw=np.r_[out['hereditary_weights'],out['regime_mode_weights']]\\ne=m._basis(np.log(out['estimated_taus']),*[v[:n] for v in args],dt,t,'all')[0]@w-yy\\nfor group,err in [('curves',e[:,:-1]),('rate',e[:,-1:])]:\\n print(group,'abs residual quantiles',np.round(np.quantile(abs(err),[.25,.5,.75,.85,.90,.95,.99]),5),'median by horizon',np.round(np.median(abs(err),axis=0),5))\\ncurve_bad=(abs(e[:,:-1])>.10).sum(1); rate_bad=abs(e[:,-1])>.10\\nprint('curve outlier counts per row',np.bincount(curve_bad,minlength=11))\\nprint('rate outliers with/without >=2 curve outliers',np.sum(rate_bad & (curve_bad>=2)),np.sum(rate_bad & (curve_bad<2)))\\nprint('outliers in complete/missing training rows',[(int(mk.sum()),int(np.sum(rate_bad[mk])),int(np.sum(curve_bad[mk]>=2))) for mk in [~np.isnan(d['train']['coupon_features_raw']).any(1),np.isnan(d['train']['coupon_features_raw']).any(1)]])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: use logarithmic drift across the low-banding campaign and gate only the damage corrections; worst-lab held-out median absolute errors are 0.0217 for curves and 0.0197 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace cell-balanced imputation with a learned predictor\",\n      \"rejected_reason\": \"The contract specifies cell-balanced means; first separate missing-feature prediction error from errors in fitting the shared parameters.\"\n    }\n  ],\n  \"rationale\": \"The logarithmic basis improved both outputs in every held-out lab. Apply it to the solver and run the isolated schema validator. Check whether training residuals cluster by specimen or by measurement type; that distinction determines whether the fit should downweight whole specimens or individual observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d79b79f0f82f8b8d1a8fe9d54655050f5bb65a46c268f3a0273f733ac981552d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32709.14,
+      "usage_known": true,
+      "prompt_tokens": 28507,
+      "cached_tokens": 6784,
+      "completion_tokens": 1097
+    }
+  ]
+}

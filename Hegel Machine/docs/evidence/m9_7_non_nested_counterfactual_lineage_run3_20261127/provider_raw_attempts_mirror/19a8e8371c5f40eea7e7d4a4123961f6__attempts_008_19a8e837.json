@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "19a8e8371c5f40eea7e7d4a4123961f6",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:59:47.785746+00:00",
+  "ended_at_utc": "2026-11-27T09:00:32.484051+00:00",
+  "request_sha256": "04d72aa353462d66c074ebf7eba97f66d0b4232467e0d670d5b7ef06718ece11",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 49541,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29409,
+    "cached_tokens": 11136,
+    "completion_tokens": 1832
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_02_solver.py')\\ns = p.read_text()\\ns = s.replace('def _fit(dt, t, past, hold, x, yc, yr):', 'def _fit(dt, t, past, hold, x, yc, yr, complete=None):')\\nneedle = \\\"    if p[0] > p[1]:\\\\n\\\"\\nassert s.count(needle) == 1\\ns = s.replace(needle, '''    # Imputation is required for predictions, but imputed training rows\\n    # need not determine the physical parameters when there are enough\\n    # complete rows to identify all seven linear coefficients.\\n    if complete is None:\\n        complete = np.ones(len(hold), dtype=bool)\\n    rows = np.r_[np.repeat(complete, len(t)), complete]\\n    a, _ = design(p[:2])\\n    if np.linalg.matrix_rank(a[rows]) < 7:\\n        rows[:] = True\\n    residual = np.einsum('ij,j->i', a, p[2:]) - y\\n    by_target = np.column_stack((residual[:n].reshape(yc.shape), residual[n:]))\\n    v = by_target[rows[n:]]\\n    target_scale = np.maximum(1.4826 * np.median(np.abs(v - np.median(v, axis=0)), axis=0), 1e-6)\\n    scale[:] = np.r_[np.tile(target_scale[:-1], len(hold)), np.full(len(hold), target_scale[-1])]\\n    p = least_squares(lambda v: fun(v)[rows], p, jac=lambda v: jac(v)[rows],\\n                      loss='cauchy', f_scale=2.5, x_scale='jac', bounds=bounds, max_nfev=80).x\\n''' + needle)\\nneedle = \\\"    p = _fit(dt, t, past[:n], hold[:n], x[:n], yc, train['instant_rate_obs'])\\\\n\\\"\\nassert s.count(needle) == 1\\ns = s.replace(needle, \\\"    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\\\n    p = _fit(dt, t, past[:n], hold[:n], x[:n], yc, train['instant_rate_obs'], complete)\\\\n\\\")\\np.write_text(s)\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/alpha_m97_c01_batch_02_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_alpha_m97_c01_batch_02.pkl','rb'))[0]; d=i['dataset']; g=i['gt']; tr=d['train']; te=d['test']; a=m.solve_alpha_m97_c01_batch_02(d); n=len(tr['lab_id']); dt,t,past,hold,x=m._prepare(d)\\nassert all(np.isfinite(v).all() for v in a.values())\\nassert np.all(a['regime_mode_weights']==0)\\nprint('taus',a['estimated_taus'],'max weight error',np.max(abs(a['hereditary_weights']-g['theta'])))\\nassert np.max(abs(a['estimated_taus']-g['taus'])) < .035\\nassert np.max(abs(a['hereditary_weights']-g['theta'])) < .01\\nok=np.isfinite(te['coupon_features_raw']).all(axis=1)\\nfor k,j,threshold,full_limit in [('predicted_strain','te_clean',.013,.31),('initial_rate_pred','te_true_rate0',.005,.10)]:\\n e=a[k]-g[j]; by=lambda mask: max(np.sqrt(np.mean(e[q]**2)) for c in range(4) if (q:=(te['lab_id']==c)&mask).any()); full,complete,missing=by(np.ones(len(ok),bool)),by(ok),by(~ok); print(k,'worst-lab RMSE all/complete/missing',full,complete,missing); assert complete < threshold and full < full_limit\\ncomplete=np.isfinite(tr['coupon_features_raw']).all(axis=1); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; cv=[]\\nfor c in range(4):\\n q=tr['lab_id']==c; ix=np.flatnonzero(~q); h=np.flatnonzero(q&complete); p=m._fit(dt,t,past[ix],hold[ix],x[ix],y[ix],r[ix],complete[ix]); b,v,*_=m._basis(p[:2],dt,t,past[h],hold[h],x[h]); cv.append([np.quantile(abs(b@p[2:]-y[h]),.9),np.quantile(abs(v@p[2:]-r[h]),.9)])\\nworst=np.max(cv,axis=0); print('LOLO complete-row worst P90 strain/rate',worst); assert np.all(worst < [.05,.045])\\ncal=d['calibration_load_cells']\\nfor c in range(4):\\n q=cal['lab_id']==c; z=cal['cmd_stress'][q]; w=cal['true_stress'][q]; expected=np.array(m._line(z,w)); spike=w.copy(); spike[np.argsort(z)[len(z)//2]]+=15\\n for zx,wy in [(z[:0],w[:0]),(z[:1],w[:1]),(z[:2],w[:2]),(z[:3],w[:3]),(z,spike)]:\\n  assert np.allclose(m._calibrate(zx,wy,c),expected,atol=.005,rtol=0)\\nprint('Sparse calibration and EMI checks passed for four channels')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: calibration and prescribed cell-mean imputation → H2: complete-row Cauchy refinement of the two-branch Prony fit; the challenger reduced complete-row worst-lab strain/rate RMSE to 0.00918/0.00342, with all-row RMSE of 0.30436/0.09602.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the baseline soft-L1 fit\",\n      \"rejected_reason\": \"It estimates the slow time constant at 3.672 rather than 3.900 and has more than three times the complete-row worst-lab strain RMSE of the challenger.\"\n    },\n    {\n      \"option\": \"Change test-time imputation to improve the missing-row slice\",\n      \"rejected_reason\": \"The task specifies cell means; changing them would violate the contract.\"\n    }\n  ],\n  \"rationale\": \"Promote the challenger because it improves parameter recovery and held-out complete-row strain error without materially changing the missingness-limited worst-lab error. Check the exact edited artifact in an isolated process. The schema, held-out slices, and sparse or spiked calibration checks distinguish integration errors, fit regressions, and fallback failures.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "12da612453ce2fdf77bfac53fb8938c68c23301ee73c0d0baf1145183a737a71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46678.86,
+      "usage_known": true,
+      "prompt_tokens": 29409,
+      "cached_tokens": 11136,
+      "completion_tokens": 1832
+    }
+  ]
+}

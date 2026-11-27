@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f7cd9d912a144180a7cce2aeb5aebfc6",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:51:54.932196+00:00",
+  "ended_at_utc": "2026-11-27T08:52:30.573512+00:00",
+  "request_sha256": "da5d2096be24470d1d1a36743890306dd6dd77a09ba1965d8ea5d1a72cdcde1b",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 60977,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32103,
+    "cached_tokens": 11136,
+    "completion_tokens": 1254
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/weight_rheology01.py <<'PY'\\nexec(open('/tmp/check_rheology01.py').read().split(\\\"print('active'\\\")[0])\\nfrom pathlib import Path\\nsource=Path(base+'alpha_m97_c03_batch_01_solver.py').read_text()\\nlab=d['train']['lab_id']\\ncomplete=~np.isnan(d['train']['coupon_features_raw']).any(1)\\nfor rate_weight in (0.5,1.,2.):\\n    ns={}\\n    s=source.replace(\\\"    def model(p, jac=False):\\\", f\\\"    obs_weight = np.tile(np.r_[np.ones(len(args[-1])), {rate_weight!r}], len(target)//(len(args[-1])+1))\\\\n    def model(p, jac=False):\\\")\\n    s=s.replace(\\\"return np.einsum('ij,j->i', a, p[2:]) - target\\\", \\\"return obs_weight * (np.einsum('ij,j->i', a, p[2:]) - target)\\\")\\n    s=s.replace('return np.column_stack((h, a))','return obs_weight[:, None] * np.column_stack((h, a))')\\n    exec(compile(s,'<weight-probe>','exec'),ns)\\n    folds=[]; spectra=[]\\n    for held in range(4):\\n        keep=lab!=held; test=~keep; loc=complete[test]\\n        tau,w=ns['_fit']((*[v[:n][keep] for v in args],dt,t),yy[keep].ravel(),'all')\\n        spectra.append(tau)\\n        e=np.abs(m._basis(np.log(tau),*[v[:n][test] for v in args],dt,t,'all')[0]@w-yy[test])\\n        folds.append([np.median(e[:,:-1]),np.median(e[:,-1]),np.median(e[loc,:-1]),np.median(e[loc,-1]),np.quantile(e[loc,:-1],.8),np.quantile(e[loc,-1],.8)])\\n    print('rate residual weight',rate_weight,'worst fold medians all and complete, then complete p80 strain/rate:',np.round(np.max(folds,axis=0),6),'fold slow taus:',np.round(np.asarray(spectra)[:,1],5))\\nPY\\nset -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/weight_rheology01.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: test whether reweighting rate versus trajectory residuals stabilizes the verified logarithmic model; baseline worst held-out lab median absolute errors are 0.0217 for strain and 0.0197 for rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the convolution and panel-invariance audits\",\n      \"rejected_reason\": \"The current artifact already has a bound receipt for those checks. The unresolved question is whether the joint fit gives adequate weight to the independently measured initial rate.\"\n    },\n    {\n      \"option\": \"Add batch intercepts or unrelated basis terms\",\n      \"rejected_reason\": \"Held-out residuals have small signed medians, and the exact constitutive basis already agrees with the independent convolution in both damage states.\"\n    }\n  ],\n  \"rationale\": \"Each coupon contributes ten trajectory samples but only one initial-rate observation. Compare fixed residual weights on real lab-held-out measurements, including upper-quantile errors and slow-time stability. Change the solver only if the comparison shows a meaningful gain without sacrificing either output; the audit leaves the verified artifact untouched.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "50d15b14c56915ef318839478b7c751f37231cbcba59d4ec5fcc0bd687c5e4e0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37976.6,
+      "usage_known": true,
+      "prompt_tokens": 32103,
+      "cached_tokens": 11136,
+      "completion_tokens": 1254
+    }
+  ]
+}

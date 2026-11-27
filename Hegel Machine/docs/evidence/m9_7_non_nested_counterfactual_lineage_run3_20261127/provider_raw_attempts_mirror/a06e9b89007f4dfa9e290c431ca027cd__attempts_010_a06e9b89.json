@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a06e9b89007f4dfa9e290c431ca027cd",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:52:02.727652+00:00",
+  "ended_at_utc": "2026-11-27T08:52:33.917250+00:00",
+  "request_sha256": "75804dab18c8dc84f0e4b53535fe2aef1aa9e54fb9373e5cf23f088adc1071e4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 64015,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33762,
+    "cached_tokens": 11136,
+    "completion_tokens": 1147
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('alpha_m97_c03_batch_01_solver.py')\\ns = p.read_text()\\na, b = s.index('def _archive_calibration('), s.index('def _calibrate(')\\ns = s[:a] + '''def _archive_calibration(lab):\\n    with open(_ARCHIVE) as stream:\\n        history = json.load(stream)\\n    fits = []\\n    for sweep in history:\\n        rows = np.asarray(sweep['lab_id']) == lab\\n        x = np.asarray(sweep['cmd_stress'], dtype=float)[rows]\\n        y = np.asarray(sweep['true_stress'], dtype=float)[rows]\\n        ok = np.isfinite(x) & np.isfinite(y)\\n        x, y = x[ok], y[ok]\\n        if x.size >= 2 and np.ptp(x) > 0:\\n            fits.append(np.polyfit(x, y, 1))\\n    return np.median(fits, axis=0) if fits else None\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\npython3 -I validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util,json,pickle,numpy as np\\nspec=importlib.util.spec_from_file_location('solver','alpha_m97_c03_batch_01_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb'))[0]; d=item['dataset']; c=d['calibration_load_cells']; base=m._calibrate(c); history=json.load(open(m._ARCHIVE)); archived=history[-1]\\nfor lab in range(4):\\n    ii=np.flatnonzero(c['lab_id']==lab); ha=np.asarray(archived['lab_id'])==lab; expected=np.polyfit(np.asarray(archived['cmd_stress'])[ha],np.asarray(archived['true_stress'])[ha],1)\\n    np.testing.assert_allclose(m._archive_calibration(lab),expected,atol=1e-12)\\n    for keep_one in [False,True]:\\n        keep=c['lab_id']!=lab; keep[ii[0]]=keep_one\\n        np.testing.assert_allclose(m._calibrate({k:v[keep] for k,v in c.items()})[lab],expected,atol=1e-12)\\n    worst=0.\\n    for j in ii:\\n        for delta in (-4.,4.):\\n            spike={k:v.copy() for k,v in c.items()}; spike['true_stress'][j]+=delta\\n            worst=max(worst,np.max(np.abs(m._calibrate(spike)[lab]-base[lab])))\\n    assert worst < 3e-4, (lab,worst)\\n    print('lab',lab,'prefix fit',expected,'current fit',base[lab],'worst EMI coefficient change',worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Prefix raw sweeps → per-channel affine fallback for sparse calibration; the verified logarithmic fit has worst held-out-lab 85th-percentile absolute errors of 0.0470 strain and 0.0405 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived calibration for clean in-batch channels\",\n      \"rejected_reason\": \"The task prioritizes clean in-batch fits, and prefix calibration may differ from the current campaign.\"\n    }\n  ],\n  \"rationale\": \"The sparse path crashes because the archive stores arrays of raw sweep measurements rather than scalar fitted coefficients. Fit the archived measurements by channel, then verify that zero- and one-point inputs use that fit and that a signed EMI spike does not displace a clean in-batch fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "3177449a4037a6910374ffc831835d04397d2478ecbc4ebbee7e0b3489f76078",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33498.76,
+      "usage_known": true,
+      "prompt_tokens": 33762,
+      "cached_tokens": 11136,
+      "completion_tokens": 1147
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "828b627714c247e3891e450d7ca8f205",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:28:09.241980+00:00",
+  "ended_at_utc": "2026-11-27T09:28:43.755384+00:00",
+  "request_sha256": "bc03ced795134cfe5e47ac43319ff0cbd4c0878c56a07c5dbfaac239a19bc637",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 60443,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31943,
+    "cached_tokens": 6784,
+    "completion_tokens": 1350
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('solver','alpha_m97_c01_batch_07_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nitem=pickle.load(open('public_alpha_m97_c01_batch_07.pkl','rb'))[0]; d,g=item['dataset'],item['gt']; o=m.solve_alpha_m97_c01_batch_07(d)\\np,h,x,full=m._prepare(d); n=len(d['train']['lab_id']); dt=d['past_dt']; t=d['eval_times']; tau=o['estimated_taus']; hw=o['hereditary_weights']; rw=o['regime_mode_weights']\\n# Independent closed-form convolution and response, not the fitted design builder.\\nlag=np.r_[np.cumsum(dt[::-1])[::-1],0.0]; z=p @ (np.exp(-lag[1:,None]/tau)-np.exp(-lag[:-1,None]/tau)); gap=h[:,None]-z\\nact=np.tanh(np.maximum(abs(p)-d['crit_stress'],0)**2@dt); act*=d['shear_banding_index']<=.5\\namplitude=gap*hw[:2]; amplitude[:,0]+=rw[0]*act*h; drift=hw[2]+x@hw[3:]+rw[1]*act*z[:,0]\\neps=d['test']['strain_0'][:,None]+amplitude[n:]@(-np.expm1(-t[:,None]/tau)).T+drift[n:,None]*np.log1p(t); rate=np.sum(amplitude[n:]/tau,axis=1)+drift[n:]\\nnp.testing.assert_allclose(o['predicted_strain'],eps,atol=1e-12,rtol=0); np.testing.assert_allclose(o['initial_rate_pred'],rate,atol=1e-12,rtol=0)\\nprint('Independent convolution and derivative: match to 1e-12')\\ncal=d['calibration_load_cells']; labs=d['test']['lab_id']; err=eps-g['te_clean']; er=rate-g['te_true_rate0']; rm=lambda v: float(np.sqrt(np.mean(v*v)))\\nfor c in range(4):\\n    k=labs==c; clean=k&full[n:]; miss=k&~full[n:]\\n    print('lab',c,'current calibration n',int(np.sum(cal['lab_id']==c)),'max physical history error',round(float(np.max(abs(p[n:][k]-g['te_hist_true'][k]))),7),'curve/rate RMSE by completeness',[(int(v.sum()),round(rm(err[v]),6),round(rm(er[v]),6)) for v in (clean,miss) if v.any()],'complete mean rate residual',round(float(er[clean].mean()),6))\\n# Replay real archived sweeps against the preceding fit to distinguish sparse EMI from a coherent slope shift.\\nhistory=json.loads(m._ARCHIVE.read_text()); prior={}\\nfor sweep in history:\\n    lab=np.asarray(sweep['lab_id']); cmd=np.asarray(sweep['cmd_stress']); true=np.asarray(sweep['true_stress'])\\n    for c in range(4):\\n        k=lab==c; a,b=cmd[k],true[k]; keep=np.ones(len(a),bool)\\n        if c in prior and len(a):\\n            deviation=abs(b-np.polyval(prior[c],a)); keep=deviation<=3\\n            if not keep.all(): print('archive EMI candidate',sweep['episode_short_name'],c,'n',len(a),'deviations',np.round(deviation,4).tolist())\\n        if np.unique(a[keep]).size>=2: prior[c]=np.polyfit(a[keep],b[keep],1)\\nprint('maximum relative tau error',round(float(np.max(abs(tau/g['taus']-1))),6),'maximum absolute hereditary/regime weight error',round(float(np.max(abs(np.r_[hw-g['theta'],rw-g['vp_theta']]))),6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Verify the logarithmic response by independent convolution and distinguish calibration or lab bias from imputation error; worst measured leave-one-lab-out curve p80 error and rate RMSE are 0.02633 and 0.02231.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, transport, or relay terms\",\n      \"rejected_reason\": \"The specified response is a two-branch convolution with logarithmic drift. The dataset has continuous strain and rate outputs, not transport states, relay modes, or classification labels.\"\n    }\n  ],\n  \"rationale\": \"An independent convolution detects memory indexing, sign, or derivative errors that would require a model correction. Per-lab clean-coupon residuals and archived sweep replay test for a systematic alignment or calibration problem that could justify an upgrade. The isolated validator checks the exact saved artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "98039aeb8d9d7eb28c897f6cd0e8ee06807ac4404a43d941fa8a2384463fa556",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36987.72,
+      "usage_known": true,
+      "prompt_tokens": 31943,
+      "cached_tokens": 6784,
+      "completion_tokens": 1350
+    }
+  ]
+}

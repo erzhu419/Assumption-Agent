@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b98fdfaf687948bc80f424e4121f5a1f",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:52:38.247407+00:00",
+  "ended_at_utc": "2026-11-27T08:53:12.440569+00:00",
+  "request_sha256": "5b0a50e8b019966a9737b217e5b493022c6e27963106db95bf1da65191ef4f71",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 67287,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34630,
+    "cached_tokens": 6784,
+    "completion_tokens": 1179
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\nsed -n '/^def _prepare/,/^def _design/p' alpha_m97_c03_batch_01_solver.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c03_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem = pickle.load(open('public_alpha_m97_c03_batch_01.pkl','rb'))[0]\\nd, g = item['dataset'], item['gt']\\no = m.solve_alpha_m97_c03_batch_01(d)\\np,h,f,b = m._prepare(d)\\nn = len(d['train']['lab_id']); t, dt = d['eval_times'], d['past_dt']\\ndamage = np.maximum(0, np.abs(p[n:])-d['crit_stress'])**2 @ dt\\nw = np.r_[o['hereditary_weights'],o['regime_mode_weights']]\\ntau = o['estimated_taus']\\nassert np.all(tau > 0)\\nmem = np.zeros((len(h)-n,2))\\nfor j, step in enumerate(dt):\\n    decay = np.exp(-step/tau)\\n    mem = decay*mem + (1-decay)*p[n:,j,None]\\ngap = h[n:,None]-mem\\nact = np.tanh(damage)\\ndrift = f[n:] @ w[2:7]\\nprony = (gap*w[:2]) @ (-np.expm1(-t[:,None]/tau)).T\\nfor plateau in (True, False):\\n    a,r = m._design(tau,p[n:],h[n:],f[n:],dt,t,damage if plateau else np.zeros_like(damage),plateau)\\n    relax = -np.expm1(-t/tau[0]); clock = np.log1p(t) if plateau else t\\n    strain = b[n:,None] + prony + drift[:,None]*clock\\n    rate = gap @ (w[:2]/tau) + drift\\n    if plateau:\\n        strain += (w[7]*act*h[n:])[:,None]*relax + (w[8]*act*mem[:,0])[:,None]*clock\\n        rate += w[7]*act*h[n:]/tau[0]+w[8]*act*mem[:,0]\\n        np.testing.assert_allclose(o['predicted_strain'],strain,atol=1e-11)\\n        np.testing.assert_allclose(o['initial_rate_pred'],rate,atol=1e-11)\\n    np.testing.assert_allclose(b[n:,None]+a@w,strain,atol=1e-11)\\n    np.testing.assert_allclose(r@w,rate,atol=1e-11)\\nlab=d['test']['lab_id']; missing=~np.isfinite(d['test']['coupon_features_raw']).all(1)\\nslices={'all':np.ones(len(lab),bool),'damaged':damage>0,'undamaged':damage==0,'complete':~missing,'missing':missing,**{f'lab{i}':lab==i for i in range(4)}}\\nfor key,truth in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n    err=o[key]-g[truth]; assert np.isfinite(err).all()\\n    print(key,'slice RMSE',{k:round(np.sqrt(np.mean(err[v]**2)),6) for k,v in slices.items()}); print(key,'abs max',float(np.max(abs(err))))\\nfor key,truth in [('estimated_taus','taus'),('hereditary_weights','theta'),('regime_mode_weights','vp_theta')]:\\n    assert np.isfinite(o[key]).all()\\n    print(key,'max relative error',float(np.max(abs(o[key]/g[truth]-1))))\\nprint('Independent recurrence, strain, and rate checks passed for both clocks.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Aligned stress history → two-branch relaxation with a campaign-wide logarithmic clock and damage-gated amplitudes; worst held-out-lab 85th-percentile absolute errors are 0.0470 strain and 0.0405 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check the final artifact against an independent stepwise memory recurrence and the analytic rate for both clocks. A mismatch would require correcting the time basis or initial derivative; the slice metrics separate those failures from the known missing-coupon error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "708d6d2e1ae6943184b0404cd633896bfd8962ced95ce0a4d836e874e8f9cb39",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36185.82,
+      "usage_known": true,
+      "prompt_tokens": 34630,
+      "cached_tokens": 6784,
+      "completion_tokens": 1179
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "82480b1440a64d309ff689a20cad4813",
+  "call_seq": 3,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Hegel_DemandGated_Graph__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:54:21.101962+00:00",
+  "ended_at_utc": "2026-11-27T08:54:39.832124+00:00",
+  "request_sha256": "72c5bf38e628eab43599bb00e58b3c8fa8e507498f7f2b6d6b002dd6d7827342",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 22034,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19679,
+    "cached_tokens": 11136,
+    "completion_tokens": 515
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '45,175p' /tmp/hegel_continual_archive/beta_m97_c03_batch_02_solver.py && tail -48 validate_public_schema.py && python3 - <<'PY'\\nimport pickle,json,numpy as np\\nwith open('public_beta_m97_c03_batch_03.pkl','rb') as f: cases=pickle.load(f)\\na=cases[0]; s=a['study']; print('STUDY',[(k,getattr(v,'shape',None),v if np.isscalar(v) else type(v).__name__) for k,v in s.items()]); print('GT',[(k,getattr(v,'shape',None)) for k,v in a['gt'].items()]); print('SWEEP',s['sensor_calibration_sweeps']); h=json.load(open('/tmp/hegel_continual_archive/archive_calibration_history.json')); print('HISTORY',len(h),[(list(t), {int(b):int(np.count_nonzero(np.asarray(t['bank_id'])==b)) for b in set(t['bank_id'])}) for t in h]); print('GRID',[(k,np.asarray(s[k]).ravel()[:3].tolist(),np.asarray(s[k]).ravel()[-2:].tolist()) for k in ('xs','ys','kappa_x','kappa_y') if k in s])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived boundary stencil -> H2 periodic stencil with calibrated nuisance projection and box-simplex certification; worst-slice error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public pickle wraps each input under `study`. Inspect the nested sweep and the archived stencil to identify which banks need fallback and where periodic wrapping belongs. Read the validator tail to determine which outputs must be checked independently.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "40168f2a04263ea6d8f3917bcec224e2313edfd7727b7fb0e33a410039861cbb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20762.34,
+      "usage_known": true,
+      "prompt_tokens": 19679,
+      "cached_tokens": 11136,
+      "completion_tokens": 515
+    }
+  ]
+}

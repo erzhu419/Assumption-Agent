@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1a86b7e94fb34c2aaf9adadcd589ab96",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:25.313194+00:00",
+  "ended_at_utc": "2026-11-27T08:50:49.917116+00:00",
+  "request_sha256": "12847ba34b9fd483b95bc9cc03ae497bfd6ec9b1eabee7c3f76f8e1a530e2a34",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44934,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27352,
+    "cached_tokens": 6784,
+    "completion_tokens": 917
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nroot = '/holdout_task/'\\ns = importlib.util.spec_from_file_location('solver', root + 'alpha_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nwith open(root + 'public_alpha_m97_c01_batch_01.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\no = m.solve_alpha_m97_c01_batch_01(d)\\ndt, t, past, hold, x, act, _ = m._prepare(d)\\nn = len(d['train']['lab_id'])\\npast, hold, x, act = past[n:], hold[n:], x[n:], act[n:]\\ntau, hw, rw = (o[k] for k in ('estimated_taus', 'hereditary_weights', 'regime_mode_weights'))\\nassert 0 < tau[0] < tau[1]\\nz = np.zeros((len(hold), 2))\\nfor j, h in enumerate(dt):\\n    a = np.exp(-h/tau)\\n    z = a*z + (1-a)*past[:, j, None]\\nw = (hold[:, None]-z)*hw[:2]\\nw[:, 0] += rw[0]*act*hold\\nv = hw[2] + x@hw[3:] + rw[1]*act*z[:, 0]\\ndef delta(times):\\n    return w@(-np.expm1(-times[None, :]/tau[:, None])) + v[:, None]*np.log1p(times)\\npred = d['test']['strain_0'][:, None] + delta(t)\\nrate = (4*delta(np.array([5e-7])) - delta(np.array([1e-6])))[:, 0]/1e-6\\nnp.testing.assert_allclose(o['predicted_strain'], pred, atol=1e-11, rtol=0)\\nnp.testing.assert_allclose(o['initial_rate_pred'], rate, atol=1e-9, rtol=0)\\ncmd = np.linspace(-2, 2, 10)\\ny = 1.34*cmd + .15\\ny[4] += 8\\nnp.testing.assert_allclose(m._calibrate(cmd, y, 0), [1.34, .15], atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(m._calibrate(cmd[:1], y[:1], 0), m._archived_calibration(0), atol=1e-12, rtol=0)\\nprint('Maximum curve reconstruction error:', np.max(abs(o['predicted_strain']-pred)))\\nprint('Maximum finite-difference rate error:', np.max(abs(o['initial_rate_pred']-rate)))\\nprint('Calibration stress tests passed: EMI spike and one-point channel.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: damage gates baseline flow → H2: low banding sets logarithmic flow and damage gates only the network terms; worst held-out lab-by-damage median absolute errors are 0.0167 for strain and 0.0184 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous verification stopped because its reconstruction multiplied two branch amplitudes by all seven hereditary weights. Correct the test to use only the two branch weights, leaving the solver unchanged. A curve or rate mismatch would identify an output-mapping or derivative defect; a calibration failure would identify the fallback branch to fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "98e4cf2150b27dd6c163bf885c9e9d396b0a5626bc76cfd97489f65a04df5a7a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26695.71,
+      "usage_known": true,
+      "prompt_tokens": 27352,
+      "cached_tokens": 6784,
+      "completion_tokens": 917
+    }
+  ]
+}

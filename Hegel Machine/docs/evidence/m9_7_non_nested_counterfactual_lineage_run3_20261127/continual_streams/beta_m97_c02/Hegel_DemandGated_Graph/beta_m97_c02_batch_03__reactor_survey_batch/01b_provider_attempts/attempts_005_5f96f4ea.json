@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f96f4ea3b184034803f4c69f0def2e9",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c02__Hegel_DemandGated_Graph__beta_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:54:42.545855+00:00",
+  "ended_at_utc": "2026-11-27T08:55:22.693945+00:00",
+  "request_sha256": "7c1a876aa237fac524acda8aef6ce7fb2c6d44f17ecee684e583b623cbabfa70",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 36646,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24766,
+    "cached_tokens": 11136,
+    "completion_tokens": 1597
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport ast\\nimport importlib.util\\nimport json\\nimport math\\nimport pickle\\nfrom pathlib import Path\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nm = load('candidate', 'beta_m97_c02_batch_03_solver.py')\\nprior = load('prior', '/tmp/hegel_continual_archive/beta_m97_c02_batch_02_solver.py')\\ntree = ast.parse(Path('validate_public_schema.py').read_text())\\nchecker = next(n for n in tree.body if isinstance(n, ast.FunctionDef) and n.name == 'verify_box_simplex_kkt_certificate')\\nns = dict(np=np, math=math)\\nexec(compile(ast.Module(body=[checker], type_ignores=[]), 'validate_public_schema.py', 'exec'), ns)\\nverify = ns[checker.name]\\nwith open('public_beta_m97_c02_batch_03.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns, g = item['study'], item['gt']\\no = m.solve_beta_m97_c02_batch_03(s)\\npublic = verify(g['S_tilde'], g['r_y'], s['source_ridge'], s['u_box'], s['total_budget'], o['kkt_certificate'])\\nprint('Public reference certificate:', public)\\nassert public['valid'], public\\nfor mode, trace in [(0.50, s['past_vortex_circulation_trace']), (0.0, s['past_vortex_circulation_trace']), (0.0, np.zeros_like(s['past_vortex_circulation_trace']))]:\\n    case = dict(s, recirculation_loop_mode=mode, past_vortex_circulation_trace=trace)\\n    for actual, expected in zip(m._forward(case), prior._forward(case)):\\n        np.testing.assert_allclose(actual, expected, rtol=0, atol=1e-13)\\nprint('Robin threshold and sealed/unsealed lineage branches agree with predecessor')\\n# Check that wraparound restores constant-field conservation and uses both endpoint velocities.\\nk = np.array([1., 2., 4., 3.]); v = np.array([0.2, -0.3, 0.1, -0.4]); h = 0.25\\nA = m._axis(k, v, 12., h, periodic=True)\\nnp.testing.assert_allclose(A @ np.ones(k.size), 0, atol=1e-12)\\nnp.testing.assert_allclose([A[0,-1], A[-1,0]], [-2/h**2-0.2/h, -2/h**2-0.4/h], atol=1e-12)\\n# Verify bank-local history use and rejection of a single EMI spike when clean coverage remains.\\nc = s['sensor_calibration_sweeps']; b = c['bank_id']; rows = s['row_bank_id']\\nkeep = (b != 1); keep[np.flatnonzero(b == 1)[0]] = True\\ntrimmed = {key: np.asarray(value)[keep].copy() for key, value in c.items()}\\ntrimmed['raw_readout'][np.flatnonzero(trimmed['bank_id'] == 2)[0]] += 9\\nactual = m._calibrate(dict(s, sensor_calibration_sweeps=trimmed))\\nassert np.all(np.isfinite(actual))\\nexpected = m._calibrate(s)\\ngain, offset = prior._historical_calibration(1)\\nexpected[rows == 1] = (s['y_obs_raw'][rows == 1] - offset) / gain\\nfor bank in [0, 3]: np.testing.assert_allclose(actual[rows == bank], expected[rows == bank], atol=1e-13, rtol=0)\\nemi_delta = np.max(np.abs(actual[rows == 2] - expected[rows == 2]))\\nassert emi_delta < 2e-6, emi_delta\\nprint('Sparse-bank and isolated EMI checks passed; EMI calibration delta:', emi_delta)\\n# Stress lower, upper and mixed active sets on the measured design, including exact budget corners.\\nworst = 0.\\nfor reverse in (False, True):\\n    S = g['S_tilde']; y = g['r_y'] * (-4 if reverse else 1)\\n    for budget in (0., 0.001, 1., 2.6, 6., 11., 11.999, 12.):\\n        upper, ridge = 1., s['source_ridge']\\n        w, nu = m._box_simplex(S, y, ridge, upper, budget)\\n        r = S @ w - y; grad = S.T @ r + ridge*w\\n        j = float(0.5*(r@r + ridge*(w@w)))\\n        cert = dict(weights=w, nu_sum=nu, lam_lower=np.maximum(grad-nu,0), lam_upper=np.maximum(nu-grad,0), primal_objective=j, dual_lower_bound=j-grad@w+nu*budget+upper*np.minimum(0,grad-nu).sum())\\n        result = verify(S, y, ridge, upper, budget, cert)\\n        assert result['valid'], (reverse, budget, result)\\n        worst = max(worst, result['gap'])\\nprint('Worst active-set stress gap:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The inherited grid with periodic wrap and cosine reaction matches the public forward matrix to 1.11e-16 max error; the public-reference KKT gap is 3.76e-7 against a 1e-6 tolerance.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the periodic discretization\",\n      \"rejected_reason\": \"The forward matrix already agrees at roundoff; the remaining public discrepancy is in the calibrated target.\"\n    }\n  ],\n  \"rationale\": \"Run the full reference certificate verifier, not just its gap formula. Stress the boundary switch, sparse and spiky calibration banks, and exact budget corners so any failure points to a specific branch to fix.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "14e9dde58cb096e41c3fbda7371385188c27f37075c423e6c0db28295f6bf7a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42224.65,
+      "usage_known": true,
+      "prompt_tokens": 24766,
+      "cached_tokens": 11136,
+      "completion_tokens": 1597
+    }
+  ]
+}

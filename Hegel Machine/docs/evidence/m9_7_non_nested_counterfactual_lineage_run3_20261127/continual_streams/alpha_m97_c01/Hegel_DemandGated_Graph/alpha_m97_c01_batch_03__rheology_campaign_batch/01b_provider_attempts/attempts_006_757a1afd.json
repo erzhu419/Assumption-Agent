@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "757a1afd95f04905886a22506a344f9d",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:02:47.838773+00:00",
+  "ended_at_utc": "2026-11-27T09:03:17.558278+00:00",
+  "request_sha256": "7bee3bb6e6295aa5faf745d2b237ee5677762ee30bf7725b28088afed0d6b776",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 42676,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26674,
+    "cached_tokens": 11136,
+    "completion_tokens": 1158
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'\\nspec=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_03_solver.py')\\nm=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_alpha_m97_c01_batch_03.pkl','rb')):\\n d=item['dataset']; tr=d['train']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; past,hold,x=(a[:n] for a in m._prepare(d)); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\n def ols(k, start):\\n  y=np.r_[yc[k].ravel(),yr[k]]\\n  def prof(logs, weights=False):\\n   c,r=m._basis(logs,dt,t,past[k],hold[k],x[k]); a=np.vstack((c.reshape(-1,9),r)); w=np.linalg.lstsq(a,y,rcond=None)[0]; return w if weights else a@w-y\\n  z=least_squares(prof,start,bounds=(np.log(.01),np.log(250))).x\\n  return z,prof(z,True)\\n def errors(z,w,k):\\n  c,r=m._basis(z,dt,t,past[k],hold[k],x[k]); return c@w-yc[k],r@w-yr[k]\\n allrows=np.ones(n,dtype=bool); wf=[]\\n for group in ['all','lab_id','stratum']:\\n  for val in ([0] if group=='all' else np.unique(tr[group])):\\n   k=allrows if group=='all' else tr[group]!=val; h=allrows if group=='all' else ~k\\n   z,w=m._fit(dt,t,past[k],hold[k],x[k],yc[k],yr[k]); zz,ww=ols(k,z)\\n   for name,a,b in [('robust',z,w),('ols',zz,ww)]:\\n    ec,er=errors(a,b,h); print(group,val,name,'tau',np.exp(a).round(5),'rmse',np.sqrt(np.mean(ec**2)).round(6),np.sqrt(np.mean(er**2)).round(6),'max-time-rmse',np.sqrt(np.mean(ec**2,axis=0)).max().round(6),'p99',np.quantile(abs(ec),.99).round(5),np.quantile(abs(er),.99).round(5))\\n    if group=='all': print('weights',b.round(6),'max abs',abs(ec).max().round(5),abs(er).max().round(5))\\n    elif name=='robust': wf.append((np.sqrt(np.mean(ec**2)),np.sqrt(np.mean(er**2)),np.sqrt(np.mean(ec**2,axis=0)).max()))\\n print('worst robust',np.max(wf,axis=0))\\n cal=d['calibration_load_cells']; ch=0; use=cal['lab_id']==ch; cx=cal['cmd_stress'][use]; cy=cal['true_stress'][use]; ref=m._calibrate(cx,cy,ch); sparse=m._calibrate(cx[:1],cy[:1],ch); noisy=cy.copy(); noisy[0]+=5; spike=m._calibrate(cx,noisy,ch)\\n print('sparse and EMI calibration deviation',abs(ref-sparse),abs(ref-spike)); assert np.max(abs(ref-sparse))<.001 and np.max(abs(ref-spike))<.001\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Calibrated, panel-aligned inputs feed the joint jammed-slip model; the isolated schema validator passed, and held-out strain and rate errors are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the shape check alone\",\n      \"rejected_reason\": \"A model can return valid arrays while missing a held-out lab, stratum, or time point. Comparing robust and ordinary fits on those slices tests whether the robust objective is warranted.\"\n    }\n  ],\n  \"rationale\": \"Refit without each lab or stratum's response labels, preserving the specified unlabeled panel alignment. If one fit improves both held-out observables, prefer it; if sparse or EMI-affected calibration deviates materially from the clean fit, revise the fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "6c97b693e851ff94c4f090d3e1384635f42da18467515a4aa0867a469a90827f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31891.73,
+      "usage_known": true,
+      "prompt_tokens": 26674,
+      "cached_tokens": 11136,
+      "completion_tokens": 1158
+    }
+  ]
+}

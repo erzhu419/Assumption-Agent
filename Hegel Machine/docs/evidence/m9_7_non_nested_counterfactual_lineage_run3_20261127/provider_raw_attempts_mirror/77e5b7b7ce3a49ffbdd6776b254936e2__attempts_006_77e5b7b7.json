@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "77e5b7b7ce3a49ffbdd6776b254936e2",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:56:31.982496+00:00",
+  "ended_at_utc": "2026-11-27T08:57:09.129999+00:00",
+  "request_sha256": "2d79bbd4f4ea2b7f0287b11a245e24df40dece8e282ab9696fc82ed462cf01b6",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28399,
+    "cached_tokens": 0,
+    "completion_tokens": 1516
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS separate residual scales' | head -c 3500 || true\\nsed 's/    err, weights = profile(log_taus)/    _, weights = profile(log_taus)/' /tmp/rheology_robust.py > alpha_m97_c02_batch_02_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nfrom unittest.mock import patch\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_02_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ncal = d['calibration_load_cells']\\nwith patch.object(s, '_historical', side_effect=AssertionError('unexpected archive access')):\\n    clean = s._calibrate(cal)\\n    emi = {k: np.copy(v) for k,v in cal.items()}\\n    emi['true_stress'][np.flatnonzero(emi['lab_id'] == 1)[0]] += 10\\n    np.testing.assert_allclose(s._calibrate(emi), clean, atol=3e-4, rtol=0)\\n    out = s.solve_alpha_m97_c02_batch_02(d)\\nkeep = (cal['lab_id'] != 2)\\nkeep[np.flatnonzero(~keep)[0]] = True\\narchived = s._historical(2)\\nassert archived is not None\\nnp.testing.assert_allclose(s._calibrate({k: np.asarray(v)[keep] for k,v in cal.items()})[2], archived)\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\npast, hold, x = (a[n:] for a in s._prepare(d))\\ntau = out['estimated_taus']; w = out['hereditary_weights']; times = d['eval_times']\\nassert 0 < tau[0] < tau[1]\\nnp.testing.assert_array_equal(out['regime_mode_weights'], [0., 0.])\\nz = np.zeros((len(hold), 2))\\nfor i, dt in enumerate(d['past_dt']):\\n    a = np.exp(-dt / tau)\\n    z = a * z + (1-a) * past[:, i, None]\\ngaps = hold[:, None] - z\\ndrift = x @ w[2:]\\nrate = gaps @ (w[:2] / tau) + drift\\ncurves = te['strain_0'][:, None] + (gaps*w[:2]) @ (1-np.exp(-times[None,:]/tau[:,None])) + drift[:,None]*times\\nnp.testing.assert_allclose(out['predicted_strain'], curves, rtol=1e-12, atol=1e-12)\\nnp.testing.assert_allclose(out['initial_rate_pred'], rate, rtol=1e-12, atol=1e-12)\\nlab = tr['lab_id']; st = tr['stratum']; good = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\ny = tr['strain_curves_obs'] - tr['strain_0'][:,None]; r = tr['instant_rate_obs']; data = tuple(a[:n] for a in s._prepare(d)); E = np.empty_like(y); R = np.empty_like(r)\\nfor k in np.unique(lab):\\n    fit, val = good & (lab != k), lab == k\\n    p, h = s._fit(*(a[fit] for a in data), d['past_dt'], times, y[fit], r[fit]); c, q = s._design(*(a[val] for a in data), d['past_dt'], times, p)\\n    E[val], R[val] = c @ h - y[val], q @ h - r[val]\\ncells = [(lab == k) & (st == j) for k,j in np.unique(np.c_[lab,st], axis=0)]\\nprint('taus:', tau, '| worst lab-stratum median strain error:', max(np.median(np.abs(E[m])) for m in cells), '| worst lab-stratum rate RMSE:', max(np.sqrt(np.mean(R[m]**2)) for m in cells))\\nprint('worst lab-horizon median absolute strain error:', max(np.median(np.abs(E[lab == k]),axis=0).max() for k in np.unique(lab)), '| imputed rows rate RMSE:', np.sqrt(np.mean(R[~good]**2)))\\nprint('Schema, independent memory recurrence, zero regime weights, EMI rejection, and sparse archive fallback passed.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unweighted linear-flow fit -> separate-scale Cauchy fit: worst held-out lab–stratum median strain error fell from 0.04573 to 0.01811, and worst cell rate RMSE fell from 0.06374 to 0.04709.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the unweighted profile fit\",\n      \"rejected_reason\": \"The slow relaxation time varied from 4.21 to 7.13 across held-out labs, versus 3.90 to 3.94 with the robust fit, which also reduced both worst-cell errors.\"\n    }\n  ],\n  \"rationale\": \"Promote the robust fit without changing the physical law. Verify the exact target artifact in an isolated process: the direct recurrence detects memory-order errors, the calibration tests detect incorrect archive use, and the held-out slices check for horizon- or imputation-specific regressions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7b29c28f01fa8e712308679896314f53e658e5739dbd67f1f4814f1e80abb1ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41571.35,
+      "usage_known": true,
+      "prompt_tokens": 28399,
+      "cached_tokens": 0,
+      "completion_tokens": 1516
+    }
+  ]
+}

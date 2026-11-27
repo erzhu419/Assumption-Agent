@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62671161490d430e81ec457f1826fac4",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c03__Flat_EqualInfo_Multiversion__beta_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c03_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:54:56.446870+00:00",
+  "ended_at_utc": "2026-11-27T08:55:25.646968+00:00",
+  "request_sha256": "df73df042b540cb9b6b696c7ca9c6c3dd7debe2c6e724a750f53bc22161211e8",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 39465,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24950,
+    "cached_tokens": 0,
+    "completion_tokens": 1074
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nfrom copy import deepcopy\\nfrom pathlib import Path\\nfrom unittest.mock import patch\\nimport numpy as np\\nroot=Path('/holdout_task'); p=root/'beta_m97_c03_batch_03_solver.py'\\nspec=importlib.util.spec_from_file_location('solver', p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nfor item in pickle.load((root/'public_beta_m97_c03_batch_03.pkl').open('rb')):\\n    s,g=item['study'],item['gt']; sw={k:np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}; b,x=sw['bank_id'],sw['ref_signal']; rb=np.asarray(s['row_bank_id']); full=m._calibrate(s)\\n    for n in (2,3):\\n        worst=(0.,None,None); count=0\\n        with patch.object(m,'_archived_calibration',side_effect=AssertionError('archive read on a clean sparse sweep')):\\n            for bank in np.unique(b):\\n                for ix in itertools.combinations(np.flatnonzero(b==bank),n):\\n                    span=float(np.ptp(x[list(ix)]))\\n                    if not span: continue\\n                    mask=b!=bank; mask[list(ix)]=True\\n                    out=m._calibrate(dict(s,sensor_calibration_sweeps={k:v[mask] for k,v in sw.items()})); e=float(np.max(np.abs(out[rb==bank]-full[rb==bank]))); count+=1\\n                    if e>worst[0]: worst=(e,int(bank),span)\\n        print(f'{n}-point clean sweeps: {count} slices; worst (calibrated observation delta, bank, reference span)={worst}')\\n    base=m.solve_beta_m97_c03_batch_03(s)\\n    altered=deepcopy(s); altered.pop('aux_manifold_telemetry')\\n    if s['recirculation_loop_mode']>0.5:\\n        altered['robin_x']=0.; altered['robin_y']=0.; altered['past_vortex_circulation_trace']=np.full_like(s['past_vortex_circulation_trace'],10.)\\n    out=m.solve_beta_m97_c03_batch_03(altered)\\n    for k in ('weights','terminal_field'): np.testing.assert_array_equal(base[k],out[k])\\n    print('Weights and terminal field unchanged with auxiliary telemetry removed and inactive wall inputs perturbed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived Robin transport -> H2 mode-gated periodic closure with per-bank affine calibration; the public-reference KKT gap is 4.03e-7 and the worst tested stress-case gap is 8.88e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the public reference and leave-one-out audits\",\n      \"rejected_reason\": \"Those checks already passed on the unchanged artifact; they did not exercise clean two- and three-point sweeps.\"\n    }\n  ],\n  \"rationale\": \"Use subsets of the measured calibration sweeps to check whether clean sparse fits accidentally consult the archive or amplify rounding at narrow reference spans. Separately, perturb inputs that should not affect the periodic branch; any output change would identify unintended coupling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bf54eca2f284d0687aaac67426dadb1d08d2342b4805477eb23fd7f51c0bdb63",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31280.43,
+      "usage_known": true,
+      "prompt_tokens": 24950,
+      "cached_tokens": 0,
+      "completion_tokens": 1074
+    }
+  ]
+}

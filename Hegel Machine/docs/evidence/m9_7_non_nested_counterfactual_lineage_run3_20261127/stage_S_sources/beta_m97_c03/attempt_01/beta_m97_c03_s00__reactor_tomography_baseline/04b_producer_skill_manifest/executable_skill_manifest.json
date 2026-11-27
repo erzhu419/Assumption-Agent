@@ -1,0 +1,82 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_beta_m97_c03_s00_f69a64d736f3",
+    "source_hash": "f69a64d736f3f5362736ef3b7244e3c2b0facfc194e3651ed99217ffa94d23fc",
+    "parent_ids": [],
+    "source_episode_id": "beta_m97_c03_s00__reactor_tomography_baseline",
+    "task_id": "beta_m97_c03_s00__reactor_tomography_baseline",
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat public_asset_index.json validate_public_schema.py && python3 - <<'PY'\nimport pickle, numpy as np\nwith open('public_beta_m97_c03_s00.pkl','rb') as f:\n    data=pickle.load(f)\ndef show(x, depth=0):\n    if isinstance(x,dict) and depth < 3:\n        for k,v in x.items():\n            print('  '*depth+str(k),end=': ')\n            if isinstance(v,dict): print()\n            show(v,depth+1)\n    elif isinstance(x,np.ndarray):\n        print(x.shape,x.dtype, x.tolist() if x.size<=15 else x.ravel()[:5])\n    elif isinstance(x,(list,tuple)):\n        print(type(x).__name__,len(x),repr(x[",
+      "cd /holdout_task && cat validate_public_schema.py && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_beta_m97_c03_s00.pkl','rb'))[0]; s=p['study']\nfor k,v in s.items():\n if isinstance(v,np.ndarray): print(k,v.shape,v.dtype, v.ravel()[:12])\n elif k=='sensor_calibration_sweeps':\n  print(k,type(v),str(v)[:3000])\n else: print(k,type(v).__name__,str(v)[:250])\nprint('reference weights',p['gt']['w_opt'])\nPY\nls /tmp/hegel_continual_archive 2>/dev/null || true\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_prim_ridge_profiled_matching.fit_ridge_nuisance | h",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_beta_m97_c03_s00.pkl','rb'))[0]; s=p['study']\nfor k,v in s.items():\n if k=='sensor_calibration_sweeps':\n  print(k,[(a,np.shape(b)) for a,b in v.items()]); b=np.asarray(v['bank_id']); x=np.asarray(v['ref_signal']); y=np.asarray(v['raw_readout']);\n  for i in range(4):\n   X=np.column_stack((x[b==i],np.ones(sum(b==i)))); c=np.linalg.lstsq(X,y[b==i],rcond=None)[0]; print(i,len(X),c,np.max(abs(y[b==i]-X@c),initial=0.))\n elif isinstance(v,np.ndarray): print(k,v.shape,v.dtype)\n elif isinstance(v,(list,tuple)): pr",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\nimport itertools, pickle\nimport numpy as np\nfrom scipy.linalg import solve\np=pickle.load(open('public_beta_m97_c03_s00.pkl','rb'))[0]; s=p['study']; gt=p['gt']\nZ=s['Z_nuisance']; G=Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]); residual=lambda A:A-Z@solve(G,Z.T@A,assume_a='pos')\nnx,ny=s['nx'],s['ny']; modes=s['source_modes'].transpose(0,2,1).reshape(-1,nx*ny).T; ij=s['sensor_ij']; idx=ij[:,0]+nx*ij[:,1]\ndef axis(a, spacing, react):\n k,v,r=s['kappa_'+a],s['vel_'+a],s['reaction_'+a]; n=len(k); h=s['L'+a]/(n-spacing); A=np.zeros((n,n)); i",
+      "cd /holdout_task && cat > beta_m97_c03_s00_solver.py <<'PY'\n\"\"\"Open-Robin reaction-transport tomography and box-simplex inversion.\"\"\"\nimport json\nfrom pathlib import Path\n\nimport numpy as np\nfrom scipy.sparse import diags, eye, kron\nfrom scipy.sparse.linalg import splu\n\n\n_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\n\n\ndef _archived_calibration(bank):\n    if not _ARCHIVE.is_file():\n        return None\n    with _ARCHIVE.open() as stream:\n        history = json.load(stream)\n    if isinstance(history, dict) and 'banks' in history:\n        history = history['banks",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\n\np = Path.cwd()\nspec = importlib.util.spec_from_file_location('candidate', p/'beta_m97_c03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\n# Load the independent certificate verifier without executing the schema CLI.\nns = {}\nexec((p/'validate_public_schema.py').read_text().split('\\n_d =')[0], ns)\nverify = ns['verify_box_simplex_kkt_certificate']\nitems = pickle.load(open(p/'public_beta_m97_c03_s00.pkl','rb')",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\n\nspec = importlib.util.spec_from_file_location('candidate', 'beta_m97_c03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nitems = pickle.load(open('public_beta_m97_c03_s00.pkl', 'rb'))\nforward_err = projection_effect = 0.0\nemi_errors = []\nfor case in items:\n    s, gt = case['study'], case['gt']\n    S, _ = m._forward(s)\n    Z = s['Z_nuisance']\n    y = m._calibrate(s)\n    B = np.column_stack((y, S))\n    R = B",
+      "cd /holdout_task && python3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m97_c03_s00_solver.py')\ns = p.read_text()\nold = '        if xb.size < 2 or not np.all(clean):\\n'\nnew = ('        # Prefer four or more clean current points to historical coefficients.\\n'\n       '        if xb.size < 2 or (not np.all(clean) and np.count_nonzero(clean) < 4):\\n')\nassert s.count(old) == 1\np.write_text(s.replace(old, new))\nPY\nset -e\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, json, pickle, tempfile\nfrom pathlib import Path\nim",
+      "cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, itertools, json, pickle, tempfile\nfrom pathlib import Path\nimport numpy as np\nspec = importlib.util.spec_from_file_location('solver', 'beta_m97_c03_s00_solver.py')\nm = importlib.util.module_from_spec(spec)\nspec.loader.exec_module(m)\nwith open('public_beta_m97_c03_s00.pkl', 'rb') as f:\n    items = pickle.load(f)\nworst = 0.0\nfailures = 0\nfirst = None\nwith tempfile.TemporaryDirectory() as d:\n    m._ARCHIVE = Path(d) / 'calibration.json'\n    for item in items:\n        s, gt = item['study'], item['gt']\n        sw ",
+      "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m97_c03_s00_solver.py')\ns = p.read_text()\na = s.index('        # A median-slope fit')\nb = s.index('        # Prefer four', a)\ns = s[:a] + '''        if xb.size >= 3:\n            i, j = np.triu_indices(xb.size, 1)\n            distinct = xb[j] != xb[i]\n            i, j = i[distinct], j[distinct]\n            if i.size:\n                slopes = (yb[j] - yb[i]) / (xb[j] - xb[i])\n                if xb.size >= 4:\n                    # Score complete lines by their residuals, not the slopes alone:\n                    # a "
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/beta_m97_c03_s00_solver.py",
+        "filename": "beta_m97_c03_s00_solver.py",
+        "bytes": 8470,
+        "sha256": "ec6eaeb9034014f0f3c4c0df51bf6712f56157bf11dd0cec92b5d1a6efea4e96",
+        "content_addressed_ref": "content_addressed_blobs/ec6eaeb9034014f0f3c4c0df51bf6712f56157bf11dd0cec92b5d1a6efea4e96.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/beta_m97_c03_s00_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "fam_kronecker_boundary_regimes_and_kkt",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "f69a64d736f3f5362736ef3b7244e3c2b0facfc194e3651ed99217ffa94d23fc",
+      "verified_post_package": true,
+      "verified_turn": 12,
+      "verification_command": "set -e\ncd /holdout_task\npython3 - <<'PY'\nfrom pathlib import Path\np = Path('beta_m97_c03_s00_solver.py')\ns = p.read_text()\na = s.index('        # A median-slope fit')\nb = s.index('        # Prefer four', a)\ns = s[:a] + '''        if xb.size",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "f69a64d736f3f5362736ef3b7244e3c2b0facfc194e3651ed99217ffa94d23fc",
+        "expected_candidate_sha256": "f69a64d736f3f5362736ef3b7244e3c2b0facfc194e3651ed99217ffa94d23fc",
+        "computed_candidate_sha256": "f69a64d736f3f5362736ef3b7244e3c2b0facfc194e3651ed99217ffa94d23fc",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/beta_m97_c03_s00_solver.py",
+            "bytes": 8470
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_f69a64d7"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

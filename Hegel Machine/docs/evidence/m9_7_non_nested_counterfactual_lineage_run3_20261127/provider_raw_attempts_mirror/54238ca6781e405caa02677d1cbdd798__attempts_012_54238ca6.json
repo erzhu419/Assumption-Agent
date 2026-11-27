@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54238ca6781e405caa02677d1cbdd798",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:22:17.314918+00:00",
+  "ended_at_utc": "2026-11-27T09:22:52.490349+00:00",
+  "request_sha256": "7eb11077d50968a43b45a7e9e3a7c8a9356962a3a9542cc80ace10549c43d2fe",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 66905,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 34371,
+    "cached_tokens": 6784,
+    "completion_tokens": 1387
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('candidate', 'alpha_m97_c01_batch_06_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_m97_c01_batch_06.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nd = item['dataset']\\ntr, te = d['train'], d['test']\\nn = len(tr['lab_id'])\\nprint('Experiment fields:', sorted(d), '| training fields:', sorted(tr))\\npast, hold, x, complete = m._prepare(d)\\no = m.solve_alpha_m97_c01_batch_06(d)\\ntau = o['estimated_taus']\\nw = np.r_[o['hereditary_weights'], o['regime_mode_weights']]\\ndt, t = np.asarray(d['past_dt']), np.asarray(d['eval_times'])\\nlag = np.cumsum(dt[::-1])[::-1] - dt\\nz = past @ (-np.expm1(-dt[:,None]/tau) * np.exp(-lag[:,None]/tau))\\ng0, g1 = (hold[:,None] - z).T\\nfast = w[0]*g0 + w[8]*(g0-g1)\\nslow = w[1]*g1\\nflow = w[2] + x @ w[3:7] + w[7]*np.sign(hold)*np.sqrt(np.abs(hold))\\nstrain = np.outer(fast, -np.expm1(-t/tau[0])) + np.outer(slow, -np.expm1(-t/tau[1])) + np.outer(flow, t/(1+.85*t))\\nrate = fast/tau[0] + slow/tau[1] + flow\\nnp.testing.assert_allclose(o['predicted_strain'], te['strain_0'][:,None]+strain[n:], atol=1e-12, rtol=0)\\nnp.testing.assert_allclose(o['initial_rate_pred'], rate[n:], atol=1e-12, rtol=0)\\na,b = m._design(tau,dt,t,past[:n][complete[:n]],hold[:n][complete[:n]],x[:n][complete[:n]])\\nmat = np.vstack((a.reshape(-1,9), b))\\nprint('Measured-coupon basis rank / columns:', np.linalg.matrix_rank(mat), mat.shape[1])\\nassert np.linalg.matrix_rank(mat) == 9\\n\\n# Fit each ablation independently inside each held-out lab fold; report medians to limit isolated curve spikes.\\nbase_design = m._design\\nfor label, col in [('exact', None), ('without_signed_slip', 7), ('without_gap_difference', 8)]:\\n    def design(*args):\\n        c, r = base_design(*args)\\n        if col is not None:\\n            c[...,col] = 0\\n            r[...,col] = 0\\n        return c, r\\n    m._design = design\\n    for lab in np.unique(tr['lab_id']):\\n        val = tr['lab_id'] == lab\\n        fold = dict(d, train={k:v[~val] for k,v in tr.items()}, test={k:np.concatenate((v, tr[k][val])) for k,v in te.items()})\\n        f = m.solve_alpha_m97_c01_batch_06(fold)\\n        off = len(te['lab_id'])\\n        e = f['predicted_strain'][off:] - tr['strain_curves_obs'][val]\\n        r = f['initial_rate_pred'][off:] - tr['instant_rate_obs'][val]\\n        observed = complete[:n][val]\\n        print(label, 'lab', lab, 'complete curve median abs / rate median abs / signed rate bias:', np.round([np.nanmedian(abs(e[observed])), np.nanmedian(abs(r[observed])), np.nanmedian(r[observed])], 6))\\nm._design = base_design\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (pseudo-Huber profiling) -> H2 (Cauchy profiling on the exact jammed-slip basis); verified worst held-out cell median absolute strain error is 0.01766 and worst imputed-cell initial-rate RMSE is 0.17369.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck operators, or balanced accuracy\",\n      \"rejected_reason\": \"This is a continuous rheology regression with no relay states, stochastic transport operator, or class labels. Held-out lab residuals are the relevant nuisance check.\"\n    }\n  ],\n  \"rationale\": \"Independently reconstruct the rational flow term, signed slip, and gap difference on real histories. A mismatch would require correcting the algebra; rank loss would flag unidentifiable weights. Refit each mode ablation by held-out lab to test whether pooled accuracy hides lab-specific bias. The installed artifact remains unchanged during this audit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "67e049efb2cfd43c3258fbfa611bbe868fcbd9c8fb291e2164f0afafeac8c1ec",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37562.25,
+      "usage_known": true,
+      "prompt_tokens": 34371,
+      "cached_tokens": 6784,
+      "completion_tokens": 1387
+    }
+  ]
+}

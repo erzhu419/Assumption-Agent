@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "008ba1b0d5b841428b54b8b8b88d123a",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:55:49.011084+00:00",
+  "ended_at_utc": "2026-11-27T08:56:29.268052+00:00",
+  "request_sha256": "8af82e2c9f04258c8def976715a3038450d553737593ba5dc0e7572bf2b0cdba",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 41251,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25614,
+    "cached_tokens": 6784,
+    "completion_tokens": 1523
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/alpha_m97_c02_batch_02_solver.py /tmp/rheology_robust.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/tmp/rheology_robust.py')\\ns = p.read_text()\\nold = '    return np.exp(log_taus), profile(log_taus)[1]'\\nnew = '''    err, weights = profile(log_taus)\\n    nc = curve_mask.sum()\\n\\n    def mad(v):\\n        return max(1e-6, 1.4826 * np.median(np.abs(v - np.median(v))))\\n\\n    def raw(p):\\n        curve, rate = _design(past, hold, x, dt, times, np.exp(p[:2]))\\n        return np.r_[(curve @ p[2:])[curve_mask] - curves[curve_mask],\\n                     (rate @ p[2:])[rate_mask] - rates[rate_mask]]\\n\\n    p = np.r_[log_taus, weights]\\n    for _ in range(2):\\n        e = raw(p)\\n        scale = np.r_[np.full(nc, mad(e[:nc])), np.full(rate_mask.sum(), mad(e[nc:]))]\\n        p = least_squares(lambda q: raw(q) / scale, p, loss='cauchy', f_scale=2.5,\\n                          bounds=(np.r_[np.log([.02, .02]), np.full(7, -np.inf)],\\n                                  np.r_[np.log([40., 40.]), np.full(7, np.inf)]),\\n                          x_scale='jac', max_nfev=120).x\\n    if p[0] > p[1]:\\n        p[:2] = p[:2][::-1]\\n        p[2:4] = p[2:4][::-1]\\n    return np.exp(p[:2]), p[2:]'''\\nassert old in s\\np.write_text(s.replace(old, new))\\nPY\\ncat > /tmp/check_rheology.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport sys\\nimport numpy as np\\n\\ndef load(path):\\n    spec = importlib.util.spec_from_file_location('solver', path)\\n    mod = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(mod)\\n    return mod\\n\\nwith open('/holdout_task/public_alpha_m97_c02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr = d['train']; n = len(tr['lab_id']); lab = tr['lab_id']; stratum = tr['stratum']\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]; r = tr['instant_rate_obs']\\ngood = np.isfinite(tr['coupon_features_raw']).all(axis=1)\\nfor path in sys.argv[1:]:\\n    s = load(path); data = tuple(a[:n] for a in s._prepare(d)); C = np.empty_like(y); R = np.empty_like(r)\\n    print(path)\\n    for k in [-1, 0, 1, 2, 3]:\\n        fit = good & (lab != k); check = (lab == k) if k >= 0 else np.ones(n, bool)\\n        tau, w = s._fit(*(a[fit] for a in data), dt, t, y[fit], r[fit]); c, z = s._design(*(a[check] for a in data), dt, t, tau)\\n        e, f = c @ w - y[check], z @ w - r[check]\\n        m = good[check]\\n        print(k, tau.round(5), w.round(5), 'complete curve abs q50/90/95/99/max', np.round(np.quantile(np.abs(e[m]), [.5,.90,.95,.99,1]), 5), 'rate RMSE complete/all', np.sqrt(np.mean(f[m]**2)), np.sqrt(np.mean(f**2)), 'curve abs >1 complete', np.sum(np.abs(e[m]) > 1))\\n        if k >= 0: C[check], R[check] = e, f\\n    for k,j in np.unique(np.c_[lab,stratum],axis=0):\\n        use=(lab==k)&(stratum==j)\\n        print('cell', k,j, use.sum(), 'curve MAE/median', np.mean(np.abs(C[use])), np.median(np.abs(C[use])), 'rate RMSE', np.sqrt(np.mean(R[use]**2)))\\n    print('curve spikes by horizon', (np.abs(C[good])>1).sum(axis=0), 'rows with multiple', np.sum((np.abs(C[good])>1).sum(axis=1)>1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/check_rheology.py /holdout_task/alpha_m97_c02_batch_02_solver.py /tmp/rheology_robust.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Unweighted two-branch linear flow -> separate-scale robust fitting; baseline worst held-out lab strain RMSE was 1.7713 and rate RMSE was 0.05063 on complete rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the terminal flow law\",\n      \"rejected_reason\": \"The supplied regime specifies linear flow, and large residuals alone do not establish a different mechanism.\"\n    }\n  ],\n  \"rationale\": \"The largest strain residual was 32.93, while rate errors were much smaller. Compare robust and unweighted fits on the same held-out labs and lab–stratum cells to see whether a few strain measurements are distorting the estimated relaxation times. Promote the challenger only if it improves typical held-out errors without sacrificing rate prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "77923d5b271b8666f9e9ca55ace152d4068be5af986ff3d3a8f5a85d4003ead7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42235.86,
+      "usage_known": true,
+      "prompt_tokens": 25614,
+      "cached_tokens": 6784,
+      "completion_tokens": 1523
+    }
+  ]
+}

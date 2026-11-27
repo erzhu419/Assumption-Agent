@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61252c0ad4c948e49a7f4803f149798f",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:07:59.103999+00:00",
+  "ended_at_utc": "2026-11-27T09:08:22.052617+00:00",
+  "request_sha256": "7b2d3b6f674b1bf3fa0709096cc8a17eddbda1d57295363addbbc42a474138bc",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 47737,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29326,
+    "cached_tokens": 6784,
+    "completion_tokens": 807
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec = importlib.util.spec_from_file_location('rheology', '/holdout_task/alpha_m97_c01_batch_03_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c01_batch_03.pkl', 'rb') as f:\\n    p = pickle.load(f)[0]\\nd, gt = p['dataset'], p['gt']\\no = s.solve_alpha_m97_c01_batch_03(d)\\nfor name, key in [('estimated_taus', 'taus'), ('hereditary_weights', 'theta'), ('regime_mode_weights', 'vp_theta')]:\\n    print(name, 'max absolute error', np.max(np.abs(o[name] - gt[key])))\\nfor c in range(4):\\n    mask = d['test']['lab_id'] == c\\n    print('clean test lab', c, 'curve/rate RMSE', *(np.sqrt(np.mean((o[name][mask] - gt[key][mask])**2)) for name, key in [('predicted_strain', 'te_clean'), ('initial_rate_pred', 'te_true_rate0')]))\\n    cal = d['calibration_load_cells']; rows = cal['lab_id'] == c\\n    x, y = cal['cmd_stress'][rows], cal['true_stress'][rows]\\n    expected = s._line(x, y)\\n    for count in (0, 1):\\n        np.testing.assert_allclose(s._calibrate(x[:count], y[:count], c), expected, atol=5e-4, rtol=0)\\n    spiked = y.copy(); spiked[np.argmax(x)] += 4.0\\n    np.testing.assert_allclose(s._calibrate(x, spiked, c), expected, atol=5e-4, rtol=0)\\nprint('Sparse and EMI-corrupted calibration cases passed on all four channels.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Ordinary least squares → Cauchy fitting of the same jammed-slip basis; worst held-lab median absolute curve and rate errors are 0.0161 and 0.01753.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema and held-lab checks\",\n      \"rejected_reason\": \"Those checks did not exercise the explicitly supported sparse and EMI-corrupted calibration paths.\"\n    }\n  ],\n  \"rationale\": \"Test the two calibration exceptions on public sweeps; a failure calls for a calibration fix, not a change to the rheology model. Separately, score the frozen solver against the clean public targets to distinguish prediction error from measurement noise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "8b3a5f8f7ae58d0aa4741aeba09d0634df3c6cabf5868d7a1e695367310a517e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25075.45,
+      "usage_known": true,
+      "prompt_tokens": 29326,
+      "cached_tokens": 6784,
+      "completion_tokens": 807
+    }
+  ]
+}

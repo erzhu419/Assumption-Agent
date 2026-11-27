@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c27471c713c41e69aa99da06a871984",
+  "call_seq": 5,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c02__Flat_EqualInfo_Multiversion__beta_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c02_batch_03__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:56:38.615907+00:00",
+  "ended_at_utc": "2026-11-27T08:57:13.340599+00:00",
+  "request_sha256": "90823a7da133045b9ed4712b4fddd5fc397de6f7de9401bbdf05948e8012fa5b",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 42686,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27167,
+    "cached_tokens": 6784,
+    "completion_tokens": 1465
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, copy, json\\nfrom pathlib import Path\\nimport numpy as np\\np=Path('/holdout_task')\\ndef load(path):\\n    spec=importlib.util.spec_from_file_location(path.stem,path)\\n    m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m); return m\\nm=load(p/'beta_m97_c02_batch_03_solver.py')\\nold=load(Path('/tmp/hegel_continual_archive/beta_m97_c02_batch_02_solver.py'))\\nverify={}\\nexec((p/'validate_public_schema.py').read_text().split('\\\\n_d =',1)[0],verify)\\nc=pickle.load((p/'public_beta_m97_c02_batch_03.pkl').open('rb'))[0]; s,g=c['study'],c['gt']\\nf=m.solve_beta_m97_c02_batch_03\\nref=f(s); check=verify['verify_box_simplex_kkt_certificate']\\nresult=check(g['S_tilde'],g['r_y'],s['source_ridge'],s['u_box'],s['total_budget'],ref['kkt_certificate']); print('Public KKT:',result); assert result['valid']\\nsw=s['sensor_calibration_sweeps']; calerr=[]\\nfor bank in range(4):\\n    idx=np.flatnonzero(sw['bank_id']==bank)\\n    for variant in ('missing','one','two-clean','four-spiked','many-spiked'):\\n        t=copy.deepcopy(s); sweep=t['sensor_calibration_sweeps']; keep=np.ones(len(sw['bank_id']),bool)\\n        if variant in ('missing','one','two-clean','four-spiked'):\\n            n={'missing':0,'one':1,'two-clean':2,'four-spiked':4}[variant]; keep[idx[n:]]=False\\n        if variant in ('four-spiked','many-spiked'): sweep['raw_readout'][idx[0]]+=8\\n        if variant=='many-spiked': sweep['raw_readout'][idx[-1]]-=10\\n        t['sensor_calibration_sweeps']={k:v[keep] for k,v in sweep.items()}\\n        w=f(t)['weights']; calerr.append((float(np.max(np.abs(w-ref['weights']))),bank,variant))\\nprint('Worst calibration stress (weight error, bank, slice):',max(calerr)); assert max(calerr)[0]<2e-6\\nfor mode, memory in [(0.50,False),(0.0,True)]:\\n    t=dict(s,recirculation_loop_mode=mode)\\n    if memory: t['past_vortex_circulation_trace']=np.array([0.8,0.7])\\n    a=f(t); b=old.solve_beta_m97_c02_batch_01(t)\\n    for k in ('weights','terminal_field'): np.testing.assert_array_equal(a[k],b[k])\\nprint('Robin and sealed-memory branches match archive exactly')\\nt=dict(s,aux_manifold_telemetry=-100*s['aux_manifold_telemetry']); np.testing.assert_array_equal(f(t)['weights'],ref['weights'])\\nfor axis in ('x','y'):\\n    n=s['n'+axis]; h=s['L'+axis]/(n-1)\\n    a=m._periodic_axis(s['kappa_'+axis],s['vel_'+axis],h)\\n    assert a[0,-1]<0 and a[-1,0]<0 and np.max(abs(a.sum(1)))<1e-12\\nrng=np.random.default_rng(975); maxerr=0.\\nfor trial in range(300):\\n    n=12; u=float(rng.uniform(0.2,2)); ridge=float(rng.uniform(0.01,0.2)); a=rng.normal(size=(18,n))\\n    wstar=rng.uniform(0.1,0.9,n)*u; flags=rng.choice([-1,0,1],size=n)\\n    if trial<2: flags[:]=(-1,1)[trial]\\n    if trial==2: flags=np.repeat([-1,1],6)\\n    wstar[flags==-1]=0; wstar[flags==1]=u\\n    nu=rng.normal(); grad=nu-flags*rng.uniform(.05,5,n)\\n    y=np.linalg.lstsq(a.T,(a.T@a+ridge*np.eye(n))@wstar-grad,rcond=None)[0]\\n    w,eta=m._box_simplex(a,y,ridge,u,float(wstar.sum()))\\n    err=float(np.max(abs(w-wstar))); maxerr=max(err,maxerr); assert err<1e-9,(trial,err)\\n    assert abs(w.sum()-wstar.sum())<1e-10 and w.min()>=0 and w.max()<=u\\nprint('Known-KKT stress: 300 cases; worst absolute weight error',maxerr)\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived Robin assembly → H2 periodic wrapping on both axes; public relative errors are 8.74e-16 for the projected design, 5.37e-7 for weights, and 1.75e-7 for the terminal field.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema passes\",\"rejected_reason\":\"The public case has only clean, complete sweeps and does not exercise calibration fallback or active box constraints.\"}],\"rationale\":\"Verify the exact artifact against the public KKT checker, then stress sparse and spiked sweeps, archived boundary branches, and constrained problems with known optima. A failure will identify whether to change calibration, forward dispatch, or the active-set solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "30b822fb347a5c617b27756308e34c79ffa1133a86e8e94ccaf71bb8c55be818",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39152.39,
+      "usage_known": true,
+      "prompt_tokens": 27167,
+      "cached_tokens": 6784,
+      "completion_tokens": 1465
+    }
+  ]
+}

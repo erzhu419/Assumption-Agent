@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d4e3578601a746518cc87e2387f211a5",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:58:26.033828+00:00",
+  "ended_at_utc": "2026-11-27T08:58:58.365557+00:00",
+  "request_sha256": "08d79ef88c7877576b435df0b1e38e009265ff993b7cca2611d25e65b333d4c8",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 51940,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28927,
+    "cached_tokens": 11136,
+    "completion_tokens": 913
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom unittest.mock import patch\\nimport numpy as np\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_02_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ncal = d['calibration_load_cells']\\nmax_cal = np.zeros(2)\\nmax_pred = np.zeros(2)\\nmax_tau = np.zeros(2)\\nwith patch.object(s, '_historical', side_effect=AssertionError('archive used despite sufficient calibration points')):\\n    nominal = s._calibrate(cal)\\n    baseline = s.solve_alpha_m97_c02_batch_02(d)\\n    for i, lab in enumerate(cal['lab_id']):\\n        keep = np.arange(len(cal['lab_id'])) != i\\n        reduced = {k: np.asarray(v)[keep] for k,v in cal.items()}\\n        max_cal = np.maximum(max_cal, np.abs(s._calibrate(reduced)[lab] - nominal[lab]))\\n        out = s.solve_alpha_m97_c02_batch_02({**d, 'calibration_load_cells': reduced})\\n        max_tau = np.maximum(max_tau, np.abs(out['estimated_taus'] - baseline['estimated_taus']))\\n        for j, key in enumerate(('predicted_strain', 'initial_rate_pred')):\\n            max_pred[j] = max(max_pred[j], np.max(np.abs(out[key] - baseline[key])))\\nprint('Calibration jackknife: max absolute gain/bias shifts:', max_cal, '; max tau shifts:', max_tau, '; max strain/rate prediction shifts:', max_pred)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust two-branch linear flow -> calibration jackknife: worst held-out lab–stratum median absolute strain error is 0.01811 and worst initial-rate RMSE is 0.04709.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear drift and confounding probe\",\n      \"rejected_reason\": \"The held-out probe already found no material strain benefit and worse rate error; classification and relay checks do not apply to these continuous targets.\"\n    }\n  ],\n  \"rationale\": \"The earlier audit checked calibration fallback and EMI rejection, but not whether a single measured calibration point controls the fitted response. Refit after deleting each real calibration row. If the resulting prediction shifts are comparable to the held-out errors, inspect leverage in the affected channel before retaining the affine fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "02153df096bbb558668c9aef163b1de8bb0af4c09abe3c05c7b953597199701a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34416.74,
+      "usage_known": true,
+      "prompt_tokens": 28927,
+      "cached_tokens": 11136,
+      "completion_tokens": 913
+    }
+  ]
+}

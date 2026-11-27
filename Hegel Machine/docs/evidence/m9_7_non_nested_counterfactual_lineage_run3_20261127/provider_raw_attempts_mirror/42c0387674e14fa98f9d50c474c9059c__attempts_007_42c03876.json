@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42c0387674e14fa98f9d50c474c9059c",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:50:15.725860+00:00",
+  "ended_at_utc": "2026-11-27T08:50:43.269162+00:00",
+  "request_sha256": "a29d4cf7af245fc4fe2ab9ddaf015c4d1274875fcb8ada2c84e723fe6a679389",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 51313,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29559,
+    "cached_tokens": 11136,
+    "completion_tokens": 1032
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/stress_rheology01.py <<'PY'\\nexec(open('/tmp/check_rheology01.py').read().split(\\\"print('active'\\\")[0])\\nlab=d['train']['lab_id']; miss=np.isnan(d['train']['coupon_features_raw']).any(1)\\n# Fit on all observations or on complete coupons, leaving each lab out in turn.\\nfor complete_only in (False, True):\\n    scores=[]\\n    for held in range(4):\\n        train=(lab!=held) & (~miss if complete_only else True)\\n        test=lab==held\\n        tau,w=m._fit((*[v[:n][train] for v in args],dt,t),yy[train].ravel(),'all')\\n        err=m._basis(np.log(tau),*[v[:n][test] for v in args],dt,t,'all')[0]@w-yy[test]\\n        scores.append([np.median(abs(err[:,:-1])), np.median(abs(err[:,-1])), np.median(abs(err[~miss[test],:-1])), np.median(abs(err[~miss[test],-1]))])\\n    print('complete_only',complete_only,'LOLO per lab: curve, rate, complete curve, complete rate',np.round(scores,5).tolist())\\n    print('worst per metric',np.round(np.max(scores,axis=0),5))\\n# Exercise the specified archive branch and in-batch cleaning independently.\\ncal=d['calibration_load_cells']; baseline=m._calibration(cal)\\nfor held in range(4):\\n    rows=np.flatnonzero(cal['lab_id']==held)\\n    mask=(cal['lab_id']!=held); mask[rows[0]]=True\\n    assert np.allclose(m._calibration({k:v[mask] for k,v in cal.items()})[held],m._prior_calibration(held))\\n    for ix in rows:\\n        for sign in (-1,1):\\n            bad={k:v.copy() for k,v in cal.items()}; bad['true_stress'][ix]+=sign*3.1\\n            clean=rows[rows!=ix]; expected=np.polyfit(cal['cmd_stress'][clean],cal['true_stress'][clean],1)\\n            assert np.allclose(m._calibration(bad)[held],expected), (held,ix,sign)\\nprint('Calibration: four sparse-channel archive paths and 80 single-point EMI injections passed')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/stress_rheology01.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: preserve the validated logarithmic model and cell-balanced prediction rule; test whether fitting on complete coupons improves the worst held-out lab medians of 0.0217 for strain and 0.0197 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the imputation rule to improve missing-coupon predictions\",\n      \"rejected_reason\": \"The contract specifies cell-balanced means. Excluding imputed coupons from parameter estimation tests their influence without changing that rule.\"\n    }\n  ],\n  \"rationale\": \"All eight training rate residuals above 0.10 occurred on coupons with missing features. Compare complete-coupon fitting against the verified baseline in lab-held-out folds, and test sparse and EMI calibration paths that the clean public sweep does not exercise. Retain the baseline unless the challenger improves the worst slice.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "807dee565885481b19dffd66424589d651c1978f82acd09893fefb1d33abb220",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29634.33,
+      "usage_known": true,
+      "prompt_tokens": 29559,
+      "cached_tokens": 11136,
+      "completion_tokens": 1032
+    }
+  ]
+}

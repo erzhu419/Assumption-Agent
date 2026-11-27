@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "48f7389840e94336ac4c09b7a5b3efeb",
+  "call_seq": 12,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:51:53.957782+00:00",
+  "ended_at_utc": "2026-11-27T08:52:25.275937+00:00",
+  "request_sha256": "9fcd08d1087e7f95a60ae59eaceacee19f9a7e41f490e25807ad1a74135f3974",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 62467,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31398,
+    "cached_tokens": 6784,
+    "completion_tokens": 1143
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nfrom pathlib import Path\\nimport numpy as np\\nroot = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('reactor', root / 'beta_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nns = {}\\nexec((root / 'validate_public_schema.py').read_text().split('\\\\n_d =')[0], ns)\\nverify = ns['verify_box_simplex_kkt_certificate']\\narchive = json.loads(Path('/tmp/hegel_continual_archive/archive_calibration_history.json').read_text())\\nworst = 0.\\ncount = 0\\nfor item in pickle.loads((root / 'public_beta_m97_c01_batch_01.pkl').read_bytes()):\\n    s, gt = item['study'], item['gt']\\n    a = {k: np.asarray(v) for k, v in s['sensor_calibration_sweeps'].items()}\\n    ids = a['bank_id']\\n    Z = s['Z_nuisance']\\n    H = Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1])\\n    for bank in range(4):\\n        j = np.flatnonzero(ids == bank)\\n        j = j[np.argsort(a['ref_signal'][j])]\\n        keep = (ids != bank) | np.isin(np.arange(len(ids)), j[[0, len(j)//2, -1]])\\n        sweep = {k: v[keep] for k, v in a.items()}\\n        y = np.empty(len(s['row_bank_id']))\\n        for b in range(4):\\n            if b == bank:\\n                x, r = (np.concatenate([np.asarray(h[k])[np.asarray(h['bank_id']) == b] for h in archive]) for k in ('ref_signal', 'raw_readout'))\\n            else:\\n                x, r = (a[k][ids == b] for k in ('ref_signal', 'raw_readout'))\\n            gain, offset = np.polynomial.polynomial.polyfit(x, r, 1)[::-1]\\n            rows = np.asarray(s['row_bank_id']) == b\\n            y[rows] = (np.asarray(s['y_obs_raw'])[rows] - offset) / gain\\n        ry = y - Z @ np.linalg.solve(H, Z.T @ y)\\n        for k in np.flatnonzero(sweep['bank_id'] == bank):\\n            for delta in (-3.2, 3.2):\\n                raw = sweep['raw_readout'].astype(float, copy=True)\\n                raw[k] += delta\\n                out = m.solve_beta_m97_c01_batch_01(dict(s, sensor_calibration_sweeps=dict(sweep, raw_readout=raw)))\\n                cert = out['kkt_certificate']\\n                np.testing.assert_array_equal(out['weights'], cert['weights'])\\n                report = verify(gt['S_tilde'], ry, s['source_ridge'], s['u_box'], s['total_budget'], cert)\\n                assert report['valid'], (bank, k, delta, report)\\n                worst = max(worst, report['gap'])\\n                count += 1\\nprint('Three-row EMI archive fallback end-to-end:', count, 'certificates; worst independent gap:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Median-slope screening -> omitted-residual screening: all 5,280 signed spike cases selected the correct fallback, and the worst deviation across 880 clean subsets was 1.92e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t11\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The calibration test established correct fallback selection but did not validate the returned certificate on those altered inputs. Check it against an independently reconstructed archive-calibrated residual and the public forward matrix. A failure would indicate a problem propagating the fallback into the inversion; a pass closes the remaining finding without changing the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "5b2145934cd6f9c5a4ca832e493b103e0fa1d4c6c6364bced845f92ff0965634",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33659.4,
+      "usage_known": true,
+      "prompt_tokens": 31398,
+      "cached_tokens": 6784,
+      "completion_tokens": 1143
+    }
+  ]
+}

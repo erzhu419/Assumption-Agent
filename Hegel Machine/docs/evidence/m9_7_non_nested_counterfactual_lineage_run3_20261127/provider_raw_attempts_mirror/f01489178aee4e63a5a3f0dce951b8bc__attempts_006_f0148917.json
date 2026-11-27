@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f01489178aee4e63a5a3f0dce951b8bc",
+  "call_seq": 6,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_06__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:14:16.535775+00:00",
+  "ended_at_utc": "2026-11-27T09:14:49.723819+00:00",
+  "request_sha256": "040b11d36aebab2cb611ea007a59351f83213aae1803bf0a129dc08fe5da1cb9",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 44723,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27787,
+    "cached_tokens": 6784,
+    "completion_tokens": 1306
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\np=/holdout_task/alpha_m97_c03_batch_06_solver.py\\ncat /tmp/batch06_model.py > \\\"$p\\\"\\ncat >> \\\"$p\\\" <<'PY'\\n\\n_ARCHIVE = '/tmp/hegel_continual_archive/archive_calibration_history.json'\\n\\n\\ndef _prior_calibration(lab, x, y):\\n    with open(_ARCHIVE) as stream:\\n        history = json.load(stream)\\n    candidates = []\\n    for sweep in reversed(history):\\n        ids, cmd, true = (np.asarray(sweep[k]) for k in ('lab_id', 'cmd_stress', 'true_stress'))\\n        rows = (ids == lab) & np.isfinite(cmd) & np.isfinite(true)\\n        if rows.sum() >= 2 and np.ptp(cmd[rows]) > 0:\\n            candidates.append(np.polyfit(cmd[rows], true[rows], 1))\\n    if not len(x):\\n        return candidates[0]\\n\\n    def support(fit):\\n        error = np.abs(y - np.polyval(fit, x))\\n        clean = error <= 0.01\\n        return -np.count_nonzero(clean), np.count_nonzero((error <= 3) & ~clean)\\n\\n    prior = min(candidates, key=support)\\n    clean = np.abs(y - np.polyval(prior, x)) <= 0.01\\n    if clean.sum() >= 2 and np.ptp(x[clean]) > 0:\\n        return np.polyfit(x[clean], y[clean], 1)\\n    return prior\\n\\n\\ndef _calibration(table):\\n    ids, cmd, true = (np.asarray(table[k]) for k in ('lab_id', 'cmd_stress', 'true_stress'))\\n    fits = []\\n    for lab in range(4):\\n        rows = (ids == lab) & np.isfinite(cmd) & np.isfinite(true)\\n        x, y = cmd[rows], true[rows]\\n        if len(x) < 2:\\n            fits.append(_prior_calibration(lab, x, y))\\n            continue\\n        fit = np.polyfit(x, y, 1)\\n        if np.max(np.abs(y - np.polyval(fit, x))) > 0.01:\\n            consensus = []\\n            for i, j in zip(*np.triu_indices(len(x), 1)):\\n                if x[i] == x[j]:\\n                    continue\\n                a = (y[j] - y[i])/(x[j] - x[i])\\n                error = np.abs(y - y[i] - a*(x - x[i]))\\n                clean = error <= 0.01\\n                if np.any(error > 3.) and np.all(clean | (error > 3.)):\\n                    consensus.append(clean)\\n            if consensus:\\n                clean = max(consensus, key=np.count_nonzero)\\n                if clean.sum() >= 4:\\n                    fit = np.polyfit(x[clean], y[clean], 1)\\n                else:\\n                    fit = _prior_calibration(lab, x, y)\\n        fits.append(fit)\\n    return np.asarray(fits)\\nPY\\nsed -n '58,85p' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py >> \\\"$p\\\"\\nsed -n '164,200p' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py\\npython3 - <<'PY'\\nimport pickle,numpy as np\\nitem=pickle.load(open('/holdout_task/public_alpha_m97_c03_batch_06.pkl','rb'))[0]\\nfor k in ('train','test'):\\n print(k,{a:np.shape(b) for a,b in item['dataset'][k].items()})\\nprint('public verification keys',list(item['gt']))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: clean current-batch affine calibration with history for EMI-contaminated sparse channels -> H2: panel-aligned jammed-slip variable projection; sparse-channel OLS residuals peak at 2.969 stress units despite EMI, and prediction validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Trust the largest two-point affine consensus on each sparse channel\",\"rejected_reason\":\"Two same-direction EMI spikes can form a tight but shifted line. Three prior sweeps independently agree on a line that matches the surviving in-batch point.\"}],\"rationale\":\"Build the solver with archived panel alignment and limit historical calibration to sparse or EMI-affected channels. Confirm the exact training target names before wiring the entry point, so an observation or offset mismatch cannot pass unnoticed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "74d06ab1a3006c176b1a922c3e6ccd0e5aa00685143d428107638f99ac590180",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35318.81,
+      "usage_known": true,
+      "prompt_tokens": 27787,
+      "cached_tokens": 6784,
+      "completion_tokens": 1306
+    }
+  ]
+}

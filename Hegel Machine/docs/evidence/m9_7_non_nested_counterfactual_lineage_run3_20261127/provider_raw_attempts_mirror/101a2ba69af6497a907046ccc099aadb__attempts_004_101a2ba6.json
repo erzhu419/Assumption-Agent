@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "101a2ba69af6497a907046ccc099aadb",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:00:41.556581+00:00",
+  "ended_at_utc": "2026-11-27T09:01:27.072557+00:00",
+  "request_sha256": "1274e20ed5d8f1656121f508b8615635ef0a59b48982fc46a07eb9838630151a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32728,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23650,
+    "cached_tokens": 6784,
+    "completion_tokens": 1750
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nfrom pathlib import Path\\nold = Path('/tmp/hegel_continual_archive/alpha_m97_c02_batch_02_solver.py').read_text()\\nprep = old[old.index('def _affine'):old.index('def _design')]\\nprint(prep[prep.index('def _prepare'):])\\np = Path('alpha_m97_c02_batch_03_solver.py')\\np.write_text('''\\\"\\\"\\\"Calibrated two-branch Prony model with jammed-slip terminal flow.\\\"\\\"\\\"\\nimport json\\nfrom pathlib import Path\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n_ARCHIVE = Path('/tmp/hegel_continual_archive/archive_calibration_history.json')\\n\\n\\n''' + prep)\\nPY\\ncat >> alpha_m97_c02_batch_03_solver.py <<'PY'\\ndef _design(past, hold, x, dt, times, taus):\\n    # Unroll the relaxation recurrence: each increment decays for the\\n    # duration of all the steps that follow it.\\n    remaining = np.r_[np.cumsum(dt[:0:-1])[::-1], 0.0]\\n    kernel = -np.expm1(-dt[:, None]/taus) * np.exp(-remaining[:, None]/taus)\\n    gap = hold[:, None] - past @ kernel\\n    relaxation = -np.expm1(-times[:, None]/taus)\\n    phi = times / (1.0 + 0.85*times)\\n    slip = np.sign(hold) * np.sqrt(np.abs(hold))\\n    delta = gap[:, 0] - gap[:, 1]\\n    flow = np.column_stack((np.ones_like(hold), x, slip))\\n    curve = np.concatenate((gap[:, None, :]*relaxation[None, :, :],\\n                            flow[:, None, :]*phi[None, :, None],\\n                            delta[:, None, None]*relaxation[None, :, :1]), axis=2)\\n    rate = np.column_stack((gap/taus, flow, delta/taus[0]))\\n    return curve, rate\\n\\n\\ndef _mad(x):\\n    return max(1e-7, 1.4826*np.median(np.abs(x-np.median(x))))\\n\\n\\ndef _fit(past, hold, x, dt, times, curves, rates):\\n    cm, rm = np.isfinite(curves), np.isfinite(rates)\\n    target = np.r_[curves[cm], rates[rm]]\\n    nc = cm.sum()\\n    # Positive separation keeps branch 0 fast in both the profile and the\\n    # robust fit; the asymmetric slip term is not invariant to a branch swap.\\n    lower, upper = np.log([.015, .015]), np.log([20., 60.])\\n\\n    def unpack(q):\\n        fast, separation = np.exp(q[:2])\\n        return np.array([fast, fast + separation])\\n\\n    def design(q):\\n        c, r = _design(past, hold, x, dt, times, unpack(q))\\n        return np.concatenate((c[cm], r[rm]))\\n\\n    scale = np.r_[np.ones(nc), np.full(rm.sum(), 2.)]\\n\\n    def profile(q, ret_weights=False):\\n        a = design(q)/scale[:, None]\\n        b = target/scale\\n        w = np.linalg.lstsq(a, b, rcond=None)[0]\\n        return w if ret_weights else np.einsum('ij,j->i', a, w) - b\\n\\n    starts = ((.15, .7), (.4, 2.), (.9, 3.5), (1.8, 7.))\\n    best = min((least_squares(profile, np.log([f, s-f]), bounds=(lower, upper),\\n                              max_nfev=75) for f, s in starts), key=lambda r: r.cost)\\n    p = np.r_[best.x, profile(best.x, True)]\\n\\n    def residual(q):\\n        return np.einsum('ij,j->i', design(q), q[2:]) - target\\n\\n    bounds = (np.r_[lower, np.full(9, -np.inf)], np.r_[upper, np.full(9, np.inf)])\\n    for _ in range(2):\\n        e = residual(p)\\n        noise = np.r_[np.full(nc, _mad(e[:nc])), np.full(rm.sum(), _mad(e[nc:]))]\\n        p = least_squares(lambda q: residual(q)/noise, p, bounds=bounds,\\n                          loss='cauchy', f_scale=2.5, x_scale='jac', max_nfev=100).x\\n    return unpack(p), p[2:]\\n\\n\\ndef solve_alpha_m97_c02_batch_03(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    n = len(train['lab_id'])\\n    data = _prepare(dataset)\\n    dt = np.asarray(dataset['past_dt'], dtype=float)\\n    times = np.asarray(dataset['eval_times'], dtype=float)\\n    complete = np.isfinite(train['coupon_features_raw']).all(axis=1)\\n    curves = train['strain_curves_obs'] - train['strain_0'][:, None]\\n    taus, weights = _fit(*(a[:n][complete] for a in data), dt, times,\\n                         curves[complete], train['instant_rate_obs'][complete])\\n    curve, rate = _design(*(a[n:] for a in data), dt, times, taus)\\n    return {'estimated_taus': taus, 'hereditary_weights': weights[:7],\\n            'regime_mode_weights': weights[7:],\\n            'predicted_strain': test['strain_0'][:, None] + curve @ weights,\\n            'initial_rate_pred': rate @ weights}\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS nonlinear least squares' | head -8\\nOPENBLAS_NUM_THREADS=1 python3 -I validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (in-batch calibration and aligned coupons) -> H2 (ordered two-branch jammed-slip fit); worst public calibration residual is 2.66e-4, with prediction errors pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit on imputed training rows as if fully observed\",\"rejected_reason\":\"162 of 180 training rows are complete; fitting on those avoids folding imputation error into the constitutive coefficients while retaining all labs.\"}],\"rationale\":\"Build the specified nine-column model using the archived alignment convention. The isolated schema check detects implementation and output-shape failures before held-out prediction and parameter validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "8064cc0e7abc60f006b014b7a2fe37c985f7e73b79add1a861a67f3c7d2de852",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 47646.06,
+      "usage_known": true,
+      "prompt_tokens": 23650,
+      "cached_tokens": 6784,
+      "completion_tokens": 1750
+    }
+  ]
+}

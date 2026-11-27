@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6fdcb1734b01473d834a9ebcdb881e9d",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__beta_m97_c01__Hegel_DemandGated_Graph__beta_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__beta_m97_c01_batch_01__reactor_survey_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:51:07.513543+00:00",
+  "ended_at_utc": "2026-11-27T08:51:46.417777+00:00",
+  "request_sha256": "ed3eb271fc6c3d56c470450e37cf5c3d7334c9d4323f3244096d0e4151760f52",
+  "system_prompt_chars": 5305,
+  "stdin_payload_chars": 54729,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29257,
+    "cached_tokens": 6784,
+    "completion_tokens": 1670
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/beta_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\nneedle = '            elif len(x) >= 3:\\\\n'\\nassert s.count(needle) == 1\\ns = s.replace(needle, '''            elif len(x) == 3:\\n                # With three points, every two-point fit can have zero error.\\n                # Test the omitted residual for each identifiable affine fit\\n                # instead of letting the median slope mask an endpoint spike.\\n                for omitted in range(3):\\n                    i, j = [k for k in range(3) if k != omitted]\\n                    if x[i] == x[j]:\\n                        continue\\n                    predicted = z[i] + (z[j] - z[i]) * (x[omitted] - x[i]) / (x[j] - x[i])\\n                    if abs(z[omitted] - predicted) > 3.0:\\n                        gain, offset = _archived_affine(bank)\\n                        break\\n            elif len(x) >= 5:\\n''')\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/reactor_stress.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nfrom pathlib import Path\\nimport numpy as np\\np = Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('solver', p/'beta_m97_c01_batch_01_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.loads((p/'public_beta_m97_c01_batch_01.pkl').read_bytes())[0]['study']\\na = {k: np.asarray(v) for k,v in s['sensor_calibration_sweeps'].items()}\\nids = a['bank_id']\\nbase = m._calibrated_observations(s)\\narchive = m._archived_affine\\ncalls = []\\ndef record(bank):\\n    calls.append(int(bank))\\n    return archive(bank)\\nm._archived_affine = record\\nworst_clean = 0.0\\nclean_count = 0\\nspike_count = 0\\nfor bank in range(4):\\n    rows = np.asarray(s['row_bank_id']) == bank\\n    ix = np.flatnonzero(ids == bank)\\n    g, o = archive(bank)\\n    expected = (np.asarray(s['y_obs_raw'])[rows] - o) / g\\n    for use in itertools.combinations(ix, 3):\\n        keep = (ids != bank) | np.isin(np.arange(len(ids)), use)\\n        sweep = {k: v[keep].copy() for k,v in a.items()}\\n        calls.clear()\\n        clean = m._calibrated_observations(dict(s, sensor_calibration_sweeps=sweep))\\n        assert not calls, (bank, use, calls)\\n        worst_clean = max(worst_clean, float(np.max(abs(clean[rows] - base[rows]))))\\n        clean_count += 1\\n        for j in np.flatnonzero(sweep['bank_id'] == bank):\\n            for delta in (-3.2, 3.2):\\n                raw = sweep['raw_readout'].copy()\\n                raw[j] += delta\\n                calls.clear()\\n                y = m._calibrated_observations(dict(s, sensor_calibration_sweeps=dict(sweep, raw_readout=raw)))\\n                assert calls == [bank], (bank, use, j, delta, calls)\\n                np.testing.assert_array_equal(y[rows], expected)\\n                np.testing.assert_array_equal(y[~rows], base[~rows])\\n                spike_count += 1\\nprint('three-row sweep stress:', clean_count, 'clean;', spike_count, 'spiked; worst clean deviation', worst_clean)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Median-slope screening -> test all two-point fits for three-row sweeps; the previous implementation missed 16 of 24 injected spikes, with a calibrated observation error as high as 28.3 in the reported examples.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The median pairwise slope reliably detects a single EMI spike in a three-row sweep.\",\n    \"empirical_witness\": \"The error screen missed 16 of 24 signed 3.2-unit spikes injected into three-row subsets of the public sweeps.\",\n    \"causal_blanket_diagnosis\": \"One contaminated point affects two of the three pairwise slopes, so the median can fit the corrupted endpoint.\",\n    \"sublated_pivot\": \"For three-row sweeps, test the omitted residual under each two-point fit; retain in-batch fitting for clean sweeps and use the archive when the screen detects a spike.\",\n    \"risk_kind\": \"sparse_calibration_outlier_masking\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Always use the archive for three-row sweeps\",\n      \"rejected_reason\": \"The historical gains are near one, unlike the current bank gains, so doing this would discard usable current calibration.\"\n    }\n  ],\n  \"rationale\": \"With three rows, the clean pair is among the tested fits even when the median slope is contaminated. Test every three-row subset of the public sweeps both clean and with signed spikes, then rerun the public certificate and regime checks in isolated Python to catch regressions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ab544aac462481972fbcb5eef088dc23c096cd9c981591e12a52303194af6ef9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42848.56,
+      "usage_known": true,
+      "prompt_tokens": 29257,
+      "cached_tokens": 6784,
+      "completion_tokens": 1670
+    }
+  ]
+}

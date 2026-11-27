@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c887a3dd22da4b65916c1b45aa19b920",
+  "call_seq": 8,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_02__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:57:27.572170+00:00",
+  "ended_at_utc": "2026-11-27T08:58:09.761282+00:00",
+  "request_sha256": "23974cea7e360c355eec1e129361b47c1d59c2a5336ebb831a31e9941cfd76fb",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 46938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28182,
+    "cached_tokens": 6784,
+    "completion_tokens": 1728
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_02_solver.py')\\ns = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(s)\\nwith open('public_alpha_m97_c02_batch_02.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\ntr, te = d['train'], d['test']\\nlabs, strata = tr['lab_id'], tr['stratum']\\nn = len(labs)\\ndt, t = d['past_dt'], d['eval_times']\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nr = tr['instant_rate_obs']\\nraw = np.vstack([tr['coupon_features_raw'], te['coupon_features_raw']])\\nref = np.vstack([tr['ref_coupons'], te['ref_coupons']])\\nall_labs = np.r_[labs, te['lab_id']]\\nall_strata = np.r_[strata, te['stratum']]\\ngood = np.isfinite(raw[:n]).all(axis=1)\\npast, hold, x = s._prepare(d)\\n\\n# Independently check that filled values weight cells equally, not by lab or cell size.\\naligned = raw.copy()\\nfor k in np.unique(all_labs):\\n    m = all_labs == k\\n    cols = [col[np.isfinite(col)] for col in ref[m].T]\\n    cols = [col for col in cols if len(col) >= 2]\\n    aligned[m] = (raw[m] - np.median([col.mean() for col in cols])) / np.median([col.std(ddof=0) for col in cols])\\ncells_all = [(all_labs == k) & (all_strata == j) for k, j in np.unique(np.c_[all_labs, all_strata], axis=0)]\\nfor j, column in enumerate(aligned.T):\\n    missing = ~np.isfinite(column)\\n    means = [column[m & ~missing].mean() for m in cells_all if (m & ~missing).any()]\\n    np.testing.assert_allclose(x[missing, j+1], np.mean(means), atol=1e-12, rtol=0)\\n    np.testing.assert_allclose(x[~missing, j+1], column[~missing], atol=1e-12, rtol=0)\\n\\n# Probe whether the specified drift leaves reproducible stress or coupon interactions.\\n# Linear pairwise sums/differences already lie in the model's affine span.\\npast, hold, x = past[:n], hold[:n], x[:n]\\nerrors = {name: (np.zeros_like(y), np.zeros_like(r)) for name in ('specified', 'extra_drift')}\\nfor k in np.unique(labs):\\n    fit, val = good & (labs != k), labs == k\\n    tau, w = s._fit(past[fit], hold[fit], x[fit], dt, t, y[fit], r[fit])\\n    C, R = s._design(past, hold, x, dt, t, tau)\\n    p, q = C @ w, R @ w\\n    h = hold / max(np.median(np.abs(hold[fit])), 1e-9)\\n    a, b, c, g = x[:, 1:].T\\n    extra = np.column_stack([h / (1 + h*h), h*h / (1 + h*h), a*b, c*g, a*b*c, b*c*g])\\n    e, f = p[fit] - y[fit], q[fit] - r[fit]\\n    mc, mr = np.isfinite(e), np.isfinite(f)\\n    def scale(z):\\n        return max(1e-6, 1.4826*np.median(np.abs(z-np.median(z))))\\n    sc, sr = scale(e[mc]), scale(f[mr])\\n    def residual(beta):\\n        drift = extra[fit] @ beta\\n        return np.r_[(e + drift[:, None]*t)[mc] / sc, (f+drift)[mr] / sr]\\n    beta = least_squares(residual, np.zeros(extra.shape[1]), loss='cauchy', f_scale=2.5).x\\n    delta = extra @ beta\\n    for name, adj in [('specified', np.zeros_like(delta)), ('extra_drift', delta)]:\\n        E, F = errors[name]\\n        E[val] = (p + adj[:, None]*t - y)[val]\\n        F[val] = (q + adj - r)[val]\\ncells = [(labs == k) & (strata == j) for k, j in np.unique(np.c_[labs, strata], axis=0)]\\nfor name, (E, F) in errors.items():\\n    print(name, 'worst cell median abs strain', max(np.nanmedian(abs(E[m])) for m in cells), 'worst cell rate RMSE', max(np.sqrt(np.nanmean(F[m]**2)) for m in cells), 'worst absolute signed cell median strain, complete rows', max(abs(np.nanmedian(E[m & good])) for m in cells), 'worst absolute signed cell median rate, complete rows', max(abs(np.nanmedian(F[m & good])) for m in cells))\\nprint('Independent panel alignment passed; missing feature entries train/test:', np.isnan(raw[:n]).sum(), np.isnan(raw[n:]).sum())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robust linear flow -> held-out nonlinear drift probe; the verified solver's worst lab–stratum median absolute strain error is 0.01811 and worst initial-rate RMSE is 0.04709.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, Fokker–Planck/HJB operators, or balanced classification accuracy\",\n      \"rejected_reason\": \"This task has continuous strain and rate targets and specifies neither a relay nor a stochastic-control law. Signed held-out cell residuals are a relevant check for nuisance bias.\"\n    }\n  ],\n  \"rationale\": \"The independent panel calculation can detect incorrect cell weighting and would trigger an alignment fix if it disagreed. The preselected nonlinear terms are fit only on outer-fold training outcomes; a material held-out gain would prompt investigation of calibration or alignment before changing the specified flow law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "955cb10644415395a28727178401b2334f5c1f38c690cf0834f3238bc28775eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44265.92,
+      "usage_known": true,
+      "prompt_tokens": 28182,
+      "cached_tokens": 6784,
+      "completion_tokens": 1728
+    }
+  ]
+}

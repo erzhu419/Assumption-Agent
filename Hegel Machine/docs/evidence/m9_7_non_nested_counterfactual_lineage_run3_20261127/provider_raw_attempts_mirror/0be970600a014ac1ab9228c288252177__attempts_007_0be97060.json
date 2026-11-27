@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0be970600a014ac1ab9228c288252177",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:09:52.406057+00:00",
+  "ended_at_utc": "2026-11-27T09:10:29.007748+00:00",
+  "request_sha256": "07aee967a0865a6d4991fcacd1d672754096d11883976630805d8a1ddd4eac56",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 52417,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31374,
+    "cached_tokens": 6784,
+    "completion_tokens": 1425
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys\\nsys.path.insert(0, '/tmp')\\nfrom rheo_robust_probe import m, fit, design\\nimport pickle\\nimport numpy as np\\nwith open('public_alpha_m97_c02_batch_04.pkl','rb') as f:\\n    d=pickle.load(f)[0]['dataset']\\ntest,train=d['test'],d['train']; n=len(train['lab_id'])\\nlab=np.r_[train['lab_id'],test['lab_id']]; stratum=np.r_[train['stratum'],test['stratum']]\\nraw=np.r_[train['coupon_features_raw'],test['coupon_features_raw']]; observed=np.isfinite(raw)\\nx,*mech=m._prepare(d); empty=np.where(observed,x,np.nan)\\ncells=np.unique(np.column_stack((lab,stratum)),axis=0)\\nmeans=np.array([np.nanmean(empty[(lab==c)&(stratum==s)],axis=0) for c,s in cells]); balanced=np.nanmean(means,axis=0)\\nxalt={'cell':x,'balanced':np.where(observed,x,balanced),'lab_balanced':x.copy()}\\nfor c in range(4):\\n    xalt['lab_balanced'][lab==c]=np.where(observed[lab==c],x[lab==c],np.nanmean(means[cells[:,0]==c],axis=0))\\ny=train['strain_curves_obs']-train['strain_0'][:,None]; r=train['instant_rate_obs']; ok=observed[:n].all(1)\\ndt,ts=d['past_dt'],d['eval_times']\\nact=mech[-1][:n]>0\\nfor cs,rs in ((.055,.13),(.035,.04),(.025,.025)):\\n    residuals={k:(np.empty_like(y),np.empty_like(r)) for k in xalt}\\n    params=[]\\n    for c in range(4):\\n        tr=ok&(lab[:n]!=c); va=lab[:n]==c\\n        tau,w=fit(tuple(a[:n][tr] for a in (x,*mech)),dt,ts,y[tr],r[tr],'log',cs,rs)\\n        params.append(np.r_[tau,w]);\\n        for k,X in xalt.items():\\n            b,z=design(tuple(a[:n][va] for a in (X,*mech)),dt,ts,tau,'log')\\n            e,er=residuals[k]; e[va]=b@w-y[va]; er[va]=z@w-r[va]\\n    print('scales',cs,rs,'held-lab tau range',np.min(params,axis=0)[:2].round(4),np.max(params,axis=0)[:2].round(4))\\n    for k,(e,er) in residuals.items():\\n        for complete in ([True,False] if k=='cell' else [False]):\\n            groups=[(lab[:n]==c)&(ok==complete)&(act==active) for c in range(4) for active in (True,False)]\\n            groups=[g for g in groups if g.any()]\\n            q=lambda arr: round(float(np.quantile(abs(arr),.9)),4)\\n            worst_curve=max(q(e[g]) for g in groups)\\n            worst_rate=max(float(np.sqrt(np.mean(er[g]**2))) for g in groups)\\n            g=ok==complete\\n            print(k,'complete',complete,'worst lab x damage q90 strain/rate RMSE',worst_curve,round(worst_rate,4),'pooled med/q90 strain, rate RMSE',round(float(np.median(abs(e[g]))),4),q(e[g]),round(float(np.sqrt(np.mean(er[g]**2))),4))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Linear terminal drift on zero-damage rows → shared logarithmic drift with damage-gated corrections; robust leave-one-lab-out worst rate RMSE was 0.247 on imputed rows and pooled median absolute strain error fell from 0.094 to 0.014.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"A zero damage activation switches the terminal drift basis from logarithmic to linear in this low-shear campaign.\",\"empirical_witness\":\"After pointwise robust fitting, complete zero-damage rows still had a signed median final-time residual of −0.619 with linear drift, versus −0.004 with shared logarithmic drift in leave-one-lab-out predictions.\",\"causal_blanket_diagnosis\":\"The terminal basis and damage activation were coupled unnecessarily: activation should gate the two crystallization corrections, not disable logarithmic drift in this campaign.\",\"sublated_pivot\":\"Use the logarithmic terminal basis in the low-shear campaign while preserving exact Prony memory and both activation-weighted terms.\",\"risk_kind\":\"incorrect regime basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep linear drift to minimize the change\",\"rejected_reason\":\"Even after spike downweighting, it leaves a coherent late-time bias on complete rows across held-out labs.\"}],\"rationale\":\"Imputed rows now dominate the worst rate slice. Compare cell and cell-balanced fills on those rows, and check whether tighter robust scales destabilize the relaxation times. Report tail strain errors without a model-dependent exclusion mask.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "990618454570c485c0314ab5362996c7f2bae75111638a9b97715dc3edffd1fa",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38809.33,
+      "usage_known": true,
+      "prompt_tokens": 31374,
+      "cached_tokens": 6784,
+      "completion_tokens": 1425
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "99ee22036d174525896eb83f377b1784",
+  "call_seq": 15,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Flat_EqualInfo_Multiversion__alpha_m97_c01_batch_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_01__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:54:05.501211+00:00",
+  "ended_at_utc": "2026-11-27T08:54:34.708547+00:00",
+  "request_sha256": "5db5c8910ca582dfbe611bbf773307e907ad15618394f47edb135645c4f4e478",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 80534,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38259,
+    "cached_tokens": 11136,
+    "completion_tokens": 1104
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_01_solver.py')\\ns = p.read_text()\\na = s.index('def _calibrate(')\\nb = s.index('    clean = _clean_calibration(cmd, true)', a)\\ns = s[:a] + '''def _calibrate(cmd, true, channel):\\n    if len(cmd) in (3, 4) and np.unique(cmd).size == len(cmd):\\n        # In a short sweep, compare the fits left after omitting each row.\\n        # Three surviving rows identify the clean line; two cannot do so\\n        # without a prior. Prediction leverage accounts for calibration\\n        # rounding when the omitted command is far from the surviving pair.\\n        keep = ~np.eye(len(cmd), dtype=bool)\\n        x, y = cmd[keep].reshape(len(cmd), -1), true[keep].reshape(len(cmd), -1)\\n        xm, ym = x.mean(axis=1), y.mean(axis=1)\\n        xc = x - xm[:, None]\\n        ss = np.sum(xc**2, axis=1)\\n        slope = np.sum(xc * (y - ym[:, None]), axis=1) / ss\\n        fit_error = np.linalg.norm(y - ym[:, None] - slope[:, None] * xc, axis=1)\\n        omitted_error = np.abs(true - ym - slope * (cmd - xm))\\n        if np.any(omitted_error > 3.0):\\n            if len(cmd) == 3:\\n                gain, bias = _archived_calibration(channel)\\n                best = np.argmax(np.abs(true - (gain * cmd + bias)))\\n            else:\\n                best = np.argmin(fit_error)\\n            leverage = np.sqrt(1 + 1 / x.shape[1] + (cmd[best] - xm[best])**2 / ss[best])\\n            if omitted_error[best] > 3.0 - 0.0003 * leverage:\\n                return _line(x[best], y[best])\\n        return _line(cmd, true)\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rheology_emi_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: median-residual spike rejection on short sweeps → H2: compare omission fits, using the archive only to break a three-point tie; the previous rule missed 3,293 of 19,200 three- and four-point trials.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use historical calibration for every short sweep\",\n      \"rejected_reason\": \"The archive differs from clean current measurements by up to 0.792 stress units and is unnecessary when three surviving points identify the current line.\"\n    }\n  ],\n  \"rationale\": \"The prior audit localized failures to short sweeps, especially spikes near the threshold. With four points, removing the spike leaves three nearly collinear observations; with three points, the archive ranks the omitted rows and measured calibration noise sets the threshold margin. Rerun the isolated schema and omission audit to detect regressions on clean sweeps or any remaining incorrect exclusions.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_015_att0.json",
+      "response_sha256": "51c93adbda9e6942bfd3dfb41598a58c1dc199ccb988a0f97efa94b17e49d2a9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31162.62,
+      "usage_known": true,
+      "prompt_tokens": 38259,
+      "cached_tokens": 11136,
+      "completion_tokens": 1104
+    }
+  ]
+}

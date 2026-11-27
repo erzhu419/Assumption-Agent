@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ed0408de292e44deb5b06d45dbfbcb90",
+  "call_seq": 9,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__Hegel_DemandGated_Graph__alpha_m97_c01_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:04:40.578804+00:00",
+  "ended_at_utc": "2026-11-27T09:05:35.104265+00:00",
+  "request_sha256": "b48f677006b9785d16eb59ab91e7e236680c792653a4362080a1309a6cb314f4",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50279,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29048,
+    "cached_tokens": 11136,
+    "completion_tokens": 2264
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/alpha_m97_c01_batch_03_solver.py')\\ns = p.read_text()\\nold = '''    if np.max(np.abs(true - np.polyval(direct, cmd))) <= consensus_tol:\\n        return direct\\n'''\\nnew = '''    # In a sparse sweep, two nearby commands can let an EMI spike at a\\n    # third command hide behind a nearly exact but implausible affine fit.\\n    # The compatible campaign sweeps have gains 0.77–1.34 and |bias| < 0.18.\\n    # Use a generous plausibility range only to flag sparse fits, never to\\n    # clip or replace a calibration supported by four clean observations.\\n    plausible_sparse_fit = 0.3 < direct[0] < 2.0 and abs(direct[1]) < 0.6\\n    if (len(cmd) >= 4 or plausible_sparse_fit) and np.max(np.abs(true - np.polyval(direct, cmd))) <= consensus_tol:\\n        return direct\\n'''\\nassert old in s\\np.write_text(s.replace(old, new, 1))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, itertools, pickle\\nimport numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'alpha_m97_c01_batch_03_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nfor item in pickle.load(open(p+'public_alpha_m97_c01_batch_03.pkl','rb')):\\n d=item['dataset']; cal=d['calibration_load_cells']; worst={}; witness={}\\n for ch in range(4):\\n  k=cal['lab_id']==ch; x=cal['cmd_stress'][k]; y=cal['true_stress'][k]; ref=np.polyfit(x,y,1); prior=m._prior_calibration(ch)\\n  for n in (0,1,2,3,4,10):\\n   if n<2:\\n    worst[n]=max(worst.get(n,0),np.max(abs(m._calibrate(x[:n],y[:n],ch)-ref))); continue\\n   for subset in itertools.combinations(range(len(x)),n):\\n    ii=np.array(subset); a,b=x[ii],y[ii]\\n    assert np.allclose(m._calibrate(a,b,ch),np.polyfit(a,b,1))\\n    for j in range(n):\\n     clean=np.arange(n)!=j; expected=prior if n==2 else np.polyfit(a[clean],b[clean],1)\\n     for delta in (-5.,-3.01,3.01,5.):\\n      obs=b.copy(); obs[j]+=delta\\n      if n==2:\\n       line=np.polyfit(a,obs,1)\\n       if 0.3 < line[0] < 2 and abs(line[1]) < .6: continue\\n      err=np.max(abs(m._calibrate(a,obs,ch)-expected))\\n      if err > worst.get(n,-1): worst[n]=err; witness[n]=(ch,subset,j,delta)\\n print('maximum calibration coefficient error by sweep size (two points: implausible fits only)',worst)\\n if max(worst.values()) >= .001: print('failing calibration witnesses',witness)\\n assert max(worst.values()) < .001\\n tr=d['train']; n=len(tr['lab_id']); t,dt=d['eval_times'],d['past_dt']; past,hold,x=(a[:n] for a in m._prepare(d)); yc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']; scores=[]\\n for group in ('lab_id','stratum'):\\n  for level in np.unique(tr[group]):\\n   k=tr[group]!=level; z,w=m._fit(dt,t,past[k],hold[k],x[k],yc[k],yr[k]); c,r=m._basis(z,dt,t,past[~k],hold[~k],x[~k]); ec=c@w-yc[~k]; er=r@w-yr[~k]; scores.append([np.sqrt(np.mean(ec**2)),np.sqrt(np.mean(er**2)),np.median(abs(ec)),np.median(abs(er))])\\n print('worst held-out strain/rate RMSE and median absolute errors',np.max(scores,axis=0))\\n assert np.all(np.max(scores,axis=0)[:2] < [.875,.060])\\n tau=np.exp(z); memory=np.zeros((n,2))\\n for v,step in zip(past.T,dt):\\n  f=np.exp(-step/tau); memory=f*memory+(1-f)*v[:,None]\\n g=hold[:,None]-memory; flow=x@w[2:7]+w[7]*np.sign(hold)*np.sqrt(abs(hold)); cross=w[8]*(g[:,0]-g[:,1]);\\n curve=(g*w[:2])@(-np.expm1(-t[:,None]/tau)).T+flow[:,None]*(t/(1+.85*t))+cross[:,None]*(-np.expm1(-t/tau[0])); rate=(g*w[:2]/tau).sum(axis=1)+flow+cross/tau[0]\\n c,r=m._basis(z,dt,t,past,hold,x); errors=(np.max(abs(c@w-curve)),np.max(abs(r@w-rate))); print('direct recurrence and analytic initial-rate discrepancies',errors); assert max(errors)<1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: A small residual does not establish clean calibration in a sparse sweep; flag implausible sparse fits for archive comparison, targeting the 4.630 maximum coefficient error while preserving held-out strain and rate RMSE of 0.8743 and 0.05904.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use archived calibration for every sparse sweep\",\n      \"rejected_reason\": \"Two or three clean points with distinct commands can determine the current calibration; test that the solver still uses those points directly.\"\n    }\n  ],\n  \"rationale\": \"The three-point failure survived the residual-only shortcut, so test whether a broad, campaign-specific plausibility check catches it without altering clean fits. If a spike still passes, the test prints the exact channel and subset for diagnosis. The isolated run also checks that the edit preserves held-out accuracy and that both predicted observables match the specified recurrence and initial derivative.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d1c4e9541518319fba9e42a54eaba290b736fc70faaeb9b116ca7a541be23952",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 58966.81,
+      "usage_known": true,
+      "prompt_tokens": 29048,
+      "cached_tokens": 11136,
+      "completion_tokens": 2264
+    }
+  ]
+}

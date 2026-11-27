@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d826669e19604a278a798a37b9d4bae9",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_07__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:24:17.247869+00:00",
+  "ended_at_utc": "2026-11-27T09:24:51.523284+00:00",
+  "request_sha256": "c0077ad6f0ea630fa317bbc486f98188ae8273b26564114142f8d2709bda7c56",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 57072,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31788,
+    "cached_tokens": 6784,
+    "completion_tokens": 1318
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, json\\nimport numpy as np\\np='/holdout_task/alpha_m97_c03_batch_07_solver.py'; spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('public_alpha_m97_c03_batch_07.pkl','rb'))[0]; d,g=item['dataset'],item['gt']; idx=json.load(open('public_asset_index.json')); print('asset index keys',list(idx))\\ntr,te=d['train'],d['test']; raw=np.concatenate([tr['coupon_features_raw'],te['coupon_features_raw']]); lab=np.r_[tr['lab_id'],te['lab_id']]; s=np.r_[tr['stratum'],te['stratum']]; past,h,x,act,off,dt,t=m._prepare(d); n=len(tr['lab_id']); y=tr['strain_curves_obs']-off[:n,None]; rate=tr['instant_rate_obs']; full=np.isfinite(raw[:n]).all(1); out=m.solve_alpha_m97_c03_batch_07(d); w0=out['hereditary_weights'][3:7]\\ncal=m._calibration(d['calibration_load_cells']); print('max calibration abs errors',np.max(np.abs(cal-np.column_stack([g['stress_gains'],g['stress_biases']])),axis=0)); print('max test stress abs errors',np.max(np.abs(past[n:]-g['te_hist_true'])),np.max(np.abs(h[n:]-g['te_hold_true'])))\\nrecords=[]; de=np.empty_like(y); dr=np.empty_like(rate)\\nfor j in range(4):\\n test=lab[:n]==j; train=~test&full; a=(past[:n],h[:n],x[:n],act[:n]); p,w=m._fit(tuple(z[train] for z in a)+(dt,t),y[train],rate[train]); c,r=m._design(p,*(z[test] for z in a),dt,t); de[test]=y[test]-c@w; dr[test]=rate[test]-r@w\\n # Hide one observed feature at a time; no held-out row contributes its own value.\\n for i in np.flatnonzero(test&full):\\n  for col in range(4):\\n   known=np.isfinite(raw[:,col]); known[i]=False; cells=[x[known&(lab==l)&(s==k),col] for l,k in np.unique(np.c_[lab,s],axis=0)]; cells=[v for v in cells if len(v)]; block=x[known&(lab==j)&(s==s[i]),col]; avg=np.mean([v.mean() for v in cells]); local=block.mean() if len(block) else avg; records.append((j,s[i],col,w[3+col]*(avg-x[i,col]),w[3+col]*(local-x[i,col])))\\nfor j in range(4):\\n z=np.asarray(records); e=z[z[:,0]==j,3:]; print('masked drift lab',j,'global/local RMSE',np.sqrt(np.mean(e**2,axis=0)).round(5),'p90',np.quantile(abs(e),.9,axis=0).round(5))\\nfor name,mask in [('no damage',act[:n]==0),('partial activation',(act[:n]>0)&(act[:n]<.9)),('near saturation',act[:n]>=.9)]:\\n mask=mask&full\\n if mask.any(): print(name,int(mask.sum()),'median strain residual by horizon',np.median(de[mask],axis=0).round(4),'median rate',round(float(np.median(dr[mask])),4))\\nfor label,mask in [('complete',np.isfinite(raw[n:]).all(1)),('imputed',~np.isfinite(raw[n:]).all(1))]:\\n for k,ref in [('predicted_strain','te_clean'),('initial_rate_pred','te_true_rate0')]:\\n  e=(out[k]-g[ref])[mask]; print(label,k,'RMSE/max',round(float(np.sqrt(np.mean(e**2))),6),round(float(np.max(abs(e))),6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (damage-gated terminal basis) -> H2 (shared logarithmic basis with damage-gated regime terms); public imputed-slice p90 remains the bottleneck at 0.324 strain and 0.219 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test classification balance, relay modes, or Fokker–Planck drift\",\"rejected_reason\":\"This batch has continuous strain and rate outputs and no class labels, relay state, or stochastic drift operator.\"}],\"rationale\":\"Check whether physical stress calibration or a missing damage term explains the remaining error. Test the two interpretations of cell-mean imputation by masking observed features; change the solver only if the alternative improves worst-lab error on those measurements.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "84f46dbe8f5965879ba6a75bf46e3bc018b97931e0e7c1f66890c1361b547e76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36843.32,
+      "usage_known": true,
+      "prompt_tokens": 31788,
+      "cached_tokens": 6784,
+      "completion_tokens": 1318
+    }
+  ]
+}

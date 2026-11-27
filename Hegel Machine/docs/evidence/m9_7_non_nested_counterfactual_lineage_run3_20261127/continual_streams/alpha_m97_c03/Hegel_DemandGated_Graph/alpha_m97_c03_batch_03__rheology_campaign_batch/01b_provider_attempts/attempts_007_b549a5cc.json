@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b549a5cce5c2479baff4de8b31c2f8fb",
+  "call_seq": 7,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Hegel_DemandGated_Graph__alpha_m97_c03_batch_03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_03__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:00:12.341113+00:00",
+  "ended_at_utc": "2026-11-27T09:00:39.096625+00:00",
+  "request_sha256": "80ed13ac0f84ab33b17e2ab1dfb692337946d97c3fa91b81296bf788b5b40e6a",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 50280,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28938,
+    "cached_tokens": 6784,
+    "completion_tokens": 615
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\ns = Path('/tmp/verify_batch03.py').read_text().split('\\\\ncal = ')[0]\\ns += '''\\n    if group == 'lab':\\n        ranked = np.argsort(np.nan_to_num(np.abs(ec), nan=-1).ravel())[::-1][:6]\\n        for row, col in zip(*np.unravel_index(ranked, ec.shape)):\\n            print('largest strain residual', 'lab', lab[row], 'stratum', stratum[row], 'horizon', col, 'observed', round(y[row,col], 4), 'predicted', round(y[row,col]+ec[row,col], 4), 'same-row residuals', np.round(ec[row], 3), 'rate residual', round(er[row], 4))\\n'''\\nPath('/tmp/verify_batch03_residuals.py').write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_batch03_residuals.py | grep -E 'largest strain residual|^full taus'\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (systematic strain mismatch) -> H2 (isolated observation spikes): worst held-out horizon RMSE is 4.816 versus median absolute error of 0.0139; missing-coupon rate RMSE is 0.170.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the model to reduce raw worst-horizon RMSE\",\n      \"rejected_reason\": \"The large gap between RMSE and median error calls for inspecting the largest errors before changing the specified physics.\"\n    }\n  ],\n  \"rationale\": \"Compare the largest held-out strain errors with the rest of the same trajectories and their independently measured initial rates. Isolated jumps support retaining the robust fit; sustained errors would warrant revisiting the model or preprocessing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f38307f1a392674fc19349075df7af47aff377aa907480e1cbcf1307fb8cbc37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26679.99,
+      "usage_known": true,
+      "prompt_tokens": 28938,
+      "cached_tokens": 6784,
+      "completion_tokens": 615
+    }
+  ]
+}

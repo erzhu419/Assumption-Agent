@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ca1eedc083274f27b2f6043a4e0b6389",
+  "call_seq": 11,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c01__stage_S_att01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c01_s00__rheology_campaign_baseline",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T08:44:08.030341+00:00",
+  "ended_at_utc": "2026-11-27T08:44:42.754785+00:00",
+  "request_sha256": "7f9d65abd7120abaf2ecb7e067951917f76c82d58b5be40b5d3d828ebb6657b5",
+  "system_prompt_chars": 5301,
+  "stdin_payload_chars": 53498,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29702,
+    "cached_tokens": 11136,
+    "completion_tokens": 1360
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', 'alpha_m97_c01_s00_solver.py')\\ns = importlib.util.module_from_spec(spec); spec.loader.exec_module(s)\\np = pickle.load(open('public_alpha_m97_c01_s00.pkl','rb'))[0]\\nd,g = p['dataset'],p['gt']; tr,te = d['train'],d['test']; t,dt = d['eval_times'],d['past_dt']\\npast,hold,x = s._prepare(d); out = s.solve_alpha_m97_c01_s00(d)\\ntau = out['estimated_taus']; w = out['hereditary_weights']; n = len(tr['lab_id'])\\nz = np.zeros((len(hold),2))\\nfor j, step in enumerate(dt):\\n    a = np.exp(-step/tau)\\n    z = a*z + (1-a)*past[:,j,None]\\ngap = hold[:,None]-z\\ndrift = x@w[2:]\\nstrain = (gap[n:]*w[:2])@(-np.expm1(-t[None,:]/tau[:,None])) + drift[n:,None]*t + te['strain_0'][:,None]\\nrate = (gap[n:]*w[:2])@(1/tau) + drift[n:]\\nnp.testing.assert_allclose(out['predicted_strain'],strain,atol=1e-12,rtol=0)\\nnp.testing.assert_allclose(out['initial_rate_pred'],rate,atol=1e-12,rtol=0)\\nassert np.max(np.abs(past)) < d['crit_stress'] and d['shear_banding_index'] <= .50\\nprint('exact recurrence, envelope, and derivative agree; stress margin:',d['crit_stress']-np.max(np.abs(past)))\\nq = dict(d)\\nfor k in ('train','test'):\\n    q[k] = dict(d[k]); q[k].pop('aux_chamber_telemetry',None)\\nwithout = s.solve_alpha_m97_c01_s00(q)\\nfor k in out:\\n    np.testing.assert_array_equal(out[k],without[k])\\nprint('all five outputs invariant to removing uncoupled telemetry')\\nc,r = s._basis(np.log(g['taus']),dt,t,g['te_hist_true'],g['te_hold_true'],x[n:]); theta=g['theta']; delta=g['te_true_rate0']-r@theta\\nclean = ~np.isnan(te['coupon_features_raw']).any(axis=1)\\nfor lab in np.unique(te['lab_id']):\\n    j = (te['lab_id']==lab)&clean\\n    signal = x[n:][j,1:]@theta[3:]\\n    scale,off=np.linalg.lstsq(np.c_[signal,np.ones(j.sum())],delta[j],rcond=None)[0]\\n    print('complete lab',lab,'reference drift RMSE before/after affine diagnostic',np.sqrt(np.mean(delta[j]**2)),np.sqrt(np.mean((delta[j]-scale*signal-off)**2)),'slope/offset residual',scale,off)\\nyc=tr['strain_curves_obs']-tr['strain_0'][:,None]; yr=tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    j=tr['lab_id']==lab; i=~j\\n    logs,coef=s._fit(dt,t,past[:n][i],hold[:n][i],x[:n][i],yc[i],yr[i]); c,r=s._basis(logs,dt,t,past[:n][j],hold[:n][j],x[:n][j]); e=c@coef-yc[j]; er=r@coef-yr[j]\\n    print('held-out lab',lab,'median rate residual',np.median(er),'median final-horizon residual',np.median(e[:,-1]),'curve/rate median AE',np.median(np.abs(e)),np.median(np.abs(er)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated Prony dynamics with linear terminal flow → H2 audit exact recurrence and lab-specific drift; prior worst held-out horizon median absolute error was 0.0593 and imputed-coupon strain RMSE was 0.5461.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational terms, relay states, or classification metrics\",\n      \"rejected_reason\": \"This is continuous regression in a specified linear-flow regime, with no relay states or class labels. The applicable checks are recurrence equivalence and signed residuals within held-out labs.\"\n    }\n  ],\n  \"rationale\": \"Compare the solver against an independently stepped recurrence to catch sign, time-index, or derivative errors. Check telemetry invariance and signed held-out-lab residuals for nuisance leakage. Use the public reference only to diagnose whether the remaining complete-coupon drift error points to a panel-alignment mismatch, not to fit a correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "e21880a969516402fe8e2ac821b0ce361d5368b79cd87897e583f18d5af0a6f5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36733.08,
+      "usage_known": true,
+      "prompt_tokens": 29702,
+      "cached_tokens": 11136,
+      "completion_tokens": 1360
+    }
+  ]
+}

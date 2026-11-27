@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "05e8f05e9be94ad988323a0910d12351",
+  "call_seq": 10,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c02__Flat_EqualInfo_Multiversion__alpha_m97_c02_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c02_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:11:58.663211+00:00",
+  "ended_at_utc": "2026-11-27T09:12:38.940809+00:00",
+  "request_sha256": "6e987f4a7d98e9d019eb17ba1cfc859223cbdb5e06476140a6d6a176aa3cc087",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 65818,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33842,
+    "cached_tokens": 6784,
+    "completion_tokens": 1509
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/alpha_m97_c02_batch_04_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nwith open('public_alpha_m97_c02_batch_04.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nhistory = json.loads(m._ARCHIVE.read_text())\\noriginal = m._calibrate\\nbase = original(d['calibration_load_cells'])\\npooled = base.copy()\\nfor c in range(4):\\n    x, y = m._channel(d['calibration_load_cells'], c)\\n    print('lab', c, 'in-batch support', len(x), 'used map', base[c].round(7).tolist())\\n    if len(x) >= 2:\\n        continue\\n    sweeps = []\\n    for h in history:\\n        x, y = m._channel(h, c)\\n        ok = m._clean(x, y)\\n        if ok.sum() >= 2 and np.ptp(x[ok]) > 0:\\n            sweeps.append((x[ok], y[ok]))\\n    maps = np.array([m._affine(x, y) for x, y in sweeps])\\n    print('  archival maps, chronological', maps.round(7).tolist())\\n    pooled[c] = m._affine(*(np.concatenate(v) for v in zip(*sweeps)))\\n    if len(sweeps) > 1:\\n        prev = m._affine(*(np.concatenate(v) for v in zip(*sweeps[:-1])))\\n        x, y = sweeps[-1]\\n        print('  preceding-sweeps prediction RMSE on latest sweep', round(float(np.sqrt(np.mean((x*prev[0]+prev[1]-y)**2))), 7))\\nt = d['train']; n = len(t['lab_id']); lab = t['lab_id']; dt = d['past_dt']; ts = d['eval_times']\\ncomplete = np.isfinite(t['coupon_features_raw']).all(1)\\ny = t['strain_curves_obs'] - t['strain_0'][:,None]; r = t['instant_rate_obs']\\nbase_act = m._prepare(d)[-1][:n]\\nactive = base_act > 0\\nfor label, cal in [('latest', base), ('pooled', pooled)]:\\n    m._calibrate = lambda _, cal=cal: cal\\n    data = tuple(x[:n] for x in m._prepare(d))\\n    print(label, 'largest map change', np.max(np.abs(cal-base)), 'activation switches', np.count_nonzero((data[-1]>0)!=active))\\n    e = np.empty_like(y); er = np.empty_like(r)\\n    for c in range(4):\\n        tr = complete & (lab != c); va = lab == c\\n        tau, w = m._fit(*(x[tr] for x in data), dt, ts, y[tr], r[tr], True)\\n        curve, rate = m._design(*(x[va] for x in data), dt, ts, tau, True)\\n        e[va], er[va] = y[va]-curve@w, r[va]-rate@w\\n        q = va & complete\\n        print('  held lab', c, 'complete n', q.sum(), 'strain p90 / median final / rate RMSE / median rate', np.round([np.quantile(abs(e[q]),.9),np.median(e[q,-1]),np.sqrt(np.mean(er[q]**2)),np.median(er[q])],6).tolist())\\n    for flag in (True, False):\\n        groups = [(lab==c)&(complete==flag)&(active==a) for c in range(4) for a in (False,True)]\\n        print('  complete', flag, 'worst strain p90 / rate RMSE', np.max([[np.quantile(abs(e[g]),.9),np.sqrt(np.mean(er[g]**2))] for g in groups if g.any()],axis=0).round(6).tolist())\\n    if label == 'latest':\\n        for g in (complete & ~active, complete & (base_act>0) & (base_act<.1), complete & (base_act>=.1)):\\n            if g.any():\\n                print('  damage slice n', g.sum(), 'signed strain median by horizon', np.median(e[g],axis=0).round(5).tolist(), 'strain p90', round(float(np.quantile(abs(e[g]),.9)),5))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Latest clean archive sweep → pooled archive calibration only if it reduces held-out lab bias; current worst strain p90/rate RMSE is 0.05345/0.02013 on complete rows and 0.65061/0.26396 on imputed rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add rational, relay, or stochastic drift terms\",\n      \"rejected_reason\": \"The specified model has no relay state or stochastic drift operator. A repeatable signed error by damage and horizon would justify revisiting the physical basis before adding terms.\"\n    }\n  ],\n  \"rationale\": \"Test whether the sparse channels inherit a noisy or stale calibration by comparing chronological sweeps and held-out signed errors within each lab, keeping the directly identified in-batch channel fixed. Damage-stratified horizon residuals test for a missed term without letting pooled scores conceal a local bias.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "999d5d110b6c24eadd27d4e39d97e690da2089f82c1b0aea8100c9449914e1a1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42221.96,
+      "usage_known": true,
+      "prompt_tokens": 33842,
+      "cached_tokens": 6784,
+      "completion_tokens": 1509
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e6293ab2d6b24f51b131e539c80cb966",
+  "call_seq": 4,
+  "stage_subdir": "m9_7_lineage_20261127T083903Z__alpha_m97_c03__Flat_EqualInfo_Multiversion__alpha_m97_c03_batch_04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__alpha_m97_c03_batch_04__rheology_campaign_batch",
+  "status": "completed",
+  "started_at_utc": "2026-11-27T09:06:26.384823+00:00",
+  "ended_at_utc": "2026-11-27T09:07:12.393564+00:00",
+  "request_sha256": "d4ac9317d78a33a3f970a79d6c2fb2dedaf1e5c237f520945dcf2fa6eeba66a1",
+  "system_prompt_chars": 5306,
+  "stdin_payload_chars": 32190,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23821,
+    "cached_tokens": 6784,
+    "completion_tokens": 1980
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nf=/holdout_task/alpha_m97_c03_batch_04_solver.py\\n{ printf '%s\\\\n' '\\\"\\\"\\\"Load-cell calibrated two-branch model for crystallized creep.\\\"\\\"\\\"'; sed -n '/^import json$/,/^def _basis/{ /^def _basis/!p; }' /tmp/hegel_continual_archive/alpha_m97_c03_batch_03_solver.py; } > \\\"$f\\\"\\ncat >> \\\"$f\\\" <<'PY'\\ndef _basis(logtau, past, hold, features, dt, t, damage, terminal_mode='active'):\\n    tau = np.exp(logtau)\\n    z = np.zeros((len(hold), 2))\\n    u = dt[:, None] / tau\\n    for j, (a, b) in enumerate(zip(np.exp(-u), -np.expm1(-u))):\\n        z = a * z + b * past[:, j, None]\\n    phi = np.vstack((-np.expm1(-t[:, None] / tau), 1 / tau))\\n    logtime = np.r_[np.log1p(t), 1.0]\\n    lintime = np.r_[t, 1.0]\\n    active = damage > 0\\n    if terminal_mode == 'all_log':\\n        terminal = np.broadcast_to(logtime, (len(hold), len(t) + 1))\\n    else:\\n        terminal = np.where(active[:, None], logtime, lintime)\\n    act = np.tanh(damage)\\n    a = np.empty((len(hold), len(t) + 1, 9))\\n    a[:, :, :2] = (hold[:, None] - z)[:, None, :] * phi\\n    a[:, :, 2] = terminal\\n    a[:, :, 3:7] = features[:, None, :] * terminal[:, :, None]\\n    a[:, :, 7] = (act * hold)[:, None] * phi[:, 0]\\n    a[:, :, 8] = (act * z[:, 0])[:, None] * logtime\\n    return a\\n\\n\\ndef _damage(dataset, past, dt):\\n    if dataset['shear_banding_index'] > 0.5:\\n        return np.zeros(len(past))\\n    excess = np.maximum(np.abs(past) - dataset['crit_stress'], 0.0)\\n    return np.sum(excess**2 * dt, axis=1)\\n\\n\\ndef _fit(args, target, mode='active', mult=None):\\n    if mult is None:\\n        mult = np.ones(target.shape)\\n    y = (target * mult).ravel()\\n\\n    def project(logtau):\\n        basis = _basis(logtau, *args, terminal_mode=mode)\\n        a = (basis * mult[:, :, None]).reshape(-1, 9)\\n        w = np.linalg.lstsq(a, y, rcond=None)[0]\\n        return np.einsum('ij,j->i', a, w) - y, w\\n\\n    bounds = np.log([0.015, 120.0])\\n    starts = ((0.4, 3.0), (1.0, 7.0), (3.0, 0.4))\\n    best = min((least_squares(lambda p: project(p)[0], np.log(start),\\n                              bounds=tuple(bounds), max_nfev=120) for start in starts),\\n               key=lambda result: result.cost)\\n    return best.x, project(best.x)[1]\\n\\n\\ndef solve_alpha_m97_c03_batch_04(dataset: dict) -> dict:\\n    past, hold, features, offset, dt, t = _prepare(dataset)\\n    damage = _damage(dataset, past, dt)\\n    train = dataset['train']\\n    n = len(train['lab_id'])\\n    target = np.column_stack((train['strain_curves_obs'] - offset[:n, None], train['instant_rate_obs']))\\n    logtau, w = _fit((past[:n], hold[:n], features[:n], dt, t, damage[:n]), target)\\n    pred = _basis(logtau, past[n:], hold[n:], features[n:], dt, t, damage[n:]) @ w\\n    return {'estimated_taus': np.exp(logtau), 'hereditary_weights': w[:7],\\n            'regime_mode_weights': w[7:], 'predicted_strain': offset[n:, None] + pred[:, :-1],\\n            'initial_rate_pred': pred[:, -1]}\\nPY\\ncat > /tmp/rheo_validate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\nP='/holdout_task/'\\ns=importlib.util.spec_from_file_location('candidate',P+'alpha_m97_c03_batch_04_solver.py'); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open(P+'public_alpha_m97_c03_batch_04.pkl','rb'))[0]['dataset']; tr=d['train']; lab=tr['lab_id']; st=tr['stratum']; n=len(lab)\\np,h,x,o,dt,t=m._prepare(d); D=m._damage(d,p,dt)[:n]; p,h,x=p[:n],h[:n],x[:n]\\ny=np.column_stack((tr['strain_curves_obs']-o[:n,None], tr['instant_rate_obs']))\\ndef args(i): return p[i],h[i],x[i],dt,t,D[i]\\ndef metrics(e):\\n return np.array([np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(e[:,-1]**2)),np.median(np.abs(e[:,:-1])),np.median(np.abs(e[:,-1])),np.max(np.abs(e[:,:-1])),np.max(np.abs(e[:,-1]))])\\nfor mode in ('active','all_log'):\\n pp,w=m._fit(args(slice(None)),y,mode); e=m._basis(pp,*args(slice(None)),terminal_mode=mode)@w-y\\n print(mode,'train',np.exp(pp),w,'metrics',metrics(e))\\n for name,g in [('lab',lab),('stratum',st)]:\\n  for k in np.unique(g):\\n   v=g==k; pp,w=m._fit(args(~v),y[~v],mode); e=m._basis(pp,*args(v),terminal_mode=mode)@w-y[v]; print(name,k,'taus',np.exp(pp),'metrics',metrics(e),'active',metrics(e[D[v]>0])[:2],'inactive',metrics(e[D[v]==0])[:2]);\\nPY\\nexport OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I /tmp/rheo_validate.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Calibrate channel 0 directly and channels 1–3 from the latest clean sweep, then test active-only versus campaign-wide logarithmic creep by held-out lab and stratum; worst-slice error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit campaign-specific stress corrections from rheology labels\",\n      \"rejected_reason\": \"Recent prefix sweeps agree within about 0.0001 in gain and bias; preserve the measured calibration unless held-out residuals show a channel-level discrepancy.\"\n    }\n  ],\n  \"rationale\": \"Implement the specified two-branch recurrence and fit the nine weights by variable projection. The grouped checks distinguish a wrong inactive-history basis from channel or stratum transfer failure; large RMSE relative to median error would motivate robust fitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "f3539e86aacb2032e9740083e001c798c9a8b461ed14d902cc4fc6298112703f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50101.04,
+      "usage_known": true,
+      "prompt_tokens": 23821,
+      "cached_tokens": 6784,
+      "completion_tokens": 1980
+    }
+  ]
+}
