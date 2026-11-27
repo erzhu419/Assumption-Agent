@@ -398,6 +398,55 @@ def verify_alpha_candidate_handoff_and_invariants(
             if not errs:
                 claims.append("viscoplastic_overstress_handoff")
 
+    # Mode 4 (`M9.6` Cross-Domain `T_shared_kkt`): Box-Simplex KKT Compliance Allocation on Alpha
+    if "allocation_weights" in out or "kkt_certificate" in out or "S_alloc_modes" in dataset:
+        from .m9_3_online_lifecycle_benchmark import _SHARED_BOX_SIMPLEX_KKT_CHECKER_PY
+
+        ns_ak: dict[str, Any] = {"math": math, "np": np}
+        exec(compile(_SHARED_BOX_SIMPLEX_KKT_CHECKER_PY, "<alpha_kkt_kernel>", "exec"), ns_ak)
+        kkt_fn_a = ns_ak["verify_box_simplex_kkt_certificate"]
+        if "allocation_weights" not in out or "kkt_certificate" not in out:
+            errs.append("missing_allocation_weights_or_kkt_certificate")
+        else:
+            aw = np.asarray(out["allocation_weights"], dtype=float)
+            m_al = int(np.asarray(dataset["S_alloc_modes"]).shape[1]) if "S_alloc_modes" in dataset else len(aw)
+            if aw.shape != (m_al,) or not bool(np.all(np.isfinite(aw))):
+                errs.append(f"bad_allocation_weights:{aw.shape}")
+            else:
+                # Reconstruct `(S_tilde_al, r_al)` from candidate's terminal `predicted_strain[:, -1]` (or `gt` when available)
+                z_nuis = np.asarray(dataset["Z_nuisance"], dtype=float)
+                lam_z = float(dataset["nuisance_ridge"])
+                pz = np.linalg.solve(z_nuis.T @ z_nuis + lam_z * np.eye(z_nuis.shape[1]), z_nuis.T)
+                s_modes = np.asarray(dataset["S_alloc_modes"], dtype=float)
+                # Modulation of coupon compliance modes by specimen compliance `(ps[:, -1] - strain_0)`
+                comp_gain = 1.0 + 0.25 * np.tanh(ps[:, -1] - s0_te)
+                s_mat_cand = s_modes * comp_gain[:, None]
+                y_al_raw = np.asarray(dataset["y_alloc_obs"], dtype=float).ravel()
+                r_al_cand = y_al_raw - z_nuis @ (pz @ y_al_raw)
+                s_til_cand = s_mat_cand - z_nuis @ (pz @ s_mat_cand)
+                chk_c = kkt_fn_a(
+                    s_til_cand,
+                    r_al_cand,
+                    float(dataset["source_ridge"]),
+                    float(dataset["u_box"]),
+                    float(dataset["total_budget"]),
+                    out["kkt_certificate"],
+                    gap_tol=2e-4,
+                )
+                if not chk_c["valid"]:
+                    errs.append(f"alpha_kkt_invalid:{chk_c['reason']}")
+                elif float(np.max(np.abs(aw - np.asarray(out["kkt_certificate"]["weights"], dtype=float)))) > 1e-5:
+                    errs.append("allocation_weights_cert_mismatch")
+                else:
+                    metrics["alpha_kkt_duality_gap"] = round(float(chk_c["gap"]), 10)
+                    claims.append("independent_box_simplex_kkt_certificate")
+                if isinstance(gt, dict) and "w_alloc_opt" in gt and require_gt_accuracy:
+                    w_gt = np.asarray(gt["w_alloc_opt"], dtype=float)
+                    w_rel = float(np.linalg.norm(aw - w_gt) / max(float(np.linalg.norm(w_gt)), 1e-12))
+                    metrics["allocation_weights_rel_l2"] = round(w_rel, 6)
+                    if w_rel > 0.045:
+                        errs.append(f"allocation_weights_gt_mismatch:{w_rel:.6f}")
+
     # Ground-truth / public residual checks (strictly FAIL-CLOSED if `gt` present!)
     if isinstance(gt, dict):
         if "te_clean" in gt:

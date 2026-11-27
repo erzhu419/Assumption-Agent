@@ -72,7 +72,13 @@ VALID_INPUT_COORDINATE_CONTRACTS: frozenset[str] = frozenset(
     {"raw_measured", "adapter_precalibrated_forbid_rewrap"}
 )
 VALID_STRUCTURE_ORIGINS: frozenset[str] = frozenset(
-    {"author_seeded", "model_proposed", "publicly_contrastively_validated", "successor_adopted"}
+    {
+        "unconstrained_initial_source",
+        "author_seeded",
+        "model_proposed",
+        "publicly_contrastively_validated",
+        "successor_adopted",
+    }
 )
 
 
