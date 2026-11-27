@@ -67,6 +67,7 @@ from .m9_5_equal_tool_continual_attribution_world import (
 from .m9_6_autonomous_structure_continual_world import (
     EmpiricalCoverageReceipt,
     ImmutableBranchLineageController,
+    classify_public_probe_failure,
     evaluate_m96_autonomous_guard,
     verify_upstream_parent_perturbation_sensitivity,
 )
@@ -693,20 +694,27 @@ for sd, ds, gt in cases:
     ps = np.asarray(out["predicted_strain"], dtype=float)
     ir = np.asarray(out["initial_rate_pred"], dtype=float)
     if et.shape != (2,) or hw.shape != (7,) or rw.shape != (2,) or ps.shape != gt["te_clean"].shape or ir.shape != gt["te_true_rate0"].shape:
-        valid = False; rows.append({{"seed": sd, "error": "shape_mismatch"}}); continue
-    if not (np.all(np.isfinite(et)) and np.all(np.isfinite(hw)) and np.all(np.isfinite(rw)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir)) and 0.05 < et[0] < et[1]):
-        valid = False; rows.append({{"seed": sd, "error": "non_finite"}}); continue
+        valid = False; rows.append({{"seed": sd, "error": "SHAPE_MISMATCH"}}); continue
+    if not (np.all(np.isfinite(et)) and np.all(np.isfinite(hw)) and np.all(np.isfinite(rw)) and np.all(np.isfinite(ps)) and np.all(np.isfinite(ir))):
+        valid = False; rows.append({{"seed": sd, "error": "NON_FINITE"}}); continue
+    if not (0.05 < float(et[0]) < float(et[1]) < 25.0):
+        valid = False; rows.append({{"seed": sd, "error": "PARAMETER_ORDER", "estimated_taus": [round(float(et[0]), 6), round(float(et[1]), 6)]}}); continue
     if float(np.linalg.norm(hw[:2])) <= 1e-4 or float(np.min(hw[:2])) <= 1e-4:
-        valid = False; rows.append({{"seed": sd, "error": "degenerate_prony_weights"}}); continue
+        valid = False; rows.append({{"seed": sd, "error": "DEGENERATE_PRONY_WEIGHTS"}}); continue
     tau_rel = float(np.max(np.abs(et - gt["taus"]) / gt["taus"]))
     s_mae = float(np.mean(np.abs(ps - gt["te_clean"])))
     r_mae = float(np.mean(np.abs(ir - gt["te_true_rate0"])))
     th_err = float(np.max(np.abs(hw - gt["theta"])))
     rw_err = float(np.linalg.norm(rw - gt["vp_theta"]) / max(float(np.linalg.norm(gt["vp_theta"])), 1.0))
     if th_err > 0.14:
-        valid = False; rows.append({{"seed": sd, "error": "theta_7coeff_gt_mismatch", "theta_err": round(th_err, 6), "strain_mae": round(s_mae, 6)}}); continue
+        valid = False; rows.append({{"seed": sd, "error": "THETA_7COEFF_GT_MISMATCH", "theta_err": round(th_err, 6), "strain_mae": round(s_mae, 6)}}); continue
     max_tau_rel = max(max_tau_rel, tau_rel); max_mae = max(max_mae, s_mae); max_rate_mae = max(max_rate_mae, r_mae); max_rw_err = max(max_rw_err, rw_err)
-    rows.append({{"seed": sd, "tau_rel": round(tau_rel, 6), "strain_mae": round(s_mae, 6), "rate_mae": round(r_mae, 6), "rw_err": round(rw_err, 6), "theta_err": round(th_err, 6)}})
+    f_codes = []
+    if tau_rel > 0.10: f_codes.append("TAU_REL_ERROR")
+    if s_mae > 0.070: f_codes.append("STRAIN_ERROR")
+    if r_mae > 0.055: f_codes.append("RATE_ERROR")
+    if rw_err > 0.16: f_codes.append("REGIME_WEIGHT_ERROR")
+    rows.append({{"seed": sd, "tau_rel": round(tau_rel, 6), "strain_mae": round(s_mae, 6), "rate_mae": round(r_mae, 6), "rw_err": round(rw_err, 6), "theta_err": round(th_err, 6), "failure_codes": f_codes}})
 el = time.monotonic() - t0
 sp = bool(valid and len(rows) == 2 and max_tau_rel <= 0.10 and max_mae <= 0.070 and max_rate_mae <= 0.055 and max_rw_err <= 0.16 and el <= 20.0)
 print(json.dumps({{"strict_pass": sp, "reward": 1.0 if sp else 0.0, "max_tau_rel_err": round(max_tau_rel, 6), "max_strain_mae": round(max_mae, 6), "max_rate_mae": round(max_rate_mae, 6), "max_rw_err": round(max_rw_err, 6), "student_elapsed_sec": round(el, 4), "instance_diagnostics": rows}}, allow_nan=False))
@@ -1298,6 +1306,69 @@ def build_m97_intervention_functions(spec: M97WorldSpec) -> dict[str, Any]:
     }
 
 
+def estimate_validated_channel_affine_calibration(
+    *,
+    ch_arr: np.ndarray,
+    x_arr: np.ndarray,
+    y_arr: np.ndarray,
+    channels: tuple[int, ...] | list[int],
+    prior_gains: dict[int, float],
+    prior_offsets: dict[int, float],
+) -> dict[str, Any]:
+    """Single shared per-channel stratified `2/3–1/3` holdout-validated affine calibration estimator (`M9.7.1` `A11` / `C2.2`).
+    Used identically by BOTH `Flat` AND `PersistentMechanismGraph` so parameter differences on matching channels equal `0.0`!
+    """
+    new_gains = {int(ch): float(prior_gains[int(ch)]) for ch in channels}
+    new_offs = {int(ch): float(prior_offsets[int(ch)]) for ch in channels}
+    channel_decisions: dict[int, dict[str, Any]] = {}
+    any_accepted_change = False
+    max_drift = 0.0
+    total_rows = 0
+
+    for ch in channels:
+        ch_i = int(ch)
+        m = ch_arr == ch_i
+        n_m = int(np.sum(m))
+        total_rows += n_m
+        if n_m < 3:
+            channel_decisions[ch_i] = {"n_rows": n_m, "action": "SkippedSparseSpotCheck"}
+            continue
+        xm, ym = x_arr[m], y_arr[m]
+        n_tr = max(2, (2 * n_m) // 3)
+        gc, bc = np.linalg.lstsq(np.column_stack([xm[:n_tr], np.ones(n_tr)]), ym[:n_tr], rcond=None)[0]
+        va_mse = float(np.mean((gc * xm[n_tr:] + bc - ym[n_tr:]) ** 2))
+        pr_mse = float(np.mean((new_gains[ch_i] * xm[n_tr:] + new_offs[ch_i] - ym[n_tr:]) ** 2))
+        if va_mse <= min(1e-2, pr_mse + 1e-5):
+            g_r, b_r = round(float(gc), 8), round(float(bc), 8)
+            ch_drift = max(abs(g_r - new_gains[ch_i]), abs(b_r - new_offs[ch_i]))
+            max_drift = max(max_drift, ch_drift)
+            if ch_drift > 1e-9:
+                any_accepted_change = True
+            new_gains[ch_i], new_offs[ch_i] = g_r, b_r
+            channel_decisions[ch_i] = {
+                "n_rows": n_m,
+                "action": "AcceptedValidatedOLS",
+                "val_mse": round(va_mse, 8),
+                "prior_val_mse": round(pr_mse, 8),
+                "drift": round(ch_drift, 8),
+            }
+        else:
+            channel_decisions[ch_i] = {
+                "n_rows": n_m,
+                "action": "RetainedPrior",
+                "val_mse": round(va_mse, 8),
+                "prior_val_mse": round(pr_mse, 8),
+            }
+    return {
+        "gains": new_gains,
+        "offsets": new_offs,
+        "any_accepted_change": any_accepted_change,
+        "max_drift": round(float(max_drift), 8),
+        "total_rows": total_rows,
+        "channel_decisions": channel_decisions,
+    }
+
+
 def update_m97_permuted_calibration_graph(
     *,
     spec: M97WorldSpec,
@@ -1307,7 +1378,10 @@ def update_m97_permuted_calibration_graph(
     planner: M8VariationalPlanner,
     registry: M94BindingRegistry,
 ) -> dict[str, Any]:
-    """Run holdout-validated `M8` `AncestorReweight` across `cal_node_p0`, `cal_node_p1`, and wired `cal_node_p2`."""
+    """Run holdout-validated per-parent calibration updates across `cal_node_p0`, `cal_node_p1`, and wired `cal_node_p2`
+    using the exact shared per-channel stratified estimator `estimate_validated_channel_affine_calibration` (`A11` — `0.0` estimator confounding!).
+    """
+    _ = planner  # Retained in signature for drop-in caller compatibility while enforcing `A11` exact shared estimator.
     sent_tm = graph.active_task_models["sentinel_p3_monitor"]
     sent_va = graph.task_datasets["sentinel_p3_monitor"]["val"]
     sent_before = np.asarray(evaluate_committed_task_model(sent_tm, graph, sent_va)["predictions"], dtype=float)
@@ -1341,45 +1415,38 @@ def update_m97_permuted_calibration_graph(
     parent_receipts: dict[str, Any] = {}
     updated_bindings: list[str] = []
     for pid, chs in (("cal_node_p0", spec.channel_perm[:2]), ("cal_node_p1", spec.channel_perm[2:])):
-        m_w = (ch_arr == chs[0]) | (ch_arr == chs[1])
-        n_w = int(np.sum(m_w))
-        if n_w < 6:
-            parent_receipts[pid] = {"selected_action": "SkippedSparseSpotCheck", "n_rows": n_w, "version": graph.mechanisms[pid].version}
-            continue
-        cw = ch_arr[m_w]
-        xw = x_arr[m_w]
-        yw = y_arr[m_w]
-        m0 = (cw == chs[0]).astype(float)
-        m1 = (cw == chs[1]).astype(float)
-        f_names = (f"g_ch{chs[0]}", f"b_ch{chs[0]}", f"g_ch{chs[1]}", f"b_ch{chs[1]}")
-        cols = {f_names[0]: xw * m0, f_names[1]: m0, f_names[2]: xw * m1, f_names[3]: m1}
-        n_tr = max(4, (2 * n_w) // 3)
-        tr_d = {"x": {k: v[:n_tr] for k, v in cols.items()}, "y": yw[:n_tr]}
-        va_d = {"x": {k: v[n_tr:] for k, v in cols.items()}, "y": yw[n_tr:]}
-        tid_w = f"cal_m97_{pid}_{episode_id}"
-        for old_t in [t for t in list(graph.active_task_models.keys()) if t.startswith(f"cal_m97_{pid}_")]:
-            graph.active_task_models.pop(old_t, None)
-            graph.task_datasets.pop(old_t, None)
-            graph.mechanisms[pid].dependent_task_ids.discard(old_t)
-        for old_m in [m for m in list(graph.mechanisms.keys()) if f"cal_m97_{pid}_" in m and m != pid]:
-            graph.mechanisms.pop(old_m, None)
-        w_before = dict(graph.mechanisms[pid].shared_weights)
-        planner.register_task(
-            task_id=tid_w,
-            shared_upstream_id=pid,
-            feature_names=f_names,
-            train_data=tr_d,
-            val_data=va_d,
-            initial_local_shrinkage=1e6,
+        mech = graph.mechanisms[pid]
+        w_before = dict(mech.shared_weights)
+        prior_g = {int(c): float(w_before[f"g_ch{c}"]) for c in chs}
+        prior_b = {int(c): float(w_before[f"b_ch{c}"]) for c in chs}
+        est = estimate_validated_channel_affine_calibration(
+            ch_arr=ch_arr,
+            x_arr=x_arr,
+            y_arr=y_arr,
+            channels=chs,
+            prior_gains=prior_g,
+            prior_offsets=prior_b,
         )
-        rev = planner.evaluate_and_revise_task(tid_w, budget_remaining=1.0)
-        act = str(rev["selected_candidate"]["action_type"])
-        w_after = dict(graph.mechanisms[pid].shared_weights)
-        drift = max(abs(float(w_after[k]) - float(w_before[k])) for k in f_names)
-        if act == "AncestorReweight":
+        if est["total_rows"] < 6 and not est["any_accepted_change"]:
+            parent_receipts[pid] = {
+                "selected_action": "SkippedSparseSpotCheck",
+                "n_rows": est["total_rows"],
+                "version": int(mech.version),
+                "max_weight_drift": 0.0,
+                "channel_decisions": est["channel_decisions"],
+            }
+            continue
+        w_after = dict(w_before)
+        for c in chs:
+            w_after[f"g_ch{c}"] = float(est["gains"][int(c)])
+            w_after[f"b_ch{c}"] = float(est["offsets"][int(c)])
+        if est["any_accepted_change"]:
+            act = "AncestorReweight"
+            mech.shared_weights = w_after
+            mech.version = int(mech.version) + 1
             ub = registry.update_shared_parameter_epoch(
                 parameter_mechanism_id=pid,
-                new_version=int(graph.mechanisms[pid].version),
+                new_version=int(mech.version),
                 parameter_payload=w_after,
                 affected_chain_id=spec.family,
                 evidence_note=f"reweight_{pid}_{episode_id}",
@@ -1387,14 +1454,17 @@ def update_m97_permuted_calibration_graph(
             for b_i in ub:
                 if b_i not in updated_bindings:
                     updated_bindings.append(b_i)
+        else:
+            act = "NoChange"
         parent_receipts[pid] = {
             "selected_action": act,
-            "n_rows": n_w,
-            "val_log_predictive_gain": round(float(rev["selected_candidate"]["val_log_predictive_gain"]), 4),
-            "version": int(graph.mechanisms[pid].version),
-            "max_weight_drift": round(drift, 8),
+            "n_rows": est["total_rows"],
+            "version": int(mech.version),
+            "max_weight_drift": est["max_drift"],
+            "channel_decisions": est["channel_decisions"],
         }
 
+    graph.sync_authoritative_state_to_forest()
     sent_after = np.asarray(evaluate_committed_task_model(sent_tm, graph, sent_va)["predictions"], dtype=float)
     return {
         "episode_id": episode_id,
@@ -1411,33 +1481,32 @@ def update_m97_flat_validated_channel_snapshot(
     public_item: dict[str, Any],
     prior_snapshot: dict[str, Any],
 ) -> dict[str, Any]:
-    """Identical per-channel `2/3–1/3` holdout-validated OLS calibration estimator for `Flat_EqualInfo_Multiversion`!"""
+    """Identical shared per-channel `2/3–1/3` holdout-validated OLS calibration estimator (`estimate_validated_channel_affine_calibration`, `A11`)!"""
     if family == "alpha":
         cal = public_item["dataset"]["calibration_load_cells"]
         ch_a = np.asarray(cal["lab_id"], dtype=int).ravel()
         x_a = np.asarray(cal["cmd_stress"], dtype=float).ravel()
         y_a = np.asarray(cal["true_stress"], dtype=float).ravel()
-        gains = list(prior_snapshot["stress_gains"])
-        offs = list(prior_snapshot["stress_biases"])
+        prior_g = {c: float(prior_snapshot["stress_gains"][c]) for c in range(4)}
+        prior_b = {c: float(prior_snapshot["stress_biases"][c]) for c in range(4)}
     else:
         cal = public_item["study"]["sensor_calibration_sweeps"]
         ch_a = np.asarray(cal["bank_id"], dtype=int).ravel()
         x_a = np.asarray(cal["ref_signal"], dtype=float).ravel()
         y_a = np.asarray(cal["raw_readout"], dtype=float).ravel()
-        gains = list(prior_snapshot["bank_gains"])
-        offs = list(prior_snapshot["bank_offsets"])
+        prior_g = {c: float(prior_snapshot["bank_gains"][c]) for c in range(4)}
+        prior_b = {c: float(prior_snapshot["bank_offsets"][c]) for c in range(4)}
 
-    for ch in range(4):
-        m = ch_a == ch
-        n_m = int(np.sum(m))
-        if n_m >= 3:
-            xm, ym = x_a[m], y_a[m]
-            n_tr = max(2, (2 * n_m) // 3)
-            gc, bc = np.linalg.lstsq(np.column_stack([xm[:n_tr], np.ones(n_tr)]), ym[:n_tr], rcond=None)[0]
-            va_mse = float(np.mean((gc * xm[n_tr:] + bc - ym[n_tr:]) ** 2))
-            pr_mse = float(np.mean((gains[ch] * xm[n_tr:] + offs[ch] - ym[n_tr:]) ** 2))
-            if va_mse <= min(1e-2, pr_mse + 1e-5):
-                gains[ch], offs[ch] = round(float(gc), 8), round(float(bc), 8)
+    est = estimate_validated_channel_affine_calibration(
+        ch_arr=ch_a,
+        x_arr=x_a,
+        y_arr=y_a,
+        channels=(0, 1, 2, 3),
+        prior_gains=prior_g,
+        prior_offsets=prior_b,
+    )
+    gains = [float(est["gains"][c]) for c in range(4)]
+    offs = [float(est["offsets"][c]) for c in range(4)]
     if family == "alpha":
         return {"stress_gains": gains, "stress_biases": offs}
     return {"bank_gains": gains, "bank_offsets": offs}
@@ -1504,14 +1573,18 @@ def verify_m97_multibranch_witness_partition(
     branch_guards: dict[str, dict[str, Any]],
     positive_witness_features_by_branch: dict[str, list[dict[str, float | None]]],
     covered_branch_pairs: set[tuple[str, str]] | None = None,
+    negative_witness_features_by_branch: dict[str, list[dict[str, float | None]]] | None = None,
 ) -> dict[str, Any]:
-    """Verify that across all historical tested positive witnesses of every retained branch `b_k`:
+    """Verify that across all historical tested witnesses of every retained branch `b_k` (`M9.7.1` `A08` strictly directional!):
     - `b_k`'s guard evaluates to `'TRUE'` on `100%` of `b_k`'s own positive witnesses;
-    - Every other branch `b_j` (`j != k`) evaluates to `'FALSE'` on `b_k`'s positive witnesses, EXCEPT when
-      `(b_j, b_k)` is backed by a verified `EmpiricalCoverageReceipt` (`status == 'supported_on_witnesses'`),
-      in which case `b_j` empirically covers `b_k` and `'TRUE'` / `'FALSE'` are both sound!
+    - Every other branch `b_j` (`j != k`) evaluates to `'FALSE'` on `b_k`'s positive witnesses, EXCEPT in the strictly
+      unidirectional case where `(b_j, b_k)` is backed by a verified `EmpiricalCoverageReceipt` (`b_j` empirically covers `b_k` on
+      `b_k`'s witnesses — NEVER symmetric `(b_k, b_j)`!);
+    - When `negative_witness_features_by_branch` is provided, `b_k`'s guard MUST evaluate to `'FALSE'` on `100%` of `b_k`'s
+      own tested scientific negative witnesses!
     """
     cov_pairs = covered_branch_pairs or set()
+    neg_by_branch = negative_witness_features_by_branch or {}
     reasons: list[str] = []
     for owner_bid, pos_list in positive_witness_features_by_branch.items():
         for w_i, feat_map in enumerate(pos_list):
@@ -1520,10 +1593,29 @@ def verify_m97_multibranch_witness_partition(
                 if eval_bid == owner_bid and res["state"] != "TRUE":
                     reasons.append(f"{owner_bid}_pos_{w_i}:own_guard_{eval_bid}={res['state']}")
                 elif eval_bid != owner_bid:
-                    if ((eval_bid, owner_bid) in cov_pairs or (owner_bid, eval_bid) in cov_pairs) and res["state"] in {"TRUE", "FALSE"}:
+                    # Strictly unidirectional (`A08`):
+                    # 1. `(eval_bid, owner_bid) in cov_pairs`: `eval_bid` empirically covers `owner_bid`, so `eval_bid` may be `TRUE` on `owner_bid`'s witnesses.
+                    # 2. If `(owner_bid, eval_bid) in cov_pairs` (`owner_bid` is the superset), `eval_bid` (`old`) MUST still be `FALSE` on all
+                    #    exclusive new-regime witnesses of `owner_bid`, and may ONLY be `TRUE` if `feat_map` is ALREADY an explicit tested
+                    #    positive witness of `eval_bid` itself!
+                    if (eval_bid, owner_bid) in cov_pairs and res["state"] in {"TRUE", "FALSE"}:
+                        continue
+                    if (
+                        (owner_bid, eval_bid) in cov_pairs
+                        and feat_map in (positive_witness_features_by_branch.get(eval_bid) or [])
+                        and res["state"] == "TRUE"
+                    ):
                         continue
                     if res["state"] != "FALSE":
                         reasons.append(f"{owner_bid}_pos_{w_i}:other_guard_{eval_bid}={res['state']}_overlap")
+    for neg_bid, neg_list in neg_by_branch.items():
+        if neg_bid not in branch_guards:
+            continue
+        g_neg = branch_guards[neg_bid]
+        for n_i, n_feat in enumerate(neg_list):
+            res_n = evaluate_m96_autonomous_guard(g_neg, n_feat, allow_open_feature_keys=True)
+            if res_n["state"] != "FALSE":
+                reasons.append(f"{neg_bid}_neg_{n_i}:own_guard_{neg_bid}={res_n['state']}_must_be_FALSE")
     return {"valid": len(reasons) == 0, "reasons": reasons}
 
 
@@ -1537,15 +1629,20 @@ def evaluate_empirical_coverage_on_branch_witnesses(
     old_positive_tasks_and_payloads: list[tuple[str, HoldoutOODTask, dict[str, Any], dict[str, str], dict[str, str]]],
 ) -> EmpiricalCoverageReceipt:
     """Execute `new_canonical_code` on frozen representative positive witnesses of `old_binding` inside isolated Docker
-    containers (`0` LLM calls, explicit CPU/wall-ms accounting!) to check whether `new` empirically covers `old` (`§5`).
+    containers (`0` LLM calls, explicit CPU/wall-ms accounting, content-addressed `A08` bindings!) to check whether
+    `new` empirically covers `old` (`§5`).
     """
     t0 = monotonic()
     passed_cnt = 0
     wit_ids: list[str] = []
+    wit_inp_shas: list[str] = []
     p_vers_list: list[dict[str, int]] = []
+    p_pay_shas: list[str] = []
     for wit_id, w_task, w_pay, ro_deps, ro_shas in old_positive_tasks_and_payloads:
         wit_ids.append(wit_id)
+        wit_inp_shas.append(hashlib.sha256(w_task.public_setup_py.encode("utf-8")).hexdigest())
         p_vers_list.append(dict(old_binding.parent_parameter_versions))
+        p_pay_shas.append(hashlib.sha256(json.dumps(w_pay, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest())
         cand_c = render_parameterized_input_adapter(
             family=family,
             source_code=new_canonical_code,
@@ -1566,9 +1663,8 @@ def evaluate_empirical_coverage_on_branch_witnesses(
     status = "unknown" if n_eval == 0 else ("supported_on_witnesses" if passed_cnt == n_eval else "refuted")
     new_sha = hashlib.sha256(new_canonical_code.encode("utf-8")).hexdigest()
     old_sha = old_binding.authoritative_executed_code_sha256()
-    rid = "ecov_" + hashlib.sha256(f"{new_sha}:{old_sha}:{wit_ids}:{status}".encode("utf-8")).hexdigest()[:16]
-    return EmpiricalCoverageReceipt(
-        receipt_id=rid,
+    rec = EmpiricalCoverageReceipt(
+        receipt_id="",
         new_binding_id=new_binding_id,
         new_solver_sha256=new_sha,
         old_binding_id=old_binding.binding_id,
@@ -1581,7 +1677,12 @@ def evaluate_empirical_coverage_on_branch_witnesses(
         evaluated_witness_count=n_eval,
         total_cpu_probe_wall_ms=el_ms,
         mean_probe_wall_ms_ratio=1.0,
+        witness_input_sha256s=wit_inp_shas,
+        parameter_payload_sha256s=p_pay_shas,
     )
+    rec.receipt_id = rec.compute_expected_receipt_id()
+    rec.verify_integrity()
+    return rec
 
 
 def propose_and_validate_m97_multibranch_split(
@@ -2081,17 +2182,8 @@ def run_m97_equal_capability_pre_llm_trial(
         expected_dependency_sha256=expected_dependency_sha256,
     )
     pr_ms = round((monotonic() - t_pr) * 1000.0, 2)
-    err_blob = f"{pr.get('schema_stdout', '')}\n{pr.get('schema_stderr', '')}"
-    has_interface_crash = any(
-        tok in err_blob for tok in ("SyntaxError", "ImportError", "ModuleNotFoundError", "AttributeError", "NameError")
-    )
-    already_proven_executable = len(lineage_ctrl.positive_witnesses_for(chosen_b.binding_id)) >= 1
-    if pr["accepted"]:
-        f_kind = "none"
-    elif pr.get("schema_valid") or (already_proven_executable and not has_interface_crash):
-        f_kind = "scientific_or_numerical"
-    else:
-        f_kind = "schema_or_interface"
+    f_cls = classify_public_probe_failure(pr)
+    f_kind = f_cls["failure_kind"]
     wit = lineage_ctrl.record_tested_witness(
         binding=chosen_b,
         public_input_sha256=public_input_sha256,

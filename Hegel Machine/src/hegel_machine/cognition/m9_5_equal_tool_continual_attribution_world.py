@@ -1777,11 +1777,13 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             (td_p / "cand.py").write_text(candidate_code, encoding="utf-8")
             m6f.exec_container_bash(cid, "mkdir -p /holdout_task", timeout_sec=10)
             subprocess.run(["docker", "cp", str(td_p / "_setup.py"), f"{cid}:/tmp/_setup.py"], check=True, timeout=15)
-            m6f.exec_container_bash(
+            setup_r = m6f.exec_container_bash(
                 cid,
                 "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 python3 -I /tmp/_setup.py && rm -f /tmp/_setup.py",
                 timeout_sec=120,
             )
+            setup_timed_out = bool(setup_r.get("timed_out")) or setup_r["exit_code"] == 124 or "[TIMEOUT:" in setup_r.get("stderr", "")
+            setup_ok = bool(setup_r["exit_code"] == 0 and not setup_timed_out)
             # Clean any unmanifested files under `/tmp/hegel_continual_archive/` BEFORE running schema validator OR scientific probe (`F02`)!
             clean_unman_py = (
                 "import json, os\n"
@@ -1800,16 +1802,22 @@ def execute_single_pre_llm_public_gate_probe_in_container(
                 "print(json.dumps({p: hashlib.sha256(open(p,'rb').read()).hexdigest() for p in ps if os.path.isfile(p)}, sort_keys=True))\n"
             )
             sh_r = m6f.exec_container_bash(cid, "python3 -I -c " + shlex.quote(pub_shas_py), timeout_sec=15)
-            pub_shas = json.loads(sh_r["stdout"].strip().splitlines()[-1])
+            pub_lines = [ln for ln in sh_r["stdout"].strip().splitlines() if ln.strip()]
+            pub_shas = json.loads(pub_lines[-1]) if (setup_ok and pub_lines) else {}
             subprocess.run(["docker", "cp", str(td_p / "cand.py"), f"{cid}:{art_path}"], check=True, timeout=15)
 
         cand_bundle_sha = m6f.compute_declared_artifacts_digest(cid, ft.declared_artifacts)
-        sch_r = m6f.exec_container_bash(
-            cid,
-            "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py",
-            timeout_sec=45,
+        sch_r = (
+            m6f.exec_container_bash(
+                cid,
+                "OPENBLAS_NUM_THREADS=1 OMP_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py",
+                timeout_sec=45,
+            )
+            if setup_ok
+            else {"exit_code": int(setup_r["exit_code"] or 1), "stdout": "", "stderr": setup_r.get("stderr", ""), "timed_out": setup_timed_out}
         )
-        sch_ok = sch_r["exit_code"] == 0 and '"schema_valid": true' in sch_r["stdout"].lower()
+        sch_timed_out = bool(sch_r.get("timed_out")) or sch_r["exit_code"] == 124 or "[TIMEOUT:" in sch_r.get("stderr", "")
+        sch_ok = bool(setup_ok and not sch_timed_out and sch_r["exit_code"] == 0 and '"schema_valid": true' in sch_r["stdout"].lower())
         sci_rec = (
             m6f.execute_host_trusted_scientific_probe(
                 agent_cid=cid,
@@ -1820,10 +1828,23 @@ def execute_single_pre_llm_public_gate_probe_in_container(
             if sch_ok
             else None
         )
-        ok_all = bool(sch_ok and isinstance(sci_rec, dict) and sci_rec.get("scientific_invariants_verified") is True)
+        sci_timed_out = bool(
+            isinstance(sci_rec, dict)
+            and (
+                bool(sci_rec.get("timed_out"))
+                or "[timeout:" in str(sci_rec.get("worker_stderr") or "").lower()
+                or "timed out" in str(sci_rec.get("error") or "").lower()
+            )
+        )
+        timed_out_any = bool(setup_timed_out or sch_timed_out or sci_timed_out)
+        ok_all = bool(sch_ok and not timed_out_any and isinstance(sci_rec, dict) and sci_rec.get("scientific_invariants_verified") is True)
         return {
             "accepted": ok_all,
+            "setup_ok": setup_ok,
+            "setup_exit_code": int(setup_r["exit_code"]),
             "schema_valid": sch_ok,
+            "schema_exit_code": int(sch_r["exit_code"]),
+            "timed_out": timed_out_any,
             "schema_stdout": sch_r["stdout"][-240:],
             "schema_stderr": sch_r["stderr"][-320:],
             "candidate_bundle_sha256": cand_bundle_sha,

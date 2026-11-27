@@ -28,7 +28,7 @@ Addresses ALL 5 Scientific Next-Generation Requirements from `Hegel_M9_5_Audit` 
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import hashlib
 import json
 import math
@@ -2350,9 +2350,87 @@ def {entrypoint}(dataset: dict) -> dict:
 # ============================================================================
 
 
+M96_LINEAGE_FOREST_KEY = "__m9_6_immutable_branch_lineage__"
+
+
+def classify_public_probe_failure(probe_result: dict[str, Any]) -> dict[str, str]:
+    """Strict 4-tier fail-closed failure classifier (`A09` / `C1.3`):
+    Priority order:
+      1. `INFRA_FAILURE` -> `failure_kind = 'timeout_or_infra'` (NEVER becomes a scientific negative witness!)
+      2. `SCHEMA_FAILURE` -> `failure_kind = 'schema_or_interface'`
+      3. `DOMAIN_REJECTION` -> `failure_kind = 'domain_precondition'` (explicit structured domain precondition rejection ONLY)
+      4. `SCIENTIFIC_FAILURE` -> `failure_kind = 'scientific_or_numerical'` (schema valid, invariant/residual check failed)
+    """
+    if bool(probe_result.get("accepted")):
+        return {"tier": "NONE", "failure_kind": "none"}
+
+    sch_out = str(probe_result.get("schema_stdout") or "")
+    sch_err = str(probe_result.get("schema_stderr") or "")
+    sci_rec = probe_result.get("scientific_probe_receipt")
+    sci_err = json.dumps(sci_rec, sort_keys=True) if isinstance(sci_rec, dict) else ""
+    blob = f"{sch_out}\n{sch_err}\n{sci_err}"
+    blob_low = blob.lower()
+
+    sch_rc = probe_result.get("schema_exit_code")
+    setup_ok = probe_result.get("setup_ok", True)
+    timed_out = bool(
+        probe_result.get("timed_out")
+        or "[timeout:" in blob_low
+        or "timed out" in blob_low
+        or "timeoutexpired" in blob_low
+    )
+    infra_signal = sch_rc in {124, 137, 139, 143} or (isinstance(sch_rc, int) and sch_rc < 0)
+    infra_exc = any(
+        tok in blob for tok in ("MemoryError", "BrokenPipeError", "ConnectionResetError", "No space left on device")
+    )
+    if timed_out or (setup_ok is False) or infra_signal or infra_exc:
+        return {"tier": "INFRA_FAILURE", "failure_kind": "timeout_or_infra"}
+
+    # Explicit structured domain precondition rejection (checked before generic schema failure ONLY when no syntax/import/type crash!)
+    has_code_bug = any(
+        tok in blob
+        for tok in (
+            "SyntaxError",
+            "ImportError",
+            "ModuleNotFoundError",
+            "AttributeError",
+            "NameError",
+            "TypeError",
+            "KeyError",
+            "IndexError",
+            "ZeroDivisionError",
+            '"not_dict"',
+            '"missing:',
+            '"bad:',
+        )
+    )
+    has_explicit_domain_rejection = (not has_code_bug) and any(
+        tok in blob_low
+        for tok in (
+            "domain_precondition_rejected",
+            "domainpreconditionerror",
+            '"domain_applicable": false',
+            "does not explain",
+            "inapplicable_regime",
+            "domain_precondition",
+            "regime is supported",
+            "unsupported regime",
+            "outside applicable",
+        )
+    )
+    if not bool(probe_result.get("schema_valid")):
+        if has_explicit_domain_rejection:
+            return {"tier": "DOMAIN_REJECTION", "failure_kind": "domain_precondition"}
+        return {"tier": "SCHEMA_FAILURE", "failure_kind": "schema_or_interface"}
+
+    if has_explicit_domain_rejection:
+        return {"tier": "DOMAIN_REJECTION", "failure_kind": "domain_precondition"}
+    return {"tier": "SCIENTIFIC_FAILURE", "failure_kind": "scientific_or_numerical"}
+
+
 @dataclass
 class SolverEvaluationWitness:
-    """Evidence-bound evaluation witness (`M9.6.1` `N07` — NEVER inferred from routing choices without execution!)."""
+    """Evidence-bound evaluation witness (`M9.6.1` `N07` + `M9.7.1` `A09/A10` — NEVER inferred from routing choices without execution!)."""
 
     witness_id: str
     binding_id: str
@@ -2361,14 +2439,33 @@ class SolverEvaluationWitness:
     public_input_sha256: str
     verifier_version: str
     result: str  # 'passed' | 'failed' | 'not_tested'
-    failure_kind: str  # 'none' | 'scientific_or_numerical' | 'schema_or_interface' | 'timeout_or_infra'
+    failure_kind: str  # 'none' | 'scientific_or_numerical' | 'domain_precondition' | 'schema_or_interface' | 'timeout_or_infra'
     public_structural_features: dict[str, float | None]
     probe_wall_ms: float = 0.0
+    witness_content_sha256: str = ""
+
+    def compute_expected_content_sha256(self) -> str:
+        payload = {
+            "witness_id": self.witness_id,
+            "binding_id": self.binding_id,
+            "solver_code_sha256": self.solver_code_sha256,
+            "parent_parameter_versions": {str(k): int(v) for k, v in sorted(self.parent_parameter_versions.items())},
+            "public_input_sha256": self.public_input_sha256,
+            "verifier_version": self.verifier_version,
+            "result": self.result,
+            "failure_kind": self.failure_kind,
+            "public_structural_features": {
+                str(k): (None if v is None else round(float(v), 10))
+                for k, v in sorted(self.public_structural_features.items())
+            },
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
 
     def is_genuine_scientific_counterexample(self) -> bool:
-        return self.result == "failed" and self.failure_kind == "scientific_or_numerical"
+        return self.result == "failed" and self.failure_kind in {"scientific_or_numerical", "domain_precondition"}
 
     def to_dict(self) -> dict[str, Any]:
+        c_sha = self.witness_content_sha256 or self.compute_expected_content_sha256()
         return {
             "witness_id": self.witness_id,
             "binding_id": self.binding_id,
@@ -2380,12 +2477,37 @@ class SolverEvaluationWitness:
             "failure_kind": self.failure_kind,
             "public_structural_features": dict(self.public_structural_features),
             "probe_wall_ms": round(float(self.probe_wall_ms), 2),
+            "witness_content_sha256": c_sha,
         }
+
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> SolverEvaluationWitness:
+        obj = cls(
+            witness_id=str(d["witness_id"]),
+            binding_id=str(d["binding_id"]),
+            solver_code_sha256=str(d["solver_code_sha256"]),
+            parent_parameter_versions={str(k): int(v) for k, v in (d.get("parent_parameter_versions") or {}).items()},
+            public_input_sha256=str(d["public_input_sha256"]),
+            verifier_version=str(d["verifier_version"]),
+            result=str(d["result"]),
+            failure_kind=str(d["failure_kind"]),
+            public_structural_features={
+                str(k): (None if v is None else float(v))
+                for k, v in (d.get("public_structural_features") or {}).items()
+            },
+            probe_wall_ms=float(d.get("probe_wall_ms", 0.0) or 0.0),
+            witness_content_sha256=str(d.get("witness_content_sha256") or ""),
+        )
+        if obj.witness_content_sha256 and obj.witness_content_sha256 != obj.compute_expected_content_sha256():
+            raise ValueError(f"Tampered SolverEvaluationWitness `{obj.witness_id}` (`A10`)")
+        if not obj.witness_content_sha256:
+            obj.witness_content_sha256 = obj.compute_expected_content_sha256()
+        return obj
 
 
 @dataclass
 class EmpiricalCoverageReceipt:
-    """Finite-witness empirical coverage receipt (`M9.6.1` `§5` — replaces overclaiming mathematical `C_new ⊇ C_old`!)."""
+    """Finite-witness content-addressed empirical coverage receipt (`M9.6.1` `§5` + `M9.7.1` `A08/A10`)."""
 
     receipt_id: str
     new_binding_id: str
@@ -2400,6 +2522,33 @@ class EmpiricalCoverageReceipt:
     evaluated_witness_count: int
     total_cpu_probe_wall_ms: float
     mean_probe_wall_ms_ratio: float
+    witness_input_sha256s: list[str] = field(default_factory=list)
+    parameter_payload_sha256s: list[str] = field(default_factory=list)
+
+    def compute_expected_receipt_id(self) -> str:
+        payload = {
+            "new_binding_id": self.new_binding_id,
+            "new_solver_sha256": self.new_solver_sha256,
+            "old_binding_id": self.old_binding_id,
+            "old_solver_sha256": self.old_solver_sha256,
+            "witness_ids": list(self.witness_ids),
+            "witness_input_sha256s": list(self.witness_input_sha256s),
+            "parameter_versions_by_witness": [
+                {str(k): int(v) for k, v in sorted(pv.items())} for pv in self.parameter_versions_by_witness
+            ],
+            "parameter_payload_sha256s": list(self.parameter_payload_sha256s),
+            "verifier_version": self.verifier_version,
+            "status": self.status,
+            "passed_witness_count": int(self.passed_witness_count),
+            "evaluated_witness_count": int(self.evaluated_witness_count),
+        }
+        return "ecov_" + hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()[:24]
+
+    def verify_integrity(self) -> None:
+        if self.receipt_id.startswith("ecov_") and len(self.receipt_id) == 29:
+            exp = self.compute_expected_receipt_id()
+            if self.receipt_id != exp:
+                raise ValueError(f"Tampered EmpiricalCoverageReceipt `{self.receipt_id}` != `{exp}` (`A08`)")
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -2409,7 +2558,9 @@ class EmpiricalCoverageReceipt:
             "old_binding_id": self.old_binding_id,
             "old_solver_sha256": self.old_solver_sha256,
             "witness_ids": list(self.witness_ids),
+            "witness_input_sha256s": list(self.witness_input_sha256s),
             "parameter_versions_by_witness": deepcopy(self.parameter_versions_by_witness),
+            "parameter_payload_sha256s": list(self.parameter_payload_sha256s),
             "verifier_version": self.verifier_version,
             "status": self.status,
             "passed_witness_count": self.passed_witness_count,
@@ -2419,15 +2570,41 @@ class EmpiricalCoverageReceipt:
             "zero_llm_calls_but_nonzero_cpu": True,
         }
 
+    @classmethod
+    def from_dict(cls, d: dict[str, Any]) -> EmpiricalCoverageReceipt:
+        obj = cls(
+            receipt_id=str(d["receipt_id"]),
+            new_binding_id=str(d["new_binding_id"]),
+            new_solver_sha256=str(d["new_solver_sha256"]),
+            old_binding_id=str(d["old_binding_id"]),
+            old_solver_sha256=str(d["old_solver_sha256"]),
+            witness_ids=[str(x) for x in (d.get("witness_ids") or [])],
+            parameter_versions_by_witness=[
+                {str(k): int(v) for k, v in pv.items()} for pv in (d.get("parameter_versions_by_witness") or [])
+            ],
+            verifier_version=str(d["verifier_version"]),
+            status=str(d["status"]),
+            passed_witness_count=int(d["passed_witness_count"]),
+            evaluated_witness_count=int(d["evaluated_witness_count"]),
+            total_cpu_probe_wall_ms=float(d.get("total_cpu_probe_wall_ms", 0.0) or 0.0),
+            mean_probe_wall_ms_ratio=float(d.get("mean_probe_wall_ms_ratio", 1.0) or 1.0),
+            witness_input_sha256s=[str(x) for x in (d.get("witness_input_sha256s") or [])],
+            parameter_payload_sha256s=[str(x) for x in (d.get("parameter_payload_sha256s") or [])],
+        )
+        obj.verify_integrity()
+        return obj
+
 
 class ImmutableBranchLineageController:
-    """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05`).
+    """Maintains non-destructive multi-branch lineage (`b00 -> b01 -> b02 -> restore b00/b01`, `M9.6.1` `N07/W04/W05` + `M9.7.1` `A10` checkpoint persistence).
 
     Key Guarantees:
       1. NEVER overwrites `bind_{wid}_c1` on subsequent conflicts — mints immutable `bind_{wid}_b{k:02d}` + `mech_{wid}_b{k:02d}`.
       2. NEVER marks an untested branch as refuted (`result = 'not_tested'`) when another branch is selected and passes.
       3. Separates `applicability_guard` (where a solver satisfies contract, allowing overlap!) from `selection_priority`
          (preferring lighter/cheaper valid branch or empirically covering branch while preserving all older branches intact!).
+      4. Persists `witness_ledger`, `coverage_receipts`, and `_branch_seq` directly inside `PersistentMechanismGraph.forest.questions`
+         so cold restart via `PersistentMechanismGraph.load_checkpoint(...)` restores full runtime lineage state (`A10`)!
     """
 
     def __init__(self, *, world_id: str, family: str, graph: PersistentMechanismGraph, registry: M94BindingRegistry) -> None:
@@ -2438,6 +2615,60 @@ class ImmutableBranchLineageController:
         self.witness_ledger: list[SolverEvaluationWitness] = []
         self.coverage_receipts: list[EmpiricalCoverageReceipt] = []
         self._branch_seq = len([b for b in registry.bindings.values() if b.chain_id == family])
+        self._hydrate_from_graph()
+
+    def _lineage_store_key(self) -> str:
+        return f"{self.world_id}::{self.family}"
+
+    def _hydrate_from_graph(self) -> None:
+        root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY)
+        if not isinstance(root_blob, dict):
+            return
+        entry = (root_blob.get("streams") or {}).get(self._lineage_store_key())
+        if not isinstance(entry, dict):
+            return
+        w_raw = list(entry.get("witness_ledger") or [])
+        c_raw = list(entry.get("coverage_receipts") or [])
+        b_seq = int(entry.get("branch_seq", self._branch_seq))
+        expected_sha = hashlib.sha256(
+            json.dumps({"branch_seq": b_seq, "witness_ledger": w_raw, "coverage_receipts": c_raw}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        stored_sha = str(entry.get("state_sha256") or "")
+        if stored_sha and stored_sha != expected_sha:
+            raise ValueError(f"Tampered lineage checkpoint state on `{self._lineage_store_key()}` (`A10`)")
+        self.witness_ledger = [SolverEvaluationWitness.from_dict(x) for x in w_raw]
+        self.coverage_receipts = [EmpiricalCoverageReceipt.from_dict(x) for x in c_raw]
+        self._branch_seq = max(self._branch_seq, b_seq)
+
+    def sync_to_graph(self) -> None:
+        root_blob = self.graph.forest.questions.get(M96_LINEAGE_FOREST_KEY)
+        if not isinstance(root_blob, dict) or root_blob.get("schema") != "hegel_m9_7_1_lineage_state_v1":
+            root_blob = {"schema": "hegel_m9_7_1_lineage_state_v1", "streams": {}}
+        streams = dict(root_blob.get("streams") or {})
+        w_ser = [w.to_dict() for w in self.witness_ledger]
+        c_ser = [c.to_dict() for c in self.coverage_receipts]
+        for c_obj in self.coverage_receipts:
+            c_obj.verify_integrity()
+        st_sha = hashlib.sha256(
+            json.dumps({"branch_seq": int(self._branch_seq), "witness_ledger": w_ser, "coverage_receipts": c_ser}, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        ).hexdigest()
+        streams[self._lineage_store_key()] = {
+            "world_id": self.world_id,
+            "family": self.family,
+            "branch_seq": int(self._branch_seq),
+            "witness_ledger": w_ser,
+            "coverage_receipts": c_ser,
+            "state_sha256": st_sha,
+        }
+        root_blob["streams"] = streams
+        self.graph.forest.questions[M96_LINEAGE_FOREST_KEY] = root_blob
+        self.graph.sync_authoritative_state_to_forest()
+
+    def record_coverage_receipt(self, receipt: EmpiricalCoverageReceipt) -> EmpiricalCoverageReceipt:
+        receipt.verify_integrity()
+        self.coverage_receipts.append(receipt)
+        self.sync_to_graph()
+        return receipt
 
     def record_tested_witness(
         self,
@@ -2463,7 +2694,9 @@ class ImmutableBranchLineageController:
             public_structural_features=deepcopy(features),
             probe_wall_ms=probe_wall_ms,
         )
+        w.witness_content_sha256 = w.compute_expected_content_sha256()
         self.witness_ledger.append(w)
+        self.sync_to_graph()
         return w
 
     def positive_witnesses_for(self, binding_id: str) -> list[SolverEvaluationWitness]:
@@ -2558,6 +2791,7 @@ class ImmutableBranchLineageController:
             old_b.applicability_guard = deepcopy(updated_failed_branch_applicability_guard)
             old_b.precondition_guard = deepcopy(updated_failed_branch_applicability_guard)
             self.registry.sync_to_graph()
+        self.sync_to_graph()
         return new_b
 
     def select_branch_deterministically(

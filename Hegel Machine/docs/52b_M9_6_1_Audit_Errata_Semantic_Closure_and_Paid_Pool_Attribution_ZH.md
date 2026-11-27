@@ -16,7 +16,7 @@
   - 逐世界 `v2` 差值：`{'alpha_m96_w01': 129381, 'alpha_m96_w02': 291293, 'alpha_m96_w03': 243453, 'alpha_m96_w04': 393279, 'beta_m96_w01': -7308, 'beta_m96_w02': 110139, 'beta_m96_w03': 231455, 'beta_m96_w04': 231738}`（**`7/8` 个世界更高**，`beta_m96_w01 = -7,308`；均值差 `202,928.75`，95% Bootstrap CI `[119139.49, 280925.88]`，双侧符号翻转 `p = 0.015625`）。
 - **零模型调用轮次口径区分**：两臂各有 `48/64` 个零模型调用 episode，其中成功通过私有验证器的零轮闭环各为 `47/64`（不能将零 LLM 调用等同于零容器/CPU 成本）。
 
-## 二、`alpha_m96_w03 / M` 真实根因订正（`N02`）与 M9.4 `68/68` 全量重评勘误（`N03`）
+## 二、`alpha_m96_w03 / M` 真实根因订正（`N02`）与 M9.4 `68` 私有实例全量重评勘误（`64/68` 通过，`30/34` 轮次）（`N03`）
 
 - **`N02`（`alpha_m96_w03 / M` 误诊订正）**：原 `M9.6` 正式封存成绩保持 `63/64` vs `63/64` 不变。该 `M` 任务并未传入非零初态（`preload_scale = 0.0`）；种子 `973861` 的 `0.1128 > 0.08` 残差源于旧私判用隐藏真值应力检验候选的代数自洽关系。在三层契约内核 `hegel_shared_math_handoff_kernel_v3_m961_three_layer` 下，第 2 层估计坐标恒等式残差低至 `<= 2.01e-14`（同时 `100%` 拦截伪造标定见证），第 3 层隐藏真值物理误差全部达标。
 - **`N03`（`M9.4` 全量 `68` 私有实例统一内核重评）**：修复 `terminal_field_B` 双通道分派并由 `hegel_shared_math_handoff_kernel_v3_m961_three_layer` 完整独立重跑 `M9.4` 全部 `34` 个 episode（`68` 个私有实例）后，通过数为 **`64/68` 私有实例（`30/34` 轮次）**。
@@ -26,4 +26,4 @@
 - **`N04`**：按 `executable_kind` 唯一绑定实际执行代码 SHA（拒绝未执行模块凭据冒用：`True`），重算内容寻址 `receipt_id`（拒绝篡改内容：`True`），并校验完整多父版本向量 `parent_parameter_versions`（拒绝次父节点过期版本：`True`）。
 - **`N07`**：`ImmutableBranchLineageController` 拒绝无实测科学反例的分叉（`True`），禁止由选中 `C1` 自造 `C0` 负见证（`True`），并在确定性状态测试中完整通过 `C0 -> C1 -> C2 -> 恢复 C0 -> 恢复 C1`（`{'restore_C0_x_0_2': 'bind_dev_b00', 'restore_C1_x_1_1': 'bind_dev_b01', 'route_C2_x_2_4': 'bind_dev_b02'}`）。
 - **`N09 + N10`**：从 `04d_skill_contract_inspections.jsonl` 重建 `Full` 在 `T` 上的真实漏斗：新 `L1` 搜索/描述为 `5/8`、`3/8`；新 `L2` 搜索/描述为 `6/8`、`4/8`；至少描述任一新模块为 `7/8`；动态调用与精确保留仍为 `0/8`、`0/8`（同时明确区分 `4` 个 Alpha 跨域 KKT 机会与 `4` 个 Beta 同族多预算机会，以及部分 L1 缺失完整对偶见证字典的契约缺口）。
-- **`N11`**：顺序受控代码池回放区分了 `OldestFirst_Probes1`（`32/48`）与 `LatestFirst_Probes1`（`40/48`），并证明在固定两翼接线的 `M9.5` 上 `Flat_SharedConditionalTable_Probes1`（`48/48`）与 `Hegel` 图守卫（`48/48`）等价——直接引出下一阶段 `M9.7` 对**非嵌套多次冲突 + 严格同现异史 + 置换多父与真实接线干扰父 + 按需编译**的检验。
+- **`N11`**（*勘误说明：`M9.6.1` 原 `06_n11` JSON 中的 `OldestFirst_Probes1` 与 `Flat_SharedConditionalTable_Probes1` 为机制推导值 `derived_expectation`，逐轮隔离实跑回执已于 `M9.7.1` `docs/evidence/m9_7_1_audit_closure_and_paid_pool_attribution_20261127/01_n11_executed_m95_paid_pool_replay.json` 补齐*）：顺序受控代码池回放区分了 `OldestFirst_Probes1`（`32/48`）与 `LatestFirst_Probes1`（`40/48`），并证明在固定两翼接线的 `M9.5` 上 `Flat_SharedConditionalTable_Probes1`（`48/48`）与 `Hegel` 图守卫（`48/48`）等价——直接引出下一阶段 `M9.7` 对**非嵌套多次冲突 + 严格同现异史 + 置换多父与真实接线干扰父 + 按需编译**的检验。

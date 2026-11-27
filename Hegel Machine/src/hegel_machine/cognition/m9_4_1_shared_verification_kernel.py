@@ -259,9 +259,9 @@ def verify_alpha_candidate_handoff_and_invariants(
         return {"ok": False, "errors": ["non_numeric_core_arrays"], "verified_claim_ids": [], "metrics": {}}
 
     if et.shape != (2,) or ps.shape != (n_te, k_t) or not (bool(np.all(np.isfinite(et))) and bool(np.all(np.isfinite(ps)))):
-        return {"ok": False, "errors": [f"bad_core_shape_or_nan:taus={et.shape},strain={ps.shape}"], "verified_claim_ids": [], "metrics": {}}
+        return {"ok": False, "errors": [f"NON_FINITE:bad_core_shape_or_nan:taus={et.shape},strain={ps.shape}"], "verified_claim_ids": [], "metrics": {}}
     if not (0.05 < float(et[0]) < float(et[1]) < 25.0):
-        errs.append("taus_not_positive_ordered")
+        errs.append("PARAMETER_ORDER:taus_not_positive_ordered")
 
     te_ps, te_h0 = calibrate_alpha_physical_stresses(dataset, "test", gt=gt)
     s0_te = np.asarray(dataset["test"]["strain_0"], dtype=float)

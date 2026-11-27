@@ -246,6 +246,7 @@ def _evaluate_demand_gated_l2_consolidation_policy(
     exp_net_v2 = round(exp_llm_reuse * 45000.0 - float(estimated_compile_v2_cost), 2)
     return {
         "policy": "m8_expected_net_value_demand_gate_v1",
+        "effective_rule_on_same_contract_stream": "disable_eager_l2_when_canonical_binding_covers_contract",
         "remaining_steps": remaining_steps,
         "canonical_binding_covers_contract": canonical_binding_covers_contract,
         "expected_compatible_llm_reuse_episodes": exp_llm_reuse,
@@ -580,7 +581,7 @@ def _run_one_m97_world_arm_stream(
                     old_binding=old_b,
                     old_positive_tasks_and_payloads=rep_wits,
                 )
-                lineage_ctrl.coverage_receipts.append(cov_r)
+                lineage_ctrl.record_coverage_receipt(cov_r)
                 cov_receipts_this_step.append(cov_r.to_dict())
                 coverage_receipts_log.append(cov_r.to_dict())
                 if cov_r.status != "supported_on_witnesses":

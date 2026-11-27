@@ -551,7 +551,7 @@ def test_m97_beta_self_guard_exception_and_covering_branch_lineage_regression() 
         registry=reg,
     )
     assert tr_c1["accepted_pre_llm"] is False
-    assert tr_c1["tested_witness"]["failure_kind"] == "scientific_or_numerical"
+    assert tr_c1["tested_witness"]["failure_kind"] == "domain_precondition"
     assert len(lineage.scientific_negative_witnesses_for(b0.binding_id)) == 1
 
     # Verify covering branch `(b01, b00)` overlap check in `verify_m97_multibranch_witness_partition`

@@ -259,8 +259,28 @@ def verify_binding_identity_and_foreign_keys(
                 f"Stale/mismatched parameter_version on `{binding.binding_id}`: "
                 f"binding={binding.parameter_version} != graph={graph.mechanisms[binding.parameter_mechanism_id].version}"
             )
-        # `N04` Full Multi-Parent Version Vector Check: EVERY linked parent version in `parent_parameter_versions` must match graph!
-        if binding.parent_parameter_versions:
+        # `N04 + A07` Fail-Closed Exact Multi-Parent Key-Set & Version Vector Check:
+        # `set(binding.parent_parameter_versions.keys())` MUST equal `set(all_pids)` (no missing-key fail-open!)
+        if binding.qualification_status == "verified" and (
+            require_closure_code
+            or strict_receipt_check
+            or bool(binding.parent_parameter_versions)
+            or bool(binding.parent_parameter_mechanism_ids)
+        ):
+            expected_pid_set = set(all_pids)
+            actual_pid_set = set(binding.parent_parameter_versions.keys())
+            if actual_pid_set != expected_pid_set:
+                raise ValueError(
+                    f"PARENT_VERSION_SET_MISMATCH on `{binding.binding_id}` (`A07`): "
+                    f"recorded keys {sorted(actual_pid_set)} != expected parents {sorted(expected_pid_set)}"
+                )
+            for pid_k in all_pids:
+                if int(binding.parent_parameter_versions[pid_k]) != int(graph.mechanisms[pid_k].version):
+                    raise ValueError(
+                        f"Stale/mismatched parent_parameter_versions[{pid_k}] on `{binding.binding_id}`: "
+                        f"{binding.parent_parameter_versions[pid_k]} != {graph.mechanisms[pid_k].version}"
+                    )
+        elif binding.parent_parameter_versions:
             for pid_k in all_pids:
                 if pid_k in binding.parent_parameter_versions and int(binding.parent_parameter_versions[pid_k]) != int(graph.mechanisms[pid_k].version):
                     raise ValueError(
@@ -393,8 +413,12 @@ class M94BindingRegistry:
             self.bindings = {}
             for k, v in (blob.get("bindings") or {}).items():
                 b = MechanismExecutableBinding.from_dict(v)
-                # `F14 + N04`: Legacy bindings missing `qualification_receipt_id` hydrate as `unknown_requires_reverification`
+                # `F14 + N04 + A07`: Legacy bindings missing `qualification_receipt_id` or missing expected `parent_parameter_versions`
+                # keys hydrate safely as `unknown_requires_reverification` rather than silently executing!
+                all_b_pids = list(dict.fromkeys([p for p in [b.parameter_mechanism_id, *b.parent_parameter_mechanism_ids] if p]))
                 if not b.qualification_receipt_id and "qualification_status" not in v:
+                    b.qualification_status = "unknown_requires_reverification"
+                elif set(b.parent_parameter_versions.keys()) != set(all_b_pids):
                     b.qualification_status = "unknown_requires_reverification"
                 self._ensure_typed_mechanism_registered(b)
                 verify_binding_identity_and_foreign_keys(b, graph=self.graph, registry=self, require_closure_code=False)
