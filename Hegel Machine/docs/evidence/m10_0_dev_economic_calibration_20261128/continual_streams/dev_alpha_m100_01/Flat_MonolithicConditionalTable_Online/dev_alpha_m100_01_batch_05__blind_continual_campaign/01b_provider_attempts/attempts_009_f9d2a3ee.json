@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9d2a3eeb3b144faafd52d26673de894",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:01.678069+00:00",
+  "ended_at_utc": "2026-11-28T02:48:37.991901+00:00",
+  "request_sha256": "9a9ae77ca2e0660d0569c6023808e0e85601524967a850770536d6825e6c73ae",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57365,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32455,
+    "cached_tokens": 9344,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/coupling_cv.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nq=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=q['calibration_load_cells']; u=c['true_channel_loads']; r=c['bridge_raw']; s=c['single_channel_sweeps']; np.set_printoptions(precision=5,suppress=True)\\nps=[]\\nfor j in range(4):\\n m=(s['lab_id']==j)&(abs(s['cmd_stress'])<3); a,y=s['true_stress'][m],s['cmd_stress'][m]; ps.append(least_squares(lambda p:p[0]+p[1]*a+p[2]*np.sin(p[3]*a)-y,[0,1,.25,2.5]).x)\\np=np.array(ps).T\\nv=r-p[0]-p[1]*u-p[2]*np.sin(p[3]*u)\\nw=u[:,[2,3,0,1]]\\nfor j in range(4):\\n keep=abs(v[:,j])<2; a=u[:,j]; b=w[:,j]; y=v[:,j]; print('channel',j,'axis coupling',np.c_[b[(a==0)&keep&(b!=0)],y[(a==0)&keep&(b!=0)]])\\n for name,df in [('poly',lambda x:[x,x**2,x**3,x**4,x**5,x**6]),('trig',lambda x:[x,np.sin(2.5*x),np.cos(2.5*x)-1]),('trig2',lambda x:[x,np.sin(1.25*x),np.cos(1.25*x)-1,np.sin(2.5*x),np.cos(2.5*x)-1]),('tanh',lambda x:[x,np.tanh(x),np.tanh(x)**2]),('rat',lambda x:[x,x/(1+x*x),x*x/(1+x*x)]),('full',lambda x:[x,x**2,np.sin(2.5*x),np.cos(2.5*x)-1,np.tanh(x),np.tanh(2.5*x)])]:\\n  A=np.column_stack(df(b)+[a*b]); coef=np.linalg.lstsq(A[keep],y[keep],rcond=None)[0]; e=A@coef-y; folds=np.arange(len(a))%5; cv=np.zeros(len(a));\\n  for k in range(5):\\n   fit=keep&(folds!=k); cv[folds==k]=A[folds==k]@np.linalg.lstsq(A[fit],y[fit],rcond=None)[0]-y[folds==k]\\n  print(name,np.quantile(abs(cv[keep]),[.5,.9,1]),coef)\\n for label, fun in [('mixed input',lambda p:p[0]*(a+p[1]*b)+p[2]*np.sin(p[3]*(a+p[1]*b))+p[4]*(np.cos(p[5]*b)-1)+p[6]*a*b),('frequency',lambda p:p[0]*b+p[1]*np.sin(p[2]*b)+p[3]*(np.cos(p[4]*b)-1)+p[5]*a*b),('rational',lambda p:p[0]*b+(p[1]*b+p[2]*b*b)/(1+p[3]**2*b*b)+p[4]*a*b),('tanh shift',lambda p:p[0]*b+p[1]*(np.tanh(p[2]*b+p[3])-np.tanh(p[3]))+p[4]*a*b)]:\\n  y1=y+p[1,j]*a+p[2,j]*np.sin(p[3,j]*a) if label=='mixed input' else y\\n  start={'mixed input':[p[1,j],.2,p[2,j],p[3,j],.1,1.5,.04],'frequency':[.3,.02,2,.1,1.5,.04],'rational':[.3,.02,-.06,.3,.04],'tanh shift':[.3,.1,1,.3,.04]}[label]\\n  f=least_squares(lambda k:(fun(k)-y1)[keep],start,max_nfev=500); print(label,np.quantile(abs(f.fun),[.5,.9,1]),f.x)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/coupling_cv.py; sed -n '1,38p;80,130p' /tmp/hegel_continual_archive/*batch_04_solver.py; sed -n '1,150p' /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic cubic bridge → H2 sinusoidal diagonal with opposite-channel coupling; worst single-axis fit RMSE is 0.000119 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the broad structured regression unchanged\",\"rejected_reason\":\"The isolated sweeps show strong opposite-channel coupling and little adjacent-channel signal. Held-out sweeps can establish whether the narrower model is sufficient.\"}],\"rationale\":\"Compare coupling laws on held-out calibration rows before inverting the bridge. The preceding apparatus trace has both markers at baseline, supporting the baseline chamber law after recalibration.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d47472f48a0510b7f09ba810cff13415e8df9de439c47e3548032d0bd217280a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38387.85,
+      "usage_known": true,
+      "prompt_tokens": 32455,
+      "cached_tokens": 9344,
+      "completion_tokens": 1457
+    }
+  ]
+}

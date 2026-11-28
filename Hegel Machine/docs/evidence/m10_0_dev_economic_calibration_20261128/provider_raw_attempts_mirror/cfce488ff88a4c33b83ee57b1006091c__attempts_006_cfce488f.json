@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cfce488ff88a4c33b83ee57b1006091c",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:26:40.562886+00:00",
+  "ended_at_utc": "2026-11-28T02:27:23.444032+00:00",
+  "request_sha256": "06eee92dc51c7737d33af073a420bee201a6ac7f612935b42c6b185fccd0a70d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45123,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28560,
+    "cached_tokens": 10880,
+    "completion_tokens": 1847
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom itertools import product\\nfrom scipy.linalg import solve\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\ns = item['study']\\nnx, ny = s['nx'], s['ny']\\nZ = s['Z_nuisance']\\nP = np.eye(len(Z)) - Z @ solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T, assume_a='pos')\\nref = s['sensor_calibration_sweeps']['ref_rosette']\\nraw = s['sensor_calibration_sweeps']['raw_rosette']\\nC = np.linalg.lstsq(np.c_[ref, np.ones(len(ref))], raw, rcond=None)[0]\\n\\ndef decode(raw_values):\\n    return solve(C[:4].T, (raw_values.reshape(-1, 4) - C[4]).T).T.ravel()\\n\\ndef reference(walls):\\n    L = np.diag(s['V_reaction_2d'].ravel(order='F'))\\n    for j in range(ny):\\n        for i in range(nx):\\n            row = i + nx*j\\n            for axis, idx, n, stride, wall in [('x',i,nx,1,walls[:2]), ('y',j,ny,nx,walls[2:])]:\\n                h = s['L'+axis] / (n-1)\\n                k = s['kappa_'+axis]\\n                vel = s['vel_'+axis][idx]\\n                if idx == 0 or idx == n-1:\\n                    step = 1 if idx == 0 else -1\\n                    rate = k[idx] / h**2\\n                    L[row,row+stride*step] -= rate\\n                    L[row,row] += rate + wall[int(idx != 0)] * s['robin_'+axis] / h\\n                else:\\n                    for step in (-1,1):\\n                        rate = (k[idx]+k[idx+step])/(2*h*h) + max(-step*vel,0)/h\\n                        L[row,row+step*stride] -= rate\\n                        L[row,row] += rate\\n    R = np.column_stack([v.ravel(order='F') for v in s['source_modes']])\\n    sensor = tuple(s['sensor_ij'].T)\\n    U = [solve(L + shift*np.eye(nx*ny), R).reshape(nx, ny, -1, order='F') for shift in s['mu_shifts']]\\n    return np.concatenate([u[sensor] for u in U]), U[-1]\\n\\npulses = item['campaign_diagnostics']\\nW = np.column_stack([p['w_pulse'] for p in pulses])\\nY = np.column_stack([decode(p['y_pulse_raw']) for p in pulses])\\ncandidates = {walls:reference(walls) for walls in product((0,1),repeat=4)}\\nerrors = {walls:S@W-Y for walls,(S,_) in candidates.items()}\\nheld = []\\nfor h in range(len(pulses)):\\n    keep = np.arange(len(pulses)) != h\\n    walls = min(errors, key=lambda key:np.linalg.norm((P@errors[key])[:,keep]))\\n    assert walls == (0,0,0,0)\\n    e = errors[walls][:,h].reshape(len(s['mu_shifts']),-1,4)\\n    held.append(np.max(np.sqrt(np.mean(e**2,axis=1))))\\nassert max(held) < 5e-6\\nprint('LOPO worst pulse/shift/bank RMSE:', max(held))\\n\\nS, U = candidates[(0,0,0,0)]\\nS = P @ S\\nn = S.shape[1]\\nupper = s['u_box']\\nscenarios = [('public',s), ('zero',dict(s,total_budget=0.)), ('full',dict(s,total_budget=n*upper))]\\nfor label, signal, budget in [('active', 40*(S[:,0]-S[:,1]), s['total_budget']), ('vertex', 40*(S[:,0]-S[:,1]), 3*upper)]:\\n    scenarios.append((label,dict(s,y_obs_raw=(signal.reshape(-1,4)@C[:4]+C[4]).ravel(), total_budget=budget)))\\nfor name, st in scenarios:\\n    out = m.solve_batch(st)\\n    w = out['weights']; c = out['kkt_certificate']; nu = c['nu_sum']; lo = np.array(c['lam_lower']); hi = np.array(c['lam_upper'])\\n    t = st['total_budget']; r = S@w-P@decode(st['y_obs_raw']); ridge = st['source_ridge']\\n    g = S.T@r+ridge*w; J = .5*(r@r+ridge*(w@w))\\n    D = J-g@w+nu*t+upper*np.minimum(g-nu,0).sum()\\n    low_count = np.count_nonzero(w < 1e-9); high_count = np.count_nonzero(w > upper-1e-9)\\n    assert abs(w.sum()-t)<1e-11 and min(w)>=-1e-11 and max(w)<=upper+1e-11\\n    assert np.allclose(c['weights'],w) and min(lo)>=0 and min(hi)>=0\\n    assert np.max(abs(g-nu-lo+hi))<1e-10 and np.max(abs(lo*w)+abs(hi*(upper-w)))<1e-10\\n    assert abs(J-c['primal_objective'])<1e-10 and abs(D-c['dual_lower_bound'])<1e-10 and abs(J-D)<1e-10\\n    field_error = np.max(abs(out['terminal_field']-U@w))\\n    assert field_error<1e-10\\n    if name in ('active','vertex'):\\n        assert low_count and high_count\\n    if name == 'vertex':\\n        assert low_count+high_count == n\\n    print(name, 'lower/upper:', (low_count,high_count), 'gap:', J-D, 'field error:', field_error)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls -> H2 zero-loss walls on both axes; the exact candidate's worst public pulse/shift/bank RMSE is 2.15e-6 and its public KKT gap is 5.29e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema and public KKT check\",\n      \"rejected_reason\": \"The public optimum is interior, so it does not test bound multipliers. An independent stencil also checks terminal-field layout.\"\n    }\n  ],\n  \"rationale\": \"The independent dense reference can expose a shared indexing mistake, and leave-one-pulse-out wall selection can expose dependence on one tracer. Active-bound and vertex cases test certificate logic that the public interior solution does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "3b01013dec5773150696e8bb61675a9c079420f3294d159212cf55d8c1953564",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46798.33,
+      "usage_known": true,
+      "prompt_tokens": 28560,
+      "cached_tokens": 10880,
+      "completion_tokens": 1847
+    }
+  ]
+}

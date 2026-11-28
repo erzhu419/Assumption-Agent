@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ece0d56a822c4b8886d9e38c490761e5",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:06.116296+00:00",
+  "ended_at_utc": "2026-11-28T02:36:27.704186+00:00",
+  "request_sha256": "c61d3da522e50003c5bc3fe5407b55b335ce0d149649483ed2181ea3e95b62f5",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 51341,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27978,
+    "cached_tokens": 5504,
+    "completion_tokens": 778
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nimport batch_solver\\nimport _verified_downstream as down\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']\\nmodel = up._fit(c['ref_rosette'], c['raw_rosette'], c['single_bank_sweeps'])\\ncanonical = up.calibrate_upstream(s)\\ntruth = np.clip(canonical['y_obs_raw'] * 0.8, -0.5, 0.5)\\nraw = up._forward(truth.reshape(-1, 4), model).reshape(truth.shape)\\nexpected = down.solve_downstream(dict(canonical, y_obs_raw=truth))\\nactual = batch_solver.solve_batch(dict(s, y_obs_raw=raw))\\n\\ndef compare(a, b, path='result'):\\n    if isinstance(b, dict):\\n        assert isinstance(a, dict) and a.keys() == b.keys(), path\\n        for k in b:\\n            compare(a[k], b[k], f'{path}.{k}')\\n    elif isinstance(b, (tuple, list)):\\n        assert type(a) is type(b) and len(a) == len(b), path\\n        for i, (av, bv) in enumerate(zip(a, b)):\\n            compare(av, bv, f'{path}[{i}]')\\n    else:\\n        aa, bb = np.asarray(a), np.asarray(b)\\n        assert aa.shape == bb.shape, path\\n        if bb.dtype.kind in 'fc':\\n            assert aa.dtype.kind in 'fc', path\\n            np.testing.assert_allclose(aa, bb, rtol=1e-8, atol=1e-9, err_msg=path)\\n            print(path, 'max absolute difference:', np.max(np.abs(aa-bb), initial=0))\\n        else:\\n            np.testing.assert_array_equal(aa, bb, err_msg=path)\\n            print(path, 'exact match')\\n\\ncompare(actual, expected)\\nprint('PASS: composed batch solver agrees with canonical downstream solver')\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 separable response → H2 cyclic quadratic coupling plus diagonal cubic curvature; worst clean held-out inverse L2 error was 4.83e-5, and box-grid round-trip error was 5.73e-12.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[],\"rationale\":\"The previous run reached the downstream comparison, so pulse handling and sweep normalization passed. The comparator then applied a floating-point assertion to a nonnumeric field. Compare numeric outputs within tolerance and other outputs exactly to finish checking equivalence without changing the artifacts.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a9d21f16ec8fc3d11694e593701be0d313a3cd9570f2fbade9b4877e59c82142",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23614.44,
+      "usage_known": true,
+      "prompt_tokens": 27978,
+      "cached_tokens": 5504,
+      "completion_tokens": 778
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e69763772af43879cef3be67399dbe5",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:23.769390+00:00",
+  "ended_at_utc": "2026-11-28T02:25:56.347060+00:00",
+  "request_sha256": "cd45841ccf9ee00e3e35f51e9c9eff3b2fa9dc149714039f894be620e1a40051",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31224,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21158,
+    "cached_tokens": 9344,
+    "completion_tokens": 1293
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe.py <<'PY'\\nimport pickle, numpy as np, importlib.util,glob\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('old',glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=a['dataset']; tr,te,di=ds['train'],ds['test'],a['campaign_diagnostics']; t,dt=ds['eval_times'],ds['past_dt']; np.set_printoptions(precision=4,suppress=True,linewidth=140)\\nc=ds['calibration_load_cells']; u,v=c['bridge_raw'],c['true_channel_loads']; B=m._bridge(c); e=np.c_[np.ones(len(u)),u]@B-v\\nprint('bridge',B,'err',np.sqrt((e**2).mean(0)),np.max(abs(e),axis=0)); print('sweeps',[ (k,np.shape(q),np.asarray(q).ravel()[:10]) for k,q in c['single_channel_sweeps'].items()]);\\nxt,xe=m._features(tr,te); st=m._prepare(tr,xt,B); tau,th=m._fit(st,dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('material',tau,th)\\nlab,refs=(np.concatenate((tr[k],te[k])) for k in ['lab_id','ref_coupons']); xd=di['coupon_features_raw'].copy()\\nfor l in np.unique(lab):\\n r=refs[lab==l]; xd[di['lab_id']==l]=(xd[di['lab_id']==l]-np.median(r.mean(0)))/np.median(r.std(0)); print('ref',l,np.sum(lab==l),np.sum(di['lab_id']==l),np.median(r.mean(0)),np.median(r.std(0)),np.median(di['ref_coupons'][di['lab_id']==l].mean(0)),np.median(di['ref_coupons'][di['lab_id']==l].std(0)))\\nlabx=np.r_[tr['lab_id'],te['lab_id']]; strata=np.r_[tr['stratum'],te['stratum']]; raw=np.concatenate([tr['coupon_features_raw'],te['coupon_features_raw']]); x=np.r_[xt,xe]; _,cc,n=np.unique(np.c_[labx,strata],axis=0,return_inverse=True,return_counts=True); w=1/n[cc.ravel(),None]; mu=(np.where(np.isnan(raw),0,x)*w).sum(0)/(~np.isnan(raw)*w).sum(0); xd=np.where(np.isnan(xd),mu,xd); sd=m._prepare(di,xd,B)\\ndef Y(g):return np.column_stack((g['instant_rate_obs'],g['strain_curves_obs']-g['strain_0'][:,None]))\\ndef base(ss):\\n C,R=m._design(np.log(tau),ss,dt,t);return np.column_stack((R@th,C@th))\\nfor g,ss in [(tr,st),(di,sd)]:\\n e=Y(g)-base(ss); print('res mean',e.mean(0),'mad',np.median(abs(e),axis=0),'max',abs(e).max(0),'sing',np.linalg.svd(e,compute_uv=False)); print('range stress',ss[0].min(),ss[0].max(),ss[1].min(),ss[1].max())\\nD=np.vstack((np.r_[1/tau,1],np.c_[-np.expm1(-t[:,None]/tau),t])); et=Y(di)-base(sd); coef=np.linalg.lstsq(D,et.T,rcond=None)[0].T; print('native basis resid med/max',np.median(abs(et-coef@D.T),0),abs(et-coef@D.T).max(0)); print('diag lab stratum hold last drift offset fit and residual',np.c_[di['lab_id'],di['stratum'],sd[1],sd[0][:,-1], sd[2]@th[2:],coef,np.linalg.norm(et-coef@D.T,axis=1)])\\nP=np.column_stack((np.ones(len(u)),u,np.column_stack([u[:,i]*u[:,j] for i in range(4) for j in range(i,4)]))); print('bridge quadratic error',np.sqrt(np.mean((P@np.linalg.lstsq(P,v,rcond=None)[0]-v)**2,0)))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived benchtop transfer → H2 chamber correction inferred from the available verification coupons; no residual metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the previous baseline unchanged\",\"rejected_reason\":\"Current chamber verification coupons are available and can directly test that transfer.\"}],\"rationale\":\"Compare calibration and native hereditary-basis residuals to determine whether chamber changes are confined to amplitudes and drift or require different temporal dynamics.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "2821bedd794ebc9173ae1cd181624627d37bf8bd619931e1df1c79eee76b60f7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34542.26,
+      "usage_known": true,
+      "prompt_tokens": 21158,
+      "cached_tokens": 9344,
+      "completion_tokens": 1293
+    }
+  ]
+}

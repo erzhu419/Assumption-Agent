@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "816c1ef49d3c45adb739cefe5f423325",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:30:52.902205+00:00",
+  "ended_at_utc": "2026-11-28T02:31:13.762172+00:00",
+  "request_sha256": "4f8a3ed302da61bdaef28667ca5754ff5d6453839f18926597cef2b514c2514e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31828,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22539,
+    "cached_tokens": 0,
+    "completion_tokens": 646
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; head -n 3 \\\"$f\\\"; tail -n 24 \\\"$f\\\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust IRLS' | head -n 12; cd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(suppress=True,precision=4,linewidth=145)\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; y=c['true_channel_loads']; x=c['bridge_raw']; print('calibration groups',np.unique((abs(y)>1e-10).sum(1),return_counts=True)); print('first 24 load/raw pairs:'); print(np.c_[y,x][:24]); print('raw quantiles by column',np.quantile(x,[0,.1,.5,.9,1],axis=0)); print('load quantiles',np.quantile(y,[0,.1,.5,.9,1],axis=0)); A=np.c_[np.ones(len(y)),y]; B=np.linalg.lstsq(A,x,rcond=None)[0]; print('forward fit',B); print('forward residual percentiles',np.quantile(np.abs(A@B-x),[.25,.5,.75,.9,.95,1],axis=0));\\nfor k in ['past_channel_raw','hold_channel_raw']:\\n print(k,np.quantile(d['test'][k].reshape(-1,4),[0,.1,.5,.9,1],axis=0))\\ns=c['single_channel_sweeps']; print('sweeps, first lab'); m=s['lab_id']==0; print(np.c_[s['true_stress'][m],s['cmd_stress'][m]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Unweighted affine bridge -> robust forward calibration; measured inverse-bridge RMSE reaches 0.455 in the worst channel.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the archived inverse least-squares calibration\",\"rejected_reason\":\"Its large calibration residuals warrant distinguishing isolated corruptions from systematic response curvature before reuse.\"}],\"rationale\":\"Use known physical loads as calibration predictors to distinguish sparse raw-side spikes from repeatable nonlinear response. Read only the archived deployment formulas needed to interpret the chronological telemetry.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "23807e6a0968a8c76a75b88b26f3553913297a3e145a2f0992cf59a9da20b27f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20820.74,
+      "usage_known": true,
+      "prompt_tokens": 22539,
+      "cached_tokens": 0,
+      "completion_tokens": 646
+    }
+  ]
+}

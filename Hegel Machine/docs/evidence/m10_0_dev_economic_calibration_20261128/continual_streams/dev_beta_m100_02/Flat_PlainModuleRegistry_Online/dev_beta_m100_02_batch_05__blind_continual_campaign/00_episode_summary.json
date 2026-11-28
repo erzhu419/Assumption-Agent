@@ -1,0 +1,505 @@
+{
+  "task_id": "dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "short_name": "dev_beta_m100_02_batch_05",
+  "benchmark": "Hegel-M100-Reliable-Modular-Amortization-And-Bidirectional-Withdrawal-World",
+  "wave": "m10_0_reliable_modular_amortization_and_bidirectional_withdrawal",
+  "scientific_domain": "coupled_2d_transport_reaction_box_simplex_kkt",
+  "wormhole_family": "m100_beta",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Flat_PlainModuleRegistry_Online",
+  "allow_l1_primitives": false,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 12,
+  "max_turns": 16,
+  "final_candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+  "validated_incumbent_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "set -e\ncat >/tmp/audit_rosette.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit, _predict, _invert, calibrate_upstream\nfrom batch_solver import solve_batch\np = pickle.l",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+        "expected_candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+        "computed_candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 4028
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_8057392a"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": true,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 2,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t04",
+      "turn_idx": 4,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "calibration model misspecification",
+      "candidate_sha256": null,
+      "resolved": false,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "An affine coupled map is sufficient for the calibration sweeps.",
+      "empirical_witness": "Excluding three gross spike rows, worst held-out row RMSE was 0.4740 for affine versus 0.1724 with tanh features; axis sweeps visibly bend as amplitude increases.",
+      "causal_blanket_diagnosis": "The affine basis models channel mixing but omits sensor saturation and amplitude-dependent coupling.",
+      "sublated_pivot": "Retain coupling and compare bounded saturation laws with small interaction bases.",
+      "pending_resolution_proposed_at_turn": 12,
+      "agent_claimed_probe": {
+        "turn": 11,
+        "command_preview": "set -e\ncat >/tmp/audit_rosette.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit, _predict, _invert, calibrate_upstream\nfrom batc",
+        "stdout_preview": "baseline worst [forward RMSE, axis mean bias, mixed mean bias] [1.20379545e-05 1.16989497e-05 7.68583938e-06]\nother_channels worst [forward RMSE, axis mean bias, mixed mean bias] [1.21186546e-05 1.23767185e-05 7.57263553e-06]\npair_differenc"
+      },
+      "probe_support_status": "agent_claimed_unverified"
+    },
+    {
+      "nogood_id": "ng_t08",
+      "turn_idx": 8,
+      "nogood_rung": "RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY",
+      "risk_kind": "calibration model misspecification",
+      "candidate_sha256": null,
+      "resolved": false,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [
+        "ng_t04"
+      ],
+      "assumption_refuted": "Conventional saturation or rational terms are needed to explain the observed bending.",
+      "empirical_witness": "The compact paired sinusoidal basis reduced worst-slice forward RMSE to 1.21e-5, near sweep noise, versus 0.00654 for the prior Tdh model.",
+      "causal_blanket_diagnosis": "The prior basis approximated the curvature with large cancelling terms while omitting a shared odd self response and even cross response.",
+      "sublated_pivot": "Fit shared frequencies and channel-specific coefficients, reject gross EMI by row residual, then invert the paired systems.",
+      "pending_resolution_proposed_at_turn": 12,
+      "agent_claimed_probe": {
+        "turn": 11,
+        "command_preview": "set -e\ncat >/tmp/audit_rosette.py <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _fit, _predict, _invert, calibrate_upstream\nfrom batc",
+        "stdout_preview": "baseline worst [forward RMSE, axis mean bias, mixed mean bias] [1.20379545e-05 1.16989497e-05 7.68583938e-06]\nother_channels worst [forward RMSE, axis mean bias, mixed mean bias] [1.21186546e-05 1.23767185e-05 7.57263553e-06]\npair_differenc"
+      },
+      "probe_support_status": "agent_claimed_unverified"
+    }
+  ],
+  "nogood_resolution_events": [],
+  "recalled_node_ids": [
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_05_conservative_elliptic_multig",
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_09_dispersive_wave_tomography"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_dev_beta_m100_02_batch_05_8057392a2875",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 10,
+    "exported_pure_functions": [
+      "sat",
+      "design",
+      "fit",
+      "pred",
+      "train",
+      "solve",
+      "_axis",
+      "_operator"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 0,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 0,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 1,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 0,
+    "describe_skill_queries": [
+      "autogenous_robust_network_assimilation.assimilate_diffusive_network"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "8057392a2875e135195fcae36ec75b42bc4c98afaa8311dd68f673eee81b4f83",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 2,
+      "declared_entrypoints": [
+        "solve_batch"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "batch_solver.py",
+          "final_file_sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+          "public_entrypoints": [
+            "solve_batch"
+          ],
+          "effective_entrypoints": [
+            "solve_batch"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        },
+        {
+          "filename": "upstream_transducer.py",
+          "final_file_sha256": "f3f830de202d1dc857f532e89ad939faa00bbe034436fda20dba1131cd018923",
+          "public_entrypoints": [
+            "calibrate_upstream"
+          ],
+          "effective_entrypoints": [],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "batch_solver.py",
+    "upstream_transducer.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_batch.pkl",
+      "/holdout_task/validate_public_schema.py",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json"
+    ],
+    "files_sha256": {
+      "/holdout_task/_verified_downstream.py": "37bd327af694ea8b355d91eede107ff2e8a27905e5089f2032c4e477d622cd77",
+      "/holdout_task/batch_solver.py": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+      "/holdout_task/public_asset_index.json": "5951b054a0b52ac449e038df1338b490f1ac9cd596b8031b34656c9e1db1b393",
+      "/holdout_task/public_batch.pkl": "5dcc2cc8f8dd31aa85e4d5f6ed3d01d7d02c6368835dde5d1df34d281f87ebd3",
+      "/holdout_task/validate_public_schema.py": "45846473e7410bd7a6f998baad074c6d758907688335dcf378eb3725a3000628",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5329,
+    "initial_user_payload_chars": 2798,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 12130
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 12,
+    "logical_agent_decision_calls": 12,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 12,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_a633baf6.json",
+      "attempts_002_88916731.json",
+      "attempts_003_14f60635.json",
+      "attempts_004_25ff4170.json",
+      "attempts_005_566eb239.json",
+      "attempts_006_91573089.json",
+      "attempts_007_23221230.json",
+      "attempts_008_123a0a98.json",
+      "attempts_009_9f6eb475.json",
+      "attempts_010_5c6e1edc.json",
+      "attempts_011_9a9fab8c.json",
+      "attempts_012_ce349a92.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 30,
+  "prompt_tokens": 341406,
+  "cached_tokens": 102784,
+  "completion_tokens": 14716,
+  "total_tokens": 356122,
+  "token_cost_proxy": 279034,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 279034,
+  "wall_ms": 489901.48,
+  "provenance_verified": true,
+  "terminal_record_sha256": "fd4fde497f8a67b4aac559615b2c7fa19cac9cd864d9b3700aa24f49068cce8c",
+  "world_id": "dev_beta_m100_02",
+  "cluster_id": "dev_cluster_m100_04_beta",
+  "family": "beta",
+  "order_mode": "coupled_first",
+  "stream_step": 5,
+  "causal_event": "S05_u2_disc",
+  "true_regime": "U2__D0",
+  "event_category": "upstream_u2_discovery",
+  "execution_mode": "llm_upstream_module_solve",
+  "pre_llm_probe_wall_ms": 5163.24,
+  "post_llm_probe_wall_ms": 5111.21,
+  "localization_probe_wall_ms": 1255.92,
+  "decomposition_probe_wall_ms": 0.0,
+  "official_verifier_wall_ms": 4515.04,
+  "readonly_dependencies_sha256": {
+    "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+  },
+  "public_qualification_status": "public_gate_verified",
+  "calibration_update_receipt": null,
+  "empirical_coverage_receipts": [],
+  "guard_induction_receipt": {
+    "accepted": true,
+    "attempts_used": 1,
+    "diagnosis": "Strongly negative adjacent correlation identifies S02, and high opposite absolute correlation identifies S05. The baseline has neither signal. Each guard accepts all of its own witnesses and rejects every other branch's witnesses. The smallest clause margin is 0.0928905, above the required 0.035.",
+    "new_branch_guard": {
+      "all_of": [
+        {
+          "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+          "op": ">",
+          "threshold": 0.1208545
+        }
+      ]
+    },
+    "existing_branch_guards": {
+      "up_r00_u0": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+            "op": ">",
+            "threshold": -0.1398215
+          },
+          {
+            "feature_name": "up_stat_04_opp_offdiag_abs_corr_max",
+            "op": "<=",
+            "threshold": 0.1208545
+          }
+        ]
+      },
+      "up_r02_S02_u1_disc": {
+        "all_of": [
+          {
+            "feature_name": "up_stat_02_adj_offdiag_signed_corr",
+            "op": "<=",
+            "threshold": -0.1398215
+          }
+        ]
+      }
+    },
+    "attempts_log": [
+      {
+        "attempt": 1,
+        "partition_check": {
+          "valid": true,
+          "reasons": []
+        }
+      }
+    ]
+  },
+  "autonomous_decomposition_receipt": null,
+  "pre_llm_trial_receipt": {
+    "arm": "Flat_PlainModuleRegistry_Online",
+    "accepted_pre_llm": false,
+    "pre_llm_probes_used": 1,
+    "probe_wall_ms": 5163.24,
+    "localization_probes_used": 2,
+    "localization_probe_wall_ms": 1255.92,
+    "sibling_fallback_used": false,
+    "lazy_projection_receipt": null,
+    "raw_archive_replay": null,
+    "upstream_selection_mode": "unique_branch",
+    "downstream_selection_mode": "unique_branch",
+    "selected_upstream_id": "up_r00_u0",
+    "selected_downstream_id": "dn_r00_d0",
+    "selected_upstream_ep": "calibrate_upstream",
+    "selected_downstream_ep": "solve_downstream",
+    "conflict_locus_diagnosis": {
+      "locus": "upstream_transducer",
+      "component_probe_executed": true,
+      "execution_status": "completed",
+      "evidence_origin": "direct_component_probe",
+      "failure_tier": "SCIENTIFIC_FAILURE",
+      "failure_kind": "scientific_or_numerical",
+      "diagonal_ols_r2": 0.924742,
+      "off_diagonal_corr_max": 0.765732,
+      "chosen_up_holdout_rmse": 0.2616906483103006,
+      "candidate_code_sha256": "333ef189ecbc78bfb88bc7d8d20791ce540505e4f8be8e4bcb9d7a9e27f3c84f",
+      "probe_id": "uprobe_4a280d4379c64a13",
+      "probe_wall_ms": 615.99,
+      "return_code": 0,
+      "upstream_observables": {
+        "up_stat_01_diagonal_ols_r2": 0.924742,
+        "up_stat_02_off_diagonal_corr_max": 0.765732,
+        "up_stat_03_cal_frobenius_rms": 1.022486,
+        "up_stat_04_cal_row_count": 80.0
+      }
+    },
+    "failure_kind": "scientific_or_numerical",
+    "probe_result": {
+      "accepted": false,
+      "setup_ok": true,
+      "setup_exit_code": 0,
+      "schema_valid": true,
+      "schema_exit_code": 0,
+      "timed_out": false,
+      "schema_stdout": "{\"schema_valid\": true, \"errors\": []}\n",
+      "schema_stderr": "",
+      "candidate_bundle_sha256": "21aa9ca6550d4f5107b571a06043592fcf0b044fbb011b165b4fd7df06c47f87",
+      "candidate_raw_sha256": "6d0991895da7917778f595d5febe300645ad2afff615228a1995d7446103e8a2",
+      "setup_source_sha256": "a5fb02f24ce3a057bfd78044d5f4abbb1d167fad009b0dafa73a941cc029f93b",
+      "readonly_dependencies_sha256": {
+        "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+      },
+      "public_setup_files_sha256": {
+        "/holdout_task/public_batch.pkl": "5dcc2cc8f8dd31aa85e4d5f6ed3d01d7d02c6368835dde5d1df34d281f87ebd3",
+        "/holdout_task/validate_public_schema.py": "45846473e7410bd7a6f998baad074c6d758907688335dcf378eb3725a3000628",
+        "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+      },
+      "scientific_probe_receipt": {
+        "execution_status": "completed",
+        "scientific_invariants_verified": false,
+        "candidate_bundle_sha256": "21aa9ca6550d4f5107b571a06043592fcf0b044fbb011b165b4fd7df06c47f87",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_batch.pkl": "5dcc2cc8f8dd31aa85e4d5f6ed3d01d7d02c6368835dde5d1df34d281f87ebd3",
+          "/holdout_task/validate_public_schema.py": "45846473e7410bd7a6f998baad074c6d758907688335dcf378eb3725a3000628",
+          "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+        },
+        "reason": "public_scientific_check_failed",
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "canonical_numeric_sha256": "f8d73420490b490ef000232d22ae99a86e9ae070e4819c95094bb335a3a63d17",
+        "errors": [
+          "kkt_invalid:reported_primal_mismatch:7.537e-02",
+          "single_channel_gt_mismatch:w=6.727617e-01,f=1.543211e-01"
+        ],
+        "measured_scientific_metrics": {
+          "field_rel_l2": 0.15432106,
+          "weights_rel_l2": 0.67276169
+        },
+        "probe_code_digest": "324b10e851a0538b4e880bba0facdcdc450dd2c81b3c833f9f6779d839207013",
+        "public_input_digest": "5dcc2cc8f8dd31aa85e4d5f6ed3d01d7d02c6368835dde5d1df34d281f87ebd3",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer"
+      }
+    },
+    "locus": "upstream_transducer"
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/batch_solver.py": "FILE:12812"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_w_rel_l2": 1.78e-05,
+      "max_field_rel_l2": 4.2e-06,
+      "max_kkt_gap": 4.659e-06,
+      "student_elapsed_sec": 0.0304,
+      "instance_diagnostics": [
+        {
+          "seed": 974511,
+          "w_rel": 1.78e-05,
+          "f_rel": 4.2e-06,
+          "kkt_gap": 4.659e-06
+        },
+        {
+          "seed": 974512,
+          "w_rel": 6.9e-06,
+          "f_rel": 1.7e-06,
+          "kkt_gap": 2.333e-06
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.130076,
+        "import_cpu_sec": 0.118799,
+        "candidate_call_wall_sec": 0.020638,
+        "candidate_call_cpu_sec": 0.018641,
+        "ipc_and_codec_wall_sec": 0.086675,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.013826,
+        "verifier_and_gt_cpu_sec": 0.018282,
+        "total_supervisor_wall_sec": 0.251215
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_w_rel_l2\": 1.78e-05, \"max_field_rel_l2\": 4.2e-06, \"max_kkt_gap\": 4.659e-06, \"student_elapsed_sec\": 0.0304, \"instance_diagnostics\": [{\"seed\": 974511, \"w_rel\": 1.78e-05, \"f_rel\": 4.2e-06, \"kkt_gap\": 4.659e-06}, {\"seed\": 974512, \"w_rel\": 6.9e-06, \"f_rel\": 1.7e-06, \"kkt_gap\": 2.333e-06}]}\n__HEGEL_VERIFIER_AUTH_95a533675e34e846a07a0ea6cc7c1f25__:{\"strict_pass\": true, \"reward\": 1.0, \"max_w_rel_l2\": 1.78e-05, \"max_field_rel_l2\": 4.2e-06, \"max_kkt_gap\": 4.659e-06, \"student_elapsed_sec\": 0.0304, \"instance_diagnostics\": [{\"seed\": 974511, \"w_rel\": 1.78e-05, \"f_rel\": 4.2e-06, \"kkt_gap\": 4.659e-06}, {\"seed\": 974512, \"w_rel\": 6.9e-06, \"f_rel\": 1.7e-06, \"kkt_gap\": 2.333e-06}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.130076, \"import_cpu_sec\": 0.118799, \"candidate_call_wall_sec\": 0.020638, \"candidate_call_cpu_sec\": 0.018641, \"ipc_and_codec_wall_sec\": 0.086675, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.013826, \"verifier_and_gt_cpu_sec\": 0.018282, \"total_supervisor_wall_sec\": 0.251215}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 3909.79,
+    "failure_taxonomy": "PASSED_ALL_CHECKS",
+    "readonly_dependencies_sha256": {
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "f989687373ee88870ab9f84c76354c1faf2d55b72fcb6a092975ad15e5b91b40"
+    }
+  }
+}

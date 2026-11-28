@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "477088fb6a7e42b4b2fb464f7217dd3f",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:01.386491+00:00",
+  "ended_at_utc": "2026-11-28T02:46:37.592296+00:00",
+  "request_sha256": "e14645ec0fe0c226323794eba4d046a15787a65a82d2a29f03bf44f7f3d54211",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 33288,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22199,
+    "cached_tokens": 11904,
+    "completion_tokens": 1493
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/bridge_profile.py <<'PY'\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; sweep=c['single_channel_sweeps']\\naxis=(abs(x)>1e-9).sum(1)<=1\\nprint('axis versus mixed rows',axis.sum(),(~axis).sum()); print('first load/raw rows',np.c_[x[:8],y[:8]].round(4)); print('sweeps by lab',np.c_[sweep['true_stress'],sweep['cmd_stress']].reshape(4,-1,2).round(4))\\n\\ndef link(z,b,k):\\n if k=='cubic':return z-b*z**3\\n if k=='tanh':return np.tanh(b*z)/b\\n if k=='atan':return np.arctan(b*z)/b\\n if k=='root':return z/np.sqrt(1+b*z*z)\\n if k=='rational':return z/(1+b*z*z)\\n if k=='sinh_inverse':return np.arcsinh(b*z)/b\\n if k=='erf':\\n  from scipy.special import erf\\n  return erf(b*z)*np.sqrt(np.pi)/(2*b)\\n\\ndef features(x,j,b,k,terms):\\n z=x[:,j]; other=[i for i in range(4) if i!=j]; a=[np.ones(len(x)),link(z,b,k),*x[:,other].T]\\n if terms=='adj': a.extend(x[:,other].T**2)\\n if terms=='diag2':a.extend(x.T**2)\\n if terms=='full2':a.extend(x[:,i]*x[:,l] for i in range(4) for l in range(i,4))\\n return np.column_stack(a)\\n\\ndef fit(x,y,k,terms):\\n model=[]\\n for j in range(4):\\n  A=features(x,j,.55,k,terms); p=np.r_[.55,np.linalg.lstsq(A,y[:,j],rcond=None)[0]]\\n  def residual(p):return features(x,j,p[0],k,terms)@p[1:]-y[:,j]\\n  for scale,loss in [(.12,'soft_l1'),(.025,'cauchy'),(.008,'cauchy')]:\\n   p=least_squares(residual,p,bounds=(np.r_[.0001,np.full(len(p)-1,-np.inf)],np.r_[4.,np.full(len(p)-1,np.inf)]),loss=loss,f_scale=scale,max_nfev=100).x\\n  model.append(p)\\n return model\\n\\ndef predict(x,model,k,terms):return np.column_stack([features(x,j,p[0],k,terms)@p[1:] for j,p in enumerate(model)])\\n\\ndef score(r,folds):return np.round([np.median(r),np.quantile(r,.85),max(np.median(r[f]) for f in folds)],5)\\nif __name__=='__main__':\\n rng=np.random.default_rng(870); random=np.array_split(rng.permutation(len(x)),5); radial=np.array_split(np.argsort(np.max(np.abs(x),axis=1)),5)\\n for k in ('cubic','tanh','atan','root','rational','sinh_inverse','erf'):\\n  for terms in ('adj','diag2','full2'):\\n   summary=[]\\n   for folds in (random,radial):\\n    r=np.zeros(len(x));\\n    for f in folds:\\n     i=np.setdiff1d(np.arange(len(x)),f); r[f]=np.linalg.norm(predict(x[f],fit(x[i],y[i],k,terms),k,terms)-y[f],axis=1)\\n    summary.append(score(r,folds))\\n   print(k,terms,*summary)\\n for k in ('tanh','atan','root','rational','erf'):\\n  m=fit(x,y,k,'diag2'); r=np.linalg.norm(predict(x,m,k,'diag2')-y,axis=1); print(k,'coeffs',np.round(m,4),'largest rows',[(int(i),round(r[i],4)) for i in np.argsort(r)[-8:]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_profile.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: replace the affine bridge with a coupled saturating response; the diagonal cubic lowers worst radial-fold median forward error from 0.465 to 0.264.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine or quadratic bridge captures the systematic channel response.\",\n    \"empirical_witness\": \"The worst random-fold median drops from 0.429 for affine and 0.432 for full quadratic to 0.101 for diagonal cubic; the cubic still reaches 0.264 in the worst radial fold.\",\n    \"causal_blanket_diagnosis\": \"The largest nonlinear coefficients act on each channel's own load, while cross-channel coefficients remain material. Higher-order terms must distinguish saturation from polynomial curvature.\",\n    \"sublated_pivot\": \"Compare saturating diagonal links with linear and quadratic coupling, retaining robust forward fitting and radial holdouts.\",\n    \"risk_kind\": \"off-support inverse bias\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the diagonal cubic directly\",\n      \"rejected_reason\": \"Its high-load error remains substantial, and a negative cubic can turn over and make the inverse ambiguous.\"\n    },\n    {\n      \"option\": \"Reuse the robust network assimilation primitive\",\n      \"rejected_reason\": \"It models dynamic graph observations, not paired static bridge calibration.\"\n    }\n  ],\n  \"rationale\": \"Axis rows can expose the shape of the bridge response, while mixed rows test coupling. Rank candidate links on held-out data to see whether saturation improves the load range where the cubic fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "fee93569ce08de5b52d6479c5822f5ab1cbecb0cc072dcbb3824f3ffc4665aab",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38281.27,
+      "usage_known": true,
+      "prompt_tokens": 22199,
+      "cached_tokens": 11904,
+      "completion_tokens": 1493
+    }
+  ]
+}

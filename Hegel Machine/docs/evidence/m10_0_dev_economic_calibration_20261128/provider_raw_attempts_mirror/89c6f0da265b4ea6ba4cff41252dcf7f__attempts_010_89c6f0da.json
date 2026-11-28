@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "89c6f0da265b4ea6ba4cff41252dcf7f",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:19.932944+00:00",
+  "ended_at_utc": "2026-11-28T02:45:50.208259+00:00",
+  "request_sha256": "1ca8c5dfe6f7ee20af78011e1cebd8a693be7deae3d209ecc1d59cf9dc17acae",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49520,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26205,
+    "cached_tokens": 9344,
+    "completion_tokens": 1204
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _basis, _invert, _TERMS, calibrate_upstream\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    st = item['study']\\n    c = st['sensor_calibration_sweeps']\\n    ref, raw = c['ref_rosette'], c['raw_rosette']\\n    a = _basis(ref)\\n    clean = np.flatnonzero(np.linalg.norm(raw, axis=1) < 10)\\n    test = clean[np.argsort(np.linalg.norm(ref[clean], axis=1))][-len(clean)//3:]\\n    train = np.setdiff1d(np.arange(len(ref)), test)\\n    coef = _fit(ref[train], raw[train])\\n    mixed = np.array([len(set(t)) > 1 for t in _TERMS])\\n    # Refit a baseline without interactions, using the same training rows.\\n    d = a[train][:, ~mixed]\\n    b = np.linalg.lstsq(d, raw[train], rcond=None)[0]\\n    for _ in range(35):\\n        err = np.linalg.norm(d @ b - raw[train], axis=1)\\n        cut = max(3*np.median(err), 1e-12)\\n        w = cut / np.maximum(cut, err)\\n        b = np.linalg.lstsq(d*w[:,None], raw[train]*w[:,None], rcond=None)[0]\\n    e0 = np.linalg.norm(a[test][:,~mixed] @ b - raw[test], axis=1)\\n    e1 = np.linalg.norm(a[test] @ coef - raw[test], axis=1)\\n    inv = np.abs(_invert(raw[test],coef)-ref[test])\\n    print('ng_t04 held-out high-amplitude interaction ablation: worst forward row, separate-bank and coupled:', e0.max(), e1.max())\\n    print('Held-out inverse max by channel:', inv.max(axis=0))\\n    assert e1.max() < e0.max()*0.01 and inv.max() < 3e-4\\n    model = _fit(ref,raw)\\n    bank = c['single_bank_sweeps']\\n    j = np.asarray(bank['bank_id']).reshape(-1)\\n    u = np.asarray(bank['ref_signal']).reshape(-1)\\n    y = np.asarray(bank['raw_readout']).reshape(-1)\\n    axis = np.zeros((len(j),4))\\n    axis[np.arange(len(j)),j] = u\\n    resid = np.abs((_basis(axis) @ model)[np.arange(len(j)),j] - y)\\n    print('Independent single-bank sweep median discrepancies:', [np.median(resid[j==k]) for k in range(4)])\\n    cal = calibrate_upstream(st)\\n    obs = st['y_obs_raw'].reshape(-1,4)\\n    closure = np.abs(_basis(cal['y_obs_raw'].reshape(-1,4))@model - obs).reshape(-1)\\n    ids = np.asarray(st['row_bank_id']).reshape(-1)\\n    assert len(ids) == len(closure)\\n    print('Observed closure max by row_bank_id:', {int(k):float(closure[ids==k].max()) for k in np.unique(ids)})\\n    assert closure.max() < 1e-9\\n    out = solve_batch(st)\\n    assert np.all(np.isfinite(out['weights'])) and np.all(np.isfinite(out['terminal_field']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Separate-bank nonlinearity → sparse coupled cubic; the highest-amplitude holdout has a maximum inverse error of 4.28e-5, and a matched interaction ablation and row-bank closure audit are pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Center observations by row_bank_id\",\n      \"rejected_reason\": \"Bank identity identifies measurement channels, not a labeled technical cohort. Centering could remove real signal; check calibration discrepancies and inverse closure by bank instead.\"\n    }\n  ],\n  \"rationale\": \"Directly test whether mixed terms account for the held-out gain under the same training split. Independent bank sweeps can reveal a channel mismatch, while closure by measurement bank can expose localized inversion failure hidden by aggregate summaries.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5923631139b60c31ff079ad4f8603694a5d29c4be9120d3be91981b77c5a881d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32281.88,
+      "usage_known": true,
+      "prompt_tokens": 26205,
+      "cached_tokens": 9344,
+      "completion_tokens": 1204
+    }
+  ]
+}

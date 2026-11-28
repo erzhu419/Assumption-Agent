@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5cc73cc937994375956547faba43cfba",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:42:25.596618+00:00",
+  "ended_at_utc": "2026-11-28T02:42:59.188833+00:00",
+  "request_sha256": "bd66550ac5618ef8ec0af01f0eca05e8cba5985987af8669bd236ba0c1014463",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22084,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19009,
+    "cached_tokens": 5504,
+    "completion_tokens": 1463
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json && python3 - <<'PY'\\nimport json\\nfor name in ['archive_manifest','archive_apparatus_log']:\\n obj=json.load(open('/tmp/hegel_continual_archive/'+name+'.json')); print(name,str(obj)[-2400:])\\nPY\\ncat >/tmp/check_bridge.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import root\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=s['calibration_load_cells']; x,y=c['true_channel_loads'],c['bridge_raw']\\nterms=[i for d in range(1,4) for i in combinations_with_replacement(range(4),d)]\\ndef design(x,i,kind):\\n z=np.atleast_2d(x); m=terms if kind=='full' else [(j,) for j in range(4)] + ([(i,(i+1)%4),(i,i,i)] if kind=='ring' else [])\\n return np.column_stack([np.ones(len(z))]+[np.prod(z[:,j],axis=1) for j in m])\\ndef fit(x,y,kind):\\n a=[design(x,i,kind) for i in range(4)]; w=np.ones(len(x))\\n for _ in range(20):\\n  b=[np.linalg.lstsq(ai*w[:,None],yi*w,rcond=None)[0] for ai,yi in zip(a,y.T)]; r=np.linalg.norm(np.column_stack([ai@bi for ai,bi in zip(a,b)])-y,axis=1); w=1/np.hypot(1,r/max(1e-8,2*np.median(r)))\\n keep=r<max(1e-8,8*np.median(r)); b=[np.linalg.lstsq(ai[keep],yi[keep],rcond=None)[0] for ai,yi in zip(a,y.T)]\\n return b,keep\\ndef forward(q,b,kind): return np.column_stack([design(q,i,kind)@bi for i,bi in enumerate(b)])\\ndef inverse(v,b,kind):\\n o=np.array([bi[0] for bi in b]); M=np.array([bi[1:5] for bi in b]); sol=root(lambda q:forward(q,b,kind)[0]-v,np.linalg.solve(M,v-o),tol=1e-10); return sol.x,np.max(np.abs(sol.fun))\\nb,good=fit(x,y,'ring'); print('ring coefficients\\\\n',np.array(b)); print('ring flagged',np.flatnonzero(~good)); print('axis',np.flatnonzero(np.count_nonzero(x,axis=1)<=1))\\nfor k in ['affine','full','ring']:\\n e=[]; f=[]\\n for i in range(len(x)):\\n  mask=np.arange(len(x))!=i; bi,_=fit(x[mask],y[mask],k)\\n  v,rr=inverse(y[i],bi,k); e.append(v-x[i]); f.append(forward(x[i],bi,k)[0]-y[i]);\\n e=np.array(e); f=np.array(f); h=np.max(np.abs(x),axis=1)>1.55; ax=np.count_nonzero(x,axis=1)<=1\\n for label,m in [('clean',good),('edges',good&h),('axis',good&ax),('mixed',good&~ax)]: print(k,label,m.sum(),'load mae/max',np.mean(np.abs(e[m])),np.max(np.abs(e[m])),'sum max',np.max(np.abs(e[m].sum(1))),'forward max',np.max(np.abs(f[m])))\\nfor part in ['train','test']:\\n for key in ['past_channel_raw','hold_channel_raw']:\\n  vals=s[part][key].reshape(-1,4); z=[inverse(v,b,'ring') for v in vals]; q=np.array([a for a,r in z]); print(part,key,'domain',q.min(0),q.max(0),'worst closure',max(r for a,r in z))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/check_bridge.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine mixing → cyclic pair coupling plus per-channel cubic response; median in-sample bridge residual fell from 0.388 to 0.00015 with the full cubic basis, and leave-one-out error is pending.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or degree-two bridge basis captures the clean calibration response.\",\"empirical_witness\":\"Median residuals were 0.388 for affine, 0.190 for quadratic, and 0.00015 for cubic; the cubic fit isolates one adjacent-channel product and one own-channel cube per output.\",\"causal_blanket_diagnosis\":\"Unmodeled bridge curvature and paired-load coupling dominate the clean residuals, independently of the gross raw spikes.\",\"sublated_pivot\":\"Retain the affine mixing and test a sparse cyclic polynomial against the unrestricted cubic on withheld calibration loads.\",\"risk_kind\":\"missing nonlinear bridge basis\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Deploy the unrestricted cubic immediately\",\"rejected_reason\":\"Its fit identifies the relevant terms, but estimating all 35 coefficients per output could worsen high-load extrapolation. Withheld slices will test that.\"}],\"rationale\":\"Withhold each calibration row and compare load error on mixed, single-channel, and high-load slices. Check trial inversion closure separately: a small calibration residual does not establish that the inverse converges on the trial domain.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "5a81fe06193b172b052c00aa65f035581b73ec934e29900dd6b10b6637f650fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37701.15,
+      "usage_known": true,
+      "prompt_tokens": 19009,
+      "cached_tokens": 5504,
+      "completion_tokens": 1463
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c56938f64c46411a92d0a6dee0b65133",
+  "call_seq": 2,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:47:18.144706+00:00",
+  "ended_at_utc": "2026-11-28T02:47:35.457666+00:00",
+  "request_sha256": "6aeb7b7b4ed2e14137ca8cf744196717be62254825d2d99f8dd503e39f52edb0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 11846,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 15036,
+    "cached_tokens": 5504,
+    "completion_tokens": 605
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np,json\\nfrom pathlib import Path\\nd=pickle.load(open('public_batch.pkl','rb'))\\nfor k,v in d.items():\\n print(k, {j:(type(o).__name__,np.shape(o) if not isinstance(o,dict) else list(o)) for j,o in v.items()} if isinstance(v,dict) else (type(v).__name__,np.shape(v)))\\nc=d['calibration_load_cells']; x=np.asarray(c['true_channel_loads']); y=np.asarray(c['bridge_raw']);\\nfor name,a in [('true',x),('raw',y)]: print(name,np.quantile(a,[0,.05,.5,.95,1],axis=0),a[:5]);\\nfor key in ('train','test','chamber_verification_trials'):\\n p=d.get(key)\\n if isinstance(p,dict):\\n  for n in ('past_channel_raw','hold_channel_raw'):\\n   a=np.asarray(p[n]); print(key,n,np.nanquantile(a.reshape(-1,4),[0,.01,.99,1],axis=0))\\nfor path in ('archive_manifest','archive_apparatus_log'):\\n a=json.loads(Path('/tmp/hegel_continual_archive/'+path+'.json').read_text()); print(path,type(a),len(a));\\n if isinstance(a,list):\\n  for q in a[-6:]: print({k:str(v)[:155] for k,v in q.items()})\\n elif isinstance(a,dict): print({k:str(v)[:240] for k,v in a.items()})\\nPY\\ncat validate_public_schema.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled affine bridge -> H2 robust nonlinear forward map; out-of-fold error pending calibration and operating-range inspection.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an inverse directly to raw calibration values\",\"rejected_reason\":\"Gross raw spikes would contaminate the predictors; fitting the forward map puts them in the residual instead.\"}],\"rationale\":\"Inspect the calibration design, field layout, and operating ranges to identify which nonlinear terms can be estimated and which extrapolation slices need testing.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "b469f619fe554a912f426fc5449c93a5fc4e5f38cb8e20150e9da77a418904e8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19321.96,
+      "usage_known": true,
+      "prompt_tokens": 15036,
+      "cached_tokens": 5504,
+      "completion_tokens": 605
+    }
+  ]
+}

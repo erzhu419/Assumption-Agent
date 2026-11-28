@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "84038982e8c940fdb4c6b8af457de7c5",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:03.078061+00:00",
+  "ended_at_utc": "2026-11-28T02:25:21.069588+00:00",
+  "request_sha256": "f9f5a2b74db48670251d84e1a8470722776c294a9816987424f82d4409640aeb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22851,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18198,
+    "cached_tokens": 0,
+    "completion_tokens": 615
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat /holdout_task/public_asset_index.json; sed -n '46,180p' /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=p['dataset']; cal=d['calibration_load_cells'];s=cal['single_channel_sweeps']; print('sweep',type(s),str(s)[:1600]);r=cal['bridge_raw'];y=cal['true_channel_loads'];print('cal range',r.min(0),r.max(0),y.min(0),y.max(0));\\nfor k,a in [('linear',np.c_[np.ones(len(r)),r]),('quad',np.c_[np.ones(len(r)),r,*[r[:,i]*r[:,j] for i in range(4) for j in range(i,4)]])]:\\n h=np.sum(np.linalg.qr(a)[0]**2,1); e=(a@np.linalg.lstsq(a,y,rcond=None)[0]-y)/(1-h[:,None]);print(k,np.sqrt(np.mean(e**2)),np.sqrt(np.mean(e.sum(1)**2)),np.max(abs(e.sum(1))))\\nfor g in [d['train'],d['test'],p['campaign_diagnostics']]:\\n print('labs',np.unique(g['lab_id'],return_counts=True),'strata',np.unique(g['stratum'],return_counts=True)); print('aux', g.get('aux_chamber_telemetry',np.empty((0,4)))[:5]); print('missing',np.isnan(g['coupon_features_raw']).sum(0)); print('raw ranges',np.min(g['past_channel_raw'],axis=(0,1)),np.max(g['past_channel_raw'],axis=(0,1)))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -40\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived affine bridge and shared spectrum -> H2 measured bridge nonlinearity and chamber corrections tested separately; no held-out error measured yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Compare affine and quadratic calibration on held-out sweeps before fitting a chamber law: bridge error could otherwise be mistaken for chamber memory. Read asset metadata for the supported diagnostic fields and deployment conditions.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "02808f319f5948efd349c277ee69d57f0531cb57e5651681d2765a3db068f295",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19956.28,
+      "usage_known": true,
+      "prompt_tokens": 18198,
+      "cached_tokens": 0,
+      "completion_tokens": 615
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "be895afd85434efdb2197e6497a6d59f",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:58:07.110590+00:00",
+  "ended_at_utc": "2026-11-28T02:58:28.922289+00:00",
+  "request_sha256": "85cd85a1d2b330dc902d323c09698cd2ad2b9b9efb5797c3c2c9859e5256436d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46499,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26608,
+    "cached_tokens": 9344,
+    "completion_tokens": 801
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\nbase=(p/'dev_alpha_m100_01_batch_06_solver.py').read_text().split('# Chamber correction transferred')[0]\\nsource=(p/'dev_alpha_m100_01_batch_02_solver.py').read_text().split('# Chamber verification coupons')[1]\\nheader='# Chamber verification coupons in the matching archived regime identify a\\\\n# unit-time saturation of drift without changing the two stress-memory branches.\\\\n'\\nbody=header+source[source.index('_CHAMBER_DRIFT_TIME'):]\\nPath('/holdout_task/batch_solver.py').write_text(base.replace('fit the shared two-branch material law.', 'fit the shared material law and forecast chamber creep.')+body)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];print('diagnostics:',type(d.get('campaign_diagnostics')).__name__); d=d['dataset']\\na,b=d['train'],d['test']; c=d['calibration_load_cells']; bridge=m._bridge(c)\\nerr=m._forward(c['true_channel_loads'],bridge)-c['bridge_raw'];print('bridge parameters',bridge.round(5));print('bridge residual percentiles by channel',np.quantile(abs(err),[.5,.9,.95,.98,1],axis=0).round(6));\\nfor name,p in [('train',a),('test',b)]:\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  z=m._invert(p[k],bridge);print(name,k,'load range',z.min(),z.max(),'max forward error',np.max(abs(m._forward(z,bridge)-p[k])))\\nr=m.solve_batch(d);print('fit',r['estimated_taus'],r['hereditary_weights']);print('test prediction ranges',[(k,float(v.min()),float(v.max())) for k,v in r.items() if 'pred' in k]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Chamber carryover → archived unit-time drift saturation with retained stress memory; current saturation marker differs from the archived match by 0.012, and blind deployment error is unobservable.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Transfer the entire batch-02 solver\",\"rejected_reason\":\"Its chamber law is relevant, but its bridge model predates the nonlinear calibration used in later campaigns.\"}],\"rationale\":\"Build the solver with the marker-matched chamber law and a bridge fitted from current sweeps. Calibration residuals and inversion error will show whether the archived bridge basis fits this campaign or needs revision before cross-validating the material fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f72387a44dc0720b2f5b8da19d4def88d1fd741f64d799c3c11791d70bb3c490",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23823.78,
+      "usage_known": true,
+      "prompt_tokens": 26608,
+      "cached_tokens": 9344,
+      "completion_tokens": 801
+    }
+  ]
+}

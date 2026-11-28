@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "62b738540d8d48609d399ea1cd89fbac",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:34:14.654169+00:00",
+  "ended_at_utc": "2026-11-28T02:34:38.627992+00:00",
+  "request_sha256": "edd2825ae96fa2d2eff4ba7eaa3fcbf0cd8b6567a4ef026004b06aad2f5bb6e9",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 29909,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20864,
+    "cached_tokens": 5504,
+    "completion_tokens": 907
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom pathlib import Path\\nD=pickle.loads(Path('/holdout_task/public_batch.pkl').read_bytes())[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; n=len(x)\\n\\ndef design(x,terms):\\n return np.column_stack([np.prod(x[:,t],axis=1) for t in terms])\\n\\ndef fit(a,b):\\n w=np.ones(len(a))\\n for j in range(40):\\n  p=np.linalg.lstsq(a*w[:,None],b*w[:,None],rcond=None)[0]\\n  r=np.linalg.norm(a@p-b,axis=1)\\n  s=max(np.median(r)*1.5,1e-5)\\n  w=1/np.sqrt(1+(r/s)**2)\\n return p,r\\n\\nif __name__=='__main__':\\n terms=[t for k in range(5) for t in combinations_with_replacement(range(4),k)]\\n for label, t in [('linear',terms[:5]),('quadratic',terms[:15]),('quad+pure-cube',[j for j in terms if len(j)<=2 or (len(j)==3 and len(set(j))==1)]),('all-cube',terms[:35]),('cube+pure-quartic',[j for j in terms if len(j)<=3 or len(set(j))==1])]:\\n  a=design(x,t); p,r=fit(a,y); pred=y.copy()\\n  for h in range(n):\\n   k=np.arange(n)!=h; pred[h]=a[h]@fit(a[k],y[k])[0]\\n  cv=np.linalg.norm(pred-y,axis=1); good=r<1\\n  print(label,'gross',np.flatnonzero(~good),'fit',np.quantile(r[good],[.5,.9,1]),'LOO',np.quantile(cv[good],[.5,.9,1]),'axis/mixed max',cv[:16][good[:16]].max(),cv[16:][good[16:]].max())\\n  if label in ('quad+pure-cube','all-cube'):\\n   print([(j,np.round(v,5).tolist()) for j,v in zip(t,p) if np.max(np.abs(v))>.001])\\n print('axis rows')\\n print(np.round(np.c_[x[:16],y[:16]],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network 2>&1 | head -14\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled bridge response -> compare sparse and full polynomial forward models; held-out calibration error has not yet been measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit raw-to-load regression directly\",\n      \"rejected_reason\": \"Gross spikes would contaminate the predictors, and the inverse of a low-order forward map need not be a low-order polynomial.\"\n    }\n  ],\n  \"rationale\": \"Compare leave-one-row-out residuals on axis and mixed-load rows to detect missing nonlinear terms or an overfit basis before committing to a map to invert.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "2f4a56837adc8b584b2359793176247181e61100cbe043244ae69077f705eed8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26012.21,
+      "usage_known": true,
+      "prompt_tokens": 20864,
+      "cached_tokens": 5504,
+      "completion_tokens": 907
+    }
+  ]
+}

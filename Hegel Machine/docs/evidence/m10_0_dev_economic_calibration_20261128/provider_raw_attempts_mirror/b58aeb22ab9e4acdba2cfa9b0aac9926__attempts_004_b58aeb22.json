@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b58aeb22ab9e4acdba2cfa9b0aac9926",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:04.441329+00:00",
+  "ended_at_utc": "2026-11-28T02:41:26.500984+00:00",
+  "request_sha256": "71ea5b84dccf6a433475f15b191e0bbcb439ee3f6f236d8fc021c089140c7079",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32008,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22367,
+    "cached_tokens": 9344,
+    "completion_tokens": 712
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"for f in /tmp/hegel_continual_archive/*batch_0{1,2,3}_solver.py; do echo ==== $f; sed -n '/^def _bridge/,/^def _design/p; /^# Chamber/,$p' \\\"$f\\\"; done; python3 - <<'PY'\\nimport pickle,numpy as np\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('dt,t',D['past_dt'],D['eval_times']); print('joint sweep',x.shape,'load quantiles',np.quantile(x,[0,.1,.5,.9,1],axis=0)); print('single sweep',[(k,np.shape(v)) for k,v in c['single_channel_sweeps'].items()]); A=np.c_[np.ones(len(x)),x]; b=np.linalg.lstsq(A,y,rcond=None)[0]; print('forward affine',b,'RMS',np.sqrt(np.mean((A@b-y)**2,axis=0))); s=c['single_channel_sweeps']; print('sweep sample',[(k,np.asarray(v)[:8].tolist()) for k,v in s.items()]);\\nfor key in ('train','test'):\\n p=D[key]; a=p['aux_chamber_telemetry']; print(key,'aux mean',a.mean(0),'std',a.std(0),'max raw',np.max(np.abs(p['past_channel_raw']),axis=(0,1)),np.max(np.abs(p['hold_channel_raw']),axis=0)); print('aux corr with hold raw',np.corrcoef(a.T,p['hold_channel_raw'].T)[:4,4:]);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (separate bridge and material fits) → H2 (transfer selected from the archived telemetry sequence); no out-of-fold error measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the latest archived deployment law unchanged\",\n      \"rejected_reason\": \"The telemetry alternates between distinct states; the archived equations are needed to map those states to deployment behavior.\"\n    }\n  ],\n  \"rationale\": \"Read the archived transfer equations without truncation and quantify current affine calibration error. A large or structured calibration residual would call for nonlinear inversion, independently of which chamber law the blind campaign uses.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "87b46ef7f1a508d8e1dbd5c87594527df8256632ae4b28e42e650315777c7934",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22015.24,
+      "usage_known": true,
+      "prompt_tokens": 22367,
+      "cached_tokens": 9344,
+      "completion_tokens": 712
+    }
+  ]
+}

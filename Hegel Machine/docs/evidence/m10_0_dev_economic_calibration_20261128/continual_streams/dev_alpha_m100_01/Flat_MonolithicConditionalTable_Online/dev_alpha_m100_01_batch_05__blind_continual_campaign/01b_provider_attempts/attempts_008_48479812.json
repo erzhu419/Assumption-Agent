@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "484798121d804244b57481ce54040e97",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:47:34.013175+00:00",
+  "ended_at_utc": "2026-11-28T02:48:00.233088+00:00",
+  "request_sha256": "e40374c3afeb2d244845249d6ce29c99c652651ec971a2a02ea91de9b3095309",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52439,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29348,
+    "cached_tokens": 9344,
+    "completion_tokens": 1003
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_basis.py <<'PY'\\nimport numpy as np,pickle,json\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\nfrom scipy.special import erf\\nq=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=q['dataset'];c=d['calibration_load_cells'];u=c['true_channel_loads'];r=c['bridge_raw'];s=c['single_channel_sweeps']; np.set_printoptions(precision=6,suppress=True,linewidth=150)\\nfor j in range(4):\\n m=s['lab_id']==j; x=s['true_stress'][m]; y=s['cmd_stress'][m]; a=x[abs(y)<3]; y=y[abs(y)<3]; p=least_squares(lambda p:p[0]+p[1]*a+p[2]*np.sin(p[3]*a)-y,[0,1,.25,2.5],loss='soft_l1',f_scale=.0003).x\\n v=r[:,j]-p[0]-p[1]*u[:,j]-p[2]*np.sin(p[3]*u[:,j]); keep=abs(r[:,j])<4\\n print('channel',j,'axis fit',p)\\n print('axis residual',v[:16].reshape(4,4))\\n for name,A in [('poly2',np.column_stack([np.prod(u[:,ii],axis=1) for k in [1,2] for ii in combinations_with_replacement(range(4),k)])),('poly3',np.column_stack([np.prod(u[:,ii],axis=1) for k in [1,2,3] for ii in combinations_with_replacement(range(4),k)])),('structured',np.c_[u,u**2,np.sin(2.5*u),np.tanh(u),np.tanh(2.5*u),np.cos(2.5*u)-1,*[u[:,k]*u[:,l] for k,l in combinations_with_replacement(range(4),2) if k!=l]])]:\\n  b=np.linalg.lstsq(A[keep],v[keep],rcond=None)[0]; err=A@b-v; print(name,np.quantile(abs(err[keep]),[.5,.9,1]),b.round(4))\\nfor k in ['train','test']:\\n v=d[k]['aux_chamber_telemetry']; print(k,'aux mean std',v.mean(0),v.std(0));print('aux first',v[:3])\\nprint('diag',q.get('campaign_diagnostics') is not None)\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.asarray(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],'mean',a.mean(0).round(3),'max',a.max(0).round(3),'tail',a[-3:,[1,6]].round(3))\\nPY\\npython3 /tmp/bridge_basis.py; grep -n -E 'equilibration|marker|preced|withdraw|telemetry' /tmp/hegel_continual_archive/*solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic cubic bridge → H2 sinusoidal diagonal with cross-channel coupling; the worst single-axis sinusoidal fit RMSE is 0.000119 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a saturating diagonal transfer\",\"rejected_reason\":\"The linear-plus-sine law fits axis data about 50–120 times more closely than the tested saturation laws.\"}],\"rationale\":\"Subtract the measured axis response and test which coupling terms explain the paired sweeps. Examine telemetry tails as well as means because a transient marker and a sustained offset imply different chamber states.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e7a55f97cfd7f7cd2161c84efc521db71d9fd9e9b6143566440a5aaf5672a0c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28240.9,
+      "usage_known": true,
+      "prompt_tokens": 29348,
+      "cached_tokens": 9344,
+      "completion_tokens": 1003
+    }
+  ]
+}

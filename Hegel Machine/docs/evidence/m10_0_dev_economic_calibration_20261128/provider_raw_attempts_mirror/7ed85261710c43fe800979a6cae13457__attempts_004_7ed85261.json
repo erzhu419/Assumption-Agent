@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7ed85261710c43fe800979a6cae13457",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:33:16.288861+00:00",
+  "ended_at_utc": "2026-11-28T02:33:41.970813+00:00",
+  "request_sha256": "7f40d4ffa2c151dbf475744f05db49a756c7d814d2af1e9f1ad2a156d697e254",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 29561,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21356,
+    "cached_tokens": 5504,
+    "completion_tokens": 953
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat > /tmp/rosette_probe.py <<'PY'\\nimport itertools,pickle,numpy as np\\nfrom scipy.linalg import lstsq\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']; x=s['ref_rosette'];y=s['raw_rosette']; q=s['single_bank_sweeps']; bank=q['bank_id'];u=q['ref_signal'];v=q['raw_readout']; xs=np.eye(4)[bank]*u[:,None]\\ndef fit(A,Y):\\n b=lstsq(A,Y)[0]\\n for _ in range(22):\\n  r=np.abs(Y-A@b) if Y.ndim==1 else np.linalg.norm(Y-A@b,axis=1)\\n  w=1/np.sqrt(1+(r/max(.002,.45*np.median(r)))**2)\\n  b=lstsq(A*w[:,None],Y*w if Y.ndim==1 else Y*w[:,None])[0]\\n return b\\ndef powers(degree):return [i for d in range(degree+1) for i in itertools.combinations_with_replacement(range(4),d)]\\ndef design(x,inds):return np.column_stack([x[:,i].prod(1) for i in inds])\\ndef report(err):return np.round(np.quantile(err,[.5,.9,.95,1]),6)\\nfor j in range(4):\\n k=bank==j; a=np.polynomial.polynomial.polyvander(u[k],5)\\n for d in (1,2,3,4,5):\\n  b=fit(a[:,:d+1],v[k]);print('single',j,d,b.round(5),report(np.sort(np.abs(v[k]-a[:,:d+1]@b))[:-1]))\\nkeep=np.linalg.norm(y,axis=1)<8\\nfor name,inds in [('affine',powers(1)),('cubic_diag',powers(1)+[(i,i,i) for i in range(4)]),('cubic_diag_mix',powers(2)+[(i,i,i) for i in range(4)]),('cubic',powers(3))]:\\n a=design(x,inds); z=design(xs,inds); err=np.zeros_like(y); coeff=[]\\n for j in range(4):\\n  k=bank==j; b=fit(np.r_[a[keep],z[k]],np.r_[y[keep,j],v[k]]);coeff.append(b)\\n  for hold in np.array_split(np.random.default_rng(1).permutation(len(x)),5):\\n   tr=keep.copy();tr[hold]=False; b=fit(np.r_[a[tr],z[k]],np.r_[y[tr,j],v[k]]);err[hold,j]=a[hold]@b-y[hold,j]\\n r=np.linalg.norm(err[keep],axis=1); print(name,report(r),'central',report(r[np.max(abs(x[keep]),axis=1)<.65]))\\n if name=='cubic':\\n  for i,b in zip(inds,np.array(coeff).T):print(i,b.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coupling → H2 sparse cubic and pairwise interactions; affine median forward row error is 0.276 on public sweeps, with held-out scores pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an inverse directly to raw readings\",\"rejected_reason\":\"EMI would contaminate inverse predictors; fitting forward keeps the known reference inputs clean.\"}],\"rationale\":\"Use single-bank sweeps to isolate each channel's curvature, then compare held-out rosette errors to identify which interaction terms are needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "94824af6d7c6f5d4db246e9a13a12810ff830b8a644ab9174db3190735359cc3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27647.07,
+      "usage_known": true,
+      "prompt_tokens": 21356,
+      "cached_tokens": 5504,
+      "completion_tokens": 953
+    }
+  ]
+}

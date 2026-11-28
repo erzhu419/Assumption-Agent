@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fad5ff5dad574d0c86332698f57dcf29",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:35.507176+00:00",
+  "ended_at_utc": "2026-11-28T02:42:18.093437+00:00",
+  "request_sha256": "a38655efa2b1b7638045d0846f5cb8986540d7dc947d441576766350b700aca1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42131,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24477,
+    "cached_tokens": 9344,
+    "completion_tokens": 1756
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/chamber_probe.py <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_alpha_m100_02_batch_03_solver as s\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te,g=d['train'],d['test'],p['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; c=s._bridge(d['calibration_load_cells']); xt,xe=s._features(tr,te); ta,th=s._fit(s._prepare(tr,xt,c),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); y=g['strain_curves_obs']-g['strain_0'][:,None]; r=g['instant_rate_obs']; E=-np.expm1(-t[:,None]/ta); B=np.c_[E,t]; br=np.r_[1/ta,1.]; Z=np.c_[y,r]; C=np.linalg.lstsq(np.vstack([B,br]),Z.T,rcond=None)[0].T\\nv={k:np.concatenate((tr[k],te[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')}; ph,h,_=s._prepare(g,np.zeros((len(y),4)),c); hc=s._loads(g['hold_channel_raw'],c); pc=s._loads(g['past_channel_raw'],c); tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0]; mem=ph@(np.exp(-tail[:,None]/ta)*-np.expm1(-dt[:,None]/ta)); base=np.c_[h[:,None]*th[:2],np.zeros(len(y))]; rem=C-base; ones=np.ones(len(y)); lab=g['lab_id']; print('taus weights',ta,th); print('residual coefficient statistics',np.quantile(rem,[0,.25,.5,.75,1],axis=0)); print('missing by col',np.isnan(g['coupon_features_raw']).sum(0)); print('hold hist range diag/test',np.min(h),np.max(h),np.min(mem,0),np.max(mem,0),np.quantile(s._loads(te['hold_channel_raw'],c).sum(-1),[0,.5,1]));\\nref=v['ref_coupons']; raw=g['coupon_features_raw']; aligned=raw.copy();\\nfor l in np.unique(lab):\\n m=v['lab_id']==l; aligned[lab==l]=(raw[lab==l]-np.median(ref[m].mean(0)))/np.median(ref[m].std(0));\\nval,cell,n=np.unique(np.c_[v['lab_id'],v['stratum']],axis=0,return_inverse=True,return_counts=True); X=np.concatenate([xt,xe]); X0=v['coupon_features_raw']; w=1/n[cell.ravel()]; mean=(X*w[:,None]*(~np.isnan(X0))).sum(0)/((~np.isnan(X0))*w[:,None]).sum(0); xpool=np.where(np.isnan(aligned),mean,aligned); xboth=s._features(v,g)[1]; xsolo=s._features(g,g)[0];\\nfor name,x in [('pool',xpool),('joint',xboth),('solo',xsolo)]:\\n drift=th[2]+x@th[3:]; print(name,'drift range',np.quantile(drift,[0,.5,1]),'initial drift max residual',np.max(abs(rem@br-drift))); print('drift vs coeff correlated',np.corrcoef(np.c_[drift,rem].T)[0,1:]); print('drift mismatch rows',np.c_[r-(base@br+drift),np.isnan(raw).any(1)][np.argsort(abs(r-(base@br+drift)))[-6:]]);\\n def score(pred):\\n  e=pred@B.T-y; er=pred@br-r; return np.sqrt(np.mean(e**2)),max(np.sqrt(np.mean(e[lab==l]**2)) for l in set(lab)),np.sqrt(np.mean(er**2)),np.max(abs(er))\\n def fit(F):\\n  pred=np.zeros_like(C)\\n  for i in range(len(y)):\\n   m=np.arange(len(y))!=i; pred[i]=base[i]+F[i]@np.linalg.lstsq(F[m],rem[m],rcond=None)[0];\\n  return np.array(score(pred)).round(5)\\n print('archive reset',score(base+np.c_[drift[:,None]*ta*s._RESET_DRIFT_FRACTIONS,drift*(1-s._RESET_DRIFT_FRACTIONS.sum())]));\\n for key,F in {'drift':drift[:,None],'intercept drift':np.c_[ones,drift],'drift polynomial':np.c_[ones,drift,drift**2,drift**3], 'hold drift':np.c_[ones,h,drift], 'hold drift interact':np.c_[ones,h,drift,h*drift,h**2,drift**2],'history drift':np.c_[ones,mem,drift], 'history hold drift':np.c_[ones,h,mem,drift], 'features':np.c_[ones,x],'features hold':np.c_[ones,x,h], 'features hold history':np.c_[ones,x,h,mem], 'features all hold channels':np.c_[ones,x,hc],'incomplete flags':np.c_[ones,drift,np.isnan(raw)]}.items(): print(key,fit(F));\\n if name=='pool': print('rows: hold, drift, natural scaled branch residues, steady, rate excess, max abs past, features'); print(np.c_[h,drift,rem[:,:2]/ta,rem[:,2],r-base@br-drift,abs(ph).max(1),x].round(3));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (archived fixed reset fractions) -> H2 (campaign-specific amplitudes on the same two relaxation branches); archived reset diagnostic absolute p90 errors are 0.610 strain and 0.121 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The previous campaign's fixed drift redistribution fractions completely describe the current chamber.\",\n    \"empirical_witness\": \"The archived reset has diagnostic absolute p90 strain error 0.610, while fitting the same two exponential shapes and linear drift per coupon gives 0.00377.\",\n    \"causal_blanket_diagnosis\": \"The curve shapes remain consistent with the intrinsic relaxation spectrum; the archived mapping from load and coupon features to branch amplitudes does not transfer.\",\n    \"sublated_pivot\": \"Keep the calibrated bridge and intrinsic spectrum; use held-out verification coupons to identify the chamber amplitude and drift terms.\",\n    \"risk_kind\": \"campaign-specific constitutive coefficients\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit new chamber time constants\",\n      \"rejected_reason\": \"The intrinsic time constants already reproduce diagnostic curve shapes to measurement scale when amplitudes are freed.\"\n    }\n  ],\n  \"rationale\": \"Check whether sparse combinations of drift, load, and load history explain held-out coupons. If the small models fail, the fitted branch amplitudes and initial-rate residuals will show which part of the chamber law is missing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7e812aa8b86889c63ec6b978a98c7343324ef805adb3509700870d967018a005",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44608.39,
+      "usage_known": true,
+      "prompt_tokens": 24477,
+      "cached_tokens": 9344,
+      "completion_tokens": 1756
+    }
+  ]
+}

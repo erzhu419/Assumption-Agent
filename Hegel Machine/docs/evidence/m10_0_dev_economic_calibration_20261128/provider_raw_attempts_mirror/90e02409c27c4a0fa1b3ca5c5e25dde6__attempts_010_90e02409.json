@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "90e02409c27c4a0fa1b3ca5c5e25dde6",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:57:12.390905+00:00",
+  "ended_at_utc": "2026-11-28T02:57:40.842175+00:00",
+  "request_sha256": "a6b0b1bde0024f25b2521711fd33c883aca76d9f513da7e10d500ce255054164",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54675,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27812,
+    "cached_tokens": 9344,
+    "completion_tokens": 1032
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\ns=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,xt=m._features(tr,te); cal=m._bridge(d['calibration_load_cells']); samples=m._prepare(tr,x,cal)\\no=m.solve_batch(d); tau=o['estimated_taus']; theta=o['hereditary_weights']; assert 0.05<tau[0]<tau[1]<25; assert all(np.isfinite(a).all() for a in o.values())\\npast, hold, f=samples; z=np.zeros((len(x),2))\\nfor j,h in enumerate(dt):\\n    a=np.exp(-h/tau); z=z*a+past[:,j,None]*(1-a)\\ncurve,rate=m._design(np.log(tau),samples,dt,t)\\nassert np.allclose(curve @ theta, ((hold[:,None]-z)*theta[:2]) @ (-np.expm1(-t[:,None]/tau)).T + (f @ theta[2:])[:,None]*t, atol=1e-10,rtol=1e-10)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; folds=[]\\nfor lab in np.unique(tr['lab_id']):\\n    va=tr['lab_id']==lab; fit=~va\\n    u,b=m._fit(tuple(a[fit] for a in samples),dt,t,y[fit],r[fit]); A,B=m._design(np.log(u),tuple(a[va] for a in samples),dt,t)\\n    folds.append([np.median(abs(A @ b-y[va])), np.median(abs(B @ b-r[va])), np.max(abs(u/tau-1))]); print('held-out lab',lab,'curve MedAE, rate MedAE, max fractional tau shift:',folds[-1])\\nprint('worst held-out lab:',np.max(folds,axis=0),'full-fit taus:',tau)\\nH=m._loads(te['hold_channel_raw'],cal).sum(axis=-1); D=theta[2]+xt @ theta[3:]; h=1e-5*tau[0]; c,v=m._chamber(H,D,tau,theta,np.array([-h,0.,h,t[-1]])); np.testing.assert_allclose(c[:,1],0,atol=1e-12); np.testing.assert_allclose((c[:,2]-c[:,0])/(2*h),o['initial_rate_pred'],atol=1e-8,rtol=1e-8); np.testing.assert_allclose(te['strain_0']+c[:,-1],o['predicted_strain'][:,-1],atol=1e-12); print('deployment derivative max error:', np.max(abs((c[:,2]-c[:,0])/(2*h)-v)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full deployment history → H2 chamber reset with transient drift; worst held-out summed-stress RMSE is 0.000564, and the public schema passed with zero reference-swap difference.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact artifact in an isolated process. A mismatch with the chronological recurrence or the chamber’s initial derivative would require an equation fix; high error in a held-out lab would warrant revisiting material-fit stability. No deployment outcomes are available to score the chamber law directly.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "5b93d7a359388b21587b20c1970c2cd56e1da490d4887717f07d7a1c21aa3834",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30436.08,
+      "usage_known": true,
+      "prompt_tokens": 27812,
+      "cached_tokens": 9344,
+      "completion_tokens": 1032
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "566eb239b44e4ab7bec2f74593db9458",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:35.770660+00:00",
+  "ended_at_utc": "2026-11-28T02:46:14.936761+00:00",
+  "request_sha256": "d41d9b762d9b51d5582823e6e2d5b959a27a13de8ca876e7d8f1c0270a74df72",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 42967,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27618,
+    "cached_tokens": 9344,
+    "completion_tokens": 1612
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cal_sep.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; good=(abs(y)<5).all(1); X,Y=x[good],y[good]\\nnp.set_printoptions(precision=6,suppress=True,linewidth=130)\\nprint('axis output with nominal zero offset removed:');print(np.c_[x,y-[-.06,.07,.06,-.05]][:16])\\ndef odd(t,k,m):\\n if m=='T':return np.tanh(k*t)\\n if m=='R':return t/(1+k*t*t)\\n if m=='A':return np.arctan(k*t)\\n if m=='S':return t/np.sqrt(1+k*t*t)\\n if m=='L':return t\\n\\ndef basis(x,j,k,m,extras):\\n t=x[:,j]; u=x[:,(j+2)%4]; a,b=k; p,q=m[:2]; f,g=odd(t,a,p),odd(u,b,q)\\n A=[np.ones(len(t)),f,g]\\n for c in m[2:]:\\n  A.append({'Q':u*u,'D':t*t,'U':u*u/(1+b*u*u),'V':u*u/(1+b*b*u*u),'W':g*g,'I':t*u,'H':t,'J':u,'F':f*f,'G':t*t/(1+a*t*t)}[c])\\n if extras: A.extend(x[:,[i for i in range(4) if i not in (j,(j+2)%4)]].T)\\n return np.column_stack(A)\\ndef fit(x,y,j,m,extras=False):\\n def res(k,coef=False):\\n  A=basis(x,j,k,m,extras); p=np.linalg.lstsq(A,y[:,j],rcond=1e-10)[0]; return p if coef else A@p-y[:,j]\\n k=least_squares(res,[1.,.8],bounds=(.005,10),max_nfev=100,ftol=1e-10,gtol=1e-11).x; return k,res(k,True)\\nrms=lambda z:np.sqrt(np.mean(z*z)); out=[]\\nfor a,b in itertools.product('TRAS','LTRAS'):\\n for ext in ('Q','U','V','W','QI','UI','VI','WI','DQ','DU','DV','DW','HQU','HQ','HU','HW','HQI','HUI','HWI','QJ','UJ','WJ','QG','UG','WG'):\\n  m=a+b+ext; f=[fit(X,Y,j,m) for j in range(4)]; r=np.column_stack([basis(X,j,k,m,False)@p-Y[:,j] for j,(k,p) in enumerate(f)]); out.append((rms(r),m,f,r))\\nfor v,m,f,r in sorted(out,key=lambda a:a[0])[:14]:\\n scores=[]\\n for order in (np.arange(len(X)),np.argsort(np.linalg.norm(X,axis=1)),np.random.default_rng(12).permutation(len(X))):\\n  for te in np.array_split(order,5):\\n   tr=np.setdiff1d(np.arange(len(X)),te)\\n   rr=[]\\n   for j in range(4):\\n    k,p=fit(X[tr],Y[tr],j,m); rr.append(basis(X[te],j,k,m,False)@p-Y[te,j])\\n   scores.append(rms(np.array(rr)))\\n print(m,'train/heldout',v,max(scores));\\n if m in [a[1] for a in sorted(out,key=lambda a:a[0])[:3]]: print(f); print('axis and mixed residual',r[:17]);print('residue correlations',np.corrcoef(np.c_[X,r].T)[:4,4:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_sep.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: Move from generic saturation features to paired-channel saturation with an even cross-channel term; the previous structured models reached 0.0398 worst-slice per-channel forward RMSE.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Add unrestricted mixed polynomial terms\",\"rejected_reason\":\"The isolated-axis sweeps identify a specific cross-channel pairing and asymmetry; unrestricted terms previously worsened holdout error.\"}],\"rationale\":\"The isolated-axis readings show that channels couple in pairs and that the cross response is not odd around zero. Test a compact even-plus-odd cross response on held-out sweeps; remaining structured residuals would motivate interactions between the paired inputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "970efe9ce58ac85d72010334643fa46364aa31603df16a8c3b0a1e38e80b8c10",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41193.46,
+      "usage_known": true,
+      "prompt_tokens": 27618,
+      "cached_tokens": 9344,
+      "completion_tokens": 1612
+    }
+  ]
+}

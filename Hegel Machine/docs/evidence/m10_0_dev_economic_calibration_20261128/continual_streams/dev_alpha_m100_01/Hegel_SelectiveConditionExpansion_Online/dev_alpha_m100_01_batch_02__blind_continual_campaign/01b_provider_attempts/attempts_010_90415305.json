@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "904153059126484c98eafb500a23f2e2",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:40:07.591396+00:00",
+  "ended_at_utc": "2026-11-28T02:40:34.352585+00:00",
+  "request_sha256": "8ce24074d0daa85a0f085410ab7c58282b6e147f4919ad42a46763602adc77e3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56783,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29795,
+    "cached_tokens": 5504,
+    "completion_tokens": 919
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I -B - <<'PY'\\nimport json, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features, _loads, _design, _chamber\\nfrom _verified_upstream import calibrate_upstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nwith open('_upstream_param_payload.json') as f:\\n    payload = json.load(f)\\nd = item['dataset']\\nout = solve_batch(d)\\ntau, theta = out['estimated_taus'], out['hereditary_weights']\\nq = calibrate_upstream({**d, 'test': item['campaign_diagnostics']}, payload)['test']\\npast, hold = _loads(q)\\nx = _features(q, q)[:len(hold)]\\nt, dt = d['eval_times'], d['past_dt']\\ny = q['strain_curves_obs'] - q['strain_0'][:, None]\\nC, R = _design(tau, past, hold, x, dt, t)\\nbase = C @ theta\\npred, rate = _chamber(tau, theta, past, hold, x, dt, t)\\nscore = theta[2] + x @ theta[3:]\\nD = score[:, None, None] * (tau * -np.expm1(-t[:, None] / tau) - t[:, None])\\nlabs = q['lab_id']\\nerrors = []\\nfor lab in np.unique(labs):\\n    test = labs == lab\\n    a = np.linalg.lstsq(D[~test].reshape(-1, 2), (y-base)[~test].ravel(), rcond=None)[0]\\n    errors.append(float(np.sqrt(np.mean((base[test] + D[test] @ a - y[test])**2))))\\nbefore, after = (float(np.median(abs((p-y)[:, -1]))) for p in (base, pred))\\nrate_change = float(np.max(abs(rate - R @ theta)))\\nprint(json.dumps({'baseline_final_time_median_abs_error': before, 'artifact_final_time_median_abs_error': after, 'held_out_lab_strain_rmse': errors, 'worst_held_out_lab_strain_rmse': max(errors), 'initial_rate_change': rate_change}))\\nassert before > 1 and after < 0.03 and max(errors) < 0.02 and rate_change == 0\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 time-linear chamber drift → H2 slope-preserving two-mode redistribution; worst held-out-lab strain RMSE is 0.01272, and missing-feature initial-rate RMSE is 0.02102.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Rerun the schema validator\",\n      \"rejected_reason\": \"The current artifact already has a bound verification receipt; only the structural evidence was rejected.\"\n    }\n  ],\n  \"rationale\": \"Isolate the structural test without changing the artifacts or rerunning the validator. If held-out strain does not improve or the initial slope changes, reopen the chamber model rather than submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "546936be1a2f4b8159c11d5258d085b9839417391d2c57ee7ae02470aec31761",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28825.89,
+      "usage_known": true,
+      "prompt_tokens": 29795,
+      "cached_tokens": 5504,
+      "completion_tokens": 919
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fff69bccdc52484d8e5dcca9d42249ee",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:59:13.235406+00:00",
+  "ended_at_utc": "2026-11-28T02:59:46.693745+00:00",
+  "request_sha256": "fc8acd7785de8c5e5234c3d5f1b5fe8e7316275882f8d845e5a9bd5b0e0de180",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46883,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25732,
+    "cached_tokens": 9344,
+    "completion_tokens": 1324
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_chamber07.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\nc=d['calibration_load_cells']; raw=c['bridge_raw']; loads=c['true_channel_loads']; sweeps=c['single_channel_sweeps']\\n# Held-out calibration compares omitted spatial interactions and rational response with the deployed basis.\\nfrom scipy.optimize import least_squares\\nfor name in ('archived','interactions','rational'):\\n    errors=[]\\n    for fold in range(5):\\n        v=np.arange(len(raw))%5==fold\\n        if name=='archived':\\n            p=m._bridge(dict(c,bridge_raw=raw[~v],true_channel_loads=loads[~v])); pred=m._forward(loads[v],p)\\n        else:\\n            pred=np.empty_like(raw[v])\\n            for j,k in enumerate([2,3,0,1]):\\n                a=loads[~v]; y=raw[~v,j]; keep=abs(y-np.median(y))<6; a,y=a[keep],y[keep]\\n                sv=sweeps['lab_id']==j; isolated=np.zeros((sum(sv),4)); isolated[:,j]=sweeps['true_stress'][sv]; a=np.r_[a,isolated]; y=np.r_[y,sweeps['cmd_stress'][sv]]\\n                def basis(x,q):\\n                    z,w=x[:,j],x[:,k]; f,g=q[:2]\\n                    b=np.column_stack([np.ones(len(x)),z,np.sin(f*z),w,-2*np.sin(g*w/2)**2]); others=[i for i in range(4) if i not in (j,k)]\\n                    if name=='rational': return b/(1+q[2]*(z-w)**2)[:,None]\\n                    return np.column_stack([b,x[:,others],z*w,(z-w)**2,(z+w)**2,z*w*x[:,others[0]],z*w*x[:,others[1]]])\\n                q0=[2.5,2.]+([.01] if name=='rational' else []); lo=[1.,.7]+([0.] if name=='rational' else []); hi=[4.,3.5]+([10.] if name=='rational' else [])\\n                def lin(q):\\n                    b=basis(a,q); return b,np.linalg.lstsq(b,y,rcond=None)[0]\\n                q=least_squares(lambda q: lin(q)[0]@lin(q)[1]-y,q0,bounds=(lo,hi),gtol=1e-11).x\\n                pred[:,j]=basis(loads[v],q)@lin(q)[1]\\n        errors.append(pred-raw[v])\\n    r=np.concatenate(errors); print('held-out bridge',name,'worst channel inlier RMS',max(np.sqrt(np.mean(z[abs(z)<1]**2)) for z in r.T),'gross faults',np.sum(abs(r)>1,axis=0))\\na,b=d['train'],d['test']; n=len(a['lab_id']); x=m._features(a,b); dt,t=d['past_dt'],d['eval_times']; bridge=m._bridge(c); past,hold=m._loads(a,bridge); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; labels=np.c_[a['lab_id'],a['stratum']]\\nfor lab in np.unique(labels[:,0]):\\n    v=labels[:,0]==lab; z=~v; tau,theta=m._fit(past[z],hold[z],x[:n][z],dt,t,y[z],r[z]); cv,cr=m._design(tau,past[v],hold[v],x[:n][v],dt,t); ec=cv@theta-y[v]; er=cr@theta-r[v]; print('held-out lab / stratum signed median residuals (strain, rate)',lab,[(int(k),round(np.median(ec[labels[v,1]==k]),6),round(np.median(er[labels[v,1]==k]),6)) for k in np.unique(labels[v,1])]); print('  held-out lab signed median (strain, rate)',np.median(ec),np.median(er))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber07.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived drift saturation → telemetry-matched chamber law with retained stress memory; the worst held-out lab/horizon median strain error was 0.012945.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test classifier balance, relay modes, or diffusion equations\",\"rejected_reason\":\"The dataset measures continuous chamber response and has no classification labels, relay states, or stochastic transport operator. Signed held-out residuals test the relevant lab nuisance instead.\"}],\"rationale\":\"Compare the deployed bridge against interaction and rational bases on held-out sweeps; a material reduction in error would warrant a calibration edit. Signed residuals by held-out lab and stratum reveal systematic offsets that pooled or absolute errors could conceal; if present, test a nuisance correction before promotion.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "86b22914ccf876d56c9e8150d68452617b4f2c17e03f267ccaf3e9c60f1b17bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35468.28,
+      "usage_known": true,
+      "prompt_tokens": 25732,
+      "cached_tokens": 9344,
+      "completion_tokens": 1324
+    }
+  ]
+}

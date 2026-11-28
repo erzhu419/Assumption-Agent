@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cc2bfcea984345ec8f62765cd8908d51",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:31:09.878537+00:00",
+  "ended_at_utc": "2026-11-28T02:31:34.282297+00:00",
+  "request_sha256": "7ab0ec2308d55589196d67e14367f116234cb249533590d2695226fb2866be7b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32894,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22620,
+    "cached_tokens": 0,
+    "completion_tokens": 932
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== $f\\\"; sed -n '1,/^def _responses/p' \\\"$f\\\"; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS calibration'; cat > /tmp/probe_transport.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; a=b['ref_signal']; by=b['raw_readout']; ix=b['bank_id']; np.set_printoptions(precision=5,suppress=True,linewidth=140)\\nprint('ref range',x.min(0),x.max(0)); print('raw obs range',s['y_obs_raw'].min(),s['y_obs_raw'].max())\\ndef feat(x,d):\\n cols=[np.ones(len(x)),*x.T]\\n if d>=2: cols += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]\\n if d>=3: cols += [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i,4) for k in range(j,4)]\\n return np.column_stack(cols)\\nfor k in range(4):\\n use=ix==k; iso=np.zeros((use.sum(),4));iso[:,k]=a[use]; yy=np.r_[y[:,k],by[use]]; xx=np.vstack((x,iso)); print('BANK',k)\\n for d in (1,2,3):\\n  z=feat(xx,d); fit=lambda m: least_squares(lambda t:(z@t-yy)[m],np.linalg.lstsq(z[m],yy[m],rcond=None)[0],jac=lambda t:z[m],loss='cauchy',f_scale=.018).x\\n  t=fit(np.ones(len(yy),bool)); e=yy-z@t; cv=np.empty_like(e)\\n  for j in range(5):\\n   m=np.arange(len(e))%5!=j; cv[~m]=yy[~m]-z[~m]@fit(m)\\n  print('degree',d,'coeff',t[:15], 'abs residual and CV q',np.quantile(abs(e),[.5,.8,.9,.95,1]),np.quantile(abs(cv),[.5,.8,.9,.95,1])); print('single residual',e[80:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_transport.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Pooled affine calibration -> outlier-resistant sweep fitting with held-out comparison of linear and nonlinear terms; quantitative calibration validation pending.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"All single-bank sweep rows are ordinary calibration measurements suitable for pooling by least squares.\",\"empirical_witness\":\"Bank 0 reports 14.418 at reference −0.0273, between neighboring readouts −0.289 and 0.124.\",\"causal_blanket_diagnosis\":\"An isolated sweep fault can dominate the offset and gain fit independently of the chamber boundary.\",\"sublated_pivot\":\"Fit with an outlier-resistant loss and test remaining residual structure on held-out sweep rows.\",\"risk_kind\":\"calibration contamination\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Pool all sweeps with ordinary least squares\",\"rejected_reason\":\"The observed isolated readout would distort the inferred calibration and propagate into the source weights.\"}],\"rationale\":\"Compare held-out sweep errors before adding nonlinear terms, and isolate the archived wall equations so calibration faults do not become evidence for a different boundary.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "08d63f29b8578dabb79fc283091a501f80f809136a5251ea73e679b3e22ea2ed",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26414.43,
+      "usage_known": true,
+      "prompt_tokens": 22620,
+      "cached_tokens": 0,
+      "completion_tokens": 932
+    }
+  ]
+}

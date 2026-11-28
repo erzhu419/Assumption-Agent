@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "550d5f22079843af94fbc43bc992251b",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:34.661514+00:00",
+  "ended_at_utc": "2026-11-28T02:49:13.561341+00:00",
+  "request_sha256": "ae9835459c3d92b2dad8ce6c6cd3947748ca3c0b893b8a8ed8dcf5f9f95cc729",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50255,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28637,
+    "cached_tokens": 9344,
+    "completion_tokens": 1617
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nimport batch_solver\\nitems = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nfor item in items:\\n    ds = item['dataset']\\n    c = ds['calibration_load_cells']\\n    T, R = c['true_channel_loads'], c['bridge_raw']\\n    sweep = c['single_channel_sweeps']\\n    ids = np.arange(len(T))\\n    err = np.full_like(T, np.nan)\\n    affine_err = np.full_like(T, np.nan)\\n    axis_err = np.full(len(sweep['true_stress']), np.nan)\\n    def forward(x, coef):\\n        return np.sum(u._design(x, x[..., u._PARTNER]) * coef, axis=-1)\\n    for f in range(5):\\n        m = ids % 5 != f\\n        ms = np.arange(len(axis_err)) % 5 != f\\n        coef = u._fit_bridge(dict(c, true_channel_loads=T[m], bridge_raw=R[m], single_channel_sweeps={k:v[ms] for k,v in sweep.items()}))\\n        good = (np.max(np.abs(forward(T, coef) - R), axis=1) < 0.02)\\n        held = ~m & good\\n        err[held] = u._invert(R[held], coef) - T[held]\\n        a = np.linalg.lstsq(np.c_[np.ones(np.sum(m & good)), T[m & good]], R[m & good], rcond=None)[0]\\n        affine_err[held] = np.linalg.solve(a[1:].T, (R[held] - a[0]).T).T - T[held]\\n        j = sweep['lab_id'][~ms]\\n        x, y = sweep['true_stress'][~ms], sweep['cmd_stress'][~ms]\\n        z = np.sum(u._design(x, np.zeros_like(x)) * coef[j], axis=-1) - y\\n        axis_err[~ms] = np.where(np.abs(z)<0.02, z, np.nan)\\n    for label, sel in [('axis rows', np.count_nonzero(T,axis=1)==1), ('mixed rows', np.count_nonzero(T,axis=1)>1), ('outer loads', np.max(np.abs(T),axis=1)>=1.45)]:\\n        print(label, 'count', np.sum(np.isfinite(err[sel,0])), 'max abs inverse per channel', np.nanmax(np.abs(err[sel]),axis=0), 'max abs affine inverse', np.nanmax(np.abs(affine_err[sel])))\\n    print('held-out sweep forward max', np.nanmax(np.abs(axis_err)), 'excluded bridge/sweep spikes', np.sum(~np.isfinite(err[:,0])), np.sum(~np.isfinite(axis_err)))\\n    assert np.nanmax(np.abs(err)) < .002 and np.nanmax(np.abs(axis_err)) < .002\\n    coef = u._fit_bridge(c)\\n    _, g, s, b, k = coef.T\\n    margin = g - u._SELF_FREQUENCY*np.abs(s) - np.abs(b) - u._CROSS_FREQUENCY*np.abs(k)\\n    print('global row diagonal-dominance margins',margin)\\n    assert np.min(margin)>0\\n    truth = np.stack(np.meshgrid(*([np.linspace(-2,2,15)]*4)), axis=-1).reshape(-1,4)\\n    assert np.max(np.abs(u._invert(forward(truth,coef),coef)-truth)) < 1e-8\\n    augmented = dict(ds, chamber_verification_trials=[{'past_channel_raw': forward(truth[:12].reshape(2,6,4),coef), 'hold_channel_raw': forward(truth[:2],coef)}])\\n    cal = u.calibrate_upstream(augmented)\\n    trial = cal['chamber_verification_trials'][0]\\n    np.testing.assert_allclose(trial['past_channel_raw'].reshape(-1,4),truth[:12],atol=1e-9)\\n    np.testing.assert_allclose(trial['hold_channel_raw'],truth[:2],atol=1e-9)\\n    cc = cal['calibration_load_cells']\\n    assert np.array_equal(cc['bridge_raw'],T) and not np.shares_memory(cc['bridge_raw'],T)\\n    assert np.array_equal(cc['single_channel_sweeps']['cmd_stress'], sweep['true_stress'])\\n    assert not np.shares_memory(cc['single_channel_sweeps']['cmd_stress'], sweep['true_stress'])\\n    for split in ('train','test'):\\n        for key in ('past_channel_raw','hold_channel_raw'):\\n            np.testing.assert_allclose(forward(cal[split][key],coef),ds[split][key],atol=1e-9,rtol=0)\\n    assert u.calibrate_upstream(dict(ds, chamber_verification_trials=None))['chamber_verification_trials'] is None\\n    out = batch_solver.solve_batch(ds)\\n    assert all(np.all(np.isfinite(v)) for v in out.values())\\n    print('isolated bundle passed; 50,625 grid points; optional trials, identity copies, and split loads verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 paired sinusoidal bridge; held-out normalized forward error peaked at 3.91e-4, and public schema validation passed with zero reference-swap difference.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"An isolated run checks whether the exact candidate recovers held-out loads better than an affine fit, including at outer loads, and whether the inverse and optional trial paths work. A failed inverse or trial check would identify which implementation to revise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "78dac94fce4613fca5d0857e49d0f17df286b62ba2afadf664f14210a589d3b9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40888.11,
+      "usage_known": true,
+      "prompt_tokens": 28637,
+      "cached_tokens": 9344,
+      "completion_tokens": 1617
+    }
+  ]
+}

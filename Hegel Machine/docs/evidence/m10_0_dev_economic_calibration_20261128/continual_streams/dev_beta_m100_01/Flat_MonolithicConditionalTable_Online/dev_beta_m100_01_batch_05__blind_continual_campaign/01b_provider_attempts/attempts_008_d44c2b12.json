@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d44c2b12b14c451596ef026e6bd1d722",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:51:20.778629+00:00",
+  "ended_at_utc": "2026-11-28T02:52:00.024498+00:00",
+  "request_sha256": "c0cb222ee9fb8c47af87cd6258e4dedbde3dc213be098ea9b61c3a6d81fa6b82",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58695,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33402,
+    "cached_tokens": 9344,
+    "completion_tokens": 1534
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe_mixed05.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom itertools import combinations_with_replacement\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; X,Y=sw['ref_rosette'],sw['raw_rosette']; bank=sw['single_bank_sweeps']\\nnp.set_printoptions(precision=6,suppress=True)\\n\\ndef feats(x,d):\\n return np.column_stack([np.prod(x[:,t],axis=1) if t else np.ones(len(x)) for k in range(d+1) for t in combinations_with_replacement(range(x.shape[1]),k)])\\n\\ndef fitfun(fun,q,X,Y):\\n # Gross corruptions are far outside the physical sweep range.\\n use=abs(Y)<5; X,Y=X[use],Y[use]; q=least_squares(lambda p:fun(X,p)-Y,q,loss='soft_l1',f_scale=.001,max_nfev=350).x\\n return q\\n\\nfor j in range(4):\\n use=bank['bank_id']==j; xb=np.zeros((use.sum(),4)); xb[:,0]=bank['ref_signal'][use]; x=X[:,(j+np.arange(4))%4]; y=Y[:,j]; z=np.r_[x,xb]; v=np.r_[y,bank['raw_readout'][use]]\\n print('BANK',j)\\n iso=np.count_nonzero(x[:,1:],axis=1)==0; xi=np.r_[x[iso,0],xb[:,0]]; yi=np.r_[y[iso],v[len(y):]]\\n for name,f,p in [('tanh',lambda a,q:q[0]+q[1]*np.tanh(q[2]*a),[0,2,1]),('tanh3',lambda a,q:q[0]+q[1]*np.tanh(q[2]*a)+q[3]*a**3,[0,2,1,0]),('tanhlin',lambda a,q:q[0]+q[1]*np.tanh(q[2]*a)+q[3]*a,[0,2,1,0]),('tanharg',lambda a,q:q[0]+q[1]*np.tanh(q[2]*a+q[3]*a**3),[0,2,1,0]),('rational',lambda a,q:q[0]+(q[1]*a+q[3]*a**3)/(1+q[2]*a*a+q[4]*a**4),[0,2,1,0,0]),('atan3',lambda a,q:q[0]+q[1]*np.arctan(q[2]*a)+q[3]*a**3,[0,2,1,0])]:\\n  q=fitfun(f,p,xi,yi); print(name,q,np.quantile(abs(f(xi,q)-yi),[.5,.9]))\\n for label in ('poly3','poly4','poly5','tanh3poly2','tanh3poly3','tanhar2','tanhar2poly3','tanhar3poly3','separate'):\\n  def design(z):\\n   a,b,c,d=z.T\\n   if label[:4]=='poly':return feats(z,int(label[-1]))\\n   if label=='tanh3poly2':return np.c_[a**3,feats(z,2)]\\n   if label=='separate':return np.c_[a**3,feats(z,3)]\\n   return feats(z,3)\\n  D=design(z); Q=np.c_[z, D]; size=D.shape[1]; p=np.r_[2.,1.1,0.,0.,0.,0.,0.,np.zeros(size)];p[7]=np.median(y)\\n  def f(Q,p):\\n   a,b,c,d=Q[:,:4].T; D=Q[:,4:]; out=D@p[7:];\\n   if label.startswith('poly'):return out\\n   t=p[1]*a\\n   if label.startswith('tanhar'):t=t+p[2]*b+p[3]*c+p[4]*d+p[5]*a*c+p[6]*c*c\\n   if label=='separate':return out+p[0]*np.tanh(t)+p[2]*np.tanh(p[3]*c)\\n   return out+p[0]*np.tanh(t)\\n  if label=='separate':p[2:4]=[.2,1.]\\n  es=[]\\n  for i in range(5):\\n   test=np.arange(len(z))%5==i;q=fitfun(f,p,Q[~test],v[~test]);es.extend((f(Q[test & (abs(v)<5)],q)-v[test & (abs(v)<5)]).tolist())\\n  print(label,np.quantile(abs(np.array(es)),[.5,.9,.99]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_mixed05.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 isolated saturation plus linear crosstalk → H2 nonlinear opposite-bank coupling and corrected self-response; provisional worst chamber-fold RMSE is 0.035068.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep additive linear crosstalk\",\"rejected_reason\":\"Opposite-bank single-input pulses produce curved responses, and linear correction leaves held-out errors above 0.06 at the 90th percentile in every bank.\"}],\"rationale\":\"Fit self-response on isolated pulses and compare nonlinear opposite-bank terms on held-out sweep measurements. This separates calibration error from boundary-model error before selecting the wall operator.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "f636143656f972cc2db72e6782e5f60ef77a7a34322baa9fcb925bf469988c1f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41230.02,
+      "usage_known": true,
+      "prompt_tokens": 33402,
+      "cached_tokens": 9344,
+      "completion_tokens": 1534
+    }
+  ]
+}

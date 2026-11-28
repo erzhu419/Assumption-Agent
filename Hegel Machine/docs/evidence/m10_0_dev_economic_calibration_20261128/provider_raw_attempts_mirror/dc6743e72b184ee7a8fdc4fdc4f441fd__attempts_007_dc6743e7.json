@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "dc6743e72b184ee7a8fdc4fdc4f441fd",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:32:00.336634+00:00",
+  "ended_at_utc": "2026-11-28T02:32:33.712479+00:00",
+  "request_sha256": "585ef60922116027bf5680c046a02cf2c2dc8e84c425d86f7c4551b43342b1d1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44563,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27141,
+    "cached_tokens": 9344,
+    "completion_tokens": 1267
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '1,42p' /tmp/material02.py; python3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print([(k,type(v).__name__) for k,v in a.items()] if isinstance(a,dict) else [[(k,type(v).__name__,str(v)[:95] if not isinstance(v,list) else len(v)) for k,v in x.items()] for x in a]);\\nPY\\ncat > /tmp/timefit02.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from explore02 import *\\nfrom scipy.optimize import least_squares\\nkeys=('lab_id','stratum','ref_coupons','coupon_features_raw'); ab={k:np.concatenate([a[k],b[k]]) for k in keys}\\nfor label,s in [('ab',ab),('c',c),('abc',{k:np.concatenate([ab[k],c[k]]) for k in keys})]:\\n print(label,[(i, np.median(s['ref_coupons'][s['lab_id']==i].mean(0)),np.median(s['ref_coupons'][s['lab_id']==i].std(0))) for i in np.unique(s['lab_id'])]);\\nxx=c['coupon_features_raw'].copy(); labs=c['lab_id']; ll=ab['lab_id'];\\nfor j in np.unique(ll):\\n ref=ab['ref_coupons'][ll==j]; xx[labs==j]=(xx[labs==j]-np.median(ref.mean(0)))/np.median(ref.std(0))\\n_,inv,count=np.unique(np.c_[ll,ab['stratum']],axis=0,return_counts=True,return_inverse=True); w=1/count[inv]; std=ab['coupon_features_raw'].copy()\\nfor j in np.unique(ll):\\n ref=ab['ref_coupons'][ll==j]; std[ll==j]=(std[ll==j]-np.median(ref.mean(0)))/np.median(ref.std(0))\\nfor k in range(4):\\n ok=np.isfinite(std[:,k]); xx[~np.isfinite(xx[:,k]),k]=np.average(std[ok,k],weights=w[ok]);\\nprint('dr differences', np.c_[dr,th[2]+xx@th[3:],np.isnan(c['coupon_features_raw']).any(1)])\\nfor label,z in [('combined',xc),('fixed-ab',xx)]:\\n cc,rr=_design(tau,pc,hc,z,dt,t); yy=np.c_[Y-cc@th,rate-rr@th]; drift=th[2]+z@th[3:]; A=np.c_[np.ones(len(hc)),drift,hc]; coef=np.linalg.lstsq(A,yy,rcond=None)[0]; print(label,'time coefficients',coef); print('in-sample RMS',rms(yy-A@coef));\\n for k in (0,1,2):\\n  def f(p):\\n   T=np.r_[t,0]; pred=p[0]*T+p[1]*(-np.expm1(-T/np.exp(p[2]))); pred[-1]=p[0]+p[1]/np.exp(p[2]); return pred\\n  fit=least_squares(lambda p:f(p)-coef[k],[-1,1,0]); print(k,'one pole',fit.x,np.exp(fit.x[2]),rms(f(fit.x)-coef[k]));\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/timefit02.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 empirical time-bin correction → H2 shared chamber transient with independently standardized diagnostic coupons; current worst LOOCV time-bin RMSE is 0.0288 and initial-rate RMSE is 0.0283.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add lab, stratum, and load-history correction terms\",\n      \"rejected_reason\": \"They increase held-out initial-rate or late-time error relative to the low-dimensional correction.\"\n    }\n  ],\n  \"rationale\": \"Test whether the chamber residual follows a transient with the correct slope at zero and whether mixing the diagnostic reference panel into deployment normalization obscures that law. Either result changes the model used for the submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3f7c3d1e6b1e41eb0ba8da7b953fb420cc063b72900e6b01cebd68d0e00e3e8b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35379.89,
+      "usage_known": true,
+      "prompt_tokens": 27141,
+      "cached_tokens": 9344,
+      "completion_tokens": 1267
+    }
+  ]
+}

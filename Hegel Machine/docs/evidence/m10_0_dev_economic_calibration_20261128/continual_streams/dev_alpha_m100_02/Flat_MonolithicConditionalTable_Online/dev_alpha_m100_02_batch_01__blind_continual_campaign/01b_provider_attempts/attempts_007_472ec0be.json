@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "472ec0be07d4461aa026d9bd99d72fc4",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:26:56.649039+00:00",
+  "ended_at_utc": "2026-11-28T02:27:27.486645+00:00",
+  "request_sha256": "8c72e9448073a6ecfb879fb62593f96a2fc4934e32e3b439d54249c1ad567394",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46985,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29265,
+    "cached_tokens": 9344,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/profile.py <<'PY'\\nexec(open('/tmp/probe.py').read().split('for g,ss in')[0])\\np,h,_=sd\\nq=th[2]+m._features(di,di)[0]@th[3:]\\ny=Y(di); n=len(q)\\ndef basis(tau): return np.vstack((np.r_[1/tau,1],np.c_[-np.expm1(-t[:,None]/tau),t]))\\nD=basis(tau); fixed=h[:,None]*(D[:,:2]@th[:2]); w=np.r_[0.45,np.ones(len(t))]; target=y-fixed\\nprint('diagnostic q range',q.min(),q.max())\\nmods={'native':D,'native_no_linear':D[:,:2],'unit_initial_rate':D[:,:2]-D[:,2,None]/tau,'single_exp':None}\\nfor name,T in mods.items():\\n offset=q[:,None]*D[:,2] if name=='unit_initial_rate' else np.zeros_like(y)\\n def run(idx):\\n  if T is None:\\n   def pred(v):\\n    s=np.exp(v[0]); return q[:,None]*v[1]*np.r_[1.,-s*np.expm1(-t/s)]\\n   fit=least_squares(lambda v:((target-offset-pred(v))[idx]*w).ravel(),[0,1]); return pred(fit.x),fit.x\\n  A=q[:,None,None]*T; b=np.linalg.lstsq((A[idx]*w[None,:,None]).reshape(-1,T.shape[1]),((target-offset)[idx]*w).ravel(),rcond=None)[0]; return A@b,b\\n pred,b=run(np.ones(n,dtype=bool)); print(name,b,'fit rmse',np.sqrt(np.mean((y-fixed-offset-pred)**2,axis=0))[[0,1,-1]])\\n for lab_out in [np.arange(n),di['lab_id']]:\\n  E=[]\\n  for lab in np.unique(lab_out):\\n   idx=lab_out==lab; pred,_=run(~idx); E.append((y-fixed-offset-pred)[idx]);\\n  print('worst group rate / curve rmse',np.max([[np.sqrt(np.mean(e[:,0]**2)),np.sqrt(np.mean(e[:,1:]**2))] for e in E],axis=0))\\nprint('projected common profile / basis',np.linalg.lstsq(D*w[:,None], ((q@target)/(q@q))*w,rcond=None)[0])\\nprint('archive solver setup'); print(''.join(open(glob.glob('/tmp/hegel_continual_archive/*solver.py')[0]).readlines()[:62]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/profile.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged history and drift → H2 reset memory plus transient drift; leave-one-coupon-out rate RMSE is 0.0078 and final-horizon RMSE is 0.0127 with diagnostic-panel normalization and a free temporal profile.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add residual memory and nonlinear drift terms\",\n      \"rejected_reason\": \"With the diagnostic reference panel, these terms do not consistently improve held-out rate and strain errors.\"\n    }\n  ],\n  \"rationale\": \"Test whether the reset model needs a linear drift tail or a different relaxation time. Compare worst held-out coupon and lab errors before encoding the chamber law, and retain the specified joint train/test feature transform for deployment.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "b1e936ffb6df3f08b0e6d21f19792cf0272ee3b7a52c896104da1dd83fdaf718",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32795.44,
+      "usage_known": true,
+      "prompt_tokens": 29265,
+      "cached_tokens": 9344,
+      "completion_tokens": 1192
+    }
+  ]
+}

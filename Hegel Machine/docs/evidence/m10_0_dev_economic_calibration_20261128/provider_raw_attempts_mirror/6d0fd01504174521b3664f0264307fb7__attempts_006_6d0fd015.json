@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6d0fd01504174521b3664f0264307fb7",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:00:08.563895+00:00",
+  "ended_at_utc": "2026-11-28T03:00:35.562049+00:00",
+  "request_sha256": "06e5b5a85c715cbd2602f1d284731e1341ac39b5e01e2dd43fa048fc6281c687",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 50648,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28519,
+    "cached_tokens": 9344,
+    "completion_tokens": 937
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncp /tmp/hegel_continual_archive/dev_beta_m100_01_batch_02_solver.py downstream_solver.py\\ncat batch_solver.py _verified_upstream.py _upstream_param_payload.json\\ncat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,json,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _forward,_project,_qp\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=calibrate_upstream(s,json.load(open('_upstream_param_payload.json')))\\nfor label,d in [('raw',s),('canonical',c)]:\\n t=d['sensor_calibration_sweeps']; r,a=t['ref_rosette'],t['raw_rosette']; X=np.c_[r,np.ones(len(r))]; F=np.linalg.lstsq(X,a,rcond=None)[0]\\n print(label,'affine map',F.round(6).tolist(),'sweep rms',np.sqrt(np.mean((X@F-a)**2,axis=0)).round(6),'keys',sorted(d))\\n for k,v in t['single_bank_sweeps'].items(): print(k,np.shape(v),np.asarray(v).ravel()[:6])\\nS,U=_forward(c); Z=c['Z_nuisance']; obs=c['y_obs_raw']; P=np.linalg.solve(Z.T@Z+c['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nt=c['sensor_calibration_sweeps']; R=t['ref_rosette']; F=np.linalg.lstsq(np.c_[R,np.ones(len(R))],t['raw_rosette'],rcond=None)[0]; y2=np.linalg.solve(F[:4].T,(obs.reshape(-1,4)-F[4]).T).T.ravel()\\nfor name,y in [('staged',obs),('sweep refinement',y2)]:\\n A,b=_project(c,S,y); w,nu=_qp(A,b,c['source_ridge'],c['u_box'],c['total_budget']); e=(S@w-y)-Z@(P@(S@w-y)); print(name,'per-shift rms',np.sqrt(np.mean(e.reshape(3,-1)**2,axis=1)), 'by bank',np.sqrt(np.mean(e.reshape(-1,4)**2,axis=0)), 'weights',w.round(6), 'cal delta rms',np.sqrt(np.mean((y-obs)**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived wall regimes compete → H2: periodic–periodic is the baseline, with worst held-out site RMSE 0.01057 and worst held-out shift RMSE 0.00993.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit a new wall operator before building the baseline\",\n      \"rejected_reason\": \"Periodic–periodic already leads the discrete comparison; first separate remaining wall error from any calibration error.\"\n    }\n  ],\n  \"rationale\": \"Stage the verified periodic–periodic core with the existing wrapper. Compare calibration sweeps before and after the staged transducer: a material residual map would motivate downstream correction, whereas an identity map would rule out a second calibration pass.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "397b51654a33daccb951d1dbd86ddd742b653057c2ed22f6f7e3fc331213a7e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26950.64,
+      "usage_known": true,
+      "prompt_tokens": 28519,
+      "cached_tokens": 9344,
+      "completion_tokens": 937
+    }
+  ]
+}

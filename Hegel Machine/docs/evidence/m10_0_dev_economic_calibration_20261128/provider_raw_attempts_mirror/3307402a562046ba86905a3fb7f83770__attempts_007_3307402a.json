@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3307402a562046ba86905a3fb7f83770",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:58:36.214643+00:00",
+  "ended_at_utc": "2026-11-28T02:58:58.279094+00:00",
+  "request_sha256": "e2ee57bce7e7bd1ba83fd68b584c4a0adbac2405257711693dc26a6e00889456",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50123,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27604,
+    "cached_tokens": 9344,
+    "completion_tokens": 773
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: d=pickle.load(f)[0]['dataset']\\na,b=d['train'],d['test']; labs=a['lab_id']; x=m._features(a,b); dt,t=d['past_dt'],d['eval_times']; bridge=m._bridge(d['calibration_load_cells']); past,hold=m._loads(a,bridge); y=a['strain_curves_obs']-a['strain_0'][:,None]; r=a['instant_rate_obs']; xt=x[:len(labs)]\\nworst=np.zeros(3)\\nfor lab in np.unique(labs):\\n    v=labs==lab; z=~v\\n    taus,theta=m._fit(past[z],hold[z],xt[z],dt,t,y[z],r[z]); assert .05<taus[0]<taus[1]<25\\n    c,k=m._design(taus,past[v],hold[v],xt[v],dt,t)\\n    err=abs(c@theta-y[v]); rate=abs(k@theta-r[v]); q=np.array([np.nanmedian(err),np.nanmedian(rate),np.nanmax(np.nanmedian(err,axis=0))]); worst=np.maximum(worst,q)\\n    print('held-out lab',lab,'taus',taus.round(5),'median curve/rate error and worst horizon median',q.round(6))\\nprint('worst across labs',worst.round(6))\\nout=m.solve_batch(d); p,h=m._loads(b,bridge); tau=out['estimated_taus']; theta=out['hereditary_weights']; eps=1e-6\\ncurve,rate=m._chamber_response(tau,theta,p,h,x[len(labs):],dt,np.array([0.,eps])); deriv_err=np.max(abs((curve[:,1]-curve[:,0])/eps-rate)); print('chamber zero-time strain increment',np.max(abs(curve[:,0])),'initial derivative max discrepancy',deriv_err); assert np.max(abs(curve[:,0]))<1e-12 and deriv_err<1e-5\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived drift saturation → current telemetry-matched chamber law; the host probe reports strain MAE 0.001255, rate MAE 0.000787, and spectrum relative error 2.70%.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Hold out each lab’s response measurements to check whether one lab drives the shared spectrum or masks a bad prediction horizon. If a fold shows a systematic failure, revisit the material fit. Independently check that the chamber curve starts at zero increment and that its initial derivative agrees with the reported rate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "c41859c8c51c493b2f124a36c3fc9bcabd27ef2fd8b8c2561370cc0f2fea6d1a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24104.82,
+      "usage_known": true,
+      "prompt_tokens": 27604,
+      "cached_tokens": 9344,
+      "completion_tokens": 773
+    }
+  ]
+}

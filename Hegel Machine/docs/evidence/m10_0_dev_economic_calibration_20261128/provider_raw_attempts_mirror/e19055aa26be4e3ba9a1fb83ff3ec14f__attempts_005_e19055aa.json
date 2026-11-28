@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e19055aa26be4e3ba9a1fb83ff3ec14f",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:33:23.147528+00:00",
+  "ended_at_utc": "2026-11-28T02:34:03.771993+00:00",
+  "request_sha256": "a937ad1ea8f6dab03ba7d8bb3deaf2f14fbc7e7bd7f2fc38eb8b38698e80f908",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 34386,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22893,
+    "cached_tokens": 5504,
+    "completion_tokens": 1782
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/compare_rosette.py <<'PY'\\nimport itertools, pickle\\nimport numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']\\nb=c['single_bank_sweeps']; bid=b['bank_id']; bx=np.eye(4)[bid]*b['ref_signal'][:,None]; by=b['raw_readout']\\nall_terms=[k for d in (2,3) for k in itertools.combinations_with_replacement(range(4),d)]\\ndef terms(name,j):\\n if name=='cyclic': return [(j,(j+1)%4),(j,j,j)]\\n if name=='own': return [(j,k) for k in range(4)]+[(j,j,j)]\\n if name=='paircubic': return [k for k in all_terms if len(k)==2 or len(set(k))==1]\\n return all_terms\\ndef mat(x,name,j): return np.column_stack([np.ones(len(x)), x, *[x[:,t].prod(1) for t in terms(name,j)]])\\ndef fit(name,tr,bt):\\n A=[mat(x[tr],name,j) for j in range(4)]; B=[mat(bx[bt & (bid==j)],name,j) for j in range(4)]; T=[by[bt & (bid==j)] for j in range(4)]\\n w=np.ones(len(tr)); v=[np.ones(len(t)) for t in T]\\n for it in range(18):\\n  p=[np.linalg.lstsq(np.vstack((a*w[:,None],bb*u[:,None])),np.r_[y[tr,j]*w,t*u],rcond=None)[0] for j,(a,bb,t,u) in enumerate(zip(A,B,T,v))]\\n  e=np.linalg.norm(np.column_stack([a@q for a,q in zip(A,p)])-y[tr],axis=1); sig=max(np.median(e)/1.83,1e-8)\\n  w=1/np.hypot(1,e/(4*sig)); v=[1/np.hypot(1,(bb@q-t)/(3*sig)) for bb,q,t in zip(B,p,T)]\\n return p\\ndef pred(x,name,p): return np.column_stack([mat(x,name,j)@p[j] for j in range(4)])\\nN=len(x); allr=np.arange(N); tests={}\\nfor j,test in enumerate(np.array_split(np.random.default_rng(31).permutation(N),5)): tests[f'random{j}']=test\\nfor j in range(4): tests[f'axis{j}']=np.flatnonzero((np.count_nonzero(x,axis=1)==1)&(x[:,j]!=0))\\ntests['edge']=np.argsort(np.max(np.abs(x),axis=1))[-16:]; tests['interior']=np.argsort(np.linalg.norm(x,axis=1))[:16]\\nfor name in ['cyclic','own','paircubic','full']:\\n print(name)\\n for use_bank in [False,True]:\\n  stat={}; spikes=[]\\n  for label,test in tests.items():\\n   bt=np.ones(len(bid),bool) if use_bank else np.zeros(len(bid),bool)\\n   if label.startswith('axis'): bt &= bid!=int(label[-1])\\n   if label=='edge': bt &= np.abs(b['ref_signal'])<np.min(np.max(np.abs(x[test]),axis=1))\\n   p=fit(name,np.setdiff1d(allr,test),bt); e=np.linalg.norm(pred(x[test],name,p)-y[test],axis=1); clean=~np.isin(test,[13,14,15]); stat[label]=float(np.max(e[clean],initial=0)); spikes.extend(e[~clean])\\n  p=fit(name,allr,np.full(len(bid),use_bank)); er=np.linalg.norm(pred(x,name,p)-y,axis=1)\\n  print('bank',use_bank,'max by slice', {k:round(v,8) for k,v in stat.items()},'min held-out spike',min(spikes),'clean max fit',np.max(np.sort(er)[:-3]))\\n  if name=='cyclic':\\n   print('ratios',np.array([[q[1+(j+1)%4]/q[1+j],q[1+(j-1)%4]/q[1+j],q[-2]/q[1+j],q[-1]/q[1+j]] for j,q in enumerate(p)]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/compare_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable cubic response → H2 mixed quadratic and cubic response; five-fold OOF p95 fell from 1.056 to 9.90e-5, with three gross EMI rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An affine cross-channel map plus separate per-channel nonlinearities adequately captures the rosette response.\",\n    \"empirical_witness\": \"Full cubic regression reduced OOF median row error from 0.324 to 3.13e-5; the only substantial mixed coefficients were four cyclic quadratic interactions.\",\n    \"causal_blanket_diagnosis\": \"The effect of each channel's reference signal depends on the adjacent channel's excitation, which an axis sweep cannot identify.\",\n    \"sublated_pivot\": \"Compare an explicitly cyclic basis with broader sparse bases on held-out axis, interior, and edge sweeps.\",\n    \"risk_kind\": \"Calibration bias on simultaneous excitation\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Ship the full cubic fit immediately\",\n      \"rejected_reason\": \"Its extra terms may fit noise, and the existing random folds do not test edge extrapolation or loss of one axis sweep.\"\n    }\n  ],\n  \"rationale\": \"The mixed terms explain the held-out error, so the next test checks whether the smaller cyclic model retains that improvement and whether single-bank data help without leaking into the axis holdout.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "190775cdd736dc06a9a2bc8dc67dd0c10dc60b688e479da0b2debe6a695cd4d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44660.23,
+      "usage_known": true,
+      "prompt_tokens": 22893,
+      "cached_tokens": 5504,
+      "completion_tokens": 1782
+    }
+  ]
+}

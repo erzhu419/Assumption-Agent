@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "959c65776e0a4418b2bf9ee4c942c917",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:27.583792+00:00",
+  "ended_at_utc": "2026-11-28T02:46:45.745220+00:00",
+  "request_sha256": "50f00b252c01369554d20197b706820c37403c7d3160ccb1390dc9c1495b41be",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41317,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24858,
+    "cached_tokens": 9344,
+    "completion_tokens": 628
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo \\\"--- $f\\\"; awk '/^def _chamber/{p=1} /^def solve_batch/{p=0} p' \\\"$f\\\"; grep -A4 -E '^_CHAMBER|^_MODE' \\\"$f\\\"; done; echo '--- s00 forecast'; tail -35 *s00_solver.py; python3 - <<'PY'\\nimport importlib.util,pickle,numpy as np,glob\\np=glob.glob('*batch_04_solver.py')[0]; s=importlib.util.spec_from_file_location('prior',p); m=importlib.util.module_from_spec(s);s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; a=c['bridge_raw']; y=c['true_channel_loads']; b=m._bridge(c); err=m._transfer(y,b)-a\\nprint('bridge rows abs residual quantiles',np.quantile(abs(err),[.5,.8,.9,.95,1],axis=0).round(5));print('bridge coefficients',b.round(5)); print('forward linear-only abs residual median',np.median(abs(y@np.linalg.lstsq(np.c_[y,np.ones(len(y))],a,rcond=None)[0][:-1]+np.linalg.lstsq(np.c_[y,np.ones(len(y))],a,rcond=None)[0][-1]-a),axis=0))\\nq=m.solve_batch(d); print('prior material',q['estimated_taus'],q['hereditary_weights']);\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge and baseline chamber → H2 robust nonlinear bridge and archive-conditioned chamber; worst affine channel RMSE is 0.538 before outlier handling.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the most recent archived solver unchanged\",\n      \"rejected_reason\": \"It is a useful baseline, but its chamber law may not explain the current apparatus state.\"\n    }\n  ],\n  \"rationale\": \"Extract only the archived chamber equations that were truncated. Check whether the latest bridge basis explains the current calibration before reusing it; if substantial residuals remain on typical rows, compare alternative basis terms in held-out calibration folds.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d0bda4d62d3233420a79976b93477da5f2338ede6194266fb620e31106ccfe42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20201.22,
+      "usage_known": true,
+      "prompt_tokens": 24858,
+      "cached_tokens": 9344,
+      "completion_tokens": 628
+    }
+  ]
+}

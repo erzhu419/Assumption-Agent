@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "95ea43eeaf284de09921d0d983957359",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:54.560150+00:00",
+  "ended_at_utc": "2026-11-28T02:46:29.925191+00:00",
+  "request_sha256": "311231a37e412cf1d3de99564fad07703468dadc937ebc696a7d44925df688a4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59169,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30270,
+    "cached_tokens": 9344,
+    "completion_tokens": 1439
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_rosette.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nb = c['single_bank_sweeps']\\n# The measured +14.41 isolated readout is outside the clean sweep range by >12.\\n# Exclude it from the scoring population but leave it in every applicable training fold.\\nA, Y, folds, clean = [], [], [], []\\nfor j in range(4):\\n    idx = b['bank_id'] == j\\n    bx = np.zeros((idx.sum(), 4))\\n    bx[:, j] = b['ref_signal'][idx]\\n    A.append(m._design(np.vstack((x, bx)), j))\\n    Y.append(np.r_[y[:, j], b['raw_readout'][idx]])\\n    folds.append(np.r_[np.arange(len(x)) % 5, np.arange(len(bx)) % 5])\\n    clean.append(np.r_[np.ones(len(x), bool), np.abs(b['raw_readout'][idx]) < 5])\\nA, Y, folds, clean = map(np.array, (A, Y, folds, clean))\\n\\ndef fit(keep, model):\\n    coef = []\\n    inlier = []\\n    for D, q, train in zip(A, Y, keep):\\n        Dt, qt = D[train], q[train]\\n        f = np.linalg.lstsq(Dt, qt, rcond=None)[0]\\n        for _ in range(6):\\n            e = qt - Dt @ f\\n            scale = max(1e-8, 1.4826 * np.median(abs(e - np.median(e))))\\n            w = 1 / np.hypot(1, e / (2.5 * scale))\\n            f = np.linalg.lstsq(Dt*w[:, None], qt*w, rcond=None)[0]\\n        e = qt - Dt @ f\\n        good = train.copy()\\n        good[train] = abs(e) < max(2e-4, 8 * 1.4826 * np.median(abs(e - np.median(e))))\\n        inlier.append(good)\\n        coef.append(np.linalg.lstsq(D[good], q[good], rcond=None)[0])\\n    coef = np.array(coef)\\n    if model == 'independent':\\n        return np.einsum('jnp,jp->jn', A, coef)\\n    def predict(t):\\n        z = A[:,:,1] + A[:,:,2:] @ t[8:12]\\n        if model == 'shared_rational':\\n            z = z / (1 + t[12]*A[:,:,1]**2)\\n        return t[:4,None] + t[4:8,None]*z\\n    start = np.r_[coef[:,0], coef[:,1], np.mean(coef[:,2:] / coef[:,1,None], axis=0)]\\n    if model == 'shared_rational':\\n        start = np.r_[start, 0.]\\n    mask = np.array(inlier)\\n    params = least_squares(lambda t: (predict(t)-Y)[mask], start).x\\n    if model == 'shared_rational':\\n        print('rational coefficient', params[-1])\\n    return predict(params)\\n\\nfor model in ('independent', 'shared', 'shared_rational'):\\n    pred = np.empty_like(Y)\\n    for fold in range(5):\\n        keep = folds != fold\\n        pred[~keep] = fit(keep, model)[~keep]\\n    err = pred-Y\\n    print(model, 'clean bank RMS', [float(np.sqrt(np.mean(v[k]**2))) for v,k in zip(err,clean)], 'worst clean absolute', np.max(abs(err[clean])))\\n    for name, sl in [('rosette',slice(None,len(x))),('single',slice(len(x),None))]:\\n        z, k = err[:,sl], clean[:,sl]\\n        print(name, 'worst bank RMS', max(np.sqrt(np.sum(np.where(k,z*z,0),axis=1) / k.sum(axis=1))))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent cubic banks → test a shared gain-scaled response with and without a rational denominator; the current worst clean-bank held-out RMS is 1.19e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Replace the bank fits based on proportional coefficients alone\",\n      \"rejected_reason\": \"Pooling can hide a bank-specific deviation; compare held-out error separately for rosette and single-bank sweeps before editing the verified solver.\"\n    }\n  ],\n  \"rationale\": \"Fit each calibration model inside the training folds. A consistent improvement on the worst clean sweep slice would justify testing the shared response in the full solver; an unstable rational term or no material gain would favor retaining the verified artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "12ab9c6690ceaafa5900052dc03b43e00fc7ae662a001f1eff1d1ed165f518ee",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37397.11,
+      "usage_known": true,
+      "prompt_tokens": 30270,
+      "cached_tokens": 9344,
+      "completion_tokens": 1439
+    }
+  ]
+}

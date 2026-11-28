@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b169906c508f4430959cbbf74b77854e",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:03:41.143143+00:00",
+  "ended_at_utc": "2026-11-28T03:04:08.827448+00:00",
+  "request_sha256": "77058374f76e0008a7978eff2ae05f9f5e50a528eb5a6c40b4d7589beaea60ab",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47620,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25124,
+    "cached_tokens": 9344,
+    "completion_tokens": 1090
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; sed -n '1,105p' downstream_solver.py; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, json, numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as m\\nfrom batch_solver import solve_batch\\nitems=pickle.load(open('public_batch.pkl','rb')); print('public items / labeled chamber',len(items),sum(i.get('campaign_diagnostics') is not None for i in items))\\nraw=items[0]['dataset']; d=calibrate_upstream(raw); tr,te=d['train'],d['test']; n=len(tr['lab_id']); x=m._features(tr,te)[:n]; dt,t=d['past_dt'],d['eval_times']; past,hold=m._loads(tr); y=m._observations(tr); labs=tr['lab_id']; strata=tr['stratum']; oof=np.empty_like(y)\\nfor lab in np.unique(labs):\\n  a=labs!=lab; b=~a; tau,th=m._fit(past[a],hold[a],x[a],dt,t,y[a]); p=m._predict(tau,th,past,hold,x,dt,t,'benchtop'); oof[b]=y[b]-p[b]\\n  gap=m._gap(tau,past,hold,dt); g0,g1=gap.T; h=hold; q=np.column_stack([g0-g1,g0+g1,g0*g1,h*g0*g1,g0/(1+g1*g1),g1/(1+g0*g0)]); q=np.column_stack([np.ones(n),q]); aug=p.copy()\\n  for j in range(y.shape[1]):\\n    r=y[:,j]-p[:,j]; k=a&np.isfinite(r); med=np.median(r[k]); mad=np.median(np.abs(r[k]-med)); k&=np.abs(r-med)<=max(5*mad,1e-10); aug[b,j]+=q[b]@np.linalg.lstsq(q[k],r[k],rcond=None)[0]\\n  metric=lambda r: (np.nanmax(np.nanmedian(np.abs(r[:,:-1]),axis=0)),np.nanmedian(np.abs(r[:,-1])))\\n  print('lab',lab,'baseline / algebraic residual extension median AE [worst horizon,rate]',np.round([metric(y[b]-p[b]),metric(y[b]-aug[b])],6))\\nfor j in np.unique(labs):\\n  for k in np.unique(strata[labs==j]):\\n    r=oof[(labs==j)&(strata==k)]; print('cell',j,k,len(r),'signed median residual [curve,rate]',np.round([np.nanmedian(r[:,:-1]),np.nanmedian(r[:,-1])],5))\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor r in rows:\\n  a=np.asarray(r['facility_telemetry_trace']); print('trace',r['completed_campaign_index'],np.round(a.mean(0),2),'channel 1/6 ranges',np.round(np.quantile(a[:,[1,6]],[0,1],axis=0),2).tolist())\\nout=solve_batch(raw); assert all(np.isfinite(a).all() for a in out.values()); print('mode',m._facility_mode())\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: calibrated two-branch hereditary fit → H2: telemetry-selected slope-preserving chamber correction; prior worst held-out lab median absolute errors were 0.01708 for strain and 0.00652 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Audit relay modes, HJB drift, or classification accuracy\",\"rejected_reason\":\"The supplied model is continuous hereditary regression with no relay, stochastic control operator, or class labels; signed residuals within lab and stratum are the relevant nuisance check.\"}],\"rationale\":\"Test whether omitted algebraic terms consistently improve predictions in held-out labs, and check whether pooled errors mask systematic within-cell bias. Inspect every facility trace for overlap or a distinct regime that would undermine the chamber-law selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1b221b82737d8f65da296066f47daf73c4e1f7dcd13cbcf2f20280cc6fbbc623",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29640.29,
+      "usage_known": true,
+      "prompt_tokens": 25124,
+      "cached_tokens": 9344,
+      "completion_tokens": 1090
+    }
+  ]
+}

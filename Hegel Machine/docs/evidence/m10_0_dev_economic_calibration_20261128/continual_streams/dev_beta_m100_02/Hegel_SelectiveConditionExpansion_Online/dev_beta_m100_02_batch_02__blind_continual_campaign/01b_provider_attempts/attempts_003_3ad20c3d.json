@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3ad20c3df6494735bf42e111ef6a09f3",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:32:39.974249+00:00",
+  "ended_at_utc": "2026-11-28T02:32:55.310024+00:00",
+  "request_sha256": "ebba0c0d308813747c6ae6e65d426e98446bb35d8a4312e67187c83b1af4415c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22426,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18357,
+    "cached_tokens": 5504,
+    "completion_tokens": 514
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np,json\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; print('ref quantiles',np.quantile(x,[0,.1,.5,.9,1],axis=0)); print('raw obs range',np.quantile(s['y_obs_raw'].reshape(-1,4),[0,1],axis=0)); print('sweep head',np.round(np.c_[x,y][:8],5)); print('bank head', {k:v[:8].tolist() for k,v in c['single_bank_sweeps'].items()}); print('ref correlations',np.corrcoef(x.T)); print('pulses',s.get('reference_tracer_pulses')); print('telemetry first',s['aux_manifold_telemetry'][:3]);\\nfor f in ['pre_llm_gate_diagnostic','archive_apparatus_log']:\\n a=json.load(open('/tmp/hegel_continual_archive/'+f+'.json')); print(f, [list(i) for i in a] if isinstance(a,list) else str(a)[:1800]);\\n if isinstance(a,list):\\n  for r in a: print({k:v for k,v in r.items() if not isinstance(v,(list,dict))})\\nPY\\nsed -n '44,86p' /tmp/hegel_continual_archive/dev_beta_m100_02_batch_01_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine cross-channel response → H2 robust nonlinear forward response; held-out error is pending and the public study has no pulse key.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Resume the sweep inspection with an optional pulse lookup. Compare calibration support against operating observations to determine whether nonlinear inverse extrapolation needs a dedicated holdout slice.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "752a451c4506d4bd58099b0778a795602dca8eeb62ea288e0bda67c3506a63e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17284.75,
+      "usage_known": true,
+      "prompt_tokens": 18357,
+      "cached_tokens": 5504,
+      "completion_tokens": 514
+    }
+  ]
+}

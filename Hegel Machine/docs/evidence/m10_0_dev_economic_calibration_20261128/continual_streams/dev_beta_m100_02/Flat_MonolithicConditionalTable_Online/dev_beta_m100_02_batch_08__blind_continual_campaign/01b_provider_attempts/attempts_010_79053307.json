@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "79053307247a4baeacbe78f71f65bb94",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:12:27.123968+00:00",
+  "ended_at_utc": "2026-11-28T03:12:58.425407+00:00",
+  "request_sha256": "bb13225ae323eef7931ecacc3446f00f65e0d90e9fb9cd2bdc97b4a71aa83176",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 62506,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32856,
+    "cached_tokens": 9344,
+    "completion_tokens": 1224
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed '/^for a in (0,1/,$d' /tmp/compare08.py > /tmp/xwall08.py\\ncat >> /tmp/xwall08.py <<'PY'\\nxy=s['sensor_ij']; rows=np.arange(len(y)); D={a:design(a,'p') for a in (0,'p')}\\ndef pred(S,tr,te):\\n X,Zt,yt=S[tr],Z[tr],y[tr]; Q=np.linalg.lstsq(Zt,np.column_stack((X,yt)),rcond=None)[0]; A,b=X-Zt@Q[:,:-1],yt-Zt@Q[:,-1]; w,_=m._box_simplex(A.T@A+1e-8*np.eye(X.shape[1]),-A.T@b,uz,budget); return S[te]@w+Z[te]@(Q[:,-1]-Q[:,:-1]@w)-y[te],w\\nslices={'full':np.ones(len(y),bool),'x-wall':np.tile(xy[:,0]<=1,3),'x-interior':np.tile(xy[:,0]>1,3)}\\nfor a,S in D.items():\\n print('x model',a)\\n for k,mask in slices.items():\\n  e,w=pred(S,rows if k=='full' else rows[~mask],rows[mask]); print(k,'RMSE',np.sqrt(np.mean(e**2)),'n',len(e),'w',np.round(w,4))\\n groups=np.tile(np.arange(len(xy))//4,3); errs=[pred(S,rows[groups!=j],rows[groups==j])[0] for j in np.unique(groups)]; print('group OOF RMSE',np.sqrt(np.mean(np.concatenate(errs)**2)),'worst',max(np.sqrt(np.mean(e**2)) for e in errs)); print('shift OOF RMSE',[np.sqrt(np.mean(pred(S,rows[rows//len(xy)!=j],rows[rows//len(xy)==j])[0]**2)) for j in range(len(s['mu_shifts']))])\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor prev,nxt in zip(log,log[1:]):\\n means=np.asarray(prev['facility_telemetry_trace']).mean(0); print('prefix',prev['completed_campaign_short_name'],'next',nxt['completed_campaign_short_name'],'DC',np.round(means[[0,4]],3))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/xwall08.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sealed chamber → periodic y, with periodic x favored by the lower unregularized residual floor (0.00633 vs. 0.00646); worst held-out calibration RMSE is 1.17×10⁻⁵.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"The archived sealed-wall operator transfers unchanged to this campaign.\",\n    \"empirical_witness\": \"The sealed model reaches 0.01518 pooled held-out rosette RMSE, versus 0.00941 with periodic boundaries on both axes; both variants with periodic y improve over either x variant with sealed y.\",\n    \"causal_blanket_diagnosis\": \"Independent sweep errors are three orders of magnitude below the chamber residuals, and changing the y wall improves prediction under either x setting.\",\n    \"sublated_pivot\": \"Retain periodic y and adjudicate x using box-feasible extrapolation to held-out wall sensors, with the source ridge removed only for model identification.\",\n    \"risk_kind\": \"boundary_operator_misspecification\",\n    \"resolves_nogood_ids\": [\n      \"ng_t05\"\n    ]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select x solely from the pooled ridge-regularized score\",\n      \"rejected_reason\": \"The difference is small enough that source shrinkage can determine the ranking; held-out x-wall observations are more directly informative.\"\n    }\n  ],\n  \"rationale\": \"Compare sealed and periodic x where the operator predictions should differ most, while holding calibration and periodic y fixed. Use the weaker ridge only for this diagnostic; the final solver will use the specified objective and ridge.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1df1a73568bd9000b4689d1635f84f4b8253dd1434a8941deade144f517dd828",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33353.92,
+      "usage_known": true,
+      "prompt_tokens": 32856,
+      "cached_tokens": 9344,
+      "completion_tokens": 1224
+    }
+  ]
+}

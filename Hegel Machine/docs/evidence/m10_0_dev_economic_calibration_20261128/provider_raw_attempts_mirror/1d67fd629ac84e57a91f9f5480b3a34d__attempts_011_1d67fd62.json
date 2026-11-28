@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1d67fd629ac84e57a91f9f5480b3a34d",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:29:01.349319+00:00",
+  "ended_at_utc": "2026-11-28T02:29:39.163035+00:00",
+  "request_sha256": "6ea7db4e043ccdb14a7cb9846f4d0d43d1fbe3ef9165ff2cc5d7f9c8181a0cf0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56737,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30598,
+    "cached_tokens": 10880,
+    "completion_tokens": 1530
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ni = s.index('def _calibrate(')\\nj = s.index('\\\\ndef _box_simplex(', i)\\ns = s[:i] + '''def _calibrate(study):\\n    \\\"\\\"\\\"Fit each independent channel using both calibration sweep types.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    single = sweeps['single_bank_sweeps']\\n    bank, signal, readout = (np.asarray(single[k]) for k in\\n                             ('bank_id', 'ref_signal', 'raw_readout'))\\n    gain, offset = np.empty(4), np.empty(4)\\n    for j in range(4):\\n        keep = bank == j\\n        x = np.r_[ref[:, j], signal[keep]]\\n        y = np.r_[raw[:, j], readout[keep]]\\n        gain[j], offset[j] = np.linalg.lstsq(\\n            np.column_stack((x, np.ones(len(x)))), y, rcond=None)[0]\\n    observed = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return ((observed - offset) / gain).ravel()\\n\\n''' + s[j:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\n\\ndef load(name, path):\\n    spec=importlib.util.spec_from_file_location(name,path)\\n    m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n    return m\\n\\nm=load('candidate','/holdout_task/batch_solver.py')\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']\\nS,U=m._responses(s,m._operator(s)); Z=s['Z_nuisance']; P=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nerrors=np.array([(m._calibrate(dict(s,y_obs_raw=p['y_pulse_raw']))-S@p['w_pulse']).reshape(len(s['mu_shifts']),-1,4) for p in a['campaign_diagnostics']])\\nworst=np.max(np.sqrt(np.mean(errors**2,axis=2))); print('worst tracer pulse/shift/bank RMSE',worst,'projected RMS',np.sqrt(np.mean((P@errors.reshape(len(errors),-1).T)**2))); assert worst<2.1532867785522654e-6\\nn=S.shape[1]; upper=s['u_box']; A=P@S\\nzero=np.zeros_like(s['y_obs_raw']); offset_cal=m._calibrate(dict(s,y_obs_raw=zero)); gain_inv=m._calibrate(dict(s,y_obs_raw=zero+1))-offset_cal\\nextreme=(40*(A[:,0]-A[:,1])-offset_cal)/gain_inv\\nfor name, st in [('public',s), ('zero',dict(s,total_budget=0.)),('full',dict(s,total_budget=n*upper)),('active',dict(s,y_obs_raw=extreme)),('vertex',dict(s,y_obs_raw=extreme,total_budget=3*upper))]:\\n    out=m.solve_batch(st); w=out['weights']; c=out['kkt_certificate']; nu=c['nu_sum']; lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); t=st['total_budget']; r=A@w-P@m._calibrate(st); ridge=st['source_ridge']; g=A.T@r+ridge*w; J=.5*(r@r+ridge*(w@w)); D=J-g@w+nu*t+upper*np.minimum(g-nu,0).sum()\\n    assert abs(w.sum()-t)<1e-11 and min(w)>=-1e-11 and max(w)<=upper+1e-11\\n    assert np.allclose(c['weights'],w) and min(lo)>=0 and min(hi)>=0\\n    assert np.max(abs(g-nu-lo+hi))<1e-10 and np.max(abs(lo*w)+abs(hi*(upper-w)))<1e-10\\n    assert max(abs(J-c['primal_objective']),abs(D-c['dual_lower_bound']),abs(J-D))<1e-10\\n    assert np.max(abs(out['terminal_field']-np.tensordot(w,U,axes=(0,0))))<1e-10\\n    lc=np.count_nonzero(w<1e-9); hc=np.count_nonzero(w>upper-1e-9)\\n    if name in ('active','vertex'): assert lc and hc\\n    if name=='vertex': assert lc+hc==n\\n    print(name,'lower/upper',lc,hc,'gap',J-D)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full-rosette affine calibration -> H2 joint per-bank affine calibration with the verified closed walls; worst tracer slice RMSE improves from 2.45e-6 to 1.84e-6 across calibration folds.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the full-rosette-only fit\",\n      \"rejected_reason\": \"It has a marginal advantage on held-out sweep RMSE, but the joint fit cuts worst tracer-slice RMSE by 25% and projected tracer RMS by 32%.\"\n    }\n  ],\n  \"rationale\": \"Promote the joint fit because it predicts independent tracer measurements better, including after nuisance projection, with only a small sweep-error tradeoff. Verify the exact edited artifact in isolation; retain the prior calibration if the all-sweep fit loses the tracer improvement or breaks the output contract.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "36b0ca325cf2764fdba77cdb4065c57cf85aca587a9b9256b4224d35a9d27b4d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39788.78,
+      "usage_known": true,
+      "prompt_tokens": 30598,
+      "cached_tokens": 10880,
+      "completion_tokens": 1530
+    }
+  ]
+}

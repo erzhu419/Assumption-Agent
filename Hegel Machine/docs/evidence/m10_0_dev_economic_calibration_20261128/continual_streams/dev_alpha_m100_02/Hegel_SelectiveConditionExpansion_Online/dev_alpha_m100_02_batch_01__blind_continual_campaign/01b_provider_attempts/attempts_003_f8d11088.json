@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f8d1108851ed47cba40ded5e7bea4755",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:04.795922+00:00",
+  "ended_at_utc": "2026-11-28T02:25:23.845865+00:00",
+  "request_sha256": "ceefba2c09a2140dc4ebce366eba9bbd7c1cf2e0d9e3843c00277882563a0f09",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22308,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18304,
+    "cached_tokens": 9344,
+    "completion_tokens": 670
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; cat dev_alpha_m100_02_s00_solver.py; python3 - <<'PY'\\nimport json,pickle,numpy as np\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; print('dt/t',d['past_dt'],d['eval_times']); print('item keys',list(p),'diag count',len(p['campaign_diagnostics']['lab_id'])); print('index summary:'); j=json.load(open('/holdout_task/public_asset_index.json')); print(str(j)[:3000]); print('apparatus:'); j=json.load(open('archive_apparatus_log.json')); print(type(j));\\nfor row in j:\\n print({k:(str(v)[:120] if isinstance(v,(list,dict)) else v) for k,v in row.items()} if isinstance(row,dict) else row)\\nfor k in ['train','test']:\\n a=d[k]['aux_chamber_telemetry']; print(k,'aux range and examples',np.nanmin(a,axis=0),np.nanmax(a,axis=0),a[:4]);\\nc=d['calibration_load_cells']; print('sweeps',type(c['single_channel_sweeps']),str(c['single_channel_sweeps'])[:1200]); A=np.c_[np.ones(len(c['bridge_raw'])),c['bridge_raw']]; Y=c['true_channel_loads']; b=np.linalg.lstsq(A,Y,rcond=None)[0]; print('affine calibration residual RMSE',np.mean((A@b-Y)**2,axis=0)**.5, 'max',np.max(np.abs(A@b-Y)))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -45\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop spectrum -> H2 deployment correction inferred from the available verification coupons; no out-of-fold score yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the campaign as blind based on the task ID\",\n      \"rejected_reason\": \"The inspected batch contains chamber verification measurements, which can test whether the prior deployment law transfers.\"\n    }\n  ],\n  \"rationale\": \"The previous output truncated the prior solver and apparatus summary. Read them compactly and quantify the affine calibration residual: if it is material, the bridge model must be corrected before attributing discrepancies to chamber memory or drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2b025becd58eaaae5ae18b073194fdad29a98413547060726ce9a9c017cb4ff1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21015.22,
+      "usage_known": true,
+      "prompt_tokens": 18304,
+      "cached_tokens": 9344,
+      "completion_tokens": 670
+    }
+  ]
+}

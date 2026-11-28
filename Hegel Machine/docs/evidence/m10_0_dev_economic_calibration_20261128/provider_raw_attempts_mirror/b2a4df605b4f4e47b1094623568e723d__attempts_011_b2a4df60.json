@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b2a4df605b4f4e47b1094623568e723d",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:56:44.979579+00:00",
+  "ended_at_utc": "2026-11-28T02:57:06.356969+00:00",
+  "request_sha256": "70baf22edaf32de7a24ee1cafef53059a4e3d140070125b2e3706fc8f13d6b33",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 59118,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29570,
+    "cached_tokens": 9344,
+    "completion_tokens": 788
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom _verified_upstream import _basis, _fit, _invert\\nst = pickle.load(open('public_batch.pkl', 'rb'))[0]['study']\\nsw = st['sensor_calibration_sweeps']\\nref, raw = map(np.asarray, (sw['ref_rosette'], sw['raw_rosette']))\\nworst_clean, min_outlier_ratio, n_large = 0., np.inf, 0\\nfor fold in range(5):\\n    train = np.arange(len(ref)) % 5 != fold\\n    coef = _fit(ref[train], raw[train])\\n    train_res = np.linalg.norm(_basis(ref[train])@coef - raw[train], axis=1)\\n    cutoff = max(8*np.median(train_res), 1e-8)\\n    forward_res = np.linalg.norm(_basis(ref[~train])@coef - raw[~train], axis=1)\\n    inv_err = np.max(np.abs(_invert(raw[~train], coef)-ref[~train]), axis=1)\\n    clean = forward_res <= cutoff\\n    worst_clean = max(worst_clean, inv_err[clean].max())\\n    large = inv_err > 1e-2\\n    if large.any():\\n        n_large += large.sum()\\n        min_outlier_ratio = min(min_outlier_ratio, np.min(forward_res[large]/cutoff))\\n        print('fold', fold, 'large-error row indices', np.flatnonzero(~train)[large].tolist(), 'forward residual / training cutoff', (forward_res[large]/cutoff).tolist())\\nprint('Worst inlier held-out inverse error:', worst_clean, 'large-error rows:', n_large, 'minimum forward outlier ratio:', min_outlier_ratio)\\nassert n_large and min_outlier_ratio > 1 and worst_clean < 1e-4\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Apparent inverse-branch failure → test for corrupted sweep readings; worst observed sweep error is 4.89, while the worst held-out pulse-by-shift error remains 1.54e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the staged inverse or add branch selection\",\n      \"rejected_reason\": \"A clean sweep row with a large inverse error would support a branch failure. A raw reading that already disagrees with the forward calibration at its known reference would not.\"\n    }\n  ],\n  \"rationale\": \"Use the forward fit from each training fold to test the anomalous held-out readings at their known references. If all large inverse errors are forward outliers and the inlier error stays small, retain the verified composition; otherwise investigate a genuine inlier inversion failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "423eb2273b909b13f1fef8f562156bc4199637414e990a4c916a6094a31fc2fb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23388.52,
+      "usage_known": true,
+      "prompt_tokens": 29570,
+      "cached_tokens": 9344,
+      "completion_tokens": 788
+    }
+  ]
+}

@@ -1,0 +1,615 @@
+{
+  "task_id": "dev_alpha_m100_02_batch_04__blind_continual_campaign__downstream_module",
+  "short_name": "dev_alpha_m100_02_batch_04",
+  "benchmark": "Hegel-M100-Reliable-Modular-Amortization-And-Bidirectional-Withdrawal-World",
+  "wave": "m10_0_reliable_modular_amortization_and_bidirectional_withdrawal",
+  "scientific_domain": "coupled_viscoelastic_chamber_hereditary_mechanics",
+  "wormhole_family": "m100_alpha",
+  "model": "gpt-6.2-sol",
+  "returned_model": "gpt-6.2-sol",
+  "provider_backend": "openai_chatgpt_subscription_codex_cli",
+  "auth_mode": "chatgpt",
+  "arm": "Hegel_SelectiveConditionExpansion_Online",
+  "allow_l1_primitives": false,
+  "disclosure_mode": "on_demand_executable",
+  "staging_policy": "net_value_gated",
+  "strict_pass": true,
+  "reward": 1.0,
+  "failure_taxonomy": "DEFERRED_FOR_BLIND_SYNTHESIS",
+  "ended_by_finish": true,
+  "turns_used": 11,
+  "max_turns": 16,
+  "final_candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+  "validated_incumbent_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+  "verification_receipts_history": [
+    {
+      "candidate_sha256": "515ff26bdda235664629588ddc7eb608820b7cac4163a0737d7617bb1ab02df4",
+      "verified_post_package": true,
+      "verified_turn": 4,
+      "verification_command": "set -e\ncd /holdout_task\nsed -i '/^def _design(part, x, dt, t, tau):/a\\    tau = np.asarray(tau, dtype=float)' downstream_solver.py\nOPENBLAS_NUM_THREADS=1 PYTHONPATH=/holdout_task python3 /tmp/analyze_chamber.py\nfor f in /tmp/hegel_continual",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "515ff26bdda235664629588ddc7eb608820b7cac4163a0737d7617bb1ab02df4",
+        "expected_candidate_sha256": "515ff26bdda235664629588ddc7eb608820b7cac4163a0737d7617bb1ab02df4",
+        "computed_candidate_sha256": "515ff26bdda235664629588ddc7eb608820b7cac4163a0737d7617bb1ab02df4",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 408
+          },
+          {
+            "path": "/holdout_task/downstream_solver.py",
+            "bytes": 3296
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v02_515ff26b"
+    },
+    {
+      "candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+      "verified_post_package": true,
+      "verified_turn": 10,
+      "verification_command": "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport runpy, sys\nsys.path.insert(0, '/holdout_task')\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/batch_solver.py']\nrunpy.run_path(sys.argv[",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+        "expected_candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+        "computed_candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 408
+          },
+          {
+            "path": "/holdout_task/downstream_solver.py",
+            "bytes": 3960
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v03_43df6337"
+    }
+  ],
+  "incumbent_auto_restored": false,
+  "pullback_gate_triggered": false,
+  "stress_challenge_gate_triggered": false,
+  "incumbent_checkpoint_alerts_fired": 0,
+  "nogood_count": 1,
+  "nogoods_recorded": [
+    {
+      "nogood_id": "ng_t05",
+      "turn_idx": 5,
+      "nogood_rung": "RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM",
+      "risk_kind": "constitutive_transfer",
+      "candidate_sha256": "515ff26bdda235664629588ddc7eb608820b7cac4163a0737d7617bb1ab02df4",
+      "resolved": false,
+      "superseded_by": null,
+      "proposed_resolves_nogood_ids": [],
+      "assumption_refuted": "Calibrating the load bridge is sufficient to transfer the benchtop constitutive and boundary law unchanged to the chamber.",
+      "empirical_witness": "Calibrated chamber initial-rate errors have mean +1.0785 and reach +3.038, while the benchtop rate residual has mean \u22120.0005 and 90th-percentile absolute error 0.0125.",
+      "causal_blanket_diagnosis": "The independently calibrated chamber has a structured response mismatch that cannot be explained by benchtop sensor noise.",
+      "sublated_pivot": "Keep the train-only intrinsic fit; separate deployment branch amplitudes and steady drift using the joint curve and initial-rate basis before choosing a boundary law.",
+      "pending_resolution_proposed_at_turn": 11,
+      "agent_claimed_probe": {
+        "turn": 10,
+        "command_preview": "set -e\ncd /holdout_task\nexport OPENBLAS_NUM_THREADS=1\npython3 -I - <<'PY'\nimport runpy, sys\nsys.path.insert(0, '/holdout_task')\nsys.argv = ['/holdout_task/validate_public_schema.py', '/holdout_task/ba",
+        "stdout_preview": "{\"schema_valid\": true, \"errors\": [], \"pooled_reference_check\": {\"valid\": true, \"swapped_ref_rows_per_split\": 24, \"ref_swap_strain_max_diff\": 0.0, \"ref_swap_rate_max_diff\": 0.0, \"tol\": 1e-05}}\nDeployment max derivative mismatch 4.05455187646"
+      },
+      "probe_support_status": "agent_claimed_unverified"
+    }
+  ],
+  "nogood_resolution_events": [],
+  "recalled_node_ids": [
+    "node_auto_07_control_panel_deconfounding",
+    "node_auto_09_dispersive_wave_tomography",
+    "node_auto_08_split_sparse_ridge_certification",
+    "node_auto_04_creep_corrected_retraction_c",
+    "node_auto_05_conservative_elliptic_multig"
+  ],
+  "staged_wormhole_modules": [],
+  "host_wormhole_gate_executed": true,
+  "host_wormhole_gate_reports": [],
+  "host_wormhole_probe_results": [
+    {
+      "overall_status": "not_applicable",
+      "candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+      "elapsed_ms": 0.0,
+      "returncode": 0,
+      "stderr": "",
+      "probe_reports": [],
+      "probe_results": []
+    }
+  ],
+  "producer_skill_manifest_summary": {
+    "artifact_id": "skill_dev_alpha_m100_02_batch_04_43df63379f30",
+    "binding_status": "bound_pure_and_full_closure",
+    "full_producer_count": 8,
+    "exported_pure_functions": [
+      "summarize",
+      "_features",
+      "_bridge",
+      "_prepare",
+      "_design",
+      "_mad",
+      "_fit",
+      "solve_batch"
+    ],
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history"
+  },
+  "skill_activation_count": 0,
+  "skill_activations": [],
+  "skill_packaging_events": [],
+  "skill_adoption_funnel": {
+    "allow_l1_primitives": false,
+    "disclosure_mode": "on_demand_executable",
+    "staging_policy": "net_value_gated",
+    "recalled_node_count": 5,
+    "staged_module_count": 0,
+    "staged_l1_primitive_count": 0,
+    "recommended_turn1_l1_count": 0,
+    "mounted_on_disk_l1_count": 0,
+    "knowledge_reference_l1_count": 0,
+    "queryable_catalog_l1_count": 0,
+    "card_char_stats": {
+      "card_count": 0,
+      "min_chars": 0,
+      "median_chars": 0.0,
+      "mean_chars": 0.0,
+      "max_chars": 0
+    },
+    "describe_skill_inspection_count": 1,
+    "search_skill_query_count": 3,
+    "demand_skill_hint_emitted": false,
+    "demand_skill_hint_turn": null,
+    "demand_triggered_recommended_l1_count": 0,
+    "describe_skill_queries": [
+      "autogenous_control_panel_deconfounding.align_control_panel"
+    ],
+    "inspected_in_bash": true,
+    "inspected_source_in_bash": true,
+    "inspected_knowledge_ref_in_bash": false,
+    "imported_in_bash_or_script": false,
+    "dynamic_calls_by_caller_role": {},
+    "dynamic_skill_activation_count": 0,
+    "dynamic_l1_primitive_activation_count": 0,
+    "dynamic_unique_modules_called": [],
+    "dynamic_unique_l1_modules_called": [],
+    "dynamic_unique_functions_called": [],
+    "dynamic_unique_l1_functions_called": [],
+    "historical_packaged_file_event_count": 0,
+    "historical_packaged_l1_file_event_count": 0,
+    "static_packaged_deliverable_count": 0,
+    "static_packaged_l1_primitive_count": 0,
+    "static_packaging_attempt_count": 0,
+    "final_selected_candidate_sha256": "43df63379f306921c3c911cadd040871d96c2aadb36dac19435e22f34bc0ce06",
+    "final_selected_artifact_retention": {
+      "inspected_file_count": 2,
+      "declared_entrypoints": [
+        "solve_batch"
+      ],
+      "final_retained_modules": [],
+      "final_retained_l1_modules": [],
+      "final_retained_functions": [],
+      "final_retained_l1_functions": [],
+      "closure_exact_present_l1_functions": [],
+      "statically_potentially_reachable_l1_functions": [],
+      "entrypoint_reachable_functions": [],
+      "entrypoint_reachable_l1_functions": [],
+      "any_public_function_reachable_functions": [],
+      "modified_or_unverified_loader_modules": [],
+      "all_retained_ast_match_source": true,
+      "files": [
+        {
+          "filename": "batch_solver.py",
+          "final_file_sha256": "e786924ba16bedc8c120d71cfeaca1a9f7f917e46b53121c89af96b5f8d7e964",
+          "public_entrypoints": [
+            "solve_batch"
+          ],
+          "effective_entrypoints": [
+            "solve_batch"
+          ],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        },
+        {
+          "filename": "downstream_solver.py",
+          "final_file_sha256": "1eb041bb5780d86f904ab8107d95ba35e789f505142a7de4f92260a6a529bbec",
+          "public_entrypoints": [
+            "solve_downstream"
+          ],
+          "effective_entrypoints": [],
+          "retained_loader_functions": [],
+          "entrypoint_reachable_skill_functions": [],
+          "any_public_function_reachable_skill_functions": []
+        }
+      ]
+    },
+    "any_skill_executed_or_packaged": false
+  },
+  "saved_artifact_snapshots": [
+    "batch_solver.py",
+    "downstream_solver.py"
+  ],
+  "submitted_final_answer": null,
+  "public_setup_receipt": {
+    "declared_public_setup": true,
+    "executed": true,
+    "required_public_assets": [
+      "/holdout_task/public_batch.pkl",
+      "/holdout_task/validate_public_schema.py",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json"
+    ],
+    "files_sha256": {
+      "/holdout_task/_upstream_param_payload.json": "9040e1dd1f1345fbbd8e3ee75a510c8a48cad559aa45dabf47faf19fb027dfcd",
+      "/holdout_task/_verified_upstream.py": "fbba10405ee5dec340375697a303dc0c1b3cf377088f8df05e16fcbefbcd92a4",
+      "/holdout_task/batch_solver.py": "e786924ba16bedc8c120d71cfeaca1a9f7f917e46b53121c89af96b5f8d7e964",
+      "/holdout_task/public_asset_index.json": "f6e37086dd6f376fce33d893e94293210c2d5e295c8779c27c0844ec7aede1e6",
+      "/holdout_task/public_batch.pkl": "4cc9e65ca2c78bb4e95eab0f7336417469f5e12c1ae7350881f641506156dc9d",
+      "/holdout_task/validate_public_schema.py": "1560065ce8132d23078471f23b80cd10bddfdfe74c098a7a52f9341fea9cd12d",
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+    },
+    "shared_public_schema_validator_present": true,
+    "public_asset_index_path": "/holdout_task/public_asset_index.json"
+  },
+  "turn1_request_accounting": {
+    "system_prompt_chars": 5327,
+    "initial_user_payload_chars": 5353,
+    "turn1_staged_manifest_json_chars": 2,
+    "turn1_prompt_tokens": 12832
+  },
+  "provider_attempt_accounting": {
+    "logical_llm_calls_total": 11,
+    "logical_agent_decision_calls": 11,
+    "logical_llm_error_calls": 0,
+    "total_provider_attempts": 11,
+    "usage_unknown_attempt_count": 0,
+    "cost_accounting_status": "complete",
+    "archived_attempt_files": [
+      "attempts_001_4a4c3221.json",
+      "attempts_002_d06c9125.json",
+      "attempts_003_c3e1606d.json",
+      "attempts_004_71758060.json",
+      "attempts_005_138f57d0.json",
+      "attempts_006_042c0e03.json",
+      "attempts_007_2a59eacb.json",
+      "attempts_008_364519e4.json",
+      "attempts_009_b630112b.json",
+      "attempts_010_80107d5b.json",
+      "attempts_011_078e2d75.json"
+    ],
+    "quarantined_unmatched_attempt_files": []
+  },
+  "decision_count": 28,
+  "prompt_tokens": 307120,
+  "cached_tokens": 65408,
+  "completion_tokens": 10872,
+  "total_tokens": 317992,
+  "token_cost_proxy": 268936,
+  "token_cost_proxy_formula": "max(0, prompt_tokens - cached_tokens) + int(0.25 * cached_tokens) + completion_tokens",
+  "effective_billed_tokens": 268936,
+  "wall_ms": 351609.43,
+  "provenance_verified": true,
+  "terminal_record_sha256": "8a35fbefd6607a76d050ed171c87e313af597f02b5ef12def3db690e4eb34601",
+  "world_id": "dev_alpha_m100_02",
+  "cluster_id": "dev_cluster_m100_02_alpha",
+  "family": "alpha",
+  "order_mode": "coupled_first",
+  "stream_step": 4,
+  "causal_event": "S04_d2_coupled_first",
+  "true_regime": "U1__D2_coupled",
+  "event_category": "coupled_d2_first_no_prior_sep",
+  "execution_mode": "llm_downstream_module_solve",
+  "pre_llm_probe_wall_ms": 5936.85,
+  "post_llm_probe_wall_ms": 5952.39,
+  "localization_probe_wall_ms": 936.75,
+  "decomposition_probe_wall_ms": 0.0,
+  "official_verifier_wall_ms": 5097.72,
+  "readonly_dependencies_sha256": {
+    "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+  },
+  "public_qualification_status": "public_gate_verified",
+  "calibration_update_receipt": {
+    "parent_receipts": {
+      "cal_node_p0": {
+        "selected_action": "NoChange",
+        "version": 2,
+        "max_drift": 0.0
+      },
+      "cal_node_p1": {
+        "selected_action": "NoChange",
+        "version": 2,
+        "max_drift": 0.0
+      }
+    },
+    "sentinel_p3_drift": 0.0,
+    "cross_factor_dn_updated_bindings": {}
+  },
+  "empirical_coverage_receipts": [
+    {
+      "receipt_id": "ecov_9f8fc405adb41c2924f1a47a",
+      "new_binding_id": "bind_dev_alpha_m100_02_dn_b02",
+      "new_solver_sha256": "1eb041bb5780d86f904ab8107d95ba35e789f505142a7de4f92260a6a529bbec",
+      "old_binding_id": "bind_dev_alpha_m100_02_dn_b00",
+      "old_solver_sha256": "5c57cf14f9e1a082aab3551bcbf190640c10e16928bd84017351af7ee5f2723e",
+      "witness_ids": [
+        "wit_S"
+      ],
+      "witness_input_sha256s": [
+        "a17d690d45ce9766d83308341a64018efa7b68088c5d82c555db448f4630158c"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "constitutive_root_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "e28e5b06c0739ebad8ac8d9afe0fb0ed4dca4f40fd165558a88bd15dcae37de5"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5750.41,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "795635749be1cc901bfa789f7f76677c3941305eed83c1ab61a6ba367f965e59"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "83a255a549bcca2fa76b830153a251c911270daa59b5c02a49eb42ddc0e2c1f7"
+      ],
+      "dependency_bundle_sha256s": [
+        "c1e70568ea190ede0362c138c533ab7f2ca01b06314a7ef0d189cd26098f735a"
+      ],
+      "probe_ids": [
+        "cprobe_6e55385dd4fd433f"
+      ]
+    },
+    {
+      "receipt_id": "ecov_8804c972c0a852a2edbc90db",
+      "new_binding_id": "bind_dev_alpha_m100_02_dn_b02",
+      "new_solver_sha256": "1eb041bb5780d86f904ab8107d95ba35e789f505142a7de4f92260a6a529bbec",
+      "old_binding_id": "bind_dev_alpha_m100_02_dn_b01",
+      "old_solver_sha256": "ca8e31e8bae00f47b4b408a90c85d9cd9196a6d5f4fdc950acdf6725f68ab288",
+      "witness_ids": [
+        "wit_dev_alpha_m100_02_batch_01"
+      ],
+      "witness_input_sha256s": [
+        "cfc6260d1a1b38302a576a8759efea7b608dec20373de63e20732049cf390360"
+      ],
+      "parameter_versions_by_witness": [
+        {
+          "constitutive_root_dn": 1
+        }
+      ],
+      "parameter_payload_sha256s": [
+        "9040e1dd1f1345fbbd8e3ee75a510c8a48cad559aa45dabf47faf19fb027dfcd"
+      ],
+      "verifier_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer",
+      "status": "refuted",
+      "passed_witness_count": 0,
+      "evaluated_witness_count": 1,
+      "total_cpu_probe_wall_ms": 5352.01,
+      "mean_probe_wall_ms_ratio": 1.0,
+      "zero_llm_calls_but_nonzero_cpu": true,
+      "receipt_schema_version": 2,
+      "witness_setup_source_sha256s": [
+        "ec825e9d15002bd30a630e5fba79cb2f148c35a8a12e96c52c965e6e271d0fe2"
+      ],
+      "witness_canonical_numeric_sha256s": [
+        "97d3bc1e3dc72f9496ab6c603578f4949e0346450e3ecd8d927c83e92dbcdea4"
+      ],
+      "dependency_bundle_sha256s": [
+        "23cd470a6608138da1a678938750acdd9a686212ce8b3911474065fd182e38cc"
+      ],
+      "probe_ids": [
+        "cprobe_d7b134ed16b74d40"
+      ]
+    }
+  ],
+  "guard_induction_receipt": {
+    "accepted": true,
+    "attempts_used": 1,
+    "diagnosis": "Only channels 2 and 5 meet the 0.070 spread requirement. Branch b00 requires both channels to be below their thresholds; b01 is isolated by high channel 5, and b02 by high channel 2. Each guard accepts all of its own supplied witnesses and rejects all supplied witnesses from the other branches. The smallest witness-to-threshold distance is 1.3894625, above the required 0.035.",
+    "new_branch_guard": {
+      "all_of": [
+        {
+          "feature_name": "dn_stat_03_log_channel_2_mean",
+          "op": ">",
+          "threshold": 1.09645
+        }
+      ]
+    },
+    "existing_branch_guards": {
+      "bind_dev_alpha_m100_02_dn_b00": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_03_log_channel_2_mean",
+            "op": "<=",
+            "threshold": 1.09645
+          },
+          {
+            "feature_name": "dn_stat_06_log_channel_5_mean",
+            "op": "<=",
+            "threshold": 1.0510115
+          }
+        ]
+      },
+      "bind_dev_alpha_m100_02_dn_b01": {
+        "all_of": [
+          {
+            "feature_name": "dn_stat_06_log_channel_5_mean",
+            "op": ">",
+            "threshold": 1.0510115
+          }
+        ]
+      }
+    },
+    "attempts_log": [
+      {
+        "attempt": 1,
+        "partition_check": {
+          "valid": true,
+          "reasons": []
+        }
+      }
+    ]
+  },
+  "autonomous_decomposition_receipt": null,
+  "pre_llm_trial_receipt": {
+    "arm": "Hegel_SelectiveConditionExpansion_Online",
+    "accepted_pre_llm": false,
+    "pre_llm_probes_used": 1,
+    "probe_wall_ms": 5936.85,
+    "localization_probes_used": 1,
+    "localization_probe_wall_ms": 936.75,
+    "sibling_fallback_used": false,
+    "lazy_projection_receipt": null,
+    "raw_archive_replay": null,
+    "upstream_selection_mode": "selected_unique_applicable",
+    "downstream_selection_mode": "selected_unique_applicable",
+    "selected_upstream_id": "bind_dev_alpha_m100_02_up_b01",
+    "selected_downstream_id": "bind_dev_alpha_m100_02_dn_b00",
+    "selected_upstream_ep": "calibrate_upstream",
+    "selected_downstream_ep": "solve_downstream",
+    "conflict_locus_diagnosis": {
+      "locus": "downstream_constitutive",
+      "component_probe_executed": true,
+      "execution_status": "completed",
+      "evidence_origin": "direct_component_probe",
+      "failure_tier": "NONE",
+      "failure_kind": "none",
+      "diagonal_ols_r2": 0.875384,
+      "off_diagonal_corr_max": 0.827428,
+      "chosen_up_holdout_rmse": 7.918447241177804e-05,
+      "candidate_code_sha256": "fbba10405ee5dec340375697a303dc0c1b3cf377088f8df05e16fcbefbcd92a4",
+      "probe_id": "uprobe_f9915b2b435b4df6",
+      "probe_wall_ms": 936.75,
+      "return_code": 0,
+      "upstream_observables": {
+        "up_stat_01_diagonal_ols_r2": 0.875384,
+        "up_stat_02_off_diagonal_corr_max": 0.827428,
+        "up_stat_03_cal_frobenius_rms": 1.261474,
+        "up_stat_04_cal_row_count": 80.0
+      }
+    },
+    "separability_withdrawal_receipt": null,
+    "failure_kind": "scientific_or_numerical",
+    "probe_result": {
+      "accepted": false,
+      "setup_ok": true,
+      "setup_exit_code": 0,
+      "schema_valid": true,
+      "schema_exit_code": 0,
+      "timed_out": false,
+      "schema_stdout": "{\"schema_valid\": true, \"errors\": [], \"pooled_reference_check\": {\"valid\": true, \"swapped_ref_rows_per_split\": 24, \"ref_swap_strain_max_diff\": 0.0, \"ref_swap_rate_max_diff\": 0.0, \"tol\": 1e-05}}\n",
+      "schema_stderr": "",
+      "candidate_bundle_sha256": "effe5752578c66dcc45ada467ac6ddb6f8422139fee9fdc039dcfd9205062f1e",
+      "candidate_raw_sha256": "372a794007c9ed369a9fabe820606b31b93c40e4dc016d6331c568f15232fdd9",
+      "setup_source_sha256": "005bf20c833974a1a8e73ef7b4e5406b60e4a69beae5efb63407b14c4d884079",
+      "readonly_dependencies_sha256": {
+        "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+      },
+      "public_setup_files_sha256": {
+        "/holdout_task/public_batch.pkl": "4cc9e65ca2c78bb4e95eab0f7336417469f5e12c1ae7350881f641506156dc9d",
+        "/holdout_task/validate_public_schema.py": "1560065ce8132d23078471f23b80cd10bddfdfe74c098a7a52f9341fea9cd12d",
+        "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+      },
+      "scientific_probe_receipt": {
+        "execution_status": "completed",
+        "scientific_invariants_verified": false,
+        "candidate_bundle_sha256": "effe5752578c66dcc45ada467ac6ddb6f8422139fee9fdc039dcfd9205062f1e",
+        "public_setup_files_sha256": {
+          "/holdout_task/public_batch.pkl": "4cc9e65ca2c78bb4e95eab0f7336417469f5e12c1ae7350881f641506156dc9d",
+          "/holdout_task/validate_public_schema.py": "1560065ce8132d23078471f23b80cd10bddfdfe74c098a7a52f9341fea9cd12d",
+          "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+        },
+        "reason": "public_scientific_check_failed",
+        "signed_by_host_probe_executor": true,
+        "receipt_kind": "scientific_probe_receipt",
+        "probe_protocol_version": "hegel_host_isolated_worker_json_rpc_probe_v5",
+        "canonical_numeric_sha256": "5a29995b1a26d5c79565ad864ab55fde4334e0d64742ed1f5afe42d17749632e",
+        "errors": [
+          "strain_mae_exceeded:0.490214",
+          "RATE_ERROR:rate_mae_exceeded:0.966537"
+        ],
+        "measured_scientific_metrics": {
+          "curve_rate_handoff_max_err": 0.00035615,
+          "rate_mae": 0.966537,
+          "strain_mae": 0.490214,
+          "tau_rel_err": 0.028124,
+          "test_complete_7coeff_direct_rate_diff": 0.000112,
+          "train_complete_7coeff_rate_median_err": 0.005594
+        },
+        "probe_code_digest": "da6d183d56762ad3ce91bc922cb3dc7880a4358a00b6deb0a216deeddce7c97f",
+        "public_input_digest": "4cc9e65ca2c78bb4e95eab0f7336417469f5e12c1ae7350881f641506156dc9d",
+        "kernel_version": "hegel_shared_math_handoff_kernel_v3_m961_three_layer"
+      }
+    },
+    "locus": "downstream_constitutive"
+  },
+  "verifier_report": {
+    "benchmark": "Hegel-OOD-Holdout-12",
+    "strict_pass": true,
+    "reward": 1.0,
+    "artifact_audit": {
+      "artifact_status": {
+        "/holdout_task/batch_solver.py": "FILE:10720"
+      },
+      "missing_or_empty": [],
+      "all_present": true
+    },
+    "verifier_metrics": {
+      "strict_pass": true,
+      "reward": 1.0,
+      "max_tau_rel_err": 0.018619,
+      "max_strain_mae": 0.002633,
+      "max_rate_mae": 0.001539,
+      "student_elapsed_sec": 0.1287,
+      "instance_diagnostics": [
+        {
+          "seed": 972811,
+          "tau_rel": 0.015319,
+          "strain_mae": 0.002097,
+          "rate_mae": 0.000743,
+          "theta_err": 0.003251,
+          "failure_codes": []
+        },
+        {
+          "seed": 972812,
+          "tau_rel": 0.018619,
+          "strain_mae": 0.002633,
+          "rate_mae": 0.001539,
+          "theta_err": 0.004288,
+          "failure_codes": []
+        }
+      ],
+      "candidate_timing_breakdown": {
+        "import_wall_sec": 0.078219,
+        "import_cpu_sec": 0.072913,
+        "candidate_call_wall_sec": 0.106069,
+        "candidate_call_cpu_sec": 0.098877,
+        "ipc_and_codec_wall_sec": 0.098348,
+        "rpc_call_count": 2,
+        "verifier_and_gt_wall_sec": 0.009456,
+        "verifier_and_gt_cpu_sec": 0.021761,
+        "total_supervisor_wall_sec": 0.292093
+      }
+    },
+    "verifier_exit_code": 0,
+    "verifier_stdout": "{\"strict_pass\": true, \"reward\": 1.0, \"max_tau_rel_err\": 0.018619, \"max_strain_mae\": 0.002633, \"max_rate_mae\": 0.001539, \"student_elapsed_sec\": 0.1287, \"instance_diagnostics\": [{\"seed\": 972811, \"tau_rel\": 0.015319, \"strain_mae\": 0.002097, \"rate_mae\": 0.000743, \"theta_err\": 0.003251, \"failure_codes\": []}, {\"seed\": 972812, \"tau_rel\": 0.018619, \"strain_mae\": 0.002633, \"rate_mae\": 0.001539, \"theta_err\": 0.004288, \"failure_codes\": []}]}\n__HEGEL_VERIFIER_AUTH_332381cf5f62c4714882abbaf2d2d00e__:{\"strict_pass\": true, \"reward\": 1.0, \"max_tau_rel_err\": 0.018619, \"max_strain_mae\": 0.002633, \"max_rate_mae\": 0.001539, \"student_elapsed_sec\": 0.1287, \"instance_diagnostics\": [{\"seed\": 972811, \"tau_rel\": 0.015319, \"strain_mae\": 0.002097, \"rate_mae\": 0.000743, \"theta_err\": 0.003251, \"failure_codes\": []}, {\"seed\": 972812, \"tau_rel\": 0.018619, \"strain_mae\": 0.002633, \"rate_mae\": 0.001539, \"theta_err\": 0.004288, \"failure_codes\": []}], \"candidate_timing_breakdown\": {\"import_wall_sec\": 0.078219, \"import_cpu_sec\": 0.072913, \"candidate_call_wall_sec\": 0.106069, \"candidate_call_cpu_sec\": 0.098877, \"ipc_and_codec_wall_sec\": 0.098348, \"rpc_call_count\": 2, \"verifier_and_gt_wall_sec\": 0.009456, \"verifier_and_gt_cpu_sec\": 0.021761, \"total_supervisor_wall_sec\": 0.292093}}\n",
+    "verifier_stderr": "",
+    "verifier_wall_ms": 4412.1,
+    "failure_taxonomy": "PASSED_ALL_CHECKS",
+    "readonly_dependencies_sha256": {
+      "/tmp/hegel_continual_archive/archive_apparatus_log.json": "4252c5c6e140570dca91c7dcd4e7ccf9efe39190d4ff9163b31564598d35e4b8"
+    }
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2bb1b46592d442d5993fbb72a4ce7384",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:59:53.025130+00:00",
+  "ended_at_utc": "2026-11-28T03:00:22.363968+00:00",
+  "request_sha256": "eb5d405728f6728987fd4029e405bba7761440024679f266fbeb73ba4d3d20db",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 47881,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26687,
+    "cached_tokens": 9344,
+    "completion_tokens": 1123
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat batch_solver.py && grep -n 'FRACTIONS' /tmp/hegel_continual_archive/*solver.py && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,json,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport batch_solver,downstream_solver as m\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]\\nd=item['dataset']; c=calibrate_upstream(d); tr,te=c['train'],c['test']; t,dt=c['eval_times'],c['past_dt']; x,xe=m._features(tr,te)\\nout=batch_solver.solve_batch(d)\\nassert all(np.isfinite(a).all() for a in out.values())\\nassert .05 < out['estimated_taus'][0] < out['estimated_taus'][1] < 25\\nprint('full fit',out['estimated_taus'],out['hereditary_weights'])\\nfor key in ('lab_id','stratum'):\\n for value in np.unique(tr[key]):\\n  v=tr[key]==value; sub=lambda mask:{k:a[mask] for k,a in tr.items()}; a,b=sub(~v),sub(v)\\n  tau,beta=m._fit(m._prepare(a,x[~v]),dt,t,a)\\n  e=m._design(m._prepare(b,x[v]),dt,t,tau)@beta-np.column_stack((b['strain_curves_obs']-b['strain_0'][:,None],b['instant_rate_obs']))\\n  print(key,value,'n',v.sum(),'taus',np.round(tau,4),'median |error| early, late, rate',np.round([np.median(abs(e[:,:len(t)//2])),np.median(abs(e[:,len(t)//2:-1])),np.median(abs(e[:,-1]))],6),'p90',np.round(np.quantile(abs(e[:,:-1]),.9),6))\\npast,hold,_=m._prepare(te,xe); tau=out['estimated_taus']; theta=out['hereditary_weights']; r=xe@theta[2:]; g=-np.expm1(-t[:,None]/tau); amp=hold[:,None]*theta[:2]+r[:,None]*(np.array([.45,.52])*tau); reset=te['strain_0'][:,None]+amp@g.T+.03*r[:,None]*t; rr=hold*np.sum(theta[:2]/tau)+r\\nprint('reset vs baseline |delta| quantiles for strain/rate',np.quantile(abs(reset-out['predicted_strain']),[.5,.9,1]),np.quantile(abs(rr-out['initial_rate_pred']),[.5,.9,1]))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); prev=None\\nfor row in log:\\n a=np.array(row['facility_telemetry_trace']);print(row['completed_campaign_index'],row['completed_campaign_short_name'],a.shape,'means 2/5',np.round(a.mean(0)[[2,5]],4),'distance from previous',None if prev is None else round(np.mean((a-prev)**2)**.5,4));prev=a\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 robust intrinsic fit → H2 separate chamber-regime transfer; public schema passes and swapping pooled reference rows changes neither output (maximum difference 0.0).\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the schema pass\",\n      \"rejected_reason\": \"The schema check does not measure out-of-cohort fit or show how sensitive deployment predictions are to the unresolved chamber regime.\"\n    }\n  ],\n  \"rationale\": \"Run the exact artifacts in an isolated interpreter and hold out each measured lab and stratum. Compare the two archived chamber laws on the deployment inputs to quantify the impact of choosing the wrong regime without treating their difference as measured prediction error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "69486f386f847b262c4154f3e77eeb8e9e7512a9536c842e0567e5e8f919718b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31329.6,
+      "usage_known": true,
+      "prompt_tokens": 26687,
+      "cached_tokens": 9344,
+      "completion_tokens": 1123
+    }
+  ]
+}

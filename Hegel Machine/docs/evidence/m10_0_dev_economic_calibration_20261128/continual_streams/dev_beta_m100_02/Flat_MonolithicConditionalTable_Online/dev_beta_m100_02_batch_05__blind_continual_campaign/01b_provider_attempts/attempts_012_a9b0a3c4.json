@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a9b0a3c488944f868d614a6d4885922b",
+  "call_seq": 12,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:52:50.054238+00:00",
+  "ended_at_utc": "2026-11-28T02:53:20.735745+00:00",
+  "request_sha256": "2c4f1e08b8ef20ef7efe035b383b2e94af109fa6d009d5386b7f45bc6494da94",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82149,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42643,
+    "cached_tokens": 9344,
+    "completion_tokens": 1130
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/cal_tail_audit.py <<'PY'\\nfrom pathlib import Path\\nimport pickle,itertools,numpy as np\\nsrc=Path('/holdout_task/batch_solver.py').read_text()\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']\\nfor selfkind,cross in itertools.product(('exp','quartic'),('base','q4','v3','v3q4','v3u5','v3abs','v3rat')):\\n    text=src\\n    tails={'base':'[]','q4':'[v**4/(1+b[-1]*v*v)]','v3':'[v**3]','v3q4':'[v**3,v**4/(1+b[-1]*v*v)]','v3u5':'[v**3,u**5]','v3abs':'[v**3,v*np.abs(v)]','v3rat':'[v**3/(1+b[-1]*v*v)]'}\\n    text=text.replace('if extra: cols.extend',f'cols.extend({tails[cross]})\\\\n        if extra: cols.extend')\\n    ns={}; exec(text,ns); estimate=ns['_estimate']; f,err,b,c=estimate(sw,selfkind)\\n    oof=[estimate(sw,selfkind,j)[1] for j in range(4)]; q=np.array([np.quantile(abs(np.concatenate([x[k] for x in oof])),[.5,.9,1]) for k in range(4)])\\n    raw=s['y_obs_raw'].reshape(-1,4); from scipy.optimize import least_squares\\n    obs=np.array([least_squares(lambda u:f(u[None,:])[0]-y,np.zeros(4),gtol=1e-12).x for y in raw]).ravel(); S,_=ns['_responses'](s,ns['_operator'](s)); Z=s['Z_nuisance']; r=[]\\n    for i in range(0,len(obs),4):\\n      hold=slice(i,i+4); tr=np.ones(len(obs),bool); tr[hold]=False; z=Z[tr]; d=np.c_[S[tr],obs[tr]]; p=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T@d); D=d-z@p; A,y=D[:,:-1],D[:,-1]; w,_=ns['_box_simplex'](A.T@A+s['source_ridge']*np.eye(A.shape[1]),-A.T@y,s['u_box'],s['total_budget']); r.append(np.sqrt(np.mean((S[hold]@w+Z[hold]@(p[:,-1]-p[:,:-1]@w)-obs[hold])**2)))\\n    print(selfkind,cross,'sweep worst med/p90/max',np.round(q.max(0),6),'chamber rms/max',np.round([np.sqrt(np.mean(np.square(r))),max(r)],6),'tails',np.round(np.asarray(c)[:,6:],5).tolist(),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cal_tail_audit.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared saturation and rational coupling → H2 test a missing opposite-bank tail; current worst held-out chamber rosette RMSE is 0.01330 and worst sweep error is 0.02905.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Submit the verified baseline now\",\"rejected_reason\":\"Large residuals concentrate at extreme opposite-bank references, which is a specific remaining calibration weakness worth testing without modifying the verified artifact.\"}],\"rationale\":\"Test whether a compact coupling term removes the residual tail on held-out sweeps without worsening held-out chamber predictions. If it does not, retain the already verified solver.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "a9ebe05a9432d348dbe0ee8cf9adebfa4e93323eb9f94b38813a67982ec920d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32654.65,
+      "usage_known": true,
+      "prompt_tokens": 42643,
+      "cached_tokens": 9344,
+      "completion_tokens": 1130
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3f9f4d508bf4d1b93560b9d57537a6d",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:40:50.272678+00:00",
+  "ended_at_utc": "2026-11-28T02:41:35.023695+00:00",
+  "request_sha256": "ef1652e19370895d8ebaa29b748446eb4c712c7935c2480c8b88edce266c91b9",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 53597,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30511,
+    "cached_tokens": 0,
+    "completion_tokens": 1945
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/verify_downstream.py <<'PY'\\nimport itertools\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _box_simplex, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\ncal = calibrate_upstream(dict(s, reference_tracer_pulses=item['campaign_diagnostics']))\\nnx, ny = s['nx'], s['ny']\\n\\ndef axis(name):\\n    k, v = s['kappa_'+name], s['vel_'+name]\\n    n = len(k)\\n    h = s['L'+name]/(n-1)\\n    M = np.zeros((n,n))\\n    for i in range(n):\\n        if name == 'y' and (i == 0 or i == n-1):\\n            M[i,1 if i == 0 else n-2] = -k[i]/h**2\\n        else:\\n            for step in (-1,1):\\n                j = (i+step)%n\\n                M[i,j] -= (k[i]+k[j])/(2*h*h) + max(0,-step*v[i])/h\\n        M[i,i] = -M[i].sum()\\n    return M\\n\\nL = np.kron(np.eye(ny),axis('x')) + np.kron(axis('y'),np.eye(nx)) + np.diag(s['V_reaction_2d'].flatten(order='F'))\\nrhs = np.column_stack([mode.flatten(order='F') for mode in s['source_modes']])\\nidx = np.array([i+nx*j for i,j in s['sensor_ij']])\\nU = [np.linalg.solve(L+shift*np.eye(nx*ny), rhs) for shift in s['mu_shifts']]\\nS = np.concatenate([a[idx] for a in U])\\npulses = cal['reference_tracer_pulses']\\nE = np.stack([S @ p['w_pulse'] - p['y_pulse_raw'] for p in pulses])\\nrmse = np.sqrt(np.mean(E.reshape(len(pulses),len(U),len(idx))**2,axis=2))\\nassert rmse.max() < 3e-6, rmse\\nprint('Pulse × shift RMSE:', rmse.tolist(), 'worst:', rmse.max())\\nZ = s['Z_nuisance']; Q = np.eye(len(Z))-Z @ np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nA, b = Q@S, Q@cal['y_obs_raw'].ravel()\\nH = A.T@A+s['source_ridge']*np.eye(S.shape[1]); c = -A.T@b\\nu = s['u_box']; total = s['total_budget']; n = len(c)\\n\\ndef exhaustive(H,c,u,total):\\n    n = len(c)\\n    best = np.inf\\n    for state in itertools.product((-1,0,1),repeat=n):\\n        state = np.asarray(state)\\n        F = np.flatnonzero(state==0)\\n        w = np.where(state==1,u,0.)\\n        if len(F):\\n            h = H[np.ix_(F,F)]\\n            mat = np.block([[h,-np.ones((len(F),1))],[np.ones((1,len(F))),np.zeros((1,1))]])\\n            w[F] = np.linalg.solve(mat,np.r_[-c[F]-(H@w)[F],total-w.sum()])[:-1]\\n        if abs(w.sum()-total)<1e-10 and w.min()>=-1e-10 and w.max()<=u+1e-10:\\n            value = w@H@w/2+c@w\\n            if value<best:\\n                best, answer = value, w\\n    return answer\\n\\nout = solve_batch(s)\\nw = out['weights']; cert = out['kkt_certificate']; nu = cert['nu_sum']\\nw_ref = exhaustive(H,c,u,total)\\nnp.testing.assert_allclose(w, w_ref, rtol=0, atol=1e-10)\\nnp.testing.assert_allclose(solve_downstream(cal)['weights'],w,rtol=0,atol=1e-12)\\nnp.testing.assert_allclose(cert['weights'],w,rtol=0,atol=0)\\nfield_error = np.max(np.abs(out['terminal_field']-(U[-1]@w_ref).reshape(nx,ny,order='F')))\\nassert field_error < 1e-10\\nlo, hi = np.asarray(cert['lam_lower']), np.asarray(cert['lam_upper'])\\ng = H@w+c\\nJ = (np.linalg.norm(A@w-b)**2+s['source_ridge']*(w@w))/2\\nD = J-g@w+nu*total+u*np.minimum(0,g-nu).sum()\\nassert np.all(lo>=0) and np.all(hi>=0)\\nerrors = dict(budget=abs(w.sum()-total), field=field_error, weights=np.max(abs(w-w_ref)), stationarity=np.max(abs(g-nu-lo+hi)), lower_complementarity=np.max(abs(lo*w)), upper_complementarity=np.max(abs(hi*(u-w))), objective=abs(J-cert['primal_objective']), dual=abs(D-cert['dual_lower_bound']), gap=abs(J-D))\\nassert max(errors.values())<1e-10, errors\\nprint('Public verification errors:', errors)\\n\\nrng = np.random.default_rng(9821)\\nmaxerr = 0.\\nfor t in range(48):\\n    G = rng.normal(size=(6,6)); H=G.T@G+0.04*np.eye(6)\\n    c = rng.normal(size=6)*[0.01,1,50][t%3]; u=0.42\\n    total = [0.,0.13,u,3*u,6*u-0.015,6*u][(t//3)%6]\\n    w,nu = _box_simplex(H,c,u,total); reduced=H@w+c-nu\\n    gap = reduced@w-u*np.minimum(0,reduced).sum()\\n    e=max(abs(w.sum()-total),max(0.,-w.min(),w.max()-u),abs(gap),np.max(abs(w-exhaustive(H,c,u,total))))\\n    maxerr=max(maxerr,e)\\nassert maxerr < 1e-9, maxerr\\nprint('48 box-simplex stress cases, including zero/full and vertex budgets; worst absolute discrepancy:',maxerr)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_downstream.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local wall losses → H2 periodic x and reflecting y; all three calibrated pulse RMSEs are below 1e-6, and the public schema passes.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact artifacts in an isolated Python process. An independently assembled dense operator detects boundary, sensor-index, and field-order errors; exhaustive active-set enumeration detects incorrect weights or certificates, including at endpoint and vertex budgets.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "5f89898e9775c68f045908dd0de4146e3788cc6127f3dd550ac43b6cb5a5c7d8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48725.48,
+      "usage_known": true,
+      "prompt_tokens": 30511,
+      "cached_tokens": 0,
+      "completion_tokens": 1945
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c321afd275bc4fdca6625e8ee076a9c5",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:27:13.946130+00:00",
+  "ended_at_utc": "2026-11-28T02:27:44.809115+00:00",
+  "request_sha256": "c4cc63ca5c0ac3f3a6bf8fd0ba885c0d496670f360093b3b3b36108de0dd349e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37445,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24590,
+    "cached_tokens": 10880,
+    "completion_tokens": 1236
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; sp=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; n=len(x)\\n_, groups=np.unique(x,axis=0,return_inverse=True)\\nprint('sweep rows, unique settings, mixed settings:', n,len(set(groups)),np.sum(np.count_nonzero(x,axis=1)>1))\\ndef rmse(a): return np.sqrt(np.mean(a*a,axis=0))\\nfor j in range(4):\\n    z=x[:,j]; pairs=[k for k in range(4) if k!=j]; scale=max(abs(z)); t=z/scale\\n    models={'affine':np.c_[np.ones(n),z], 'mixed_affine':np.c_[np.ones(n),z,x[:,pairs]], 'quadratic':np.c_[np.ones(n),z,z*z]}\\n    for a in (.25,1.): models[f'rational_{a}']=np.c_[np.ones(n),z,z/(1+a*t*t)]\\n    for name,A in models.items():\\n        residual=np.empty(n)\\n        for g in np.unique(groups):\\n            test=groups==g; B=A[~test];\\n            if np.linalg.matrix_rank(B)<A.shape[1]: break\\n            residual[test]=A[test]@np.linalg.lstsq(B,y[~test,j],rcond=None)[0]-y[test,j]\\n        else:\\n            print('held-setting calibration',j,name,'RMSE',rmse(residual),'max',max(abs(residual))); continue\\n        print('held-setting calibration',j,name,'not identifiable in a training fold')\\nS,_=m._forward(s); mres=[]\\nfor pulse in i['campaign_diagnostics']:\\n    e=S@pulse['w_pulse']-m._calibrate(dict(s,y_obs_raw=pulse['y_pulse_raw'])); mres.append(e.reshape(len(s['mu_shifts']),len(s['sensor_ij'])))\\ne=np.asarray(mres); sensor_shift=np.sqrt(np.mean(e*e,axis=0)); print('worst pulse RMS by sensor and shift',sensor_shift.max(),'worst absolute pulse residual',np.max(abs(e)))\\nassert np.max(abs(e))<3e-6\\nZ=s['Z_nuisance']; yy=m._calibrate(s); out=m.solve_batch(s); w=out['weights']; rr=yy-S@w; P=np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T); adjusted=rr-Z@(P@rr); banks=np.asarray(s['row_bank_id']).ravel(); print('bank slices (bank, raw residual RMS, projected residual RMS):',[(k,rmse(rr[banks==k]),rmse(adjusted[banks==k])) for k in np.unique(banks)])\\nJ=.5*(adjusted@adjusted+s['source_ridge']*(w@w)); assert abs(J-out['kkt_certificate']['primal_objective'])<1e-12\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Open Robin walls → sealed diffusive walls; worst public pulse-by-shift RMSE is 9.92e-7 and worst KKT stress gap is 1.33e-12.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run classification, relay, or stochastic-drift checks\",\n      \"rejected_reason\": \"This steady linear inverse problem has no class labels, relay modes, or stochastic time dynamics. The relevant slices are calibration settings, sensors, shifts, and nuisance banks.\"\n    }\n  ],\n  \"rationale\": \"Hold out whole calibration settings to test whether cross-channel or rational terms predict better than the affine model. Check tracer residuals at individual sensors so pooling cannot hide a bad channel, and independently verify the prescribed nuisance projection. Reconsider the calibration only if a challenger improves held-out sweeps and tracer predictions beyond the measured error scale.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "8d9e0d684f6503d65c67978038934f3426bd46a54e062944f8bacbf0034ef7d3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32858.24,
+      "usage_known": true,
+      "prompt_tokens": 24590,
+      "cached_tokens": 10880,
+      "completion_tokens": 1236
+    }
+  ]
+}

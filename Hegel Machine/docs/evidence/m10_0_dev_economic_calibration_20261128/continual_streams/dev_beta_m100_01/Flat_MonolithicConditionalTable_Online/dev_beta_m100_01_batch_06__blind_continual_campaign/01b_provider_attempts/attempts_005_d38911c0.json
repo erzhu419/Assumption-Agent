@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d38911c0e47c4aa685daf3f89ede1d85",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:00:07.272167+00:00",
+  "ended_at_utc": "2026-11-28T03:00:40.448804+00:00",
+  "request_sha256": "7dada66658b3adeb9519d4487c200cf825d4e29259a3e89945aedddd43c525ce",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40336,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26000,
+    "cached_tokens": 19584,
+    "completion_tokens": 1338
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; clean=np.max(np.abs(Y),axis=1)<4; X,Y=X[clean],Y[clean]; q=c['single_bank_sweeps']; B=q['bank_id']; G=q['ref_signal']; T=q['raw_readout']; plus=np.eye(4)[B]*G[:,None]; forms={'tanh':np.tanh,'erf':erf,'atan':np.arctan,'sqrt':lambda z:z/np.sqrt(1+z*z),'rational':lambda z:z/(1+z*z)}\\naxis=np.count_nonzero(X,axis=1)==1\\nfor j in range(4):\\n a=X[:,j]; b=X[:,(j+2)%4]; m=(B==j)&(abs(T)<4); U=np.r_[X,plus[m]]; v=np.r_[Y[:,j],T[m]]; alone=np.r_[axis,np.ones(sum(m),bool)]; fold=np.arange(len(U))%4\\n print('channel',j, 'clean axis median',np.median(Y[axis&(a==0)&(b==0),j]))\\n for k,f in forms.items():\\n  scores=[]\\n  for typ in range(4):\\n   def design(P):\\n    aa,bb=U[:,j],U[:,(j+2)%4]; z=aa+P[1]*bb; scale=np.exp(P[0]); cols=[np.ones(len(U)),f(scale*(z if typ<2 else aa)),aa,aa**2,aa**3,bb,bb**2,bb**3,aa*bb];\\n    if typ%2: cols.extend([aa**2*bb,aa*bb**2,U[:,(j+1)%4],U[:,(j-1)%4],U[:,(j+1)%4]*U[:,(j-1)%4]])\\n    if typ>=2: cols.append(f(np.exp(P[1])*bb))\\n    return np.column_stack(cols)\\n   def fit(train):\\n    def lin(P):\\n     D=design(P); bet=np.linalg.lstsq(D[train],v[train],rcond=None)[0];return D@bet\\n    p=least_squares(lambda p:(lin(p)-v)[train],[0,.15],bounds=([-2,-3],[2,2])).x\\n    return lin(p)-v,p\\n   err=np.zeros(len(U))\\n   for i in range(4):\\n    pred,_=fit(fold!=i); err[fold==i]=pred[fold==i]\\n   res,p=fit(np.ones(len(U),bool)); scores.append((typ,[round(t,7) for t in (np.sqrt(np.mean(err[alone]**2)),np.sqrt(np.mean(err[~alone]**2)),np.max(abs(res)))],p.round(3).tolist()))\\n  print(k,scores)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\\nfor f in /tmp/hegel_continual_archive/*s00_solver.py /tmp/hegel_continual_archive/*batch_03_solver.py /tmp/hegel_continual_archive/*batch_04_solver.py; do echo ====; sed -n '1,30p' \\\"$f\\\"; done\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust Cauchy IRLS rosette sensor calibration' | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine sensing -> H2 nonlinear saturation with opposite-bank coupling; three of 80 rosette rows and one of 48 single-bank points have gross offsets, and held-out error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an inverse polynomial directly\",\"rejected_reason\":\"It can hide a misspecified forward map and extrapolate poorly near saturation; compare forward forms on held-out sweeps first.\"}],\"rationale\":\"Hold out sweep rows while fitting candidate nonlinear maps to distinguish pre-saturation mixing from additive coupling. Confirm the archived wall formulas before comparing their predictions on the blind study.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "7c01846f182f171de873d626abc54d549c0c3c358220787c60cf4c66a9914409",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35160.35,
+      "usage_known": true,
+      "prompt_tokens": 26000,
+      "cached_tokens": 19584,
+      "completion_tokens": 1338
+    }
+  ]
+}

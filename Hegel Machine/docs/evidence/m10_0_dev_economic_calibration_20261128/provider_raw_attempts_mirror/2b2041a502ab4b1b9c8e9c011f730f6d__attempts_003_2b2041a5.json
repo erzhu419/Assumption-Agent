@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b2041a502ab4b1b9c8e9c011f730f6d",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:52.120071+00:00",
+  "ended_at_utc": "2026-11-28T02:42:19.647964+00:00",
+  "request_sha256": "9f4d17fc66387db1d43b76cccfa7d8d1d87b8073689304b9587edcca7a5ecd7c",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 21830,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18810,
+    "cached_tokens": 5504,
+    "completion_tokens": 1061
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/rosette_probe.py <<'PY'\\nimport json,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nnp.set_printoptions(precision=5,suppress=True,linewidth=125)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; print('single bank keys',list(b));\\ndef design(x,terms):\\n return np.column_stack([np.prod(x[:,t],axis=1) if t else np.ones(len(x)) for t in terms])\\ndef robust(a,y):\\n coef=np.linalg.lstsq(a,y,rcond=None)[0]\\n for _ in range(35):\\n  r=np.linalg.norm(a@coef-y,axis=1); w=np.minimum(1.,3*np.median(r)/np.maximum(r,1e-13)); coef=np.linalg.lstsq(a*w[:,None],y*w[:,None],rcond=None)[0]\\n return coef\\nbase=[()]+[(i,) for i in range(4)]; models={'linear':base,'diagonal 2+3':base+[(i,)*k for k in (2,3) for i in range(4)],'mixed 2':base+list(combinations_with_replacement(range(4),2)),'mixed 3':base+sum([list(combinations_with_replacement(range(4),k)) for k in (2,3)],[]),'odd mixed 3':base+list(combinations_with_replacement(range(4),3))}\\na=design(x,base); ra=np.linalg.norm(a@robust(a,y)-y,axis=1); print('affine row residual sorted',np.sort(ra)); print('calibration row norms',np.quantile(np.linalg.norm(x,axis=1),[0,.2,.5,.8,1]));\\nfor name,terms in models.items():\\n a=design(x,terms); pred=np.empty_like(y)\\n for test in np.array_split(np.random.default_rng(608).permutation(len(x)),5):\\n  train=np.setdiff1d(np.arange(len(x)),test); pred[test]=a[test]@robust(a[train],y[train]);\\n r=np.linalg.norm(pred-y,axis=1); print(name,'OOF',np.quantile(r,[.25,.5,.75,.85,.9,.95,1]),'low/mid/high', [np.median(r[i]) for i in np.array_split(np.argsort(np.linalg.norm(x,axis=1)),3)]); coef=robust(a,y); print('coef',coef if len(terms)<=15 else np.c_[np.linalg.norm(coef,axis=1)])\\nfor j in range(4):\\n mask=b['bank_id']==j; q=b['ref_signal'][mask,None]; t=b['raw_readout'][mask,None]; a=np.c_[q**0,q,q**2,q**3]; cc=robust(a,t); print('bank',j,cc.ravel(),np.sort(np.abs(t-a@cc).ravel()))\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; d=json.load(open(p)); print('log root',[(k,type(v).__name__,len(v) if isinstance(v,(dict,list,str)) else v) for k,v in d.items()]);\\nfor k,v in d.items():\\n if isinstance(v,list) and v and isinstance(v[-1],dict): print('log entry',k,[(z,type(w).__name__,len(w) if isinstance(w,(list,dict)) else str(w)[:100]) for z,w in v[-1].items()]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Coupled affine response → sparse cubic or mixed nonlinear response; held-out diagnostics are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible inverse directly to raw sweeps\",\"rejected_reason\":\"Gross EMI produces high-leverage raw inputs; the forward fit keeps predictors in clean reference coordinates.\"}],\"rationale\":\"Compare forward models out of fold across reference amplitudes, and fit each independent bank sweep to identify the nonlinear response without letting EMI set the model complexity.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "28004ff50e4871becd0b8d943bef444446653b8311a790f973a12c9a73adfc6b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29559.42,
+      "usage_known": true,
+      "prompt_tokens": 18810,
+      "cached_tokens": 5504,
+      "completion_tokens": 1061
+    }
+  ]
+}

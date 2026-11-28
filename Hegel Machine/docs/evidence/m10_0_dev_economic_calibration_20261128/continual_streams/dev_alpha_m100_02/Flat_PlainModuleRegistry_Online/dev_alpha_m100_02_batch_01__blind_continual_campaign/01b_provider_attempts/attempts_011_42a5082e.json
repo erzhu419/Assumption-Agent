@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "42a5082eb2af469583d89cbc0db64bd2",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:56.921878+00:00",
+  "ended_at_utc": "2026-11-28T02:29:28.852428+00:00",
+  "request_sha256": "83e2482480107addfb35068a5a9157a3a07b8b998af387ecc3827e7bc053387b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73024,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37647,
+    "cached_tokens": 9344,
+    "completion_tokens": 1218
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/s10_baseline.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\nold = '''    amplitudes = hold[:, None] * theta[:2] + forcing[:, None] * np.array([0.26, 1.8])'''\\nassert old in s\\ns = s.replace(old, '''    # The branches receive 45% and 52% of the initial forcing rate.\\n    # Multiplying by tau converts each rate to its strain amplitude.\\n    amplitudes = hold[:, None] * theta[:2] + forcing[:, None] * (tau * np.array([0.45, 0.52]))''')\\np.write_text(s)\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nold = runpy.run_path('/tmp/s10_baseline.py')\\nnew = runpy.run_path('/holdout_task/batch_solver.py')\\ni = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd, c = i['dataset'], i['campaign_diagnostics']\\na, b = old['solve_batch'](d), new['solve_batch'](d)\\nfor key in ('estimated_taus', 'hereditary_weights'):\\n    np.testing.assert_array_equal(a[key], b[key])\\ntau, theta = b['estimated_taus'], b['hereditary_weights']\\nassert 0.05 < tau[0] < tau[1] < 25\\nbridge = new['_bridge'](d['calibration_load_cells'])\\ntimes = d['eval_times']\\nx = new['_features'](c, c)[0]\\n_, hold, f = new['_prepare'](c, x, bridge)\\ny = c['strain_curves_obs'] - c['strain_0'][:, None]\\nr = c['instant_rate_obs']\\nmissing = np.isnan(c['coupon_features_raw']).any(axis=1)\\nfor label, module in [('baseline', old), ('rate partition', new)]:\\n    strain, rate = module['_chamber_response'](hold, f, tau, theta, times)\\n    print(label)\\n    for name, k in [('complete', ~missing), ('missing', missing)] + [(f'lab {l}', c['lab_id'] == l) for l in np.unique(c['lab_id'])]:\\n        print(name, 'strain/rate RMSE', np.round([np.mean((strain[k]-y[k])**2)**.5, np.mean((rate[k]-r[k])**2)**.5], 6))\\n_, test_hold, test_f = new['_prepare'](d['test'], new['_features'](d['train'], d['test'])[1], bridge)\\nnp.testing.assert_allclose(b['initial_rate_pred'], test_hold * np.sum(theta[:2]/tau) + test_f @ theta[2:], atol=1e-12, rtol=0)\\nh = 1e-5\\ncurve, _ = new['_chamber_response'](test_hold, test_f, tau, theta, np.array([h, 2*h]))\\nnp.testing.assert_allclose((4*curve[:,0]-curve[:,1])/(2*h), b['initial_rate_pred'], rtol=1e-8, atol=1e-8)\\nprint('Maximum deployment delta (strain/rate):', *(float(np.max(np.abs(b[k]-a[k]))) for k in ('predicted_strain','initial_rate_pred')))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: fixed chamber strain amplitudes → H2: conserved initial-rate partition (45% fast, 52% slow, 3% drift); prior candidate host MAE was 0.001487 strain and 0.003572 rate, and the partition probe’s worst-lab RMSE was 0.01673 strain and 0.01350 rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep fixed strain-amplitude multipliers\",\n      \"rejected_reason\": \"They only approximate the measured rate partition at the fitted relaxation times; the partition preserves the full coupon forcing rate exactly.\"\n    }\n  ],\n  \"rationale\": \"The fitted rate fractions sum to approximately one, and the rounded partition is near the observation noise on complete verification coupons. Compare it with the prior candidate by lab and missingness, and verify that the exact delivery artifact preserves pooled-reference invariance, material estimates, and the strain derivative at zero.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "a5c61ef7aed5dc0aeb0a90d3eceed2a1265c81beb973c2a508e221762d0f5d08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33909.46,
+      "usage_known": true,
+      "prompt_tokens": 37647,
+      "cached_tokens": 9344,
+      "completion_tokens": 1218
+    }
+  ]
+}

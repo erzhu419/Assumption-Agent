@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "137b311e75114b0bab4bc8b698d9cf08",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:51:05.157025+00:00",
+  "ended_at_utc": "2026-11-28T02:51:33.396033+00:00",
+  "request_sha256": "38cf7ae067a97cd461dba28facb7155a25c4cef533c4713478babe160798c9a0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56734,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31940,
+    "cached_tokens": 9344,
+    "completion_tokens": 1109
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,sys\\nimport numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom upstream_transducer import calibrate_upstream,_fit,_invert,_basis,_PAIR,_gross_good\\nfrom batch_solver import solve_batch\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\\nfor item in items:\\n s=item['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; axis=np.count_nonzero(X,axis=1)==1; good=np.all(_gross_good(Y),axis=1)\\n cv=np.full_like(X,np.nan); cv_fwd=cv.copy()\\n folds=[]\\n for mask in (good&axis,good&~axis):\\n  rows=np.flatnonzero(mask); np.random.default_rng(41).shuffle(rows); folds.append(np.array_split(rows,5))\\n for a,b in zip(*folds):\\n  test=np.r_[a,b]; train=np.ones(len(X),dtype=bool); train[test]=False\\n  f,p=_fit(dict(c,ref_rosette=X[train],raw_rosette=Y[train]))\\n  cv[test]=_invert(Y[test],f,p)-X[test]\\n  cv_fwd[test]=np.einsum('nck,ck->nc',_basis(X[test],X[test][:,_PAIR],f),p)-Y[test]\\n for name,m in [('axis',axis&good),('mixed',~axis&good)]:\\n  a=np.sqrt(np.mean(cv[m]**2)); b=np.sqrt(np.mean(cv_fwd[m]**2)); print(name,'held-out inverse RMSE',a,'forward RMSE',b,'max inverse',np.max(abs(cv[m]))); assert a<2e-4 and b<3e-5\\n f,p=_fit(c)\\n target=np.random.default_rng(3).uniform(-0.45,0.45,(7,11,4)); z=target.reshape(-1,4); raw=np.einsum('nck,ck->nc',_basis(z,z[:,_PAIR],f),p).reshape(target.shape)\\n obs=s['y_obs_raw'].copy(); raw_sweep=Y.copy(); bank=c['single_bank_sweeps']; bank_raw=bank['raw_readout'].copy()\\n pulse={'y_pulse_raw':raw,'metadata':'retained'}; empty={'y_pulse_raw':None}; o=calibrate_upstream(dict(s,reference_tracer_pulses=[pulse,empty,None])); q=o['reference_tracer_pulses']; err=np.max(abs(q[0]['y_pulse_raw']-target)); print('pulse inverse max',err); assert q[0]['y_pulse_raw'].shape==raw.shape and err<1e-10 and q[0]['metadata']=='retained' and q[1]==empty and q[2] is None and pulse['y_pulse_raw'] is raw\\n assert calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n co=o['sensor_calibration_sweeps']; assert np.array_equal(co['raw_rosette'],X) and not np.shares_memory(co['raw_rosette'],X); assert np.array_equal(co['single_bank_sweeps']['raw_readout'],bank['ref_signal']) and not np.shares_memory(co['single_bank_sweeps']['raw_readout'],bank['ref_signal']); assert np.array_equal(Y,raw_sweep) and np.array_equal(bank['raw_readout'],bank_raw) and np.array_equal(s['y_obs_raw'],obs)\\n ans=solve_batch(s); w=ans['weights']; print('budget error',abs(w.sum()-s['total_budget']),'KKT',ans['kkt_certificate']); assert abs(w.sum()-s['total_budget'])<1e-7 and w.min()>=-1e-8 and w.max()<=s['u_box']+1e-8\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shifted saturation -> H2 paired harmonic response; the exploratory worst-slice held-out forward RMSE was 1.0833e-5, and the production inverse closed to 1.56e-14 on public observations.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[],\"rationale\":\"The public schema passes but does not exercise non-null pulses or measure held-out inverse error. Test both in an isolated process: failure would call for correcting pulse handling or the inverse before submission.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0587a603aa6f715f1c164cbebc1e892e339e81fc7fa16226dc920f67b76bf38d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30229.73,
+      "usage_known": true,
+      "prompt_tokens": 31940,
+      "cached_tokens": 9344,
+      "completion_tokens": 1109
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "382f0bf3e8834e27b46acf735508387f",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:41.685125+00:00",
+  "ended_at_utc": "2026-11-28T02:37:17.021114+00:00",
+  "request_sha256": "fa361de534ffec30fcd38fa6fb38d7289156af4fc403b432672cac66cc2048f3",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46088,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25521,
+    "cached_tokens": 9344,
+    "completion_tokens": 1362
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit_bridge, _inverse\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    episodes = pickle.load(f)\\nfor episode in episodes:\\n    c = episode['dataset']['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    a = _basis(x)\\n    pairs = np.column_stack([x[:, i] + s*x[:, j] for i, j in combinations(range(4), 2) for s in (-1, 1)])\\n    designs = [a]\\n    names = ['polynomial']\\n    for alpha in (0.001, 0.03, 0.2):\\n        designs.append(np.column_stack((a[:, :15], x**3/(1+alpha*x*x))))\\n        names.append(f'saturating-self:{alpha}')\\n        designs.append(np.column_stack((a, pairs**3/(1+alpha*pairs*pairs))))\\n        names.append(f'pairwise-sum/difference:{alpha}')\\n\\n    def clean_indices(indices):\\n        b = _fit_bridge(x[indices], y[indices])\\n        err = np.linalg.norm(a[indices]@b-y[indices], axis=1)\\n        return indices[err <= max(8*np.median(err), 1e-10)], b\\n\\n    rng = np.random.default_rng(137)\\n    folds = rng.permutation(len(x)) % 5\\n    groups = [(f'random-{k}', folds == k) for k in range(5)]\\n    single = np.count_nonzero(x, axis=1) == 1\\n    groups.extend((f'axis-{j}', single & (x[:, j] != 0)) for j in range(4))\\n    groups.append(('extreme', np.max(np.abs(x), axis=1) >= 1.5))\\n    for label, held in groups:\\n        train = np.flatnonzero(~held)\\n        in_fold = rng.permutation(len(train)) % 4\\n        scores = np.zeros(len(designs))\\n        for k in range(4):\\n            it = train[in_fold != k]\\n            iv = train[in_fold == k]\\n            good, b = clean_indices(it)\\n            iv = iv[np.linalg.norm(a[iv]@b-y[iv], axis=1) < 5]\\n            scores[0] += np.sum((a[iv]@b-y[iv])**2)\\n            for j, design in enumerate(designs[1:], 1):\\n                coef, _, rank, _ = np.linalg.lstsq(design[good], y[good], rcond=None)\\n                scores[j] += np.sum((design[iv]@coef-y[iv])**2) if rank == design.shape[1] else np.inf\\n        best = np.argmin(scores[1:])+1\\n        good, b = clean_indices(train)\\n        h = np.flatnonzero(held)\\n        h = h[np.linalg.norm(a[h]@b-y[h], axis=1) < 5]\\n        design = designs[best]\\n        coef = np.linalg.lstsq(design[good], y[good], rcond=None)[0]\\n        rmse = lambda residual: np.sqrt(np.mean(residual**2))\\n        print(f'{label}: baseline bridge={rmse(a[h]@b-y[h]):.7g}; challenger={names[best]} bridge={rmse(design[h]@coef-y[h]):.7g}; inner challenger/base SSE={scores[best]/scores[0]:.4g}; baseline load max={np.max(np.abs(_inverse(y[h], b)-x[h])):.7g}')\\n    print('Calibration fields:', ', '.join(c), '| datasets:', len(episodes))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 robust polynomial calibration; worst held-out bridge RMSE was 0.000133 and maximum absolute load error was 0.000336 on non-spike rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch-centered classification, relay-mode tests, or drift operators\",\n      \"rejected_reason\": \"The upstream task is continuous bridge calibration. Its paired calibration measurements have no batch labels, relay state, or time-dependent drift target.\"\n    }\n  ],\n  \"rationale\": \"Test whether the polynomial misses reproducible saturation or nonlinear pairwise effects. Select rational challengers inside each outer fold, then evaluate on held-out axes and extreme loads. A consistent gain on those slices would warrant testing the challenger's inverse before changing either deliverable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "52121e508a01fd31adeac52969492b705493968921e6bbb996ee0601ffe2917c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37362.34,
+      "usage_known": true,
+      "prompt_tokens": 25521,
+      "cached_tokens": 9344,
+      "completion_tokens": 1362
+    }
+  ]
+}

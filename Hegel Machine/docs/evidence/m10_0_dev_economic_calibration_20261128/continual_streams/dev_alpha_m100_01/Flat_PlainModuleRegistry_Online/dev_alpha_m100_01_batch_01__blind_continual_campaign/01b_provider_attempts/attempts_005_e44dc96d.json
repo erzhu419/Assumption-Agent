@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e44dc96d1a934b749d0e29d7d962c699",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:49.486483+00:00",
+  "ended_at_utc": "2026-11-28T02:26:14.738209+00:00",
+  "request_sha256": "77d1127dcdc6a3e64215c6ebca2169ea5f5c50d00e711dcf7fce5be87f18c3b1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41696,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25148,
+    "cached_tokens": 9344,
+    "completion_tokens": 948
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from explore import *\\nA,B=_design(taus,pc,hc,xc,dt,t); Ar,Br=_design(taus,pc[:,::-1],hc,xc,dt[::-1],t); Af,Bf=_design(taus,pc[:,::-1],hc,xc,dt,t)\\ny=np.c_[qc,rc]; bb=np.vstack([np.c_[-np.expm1(-t[:,None]/taus),t],np.r_[1/taus,1]]); c=lstsq(bb,y.T)[0].T\\nnp.set_printoptions(precision=4,linewidth=190)\\nprint('past / hold / lab / stratum and recovered [branch1 branch2 drift]');print(np.c_[pc,hc,ch['lab_id'],ch['stratum'],c]); print('refs',[(g['ref_coupons'].min(),g['ref_coupons'].max()) for g in [tr,te,ch]])\\nfor name,a,b in [('baseline',A,B),('reverse paired',Ar,Br),('reverse loads',Af,Bf)]:\\n coef=np.c_[b[:,:2]*taus*theta[:2],b[:,2:]@theta[2:]];e=y-np.c_[a@theta,b@theta]; print(name,'coef rmse',rms(c-coef,0),'curve & rate rmse',rms(e[:,:-1]),rms(e[:,-1])); print('residual coeff vs predictors',np.corrcoef(np.c_[c-coef,pc,hc,xc].T)[:3,3:])\\nfor name,m in [('past',np.c_[np.ones(len(pc)),pc]),('past+hold',np.c_[np.ones(len(pc)),pc,hc]),('past+hold+x',np.c_[np.ones(len(pc)),pc,hc,xc]),('hold+x',np.c_[np.ones(len(pc)),hc,xc])]:\\n for k in range(3):\\n  b=lstsq(m,c[:,k])[0]; h=(np.linalg.qr(m)[0]**2).sum(1); loo=(c[:,k]-m@b)/(1-h);print(name,k,'loo',rms(loo),'weights',b)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 chronological benchtop law -> H2 altered chamber memory and drift on the same exponential basis; chamber baseline rate RMSE is 1.6334, while free branch amplitudes and drift leave at most 0.00285 per-time RMSE.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\"assumption_refuted\":\"The benchtop history and drift law transfers unchanged to this chamber.\",\"empirical_witness\":\"On 24 verification coupons it yields initial-rate RMSE 1.6334; retaining the shared time basis and freeing per-coupon amplitudes reduces rate residual RMSE to 0.00084.\",\"causal_blanket_diagnosis\":\"The relaxation time basis is consistent with the chamber data, but the mapping from loading history and coupon inputs to branch amplitudes and drift is not.\",\"sublated_pivot\":\"Keep the train-fitted spectrum and test paired history reversal, then identify remaining branch and drift terms separately.\",\"risk_kind\":\"constitutive transfer\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit separate chamber relaxation times\",\"rejected_reason\":\"The train-fitted time basis already represents the chamber trajectories near their measurement noise once amplitudes are freed.\"}],\"rationale\":\"Reversing loads with and without their durations tests whether a chronology mismatch explains the first branch. Leave-one-coupon-out residual fits test whether any remaining correction depends on stress history, hold stress, or coupon features.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "af19150c3c586983bb81a56265d54524e451ce420f4ba496ce84dfc41864387d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27213.95,
+      "usage_known": true,
+      "prompt_tokens": 25148,
+      "cached_tokens": 9344,
+      "completion_tokens": 948
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5c686100a8af44e886e62ee418a0e18f",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:38.824033+00:00",
+  "ended_at_utc": "2026-11-28T02:44:09.331745+00:00",
+  "request_sha256": "005984bae2a9a1ab764d9ce793dca29793a2d8c398c3dd36884210b40eaef46b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40140,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25181,
+    "cached_tokens": 9344,
+    "completion_tokens": 1201
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import calibrate_upstream, _fit, _invert\\nfrom batch_solver import solve_batch\\nfrom _verified_downstream import solve_downstream\\nwith open('public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nprint('public studies:', len(items))\\nfor item in items:\\n    st = item['study']\\n    c = st['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']\\n    clean = np.linalg.norm(y, axis=1) < 10\\n    rng = np.random.default_rng(318)\\n    pred_err = []\\n    for seed in range(12):\\n        order = rng.permutation(np.flatnonzero(clean))\\n        test, train = order[:20], order[20:]\\n        train = np.r_[train, np.flatnonzero(~clean)]\\n        coef = _fit(x[train], y[train]); pred_err.append(np.max(np.linalg.norm(_invert(y[test],coef)-x[test],axis=1)))\\n    print('all observed EMI rows retained in training; worst held-out inverse:', max(pred_err))\\n    assert max(pred_err) < 3e-4\\n    out = calibrate_upstream(st)\\n    assert out['y_obs_raw'].shape == st['y_obs_raw'].shape and np.all(np.isfinite(out['y_obs_raw']))\\n    for key, orig, ref in [('raw_rosette', c, 'ref_rosette'), ('raw_readout', c['single_bank_sweeps'], 'ref_signal')]:\\n        new = out['sensor_calibration_sweeps'] if key == 'raw_rosette' else out['sensor_calibration_sweeps']['single_bank_sweeps']\\n        np.testing.assert_array_equal(new[key], orig[ref]); assert not np.shares_memory(new[key], orig[ref])\\n        assert not np.array_equal(orig[key], orig[ref])\\n    assert calibrate_upstream(dict(st, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n    # Use real clean calibration pairs as a shaped pulse with an independent known target.\\n    sel = np.flatnonzero(clean)[:12]\\n    pulse = y[sel].reshape(3,4,4).copy()\\n    marker = {'label':'test', 'y_pulse_raw':None}\\n    with_pulse = dict(st, reference_tracer_pulses=[{'label':'test','y_pulse_raw':pulse}, marker, None])\\n    p,q,n = calibrate_upstream(with_pulse)['reference_tracer_pulses']\\n    e = np.max(np.abs(p['y_pulse_raw'] - x[sel].reshape(pulse.shape)))\\n    print('pulse maximum coordinate error:', e)\\n    assert e < 1e-4 and p['label'] == 'test' and q == marker and n is None\\n    np.testing.assert_array_equal(pulse, y[sel].reshape(pulse.shape))\\n    o = solve_batch(st); ref_out = solve_downstream(out)\\n    for key in ('weights','terminal_field'):\\n        np.testing.assert_array_equal(o[key], ref_out[key]); assert np.all(np.isfinite(o[key]))\\n    assert abs(np.sum(o['weights']) - st['total_budget']) < 1e-8\\n    assert np.min(o['weights']) >= -1e-9 and np.max(o['weights']) <= st['u_box'] + 1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full cubic basis → H2 study-specific sparse cubic fit; worst clean out-of-fold row errors were 4.54e-5 forward and 4.04e-5 inverse.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and held-out calibration passed, but the public study has no tracer pulses. Test the pulse path against known calibration pairs and retain every observed EMI spike in each stress-training split. A failure would identify whether to revise pulse reshaping or the robust fit.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "7a511f6ebb83bdd1093ee683514a9aa058f8a4a7137b5602ea934cf7e32e34de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32550.47,
+      "usage_known": true,
+      "prompt_tokens": 25181,
+      "cached_tokens": 9344,
+      "completion_tokens": 1201
+    }
+  ]
+}

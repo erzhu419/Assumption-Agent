@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7f44bf45c6754c4fbf331011eccdc1f2",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:01:41.569125+00:00",
+  "ended_at_utc": "2026-11-28T03:02:16.578780+00:00",
+  "request_sha256": "ad02912ac4a33e9a6fabd9e24bd408f46dd7f2333b18e817b1ad33ee804bfbf0",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 56170,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29881,
+    "cached_tokens": 9344,
+    "completion_tokens": 1337
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('downstream_solver.py')\\ns = p.read_text()\\na = s.index('# Transfer the retained-history')\\nb = s.index('def solve_downstream', a)\\ns = s[:a] + '''# The apparatus prefix does not distinguish the batch-04 reset boundary\\n# from the batch-07 retained-history boundary. Predict their midpoint.\\n_CHAMBER_FRACTIONS = np.array([0.38, 0.61])\\n\\n\\ndef _chamber(test, x, tau, theta, dt, times):\\n    history = np.asarray(test['past_channel_raw']).sum(axis=-1)\\n    hold = np.asarray(test['hold_channel_raw']).sum(axis=-1)\\n    retained_gap = _history_gap(tau, history, hold, dt)\\n    gap = 0.5 * (hold[:, None] + retained_gap)\\n    force = x @ theta[2:]\\n    amplitudes = gap * theta[:2] + force[:, None] * (tau * _CHAMBER_FRACTIONS)\\n    drift = (1.0 - _CHAMBER_FRACTIONS.sum()) * force\\n    basis, derivative = _basis(tau, times)\\n    coefficients = np.column_stack((amplitudes, drift))\\n    strain = test['strain_0'][:, None] + coefficients @ basis.T\\n    return strain, coefficients @ derivative\\n\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport json, pickle, sys\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as s\\nwith open('public_batch.pkl','rb') as f: raw = pickle.load(f)[0]['dataset']\\nd = calibrate_upstream(raw)\\ntr, te = d['train'], d['test']\\ndt, t = d['past_dt'], d['eval_times']\\nx, z = s._features(tr, te)\\ny = solve_batch(raw)\\ntau, w = y['estimated_taus'], y['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\nassert all(np.isfinite(v).all() for v in y.values())\\nhold = te['hold_channel_raw'].sum(-1)\\ngap = s._history_gap(tau, te['past_channel_raw'].sum(-1), hold, dt)\\nforce = z @ w[2:]\\nresponses = []\\nfor g, f in ((hold[:,None], np.array([.20,.52])), (gap,np.array([.56,.70]))):\\n    amp = g*w[:2] + force[:,None]*tau*f\\n    drift = force*(1-f.sum())\\n    responses.append((te['strain_0'][:,None]+amp @ (-np.expm1(-t[:,None]/tau)).T+drift[:,None]*t, amp @ (1/tau)+drift))\\nfor j,key in enumerate(('predicted_strain','initial_rate_pred')):\\n    observed = y[key]\\n    np.testing.assert_allclose(observed, (responses[0][j]+responses[1][j])/2, atol=1e-12)\\n    err = [np.sqrt(np.mean((observed-r[j])**2,axis=0)).max() for r in responses]\\n    print(key, 'worst horizon/endpoint RMS vs archived extremes:', max(err))\\nh = 1e-7\\nv, r = s._chamber(te,z,tau,w,dt,np.array([0.,h]))\\nnp.testing.assert_allclose(v[:,0],te['strain_0'],atol=1e-12)\\nnp.testing.assert_allclose((v[:,1]-v[:,0])/h,r,rtol=1e-5,atol=1e-7)\\nprint('maximum derivative error:', np.max(abs((v[:,1]-v[:,0])/h-r)))\\nprint('material parameters:',tau,w)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Single archived boundary → midpoint of the reset and retained-history laws; worst held-out benchtop p90 errors are 0.02396 for strain and 0.01611 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t09\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use chronology to select the retained-history law\",\n      \"rejected_reason\": \"The current three-trace persistence pattern has no labeled counterpart in the archive, so it does not validate that choice.\"\n    }\n  ],\n  \"rationale\": \"Keep the validated material fit. The midpoint halves the worst disagreement with the two archived boundary laws at each horizon and for initial rate. Verify that property, the strain-rate identity, and the public schema on the edited artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "c4383ea2a9f30080ba718faf9ca4ef7e89f0bc05c281c300dcae9919a3501174",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37005.12,
+      "usage_known": true,
+      "prompt_tokens": 29881,
+      "cached_tokens": 9344,
+      "completion_tokens": 1337
+    }
+  ]
+}

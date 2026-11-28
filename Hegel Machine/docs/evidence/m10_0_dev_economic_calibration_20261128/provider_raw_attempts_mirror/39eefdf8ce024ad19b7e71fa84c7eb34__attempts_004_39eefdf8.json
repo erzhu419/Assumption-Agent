@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "39eefdf8ce024ad19b7e71fa84c7eb34",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:42:21.008607+00:00",
+  "ended_at_utc": "2026-11-28T02:42:43.291951+00:00",
+  "request_sha256": "3b420b0f47256e3239ac9e2d6b6e8fb387992000f2504878bc7f9010caa0a5a8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 30970,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22738,
+    "cached_tokens": 5504,
+    "completion_tokens": 856
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,re\\nroot='/tmp/hegel_continual_archive/'\\nfor entry in json.load(open(root+'archive_manifest.json')):\\n p=entry['solver_path']; print('\\\\n',p)\\n for i,line in enumerate(open(p),1):\\n  if re.search(r'def .*calib|def .*roset|y_pulse_raw|reference_tracer_pulses|single_bank_sweeps',line): print(i, line.strip()[:160])\\na=json.load(open(root+'archive_apparatus_log.json')); print('\\\\nTelemetry fields:')\\nfor e in a: print({k:(v if not isinstance(v,(dict,list)) else f'{type(v).__name__}[{len(v)}]') for k,v in e.items()})\\nPY\\nsed '/^p=\\\\x27\\\\/tmp\\\\/hegel_continual_archive/,$d' /tmp/rosette_probe.py >/tmp/rosette_structure.py\\ncat >>/tmp/rosette_structure.py <<'PY'\\nterms=models['mixed 3']; a=design(x,terms); co=robust(a,y); print('active monomials');\\nfor j in range(4): print(j,[(t,round(v,6)) for t,v in zip(terms,co[:,j]) if abs(v)>1e-3]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_structure.py | tail -6\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine or separate-bank response → H2 coupled quadratic and cubic response; worst amplitude-tertile median OOF row error dropped from 0.526 affine to 5.98e-5 with the full cubic basis.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Affine coupling plus separate per-bank nonlinearities suffices for the rosette.\",\n    \"empirical_witness\": \"Diagonal quadratic/cubic terms left worst-tertile median OOF error at 0.539, while the full cubic basis reduced it to 5.98e-5.\",\n    \"causal_blanket_diagnosis\": \"The individual bank sweeps show cubic response but cannot expose interactions that require two nonzero reference channels.\",\n    \"sublated_pivot\": \"Retain coupled linear response and test a compact forward basis containing cross-channel products and per-bank cubic terms.\",\n    \"risk_kind\": \"omitted_cross_channel_interaction\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep all 35 cubic monomials in the production fit\",\n      \"rejected_reason\": \"Useful for discovering support, but unnecessary terms can amplify noise when calibration rows are held out.\"\n    }\n  ],\n  \"rationale\": \"Identify which mixed monomials carry the signal and check the campaign archive for pulse shapes or prior calibration regimes. Those findings determine the compact model and which paths need validation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "e17d14ef0c02d9d44a2b2e32cd77b05230304e86d27885639622b5835bed6780",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24335.69,
+      "usage_known": true,
+      "prompt_tokens": 22738,
+      "cached_tokens": 5504,
+      "completion_tokens": 856
+    }
+  ]
+}

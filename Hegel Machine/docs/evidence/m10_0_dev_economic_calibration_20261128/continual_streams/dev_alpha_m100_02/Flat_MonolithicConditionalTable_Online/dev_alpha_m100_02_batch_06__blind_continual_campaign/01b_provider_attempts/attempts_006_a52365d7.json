@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a52365d7b41b413b9194f4eb6ffdd754",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:55:37.559960+00:00",
+  "ended_at_utc": "2026-11-28T02:55:55.314134+00:00",
+  "request_sha256": "0ab1110eccb9c558a70d600c9c2a8dfe39b0d0f15b9588c70b741b7c1aa65afb",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41703,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24556,
+    "cached_tokens": 9344,
+    "completion_tokens": 520
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; for f in *_solver.py; do echo ==== $f; grep -E '^_[A-Z]|fast, slow' \\\"$f\\\"; sed -n '/^def _bridge/,/^def _loads/p' \\\"$f\\\" | head -34; done; python3 - <<'PY'\\nimport pickle,numpy as np\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=item['dataset']; print('dataset keys',list(d)); c=d['calibration_load_cells']; print('calibration keys',list(c));\\nfor name in ('bridge_raw','true_channel_loads'):\\n a=np.asarray(c[name]); print(name,a.shape,np.quantile(np.abs(a),[0,.5,.9,.95,.98,.99,1]))\\nfor name,a in c['single_channel_sweeps'].items():\\n a=np.asarray(a); print(name,a.shape,a.ravel()[:8],np.quantile(np.abs(a),[.5,.95,.99,1]) if a.dtype.kind in 'fiu' else '')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full deployment history -> H2 chamber reset with transient drift; the current channel-5 mean is within 0.028 of both reset precedents, but blind prediction error is unmeasured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Carry forward the last campaign's bridge model\",\n      \"rejected_reason\": \"The archived bridge equations differ, so the current empirical sweeps must determine which law to fit.\"\n    }\n  ],\n  \"rationale\": \"Recover the drift fractions from both matching chamber precedents and identify the archived bridge families to compare on current calibration sweeps.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "c025067bbd370d23ba2461f3ad4dbf58b69637e08bbb34058e5c73b9aabf670c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17706.76,
+      "usage_known": true,
+      "prompt_tokens": 24556,
+      "cached_tokens": 9344,
+      "completion_tokens": 520
+    }
+  ]
+}

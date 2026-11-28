@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a9fab8c794647d58ab615d9636463f4",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:12.002591+00:00",
+  "ended_at_utc": "2026-11-28T02:50:50.046785+00:00",
+  "request_sha256": "ccfc710c3154a1d95293fc8ef8276285439b8590ed6c5215006e1ed31d9898fa",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 67845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35374,
+    "cached_tokens": 9344,
+    "completion_tokens": 1552
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat >/tmp/audit_rosette.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _predict, _invert, calibrate_upstream\\nfrom batch_solver import solve_batch\\np = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\ns = p[0]['study']; c = s['sensor_calibration_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\nclean = np.max(abs(y), axis=1) < 5\\naxis = np.count_nonzero(x, axis=1) == 1\\npairing = [2, 3, 0, 1]\\ndef extra(a, kind, j):\\n    t, u = a[:, j], a[:, pairing[j]]\\n    if kind == 'other_channels':\\n        v, w = a[:, (j+1)%4], a[:, (j+3)%4]\\n        return np.column_stack((v,w,v*v,w*w,v*w))\\n    if kind == 'pair_difference':\\n        return np.column_stack((t*u,t*t*u,t*u*u,np.sin(2.5*(t-.21*u))-np.sin(2.5*t),np.sin(2.5*(t+.21*u))-np.sin(2.5*t)))\\n    return np.column_stack([z/(1+.6*z*z) for z in (t,u,t-.21*u,t+.21*u)] + [u*u/(1+.6*u*u)])\\nmodels = ('baseline','other_channels','pair_difference','rational')\\nerrs = {k: [] for k in models}\\nbase = solve_batch(s); w0 = np.asarray(base['weights']); field0 = base['terminal_field']\\nmax_changes = np.zeros(3); gaps = []\\norders = (np.arange(len(x)), np.argsort(np.max(abs(x),axis=1)))\\nfor order in orders:\\n    for te in np.array_split(order, 5):\\n        tr = np.setdiff1d(np.arange(len(x)),te)\\n        f,b = _fit(x[tr], y[tr]); goodtr = tr[clean[tr]]; goodte = te[clean[te]]\\n        r = y[goodtr] - _predict(x[goodtr],f,b)\\n        pred = _predict(x[goodte],f,b)\\n        for m in models:\\n            z = pred.copy()\\n            if m != 'baseline':\\n                for j in range(4):\\n                    beta = np.linalg.lstsq(extra(x[goodtr],m,j),r[:,j],rcond=1e-8)[0]\\n                    z[:,j] += extra(x[goodte],m,j) @ beta\\n            e = z-y[goodte]\\n            errs[m].append([np.sqrt(np.mean(e**2)), *[np.max(np.abs(e[a].mean(0))) if np.any(a) else 0. for a in (axis[goodte],~axis[goodte])]])\\n        cc = dict(c, ref_rosette=x[tr], raw_rosette=y[tr]); out = solve_batch(dict(s,sensor_calibration_sweeps=cc)); w = np.asarray(out['weights']); cert = out['kkt_certificate']\\n        max_changes = np.maximum(max_changes,[np.max(abs(w-w0)),np.max(abs(out['terminal_field']-field0)),abs(w.sum()-s['total_budget'])])\\n        assert np.isfinite(out['terminal_field']).all() and w.min() >= -1e-10 and w.max() <= s['u_box']+1e-10\\n        gaps.append(abs(cert['primal_objective']-cert['dual_lower_bound']))\\nfor m in models: print(m, 'worst [forward RMSE, axis mean bias, mixed mean bias]', np.max(errs[m],axis=0))\\nprint('max [weight change, terminal field change, budget error]',max_changes,'max certificate gap',max(gaps))\\nprint('public studies',len(p),'axis clean rows',sum(axis&clean),'mixed clean rows',sum(~axis&clean),'EMI rows',np.flatnonzero(~clean).tolist(),'cohort / mode fields',[k for k in s if any(z in k for z in ('batch','class','relay','meter','cohort'))])\\nassert max_changes[2] < 1e-10 and max(gaps) < 1e-9\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The paired sine/cosine map reaches 2.74e-5 worst held-out inverse RMSE; test whether omitted coupling or rational terms explain residuals and whether calibration uncertainty affects downstream outputs.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, classification, or drift-operator benchmarks\",\n      \"rejected_reason\": \"The public study is a continuous calibration and PDE inversion problem; it supplies no relay states or class labels, and the verified downstream operator is outside the calibration task.\"\n    }\n  ],\n  \"rationale\": \"Fit residual challengers only on training sweeps and measure held-out errors and signed bias separately for axis and mixed sweeps. Propagate each fold's calibration through the actual composed solver to detect changes in weights, terminal fields, or KKT feasibility that the schema test would miss.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "761557922300826db750bd8b300c41bcc0172df8c739c0a0f4f27738d386ead3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40112.37,
+      "usage_known": true,
+      "prompt_tokens": 35374,
+      "cached_tokens": 9344,
+      "completion_tokens": 1552
+    }
+  ]
+}

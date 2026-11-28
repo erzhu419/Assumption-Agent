@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5d2ae8bd8d234539b7503830752deea4",
+  "call_seq": 12,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:59:52.583053+00:00",
+  "ended_at_utc": "2026-11-28T03:00:26.891196+00:00",
+  "request_sha256": "321895b665c270cb3d1ee74f476dd6f1e9234394ffcde56871e9a8eedd8cd790",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 73594,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37518,
+    "cached_tokens": 9344,
+    "completion_tokens": 1359
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\np=Path('/holdout_task/batch_solver.py')\\ns=p.read_text().replace('# Tracer pulses identify wraparound in x and no wall leakage in y.', '# The preceding facility trace matches the archived sealed-wall campaigns.')\\ns=s.replace('return np.stack([*(b**k for k in range(1, 8)), np.sin(f*b), 1-np.cos(f*b)], axis=-1)', 'return np.stack((b, b*b, np.sin(f*b), 1-np.cos(f*b)), axis=-1)')\\ns=s.replace('    cross = _cross_design(b, f)\\\\n    diag', '    diag')\\na=s.index('    # The gain-scaled opposite-bank'); b=s.index('\\\\n\\\\n\\\\ndef _raw',a)\\ns=s[:a]+'''    # Profile the cross-bank frequency separately from the self-response.\\n    def profile(freq):\\n        cross = _cross_design(b, freq)\\n        local = coeff.copy()\\n        for _ in range(5):\\n            h = np.linalg.lstsq(cross*local[bank,1,None],\\n                                yy-np.sum(diag*local[bank], axis=1), rcond=None)[0]\\n            D = diag.copy()\\n            D[:,1] += cross @ h\\n            local = np.array([np.linalg.lstsq(D[bank==j], yy[bank==j], rcond=None)[0]\\n                              for j in range(4)])\\n        return np.linalg.norm(np.sum(D*local[bank], axis=1)-yy), local, h\\n    cross_f = minimize_scalar(lambda freq: profile(freq)[0], bounds=(1.5, 2.5),\\n                              method='bounded').x\\n    _, coeff, h = profile(cross_f)\\n    return f, cross_f, coeff, h'''+s[b:]\\ns=s.replace('f, coeff, h = fit','f, cross_f, coeff, h = fit').replace('_cross_design(b,f) @ h','_cross_design(b, cross_f) @ h').replace('f, c, h = fit','f, cross_f, c, h = fit')\\ns=s.replace('sum((k+1)*h[k]*b**k for k in range(7)) + f*(h[7]*np.cos(f*b)+h[8]*np.sin(f*b))','h[0] + 2*h[1]*b + cross_f*(h[2]*np.cos(cross_f*b)+h[3]*np.sin(cross_f*b))')\\np.write_text(s)\\nPY\\ncat >/tmp/rosette_validate.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; clean=(abs(y)<5).all(axis=1)\\nfrom pathlib import Path\\nprior=next(Path('/tmp/.hegel_candidate_archive/v01_6868c980').rglob('batch_solver.py'))\\nfor p in (prior,'/holdout_task/batch_solver.py'):\\n spec=importlib.util.spec_from_file_location('solver',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\n fit=m._sweep_fit(s); err=[]; idx=np.arange(len(x)); rng=np.random.default_rng(41)\\n for inds in np.array_split(rng.permutation(idx[clean]),5):\\n  use=~np.isin(idx,inds); err.append(np.max(abs(m._raw(x[inds],m._sweep_fit(s,use))-y[inds]),axis=0))\\n z=m._calibrate(s).reshape(-1,4); out=m.solve_batch(s); k=out['kkt_certificate']; w=out['weights']; print(p,'fit',fit,'held-out maxima',np.max(err,axis=0),'inverse raw error',np.max(abs(m._raw(z,fit).ravel()-s['y_obs_raw'])),'w',w,'gap',k['primal_objective']-k['dual_lower_bound'],'terminal norm',np.linalg.norm(out['terminal_field']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_validate.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 seventh-order opposite-bank approximation -> H2 separate self- and cross-bank frequencies with quadratic-trigonometric leakage; the compact per-bank fit reaches a worst in-sample error of 2.92e-5 raw units, pending held-out validation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the common-frequency polynomial approximation\",\n      \"rejected_reason\": \"The mixed sweeps identify a distinct cross-bank frequency near 2.0; test whether the smaller basis maintains or improves errors on held-out sweeps.\"\n    }\n  ],\n  \"rationale\": \"Fit both frequencies from the provided sweeps and compare with the archived candidate on identical held-out rows. If the compact fit degrades calibration or changes the constrained solution unexpectedly, retain the earlier candidate and inspect the shared-gain assumption.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "4018e309356609113c6c227c3a74fd2fdcde016ba862f9a2bcd53fdb8cdb0788",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36299.13,
+      "usage_known": true,
+      "prompt_tokens": 37518,
+      "cached_tokens": 9344,
+      "completion_tokens": 1359
+    }
+  ]
+}

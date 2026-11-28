@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60fb95ceabf8463789c6280dbfd8c9a0",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:43.390212+00:00",
+  "ended_at_utc": "2026-11-28T02:44:12.039538+00:00",
+  "request_sha256": "a9c4ee94569ce5f78c668e570f53a6b9e2685fa87e1db2ceeef284ba4424137a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41645,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25788,
+    "cached_tokens": 9344,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport os, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\ncal = ds['calibration_load_cells']\\nx, y = cal['true_channel_loads'], cal['bridge_raw']\\nb = up._fit(x, y)\\nclean = np.linalg.norm(up._forward(x, b)-y, axis=1) < .01\\nprint('flagged calibration rows:', np.flatnonzero(~clean).tolist())\\nerr = np.zeros_like(x)\\nfor i in np.flatnonzero(clean):\\n    train = np.arange(len(x)) != i\\n    err[i] = up._inverse(y[i:i+1], up._fit(x[train], y[train]))[0] - x[i]\\naxis = np.count_nonzero(x, axis=1) <= 1\\nfor name, mask in [('axis', axis), ('mixed', ~axis), ('edge', np.max(abs(x), axis=1)>1.55)]:\\n    e = err[clean & mask]\\n    worst = np.max(abs(e))\\n    total = np.max(abs(e.sum(axis=1)))\\n    print(f'LOO {name}, n={len(e)}: max channel={worst:.9g}, max total={total:.9g}')\\n    assert worst < .001 and total < .001\\nout = up.calibrate_upstream(ds)\\nfor name in ('train', 'test'):\\n    for key in ('past_channel_raw', 'hold_channel_raw'):\\n        q, raw = out[name][key], ds[name][key]\\n        assert q.shape == raw.shape and np.all(np.isfinite(q)) and not np.shares_memory(q,raw)\\n        e = np.max(abs(up._forward(q.reshape(-1,4),b)-raw.reshape(-1,4)))\\n        print(f'{name}/{key} max closure={e:.9g}')\\n        assert e < 1e-9\\nassert out.get('chamber_verification_trials') is None\\nassert np.array_equal(out['calibration_load_cells']['bridge_raw'], x) and not np.shares_memory(out['calibration_load_cells']['bridge_raw'], x)\\nsweeps = out['calibration_load_cells']['single_channel_sweeps']\\nassert np.array_equal(sweeps['cmd_stress'], sweeps['true_stress']) and not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\nloads = np.stack(np.meshgrid(*[np.linspace(-1.6, 1.7, 7)]*4, indexing='ij'),axis=-1).reshape(-1,4)\\nraw = up._forward(loads,b)\\ntrials = {'past_channel_raw':raw[:2400].reshape(-1,6,4), 'hold_channel_raw':raw}\\nrestored = up.calibrate_upstream(dict(ds, chamber_verification_trials=trials))['chamber_verification_trials']\\ne = max(np.max(abs(restored['hold_channel_raw']-loads)), np.max(abs(restored['past_channel_raw'].reshape(-1,4)-loads[:2400])))\\nprint(f'chamber round trip on {len(loads)} mixed and boundary loads: max error={e:.9g}')\\nassert e < 1e-9\\npred = solve_batch(ds)\\nassert all(np.all(np.isfinite(np.asarray(pred[k]))) for k in ('estimated_taus', 'hereditary_weights', 'initial_rate_pred', 'predicted_strain'))\\nprint('Isolated composed solve and normalization passed.')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine mixing → cyclic pair coupling plus per-channel cubic response; prior leave-one-out maxima were 0.000353 per channel and 0.000529 for total load, and the public schema passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Test the exact artifact in an isolated process. Leave-one-out errors can expose a fit regression, while closure and chamber round trips can expose inverse or shape errors the public schema does not exercise.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "5974d3c325c5d958dc786034536698cb4112c843535697d0b7fd4defd86f415d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30690.08,
+      "usage_known": true,
+      "prompt_tokens": 25788,
+      "cached_tokens": 9344,
+      "completion_tokens": 1144
+    }
+  ]
+}

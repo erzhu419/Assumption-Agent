@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9a79669df0f749c4a2fa5c2fc0f32318",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:39:55.714538+00:00",
+  "ended_at_utc": "2026-11-28T02:40:15.524028+00:00",
+  "request_sha256": "ddfb3db9e51dc24e250ab970b18c0705f5aac9651005f9454aabae92a5dd06ad",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 23334,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19031,
+    "cached_tokens": 9344,
+    "completion_tokens": 633
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pathlib,pickle,numpy as np\\np=pickle.load(open('public_batch.pkl','rb')); print('public items',len(p));\\nfor i,item in enumerate(p):\\n d=item['dataset']; q=item.get('campaign_diagnostics'); print(i, {k:(list(v) if isinstance(v,dict) else np.asarray(v).tolist()) for k,v in d.items()},'diagnostic rows',None if q is None else len(q['lab_id']))\\na=pathlib.Path('/tmp/hegel_continual_archive')\\nfor f in a.rglob('*'):\\n if f.is_file(): print(f.relative_to(a),f.stat().st_size)\\nfor name in ('archive_manifest.json','pre_llm_gate_diagnostic.json','archive_apparatus_log.json'):\\n f=a/name\\n if not f.exists(): continue\\n x=json.loads(f.read_text()); print(name)\\n def brief(v):\\n  if isinstance(v,dict): return {k:brief(w) for k,w in v.items()}\\n  if isinstance(v,list):\\n   try:\\n    z=np.asarray(v,dtype=float)\\n    if z.ndim==2 and len(z)>4: return dict(shape=z.shape,mean=z.mean(0).round(4).tolist(),sd=z.std(0).round(4).tolist(),tail=z[-1].tolist())\\n   except (ValueError,TypeError): pass\\n   return [brief(w) for w in v]\\n  return v\\n print(str(brief(x))[:9500])\\nPY\\nsed -n '36,150p' validate_public_schema.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation Cauchy IRLS' 2>&1 | grep -Ei 'viscoelastic|irls|cauchy' | cut -c1-260 | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 calibrated benchtop hereditary law -> H2 chamber law identified from current diagnostic coupons; no out-of-fold metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The previous output was truncated. Read compact archive summaries and the exact schema check to determine whether prior chamber laws provide testable candidate terms for the current diagnostics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "32b2056dd406e2df99af4e9579248a6acade244755b2d873fbcabefdd0fdae42",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 21807.94,
+      "usage_known": true,
+      "prompt_tokens": 19031,
+      "cached_tokens": 9344,
+      "completion_tokens": 633
+    }
+  ]
+}

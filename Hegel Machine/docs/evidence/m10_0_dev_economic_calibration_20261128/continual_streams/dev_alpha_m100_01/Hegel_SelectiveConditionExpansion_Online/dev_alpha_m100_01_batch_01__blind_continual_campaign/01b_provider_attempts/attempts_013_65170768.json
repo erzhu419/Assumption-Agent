@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "651707688bca4382b8ef53ea04744283",
+  "call_seq": 13,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:30:06.341129+00:00",
+  "ended_at_utc": "2026-11-28T02:30:38.819876+00:00",
+  "request_sha256": "8c7feb8a4bc7cb4a387247e9375887e788563f27c7915aff83f9cf27c82607c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 74455,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38015,
+    "cached_tokens": 9344,
+    "completion_tokens": 1292
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"sed '/^for rate in/,$d' /tmp/m100_chamber.py >/tmp/m100_finalprobe.py\\ncat >>/tmp/m100_finalprobe.py <<'PY'\\nfrom scipy.optimize import least_squares\\nD=np.c_[q['instant_rate_obs'],q['strain_curves_obs']-q['strain_0'][:,None]]\\nX=_features(q,q)[:len(h)]; s=np.c_[np.ones(len(h)),X]@theta[2:]; F=np.c_[np.ones(len(h)),s]; T=np.r_[1.,t]; L=lambda k:np.r_[1/k,-np.expm1(-t/k)]; K=lambda k:np.array([L(j) for j in k]); valid=~np.isnan(q['coupon_features_raw']).any(1)\\nfor mode in ['free profiles','fixed hold','adjust hold','rankone','rankone exact','rankone no linear']:\\n def fit(mask):\\n  if mode in ['free profiles','fixed hold']:\\n   G=np.c_[h,F] if mode=='free profiles' else F\\n   H=0 if mode=='free profiles' else h[:,None]*(theta[:2]@K(tau)); co=np.linalg.lstsq(G[mask],(D-H)[mask],rcond=None)[0]; return H+G@co,co\\n  def predict(k):\\n   if mode=='adjust hold':\\n    H=h[:,None]*(k[2:4]@K(k[:2])); A=np.vstack([K(k[:2]),T]); return H+F@np.linalg.lstsq(F[mask],(D-H)[mask],rcond=None)[0]@np.linalg.pinv(A)@A\\n   A=K(k[:2]); A=np.vstack([A,T]) if mode!='rankone no linear' else A\\n   H=h[:,None]*(k[2:4]@K(k[:2])); v=s+k[4] if mode!='rankone exact' else s\\n   z=(v[mask]@(D-H)[mask])/(v[mask]@v[mask]); return H+v[:,None]*(z@np.linalg.pinv(A)@A)\\n  k=least_squares(lambda k:(predict(k)-D)[mask].ravel(),[.58,4.2,.81,.57,-.09],bounds=([.3,1.5,.5,.2,-.5],[1.,12.,1.1,1.,.5]),max_nfev=150).x\\n  return predict(k),k\\n P,B=fit(np.ones(len(h),bool)); E=P-D; ev=lambda z:np.sqrt(np.mean(z**2,axis=0)); print(mode,'params',B,'rmse complete/missing',ev(E[valid])[[0,-1]],ev(E[~valid])[[0,-1]])\\n print('worst lab',np.max([ev((fit(q['lab_id']!=j)[0]-D)[q['lab_id']==j]) for j in np.unique(q['lab_id'])],axis=0)); print('missing residual',E[~valid][:,[0,-1]])\\nH=h[:,None]*(theta[:2]@K(tau)); B=np.linalg.lstsq(F[valid],(D-H)[valid],rcond=None)[0]; W=D-H-B[0]; inferred=(W@B[1])/(B[1]@B[1]); ii,jj=np.nonzero(np.isnan(q['coupon_features_raw'])); print('implied versus observed frame fill',np.c_[jj,X[ii,jj]+(inferred[ii]-s[ii])/theta[3:][jj],X[ii,jj]]); print('coeff temporal fixed',B@np.linalg.pinv(np.vstack([K(tau),T]))); print('labrange deployment',np.unique(te['lab_id'],return_counts=True))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m100_finalprobe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: replace inherited deployment memory with a hold-stress response and a split-local feature score; the diagnostic-only reference frame has complete-coupon RMS 0.00214 versus 0.01766 in the train/test frame.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use the train/test reference frame for the chamber feature score\",\"rejected_reason\":\"The prior comparison shows substantially larger errors on complete chamber coupons, even before imputation.\"}],\"rationale\":\"Compare constrained continuous-time chamber laws using the diagnostic split's own references. Separate complete from imputed coupons and refit by held-out lab to determine whether the feature response needs linear drift and whether the rate is consistent with the curve derivative.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "41166530b4f9abdf0ebb5e919b713e3bda26ba13c0b386e0abb41f1694792d3d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34492.85,
+      "usage_known": true,
+      "prompt_tokens": 38015,
+      "cached_tokens": 9344,
+      "completion_tokens": 1292
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c9b9aee82199477cb954fc9d7e7d31cb",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:33:52.715948+00:00",
+  "ended_at_utc": "2026-11-28T02:34:22.823134+00:00",
+  "request_sha256": "a781f89e63df00fe7cf855d0bfa31cd58107f980ba9e6150ed40ad2007cb35fc",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 36974,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24140,
+    "cached_tokens": 9344,
+    "completion_tokens": 1183
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/wrap_probe.py <<'PY'\\nfrom wall_probe import *\\nref,raw=[s['sensor_calibration_sweeps'][k] for k in ('ref_rosette','raw_rosette')]\\nprint('upstream payload',pay)\\nfor j in range(4):\\n ok=np.abs(raw[:,j])<=8.5\\n print('sweep',j,np.polyfit(ref[ok,j],raw[ok,j],1),'payload max err',np.max(np.abs(raw[ok,j]-ref[ok,j]*pay['gains'][j]-pay['offsets'][j])))\\n\\ndef ax(k,v,h,r,kind):\\n a=axis(k,v,h,r,([1,1,1,1] if kind=='open' else [0,0,1,1])).tolil()\\n if kind in ('periodic','wrap_add','wrap_local','wrap_half'):\\n  q=(k[0]+k[-1])/(2*h*h)\\n  for i,j,t in ((0,len(k)-1,1),(len(k)-1,0,-1)):\\n   p=i+t\\n   wrap=q+max(t*v[i],0)/h if kind=='periodic' else (q if kind!='wrap_local' else k[i]/h**2)\\n   a[i,j]=-wrap\\n   if kind=='periodic': a[i,p]=-(k[i]+k[p])/(2*h*h)-max(-t*v[i],0)/h\\n   if kind=='wrap_half': a[i,p]*=.5\\n   a[i,i]=-a[i,p]-a[i,j]\\n if kind=='reflect':\\n  for i,j in ((0,1),(-1,-2)): a[i,j]*=2; a[i,i]*=2\\n return a.tocsc()\\n\\nfrom itertools import product\\nV=sparse.diags(s['V_reaction_2d'].ravel(order='F'),format='csc')\\nkinds=['open','sealed','periodic','wrap_add','wrap_local','wrap_half','reflect']; pairs=[]\\nfor x,y in product(kinds,repeat=2):\\n X=ax(s['kappa_x'],s['vel_x'],s['Lx']/(nx-1),s['robin_x'],x);A=ax(s['kappa_y'],s['vel_y'],s['Ly']/(ny-1),s['robin_y'],y)\\n L=sparse.kron(sparse.eye(ny),X,format='csc')+sparse.kron(A,sparse.eye(nx),format='csc')+V\\n yy=np.vstack([splu(L+mu*I).solve(rhs)[at] for mu in s['mu_shifts']]); e=yy-Y\\n pairs.append((np.max(np.sqrt(np.mean(e**2,axis=0))),x,y,np.sqrt(np.mean(e**2,axis=0)),np.max(abs(e))))\\nfor a in sorted(pairs)[:12]: print(a)\\nprint('aux ranges', np.min(s['aux_manifold_telemetry'],axis=0), np.max(s['aux_manifold_telemetry'],axis=0))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/wrap_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Independent open or sealed wall rows → test cross-wall coupling and reflected faces; best discrete worst-pulse RMSE is 0.02433, and the free local-wall model reaches 0.03687 on its worst held-out pulse.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived open and sealed boundary rows, or their axiswise mixtures, explain the calibrated tracer responses.\",\n    \"empirical_witness\": \"Worst-pulse RMSE is 0.12476 for open walls and 0.02433 for sealed walls, with a sealed-wall maximum point error of 0.08365. Independent leakage and face multipliers worsen worst held-out pulse RMSE to 0.03687.\",\n    \"causal_blanket_diagnosis\": \"The discrepancy persists with known source weights, and flexible local coefficients do not transfer reliably across pulses.\",\n    \"sublated_pivot\": \"Keep the documented interior stencil and test discrete cross-wall and reflected-face terms, while verifying calibration against the sweeps.\",\n    \"risk_kind\": \"boundary operator misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the eight fitted local-wall coefficients\",\n      \"rejected_reason\": \"They reduce pooled error but worsen worst held-out pulse error and vary substantially across folds.\"\n    }\n  ],\n  \"rationale\": \"Cross-wall coupling could change how different tracer mixtures propagate without adding unstable local fit parameters. If it does not lower pulse error, the sweep comparison will show whether sensor calibration needs to be addressed before expanding the wall model.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "333e7ac31f34d88b8e6ac4be0b0de3337ba4eff411a58aa3e37c1ac76979cdb6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32149.44,
+      "usage_known": true,
+      "prompt_tokens": 24140,
+      "cached_tokens": 9344,
+      "completion_tokens": 1183
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "23920c05b843493cbc5519fcac63794e",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:01.398945+00:00",
+  "ended_at_utc": "2026-11-28T02:50:36.866488+00:00",
+  "request_sha256": "ac028fbfa4eb51e3370c924caf2a45e0abd6ebe28fde2ef7cd91c3a988e76f0a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58960,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31638,
+    "cached_tokens": 9344,
+    "completion_tokens": 1547
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']\\nx, y, bank = c['ref_rosette'], c['raw_rosette'], b['bank_id']\\nclean = np.max(abs(y), axis=1) < 5\\naxis = np.count_nonzero(x, axis=1) == 1\\nedge = np.max(abs(x), axis=1) > 1.35\\nrows = np.arange(len(x)); all_banks = np.ones(len(bank), bool)\\nfolds = [('axis', axis, all_banks, None), ('edge', edge & ~axis, all_banks, None)]\\nfolds += [(f'mixed_{j}', np.isin(rows, v), all_banks, None) for j, v in enumerate(np.array_split(np.random.default_rng(2026).permutation(rows[~axis]), 5))]\\nfolds += [(f'bank_{j}', axis & (x[:, j] != 0), bank != j, j) for j in range(4)]\\nworst = peak = direct_peak = 0.\\nfor name, test, single_train, held_bank in folds:\\n    p = up._fit(dict(c, ref_rosette=x[~test], raw_rosette=y[~test], single_bank_sweeps={k: np.asarray(v)[single_train] for k,v in b.items()}))\\n    m = test & clean\\n    e = up._inverse(y[m], *p) - x[m]\\n    rms = np.sqrt(np.mean(e**2, axis=0)).max(); pk = np.max(abs(e))\\n    worst = max(worst, rms); peak = max(peak, pk)\\n    if held_bank is not None:\\n        u = b['ref_signal'][~single_train]; v = b['raw_readout'][~single_train]; ok = abs(v) < 5\\n        a,k = p[2][:2]\\n        direct = p[0][held_bank] + p[1][held_bank]*(u+a*np.sin(k*u))\\n        err = np.max(abs(direct[ok]-v[ok])); direct_peak = max(direct_peak, err)\\n        print(name, 'single-bank peak raw error', err)\\n    print(name, 'held-out channel RMS', rms, 'peak', pk)\\nprint('worst channel RMS',worst,'peak inverse error',peak,'single-bank peak raw error',direct_peak)\\nassert worst < 5e-5 and peak < 2e-4 and direct_peak < 1e-4\\nbias = np.array([-.06,.07,.06,-.05]); gain = np.array([.8,1.28,1.3,.79])\\nz = np.array([[-2.1,.3,1.8,-.8],[1.5,-1.6,0.,.05],[.3,.2,.1,-.2],[0.,0.,0.,0.]])\\no = z[:,[2,3,0,1]]\\nraw = (bias + gain*(z+.25*np.sin(2.5*z)-.21*o+.06*(1-np.cos(2*o)))).reshape(2,2,4)\\nraw_before = raw.copy(); obs_before = s['y_obs_raw'].copy()\\npulses = [dict(y_pulse_raw=raw,tag='tracer'),dict(y_pulse_raw=None,tag='missing')]\\nout = up.calibrate_upstream(dict(s, reference_tracer_pulses=pulses))\\npulse = out['reference_tracer_pulses']; calibrated = pulse[0]['y_pulse_raw']\\nerr = np.max(abs(calibrated.reshape(-1,4)-z)); print('pulse peak inverse error',err)\\nassert err < 2e-4 and calibrated.shape == raw.shape and pulse[0]['tag']=='tracer' and pulse[1]==pulses[1]\\nassert np.array_equal(raw, raw_before) and np.array_equal(s['y_obs_raw'], obs_before) and out['y_obs_raw'].shape==obs_before.shape\\nnorm=out['sensor_calibration_sweeps']\\nfor actual, expected in [(norm['raw_rosette'],x),(norm['single_bank_sweeps']['raw_readout'],b['ref_signal'])]:\\n    assert np.array_equal(actual,expected) and not np.shares_memory(actual,expected)\\nassert 'reference_tracer_pulses' not in up.calibrate_upstream(s)\\nassert up.calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nret=solve_batch(s); w=ret['weights']; cert=ret['kkt_certificate']\\ngap=abs(cert['primal_objective']-cert['dual_lower_bound']); budget=abs(w.sum()-s['total_budget'])\\nprint('KKT gap',gap,'budget error',budget)\\nassert gap<1e-9 and budget<1e-10 and np.min(w)>-1e-10 and np.max(w)<s['u_box']+1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared sine–cosine response → robust coupled inversion; the completed holdouts reached 4.09×10⁻⁵ worst channel inverse RMS before the test stopped.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Change the calibration model in response to the assertion\",\n      \"rejected_reason\": \"The assertion used a stale loop index and compared bank 0 readings against bank 3 coefficients.\"\n    }\n  ],\n  \"rationale\": \"Carry the held-out bank index into each fold and verify the unchanged artifacts in isolation. A correctly indexed failure would warrant inspecting that fold's fit; the pulse and KKT checks separately test shape preservation and downstream feasibility.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "fd833fe481e447af3c9250bdd70984b8f9592b5b9c623a680ea35e145a41ce07",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39603.52,
+      "usage_known": true,
+      "prompt_tokens": 31638,
+      "cached_tokens": 9344,
+      "completion_tokens": 1547
+    }
+  ]
+}

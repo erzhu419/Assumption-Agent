@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a6afcf904ea41708e897fcd93f782f0",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:30.400492+00:00",
+  "ended_at_utc": "2026-11-28T02:50:05.337164+00:00",
+  "request_sha256": "faec6801c9a1c0f3d74c5d2b72a798ec1798a6a88c35ba4d0356176f3f995add",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 54821,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29180,
+    "cached_tokens": 11904,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/bridge_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\n\\nalternatives = ('paired', 'shared ratios', 'rational correction', 'sum/difference correction')\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    c = item['dataset']['calibration_load_cells']\\n    t, r = c['true_channel_loads'], c['bridge_raw']\\n    sw = c['single_channel_sweeps']\\n    # The preceding public run found gross spikes; report the excluded magnitudes\\n    # using a screen independent of the predictions being compared here.\\n    clean = np.max(np.abs(r), axis=1) < 5\\n    clean_s = np.abs(sw['cmd_stress']) < 5\\n    print('max raw magnitude retained/rejected (rows and sweeps)', np.max(np.abs(r[clean])), np.max(np.abs(r[~clean]),axis=1), np.max(np.abs(sw['cmd_stress'][clean_s])), np.abs(sw['cmd_stress'][~clean_s]))\\n    features = lambda x: u._design(x, x[..., u._PARTNER])\\n    def forward(x, coef):\\n        return np.sum(features(x) * coef, axis=-1)\\n    def extra(x, kind):\\n        p = x[..., u._PARTNER]\\n        if kind == 'rational correction':\\n            return np.stack((x/(1+x*x), p*p/(1+p*p), x*p/(1+(x-p)**2)), axis=-1)\\n        return np.stack((np.sin(2.5*(x+p))-np.sin(2.5*x)-np.sin(2.5*p),\\n                         np.sin(2.5*(x-p))-np.sin(2.5*x)+np.sin(2.5*p), x*p),axis=-1)\\n    for kind in alternatives:\\n        err = np.full_like(t, np.nan)\\n        for f in range(5):\\n            train = np.arange(len(t))%5 != f\\n            s_train = np.arange(len(clean_s))%5 != f\\n            coef = u._fit_bridge(dict(c, true_channel_loads=t[train], bridge_raw=r[train], single_channel_sweeps={k:v[s_train] for k,v in sw.items()}))\\n            sel = ~train & clean\\n            mix = train & clean\\n            s = s_train & clean_s\\n            j = sw['lab_id'][s]\\n            v = sw['true_stress'][s]\\n            y = sw['cmd_stress'][s]\\n            sweep_x = np.eye(4)[j] * v[:,None]\\n            if kind == 'shared ratios':\\n                def unpack(p):\\n                    return np.c_[p[:4], p[4:8,None]*np.r_[1,p[8:]][None,:]]\\n                def shared_res(p):\\n                    b = unpack(p)\\n                    return np.r_[(forward(t[mix],b)-r[mix]).ravel(),forward(sweep_x,b)[np.arange(len(j)),j]-y]\\n                p = np.r_[coef[:,0],coef[:,1],np.median(coef[:,2:]/coef[:,1,None],axis=0)]\\n                coef = unpack(least_squares(shared_res,p).x)\\n            if kind in alternatives[2:]:\\n                a = np.concatenate((features(t),extra(t,kind)),axis=-1)\\n                b = np.concatenate((features(sweep_x),extra(sweep_x,kind)),axis=-1)\\n                w = np.array([np.linalg.lstsq(np.r_[a[mix,k],b[j==k,k]],np.r_[r[mix,k],y[j==k]],rcond=None)[0] for k in range(4)])\\n                guess = u._invert(r[sel],coef)\\n                vhat = [least_squares(lambda x: np.sum(np.concatenate((features(x),extra(x,kind)),axis=-1)*w,axis=-1)-z, x0,gtol=1e-13).x for z,x0 in zip(r[sel],guess)]\\n            else:\\n                vhat = u._invert(r[sel],coef)\\n            err[sel] = vhat-t[sel]\\n        inner = np.count_nonzero(t,axis=1)>1\\n        edge = np.max(np.abs(t),axis=1)>=1.45\\n        print(kind, 'OOF max/axis/mixed/edge/RMSE', *(float(np.nanmax(np.abs(z))) for z in (err,err[~inner],err[inner],err[edge])),float(np.sqrt(np.nanmean(err**2))))\\n    print('schema keys (no classification target or relay state)',list(item['dataset']),list(item['dataset']['train']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine bridge → H2 paired sinusoidal bridge; worst held-out absolute inverse error is 1.187e-3 on mixed-load rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply batch-centered classification or relay-mode checks\",\n      \"rejected_reason\": \"The task is continuous static load inversion, with no classification target, relay state, or drift operator to validate.\"\n    }\n  ],\n  \"rationale\": \"Check whether shared gain ratios or omitted rational and sum/difference terms improve the worst held-out inverse errors. Each alternative is fit without its test fold, and spike exclusion is independent of competing predictions. A material gain on mixed or outer loads would justify revising the artifact.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "f4b787b60df09a3b776edea249a2c42d0d0493f7370bba071f17406c17cfb351",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39005.48,
+      "usage_known": true,
+      "prompt_tokens": 29180,
+      "cached_tokens": 11904,
+      "completion_tokens": 1533
+    }
+  ]
+}

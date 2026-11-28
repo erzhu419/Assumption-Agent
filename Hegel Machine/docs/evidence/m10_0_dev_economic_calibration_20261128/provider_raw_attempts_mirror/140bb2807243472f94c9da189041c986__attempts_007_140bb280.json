@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "140bb2807243472f94c9da189041c986",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step09__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_09__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:00:10.065770+00:00",
+  "ended_at_utc": "2026-11-28T03:00:33.097638+00:00",
+  "request_sha256": "4e432b455e29dc5af0c27ae6906bcc2c4a4d3b83fe719cc7ad2cd49906711db5",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48345,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26706,
+    "cached_tokens": 12672,
+    "completion_tokens": 835
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, json, pickle\\nsys.path.insert(0,'/holdout_task')\\nimport numpy as np\\nimport _verified_upstream as up, downstream_solver as s\\nfrom batch_solver import solve_batch\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; d=up.calibrate_upstream(raw); tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; x,_=s._features(tr,te)\\ntau0,th0=s._material(tr,x,dt,t); print('full fit',tau0,th0)\\nfor key in ('lab_id','stratum'):\\n for value in np.unique(tr[key]):\\n  test=tr[key]==value; fit=~test\\n  tau,th=s._material({k:v[fit] for k,v in tr.items()},x[fit],dt,t)\\n  n=test.sum(); a=s._design(tau,tr['past_channel_raw'][test].sum(-1),tr['hold_channel_raw'][test].sum(-1),x[test],dt,t)\\n  err=a@th-np.r_[(tr['strain_curves_obs'][test]-tr['strain_0'][test,None]).ravel(),tr['instant_rate_obs'][test]]\\n  e,r=abs(err[:-n]).reshape(n,-1),abs(err[-n:]); print(key,value,n,'tau',tau.round(5),'strain MAE',e.mean().round(6),'strain p90',np.quantile(e,.9).round(6),'rate MAE',r.mean().round(6),'rate p90',np.quantile(r,.9).round(6),'late p90',np.quantile(e[:,-3:],.9).round(6))\\nresult=solve_batch(raw); xte=s._features(tr,te)[1]; v,r=s._chamber(te,xte,tau0,th0,dt,np.array([0.,1e-7])); assert np.allclose(v[:,0],te['strain_0']); print('max derivative error',max(abs((v[:,1]-v[:,0])/1e-7-r))); assert np.allclose((v[:,1]-v[:,0])/1e-7,r,rtol=1e-5,atol=1e-7); assert .05 < result['estimated_taus'][0] < result['estimated_taus'][1] < 25\\np='/tmp/hegel_continual_archive/archive_manifest.json'; a=json.load(open(p)); print('archive metadata',str(a)[:4400])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archive-wide chamber transfer → batch-07 retained-history model; public schema passed and pooled-reference strain changes by at most 1.01e-8, but chamber error remains unobservable.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Leave-lab and leave-stratum fits will reveal material estimates that depend on a single cohort; instability would warrant revisiting the robust fit. Independently check that the chamber strain derivative agrees with the returned rate, since the schema validator cannot detect that error. Review archive metadata for evidence that distinguishes the conflicting boundary laws.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "53d2ce31b8b3bb129524daaf193616b3615f741a4def8f83f404ebbfc416fc6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25020.44,
+      "usage_known": true,
+      "prompt_tokens": 26706,
+      "cached_tokens": 12672,
+      "completion_tokens": 835
+    }
+  ]
+}

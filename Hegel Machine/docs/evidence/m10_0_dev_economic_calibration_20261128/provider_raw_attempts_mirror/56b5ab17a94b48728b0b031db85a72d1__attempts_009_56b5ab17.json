@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "56b5ab17a94b48728b0b031db85a72d1",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:39.682689+00:00",
+  "ended_at_utc": "2026-11-28T02:37:15.199727+00:00",
+  "request_sha256": "44930cc97df5b027aa32698c034d5048e3ac5ab83e0f765151edcdb563b48f7f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 67665,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37367,
+    "cached_tokens": 5504,
+    "completion_tokens": 1429
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /holdout_task/batch_solver.py <<'PY'\\n\\\"\\\"\\\"Calibrate the current bridge, then solve in physical coordinates.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset))\\nPY\\ncd /holdout_task && export OPENBLAS_NUM_THREADS=1 && python3 validate_public_schema.py batch_solver.py && python3 -I - <<'PY'\\nimport sys, pickle, copy\\nsys.path.insert(0, '/holdout_task')\\nimport numpy as np\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as s\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; raw=item['dataset']; cal=calibrate_upstream(raw)\\na=solve_batch(raw)\\nwarp=copy.deepcopy(raw); gain=np.array([1.08,.94,1.04,.92]); offset=np.array([.045,-.03,.02,.035]); cells=warp['calibration_load_cells']; b=cells['bridge_raw']; valid=(abs(b)<=8.5).all(axis=1); b[valid]=b[valid]*gain+offset\\nassert np.array_equal((abs(b)<=8.5).all(axis=1),valid)\\nfor part in ('train','test'):\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  warp[part][k]=warp[part][k]*gain+offset\\nb=solve_batch(warp); diffs={k:float(np.max(abs(a[k]-b[k]))) for k in a}; print('bridge affine-change max output deltas', diffs); assert max(diffs.values())<1e-5\\nassert 0.05<a['estimated_taus'][0]<a['estimated_taus'][1]<25\\nprint('material',a['estimated_taus'],a['hereditary_weights'])\\ndg=calibrate_upstream(dict(raw,test=item['campaign_diagnostics']))['test']; train,test=cal['train'],cal['test']; n=len(train['lab_id']); x=s._features(train,test); dt,t=cal['past_dt'],cal['eval_times']; ta,th=a['estimated_taus'],a['hereditary_weights']; h0,h=s._loads(dg); obs=s._observations(dg); B=s._basis(ta,t); base=s._predict(ta,th,h0,h,np.zeros((len(h),4)),dt,t,np.zeros((2,3))); \\nxd=dg['coupon_features_raw'].copy(); labs=dg['lab_id']; strata=dg['stratum']\\nfor lab in np.unique(labs):\\n m=labs==lab; r=dg['ref_coupons'][m]; xd[m]=(xd[m]-np.median(r.mean(0)))/np.median(r.std(0))\\nfor fill_name,features in [('diagnostic mean',np.where(np.isfinite(xd),xd,np.nanmean(xd,0))),('diagnostic balanced',s._features(dg,dg)[:len(h)])]:\\n score=th[2]+features@th[3:]; base=s._predict(ta,th,h0,h,features,dt,t,np.zeros((2,3))); A=(np.c_[np.ones(len(h)),score][:,None,:,None]*B[None,:,None,:]).reshape(len(h),len(B),6); delta=obs-base\\n def metrics(e): return np.array([np.max(np.sqrt(np.mean(e[:,:-1]**2,axis=0))), np.sqrt(np.mean(e[:,-1]**2))])\\n for structure,cols in [('affine',np.arange(6)),('origin',np.arange(3,6))]:\\n  Z=A[:,:,cols]; coef=np.linalg.lstsq(Z.reshape(-1,len(cols)),delta.ravel(),rcond=None)[0]; mm=[]\\n  for labels in [labs,strata,np.arange(len(h)),np.isnan(xd).any(1)]:\\n   errs=[]\\n   for label in np.unique(labels):\\n    i=labels==label; c=np.linalg.lstsq(Z[~i].reshape(-1,len(cols)),delta[~i].ravel(),rcond=None)[0]; errs.append(metrics(delta[i]-Z[i]@c))\\n   mm.append(np.max(errs,axis=0))\\n  print(fill_name,structure,'coef',coef.round(5),'worst horizon/rate, split by lab, stratum, coupon, missingness',np.array(mm).round(5))\\nprint('fixed law diagnostic worst-horizon/rate',metrics(obs-s._predict(ta,th,h0,h,np.where(np.isfinite(xd),xd,np.nanmean(xd,0)),dt,t,s._CHAMBER)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 staged bridge constants → H2 fit the bridge from each dataset’s sweeps while retaining the diagnostic chamber law; prior worst held-out lab RMSE was 0.00841 at the final horizon and 0.01068 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Keep the staged calibration payload in solve_batch\",\"rejected_reason\":\"The staged wrapper bypasses the requested per-dataset fit; the verified transducer already implements fitting when called without the payload.\"}],\"rationale\":\"Verify the revised adapter on the public schema and an equivalent bridge with changed gains and offsets. Compare the chamber law across held-out labs, strata, coupons, and missingness groups to decide whether its intercepts and diagnostic imputation are supported.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "9d34020bc6a3c476599d72ee3c1944fb8e5a686d7735c8e448c640e53e5a8f62",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37542.23,
+      "usage_known": true,
+      "prompt_tokens": 37367,
+      "cached_tokens": 5504,
+      "completion_tokens": 1429
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69d79c7ebf1e41a281a3e7d9737af2cb",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:58.782749+00:00",
+  "ended_at_utc": "2026-11-28T02:49:33.648496+00:00",
+  "request_sha256": "e0e5491d292a2222554d23fb7e1c2e607703ba35d690f7ebfe26afc14d952954",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 61614,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37255,
+    "cached_tokens": 9344,
+    "completion_tokens": 1517
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/ros_separate.py <<'PY'\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nfrom ros_probe import x,y\\nfrom ros_joint_input import bank\\nbi=bank['bank_id']; z=bank['ref_signal']; sy=bank['raw_readout']; keep=np.max(np.abs(y),axis=1)<5; sb=np.abs(sy)<5; axis=np.count_nonzero(x,axis=1)==1; opp=[2,3,0,1]\\n\\ndef design(a,k,m):\\n t=[a,np.sin(k[0]*a)]\\n if 't' in m:t.append(np.tanh(k[1]*a))\\n if '3' in m:t.append(a**3)\\n if '5' in m:t.append(a**5)\\n if 'h' in m:t.append(np.sin(2*k[0]*a))\\n return np.stack(t,axis=-1)\\n\\ndef fit_local(tr,m):\\n ii,jj=np.where((x!=0)&(tr&axis)[:,None]); aa=np.r_[x[ii,jj],z[sb]]; yy=np.r_[y[ii,jj],sy[sb]]; bb=np.r_[jj,bi[sb]]\\n def get(p):\\n  g=np.r_[1,p[:3]]; D=np.c_[np.eye(4)[bb], g[bb,None]*design(aa,p[3:],m)]; b=np.linalg.lstsq(D,yy,rcond=None)[0]; return D@b-yy,b,g\\n p=min((least_squares(lambda p:get(p)[0],[.64,.992,.65,2.5,k],bounds=([.25,.25,.25,1.5,.04],[2,2,2,3.5,3]),max_nfev=150) for k in (.2,.55,1.3)),key=lambda q:q.cost).x\\n r,b,g=get(p); return p,b,g,np.sqrt(np.mean(r*r))\\n\\ndef cd(a,b,k,m):\\n t=[b]\\n if 'c' in m:t.append(1-np.cos(k[0]*b))\\n if 'r' in m:t.append(b*b/(1+k[0]*b*b))\\n if 's' in m:t.append(np.sin(k[1]*b))\\n if 'q' in m:t.append(b*b)\\n if '3' in m:t.append(b**3)\\n if 'u' in m:t.append(b/(1+k[1]*b*b))\\n if 'i' in m:t.extend([a*b,np.tanh(a)*b,a*(1-np.cos(2*b)),b*(1-np.cos(2*a))])\\n if 'v' in m:t.extend([np.sin(2*(a+b))-np.sin(2*a)-np.sin(2*b),np.cos(2*(a+b))-np.cos(2*a)-np.cos(2*b)+1])\\n return np.stack(t,axis=-1)\\nfolds=[np.array([],int),*np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5)]\\nfor lm in ('t','t3','t35','h'):\\n p,b,g,e=fit_local(keep,lm);print('local',lm,e,p.round(6),b.round(6),flush=True)\\nfor cm in ('c','r','qs','cs','rs','ru','r3','rsi','rsv'):\\n errs=[];result=[]\\n for ids in folds:\\n  tr=keep.copy();tr[ids]=False; va=ids[keep[ids]] if ids.size else np.flatnonzero(keep); p,b,g,_=fit_local(tr,'t3'); d=b[:4]+g*(design(x,p[3:],'t3')@b[4:]); R=(y-d)/g\\n  def cp(k):\\n   D=cd(x,x[:,opp],k,cm); B=np.linalg.lstsq(D[tr].reshape(-1,D.shape[-1]),R[tr].ravel(),rcond=None)[0];return D@B,B\\n  rng=([.15,.1],[4,6]); ini=[2 if 'c' in cm else .5,2.]\\n  opt=least_squares(lambda k:(cp(k)[0]-R)[tr].ravel(),ini,bounds=rng,max_nfev=120); rr,bb=cp(opt.x);errs.append(np.sqrt(np.mean(((rr[va]-R[va])*g)**2)));result.append((opt.x,bb))\\n print(cm,np.round(errs,7),[np.round(a,6) for a in result[0]],flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/ros_separate.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 shared diagonal sine correction → H2 separate, gain-scaled opposite-bank transfer; the diagonal fit reaches 1.0e-5 axis RMSE, but the best prior worst held-out forward RMSE is 0.01537.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Estimate opposite-bank coupling only from isolated sweeps\",\"rejected_reason\":\"Three bank-3 axis rows have gross EMI, leaving only one clean axis point for that direction. Mixed sweeps are needed to identify and validate the coupling.\"}],\"rationale\":\"The separated diagonal fit is near the sweep noise floor, so the mixed-sweep error now tests the coupling law. Refit both parts within each amplitude fold to determine whether a shared opposite-bank transfer suffices or an interaction is needed.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "d933718b9f337cb99f78d3e9ef40cbd203015d40b9e12e26d96e27a440a05741",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38876.71,
+      "usage_known": true,
+      "prompt_tokens": 37255,
+      "cached_tokens": 9344,
+      "completion_tokens": 1517
+    }
+  ]
+}

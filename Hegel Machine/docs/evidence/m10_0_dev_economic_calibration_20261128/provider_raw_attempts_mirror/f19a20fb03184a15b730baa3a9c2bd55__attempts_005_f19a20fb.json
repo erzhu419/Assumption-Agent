@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f19a20fb03184a15b730baa3a9c2bd55",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:57.136796+00:00",
+  "ended_at_utc": "2026-11-28T02:26:38.287418+00:00",
+  "request_sha256": "b05d5dc4f715a9031df9197d0914ec383d47aa05a20dd0f6c226577cf03ea28e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 42120,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25530,
+    "cached_tokens": 9344,
+    "completion_tokens": 1700
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/explore_chamber.py <<'PY'\\nimport pickle, numpy as np, sys\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_alpha_m100_02_s00_solver as m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; q=p['campaign_diagnostics']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; cal=m._bridge(d['calibration_load_cells']); out=m.solve_batch(d); tau,th=out['estimated_taus'],out['hereditary_weights']; lab=q['lab_id']; st=q['stratum']; n=len(lab)\\nprint('tau',tau,'theta',th,'dt',dt,'t',t)\\npanel={k:np.concatenate((tr[k],te[k]),axis=0) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}\\nx=m._features(panel,q)[1]; print('diagnostic raw shape and missing',x.shape,np.isnan(q['coupon_features_raw']).sum()); print('ref pooled lab params',[(int(l),np.median(panel['ref_coupons'][panel['lab_id']==l].mean(0)),np.median(panel['ref_coupons'][panel['lab_id']==l].std(0))) for l in np.unique(lab)])\\npast,h,f=m._prepare(q,x,cal); print('past/hold range',past.min(),past.max(),h.min(),h.max())\\ny=np.column_stack((q['strain_curves_obs']-q['strain_0'][:,None],q['instant_rate_obs'])); a,b=m._design(np.log(tau),(past,h,f),dt,t); base=np.column_stack((a@th,b@th)); print('baseline median/RMSE/max abs',np.median(abs(y-base),axis=0)[[0,-2,-1]],np.sqrt(np.mean((y-base)**2,axis=0))[[0,-2,-1]],np.max(abs(y-base),axis=0)[[0,-2,-1]])\\ndef basis(u):\\n v=np.exp(u); return np.vstack((np.c_[-np.expm1(-t[:,None]/v),t],np.r_[1/v,1]))\\ndef project(u):\\n B=basis(u); return np.linalg.lstsq(B,y.T,rcond=None)[0].T\\nu=np.log(tau); B=basis(u); C=project(u); opt=least_squares(lambda uu:(project(uu)@basis(uu).T-y).ravel(),u,loss='soft_l1',f_scale=.003); print('temporal base/opt RMSE, opt tau:',np.sqrt(np.mean((C@B.T-y)**2)),np.sqrt(np.mean((project(opt.x)@basis(opt.x).T-y)**2)),np.exp(opt.x)); print('noise all slices',np.round(np.sqrt(np.mean((C@B.T-y)**2,axis=0)),5))\\nsw=d['calibration_load_cells']['single_channel_sweeps']; pars=np.array([np.polyfit(sw['cmd_stress'][sw['lab_id']==l],sw['true_stress'][sw['lab_id']==l],1) for l in range(4)]); g,offset=pars[lab].T; tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0]; K=np.exp(-tail[:,None]/tau)*-np.expm1(-dt[:,None]/tau); z=past@K; Z=(g[:,None]*past+offset[:,None])@K; H=g*h+offset; intrinsic=f@th[2:]; A=np.c_[(h[:,None]-z)*th[:2],intrinsic]; R=C-A\\nprint('component true/explicit sweep and correction, by coupon:'); print(np.round(np.c_[lab,st,h,intrinsic,C,R,(H[:,None]-Z)*th[:2]],4));\\nfor name,D in [('base',np.c_[f,h,z]),('true sweep',np.c_[f,H,Z]),('all stress',np.c_[f,h,z,H,Z]),('all past',np.c_[f,h,past]),('lab only',np.c_[f,h,z,np.eye(4)[lab,1:]]),('stratum',np.c_[f,h,z,np.eye(3)[st,1:]]),('lab and stratum',np.c_[f,h,z,np.eye(4)[lab,1:],np.eye(3)[st,1:]]),('stress cal vars',np.c_[f,h,z,h*g,z*g[:,None],offset]),('cmd)',np.c_[f,(h-offset)/g,((past-offset[:,None])/g[:,None])@K])]:\\n pred=np.empty_like(R); predl=np.empty_like(R); P=np.linalg.lstsq(D,R,rcond=None)[0];\\n for i in range(n):\\n  sel=np.arange(n)!=i; pred[i]=D[i]@np.linalg.lstsq(D[sel],R[sel],rcond=None)[0]\\n for l in np.unique(lab):\\n  sel=lab!=l; predl[~sel]=D[~sel]@np.linalg.lstsq(D[sel],R[sel],rcond=None)[0]\\n err=lambda pred:np.round(np.sqrt(np.mean(((pred-R)@B.T)**2,axis=0))[[0,-2,-1]],4)\\n print(name,'fit/loco/lolo',err(D@P),err(pred),err(predl),'coefs',np.round(P,3).tolist() if name in ('base','stratum','true sweep') else '')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/explore_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared material spectrum -> H2 chamber-specific branch amplitudes and drift; the public diagnostics have a maximum residual of 0.00702 after allowing those three coefficients to vary by coupon.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Estimate a separate chamber spectrum\",\n      \"rejected_reason\": \"The shared basis already fits the diagnostic time dependence closely; freeing the chamber times is useful first as a test for systematic error.\"\n    },\n    {\n      \"option\": \"Use lab-specific correction coefficients\",\n      \"rejected_reason\": \"Lab labels may proxy for the measured command-to-stress map; leaving laboratories out tests which relation transfers.\"\n    }\n  ],\n  \"rationale\": \"Separate temporal-model error from errors in the branch amplitudes and drift. Compare physical- and command-stress coordinates on held-out coupons and labs before selecting a deployment correction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "fb9515ae6094f19ca45f4d0612ea7280bd5d9eb274686793960945feb968ef25",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43132.87,
+      "usage_known": true,
+      "prompt_tokens": 25530,
+      "cached_tokens": 9344,
+      "completion_tokens": 1700
+    }
+  ]
+}

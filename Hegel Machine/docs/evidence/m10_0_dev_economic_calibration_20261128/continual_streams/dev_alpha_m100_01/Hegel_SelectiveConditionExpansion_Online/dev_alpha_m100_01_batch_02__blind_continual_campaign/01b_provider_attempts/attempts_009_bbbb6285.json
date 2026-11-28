@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bbbb6285e3ee428280d9e72dedfdbd41",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:39:30.178388+00:00",
+  "ended_at_utc": "2026-11-28T02:40:04.310624+00:00",
+  "request_sha256": "798c6194c9fc703f46ba792be4259d68c673bf6245ed7fc70b0a96db5996b37f",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 54145,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29959,
+    "cached_tokens": 9344,
+    "completion_tokens": 1332
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I -B - <<'PY'\\nimport sys, pickle, json\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _features, _fit, _loads, _design, _chamber, _CHAMBER_REDISTRIBUTION\\nfrom _verified_upstream import calibrate_upstream\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd=p['dataset']; result=solve_batch(d)\\nfor key,shape in [('estimated_taus',(2,)),('hereditary_weights',(7,)),('predicted_strain',(len(d['test']['lab_id']),len(d['eval_times']))),('initial_rate_pred',(len(d['test']['lab_id']),))]:\\n    assert result[key].shape == shape and np.isfinite(result[key]).all(), key\\na,b=result['estimated_taus']; assert .05 < a < b < 25\\ncal=calibrate_upstream(d); tr,te=cal['train'],cal['test']; dt,t=cal['past_dt'],cal['eval_times']; n=len(tr['lab_id']); x=_features(tr,te)[:n]\\nh,H=_loads(tr); labs=tr['lab_id']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']\\nstrain90=[]; rate90=[]\\nfor lab in np.unique(labs):\\n    test=labs==lab; m=~test\\n    tau,theta=_fit(h[m],H[m],x[m],dt,t,y[m],r[m]); C,R=_design(tau,h[test],H[test],x[test],dt,t)\\n    strain90.append(np.quantile(abs(C@theta-y[test]),.9)); rate90.append(np.quantile(abs(R@theta-r[test]),.9))\\nprint('benchtop worst held-out lab p90 strain/rate abs error',max(strain90),max(rate90)); assert max(strain90)<.05 and max(rate90)<.04\\npay=json.load(open('/holdout_task/_upstream_param_payload.json')); q=calibrate_upstream({**d,'test':p['campaign_diagnostics']},pay)['test']; h,H=_loads(q); x=_features(q,q)[:len(H)]; labs=q['lab_id']; y=q['strain_curves_obs']-q['strain_0'][:,None]; r=q['instant_rate_obs']; tau=result['estimated_taus']; theta=result['hereditary_weights']\\nC,R=_design(tau,h,H,x,dt,t); base=C@theta; pred,rate=_chamber(tau,theta,h,H,x,dt,t)\\nD=(theta[2]+x@theta[3:])[:,None,None]*(tau*-np.expm1(-t[:,None]/tau)-t[:,None])[None,:,:]\\nassert np.allclose(pred,base+D@_CHAMBER_REDISTRIBUTION) and np.array_equal(rate,R@theta)\\ne=np.empty_like(y)\\nfor lab in np.unique(labs):\\n    test=labs==lab; m=~test\\n    c=np.linalg.lstsq(D[m].reshape(-1,2),(y-base)[m].ravel(),rcond=None)[0]\\n    e[test]=base[test]+D[test]@c-y[test]\\nrmse=lambda z: float(np.sqrt(np.mean(z*z)))\\nworst=max(rmse(e[labs==lab]) for lab in np.unique(labs)); rateworst=max(rmse((rate-r)[labs==lab]) for lab in np.unique(labs)); missing=np.isnan(q['coupon_features_raw']).any(axis=1)\\nprint('diagnostic LOLO worst lab, final-time and missing-feature strain RMSE:',worst,rmse(e[:,-1]),rmse(e[missing])); print('diagnostic worst lab and missing-feature initial-rate RMSE:',rateworst,rmse((rate-r)[missing])); print('no correction vs final artifact final-time median absolute strain error:',np.median(abs((base-y)[:,-1])),np.median(abs((pred-y)[:,-1])))\\nassert worst<.02 and rmse(e[missing])<.03 and rateworst<.02 and np.median(abs((pred-y)[:,-1]))<.03\\nPY\\npython3 -B /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 time-linear drift → H2 slope-preserving two-mode redistribution; diagnostic leave-one-lab-out worst strain RMSE is 0.01272 and missing-feature initial-rate RMSE is 0.02102.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t06\"]},\"considered_alternatives\":[{\"option\":\"Refit the chamber on complete-feature coupons only\",\"rejected_reason\":\"It slightly improves the missing-feature slice but worsens the held-out lab and final-time strain metrics, and it cannot improve initial-rate predictions.\"}],\"rationale\":\"Verify the actual deliverables in an isolated Python process, independently checking benchtop parameter transfer, chamber strain, and initial rate. A failed slice would identify which component to revisit; the official validator separately checks output schema and pooled-reference symmetry.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "c30d1752fa293200d008f1ca9abd94ced302984279b7b9c9449d9ed4a52829cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36127.42,
+      "usage_known": true,
+      "prompt_tokens": 29959,
+      "cached_tokens": 9344,
+      "completion_tokens": 1332
+    }
+  ]
+}

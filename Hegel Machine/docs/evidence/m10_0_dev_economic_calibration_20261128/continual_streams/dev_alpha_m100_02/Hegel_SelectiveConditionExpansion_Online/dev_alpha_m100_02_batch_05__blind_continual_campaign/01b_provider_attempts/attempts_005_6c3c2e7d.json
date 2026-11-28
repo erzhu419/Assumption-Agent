@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c3c2e7dd6894d04a90a5fb2d78f49ff",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:56.411530+00:00",
+  "ended_at_utc": "2026-11-28T02:47:31.303241+00:00",
+  "request_sha256": "f6e557d820994a5c58f4b04c3bf6d96ec022716de914033b89e1d11f420df09b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45805,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28021,
+    "cached_tokens": 9344,
+    "completion_tokens": 1526
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && grep -inE 'bridge|sweep|tanh|arctan|channel_raw' /tmp/hegel_continual_archive/*solver.py | head -35; grep -inE 'bridge|sweep|transducer' /tmp/hegel_continual_archive/archive_apparatus_log.json | cut -c1-220 | tail -18; cat > /tmp/bridge_sweeps.py <<'PY'\\nfrom bridge_profile import x,y,sweep\\nfrom scipy.optimize import least_squares\\nimport numpy as np\\n\\n# The sweep readings coincide with the corresponding bridge diagonal on axis rows.\\ndef data(j):\\n m=sweep['lab_id']==j; a=(x[:,j]!=0)&((x!=0).sum(1)==1)&(np.linalg.norm(y,axis=1)<8)\\n t=np.r_[sweep['true_stress'][m],x[a,j]]; z=np.r_[sweep['cmd_stress'][m],y[a,j]]\\n return t,z\\n\\ndef basis(t,b,kind):\\n u=b[0]*t\\n T=np.tanh(u); A=np.arctan(u); R=u/np.sqrt(1+u*u)\\n terms={'tanh':[T], 'atan':[A], 'root':[R], 'tanh_lin':[T,t], 'atan_lin':[A,t], 'root_lin':[R,t], 'tanh_cubic':[T,t**3], 'tanh_lin3':[T,t,t**3], 'atan_lin3':[A,t,t**3], 'root_lin3':[R,t,t**3], 'tanh_sin':[T,np.sin(b[-1]*t)], 'tanh_rational':[T,t/(1+b[-1]*t*t)], 'tanh_quintic':[T,t,t**3,t**5], 'tanh2':[T,np.tanh(b[-1]*t)], 'tanh_even':[T,t,t**2,t**3]}\\n return np.column_stack([np.ones(len(t)),*terms[kind]])\\n\\ndef fit(t,z,kind):\\n keep=np.abs(z)<8; t,z=t[keep],z[keep]; q=[1.5,2.] if kind in ('tanh_sin','tanh_rational','tanh2') else [1.5]\\n def solve(q):\\n  B=basis(t,q,kind); return np.linalg.lstsq(B,z,rcond=None)[0]\\n res=least_squares(lambda q:basis(t,q,kind)@solve(q)-z,q,bounds=(.05,8),max_nfev=180)\\n return res.x,solve(res.x)\\n\\nfor k in ('tanh','atan','root','tanh_lin','atan_lin','root_lin','tanh_cubic','tanh_lin3','atan_lin3','root_lin3','tanh_sin','tanh_rational','tanh_quintic','tanh2','tanh_even'):\\n stat=[]; pars=[]\\n for j in range(4):\\n  t,z=data(j); valid=np.abs(z)<8; t,z=t[valid],z[valid]; p,c=fit(t,z,k); e=basis(t,p,k)@c-z; pars.append(np.round(np.r_[p,c],5).tolist())\\n  # Hold out groups with essentially equal absolute load, including duplicated sweep endpoints.\\n  groups=np.array_split(np.unique(np.round(abs(t),6)),4); err=np.zeros(len(t))\\n  for g in groups:\\n   m=np.isin(np.round(abs(t),6),g); p,c=fit(t[~m],z[~m],k);err[m]=basis(t[m],p,k)@c-z[m]\\n  stat.append([np.sqrt(np.mean(e*e)),np.sqrt(np.mean(err*err)),max(abs(err))]);\\n print(k,np.round(stat,5).tolist(),pars)\\nprint('axis raw by channel:')\\nfor j in range(4):\\n m=(x[:,j]!=0)&((x!=0).sum(1)==1); print(j,np.c_[x[m,j],y[m]].round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_sweeps.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: separate the diagonal sweep response from mixed-load coupling; simple saturating links reduced the best worst radial-fold median forward error from 0.264 to 0.0701.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Finalize the best single saturating link\",\"rejected_reason\":\"Pure-axis measurements offer an independent check of diagonal curvature and can distinguish it from coupling error before inversion.\"}],\"rationale\":\"The sweeps and bridge axis rows agree at shared loads. Holding out load magnitudes tests whether any added diagonal term improves interpolation and endpoint prediction rather than just fitting more coefficients.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "756bc383048917fe1ede3a342ce0943d9f75ffb88aafb3da4e9ba4558c6be9c5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38912.01,
+      "usage_known": true,
+      "prompt_tokens": 28021,
+      "cached_tokens": 9344,
+      "completion_tokens": 1526
+    }
+  ]
+}

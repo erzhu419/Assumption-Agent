@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8de7e60a33a84f6795521768087171ca",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:26:39.996794+00:00",
+  "ended_at_utc": "2026-11-28T02:27:17.065981+00:00",
+  "request_sha256": "8dc92e1f988923ee07f1b623b21cdf63ccb4c974feceb455f60c52c9385b524e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43379,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26984,
+    "cached_tokens": 9344,
+    "completion_tokens": 1521
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'\\nspec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; nx,ny=s['nx'],s['ny']; N=nx*ny\\n# Assemble a dense reference row by row in physical grid coordinates.\\nL=np.diag(s['V_reaction_2d'].ravel(order='F'))\\nfor iy in range(ny):\\n for ix in range(nx):\\n  row=ix+nx*iy\\n  for ax,j,n,stride in [('x',ix,nx,1),('y',iy,ny,nx)]:\\n   h=s['L'+ax]/(n-1); k=s['kappa_'+ax]; v=s['vel_'+ax][j]\\n   if j==0 or j==n-1:\\n    edges=[(1 if j==0 else -1,k[j]/h**2)]\\n   else:\\n    edges=[(-1,(k[j]+k[j-1])/(2*h**2)+max(v,0)/h),(1,(k[j]+k[j+1])/(2*h**2)+max(-v,0)/h)]\\n   for step,value in edges:\\n    L[row,row]+=value; L[row,row+step*stride]-=value\\nrhs=np.column_stack([f.ravel(order='F') for f in s['source_modes']]); ij=s['sensor_ij']; at=ij[:,0]+nx*ij[:,1]\\nU=[np.linalg.solve(L+mu*np.eye(N),rhs) for mu in s['mu_shifts']]; S=np.vstack([u[at] for u in U]); Sc,Uc=m._forward(s)\\nassert np.allclose(S,Sc,rtol=1e-12,atol=1e-12)\\npulse_err=[]\\nfor d in i['campaign_diagnostics']:\\n y=m._calibrate(dict(s,y_obs_raw=d['y_pulse_raw']))\\n pulse_err.append(Sc@d['w_pulse']-y)\\ne=np.asarray(pulse_err).reshape(len(pulse_err),len(U),len(at)); worst=float(np.max(np.sqrt(np.mean(e**2,axis=2)))); assert worst<3e-6\\ncal=s['sensor_calibration_sweeps']; x=cal['ref_rosette']; raw=cal['raw_rosette']; fit=np.array([np.polyfit(x[:,j],raw[:,j],1) for j in range(4)])\\ny=((s['y_obs_raw'].reshape(-1,4)-fit[:,1])/fit[:,0]).ravel(); Z=s['Z_nuisance']; P=np.eye(len(y))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA=P@S; b=P@y; out=m.solve_batch(s); w=out['weights']; c=out['kkt_certificate']; cap=s['u_box']; budget=s['total_budget']; ridge=s['source_ridge']; nu=c['nu_sum']; lo=np.array(c['lam_lower']); hi=np.array(c['lam_upper']); r=A@w-b; g=A.T@r+ridge*w; obj=0.5*(r@r+ridge*(w@w)); dual=obj-g@w+nu*budget+cap*np.minimum(g-nu,0).sum()\\nassert np.array_equal(w,c['weights']) and np.all(w>=0) and np.all(w<=cap) and abs(w.sum()-budget)<1e-12\\nassert np.all(lo>=0) and np.all(hi>=0) and max(abs(g-nu-lo+hi))<1e-12\\nassert abs(obj-c['primal_objective'])<1e-12 and abs(dual-c['dual_lower_bound'])<1e-12 and abs(obj-dual)<1e-10\\nfield=(U[-1]@w).reshape((nx,ny),order='F'); assert np.allclose(field,out['terminal_field'],atol=1e-12,rtol=1e-12)\\n# A separable quadratic has an analytic clipped-threshold optimum, including all-active vertices.\\nA=np.eye(8); b=np.arange(8,dtype=float)*0.8; ridge=0.04; gaps=[]\\nfor budget in (0.,0.03,0.42,0.84,1.4,2.1,3.33,8*cap):\\n w,nu=m._qp(A,b,ridge,cap,budget); g=(1+ridge)*w-b; d=g-nu\\n expected=np.clip((budget-cap*np.arange(7,-1,-1)),0,cap)\\n assert np.allclose(w,expected,rtol=0,atol=1e-10) and abs(w.sum()-budget)<1e-12\\n gaps.append(np.maximum(d,0)@w+np.maximum(-d,0)@(cap-w))\\nassert max(gaps)<1e-10\\nprint(f'worst pulse-by-shift RMS={worst:.3g}; public KKT gap={obj-dual:.3g}; max analytic-slice gap={max(gaps):.3g}; terminal-field max error={np.max(np.abs(field-out[\\\"terminal_field\\\"])):.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: Reflecting walls reduce worst-shift tracer RMSE from 0.1674 to 9.90e-7; now verify the saved solver against an independent reference.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema already passes. An independent dense reference can expose wall or indexing errors, and analytic box-simplex cases can expose multiplier or complementarity errors at active bounds. A failure will identify whether to fix the stencil, field reconstruction, or optimizer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "915bbda66848ef48afe78c3533683db86e0d94795448e775168a9f55af4e9fb9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39007.74,
+      "usage_known": true,
+      "prompt_tokens": 26984,
+      "cached_tokens": 9344,
+      "completion_tokens": 1521
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2b70db9601f946f38afca70c33a6905b",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:03:00.140573+00:00",
+  "ended_at_utc": "2026-11-28T03:03:22.945681+00:00",
+  "request_sha256": "7f1d3731c027f7c978416c24241f518b30eeb5bc52d38ee31579ee7657f849bb",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49678,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26056,
+    "cached_tokens": 9344,
+    "completion_tokens": 846
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e; cd /holdout_task; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, json, numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom _verified_upstream import calibrate_upstream\\nimport downstream_solver as m\\nraw=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; d=calibrate_upstream(raw); train,test=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; n=len(train['lab_id']); x=m._features(train,test); past,hold=m._loads(train); obs=m._observations(train)\\nbase=solve_batch(raw); direct=m.solve_downstream(d)\\nfor k in base: np.testing.assert_allclose(base[k],direct[k],rtol=0,atol=0)\\nfor lab in np.unique(train['lab_id']):\\n    keep=train['lab_id']!=lab; val=~keep\\n    tau,theta=m._fit(past[keep],hold[keep],x[:n][keep],dt,t,obs[keep])\\n    a=np.abs(m._predict(tau,theta,past[val],hold[val],x[:n][val],dt,t,'benchtop')-obs[val]); print('held-out lab',lab,'worst horizon median curve AE',round(np.nanmax(np.nanmedian(a[:,:-1],axis=0)),6),'median rate AE',round(np.nanmedian(a[:,-1]),6),'curve/rate P90 AE',np.round([np.nanquantile(a[:,:-1],.9),np.nanquantile(a[:,-1],.9)],6),'taus',np.round(tau,5))\\ntau,theta=base['estimated_taus'],base['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\nargs=(tau,theta,*m._loads(test),x[n:],dt,t); ben=m._predict(*args,'benchtop'); sp=m._predict(*args,'slope_preserving'); reset=m._predict(*args,'reset'); assert np.isfinite(reset).all(); np.testing.assert_allclose(sp[:,-1],ben[:,-1],rtol=0,atol=1e-12)\\nfor name,y in [('slope_preserving',sp),('reset',reset)]: print(name,'maximum shift by horizon and rate',np.round(np.max(np.abs(y-ben),axis=0),4))\\nrecords=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor r in records[:3]+records[-2:]: print('facility after',r['completed_campaign_short_name'],'channels 1/6',np.round(np.asarray(r['facility_telemetry_trace'])[:,[1,6]].mean(0),3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: robust calibrated benchtop fit → H2: facility telemetry selects the archived slope-preserving law; public reference-exchange changes were at most 9.09e-8 for strain and 2.8e-9 for rate, and held-out lab errors are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Correct the verification script to use the staged upstream function’s one-argument signature; the wrapper already handles it correctly. Held-out lab errors will reveal material-fit instability, while exact wrapper agreement and rate conservation will detect composition or chamber-law errors.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "5e63940adf96df76702f134f25bfecc6541b0edbe1cbc305e87581a369c2d3a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24888.03,
+      "usage_known": true,
+      "prompt_tokens": 26056,
+      "cached_tokens": 9344,
+      "completion_tokens": 846
+    }
+  ]
+}

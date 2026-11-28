@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "142a699525fa4c4399bfacc717f75be4",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:34:09.836554+00:00",
+  "ended_at_utc": "2026-11-28T02:34:35.180820+00:00",
+  "request_sha256": "808a768feb82913597a97052c210c0d84ccea4c8dc4c154a6ed09001ebc040da",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 71881,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35513,
+    "cached_tokens": 9344,
+    "completion_tokens": 883
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncd /holdout_task\\npython3 -I validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; n=len(s['source_modes']); cap=s['u_box']; z=s['Z_nuisance']; y=m._calibrate(s); a=m._operator(s); S,U=m._responses(s,a)\\nP=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T); X=S-z@(P@S); b=y-z@(P@y); ridge=s['source_ridge']; max_gap=0\\nfor B in (s['total_budget'], .01*cap, 2*cap, (n-.01)*cap):\\n d=m.solve_batch(dict(s,total_budget=B)); w=np.asarray(d['weights']); k=d['kkt_certificate']; g=X.T@(X@w-b)+ridge*w; J=.5*np.sum((X@w-b)**2)+.5*ridge*(w@w); nu=k['nu_sum']; lo=np.asarray(k['lam_lower']); hi=np.asarray(k['lam_upper']); dual=J-g@w+nu*B+cap*np.minimum(0,g-nu).sum(); gap=J-dual; max_gap=max(max_gap,abs(gap))\\n assert abs(sum(w)-B)<1e-10 and np.min(w)>-1e-10 and np.max(w)<cap+1e-10\\n assert np.allclose(k['weights'],w,rtol=0,atol=1e-12) and np.min(lo)>=0 and np.min(hi)>=0\\n assert np.max(abs(g-nu-lo+hi))<1e-10 and np.max(abs(lo*w)+abs(hi*(cap-w)))<1e-9\\n assert abs(k['primal_objective']-J)<1e-10 and abs(k['dual_lower_bound']-dual)<1e-10 and abs(gap)<1e-9\\n f=np.asarray(d['terminal_field']).ravel(order='F'); q=np.tensordot(w,s['source_modes'],axes=1).ravel(order='F'); field_res=np.max(abs(a@f+s['mu_shifts'][-1]*f-q)); assert field_res<1e-10\\n print(f'budget={B:.5f} lower={sum(w<1e-10)} upper={sum(w>cap-1e-10)} gap={gap:.3e} terminal_equation_residual={field_res:.3e}')\\nprint(f'worst internal duality gap={max_gap:.3e}')\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived sealed walls → documented open Robin walls: worst held-out RMSE is 0.01056, and the host measured relative errors of 1.62e-6 for the field and 8.25e-6 for weights.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The host already verified the public field and weights. Run the exact artifact in isolated Python and exercise near-empty and near-full budgets to catch multiplier or complementarity errors that the all-interior public solution would miss.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "70741e5b180dcb0015d7f7557d8adb0e3f0d6864f0be2b66581d729112df7746",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27385.14,
+      "usage_known": true,
+      "prompt_tokens": 35513,
+      "cached_tokens": 9344,
+      "completion_tokens": 883
+    }
+  ]
+}

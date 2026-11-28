@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6efdd5f964e454b945e7f3fc84fefe1",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:34:18.707201+00:00",
+  "ended_at_utc": "2026-11-28T02:34:45.635475+00:00",
+  "request_sha256": "3ce8512e51a15ba35646237530ffe28df580e0fcae4b137127adfbd93bce2956",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54839,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29821,
+    "cached_tokens": 9344,
+    "completion_tokens": 1066
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nrms = lambda x: np.sqrt(np.mean(x*x))\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']; cal = s['sensor_calibration_sweeps']; bank = cal['single_bank_sweeps']; ref, raw = cal['ref_rosette'], cal['raw_rosette']\\n    offsets, gains = [], []\\n    for source in ('rosette', 'single-bank'):\\n        pars = []\\n        for j in range(4):\\n            mask = bank['bank_id'] == j\\n            xx, yy = (ref[:,j], raw[:,j]) if source == 'rosette' else (bank['ref_signal'][mask], bank['raw_readout'][mask])\\n            pars.append(np.linalg.lstsq(np.c_[xx, np.ones_like(xx)], yy, rcond=None)[0])\\n        gain, offset = np.array(pars).T; gains.append(gain); offsets.append(offset)\\n        if source == 'single-bank':\\n            held = [rms(raw[:,j] - (ref[:,j]*gain[j] + offset[j])) for j in range(4)]\\n        else:\\n            jj = bank['bank_id']; pred = gain[jj]*bank['ref_signal'] + offset[jj]\\n            held = [rms((bank['raw_readout']-pred)[jj==j]) for j in range(4)]\\n        print(source, 'worst cross-sweep channel RMS', max(held))\\n    S, _ = m._forward(s)\\n    Z = s['Z_nuisance']; basis = np.linalg.qr(Z, mode='reduced')[0]\\n    gain, offset = m._calibration(s)\\n    for label, a, b in [('pooled',gain,offset), ('rosette',gains[0],offsets[0]), ('single-bank',gains[1],offsets[1])]:\\n        per_slice, per_pulse, per_projected = [], [], []\\n        for p in item.get('campaign_diagnostics') or []:\\n            e = ((p['y_pulse_raw'].reshape(-1,4)-b)/a).ravel() - S@p['w_pulse']\\n            per_pulse.append(rms(e)); per_projected.append(rms(e - basis@(basis.T@e)))\\n            for block in np.split(e, len(s['mu_shifts'])):\\n                per_slice.extend(rms(col) for col in block.reshape(-1,4).T)\\n        print(label, 'worst pulse RMS', max(per_pulse, default=0.), 'worst projected pulse RMS', max(per_projected, default=0.), 'worst pulse × shift × channel RMS', max(per_slice, default=0.))\\n        if label == 'pooled':\\n            assert max(per_slice, default=0.) < 5e-6\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 local walls → H2 conservative periodic transport; worst public tracer RMSE is 8.79e-7, and the independent probe reports relative field error of 2.03e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, HJB drift, or cohort classification\",\n      \"rejected_reason\": \"This study is a steady transport inverse problem with no relay states, stochastic drift, or class labels. The relevant confounding test is whether measured nuisance explains tracer residuals.\"\n    }\n  ],\n  \"rationale\": \"Fit calibration on each sweep family separately and test on the other. A cross-sweep mismatch or a large residual isolated to one tracer, shift, or channel would warrant revisiting calibration; comparing residuals before and after nuisance projection distinguishes structured nuisance from a forward-model error.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "68125eb9a3386487c6ff88cb07bcb99d9f9208bc42187598a11c51e605ef194e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28971.33,
+      "usage_known": true,
+      "prompt_tokens": 29821,
+      "cached_tokens": 9344,
+      "completion_tokens": 1066
+    }
+  ]
+}

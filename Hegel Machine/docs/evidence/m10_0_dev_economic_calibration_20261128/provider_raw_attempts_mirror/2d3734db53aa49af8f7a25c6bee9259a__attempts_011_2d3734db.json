@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2d3734db53aa49af8f7a25c6bee9259a",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:43.928712+00:00",
+  "ended_at_utc": "2026-11-28T02:29:21.178967+00:00",
+  "request_sha256": "463db3a9bc15b1c44460cf6a8daf414c3728b840b9da828814cc5d0a3ce34915",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52940,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28129,
+    "cached_tokens": 9344,
+    "completion_tokens": 1500
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncp /holdout_task/batch_solver.py /tmp/chamber_rosette_only.py\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\na = s.index('def _calibrate(')\\nb = s.index('\\\\ndef ', a + 1)\\ns = s[:a] + '''def _calibrate(study):\\n    sweeps = study['sensor_calibration_sweeps']\\n    ref = np.asarray(sweeps['ref_rosette'])\\n    raw = np.asarray(sweeps['raw_rosette'])\\n    design = np.column_stack((ref, np.ones(len(ref))))\\n    single = sweeps['single_bank_sweeps']\\n    bank = np.asarray(single['bank_id']).ravel()\\n    signal = np.asarray(single['ref_signal']).ravel()\\n    readout = np.asarray(single['raw_readout']).ravel()\\n    coeff = np.empty((5, 4))\\n    for k in range(4):\\n        use = bank == k\\n        # Only the driven bank has a nonzero reference in these sweeps.\\n        isolated = np.zeros((np.count_nonzero(use), 5))\\n        isolated[:, k] = signal[use]\\n        isolated[:, -1] = 1.0\\n        coeff[:, k] = np.linalg.lstsq(\\n            np.vstack((design, isolated)), np.r_[raw[:, k], readout[use]], rcond=None\\n        )[0]\\n    observed = np.asarray(study['y_obs_raw']).reshape(-1, 4)\\n    return np.linalg.solve(coeff[:4].T, (observed - coeff[4]).T).T.ravel()\\n\\n''' + s[b:]\\np.write_text(s)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\n\\ndef load(name, path):\\n    spec = importlib.util.spec_from_file_location(name, path)\\n    module = importlib.util.module_from_spec(spec)\\n    spec.loader.exec_module(module)\\n    return module\\n\\nold = load('old', '/tmp/chamber_rosette_only.py')\\nnew = load('new', '/holdout_task/batch_solver.py')\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\ns = item['study']\\nS, U = new._responses(s, new._operator(s))\\nfor solver in (old, new):\\n    errors = []\\n    for pulse in item['campaign_diagnostics']:\\n        y = solver._calibrate(dict(s, y_obs_raw=pulse['y_pulse_raw']))\\n        errors.append((S@pulse['w_pulse']-y).reshape(len(s['mu_shifts']), -1, 4))\\n    print(solver.__name__, 'worst full-fit calibrated pulse/shift/bank RMSE:', np.sqrt(np.mean(np.square(errors), axis=2)).max())\\nZ = s['Z_nuisance']\\nP = np.eye(len(S)) - Z @ np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nB,y = P@S,P@new._calibrate(s)\\ncap, ridge = s['u_box'],s['source_ridge']\\nn = S.shape[1]\\nworst = 0.\\nfor total in [0.,cap,s['total_budget'],(n-1)*cap,n*cap]:\\n    out = new.solve_batch(dict(s,total_budget=total))\\n    w,k = out['weights'],out['kkt_certificate']\\n    lo,hi = np.array(k['lam_lower']),np.array(k['lam_upper'])\\n    res = B@w-y\\n    g = B.T@res+ridge*w\\n    J = (res@res+ridge*(w@w))/2\\n    nu = k['nu_sum']\\n    dual = J-g@w+nu*total+cap*np.minimum(0,g-nu).sum()\\n    assert np.array_equal(w,k['weights']) and min(lo.min(),hi.min())>=0\\n    worst = max(worst, abs(w.sum()-total), -w.min(), w.max()-cap, abs(k['primal_objective']-J), abs(k['dual_lower_bound']-dual), abs(J-dual), np.max(np.abs(g-nu-lo+hi)), np.max(np.abs(np.r_[w*lo,(cap-w)*hi])), np.max(np.abs(out['terminal_field']-np.einsum('i,ijk->jk',w,U))))\\nassert worst < 1e-10, worst\\nprint('Worst joint-fit field/certificate discrepancy across five budgets:', worst)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Rosette-only affine calibration → joint affine calibration: worst independent raw tracer slice RMSE improved from 2.65×10⁻⁶ to 2.29×10⁻⁶.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the rosette-only fit\",\n      \"rejected_reason\": \"The joint fit reduced worst independent tracer error by 14% and slightly improved held-out single-bank error, with essentially unchanged held-out rosette error.\"\n    }\n  ],\n  \"rationale\": \"Use the isolated sweeps to constrain each bank’s gain and offset without changing the sealed-wall operator. Compare full-fit tracer residuals to detect any regression from pooling, and verify the revised solver’s field and KKT outputs in an isolated interpreter across five budgets.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "2c961eac56f68e39aa5e5ccc719af2e2ff55ac21b27d57d351e785e7c7b7fe0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39152.48,
+      "usage_known": true,
+      "prompt_tokens": 28129,
+      "cached_tokens": 9344,
+      "completion_tokens": 1500
+    }
+  ]
+}

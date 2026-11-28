@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e121da4157ed43a8a6a742c224bf6eee",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:51:33.082967+00:00",
+  "ended_at_utc": "2026-11-28T02:52:04.998254+00:00",
+  "request_sha256": "89d06240f6120922517597782119e463d4db26c84ddadf43b60a3cc8cd9053cc",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 67684,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36170,
+    "cached_tokens": 9344,
+    "completion_tokens": 1360
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cross_fit.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; X=c['true_channel_loads']; Y=c['bridge_raw']; S=c['single_channel_sweeps']; k=(abs(Y)<5).all(1); X,Y=X[k],Y[k]; ok=abs(S['cmd_stress'])<5;j=S['lab_id'][ok];z=S['true_stress'][ok];v=S['cmd_stress'][ok]; W=X[:,[2,3,0,1]]\\ndef axis(f):\\n A=np.column_stack([np.ones(len(z)),z,np.sin(f*z)]); b=np.stack([np.linalg.lstsq(A[j==q],v[j==q],rcond=None)[0] for q in range(4)]); return (A*b[j]).sum(1)-v,b\\nf=least_squares(lambda p:axis(p[0])[0],[2.5]).x[0]; b=axis(f)[1]; R=Y-b[:,0]-X*b[:,1]-np.sin(f*X)*b[:,2]\\nforms={\\n 'rational square':lambda x,a:x*x/(1+a*x*x), 'rational abs':lambda x,a:x*x/(1+a*abs(x)), 'rational fourth':lambda x,a:x*x/(1+a*x**4),\\n 'tanh square':lambda x,a:np.tanh(a*x*x),'square tanh':lambda x,a:x*np.tanh(a*x),'cos':lambda x,a:1-np.cos(a*x),'cos square':lambda x,a:(1-np.cos(a*x))/(1+x*x), 'exp':lambda x,a:-np.expm1(-a*x*x), 'log':lambda x,a:np.log1p(a*x*x),'sqrt':lambda x,a:np.sqrt(1+a*x*x)-1,'rational free power':lambda x,a,p:x*x/(1+a*abs(x)**p), 'squared sine':lambda x,a:np.sin(a*x)**2}\\nfolds=np.array_split(np.random.default_rng(42).permutation(len(X)),5)\\nfor name,g in forms.items():\\n def estimate(fit):\\n  def inner(p,idx,ret=False):\\n   G=g(W,*p); obs=[]; coeff=[]\\n   for q in range(4):\\n    A=np.column_stack([W[:,q],G[:,q]]); t=np.linalg.lstsq(A[fit],R[fit,q],rcond=None)[0]; obs.append(A[idx]@t-R[idx,q]); coeff.append(t)\\n   return (np.array(obs).T,np.array(coeff)) if ret else np.ravel(obs)\\n  p=least_squares(lambda p:inner(p,fit), [.7, 2.] if name.endswith('free power') else [.7],bounds=(.005,5)).x\\n  return p,inner\\n e=np.zeros_like(R)\\n for ids in folds:\\n  p,fn=estimate(np.setdiff1d(np.arange(len(X)),ids)); e[ids],_=fn(p,ids,True)\\n p,fn=estimate(np.arange(len(X))); _,co=fn(p,np.arange(len(X)),True)\\n print(name,p,np.quantile(abs(e),[.5,.9,1]),'worstfold',max(np.quantile(abs(e[i]),.9) for i in folds),'normalized coeff',np.round(co/b[:,1,None],5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/cross_fit.py\\nnl -ba /holdout_task/batch_solver.py | sed -n '30,155p'\\npython3 - <<'PY'\\nimport json,numpy as np\\nfor row in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n print(row['completed_campaign_short_name'],np.round(np.asarray(row['facility_telemetry_trace']).mean(0),3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic bridge -> H2 shared sine response plus nonlinear opposite-channel coupling; axis RMS is below 0.000083, but the fixed-denominator coupling leaves a channel p90 of about 0.008.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Keep adding mixed polynomial terms\",\"rejected_reason\":\"Mixed terms did not explain the systematic residual left after subtracting the independently measured axis response.\"}],\"rationale\":\"Estimate the opposite-channel nonlinearity inside each calibration fold and compare compact alternatives. A noise-level residual would justify replacing the cubic calibration; the full precursor means also check whether the blind campaign has a different elevated telemetry channel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "e0defac8c27c2942fb328c56d84fb45e79abddd77b9e8a0a0d5f6d7fbc4d0908",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35966.7,
+      "usage_known": true,
+      "prompt_tokens": 36170,
+      "cached_tokens": 9344,
+      "completion_tokens": 1360
+    }
+  ]
+}

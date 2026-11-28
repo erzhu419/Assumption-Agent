@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4dbc4f9e46c54114b59e55f88a69875e",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:08.313646+00:00",
+  "ended_at_utc": "2026-11-28T02:50:37.484228+00:00",
+  "request_sha256": "309fe8e0ef69c9fb2f4ec4b3c9b2bae469a9d5bce4a7d2154b3f7c0fcd8a7b7a",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56861,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29331,
+    "cached_tokens": 9344,
+    "completion_tokens": 1144
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_residual.py <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task'); import upstream_transducer as u\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n c=item['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; k=u._fit_bridge(c); p=x[:,u._PARTNER]; F=u._design(x,p); e=y-(F*k).sum(-1); m=np.max(abs(y),axis=1)<5\\n print('normalized coefficients',k[:,1:]/k[:,1,None]); print('largest residual rows', np.c_[np.arange(len(x)),x,e][m][np.argsort(np.max(abs(e[m]),axis=1))[-10:]])\\n corr=np.stack((np.sin(2.5*(x+p))-np.sin(2.5*x)-np.sin(2.5*p),np.sin(2.5*(x-p))-np.sin(2.5*x)+np.sin(2.5*p),x*p),axis=-1)\\n for scheme in ('interleaved','blocked','load radius'):\\n  ids=np.arange(len(x)); groups=ids%5 if scheme=='interleaved' else ids*5//len(x) if scheme=='blocked' else np.argsort(np.argsort(np.max(abs(x),axis=1)))*5//len(x)\\n  for extra in (False,True):\\n   D=np.concatenate((F,corr),axis=-1) if extra else F\\n   sw=c['single_channel_sweeps']; s=sw['true_stress']; raw=sw['cmd_stress']; labs=sw['lab_id']; A=u._design(s,np.zeros_like(s)); A=np.c_[A,np.zeros((len(s),3))] if extra else A\\n   pred=np.full_like(y,np.nan); loaderr=np.full_like(y,np.nan); weights=[]\\n   from scipy.optimize import least_squares\\n   for f in range(5):\\n    tr=m&(groups!=f); te=m&(groups==f); a=(abs(raw)<5)&(np.arange(len(s))%5!=f)\\n    b=np.array([np.linalg.lstsq(np.r_[D[tr,j],A[a&(labs==j)]],np.r_[y[tr,j],raw[a&(labs==j)]],rcond=None)[0] for j in range(4)]); weights.append(b)\\n    pred[te]=(D[te]*b).sum(-1)-y[te]\\n    for i in np.flatnonzero(te):\\n     def fun(h):\\n      p=h[u._PARTNER]; d=u._design(h,p)\\n      if extra: d=np.c_[d,np.sin(2.5*(h+p))-np.sin(2.5*h)-np.sin(2.5*p),np.sin(2.5*(h-p))-np.sin(2.5*h)+np.sin(2.5*p),h*p]\\n      return (d*b).sum(-1)-y[i]\\n     loaderr[i]=least_squares(fun,u._invert(y[i:i+1],b[:,:5])[0],gtol=1e-13).x-x[i]\\n   print(scheme, 'extra',extra,'inverse max/RMSE',np.nanmax(abs(loaderr)),np.sqrt(np.nanmean(loaderr**2)), 'forward max',np.nanmax(abs(pred)))\\n   if extra: print('correction coefficient min/max',np.min(weights,axis=0)[:,-3:],np.max(weights,axis=0)[:,-3:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_residual.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 paired sinusoidal bridge → H2 weak sum/difference interaction; interleaved worst held-out inverse error fell from 1.187e-3 to 7.941e-4, pending blocked-fold confirmation.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t03\"]},\"considered_alternatives\":[{\"option\":\"Promote the correction based on interleaved folds alone\",\"rejected_reason\":\"The improvement could depend on a few high-error rows or nearby calibration loads; blocked and load-radius folds can distinguish that from a stable interaction.\"}],\"rationale\":\"Compare the two bases with identical spike screening and training rows. Promote the correction only if it reduces the inverse bottleneck across the harder splits and the fitted interaction is stable enough to preserve safe extrapolation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "947fcf1fe417565948eb07f6d5f4ad85e2ff32a3e74919f9979be22ebac68ee9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31239.29,
+      "usage_known": true,
+      "prompt_tokens": 29331,
+      "cached_tokens": 9344,
+      "completion_tokens": 1144
+    }
+  ]
+}

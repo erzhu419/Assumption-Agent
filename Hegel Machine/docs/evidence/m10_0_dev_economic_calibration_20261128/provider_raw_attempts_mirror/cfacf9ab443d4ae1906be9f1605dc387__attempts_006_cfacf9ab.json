@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "cfacf9ab443d4ae1906be9f1605dc387",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:47:45.047586+00:00",
+  "ended_at_utc": "2026-11-28T02:48:12.242219+00:00",
+  "request_sha256": "1dbdfa48e5908037c293009e6f2b6596ea43c221c331fa0e736e27a4665651b6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43223,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24716,
+    "cached_tokens": 9344,
+    "completion_tokens": 1072
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\ncp /tmp/alpha_intrinsic_review.py /holdout_task/batch_solver.py\\nsed -i '1c\\\\\\\"\\\"\\\"Fit the load bridge and material law for the equilibrated chamber.\\\"\\\"\\\"' /holdout_task/batch_solver.py\\ncat >> /holdout_task/batch_solver.py <<'PY'\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    times, dt = np.asarray(dataset['eval_times']), np.asarray(dataset['past_dt'])\\n    x_train, x_test = _features(train, test)\\n    calibration = _bridge(dataset['calibration_load_cells'])\\n    tau, theta = _fit(_prepare(train, x_train, calibration), dt, times,\\n                      train['strain_curves_obs'] - train['strain_0'][:, None],\\n                      train['instant_rate_obs'])\\n\\n    # The latest equilibration trace matches the two archived baseline regimes:\\n    # neither chamber-reset channel is elevated. Keep the full stress history.\\n    curves, rate = _design(np.log(tau), _prepare(test, x_test, calibration), dt, times)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves @ theta,\\n            'initial_rate_pred': rate @ theta}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/'\\ns=importlib.util.spec_from_file_location('solver',p+'batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; t,dt=d['eval_times'],d['past_dt']; x,_=m._features(tr,te)\\ny=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; cal=d['calibration_load_cells']; raw=cal['bridge_raw']; true=cal['true_channel_loads'];\\nfor i,idx in enumerate(np.array_split(np.random.default_rng(42).permutation(len(raw)),5)):\\n    keep=np.ones(len(raw),bool); keep[idx]=False\\n    pred=m._loads(raw[idx],m._bridge({'bridge_raw':raw[keep],'true_channel_loads':true[keep]})); err=np.abs((pred-true[idx]).sum(axis=-1)); print('bridge fold',i,'stress median/p90/max',np.quantile(err,[.5,.9,1]))\\na=m._prepare(tr,x,m._bridge(cal)); tau,theta=m._fit(a,dt,t,y,r); print('full material',tau,theta)\\nfor lab in np.unique(tr['lab_id']):\\n    k=tr['lab_id']!=lab; model=m._fit(tuple(v[k] for v in a),dt,t,y[k],r[k]); u,b=model\\n    g,h=m._design(np.log(u),tuple(v[~k] for v in a),dt,t); curve=np.abs(g@b-y[~k]); rate=np.abs(h@b-r[~k]); print('held lab',lab,'tau',u,'early/late curve p90',*[round(np.quantile(z,.90),6) for z in np.array_split(curve,2,axis=1)],'rate p90',round(np.quantile(rate,.90),6))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 replay the latest reset -> H2 retain full hereditary memory after the low-channel precursor; five-fold calibration and leave-one-lab-out metrics are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse either reset law\",\"rejected_reason\":\"The latest precursor means (−0.378, −0.355) match the two archived baseline cases, not either elevated reset case.\"}],\"rationale\":\"Install the telemetry-supported baseline in a standalone solver. Use held-out bridge sweeps to detect calibration errors and held-out labs to check whether the material fit generalizes across early strain, late strain, and initial rate.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "f1ecfca4fd4b300799446ede4fc40ac78f1e2ea3337f3a4f6c0f18a6f20c56fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29218.84,
+      "usage_known": true,
+      "prompt_tokens": 24716,
+      "cached_tokens": 9344,
+      "completion_tokens": 1072
+    }
+  ]
+}

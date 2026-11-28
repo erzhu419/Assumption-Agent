@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1107ac08a66746e498275e1421369a97",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:33:44.346075+00:00",
+  "ended_at_utc": "2026-11-28T02:34:20.203827+00:00",
+  "request_sha256": "0ded214151b3acb0fb774b1983924ed595ecd128be319ff4cf33b4f039e53876",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 56926,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29428,
+    "cached_tokens": 9344,
+    "completion_tokens": 1457
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_chamber.py <<'PY'\\nimport importlib.util\\nimport pickle\\nfrom itertools import combinations\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('batch_solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']\\nL, R = c['true_channel_loads'], c['bridge_raw']\\n# The public sweeps show gross spikes well outside the normal raw range.\\nclean = np.max(abs(R), axis=1) < 6\\nL, R = L[clean], R[clean]\\npairs = list(combinations(range(4), 2))\\nerrors = np.empty((3, len(L), 4))\\nfor j in range(4):\\n    q = (j + 1) % 4\\n    x, y = L[:, j], L[:, q]\\n    a = np.column_stack((np.ones(len(L)), L, x**3, x*y))\\n    extended = np.column_stack((a, L**2, *(L[:, u]*L[:, v] for u, v in pairs if {u,v} != {j,q})))\\n    # Separate self, sum and difference saturation; choose coefficients inside each fold.\\n    Q2 = np.column_stack((x*x, (x+y)**2, (x-y)**2))\\n    for i in range(len(L)):\\n        keep = np.arange(len(L)) != i\\n        beta = np.linalg.lstsq(a[keep], R[keep,j], rcond=None)[0]\\n        gamma = np.linalg.lstsq(extended[keep], R[keep,j], rcond=None)[0]\\n        fit = least_squares(lambda p: (a[keep]@p[:7])/(1+Q2[keep]@p[7:])-R[keep,j], np.r_[beta, 0.,0.,0.], bounds=(np.r_[np.full(7,-np.inf),0.,0.,0.],np.inf), gtol=1e-12).x\\n        errors[:,i,j] = [a[i]@beta-R[i,j], extended[i]@gamma-R[i,j], (a[i]@fit[:7])/(1+Q2[i]@fit[7:])-R[i,j]]\\nfor name,e in zip(('cyclic cubic','expanded pair/quadratic','rational saturation'),errors):\\n    print(name, 'worst channel LOO RMSE', np.sqrt(np.mean(e**2,axis=0)).max(), 'max error', abs(e).max())\\nB = m._bridge(c)\\nj = np.arange(4)\\nq = (j+1)%4\\nfor name in ('train','test'):\\n    p = d[name]\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        raw = p[key].reshape(-1,4)\\n        u = m._loads(raw,B)\\n        resid = B[0] + u@B[1:5] + B[5]*u**3 + B[6]*u*u[:,q] - raw\\n        jac = np.broadcast_to(B[1:5].T, (len(u),4,4)).copy()\\n        jac[:,j,j] += 3*B[5]*u**2+B[6]*u[:,q]\\n        jac[:,j,q] += B[6]*u\\n        print(name,key,'max inversion residual',abs(resid).max(),'worst condition',np.linalg.cond(jac).max())\\n        assert abs(resid).max() < 1e-9\\ntr, te = d['train'], d['test']\\nX, _ = m._features(tr,te)\\ns = m._prepare(tr,X,B)\\nt, dt = d['eval_times'], d['past_dt']\\nY = tr['strain_curves_obs']-tr['strain_0'][:,None]\\nr = tr['instant_rate_obs']\\nfor lab in np.unique(tr['lab_id']):\\n    keep = tr['lab_id'] != lab\\n    tau, theta = m._fit(tuple(a[keep] for a in s),dt,t,Y[keep],r[keep])\\n    ac, ar = m._design(np.log(tau),tuple(a[~keep] for a in s),dt,t)\\n    ec, er = ac@theta-Y[~keep], ar@theta-r[~keep]\\n    print('held-out lab',lab,'median signed strain/rate residual',np.median(ec),np.median(er),'rate p90',np.quantile(abs(er),.9))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Cyclic cubic bridge → test for omitted pairwise or saturation terms; current worst-channel calibration LOO RMSE is 1.09e-4 and worst held-out lab rate p90 is 0.01568.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply classifier, relay, or stochastic-control checks\",\n      \"rejected_reason\": \"This dataset has continuous coupon responses and no class labels, relay states, or stochastic control operator. Held-out signed residuals are the relevant check for lab bias.\"\n    }\n  ],\n  \"rationale\": \"Compare bridge alternatives on identical held-out rows; promote a larger basis only if it materially improves the worst calibration error. Check every observed deployment load for an inaccurate or ill-conditioned inverse, and use signed held-out residuals to distinguish lab bias from isolated outliers.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "6f876942a320f952d3c20549cbfe67beb7a4a5639aaa5b4fbbdda97e711b2039",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37890.37,
+      "usage_known": true,
+      "prompt_tokens": 29428,
+      "cached_tokens": 9344,
+      "completion_tokens": 1457
+    }
+  ]
+}

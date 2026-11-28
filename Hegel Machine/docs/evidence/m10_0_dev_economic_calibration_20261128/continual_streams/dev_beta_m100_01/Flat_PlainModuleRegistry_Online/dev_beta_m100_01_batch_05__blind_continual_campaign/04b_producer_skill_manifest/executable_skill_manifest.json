@@ -1,0 +1,218 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_beta_m100_01_batch_05_1bdce3f90359",
+    "source_hash": "1bdce3f903592d9ab586b347b50041aab224dfd11ea5ba55d989c9f4ccb4893d",
+    "parent_ids": [],
+    "source_episode_id": "dev_beta_m100_01_batch_05__blind_continual_campaign",
+    "task_id": "dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/ros_basis.py",
+        "archived_relpath": "producers/tmp__ros_basis.py",
+        "bytes": 1547,
+        "sha256": "96a829b8205d0c02e29bbc056ef94ea7d088d09151173dcfcea90d70d1f1b5fe"
+      },
+      {
+        "container_path": "/tmp/ros_interact.py",
+        "archived_relpath": "producers/tmp__ros_interact.py",
+        "bytes": 1700,
+        "sha256": "8ecc4ffa2607418cb8fa938eae4f749de2804413c2f13c6a37cbca8dd106a858"
+      },
+      {
+        "container_path": "/tmp/ros_joint.py",
+        "archived_relpath": "producers/tmp__ros_joint.py",
+        "bytes": 2125,
+        "sha256": "5469c1df7b8be7909539e19d09012207fddf05e99e82a9ad720c5ac2cbbdf555"
+      },
+      {
+        "container_path": "/tmp/ros_joint_input.py",
+        "archived_relpath": "producers/tmp__ros_joint_input.py",
+        "bytes": 144,
+        "sha256": "e5152b4185bf980f951836902e758e933abd5537ed42dbcbc287eb541a43fbe8"
+      },
+      {
+        "container_path": "/tmp/ros_probe.py",
+        "archived_relpath": "producers/tmp__ros_probe.py",
+        "bytes": 1638,
+        "sha256": "e14f5b00431ea2c67a3a1aae704558752428b66b4e31b1d5446ef58159fb2862"
+      },
+      {
+        "container_path": "/tmp/ros_separate.py",
+        "archived_relpath": "producers/tmp__ros_separate.py",
+        "bytes": 2334,
+        "sha256": "3382217f35189ba9b78a2f5e44c71c97b7fbc5fe7a112d4ae1e2afd4a903398e"
+      },
+      {
+        "container_path": "/tmp/ros_shape.py",
+        "archived_relpath": "producers/tmp__ros_shape.py",
+        "bytes": 2202,
+        "sha256": "c3dfdd7e56a0dd4df642fff47a63578e6b684a55b58e4dae0187aef9557121b4"
+      },
+      {
+        "container_path": "/tmp/ros_shared.py",
+        "archived_relpath": "producers/tmp__ros_shared.py",
+        "bytes": 1464,
+        "sha256": "1e6ea5be097daa7bb37a7eca8196e2751aebddbdde42b4f36026f58a7158674b"
+      },
+      {
+        "container_path": "/tmp/verify_rosette.py",
+        "archived_relpath": "producers/tmp__verify_rosette.py",
+        "bytes": 2219,
+        "sha256": "0fad374f17c19acd9348f76ee25a9c1af30da9532438b3b0bf29c161bdcd0a17"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_batch_01_solver.py",
+        "bytes": 4903,
+        "sha256": "db79633794c7a7c9cda5076a9ba10028d2e587089a6f53be2b027baeb4163c6a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_batch_02_solver.py",
+        "bytes": 4855,
+        "sha256": "695e10864b98477e8a3ce9cc49b3d7a607e8c772d660a88f9df3b0d8477d9039"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_s00_solver.py",
+        "bytes": 4819,
+        "sha256": "694e1ed992343f0950cf3c3077dd2640a96f328a7e515bba357cd947514194d1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat batch_solver.py validate_public_schema.py _verified_downstream.py && cat public_asset_index.json && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))\ndef scan(x,depth=0):\n if isinstance(x,dict):\n  for k,v in x.items(): print(' '*depth,k,end=': '); scan(v,depth+2)\n elif isinstance(x,np.ndarray): print(x.shape,x.dtype, (float(np.nanmin(x)),float(np.nanmax(x))) if x.size and x.dtype.kind in 'fiu' else '')\n elif isinstance(x,(tuple,list)):\n  print(type(x).__name__,len(x));\n  if x and depth<5: scan(x[0],depth+2)\n else: print(type(x).__na",
+      "cd /holdout_task && sed -n '35,170p' _verified_downstream.py && cat /tmp/hegel_continual_archive/archive_manifest.json && grep -nEi 'rosette|tanh|calib|sweeps' /tmp/hegel_continual_archive/*solver.py /tmp/hegel_continual_archive/archive_apparatus_log.json | cut -c1-210 | head -60 && python3 - <<'PY'\nimport pickle,numpy as np\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print('X stats',x.min(0), x.max(0), x.std(0)); print('y obs q',np.quantile(s['y_obs_raw'].reshape(-1,4),[0,.5,1],axis=0)); print('bank ids',s",
+      "cd /holdout_task && python3 - <<'PY'\nimport json\nx=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print(type(x).__name__); print(list(x) if isinstance(x,dict) else len(x)); print(str(x)[-2400:])\nPY\ncat >/tmp/ros_probe.py <<'PY'\nimport numpy as np,pickle\nfrom scipy.optimize import least_squares\nx,y=[pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps'][k] for k in ('ref_rosette','raw_rosette')]\ndef pred(p,x,j,m):\n a=x[:,j]; h=p[2]+p[3]*a; lin=p[0]+x@p[4:8];\n if m in ('mix','mix_no_lin','mix_same'): h=h+x@p[8:12]\n if m=='mi",
+      "cat >/tmp/ros_basis.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom itertools import combinations_with_replacement\nfrom ros_probe import x,y,fit\n\ndef design(x,k,m):\n t=np.tanh(x*k)\n cols=[np.ones(len(x)),*x.T,*t.T]\n if 'q' in m: cols.extend(x[:,i]*x[:,j] for i,j in combinations_with_replacement(range(4),2))\n if 'd' in m: cols.extend((x*x).T)\n if 'p' in m: cols.extend(x[:,i]*x[:,j] for i,j in [(0,2),(1,3)])\n if 's' in m: cols.extend(np.sin(2*x).T)\n if 'f' in m: cols.extend((x/(1+x*x)).T)\n return np.column_stack(cols)\n\ndef solve(x,y,m):\n keep=fit(x,y,'affine')[1]; x,y=",
+      "cat >/tmp/ros_joint.py <<'PY'\nimport pickle,numpy as np\nfrom scipy.optimize import least_squares\nfrom ros_probe import x,y,fit\nst=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; bank=st['sensor_calibration_sweeps']['single_bank_sweeps']; z=bank['ref_signal']; sy=bank['raw_readout']; bi=bank['bank_id']; valid=fit(x,y,'affine')[1];\nfor j in range(4):\n q=(bi==j)&(np.abs(sy)<4); zz,yy=z[q],sy[q];\n for shift in (False,True):\n  p=least_squares(lambda p:p[0]+p[1]*zz+p[2]*np.tanh(p[3]*zz+(p[4] if shift else 0))-yy,[0,.2,1,1.4,0] if shift else [0,.2,1,1.4]).x\n  print('single',j,sh",
+      "cat >/tmp/ros_interact.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom ros_probe import x,y,fit\nfrom ros_joint_input import bank\nvalid=fit(x,y,'affine')[1]\nfolds=[np.array([],int),*np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5)]\ndef design(x,j,k,mode):\n a,b=x[:,j],x[:,j^2]; u=np.tanh(k[0]*a); v=np.tanh(k[0]*b); d=[np.ones(len(a)),a,u,b,1-np.cos(k[1]*b)]\n if 'r' in mode:d += [b/(1+b*b)]\n if 'i' in mode:d += [a*b,u*b,a*v,u*v]\n if 'm' in mode:d += [np.tanh(k[0]*a+k[2]*b)-u]\n if 'g' in mode:d += [a/(1+a*a)]\n if 'e' in mode:d += [b*b/(1+b*b)*a,b*b/(1+b*b)*u,a*a/(1",
+      "cd /holdout_task && python3 - <<'PY'\nimport pickle,numpy as np\nitems=pickle.load(open('public_batch.pkl','rb'));print('items',len(items));s=items[0]['study'];print('keys',list(s));c=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; print('keys',list(c),list(b));print('single',np.column_stack([b[k] for k in ('bank_id','ref_signal','raw_readout')]).round(7)); print('axis rows',np.c_[c['ref_rosette'][:16],c['raw_rosette'][:16]].round(6)); print('obs',s['y_obs_raw'].shape,np.quantile(s['y_obs_raw'].reshape(-1,4),[0,.5,1],axis=0)); print('pulses',type(s.get('reference_tracer_pulses')))\nPY\n",
+      "cat >/tmp/ros_shape.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom ros_probe import x,y\nfrom ros_joint_input import bank\nbi=bank['bank_id']; z=bank['ref_signal']; sy=bank['raw_readout']; keep=np.max(np.abs(y),axis=1)<5; sb=np.abs(sy)<5; opp=[2,3,0,1]; axis=np.count_nonzero(x,axis=1)==1\n\ndef features(a,k,m):\n t=k[0]*a\n if m=='arg3': t=t+k[2]*a**3\n if m=='argsin': t=t+k[2]*np.sin(k[3]*a)\n if m=='argrat': t=t+k[2]*a/(1+k[3]*a*a)\n d=np.tanh(t)+k[1]*a\n if m=='sin': d+=k[2]*np.sin(k[3]*a)\n if m=='sin3': d+=k[2]*np.sin(k[3]*a)+k[4]*a**3\n if m=='cos_even': d+=k[2]*(1-np.cos",
+      "cat >/tmp/ros_separate.py <<'PY'\nimport numpy as np\nfrom scipy.optimize import least_squares\nfrom ros_probe import x,y\nfrom ros_joint_input import bank\nbi=bank['bank_id']; z=bank['ref_signal']; sy=bank['raw_readout']; keep=np.max(np.abs(y),axis=1)<5; sb=np.abs(sy)<5; axis=np.count_nonzero(x,axis=1)==1; opp=[2,3,0,1]\n\ndef design(a,k,m):\n t=[a,np.sin(k[0]*a)]\n if 't' in m:t.append(np.tanh(k[1]*a))\n if '3' in m:t.append(a**3)\n if '5' in m:t.append(a**5)\n if 'h' in m:t.append(np.sin(2*k[0]*a))\n return np.stack(t,axis=-1)\n\ndef fit_local(tr,m):\n ii,jj=np.where((x!=0)&(tr&axis)[:,None]); aa=np.r_[x[i",
+      "cd /holdout_task && cat >upstream_transducer.py <<'PY'\n\"\"\"Fit and invert the coupled four-bank rosette response.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n_OPPOSITE = np.array([2, 3, 0, 1])\n\n\ndef _response(x, p):\n    bias, gain = p[:4], p[4:8]\n    slope, amp, freq, cross, even, cross_freq = p[8:]\n    q = x[:, _OPPOSITE]\n    return bias + gain * (slope * x + amp * np.sin(freq * x) +\n                          cross * q + even * (1 - np.cos(cross_freq * q)))\n\n\ndef _fit(ref, raw, bank):\n    j = np.asarray(bank['bank_id'], dtype=int)\n    axis = np.asarray(bank['ref_signal'], d",
+      "cd /holdout_task && cat >/tmp/verify_rosette.py <<'PY'\nimport pickle, runpy, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as up\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\nc = s['sensor_calibration_sweeps']; x,y,bank = (c[k] for k in ('ref_rosette','raw_rosette','single_bank_sweeps'))\nclean = np.max(np.abs(y),axis=1)<5\nworst = 0\nfor ids in np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5):\n    tr = np.ones(len(x),bool); tr[ids] = False\n    p = up._fit(x[tr],y[tr],bank)\n    ids = ids[clean[ids]]\n    d = up._inverse(y[ids"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_beta_m100_01_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_01_solver.py",
+      "selected_channels": [
+        "m100_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 4679,
+        "sha256": "1a7fe3c29477ebf3df72074aae20488e57615281e1b9066e392dd59df0073716",
+        "content_addressed_ref": "content_addressed_blobs/1a7fe3c29477ebf3df72074aae20488e57615281e1b9066e392dd59df0073716.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": [
+      "design",
+      "pred",
+      "fit",
+      "predict",
+      "cd",
+      "features",
+      "local",
+      "solve"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "1bdce3f903592d9ab586b347b50041aab224dfd11ea5ba55d989c9f4ccb4893d",
+      "verified_post_package": true,
+      "verified_turn": 11,
+      "verification_command": "cd /holdout_task && cat >/tmp/verify_rosette.py <<'PY'\nimport pickle, runpy, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nimport upstream_transducer as up\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study'",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "1bdce3f903592d9ab586b347b50041aab224dfd11ea5ba55d989c9f4ccb4893d",
+        "expected_candidate_sha256": "1bdce3f903592d9ab586b347b50041aab224dfd11ea5ba55d989c9f4ccb4893d",
+        "computed_candidate_sha256": "1bdce3f903592d9ab586b347b50041aab224dfd11ea5ba55d989c9f4ccb4893d",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 4679
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_1bdce3f9"
+    }
+  },
+  "structure": {
+    "full_producer_count": 12,
+    "reusable_ast_function_closures": [
+      {
+        "name": "design",
+        "code": "def design(x, k, m):\n    from itertools import combinations_with_replacement\n    t = np.tanh(x * k)\n    cols = [np.ones(len(x)), *x.T, *t.T]\n    if 'q' in m:\n        cols.extend((x[:, i] * x[:, j] for (i, j) in combinations_with_replacement(range(4), 2)))\n    if 'd' in m:\n        cols.extend((x * x).T)\n    if 'p' in m:\n        cols.extend((x[:, i] * x[:, j] for (i, j) in [(0, 2), (1, 3)]))\n    if 's' in m:\n        cols.extend(np.sin(2 * x).T)\n    if 'f' in m:\n        cols.extend((x / (1 + x * x)).T)\n    return np.column_stack(cols)"
+      },
+      {
+        "name": "pred",
+        "code": "def pred(p, x, j, m):\n    a = x[:, j]\n    h = p[2] + p[3] * a\n    lin = p[0] + x @ p[4:8]\n    if m in ('mix', 'mix_no_lin', 'mix_same'):\n        h = h + x @ p[8:12]\n    if m == 'mix_no_lin':\n        lin = p[0]\n    if m == 'mix_same':\n        lin = p[0] + p[4] * h\n    if m == 'rational':\n        return lin + p[1] * h / np.sqrt(1 + h * h)\n    if m == 'frac':\n        return lin + p[1] * h / (1 + h * h)\n    if m == 'poly5':\n        return lin + sum((p[8 + k] * a ** (k + 2) for k in range(4)))\n    if m == 'affine':\n        return lin\n    return lin + p[1] * np.tanh(h)"
+      },
+      {
+        "name": "fit",
+        "code": "def fit(x, y, m):\n    from scipy.optimize import least_squares\n    b = np.column_stack((np.ones(len(x)), x))\n    w = np.ones(len(x), bool)\n    for _ in range(4):\n        r = np.linalg.norm(b @ np.linalg.lstsq(b[w], y[w], rcond=None)[0] - y, axis=1)\n        w = r < max(0.06, 4 * np.median(r))\n    ps = []\n    for j in range(4):\n        p = np.zeros(12)\n        p[1] = 1.0\n        p[3] = 1.0\n        p[j + 4] = 0.25\n        z = least_squares(lambda p: pred(p, x[w], j, m) - y[w, j], p, loss='soft_l1', f_scale=0.015, max_nfev=400).x\n        ps.append(z)\n    return (np.array(ps), w)"
+      },
+      {
+        "name": "predict",
+        "code": "def predict(ps, x, m):\n    return np.column_stack([pred(p, x, j, m) for (j, p) in enumerate(ps)])"
+      },
+      {
+        "name": "cd",
+        "code": "def cd(a, b, k, m):\n    t = [b]\n    if 'c' in m:\n        t.append(1 - np.cos(k[0] * b))\n    if 'r' in m:\n        t.append(b * b / (1 + k[0] * b * b))\n    if 's' in m:\n        t.append(np.sin(k[1] * b))\n    if 'q' in m:\n        t.append(b * b)\n    if '3' in m:\n        t.append(b ** 3)\n    if 'u' in m:\n        t.append(b / (1 + k[1] * b * b))\n    if 'i' in m:\n        t.extend([a * b, np.tanh(a) * b, a * (1 - np.cos(2 * b)), b * (1 - np.cos(2 * a))])\n    if 'v' in m:\n        t.extend([np.sin(2 * (a + b)) - np.sin(2 * a) - np.sin(2 * b), np.cos(2 * (a + b)) - np.cos(2 * a) - np.cos(2 * b) + 1])\n    return np.stack(t, axis=-1)"
+      },
+      {
+        "name": "features",
+        "code": "def features(a, k, m):\n    t = k[0] * a\n    if m == 'arg3':\n        t = t + k[2] * a ** 3\n    if m == 'argsin':\n        t = t + k[2] * np.sin(k[3] * a)\n    if m == 'argrat':\n        t = t + k[2] * a / (1 + k[3] * a * a)\n    d = np.tanh(t) + k[1] * a\n    if m == 'sin':\n        d += k[2] * np.sin(k[3] * a)\n    if m == 'sin3':\n        d += k[2] * np.sin(k[3] * a) + k[4] * a ** 3\n    if m == 'cos_even':\n        d += k[2] * (1 - np.cos(k[3] * a))\n    if m == 'tanh2':\n        d += k[2] * np.tanh(k[3] * a)\n    if m == 'rat':\n        d += k[2] * a / (1 + k[3] * a * a)\n    return d"
+      },
+      {
+        "name": "local",
+        "code": "def local(p, a, m):\n    return p[:4] + p[4:8] * features(a, p[8:], m)"
+      },
+      {
+        "name": "solve",
+        "code": "def solve(x, y, m):\n    from scipy.optimize import least_squares\n    keep = fit(x, y, 'affine')[1]\n    (x, y) = (x[keep], y[keep])\n    w = np.ones(len(x))\n    k = np.full(4, 1.5)\n    for _ in range(5):\n\n        def params(k):\n            D = design(x, k, m)\n            b = np.linalg.lstsq(D * w[:, None], y * w[:, None], rcond=None)[0]\n            return (D, b)\n\n        def fun(k):\n            (D, b) = params(k)\n            return ((D @ b - y) * w[:, None]).ravel()\n        k = least_squares(fun, k, bounds=(0.35, 4), max_nfev=65).x\n        (D, b) = params(k)\n        r = np.linalg.norm(D @ b - y, axis=1)\n        w = (1 + (r / max(0.004, 1.5 * np.median(r))) ** 2) ** (-0.25)\n    return (k, b)"
+      }
+    ]
+  }
+}

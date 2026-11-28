@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "94785feeebcd438fa1febe9dfee1f199",
+  "call_seq": 2,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_07__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:52:12.736014+00:00",
+  "ended_at_utc": "2026-11-28T02:52:36.456233+00:00",
+  "request_sha256": "f95c6792bb4ae26a8f3d5044f4e5770fda2f4b62de58b2a13a2bbdee03d818a4",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 15635,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16356,
+    "cached_tokens": 9344,
+    "completion_tokens": 787
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat validate_public_schema.py; python3 - <<'PY'\\nimport json, pathlib, pickle, numpy as np\\nfor f in [pathlib.Path('public_asset_index.json'), *pathlib.Path('/tmp/hegel_continual_archive').glob('*.json')]:\\n d=json.loads(f.read_text()); print('\\\\n',f, type(d).__name__,len(d))\\n if isinstance(d,dict):\\n  for k,v in d.items(): print(k,str(v)[:500])\\n else:\\n  for a in d:\\n   if isinstance(a,dict): print({k:(v if not isinstance(v,(dict,list)) or len(v)<5 else 'len='+str(len(v))) for k,v in a.items()})\\n   else: print(str(a)[:200])\\np=pickle.load(open('public_batch.pkl','rb'))[0]\\nfor x in p['campaign_diagnostics']:\\n print('pulse',[(k,np.shape(v),np.asarray(v).ravel()[:10]) for k,v in x.items()])\\ns=p['study']; b=s['sensor_calibration_sweeps']; print('telemetry',s['aux_manifold_telemetry'][:8]); print('bank',s['row_bank_id'].reshape(-1,4)[:8]); print('single',[(k,np.shape(v),np.asarray(v).ravel()[:16]) for k,v in b['single_bank_sweeps'].items()]); print('sweep affines',*[np.linalg.lstsq(np.c_[b['ref_rosette'][np.max(abs(b['raw_rosette']),axis=1)<8.5],np.ones(np.sum(np.max(abs(b['raw_rosette']),axis=1)<8.5))],b['raw_rosette'][np.max(abs(b['raw_rosette']),axis=1)<8.5],rcond=None)[0]]); print('sensor bounds hits',[(i,np.sum(s['sensor_ij'][:,j]==i)) for j,n in enumerate((s['nx'],s['ny'])) for i in (0,n-1)])\\nPY\\nfind /tmp/hegel_continual_archive -maxdepth 3 -type f -printf '%P %s\\\\n' | head -80; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -35\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin -> H2 campaign-specific wall rows identifiable from three tracer pulses; no held-out pulse metric measured yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit an unrestricted wall operator from the pulses\",\n      \"rejected_reason\": \"First inspect archived operator families and sweep residuals so wall fitting does not absorb a sensor-calibration mismatch.\"\n    }\n  ],\n  \"rationale\": \"The first listing truncated the archive metadata. Compact inspection will identify reusable wall-row formulas, tell whether downstream calibration remains necessary after upstream normalization, and establish which wall slices are directly observed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "cc1edad52349f0f75496d192a7be265c336265a8ed6692503e4c097ba7c4f64a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25775.18,
+      "usage_known": true,
+      "prompt_tokens": 16356,
+      "cached_tokens": 9344,
+      "completion_tokens": 787
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "54c06cdfe79b4ab494b23df813405f11",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:34:54.235429+00:00",
+  "ended_at_utc": "2026-11-28T02:35:34.972713+00:00",
+  "request_sha256": "cf3caea6270ff260dd0f40459273c6dc3a418ba37364192408d84bc59662a8b6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41156,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25038,
+    "cached_tokens": 9344,
+    "completion_tokens": 1705
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nimport batch_solver\\nimport _verified_downstream as down\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']\\nidx=np.arange(len(x)); axes=np.count_nonzero(x,axis=1)==1\\nslices={f'random{i}':t for i,t in enumerate(np.array_split(np.random.default_rng(31).permutation(idx),5))}\\nslices.update({f'axis{i}':idx[axes & (x[:,i]!=0)] for i in range(4)})\\nslices['edge']=np.argsort(np.max(abs(x),axis=1))[-16:]\\nslices['interior']=np.argsort(np.linalg.norm(x,axis=1))[:16]\\nmetrics={}; bank_errors=[]; emi_errors=[]\\nfor label,test in slices.items():\\n    train=np.setdiff1d(idx,test)\\n    keep=np.ones(len(b['bank_id']),bool)\\n    if label.startswith('axis'): keep &= b['bank_id']!=int(label[-1])\\n    if label=='edge': keep &= abs(b['ref_signal'])<np.min(np.max(abs(x[test]),axis=1))\\n    if label.startswith('random'): keep &= np.arange(len(keep))%5!=int(label[-1])\\n    model=up._fit(x[train],y[train],{k:v[keep] for k,v in b.items()})\\n    error=np.linalg.norm(up._forward(x[test],model)-y[test],axis=1)\\n    # Public sweep diagnostics independently identified these three gross EMI rows.\\n    clean=~np.isin(test,[13,14,15]); emi_errors.extend(error[~clean])\\n    inverse=np.linalg.norm(up._inverse(y[test[clean]],model)-x[test[clean]],axis=1)\\n    metrics[label]=(float(max(error[clean])),float(max(inverse)))\\n    j=b['bank_id'][~keep]; z=np.eye(4)[j]*b['ref_signal'][~keep,None]\\n    e=np.abs(up._forward(z,model)[np.arange(len(j)),j]-b['raw_readout'][~keep]); bank_errors.extend(e)\\nworst_f,worst_i=np.max(list(metrics.values()),axis=0)\\nprint('Public holdout max forward/inverse L2 by slice:',metrics)\\nprint('Worst forward/inverse:',worst_f,worst_i,'minimum held-out EMI residual:',min(emi_errors),'bank clean max:',max(e for e in bank_errors if e<1),'bank EMI min:',min(e for e in bank_errors if e>1))\\nassert worst_f<6e-5 and worst_i<7e-5 and min(emi_errors)>20\\nassert max(e for e in bank_errors if e<1)<6e-5\\nmodel=up._fit(x,y,b)\\n# Simultaneous extreme excitation in calibrated reference coordinates.\\ngrid=np.stack(np.meshgrid(*[np.linspace(a,d,7) for a,d in zip(x.min(0),x.max(0))],indexing='ij'),axis=-1).reshape(-1,4)\\nr=up._forward(grid,model)\\nroundtrip=np.max(abs(up._inverse(r,model)-grid)); print('Box-grid inverse max absolute error:',roundtrip); assert roundtrip<1e-10\\npulse_raw=r[:24].reshape(2,3,4); old_pulse=pulse_raw.copy(); old_rosette=y.copy(); old_bank=b['raw_readout'].copy(); old_obs=s['y_obs_raw'].copy()\\nout=up.calibrate_upstream(dict(s,reference_tracer_pulses=[{'y_pulse_raw':pulse_raw,'label':'grid'},{'y_pulse_raw':None}]))\\nnp.testing.assert_allclose(out['reference_tracer_pulses'][0]['y_pulse_raw'],grid[:24].reshape(2,3,4),atol=1e-10,rtol=0)\\nassert out['reference_tracer_pulses'][0]['label']=='grid' and out['reference_tracer_pulses'][1]['y_pulse_raw'] is None\\nassert up.calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nassert 'reference_tracer_pulses' not in up.calibrate_upstream(s)\\nfor a,v in [(pulse_raw,old_pulse),(y,old_rosette),(b['raw_readout'],old_bank),(s['y_obs_raw'],old_obs)]: np.testing.assert_array_equal(a,v)\\ncs=out['sensor_calibration_sweeps']; np.testing.assert_array_equal(cs['raw_rosette'],x); np.testing.assert_array_equal(cs['single_bank_sweeps']['raw_readout'],b['ref_signal']); assert not np.shares_memory(cs['raw_rosette'],x) and not np.shares_memory(cs['single_bank_sweeps']['raw_readout'],b['ref_signal'])\\nobs=out['y_obs_raw']; assert obs.shape==s['y_obs_raw'].shape\\nnp.testing.assert_allclose(up._forward(obs.reshape(-1,4),model).ravel(),s['y_obs_raw'],atol=1e-11,rtol=0)\\n# Compare both paths on known canonical observations transformed by the fitted law.\\ntruth=np.clip(obs*0.8,-0.5,0.5); base=up.calibrate_upstream(s)\\nexpect=down.solve_downstream(dict(base,y_obs_raw=truth)); actual=batch_solver.solve_batch(dict(s,y_obs_raw=up._forward(truth.reshape(-1,4),model).ravel()))\\nassert actual.keys()==expect.keys()\\nfor k in actual: np.testing.assert_allclose(actual[k],expect[k],rtol=1e-8,atol=1e-9,err_msg=k)\\nprint('Pulse shape, input preservation, identity sweeps, and canonical downstream equivalence: PASS')\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unrestricted cubic → H2 cyclic quadratic coupling plus diagonal cubic curvature; prior worst clean held-out forward error was 3.838e-5, with exact-artifact inverse validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t05\"]},\"considered_alternatives\":[{\"option\":\"Stop after the public schema pass\",\"rejected_reason\":\"The public study has no tracer pulses, and the schema check cannot detect a biased inverse or a failure on simultaneous extreme excitation.\"}],\"rationale\":\"Validate the shipped fit on held-out measured sweeps and EMI rows, then isolate Newton convergence and pulse handling in a clean process. A measured accuracy failure would reopen the fit; a round-trip or pulse failure would localize the fix to inversion or schema handling.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f9200a3d66e1b949ccc07f43c2511919a3e888eee1b71024b29652ddb7e60090",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44701.91,
+      "usage_known": true,
+      "prompt_tokens": 25038,
+      "cached_tokens": 9344,
+      "completion_tokens": 1705
+    }
+  ]
+}

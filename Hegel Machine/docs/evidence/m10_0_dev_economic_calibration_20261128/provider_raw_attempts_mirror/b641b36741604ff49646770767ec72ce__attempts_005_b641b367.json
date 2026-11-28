@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b641b36741604ff49646770767ec72ce",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:27.866985+00:00",
+  "ended_at_utc": "2026-11-28T02:41:46.474940+00:00",
+  "request_sha256": "497bf1e260cd100f9a5aba01e2241a927a77cf49ae1eafe5036790305fc84da7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41176,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25610,
+    "cached_tokens": 9344,
+    "completion_tokens": 642
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/dev_alpha_m100_01_batch_03_solver.py /holdout_task/batch_solver.py\\nsed -n '27,58p;97,155p' /holdout_task/batch_solver.py\\nsed -n '80,150p' /tmp/hegel_continual_archive/dev_alpha_m100_01_batch_01_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw=c['bridge_raw']; x=c['true_channel_loads']; b=m._bridge(c); print('bridge coefficients\\\\n',b); print('forward residual quantiles',np.quantile(abs(m._transfer(x,b)-raw),[.5,.8,.9,.95,1],axis=0)); out=m.solve_batch(d); print('material',out['estimated_taus'],out['hereditary_weights']); print('deployment summary',[(k,np.shape(v),np.min(v),np.max(v)) for k,v in out.items()]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (robust nonlinear bridge and shared material fit) → H2 (benchtop deployment as a provisional baseline); the unfiltered affine bridge has worst-channel RMS 2.72 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Treat the affine RMS as proof of bridge nonlinearity\",\n      \"rejected_reason\": \"Gross sweep outliers can also inflate RMS; inspect the residual distribution before deciding which terms the bridge needs.\"\n    }\n  ],\n  \"rationale\": \"Install an executable baseline that recalibrates from the supplied sweeps. Its residual quantiles will distinguish a few corrupted readings from a bridge law that misses most points; the archived batch 01 transfer will clarify whether the facility signals track chamber changes or calibration changes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "875342eb89637b5ac87a9c5b2341cc9a698d5fc87341fa5680a3813b45a44f1d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20584.8,
+      "usage_known": true,
+      "prompt_tokens": 25610,
+      "cached_tokens": 9344,
+      "completion_tokens": 642
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0eca100407c74a31b02f70634e07fe5d",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:48.972926+00:00",
+  "ended_at_utc": "2026-11-28T02:42:13.598291+00:00",
+  "request_sha256": "08771588730c439da8c9c68acef03fdb7f63cde034a9e6267d4871525e2e2992",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46064,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26623,
+    "cached_tokens": 9344,
+    "completion_tokens": 911
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"ls -la /pretrain_task /tmp/hegel_continual_archive; for f in /tmp/hegel_continual_archive/*solver.py; do echo ==== $f; grep -nE '^#|^_CHAMBER|^def _chamber|^    (amplitude|drift|fast_slow|return amplitude|rise) =' \\\"$f\\\"; done; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np,json\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; u=c['true_channel_loads']; y=c['bridge_raw']; rows=np.arange(len(u)); print('Held-out bridge by magnitude, conditioned on readings within 0.003 of nonlinear reference:')\\nfor a in [False,True]:\\n es=np.full_like(u,np.nan)\\n for k in range(5):\\n  tr=rows%5!=k; te=~tr; b=m._bridge({**c,'true_channel_loads':u[tr],'bridge_raw':y[tr]}); p=m._transfer(u[te],b); keep=np.max(abs(p-y[te]),axis=1)<0.003\\n  if a:\\n   from scipy.optimize import least_squares\\n   A=np.c_[u,np.ones(len(u))]; seed=np.linalg.lstsq(A[tr],y[tr],rcond=None)[0]; b=least_squares(lambda q: (A[tr]@q.reshape(5,4)-y[tr]).ravel(),seed.ravel(),loss='soft_l1',f_scale=.02).x.reshape(5,4); v=(y[te][keep]-b[-1])@np.linalg.inv(b[:-1])\\n  else: v=m._invert(y[te][keep],b)\\n  es[rows[te][keep]]=v-u[te][keep]\\n print('affine' if a else 'nonlinear','valid',np.isfinite(es[:,0]).sum(),'total-load worst magnitude bin MAE',max(np.nanmean(abs(es[np.digitize(np.max(abs(u),axis=1),[.5,1.2])==i].sum(axis=1))) for i in range(3)))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (nonlinear bridge and shared material) → H2 (preceding trace selects the chamber law); worst-channel 95th-percentile calibration residual is 2.30e-4 raw units.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Treat the last completed campaign's trace as describing that same campaign\",\"rejected_reason\":\"The archived batch 03 solver explicitly uses the preceding low-marker trace. With that ordering, the current trace instead matches the lead-in to batch 01.\"}],\"rationale\":\"Confirm the archive's trace-to-deployment convention and recover the archived transfer equation before editing. Held-out sweep inversion checks whether the dynamic nonlinear calibration recovers total load across the supported range rather than just fitting the calibration points.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "fdbb574ed340510f2ec0ee481a0262ab1ef055238f93d9472ae36b62a5d4f4c0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26658.24,
+      "usage_known": true,
+      "prompt_tokens": 26623,
+      "cached_tokens": 9344,
+      "completion_tokens": 911
+    }
+  ]
+}

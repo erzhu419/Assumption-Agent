@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6009bd4f91074ce0b7be318c309e23b7",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:00:41.940039+00:00",
+  "ended_at_utc": "2026-11-28T03:01:10.072389+00:00",
+  "request_sha256": "e3a325c8212d5b9574411ae3e343c90a5556d7e88a46333eb7b46fdc4b18e6cf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 45307,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27857,
+    "cached_tokens": 9344,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cal_axis.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps']; i=q['bank_id']; t=q['ref_signal']; v=q['raw_readout']; clean=np.max(abs(Y),axis=1)<4; axis=np.count_nonzero(X,axis=1)==1; z=np.max(abs(Y),axis=1)<4\\nfor j in range(4):\\n off=np.median(Y[clean&axis&(X[:,j]==0)&(X[:,(j+2)%4]==0),j]); m=clean&axis&(X[:,j]!=0); k=(i==j)&(abs(v)<4); a=np.r_[X[m,j],t[k]]; b=np.r_[Y[m,j],v[k]]-off\\n print('\\\\nbank',j,'offset',off)\\n for name,f in [('tanh',np.tanh),('erf',erf),('atan',np.arctan),('sqrt',lambda x:x/(1+x*x)**.5),('rat',lambda x:x/(1+x*x))]:\\n  for extra in [0,1,2]:\\n   def pred(p):\\n    d=[f(np.exp(p[0])*(a+p[1]))-f(np.exp(p[0])*p[1]),a]; d.extend([a*a,a**3][:extra]); return np.array(d).T\\n   def resid(p):\\n    D=pred(p); return D@np.linalg.lstsq(D,b,rcond=None)[0]-b\\n   p=least_squares(resid,[0,0],bounds=([-2,-1],[3,1]),gtol=1e-12).x; D=pred(p); co=np.linalg.lstsq(D,b,rcond=None)[0]; err=resid(p); print(name,extra,'max',round(max(abs(err)),7), 'p',p.round(5),'coef',co.round(5))\\n print('opposite axis',np.c_[X[clean&axis&(X[:,(j+2)%4]!=0),(j+2)%4],Y[clean&axis&(X[:,(j+2)%4]!=0),j]-off].round(6))\\n print('mixed sample',np.c_[X[~axis][:3],Y[~axis][:3,j]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_axis.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json /holdout_task/public_asset_index.json | head -110; sed -n '85,150p' /tmp/hegel_continual_archive/*batch_03_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -16\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic saturation fit -> H2 isolate the primary and opposite-bank transfer laws; the best previous channel-1 mixed-sweep RMSE was 0.0142, well above sweep noise.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Proceed with the previous approximately fitted map\",\n      \"rejected_reason\": \"Its mixed-sweep error is large enough to bias the inverse. Single-bank experiments can separate the primary nonlinearity from interaction terms.\"\n    }\n  ],\n  \"rationale\": \"Test whether the clean axis-only sweeps identify a low-parameter transfer law before fitting cross-channel terms. Read the gate diagnostic for independent boundary evidence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "541dcf3c1084a1ba89a61116e20098c16db1f5aab2dfab5fb94ae6e37a79e842",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30210.88,
+      "usage_known": true,
+      "prompt_tokens": 27857,
+      "cached_tokens": 9344,
+      "completion_tokens": 1069
+    }
+  ]
+}

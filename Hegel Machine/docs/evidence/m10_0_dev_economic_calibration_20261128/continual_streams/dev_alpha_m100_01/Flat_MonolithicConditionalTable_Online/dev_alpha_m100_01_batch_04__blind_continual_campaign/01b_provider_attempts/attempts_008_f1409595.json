@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f14095957cb14783aa3dcb4ad9af8bae",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:42:34.468852+00:00",
+  "ended_at_utc": "2026-11-28T02:43:10.755707+00:00",
+  "request_sha256": "d6faf8f458834192cb768fac41ab9f1bdf86c1f80348b0ef540db6e5e187c51e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49624,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27163,
+    "cached_tokens": 9344,
+    "completion_tokens": 1434
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\np = Path('/holdout_task/batch_solver.py')\\ns = p.read_text()\\ns = s.replace('\\\"\\\"\\\"Estimate a two-branch hereditary response from the benchtop coupons.\\\"\\\"\\\"', '\\\"\\\"\\\"Fit the benchtop material and predict the current deployment chamber.\\\"\\\"\\\"')\\narchive = Path('/tmp/hegel_continual_archive/dev_alpha_m100_01_batch_01_solver.py').read_text()\\ntransfer = archive[archive.index('# Rows are intercept'):archive.index('def solve_batch(')].rstrip()\\ns = s.replace('def solve_batch(dataset):', '# The immediately preceding facility trace matches the archived lead-in\\\\n# for the memory-withdrawal chamber. Transfer that law, not its bridge fit.\\\\n' + transfer + '\\\\n\\\\n\\\\ndef solve_batch(dataset: dict) -> dict:')\\ns = s[:s.index('    # Both equilibration markers')] + '''    hold = _invert(test['hold_channel_raw'], bridge).sum(axis=-1)\\n    strain, rate = _chamber_response(taus, theta, hold, x[n:], t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': np.asarray(test['strain_0'])[:, None] + strain,\\n            'initial_rate_pred': rate}\\n'''\\np.write_text(s)\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\ny = m.solve_batch(d)\\ntr, te = d['train'], d['test']\\ntaus, theta = y['estimated_taus'], y['hereditary_weights']\\nassert 0.05 < taus[0] < taus[1] < 25\\nassert all(np.isfinite(a).all() for a in y.values())\\nb = m._bridge(d['calibration_load_cells'])\\nn = len(tr['lab_id'])\\nx = m._features(tr, te)\\ndt, t = d['past_dt'], d['eval_times']\\npast, hold = m._loads(tr, b)\\ncurves = tr['strain_curves_obs'] - tr['strain_0'][:, None]\\nrates = tr['instant_rate_obs']\\nworst = np.zeros(3)\\nfor lab in np.unique(tr['lab_id']):\\n    keep = tr['lab_id'] != lab\\n    tt, th = m._fit(past[keep], hold[keep], x[:n][keep], dt, t, curves[keep], rates[keep])\\n    assert 0.05 < tt[0] < tt[1] < 25\\n    c, r = m._design(tt, past[~keep], hold[~keep], x[:n][~keep], dt, t)\\n    e = abs(c @ th - curves[~keep])\\n    metric = [np.nanmedian(e[:, :len(t)//2]), np.nanmedian(e[:, len(t)//2:]), np.nanmedian(abs(r @ th - rates[~keep]))]\\n    print('held lab', lab, 'taus', tt, 'early/late/rate MedAE', metric)\\n    worst = np.maximum(worst, metric)\\nprint('worst held-lab early/late/rate MedAE', worst)\\nh = 1e-6\\nhold_te = m._invert(te['hold_channel_raw'], b).sum(axis=-1)\\np, r = m._chamber_response(taus, theta, hold_te, x[n:], np.array([0., h]))\\nnp.testing.assert_allclose(p[:, 0], 0.)\\nnp.testing.assert_allclose(r, y['initial_rate_pred'])\\nnp.testing.assert_allclose(p[:, 1]/h, r, rtol=2e-6, atol=1e-7)\\nchanged = {**d, 'test': {**te, 'past_channel_raw': np.zeros_like(te['past_channel_raw'])}}\\nz = m.solve_batch(changed)\\nfor k in y: np.testing.assert_array_equal(y[k], z[k])\\nprint('Chamber checks: zero initial increment, slope agreement, and withdrawal of deployment load history.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear bridge and shared material) → H2 (archived memory-withdrawal law); the marker distance is 0.0325 versus 2.82 for the next closest lead-in, and the worst held-out total-load bin MAE is 2.36e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retain the benchtop chamber law\",\n      \"rejected_reason\": \"The current lead-in is much closer to the archived memory-withdrawal lead-in than to either baseline lead-in.\"\n    }\n  ],\n  \"rationale\": \"Transfer only the archived chamber law while refitting calibration and material on the current data. Held-lab errors check material generalization across early and late horizons; the deployment checks detect an inconsistent initial rate or unintended dependence on withdrawn load history. No chamber labels are available for direct error measurement.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "c305066d71bd72200a0f412eb3509002d4aee1c03154d0cd42fffde9fa4324ea",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38313.4,
+      "usage_known": true,
+      "prompt_tokens": 27163,
+      "cached_tokens": 9344,
+      "completion_tokens": 1434
+    }
+  ]
+}

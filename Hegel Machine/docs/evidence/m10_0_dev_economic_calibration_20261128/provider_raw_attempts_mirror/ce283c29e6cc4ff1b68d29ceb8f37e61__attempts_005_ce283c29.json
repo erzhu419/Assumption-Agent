@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce283c29e6cc4ff1b68d29ceb8f37e61",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:38.043938+00:00",
+  "ended_at_utc": "2026-11-28T02:47:14.437713+00:00",
+  "request_sha256": "9bd1ac705f522d5f2255b5f3150c5f56d1d2703803e9c0d8b9ff0d4838645345",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 38195,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24767,
+    "cached_tokens": 9344,
+    "completion_tokens": 1452
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_basis.py <<'PY'\\nimport pickle,json\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=170)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; T=c['true_channel_loads']; R=c['bridge_raw']; q=c['single_channel_sweeps']; ok=np.max(abs(R),axis=1)<5; axis=np.count_nonzero(T,axis=1)==1\\nfor j in range(4):\\n p=j^2; sw=(q['lab_id']==j)&(abs(q['cmd_stress'])<5); ax=ok&axis&(T[:,j]!=0); x=np.r_[q['true_stress'][sw],T[ax,j]]; y=np.r_[q['cmd_stress'][sw], R[ax,j]]\\n f=lambda a,u:a[0]+a[1]*u+a[2]*np.sin(a[3]*u)\\n fit=least_squares(lambda a:f(a,x)-y,[0,1,.2,2.5]).x\\n print('self',j,fit,'rmse',np.std(f(fit,x)-y))\\n a=T[ok,j]; b=T[ok,p]; z=R[ok,j]-f(fit,a); u,v=T[ok,j],T[ok,p]\\n print('pair axis',np.c_[b[(a==0)&(b!=0)],z[(a==0)&(b!=0)]])\\n for opt in ['poly2','tanh','ration','cos','trig','mixed','full']:\\n  feat=[b];\\n  if opt=='poly2':feat += [b*b,u*v]\\n  if opt=='tanh':feat += [np.tanh(b)**2,u*v]\\n  if opt=='ration':feat += [b*b/(1+b*b),u*v]\\n  if opt=='cos':feat += [1-np.cos(1.5*b),u*v]\\n  if opt=='trig':feat += [np.sin(2.5*b),1-np.cos(2.5*b),u*v]\\n  if opt=='mixed':feat += [np.sin(2.5*b),b*b/(1+b*b),u*v,np.sin(2.5*u)*b,u*np.sin(2.5*b),np.sin(2.5*u)*np.sin(2.5*b)]\\n  if opt=='full':\\n   cols=T[ok].T; feat=list(cols)+[w*w for w in cols]+[np.sin(2.5*w) for w in cols]+[cols[k]*cols[l] for k in range(4) for l in range(k)]\\n  F=np.array(feat).T; err=z-F@np.linalg.lstsq(F,z,rcond=None)[0]; print(opt, np.sqrt(np.mean(err**2)), np.max(abs(err)))\\n print('mixed example: own paired residual',np.c_[a,b,z][~axis[ok]][:8])\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); print('telemetry campaigns',[(e['completed_campaign_short_name'],type(e['facility_telemetry_trace']).__name__,len(e['facility_telemetry_trace'])) for e in log]); print('last trace fields', list(log[-1]['facility_telemetry_trace'])[:12] if isinstance(log[-1]['facility_telemetry_trace'],dict) else list(log[-1]['facility_telemetry_trace'][0])[:12])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_basis.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 generic saturation → H2 linear-plus-sinusoidal self response with paired coupling; the best tested sweep fits have RMSE 6.1e-5 to 9.4e-5, with mixed-load inverse error not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Carry the six-parameter tanh-plus-sine model forward\",\"rejected_reason\":\"The fitted sine frequency is near 2.5 for all four channels and the tanh is nearly linear; test the simpler linear-plus-sine law first.\"}],\"rationale\":\"Fit the isolated response before testing paired and all-channel terms on mixed rows. If both mixed bases leave residuals well above sweep noise, the discrepancy guides the next interaction basis rather than being absorbed into the self-response.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "582b5c67d4825f895a5ace909402f72109d7ba5e3579075c4d434180f1a9ec6c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38370.07,
+      "usage_known": true,
+      "prompt_tokens": 24767,
+      "cached_tokens": 9344,
+      "completion_tokens": 1452
+    }
+  ]
+}

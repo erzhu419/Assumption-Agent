@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f6132d0cda884b4d81103291bd340bde",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:56:47.453265+00:00",
+  "ended_at_utc": "2026-11-28T02:57:18.618227+00:00",
+  "request_sha256": "9f6f115ff38baa4363e05011372d8f0e7bacf3216bdbc9189cf13446a33ba925",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 33946,
+    "cached_tokens": 9344,
+    "completion_tokens": 1250
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/chamber_probe.py <<'PY'\\nfrom chamber_data import *\\nfrom itertools import combinations\\nfrom scipy.optimize import least_squares\\nz=h[:,None]-g; l=di['lab_id']; st=di['stratum']; one=np.ones(len(h)); base=c.copy(); base[:,0]=th[0]*h\\nY=y-base@B.T; a=B[:,0]; b1=B[:,1]; d=B[:,2]\\nQ={'hold':h,'zfast':z[:,0],'zslow':z[:,1],'gapfast':g[:,0],'gapslow':g[:,1],'stratum':st}\\nQ.update({f'p{j}':v for j,v in enumerate(p.T)}); Q.update({f'x{j}':v for j,v in enumerate(xx.T)})\\nQ.update({f'hch{j}':v for j,v in enumerate(np.asarray(di['hold_channel_raw']).T)})\\nQ.update({f'pch{j}':v for j,v in enumerate(np.asarray(di['past_channel_raw'])[:,-1,:].T)})\\nQ.update({f'str{j}':st==j for j in np.unique(st)})\\nQ.update({'hold*zslow':h*z[:,1],'hold*score':h*s,'zslow*score':z[:,1]*s,'hold2':h*h,'score2':s*s,'score3':s**3,'end-start':p[:,-1]-p[:,0]})\\ndef evaluate(cols):\\n A=np.stack([s[:,None]*a,s[:,None]*d]+[v[:,None]*b1 for v in cols],axis=-1)\\n def fit(m): return np.linalg.lstsq(A[m].reshape(-1,A.shape[-1]),Y[m].ravel(),rcond=None)[0]\\n beta=fit(one==1); e=Y-A@beta; eo=np.empty_like(e)\\n for j in np.unique(l): eo[l==j]=Y[l==j]-A[l==j]@fit(l!=j)\\n score=[np.sqrt(np.mean(e[:,:-1]**2)),np.sqrt(np.mean(eo[:,:-1]**2)),np.sqrt(np.mean(eo[:,-1]**2)),max(np.sqrt(np.mean(eo[l==j,:-1]**2)) for j in np.unique(l))]\\n return np.array(score),beta,e\\nbest=[]\\nfor k,v in Q.items():\\n sc,bta,_=evaluate([one,s,v]); best.append((sc[1],k,sc,bta))\\nfor row in sorted(best,key=lambda x:x[0])[:16]:print(row)\\nfor keys in [('hold','zslow'),('hold','gapslow'),('zfast','zslow'),('p0','p5'),('hold','stratum')]:\\n print(keys,evaluate([one,s,*[Q[k] for k in keys]])[:2])\\nsc,bta,e=evaluate([one,s]); r=e@b1/(b1@b1); print('deviations (lab,stratum,score,hold,zslow,slow residual)',np.c_[l,st,s,h,z[:,1],r].round(3)); print('test score span',np.quantile(th[2]+x[n:]@th[3:],[0,.5,1]))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/chamber_probe.py\\npython3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; a=json.load(open(p)); print('archive keys',list(a) if isinstance(a,dict) else len(a));\\nfor v in (a.values() if isinstance(a,dict) else [a]):\\n if isinstance(v,list) and v and isinstance(v[-1],dict): print('last record', {k:(str(x)[:250] if not isinstance(x,list) else f'list({len(x)})') for k,x in v[-1].items()})\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 fast-memory withdrawal plus affine slow transfer → H2 stress- or cell-dependent slow transfer; affine leave-one-lab-out RMSE is 0.07544 for strain and 0.04557 for initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a nonlinear function of drift score alone\",\"rejected_reason\":\"Quadratic and saturation laws did not improve held-out predictions reliably; the remaining error is concentrated in the slow basis, so stress-history contrasts are the next test.\"}],\"rationale\":\"Test whether the slow residual tracks calibrated hold stress, hereditary state, or a repeatable cell effect. Keep the fast withdrawal law fixed and compare held-out strain and rate before adding a chamber term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "3c4c4efce27218af584977cb88e499c171151808520862834d94ef4ffa7e0c60",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33181.03,
+      "usage_known": true,
+      "prompt_tokens": 33946,
+      "cached_tokens": 9344,
+      "completion_tokens": 1250
+    }
+  ]
+}

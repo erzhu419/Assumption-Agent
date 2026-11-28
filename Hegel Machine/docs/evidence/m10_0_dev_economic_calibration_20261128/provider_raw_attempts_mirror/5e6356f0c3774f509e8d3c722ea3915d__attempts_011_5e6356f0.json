@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5e6356f0c3774f509e8d3c722ea3915d",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:45.241725+00:00",
+  "ended_at_utc": "2026-11-28T02:37:27.698487+00:00",
+  "request_sha256": "3503792681e5e9056f86760b39c98e4a63547837ddb0e6239767cce0fdf9e766",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 58351,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29617,
+    "cached_tokens": 9344,
+    "completion_tokens": 1704
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_rosette_margin.py <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    study = pickle.load(f)[0]['study']\\nsweep = study['sensor_calibration_sweeps']\\nx, y = sweep['ref_rosette'], sweep['raw_rosette']\\nbank = sweep['single_bank_sweeps']\\nrows = np.arange(len(x))\\nbrows = np.arange(len(bank['bank_id']))\\nclean = ~np.isin(rows, [13, 14, 15])\\n\\n# A rational challenger divides the nonlinear correction by 1+a*q^2,\\n# with q either the local signal or the adjacent-channel difference.\\ndef design(z, j, a, difference):\\n    d = up._design(z, j)\\n    q = z[:, j] - z[:, (j+1)%4] if difference else z[:, j]\\n    d[:, 5:] /= 1 + a*q[:, None]**2\\n    return d\\n\\ndef fit(tr, bk, a, diff):\\n    if a == 0:\\n        return up._fit(x[tr], y[tr], {k:v[bk] for k,v in bank.items()})\\n    A = [design(x[tr], j, a, diff) for j in range(4)]\\n    B, v = [], []\\n    for j in range(4):\\n        ii = bk[bank['bank_id'][bk] == j]\\n        z = np.zeros((len(ii), 4)); z[:, j] = bank['ref_signal'][ii]\\n        B.append(design(z, j, a, diff)); v.append(bank['raw_readout'][ii])\\n    w = np.ones(len(tr)); wb = [np.ones(len(t)) for t in v]\\n    for _ in range(18):\\n        coef = np.column_stack([np.linalg.lstsq(np.vstack((d*w[:,None], b*u[:,None])), np.r_[y[tr,j]*w,t*u], rcond=None)[0] for j,(d,b,t,u) in enumerate(zip(A,B,v,wb))])\\n        e = np.linalg.norm(np.column_stack([d@coef[:,j] for j,d in enumerate(A)])-y[tr],axis=1)\\n        scale = max(np.median(e)/1.83,1e-8)\\n        w = 1/np.hypot(1,e/(4*scale))\\n        wb = [1/np.hypot(1,(b@coef[:,j]-t)/(3*scale)) for j,(b,t) in enumerate(zip(B,v))]\\n    return coef\\n\\ndef errors(test, p, a, diff):\\n    z = x[test]\\n    return np.linalg.norm(np.column_stack([design(z,j,a,diff)@p[:,j] for j in range(4)])-y[test], axis=1)\\n\\nouter = {f'random{i}':t for i,t in enumerate(np.array_split(np.random.default_rng(31).permutation(rows),5))}\\nouter['upper envelope'] = np.argsort(np.max(abs(x),axis=1))[-16:]\\nouter['joint contrast'] = np.argsort(np.max(abs(x-np.roll(x,-1,axis=1)),axis=1))[-16:]\\nouter['central'] = np.argsort(np.linalg.norm(x,axis=1))[:16]\\noptions = [(0.,False)] + [(a,d) for d in (False,True) for a in (1e-5,1e-4,1e-3,1e-2,0.1)]\\nbase_max = selected_max = 0.\\nfor i,(name,test) in enumerate(outer.items()):\\n    tr = np.setdiff1d(rows,test)\\n    bk = brows[brows%5 != i%5]\\n    def score(option):\\n        a,d = option\\n        parts = []\\n        for val in np.array_split(np.random.default_rng(92).permutation(tr),3):\\n            p = fit(np.setdiff1d(tr,val),bk,a,d)\\n            parts.extend(errors(val,p,a,d))\\n        return np.quantile(parts,0.9)\\n    a,d = min(options,key=score)\\n    test = test[clean[test]]\\n    p0 = fit(tr,bk,0.,False)\\n    baseline = max(errors(test,p0,0.,False))\\n    inverse = max(np.linalg.norm(up._inverse(y[test],p0)-x[test],axis=1))\\n    selected = max(errors(test,fit(tr,bk,a,d),a,d))\\n    base_max = max(base_max,baseline); selected_max = max(selected_max,selected)\\n    print(f'{name}: forward={baseline:.3e} inverse={inverse:.3e} nested-challenger={selected:.3e} a={a:g} difference={d}')\\nprint(f'Worst forward: cyclic={base_max:.3e}; nested challenger={selected_max:.3e}')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette_margin.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic polynomial → H2 rational saturation only if it improves held-out accuracy; the verified baseline's worst clean inverse L2 error is 4.83e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run class-balance, relay-mode, or drift-operator tests\",\n      \"rejected_reason\": \"The upstream task fits paired continuous measurements from one study; it has no class labels, technical-batch cohorts, relay states, or drift operator to estimate.\"\n    }\n  ],\n  \"rationale\": \"Test whether the polynomial misses a rational saturation effect at high excitation or large adjacent-channel contrast. Select the denominator inside the training folds. Reopen the fit only if the challenger fixes a measured worst-slice error; otherwise retain the verified artifacts.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "93445c6ea920bc2f564b9d866978421f50f0f1d6b6a1a24e0e9639e628944f60",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 46468.66,
+      "usage_known": true,
+      "prompt_tokens": 29617,
+      "cached_tokens": 9344,
+      "completion_tokens": 1704
+    }
+  ]
+}

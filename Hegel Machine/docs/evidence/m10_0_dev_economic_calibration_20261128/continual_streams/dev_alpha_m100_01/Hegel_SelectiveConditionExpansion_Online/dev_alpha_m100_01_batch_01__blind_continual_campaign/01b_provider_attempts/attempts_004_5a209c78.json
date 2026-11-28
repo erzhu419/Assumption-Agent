@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5a209c7823fe40e180919ebd7479f574",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:20.941687+00:00",
+  "ended_at_utc": "2026-11-28T02:25:49.420850+00:00",
+  "request_sha256": "1173cff81dc07f8b15bf442da5c1312c47de5445b72c41667cb844c6b9cd3a0e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 30480,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20550,
+    "cached_tokens": 0,
+    "completion_tokens": 981
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cp /tmp/hegel_continual_archive/dev_alpha_m100_01_s00_solver.py /tmp/m100_base.py\\ncat > /tmp/m100_probe.py <<'PY'\\nimport pickle,numpy as np\\nfrom m100_base import _bridge,_loads,_features,_design,_fit\\nnp.set_printoptions(precision=5,suppress=True,linewidth=130)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=i['dataset']; diag=i['campaign_diagnostics']; tr=d['train']; te=d['test']; cal=d['calibration_load_cells']; dt=d['past_dt']; t=d['eval_times']; n=len(tr['lab_id']); x=_features(tr,te); xd=_features(dict((k,np.concatenate((tr[k],te[k]))) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')),diag)[-len(diag['lab_id']):]; b=_bridge(cal)\\na=cal['bridge_raw']; y=cal['true_channel_loads']; z=np.c_[a,np.ones(len(a))]; e=z@np.linalg.lstsq(z,y,rcond=None)[0]-y\\nprint('cal',a.shape,'ranges',a.min(0),a.max(0),'affine RMSE',np.sqrt(np.mean(e**2,0)),'max',np.max(abs(e),0),'sweeps',type(cal['single_channel_sweeps'])); print('sweep keys',[(str(k),getattr(v,'shape',None),list(v) if isinstance(v,dict) else '') for k,v in cal['single_channel_sweeps'].items()] if isinstance(cal['single_channel_sweeps'],dict) else str(cal['single_channel_sweeps'])[:350]); print('bridge',b,'dt,t',dt,t)\\nfor typ in ('train','diag'):\\n part=tr if typ=='train' else diag; xx=x[:n] if typ=='train' else xd; p,h=_loads(part,b); cobs=part['strain_curves_obs']-part['strain_0'][:,None]; robs=part['instant_rate_obs']; fit=_fit(p,h,xx,dt,t,cobs,robs)\\n print('fit',typ,fit)\\n if typ=='train': tau,theta=fit\\n C,R=_design(tau,p,h,xx,dt,t); ec=cobs-C@theta; er=robs-R@theta\\n print(typ,'resid quantiles curve',np.quantile(abs(ec),[.25,.5,.8,.9,.95,1]),'rate',np.quantile(abs(er),[.25,.5,.8,.9,.95,1])); print('resid means by t',ec.mean(0)); print('curve SVD',np.linalg.svd(ec,compute_uv=False)); print('resid first rows',np.c_[er,ec][:8]); print('part lab,str counts',np.unique(np.c_[part['lab_id'],part['stratum']],axis=0,return_counts=True));\\n if typ=='diag': print('hold/past ranges',h.min(),h.max(),p.min(),p.max())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m100_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: separate bridge calibration error from chamber-law error using residuals on benchtop and chamber coupons; quantitative comparison pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Refit material weights on chamber coupons\",\n      \"rejected_reason\": \"That would absorb a deployment-law change into material parameters that the task requires estimating from train.\"\n    }\n  ],\n  \"rationale\": \"Measure affine calibration errors first, then compare chamber time structure and initial-rate errors against the train fit. This distinguishes a bridge correction from a missing constitutive term.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "801a9015368007bdb6ba060d47caff405bfe180bc1609412a8824014195550d2",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28441.42,
+      "usage_known": true,
+      "prompt_tokens": 20550,
+      "cached_tokens": 0,
+      "completion_tokens": 981
+    }
+  ]
+}

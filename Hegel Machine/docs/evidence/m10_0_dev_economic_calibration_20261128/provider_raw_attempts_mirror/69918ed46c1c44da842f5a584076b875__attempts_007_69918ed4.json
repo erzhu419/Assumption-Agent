@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "69918ed46c1c44da842f5a584076b875",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:11:01.745491+00:00",
+  "ended_at_utc": "2026-11-28T03:11:27.030465+00:00",
+  "request_sha256": "39d5e7ae2dedc3cd7988e78c8b51f29260da27ea0a3480c5a4a94c58b418df05",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 50688,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28374,
+    "cached_tokens": 9344,
+    "completion_tokens": 913
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/profile08.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import minimize_scalar\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; t=s['sensor_calibration_sweeps']; b=t['single_bank_sweeps']\\nfamilies={'tanh':np.tanh,'atan':np.arctan,'sin':np.sin,'asinh':np.arcsinh,'rat':lambda z:z/(1+z*z),'softsign':lambda z:z/np.sqrt(1+z*z),'erf':__import__('scipy.special',fromlist=['erf']).erf}\\nfor name,fn in families.items():\\n def profile(f,ret=False):\\n  cs=[]; rs=[]\\n  for j in range(4):\\n   ix=(b['bank_id']==j)&(abs(b['raw_readout'])<4); x,y=b['ref_signal'][ix],b['raw_readout'][ix]; D=np.column_stack([np.ones(len(x)),x,fn(f*x)]); c=np.linalg.lstsq(D,y,rcond=None)[0];cs.append(c);rs.extend(D@c-y)\\n  return (np.array(cs),np.max(abs(np.array(rs)))) if ret else np.mean(np.square(rs))\\n opt=minimize_scalar(profile,bounds=(.3,4.),method='bounded',options={'xatol':1e-13}); print(name,'freq',opt.x,'RMSE',opt.fun**.5,'max',profile(opt.x,True)[1],'coeff',np.round(profile(opt.x,True)[0],5))\\n if name=='tanh':\\n  c=profile(opt.x,True)[0]; x=t['ref_rosette']; r=t['raw_rosette']-(c[:,0]+c[:,1]*x+c[:,2]*fn(opt.x*x)); good=np.all(abs(t['raw_rosette'])<4,axis=1); x=x[good];r=r[good]; print('joint remaining RMSE',np.mean(r*r,axis=0)**.5); print('cross regression',np.round(np.linalg.lstsq(x,r,rcond=None)[0],4))\\nPY\\npython3 /tmp/profile08.py; cd /tmp/hegel_continual_archive; for f in *solver.py; do echo \\\"--- $f\\\"; head -1 \\\"$f\\\"; grep -E '^[[:space:]]+a[xy] =' \\\"$f\\\"; done; python3 - <<'PY'\\nimport json\\nfor n in ('archive_apparatus_log','archive_manifest'):\\n x=json.load(open(n+'.json')); print(n); print({k:v for k,v in x[-1].items() if not isinstance(v,(list,dict))} if isinstance(x,list) else list(x))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine rosette → nonlinear self-response plus cross-channel coupling; worst affine joint-sweep RMSE was 2.55 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer the archived sine calibration directly\",\n      \"rejected_reason\": \"The isolated sweeps can distinguish a sine correction from monotone saturation before fitting cross-channel effects.\"\n    }\n  ],\n  \"rationale\": \"Fit compact response families to the clean isolated sweeps, then inspect what each self-response leaves unexplained in the joint sweeps. This separates the sensor model from the transport model before boundary comparison.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "be77cf2b431af9f196b90f28d60d0cb4d6ec848392ff2e04aa49b4026c7150e1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27317.49,
+      "usage_known": true,
+      "prompt_tokens": 28374,
+      "cached_tokens": 9344,
+      "completion_tokens": 913
+    }
+  ]
+}

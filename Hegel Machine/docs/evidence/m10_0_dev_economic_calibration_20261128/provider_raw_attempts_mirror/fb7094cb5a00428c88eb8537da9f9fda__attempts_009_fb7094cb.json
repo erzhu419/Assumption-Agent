@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fb7094cb5a00428c88eb8537da9f9fda",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:34.140335+00:00",
+  "ended_at_utc": "2026-11-28T02:46:01.806742+00:00",
+  "request_sha256": "1a4396ba2bb475cab7ce26562e45a1f97046f86c44cd447b31fe184dcd83b2fb",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46777,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25302,
+    "cached_tokens": 9344,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations_with_replacement\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\naxis = np.count_nonzero(x, axis=1) <= 1\\namp = np.max(abs(x), axis=1)\\nterms = list(combinations_with_replacement(range(4), 2))\\nL = np.column_stack((np.ones(len(x)), x))\\nQ = np.column_stack([L] + [x[:, i] * x[:, j] for i, j in terms])\\nfor label, test in [('axis sweep', axis), ('high mixed load', ~axis & (amp >= np.quantile(amp[~axis], .8)))]:\\n    tr = ~test\\n    coef = up._fit(x[tr], y[tr])\\n    row = np.linalg.norm(up._forward(x, coef) - y, axis=1)\\n    assert np.all((row < .01) | (row > 1.0))\\n    fit, val = tr & (row < .01), test & (row < .01)\\n    lower = [np.max(abs(A[val] @ np.linalg.lstsq(A[fit], y[fit], rcond=None)[0] - y[val])) for A in (L, Q)]\\n    sparse = np.max(abs(up._forward(x[val], coef) - y[val]))\\n    loads = up._inverse(y[val], coef) - x[val]\\n    chan, total = np.max(abs(loads)), np.max(abs(loads.sum(axis=1)))\\n    print(f'ng_t03 {label} n={val.sum()} forward max affine/quadratic/sparse={lower[0]:.8g}/{lower[1]:.8g}/{sparse:.8g}; sparse inverse max channel/total={chan:.8g}/{total:.8g}')\\n    assert sparse < min(lower) and chan < .001 and total < .001\\nout = solve_batch(ds)\\nassert all(np.isfinite(np.asarray(out[k])).all() for k in ('estimated_taus','hereditary_weights','initial_rate_pred','predicted_strain'))\\nPY\\nrc=$?; [ \\\"$rc\\\" -eq 0 ] || exit \\\"$rc\\\"; OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Affine and quadratic mixing → cyclic pair coupling plus per-channel cubic response; clean leave-one-out maxima were 0.000353 per channel and 0.000529 in total load, with whole-slice holdouts now testing extrapolation.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t03\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Promote gain pooling on the mixed-load improvement alone\",\n      \"rejected_reason\": \"Pooling did not improve the high-load slice, and no tolerance bottleneck has been demonstrated. Withholding a whole load regime tests a different failure mode from interleaved folds.\"\n    }\n  ],\n  \"rationale\": \"Exclude the entire axis sweep or upper mixed-load band from fitting, then compare the exact artifact with affine and quadratic models on real held-out measurements. A failure would show the sparse basis was not adequately constrained outside the fitted load regime; passing verifies the missing-basis repair directly in a clean process.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "7757014872837eeb93d4ffd03f60ff16d4b2ce41ade0157e7098bfad655bbbf1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29696.43,
+      "usage_known": true,
+      "prompt_tokens": 25302,
+      "cached_tokens": 9344,
+      "completion_tokens": 1050
+    }
+  ]
+}

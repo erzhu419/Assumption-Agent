@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "643384c9b6bc41f897111a1fcff61527",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:52:04.167422+00:00",
+  "ended_at_utc": "2026-11-28T02:52:44.734591+00:00",
+  "request_sha256": "d90c3c8a1ac7e21c2c09e4ba8f64787d5e13eba97a7dae7667fd94273374b0d0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 78074,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 42411,
+    "cached_tokens": 9344,
+    "completion_tokens": 1766
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_chamber.py <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nfrom scipy.optimize import minimize\\nfrom pathlib import Path\\np=Path('/holdout_task'); spec=importlib.util.spec_from_file_location('batch_solver',p/'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns=pickle.load((p/'public_batch.pkl').open('rb'))[0]['study']; nx,ny=s['nx'],s['ny']; Z=s['Z_nuisance']; obs=m._calibrate(s); out=m.solve_batch(s)\\ndef dense_axis(k,v,h,r):\\n n=len(k); A=np.zeros((n,n));\\n for i in range(n):\\n  if i in (0,n-1):\\n   j=1 if i==0 else n-2; A[i,j]=-k[i]/h**2; A[i,i]=k[i]/h**2+r/h\\n  else:\\n   A[i,i-1]=-(k[i-1]+k[i])/(2*h**2)-max(v[i],0)/h\\n   A[i,i+1]=-(k[i]+k[i+1])/(2*h**2)-max(-v[i],0)/h\\n   A[i,i]=-A[i,i-1]-A[i,i+1]\\n return A\\nAx,Ay=[dense_axis(s['kappa_'+a],s['vel_'+a],s['L'+a]/(s['n'+a]-1),s['robin_'+a]) for a in 'xy']; L=np.kron(np.eye(ny),Ax)+np.kron(Ay,np.eye(nx))+np.diag(s['V_reaction_2d'].flatten(order='F')); assert np.max(abs(L-m._operator(s).toarray()))<1e-10\\nrhs=np.stack([u.flatten(order='F') for u in s['source_modes']],axis=1); S=[]; I=np.eye(nx*ny)\\nfor mu in s['mu_shifts']:\\n U=np.linalg.solve(L+mu*I,rhs); S.extend(U[s['sensor_ij'][:,0]+nx*s['sensor_ij'][:,1]])\\nS=np.asarray(S); B=s['total_budget']; cap=s['u_box']; sr=s['source_ridge']; R=s['nuisance_ridge']\\ndef problem(mask):\\n z=Z[mask]; d=np.column_stack((S[mask],obs[mask])); P=np.linalg.solve(z.T@z+R*np.eye(z.shape[1]),z.T@d); d=d-z@P; A,y=d[:,:-1],d[:,-1]; return A,y,P\\nA,y,P=problem(slice(None)); w=out['weights']; c=out['kkt_certificate']; g=A.T@(A@w-y)+sr*w; nu=c['nu_sum']; lo=np.asarray(c['lam_lower']); hi=np.asarray(c['lam_upper']); J=.5*(np.linalg.norm(A@w-y)**2+sr*(w@w)); D=J-g@w+nu*B+cap*np.minimum(0,g-nu).sum()\\nerr=[abs(w.sum()-B),max(0.,-w.min(),w.max()-cap),np.max(abs(g-nu-lo+hi)),np.max(abs(lo*w)),np.max(abs(hi*(cap-w))),abs(J-c['primal_objective']),abs(D-c['dual_lower_bound']),abs(J-D),np.max(abs((U@w).reshape((nx,ny),order='F')-out['terminal_field']))]; assert np.max(err)<1e-10 and np.min(lo)>=0 and np.min(hi)>=0 and np.array_equal(c['weights'],w); print('budget/box/stationarity/complementarity/objective/dual/gap/field:',err)\\nerr=[]\\nfor i in range(0,len(obs),4):\\n tr=np.ones(len(obs),bool); tr[i:i+4]=False; A,y,P=problem(tr); w0,_=m._box_simplex(A.T@A+sr*np.eye(len(w)),-A.T@y,cap,B); err.append(np.sqrt(np.mean((S[~tr]@w0+Z[~tr]@(P[:,-1]-P[:,:-1]@w0)-obs[~tr])**2)))\\nprint('Leave-rosette-out RMSE pooled and worst:',np.sqrt(np.mean(np.square(err))),max(err))\\nrng=np.random.default_rng(120); worst=0.\\nfor total in (0., .42, 1.26, 1.4, 2.94, 3.36):\\n for _ in range(20):\\n  Q=rng.normal(size=(8,8)); H=Q.T@Q+.04*np.eye(8); c=rng.normal(size=8)*3; u,v=m._box_simplex(H,c,.42,total); d=H@u+c-v; violation=max(abs(u.sum()-total),-u.min(),u.max()-.42,np.max(np.maximum(d,0)*u),np.max(np.maximum(-d,0)*(.42-u))); worst=max(worst,violation)\\nassert worst<1e-9; print('worst stress feasibility/complementarity:',worst)\\nsw=s['sensor_calibration_sweeps']; f,e,b,coef=m._estimate(sw); x=sw['ref_rosette']; raw=sw['raw_rosette']; re=f(x)-raw; good=np.max(abs(raw),axis=1)<5; size=np.max(abs(re),axis=1); print('shared coefficients:',np.round(coef,5)); print('largest clean residual rows:');\\nfor i in np.flatnonzero(good)[np.argsort(size[good])[-9:]]: print(i, np.round(x[i],3),np.round(re[i],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic calibration → H2 shared saturating self-transfer and rational opposite-bank coupling; held-out sweep error reaches 0.01024 at the worst-bank 90th percentile and 0.02905 at the maximum.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select the calibration from sweep error alone\",\n      \"rejected_reason\": \"The fitted law must also improve or preserve the chamber predictions; inspect the remaining residuals for structure before adding terms.\"\n    }\n  ],\n  \"rationale\": \"Independently reconstruct the transport operator and KKT quantities to catch wall-row, field-ordering, or certificate errors that the schema validator cannot detect. Stress active bounds and exact budgets, then measure the updated calibration on held-out chamber rosettes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "3ed7758b760b5fb8c97527b6b30f29deb98c4f891bb6727036a54c892b862bd5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 44697.24,
+      "usage_known": true,
+      "prompt_tokens": 42411,
+      "cached_tokens": 9344,
+      "completion_tokens": 1766
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09004f0f34cf47e988ddef985fece72a",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:05:11.688056+00:00",
+  "ended_at_utc": "2026-11-28T03:05:34.876048+00:00",
+  "request_sha256": "802197c421272887f97b3a1cb13cd0cf2b562692282064465a897af762736289",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 49399,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26233,
+    "cached_tokens": 9344,
+    "completion_tokens": 775
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\nprint('gate:', (p/'pre_llm_gate_diagnostic.json').read_text()[:5000])\\na=json.loads((p/'archive_apparatus_log.json').read_text()); print('log structure:', list(a) if isinstance(a,dict) else a[0].keys());\\nif isinstance(a,dict):\\n for k,v in a.items():\\n  if not isinstance(v,list): print(k,str(v)[:700])\\na=a if isinstance(a,list) else next(v for v in a.values() if isinstance(v,list))\\nfor i,r in enumerate(a):\\n x=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'], 'shape',x.shape,'mean',np.round(x.mean(0),3),'identical to',[j for j in range(i) if np.array_equal(x,a[j]['facility_telemetry_trace'])]); print('other fields',{k:v for k,v in r.items() if k not in ('facility_telemetry_trace','completed_campaign_index','completed_campaign_short_name')})\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; d=item['dataset']; print('keys',list(item),list(d));\\nfor name in ('train','test'):\\n q=d[name]; x=q['aux_chamber_telemetry']; print(name,'telemetry quantiles',np.round(np.quantile(x,[0,.25,.5,.75,1],axis=0),3)); print('sample correlations',np.round(np.corrcoef(np.column_stack((x,q['hold_channel_raw'].sum(-1),q['past_channel_raw'].sum(-1))).T)[:4,4:],2))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain the validated intrinsic fit and require deployment-specific evidence before transferring an archived chamber law; worst held-out-lab p90 errors are 0.02274 for strain and 0.01497 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune the intrinsic fit now\",\n      \"rejected_reason\": \"Held-out lab errors are small relative to the deployment-law disagreement, so identifying the chamber law is the larger opportunity.\"\n    }\n  ],\n  \"rationale\": \"Read the gate diagnostic and summarize the telemetry to determine whether the archive contains a deployment-specific signal beyond the mismatched campaign signatures. If it does not, use the documented benchtop fallback rather than transfer unsupported drift fractions. The staged and dynamically fitted calibrations differ by less than 0.00019 in the public train data; preserve the staged transducer.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "731c2a2f92991847faa302629f7c7283514d227e9502d8f98b40fe82ef8f9c87",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 23148.42,
+      "usage_known": true,
+      "prompt_tokens": 26233,
+      "cached_tokens": 9344,
+      "completion_tokens": 775
+    }
+  ]
+}

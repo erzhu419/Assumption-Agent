@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ffddb66514c3444f81c065cb2de4f3d6",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:25.122285+00:00",
+  "ended_at_utc": "2026-11-28T02:25:55.696798+00:00",
+  "request_sha256": "5bcd0dc6838a7aa35c229a9df2c40bd5da60bdc69462b611ba50d38adbf75c7d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31973,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21790,
+    "cached_tokens": 9344,
+    "completion_tokens": 1012
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"sed -n '60,170p' /tmp/hegel_continual_archive/dev_alpha_m100_02_s00_solver.py; python3 - <<'PY'\\nimport pickle,json,sys,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive'); import dev_alpha_m100_02_s00_solver as m\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; q=p['campaign_diagnostics']; tr,te=d['train'],d['test']; c=d['calibration_load_cells']; dt,t=d['past_dt'],d['eval_times']; cal=m._bridge(c); xtr,xt=m._features(tr,te); out=m.solve_batch(d); tau=out['estimated_taus']; th=out['hereditary_weights']; print('tau,theta',tau,th); print('diag N',len(q['lab_id']),'t',t,'dt',dt)\\nfor part,x in [(tr,xtr),(q,m._features(tr,q)[1])]:\\n a,b=m._design(np.log(tau),m._prepare(part,x,cal),dt,t); e=part['strain_curves_obs']-part['strain_0'][:,None]-a@th; r=part['instant_rate_obs']-b@th\\n print('res quantiles',np.quantile(e,[0,.1,.5,.9,1]),'rate',np.quantile(r,[0,.1,.5,.9,1]),'res sv',np.linalg.svd(e,compute_uv=False)); print('lab means',[(k,np.mean(e[part['lab_id']==k],axis=0)[[0,4,-1]],np.mean(r[part['lab_id']==k])) for k in np.unique(part['lab_id'])])\\n if part is q:\\n  B=np.column_stack((-np.expm1(-t[:,None]/tau),t)); z=np.linalg.lstsq(np.vstack((B,np.r_[1/tau,1.])),np.column_stack((e,r)).T,rcond=None)[0].T; print('diag residual branch and drift coefficients by coupon:',np.round(np.c_[q['lab_id'],q['stratum'],z],4)); print('remaining median/max',np.median(abs(e-z@B.T)),np.max(abs(e-z@B.T)))\\nprint('sweep keys',c['single_channel_sweeps'].keys()); sw=c['single_channel_sweeps'];\\nfor k in np.unique(sw['lab_id']):\\n i=sw['lab_id']==k; print('sweep true from cmd',k,np.polyfit(sw['cmd_stress'][i],sw['true_stress'][i],1))\\nprint('index compact:',str(json.load(open('/holdout_task/public_asset_index.json')))[:1450]);\\nfor a in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n v=np.array(a['facility_telemetry_trace']); print('trace',a['completed_campaign_index'],a['completed_campaign_short_name'],v.shape,np.round(v.mean(0),3),np.round(v.std(0),3))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 shared benchtop spectrum -> H2 chamber-specific stress or response correction; affine bridge calibration has maximum channel error 3.19e-4, and chamber validation is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit a nonlinear inverse bridge\",\n      \"rejected_reason\": \"The full four-channel affine inverse already matches the calibration sweeps to within 3.19e-4 per channel.\"\n    }\n  ],\n  \"rationale\": \"Decompose the verification residuals into branch and drift terms. If the shared temporal basis explains them, test a sparse correction to branch amplitudes or drift; if it does not, test a changed chamber time law. Quantify the lab sweep transforms separately so command calibration is not mistaken for hereditary dynamics.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d2a9dfbf521a086b356324e78e175c8f20238e963e08528d8d051c635fb47966",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32538.94,
+      "usage_known": true,
+      "prompt_tokens": 21790,
+      "cached_tokens": 9344,
+      "completion_tokens": 1012
+    }
+  ]
+}

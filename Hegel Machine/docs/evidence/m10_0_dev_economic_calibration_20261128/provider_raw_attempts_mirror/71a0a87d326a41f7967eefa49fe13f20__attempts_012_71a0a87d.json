@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "71a0a87d326a41f7967eefa49fe13f20",
+  "call_seq": 12,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:06:27.722871+00:00",
+  "ended_at_utc": "2026-11-28T03:06:56.483165+00:00",
+  "request_sha256": "e220d7fc574e51720249ca5319e063948393294b6b0e9ee02a1a2f25ca099a4b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 82245,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 40315,
+    "cached_tokens": 9344,
+    "completion_tokens": 1084
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /holdout_task/validate_public_schema.py\\npython3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; ds=item['dataset']; tr,te=ds['train'],ds['test']; cal=ds['calibration_load_cells']; raw=cal['bridge_raw']; truth=cal['true_channel_loads']\\nn=len(raw); err=np.full(raw.shape,np.nan)\\nfor k in range(4):\\n    inside=np.arange(n)%4!=k\\n    bridge=m._bridge(dict(cal,bridge_raw=raw[inside],true_channel_loads=truth[inside]))\\n    expected=m._forward(truth[~inside],bridge); actual=raw[~inside]; normal=np.abs(actual-np.median(raw,axis=0))<6\\n    err[~inside]=np.where(normal,expected-actual,np.nan)\\nprint('Calibration worst held-out channel RMSE:',max(np.sqrt(np.nanmean(err**2,axis=0))))\\nbridge=m._bridge(cal)\\nfor name,q in [('train',tr),('deployment',te),('verification',item['campaign_diagnostics'])]:\\n    for key in ('past_channel_raw','hold_channel_raw'):\\n        a=q[key]; v=m._invert(a,bridge); resid=np.max(np.abs(m._forward(v,bridge)-a)); print(name,key,'max inversion residual',resid); assert resid<1e-7\\nbase=m.solve_batch(ds); taus=base['estimated_taus']; assert .05<taus[0]<taus[1]<25\\nx=m._features(tr,te); p,h=m._loads(tr,bridge); dt,t=ds['past_dt'],ds['eval_times']; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; ids=tr['lab_id']\\nfor lab in np.unique(ids):\\n    a=ids!=lab; b=~a\\n    tau,w=m._fit(p[a],h[a],x[:len(ids)][a],dt,t,y[a],r[a]); c,i=m._design(tau,p[b],h[b],x[:len(ids)][b],dt,t); print('Bench held-out lab',lab,'tau',tau.round(5),'strain/rate MAE',np.nanmedian(abs(c@w-y[b])),np.nanmedian(abs(i@w-r[b])))\\nd=item['campaign_diagnostics']; xd=m._features(d,d)[:len(d['lab_id'])]; _,h=m._loads(d,bridge); c,r=m._chamber_response(taus,base['hereditary_weights'],h,xd,t); ec=c+d['strain_0'][:,None]-d['strain_curves_obs']; er=r-d['instant_rate_obs']; missing=~np.isfinite(d['coupon_features_raw']).all(1)\\nfor k,q in [('complete',~missing),('imputed',missing)]:\\n    print('Verification',k,'worst horizon strain RMSE',np.max(np.sqrt(np.mean(ec[q]**2,axis=0))),'initial-rate RMSE',np.sqrt(np.mean(er[q]**2)))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: hold-only chamber relaxation with affine drift → H2: a single feature-weighted drift kernel; complete-coupon leave-lab-out worst RMSE is 0.00292 for strain and 0.00258 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Verify the exact artifact in isolated Python. Held-out sweeps and inversion residuals would expose calibration failure, held-out benchtop labs would expose spectrum instability, and separate verification errors on complete and imputed coupons show whether the remaining error concentrates in missing features.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "944924753440114321afeb57c1bcc2e1652173f08ea12b33eedf7897d4ee5a3f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30822.75,
+      "usage_known": true,
+      "prompt_tokens": 40315,
+      "cached_tokens": 9344,
+      "completion_tokens": 1084
+    }
+  ]
+}

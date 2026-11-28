@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8ab29d3203674ab9aec387450b75b8b4",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:54:33.121335+00:00",
+  "ended_at_utc": "2026-11-28T02:54:50.587152+00:00",
+  "request_sha256": "9924e8c616b1306bf49344ec6f9a39d2762d3622a2d5056d3d3d5199c52cfcf8",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 32475,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 21390,
+    "cached_tokens": 9344,
+    "completion_tokens": 597
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport json,pickle,numpy as np\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]; ds=calibrate_upstream(item['dataset'])\\nprint('DIAGNOSTICS',type(item.get('campaign_diagnostics')).__name__)\\nfor k,v in ds.items():\\n print(k,{j:(list(w) if isinstance(w,dict) else np.shape(w)) for j,w in v.items()} if isinstance(v,dict) else str(v)[:220])\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor k,v in (a.items() if isinstance(a,dict) else [('records',a)]):\\n if not isinstance(v,list): print(k,str(v)[:1500]); continue\\n print(k,len(v));\\n for r in v:\\n  if not isinstance(r,dict): print(str(r)[:350]); continue\\n  print({q:(f'{type(w).__name__}[{len(w)}]' if isinstance(w,(list,dict)) else w) for q,w in r.items()})\\n  if 'facility_telemetry_trace' in r:\\n   z=np.array(r['facility_telemetry_trace']);print('mean',z.mean(0).round(4),'std',z.std(0).round(4),'first',z[0])\\n  for q,w in r.items():\\n   if q!='facility_telemetry_trace' and isinstance(w,(list,dict)): print(q,str(w)[:300])\\nPY\\nsed -n '60,120p' /tmp/hegel_continual_archive/dev_alpha_m100_01_batch_02_solver.py; sed -n '1,95p' validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 two-branch benchtop law → H2 separate chamber boundary correction; no quantitative validation yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Summarize the telemetry by campaign without printing full traces. If the archive contains only unlabeled facility signals, it cannot directly validate a transfer law; if paired chamber measurements are present, use them to test the archived correction.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d9803ad2cafd67f79efdbfdde866a3e80fbad6606fd58eff4dae90ecd2950e19",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19514.09,
+      "usage_known": true,
+      "prompt_tokens": 21390,
+      "cached_tokens": 9344,
+      "completion_tokens": 597
+    }
+  ]
+}

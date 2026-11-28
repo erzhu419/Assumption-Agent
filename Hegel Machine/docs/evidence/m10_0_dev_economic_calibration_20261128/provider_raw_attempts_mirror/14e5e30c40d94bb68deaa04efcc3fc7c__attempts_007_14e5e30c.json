@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "14e5e30c40d94bb68deaa04efcc3fc7c",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:47:07.305211+00:00",
+  "ended_at_utc": "2026-11-28T02:47:32.387015+00:00",
+  "request_sha256": "aec473e62bcbce13053ef8c92c38191944386999b8d547ba01a30585da010bd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47454,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27432,
+    "cached_tokens": 9344,
+    "completion_tokens": 964
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/diag_bridge.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nfrom scipy.special import erf\\nq=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0];d=q['dataset'];c=d['calibration_load_cells'];u=c['true_channel_loads'];r=c['bridge_raw'];s=c['single_channel_sweeps'];np.set_printoptions(precision=5,suppress=True,linewidth=180)\\nfor j in range(4):\\n m=s['lab_id']==j; a=np.r_[s['true_stress'][m],u[4*j:4*j+4,j]]; y=np.r_[s['cmd_stress'][m],r[4*j:4*j+4,j]]; sel=np.abs(y)<3; a,y=a[sel],y[sel]; print('axis',j)\\n for name,f in [('tanh',np.tanh),('erf',erf),('atan',np.arctan),('rational',lambda z:z/np.sqrt(1+z*z)),('sin',np.sin)]:\\n  best=min((least_squares(lambda p:p[0]+p[1]*a+p[2]*f(a*p[3])-y,[0.1,.3,1.,k],bounds=([-2,-2,-4,.05],[2,4,4,8]),max_nfev=800) for k in [.6,1.4,2.7]),key=lambda z:z.cost); print(name,best.x,np.sqrt(2*best.cost/len(y)))\\nprint('paired calibration excluding first 16 rows'); print(np.c_[u,r][16:]); print('dataset keys',list(d))\\nfor k in ['train','test']:\\n v=d[k]['aux_chamber_telemetry'];print(k, 'aux means',v.mean(0),'std',v.std(0))\\nPY\\npython3 /tmp/diag_bridge.py | head -58; ls -l /tmp/hegel_continual_archive; python3 - <<'PY'\\nimport json\\nx=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'));[(print(e['completed_campaign_short_name'],{k:v for k,v in e.items() if k!='facility_telemetry_trace'})) for e in x]\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cyclic cubic bridge → H2 saturating diagonal response with cross-channel coupling; the cubic misses typical calibration readings by up to 0.233 raw units in median absolute error.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The archived cyclic cubic basis spans the active bridge transfer.\",\"empirical_witness\":\"Its robust fit has median absolute errors of 0.22654 and 0.23345 on channels 0 and 2; clean single-channel sweeps show a steep center and flatter tails.\",\"causal_blanket_diagnosis\":\"The mismatch is already present in controlled transducer sweeps, before estimation of material or chamber behavior.\",\"sublated_pivot\":\"Isolate the diagonal transfer on single-channel sweeps, then fit the cross-channel structure on paired calibration data.\",\"risk_kind\":\"calibration_model_misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible inverse directly\",\"rejected_reason\":\"The controlled sweeps isolate forward transfer, making it possible to validate a sparser model before extrapolating.\"}],\"rationale\":\"The axis sweeps can separate candidate saturation functions. The paired loads then reveal whether residual coupling is separable or requires interaction terms. Archive metadata determines which deployment law to apply once calibration is resolved.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "670e972875068e7081246ed7feaf8ff4a329aa80c909889a053d98660ac6d22a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27089.74,
+      "usage_known": true,
+      "prompt_tokens": 27432,
+      "cached_tokens": 9344,
+      "completion_tokens": 964
+    }
+  ]
+}

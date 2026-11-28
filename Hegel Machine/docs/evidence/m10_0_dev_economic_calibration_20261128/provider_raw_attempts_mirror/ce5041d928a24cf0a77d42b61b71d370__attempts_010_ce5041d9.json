@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ce5041d928a24cf0a77d42b61b71d370",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:51:36.080864+00:00",
+  "ended_at_utc": "2026-11-28T02:52:04.862700+00:00",
+  "request_sha256": "004996504619d3a6e9ffb98107601b032c8c22c5f3d98f59b812114b809086b2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 65385,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36845,
+    "cached_tokens": 9344,
+    "completion_tokens": 1057
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nfrom copy import deepcopy\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as b\\nfrom batch_solver import solve_batch\\nD = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nC = D['calibration_load_cells']\\nX, Y = C['true_channel_loads'], C['bridge_raw']\\nf, c = b._fit(X, Y)\\n# Exercise verification trials, including opposing signs at the calibration boundary.\\nedge = np.array([[-1.6, -1.6, 1.7, 1.7], [1.7, 1.7, -1.6, -1.6], [1.7, -1.6, 1.7, -1.6], [-1.6, 1.7, -1.6, 1.7]])\\nraw = (b._design(edge, f)*c).sum(axis=-1)\\nD = dict(D, chamber_verification_trials={'past_channel_raw': raw.reshape(2,2,4), 'hold_channel_raw': raw[::2], 'past_dt': D['past_dt']})\\noriginal = deepcopy(D['chamber_verification_trials'])\\nO = b.calibrate_upstream(D)\\nP = O['chamber_verification_trials']\\nerror = max(np.max(abs(P['past_channel_raw'].reshape(-1,4)-edge)), np.max(abs(P['hold_channel_raw']-edge[::2])))\\nassert error < 1e-8, error\\nfor field in original:\\n    np.testing.assert_array_equal(original[field], D['chamber_verification_trials'][field])\\nI = O['calibration_load_cells']\\nfor container, dest, src in [(I, 'bridge_raw', 'true_channel_loads'), (I['single_channel_sweeps'], 'cmd_stress', 'true_stress')]:\\n    np.testing.assert_array_equal(container[dest], container[src])\\n    assert not np.shares_memory(container[dest], container[src])\\nfor name in ('train', 'test', 'chamber_verification_trials'):\\n    for field in ('past_channel_raw', 'hold_channel_raw'):\\n        np.testing.assert_array_equal(b.calibrate_upstream(O)[name][field], O[name][field])\\n# Add off-model spikes small enough that a raw-magnitude screen alone need not reject them.\\nY2 = Y.copy()\\nfor row, column, spike in [(3,0,.30), (22,1,-.45), (43,2,.36), (64,3,-.40)]:\\n    Y2[row,column] += spike\\nf2,c2 = b._fit(X,Y2)\\nloads = b._invert(raw,f2,c2)\\nspike_error = np.max(abs(loads-edge))\\nassert spike_error < 1e-3, spike_error\\nassert all(np.isfinite(v).all() for v in solve_batch(D).values())\\nprint(f'Optional verification-trial boundary inverse max error: {error:.3g}; four extra spike rows, boundary inverse max change: {spike_error:.3g}; identity copies, input preservation, idempotence, and composed output verified.')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable saturation -> H2 linear-plus-sine self-response with linear-plus-cosine paired coupling; worst-slice five-fold forward RMSE is 0.000146 and inverse RMSE is 0.000391.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema and measured holdout slices pass. Test the optional trial branch absent from the public batch and additional spikes that could evade the raw-magnitude screen; a failure would identify whether to revise field handling or robust fitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "1a832d19777e45508ae21ee4343209c294c79f981a2148c1cf3ca0d1fd1c7b30",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28737.54,
+      "usage_known": true,
+      "prompt_tokens": 36845,
+      "cached_tokens": 9344,
+      "completion_tokens": 1057
+    }
+  ]
+}

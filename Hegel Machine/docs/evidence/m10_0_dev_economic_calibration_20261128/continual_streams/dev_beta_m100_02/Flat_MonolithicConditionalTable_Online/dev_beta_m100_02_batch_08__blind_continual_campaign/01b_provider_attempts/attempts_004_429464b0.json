@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "429464b0f61643ecab357f552a13b070",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:10:02.758637+00:00",
+  "ended_at_utc": "2026-11-28T03:10:19.815008+00:00",
+  "request_sha256": "681b12f465cfafdc0623933c63316b89738698d76373bc0beb5a627185d3937b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 32671,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22220,
+    "cached_tokens": 9344,
+    "completion_tokens": 560
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /tmp/hegel_continual_archive; for f in *solver.py; do echo \\\"---$f\\\"; sed -n '1,34p' \\\"$f\\\" | grep -E '\\\"\\\"\\\"|def |ax =|ay =|main\\\\[|lower\\\\[|upper\\\\[|return |#'; sed -n '/^def _cross_design/,/^def _box_simplex/p; /^def _calibrate/,/^def _box_simplex/p' \\\"$f\\\" | awk '!seen[$0]++' | head -82; done; python3 - <<'PY'\\nimport numpy as np,pickle\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; ref=s['sensor_calibration_sweeps']['ref_rosette']; raw=s['sensor_calibration_sweeps']['raw_rosette']; print('reference range',ref.min(0),ref.max(0)); a=np.column_stack((np.ones(len(ref)),ref)); b=np.linalg.lstsq(a,raw,rcond=None)[0]; print('linear coefficients',b,'error RMSE',np.mean((a@b-raw)**2,axis=0)**.5); t=s['sensor_calibration_sweeps']['single_bank_sweeps']; print('isolated reference',t['ref_signal'][t['bank_id']==0]); print('isolated raw',t['raw_readout'][t['bank_id']==0]); print('rows',s['row_bank_id'].reshape(-1,4)[:6]); print('shift',s['mu_shifts'])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Open-wall prior -> compare archived wall operators using independently decoded observations; no held-out residual yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Select the wall model from the most recent archive entry\",\"rejected_reason\":\"Similar telemetry means have preceded different archived campaigns; the calibrated observations can test whether the latest operator transfers.\"}],\"rationale\":\"Identify the archived wall and rosette model families. A poor affine fit on known sweeps would require testing nonlinear calibration before using chamber residuals to rank the wall operators.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "d300a5d1cf59a2913d2cd30624e8011f97d0d400a42a7f7e262574345f38bd3a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19087.77,
+      "usage_known": true,
+      "prompt_tokens": 22220,
+      "cached_tokens": 9344,
+      "completion_tokens": 560
+    }
+  ]
+}

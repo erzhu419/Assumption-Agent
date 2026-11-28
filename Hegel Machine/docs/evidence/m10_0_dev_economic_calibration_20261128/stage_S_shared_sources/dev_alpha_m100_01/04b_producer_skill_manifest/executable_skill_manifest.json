@@ -1,0 +1,100 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_alpha_m100_01_s00_618f5207edf6",
+    "source_hash": "618f5207edf6597ed29b0843db348264a1bf71947e501b38bb42532a86002e6f",
+    "parent_ids": [],
+    "source_episode_id": "dev_alpha_m100_01",
+    "task_id": "dev_alpha_m100_01_s00__blind_continual_campaign",
+    "wormhole_family": "m100_alpha"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/audit_heredity.py",
+        "archived_relpath": "producers/tmp__audit_heredity.py",
+        "bytes": 3877,
+        "sha256": "0fd78d5f123a5ec201936401ea0b65050c3ba063396654f02ff61cf86d4a583d"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "ls -l /holdout_task /tmp/hegel_continual_archive; cat /holdout_task/validate_public_schema.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation robust IRLS reference panel alignment imputation'; python3 - <<'PY'\nimport pickle, numpy as np, pathlib\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\ndef scan(x,p='',d=0):\n if isinstance(x,dict) and d<3:\n  for k,v in x.items(): scan(v,p+'/'+str(k),d+1)\n elif isinstance(x,np.ndarray): print(p,x.shape,x.dtype,repr(x.ravel()[:7]))\n else: print(p,type(x).__name__,repr(x)[:340])\nscan(x)\nfor p in pathlib.Path",
+      "python3 - <<'PY'\nimport pickle,json,numpy as np\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\nfor k,v in x.items():\n print(k,type(v).__name__)\n if isinstance(v,dict):\n  for a,b in v.items():\n   print(' ',a,[(p,np.shape(q)) for p,q in b.items()] if isinstance(b,dict) else (np.shape(b),str(b)[:150] if np.ndim(b)==0 else np.asarray(b).ravel()[:3].tolist()))\np=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\nfor r in p if isinstance(p,list) else [p]:\n print('telemetry',[(k,(np.shape(v),str(v)[:350]) if isinstance(v,list) else v) for k,v in r.items()])\na=js",
+      "python3 - <<'PY'\nimport pickle,json,numpy as np\nfrom scipy.linalg import lstsq\nnp.set_printoptions(precision=4,suppress=True,linewidth=120)\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; r=c['bridge_raw']; y=c['true_channel_loads']; print('cal samples',r[:5],y[:5]); print('sweep',[(k,np.shape(v),np.asarray(v).ravel()[:12]) for k,v in c['single_channel_sweeps'].items()]); rng=np.random.default_rng(863); f=np.array_split(rng.permutation(len(r)),5); i,j=np.triu_indices(4,1)\nfor tag,a in [('affine',np.c_[np.ones(len(r)),r]),('diagonal quadr",
+      "PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -24\ncat > /holdout_task/batch_solver.py <<'PY'\n\"\"\"Estimate a two-branch hereditary response from the benchtop coupons.\"\"\"\nimport numpy as np\nfrom scipy.optimize import least_squares\n\n\ndef _features(train, test):\n    parts = (train, test)\n    def pooled(key):\n        return np.concatenate([np.asarray(p[key]) for p in parts], axis=0)\n\n    labs = pooled('lab_id')\n    strata = pooled('stratum')\n    refs = pooled('ref_coupons')\n    x = pooled('coupon_features_raw').astype(fl",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util,pickle,numpy as np\nfrom scipy.optimize import least_squares\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; tr,te=d['train'],d['test']; dt,t=d['past_dt'],d['eval_times']; p,h=m._loads(tr,m._bridge(d['calibration_load_cells'])); x=m._features(tr,te)[:len(h)]; y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; labs=tr['lab_id']; missing=n",
+      "cat >/tmp/audit_heredity.py <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\nm = importlib.util.module_from_spec(s)\ns.loader.exec_module(m)\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\nd = item['dataset']; tr = d['train']; te = d['test']\nlab = tr['lab_id']; labs = np.unique(lab)\ndt, t = d['past_dt'], d['eval_times']\np, h = m._loads(tr, m._bridge(d['calibration_load_cells']))\nx = m._features(tr, te)[:len(h)]\ny = tr['strain_curves_obs"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__audit_heredity.py",
+      "primary_producer_container_path": "/tmp/audit_heredity.py",
+      "selected_channels": [
+        "m100_alpha"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "bound_pure_and_full_closure"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4094,
+        "sha256": "e0db09c225639cc1f5e307880568dee9e43abf5c28881ff37cb071c528d02ccf",
+        "content_addressed_ref": "content_addressed_blobs/e0db09c225639cc1f5e307880568dee9e43abf5c28881ff37cb071c528d02ccf.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": [
+      "metrics"
+    ]
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m100_alpha",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "618f5207edf6597ed29b0843db348264a1bf71947e501b38bb42532a86002e6f",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "cat >/tmp/audit_heredity.py <<'PY'\nimport importlib.util, json, pickle\nimport numpy as np\nfrom scipy.optimize import least_squares\n\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\nm = importlib.util.mod",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "618f5207edf6597ed29b0843db348264a1bf71947e501b38bb42532a86002e6f",
+        "expected_candidate_sha256": "618f5207edf6597ed29b0843db348264a1bf71947e501b38bb42532a86002e6f",
+        "computed_candidate_sha256": "618f5207edf6597ed29b0843db348264a1bf71947e501b38bb42532a86002e6f",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4094
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_618f5207"
+    }
+  },
+  "structure": {
+    "full_producer_count": 1,
+    "reusable_ast_function_closures": [
+      {
+        "name": "metrics",
+        "code": "def metrics(errors):\n    (ec, er) = errors\n    return np.array([np.quantile(abs(ec), 0.9), np.quantile(abs(er), 0.9)])"
+      }
+    ]
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "c3abef56cd7141599d5714423205ed46",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:12.749157+00:00",
+  "ended_at_utc": "2026-11-28T02:25:31.227927+00:00",
+  "request_sha256": "bfa59a9c7ebaca105cae170cbcf49367d9d4875e34591eb3ff2faff82133ffd5",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24350,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19674,
+    "cached_tokens": 0,
+    "completion_tokens": 597
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"python3 - <<'PY'\\nimport json,pickle,runpy,numpy as np\\np='/tmp/hegel_continual_archive/'\\nfor d in json.load(open(p+'archive_apparatus_log.json')):\\n print({k:(v if not isinstance(v,list) or len(v)<8 else ('rows',len(v))) for k,v in d.items()})\\nm=runpy.run_path(p+'dev_beta_m100_02_s00_solver.py'); d=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=d['study'];S,_=m['_responses'](s,m['_operator'](s));Y=[];P=[]\\nfor pulse in d['campaign_diagnostics']:\\n y=m['_calibrate'](dict(s,y_obs_raw=pulse['y_pulse_raw'])); pred=S@pulse['w_pulse']; Y.append(y);P.append(pulse['w_pulse']); e=pred-y; print('baseline pulse RMSE',np.sqrt(np.mean(e**2)), 'shift RMSE',np.sqrt(np.mean(e.reshape(3,-1)**2,axis=1)), 'raw range',np.ptp(y)); print('mean residual by shift',e.reshape(3,-1).mean(axis=1),'nuisance projection norm',np.linalg.norm(s['Z_nuisance']@np.linalg.lstsq(s['Z_nuisance'],e,rcond=None)[0]))\\nprint('sweep shape summary',[(k,np.shape(v)) for k,v in s['sensor_calibration_sweeps']['single_bank_sweeps'].items()]);print('aux telemetry head',s['aux_manifold_telemetry'][:3]);print('pulse weights',P)\\nPY\\nsed -n '47,160p' /tmp/hegel_continual_archive/dev_beta_m100_02_s00_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Open-wall Robin → pulse-tested boundary rows; affine calibration fit has worst-channel RMSE 1.03e-5, while tracer validation is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Measure baseline error by pulse and shift and check whether nuisance explains it. If not, use the compact apparatus log to choose which boundary terms to fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "711c561b012cbe778ba4005b552f7a724d496d5d83820bd49156575a0547a5d5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20441.01,
+      "usage_known": true,
+      "prompt_tokens": 19674,
+      "cached_tokens": 0,
+      "completion_tokens": 597
+    }
+  ]
+}

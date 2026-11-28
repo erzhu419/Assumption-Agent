@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f9a57c7023c4466b87e75e4089e2ece3",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:54.777148+00:00",
+  "ended_at_utc": "2026-11-28T02:49:39.310044+00:00",
+  "request_sha256": "041e518f06945828d052b93180ffd3272cfc78975a811ad2b838a2af4a3ba9ec",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39644,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26922,
+    "cached_tokens": 9344,
+    "completion_tokens": 1617
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/shared_rosette.py <<'PY'\\nimport pickle,numpy as np\\nfrom scipy.optimize import least_squares\\nfrom scipy.interpolate import CubicSpline\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; X,Y=c['ref_rosette'],c['raw_rosette']; clean=np.max(abs(Y-np.median(Y,axis=0)),axis=1)<5; axis=np.count_nonzero(X,axis=1)==1; sb=c['single_bank_sweeps']; u,v,b=[sb[k] for k in ('ref_signal','raw_readout','bank_id')]; base=np.array([np.median(Y[clean&axis&(X[:,j]==0)&(X[:,j^2]==0),j]) for j in range(4)]); print('offset',base)\\nm=abs(v)<5; t=u[m]; z=v[m]-base[b[m]]; bank=b[m];\\nF={'tanh':lambda x,k:np.tanh(k*x),'atan':lambda x,k:np.arctan(k*x),'sqrt':lambda x,k:k*x/np.sqrt(1+(k*x)**2),'erf':lambda x,k:__import__('scipy').special.erf(k*x)}\\nfor name,f in F.items():\\n for term in ('none','lin','cub','lincub','sin','rat','sat2'):\\n  def D(x,p):\\n   a=[f(x,np.exp(p[0]))]; k=np.exp(p[-1]);\\n   a+= {'none':[], 'lin':[x],'cub':[x**3],'lincub':[x,x**3],'sin':[np.sin(k*x)],'rat':[x/(1+(k*x)**2)],'sat2':[f(x,k)]}[term]; return np.column_stack(a)\\n  def coeff(p):return np.stack([np.linalg.lstsq(D(t[bank==j],p),z[bank==j],rcond=None)[0] for j in range(4)])\\n  def err(p):return np.sum(D(t,p)*coeff(p)[bank],axis=1)-z\\n  init=[0.,0.4] if term in ('sin','rat','sat2') else [0.]; p=least_squares(err,init,bounds=(-3,2),max_nfev=400,gtol=1e-13).x; print(name,term,np.sqrt(np.mean(err(p)**2)),np.exp(p),np.round(coeff(p)[0],6))\\n# Interpolate the independently measured diagonal shapes, then isolate cross terms on mixed rows.\\npair=np.arange(4)^2; C=[]; T=[]\\nfor j in range(4):\\n use=m&(b==j); x=np.r_[u[use],0]; y=np.r_[v[use]-base[j],0]; order=np.argsort(x); f=CubicSpline(x[order],y[order]); r=Y[:,j]-base[j]-f(X[:,j]); C.append(r[clean]); T.append(X[clean,j^2]);\\nC=np.array(C).T; T=np.array(T).T; D0=np.abs(X[clean]); print('cross isolated quantiles',np.round(np.quantile(C,[0,.1,.5,.9,1],axis=0),5));\\nfor j in range(4):\\n order=np.argsort(T[:,j]); zidx=order[np.linspace(0,len(order)-1,15,dtype=int)]; print(j,np.round(np.c_[T[zidx,j],C[zidx,j],D0[zidx,j]],5).tolist())\\nfor name,f in F.items():\\n for term in ('even','quad','rat','shift','linquad','coseven'):\\n  def D(x,p):\\n   k=np.exp(p[0]); a=f(x,k); l=np.exp(p[-1]); return np.stack({'even':[a,a*a],'quad':[a,x*x],'rat':[a,x*x/(1+(l*x)**2)],'shift':[a,f(x+p[-1],k)-f(p[-1],k)],'linquad':[x,a,x*x/(1+(l*x)**2)],'coseven':[a,1-np.cos(l*x)]}[term],axis=-1)\\n  def coeff(p):return np.stack([np.linalg.lstsq(D(T[:,j],p),C[:,j],rcond=None)[0] for j in range(4)])\\n  def err(p):return (np.sum(D(T,p)*coeff(p)[None,:,:],axis=2)-C).ravel()\\n  p=least_squares(err,[0.,0.6] if term not in ('even','quad') else [0.],bounds=(-4,2),max_nfev=300).x; print('cross',name,term,np.sqrt(np.mean(err(p)**2)),p,np.round(coeff(p)[0],6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/shared_rosette.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 independent shifted saturation -> H2 shared diagonal and cross-channel response shapes; the best tested pair model still has 0.01503 worst-slice held-out forward RMSE.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Cross-axis responses are nearly proportional across channels. Use the independent single-bank sweeps to isolate the diagonal law, then test whether the remaining mixed-row response depends only on the paired channel or also on the primary signal.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "eb3151b1ba25b9299d0b1fc4e5deed30cdfbdf217865fa1f06eaf792859647e9",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 48550.82,
+      "usage_known": true,
+      "prompt_tokens": 26922,
+      "cached_tokens": 9344,
+      "completion_tokens": 1617
+    }
+  ]
+}

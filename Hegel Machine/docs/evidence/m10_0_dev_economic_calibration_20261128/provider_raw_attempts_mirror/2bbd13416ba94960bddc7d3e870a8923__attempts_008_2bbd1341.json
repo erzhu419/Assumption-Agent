@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "2bbd13416ba94960bddc7d3e870a8923",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:26:54.173279+00:00",
+  "ended_at_utc": "2026-11-28T02:27:21.180696+00:00",
+  "request_sha256": "388fffc4ba403fc343f6d719b25a40230f54fb4584975cdfbe3432c628754f55",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 48125,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29259,
+    "cached_tokens": 9344,
+    "completion_tokens": 1044
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/transfer.py <<'PY'\\nimport contextlib,io\\nwith contextlib.redirect_stdout(io.StringIO()):\\n from explore import *\\nfrom base import _features\\nfrom itertools import product\\nbb=np.vstack([np.c_[-np.expm1(-t[:,None]/taus),t],np.r_[1/taus,1]])\\ny=np.c_[qc,rc]-hc[:,None]*(bb[:,:2]@theta[:2]);\\ndef aligned(ref_parts, missing):\\n vals=ch['coupon_features_raw'].copy()\\n for lab in np.unique(ch['lab_id']):\\n  panel=np.concatenate([g['ref_coupons'][g['lab_id']==lab] for g in ref_parts]); m=ch['lab_id']==lab\\n  vals[m]=(vals[m]-np.median(panel.mean(0)))/np.median(panel.std(0))\\n vals=np.where(np.isfinite(vals),vals,missing)\\n return vals\\npooled=_features(tr,te); impute=np.array([pooled[np.flatnonzero(np.isnan(np.r_[tr['coupon_features_raw'],te['coupon_features_raw']][:,j]))[0],j] for j in range(4)])\\nprint('diag fields',list(ch),'raw feature missing',np.isnan(ch['coupon_features_raw']).sum(0),'deployment impute',impute)\\nfor g in [tr,te,ch]:\\n a=g.get('aux_chamber_telemetry');print('aux',None if a is None else (a.shape,a[:2],a.std(0)))\\n\\ndef evaluate(m,y=y):\\n q=np.linalg.qr(m,mode='reduced')[0]; z=lstsq(m,y)[0]; er=(y-m@z)/(1-np.sum(q*q,axis=1))[:,None]\\n return np.array([rms(er[:,:-1]),max(rms(er[:,:-1],0)),rms(er[:,-1]),max(abs(er[:,-1]))]),z\\nfor name,v in [('tr+ch',xc),('tr+te',aligned([tr,te],impute)),('tr',aligned([tr],impute)),('ch',aligned([ch],impute)),('all',aligned([tr,te,ch],impute))]:\\n rr=theta[2]+v@theta[3:];print(name,np.max(abs(v-xc)))\\n for model,m in [('linear',np.c_[np.ones(len(rr)),rr]),('quadratic',np.c_[np.ones(len(rr)),rr,rr*rr]),('four features',np.c_[np.ones(len(rr)),v])]:\\n  e,b=evaluate(m);print(model,e,'coef basis',lstsq(bb,b.T)[0].T.round(5))\\n if name=='tr+te':\\n  ee=y-np.c_[np.ones(len(rr)),rr]@lstsq(np.c_[np.ones(len(rr)),rr],y)[0];print('diagnostic residual by row',np.c_[ch['lab_id'],ch['stratum'],np.isnan(ch['coupon_features_raw']).sum(1),rr,ee[:,0],ee[:,-2],ee[:,-1]])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/transfer.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 independent feature corrections -> H2 a shared drift-score correction on the intrinsic time basis; linear score leave-one-coupon-out RMSE is 0.02739 for curves and 0.02368 for rates.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use cubic load and drift-score terms\",\"rejected_reason\":\"They worsened held-out curve and rate error relative to the simpler score correction.\"}],\"rationale\":\"The earlier diagnostic fit standardized train and diagnostic coupons together. Test whether applying the actual deployment reference panel removes systematic error, and compare models on both time-point and rate errors before implementing the chamber law.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "d18858f8860c3dac71ce098833f9515b0f0f603eea26e68d8c26b5746a9e66fc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28991.4,
+      "usage_known": true,
+      "prompt_tokens": 29259,
+      "cached_tokens": 9344,
+      "completion_tokens": 1044
+    }
+  ]
+}

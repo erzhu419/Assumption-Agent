@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "60bb028885fa476485a159841be4e196",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:37:33.866326+00:00",
+  "ended_at_utc": "2026-11-28T02:38:03.835075+00:00",
+  "request_sha256": "09105a967164ad6887d48ae3cdf8d49aa6182923e7b2b8befea1f8e48b708b71",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 50048,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26682,
+    "cached_tokens": 0,
+    "completion_tokens": 1193
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport pickle\\nimport sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom upstream_transducer import _basis, _fit_bridge, _inverse, calibrate_upstream\\nfrom _verified_downstream import solve_downstream\\n\\nwith open('public_batch.pkl', 'rb') as f:\\n    episodes = pickle.load(f)\\nfor episode in episodes:\\n    d = episode['dataset']\\n    c = d['calibration_load_cells']\\n    x, y = c['true_channel_loads'], c['bridge_raw']\\n    baseline = solve_batch(d)\\n    canonical = calibrate_upstream(d)\\n    folds = np.random.default_rng(137).permutation(len(x)) % 5\\n    axis = np.count_nonzero(x, axis=1) == 1\\n    slices = [(f'random-{i}', folds == i) for i in range(5)]\\n    slices += [(f'axis-{i}', axis & (x[:, i] != 0)) for i in range(4)]\\n    slices += [('extreme', np.max(np.abs(x), axis=1) >= 1.5)]\\n    worst = {k: 0.0 for k in baseline}\\n    worst_held = {k: 0.0 for k in ('affine', 'polynomial')}\\n    for label, held in slices:\\n        xtr, ytr = x[~held], y[~held]\\n        b = _fit_bridge(xtr, ytr)\\n        clean_tr = np.linalg.norm(_basis(xtr) @ b - ytr, axis=1) < 5\\n        clean_h = held & (np.linalg.norm(_basis(x) @ b - y, axis=1) < 5)\\n        # Give the affine baseline the same clean training rows, isolating basis effects.\\n        affine = np.zeros_like(b)\\n        affine[:5] = np.linalg.lstsq(_basis(xtr[clean_tr])[:, :5], ytr[clean_tr], rcond=None)[0]\\n        errors = {name: float(np.max(np.abs(_inverse(y[clean_h], coef) - x[clean_h]))) for name, coef in [('affine', affine), ('polynomial', b)]}\\n        for k in errors:\\n            worst_held[k] = max(worst_held[k], errors[k])\\n        assert errors['polynomial'] < 0.002 and errors['polynomial'] < errors['affine'], (label, errors)\\n        q = dict(canonical)\\n        for split in ('train', 'test', 'chamber_verification_trials'):\\n            part = d.get(split)\\n            if part is not None:\\n                q[split] = dict(part, **{k: _inverse(part[k], b) for k in ('past_channel_raw', 'hold_channel_raw')})\\n        observed = solve_downstream(q)\\n        changes = {k: float(np.max(np.abs(observed[k] - baseline[k]))) for k in baseline}\\n        assert all(np.isfinite(list(changes.values()))), (label, changes)\\n        for k, v in changes.items():\\n            worst[k] = max(worst[k], v)\\n        print(label, 'held-out max load errors:', errors, 'downstream max changes:', changes)\\n    print('ng_t04 direct witness; worst held-out max load error:', worst_held)\\n    print('Worst downstream max changes under calibration removal:', worst)\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 robust quadratic interactions and self-cubics; worst held-out bridge RMSE was 0.000133 and worst absolute load error was 0.000336 on non-spike rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the rational and pairwise basis search\",\n      \"rejected_reason\": \"The nested audit already found higher held-out bridge RMSE on all ten slices; it did not measure how calibration uncertainty propagates to the downstream outputs.\"\n    }\n  ],\n  \"rationale\": \"Compare the polynomial to an affine fit on the same clean training rows to isolate the effect of the nonlinear basis. Then measure how withholding calibration rows moves each downstream output: a large change would trigger investigation of inverse conditioning or downstream fit sensitivity before submission.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d5dce55d6e306ff428cf0061b61d11a43e588ad767ba279ce8aed33316f3f75e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32009.41,
+      "usage_known": true,
+      "prompt_tokens": 26682,
+      "cached_tokens": 0,
+      "completion_tokens": 1193
+    }
+  ]
+}

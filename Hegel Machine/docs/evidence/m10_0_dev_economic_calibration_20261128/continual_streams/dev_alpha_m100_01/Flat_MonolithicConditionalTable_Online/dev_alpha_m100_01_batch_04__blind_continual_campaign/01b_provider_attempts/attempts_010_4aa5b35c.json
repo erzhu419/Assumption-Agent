@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4aa5b35c35a24e9a83fccd1827094fc4",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:27.199909+00:00",
+  "ended_at_utc": "2026-11-28T02:43:57.156994+00:00",
+  "request_sha256": "48f64385714e67bb48463eaa8ce2e89bad39939e4a0f33f23b2758520f397a9d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49444,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26410,
+    "cached_tokens": 9344,
+    "completion_tokens": 1088
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nexport OPENBLAS_NUM_THREADS=1\\nsed -n '27,79p;/^# The immediately preceding/,$p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\ns=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; idx=np.arange(len(x)); nz=np.max(abs(x),axis=1)\\n# Test omitted cross-channel and rational curvature on held-out sweeps.\\ndef extra(u):\\n    return np.column_stack([u[:,i]*u[:,j] for i in range(4) for j in range(i,4)] + [u[:,i]*(1/(1+a*(u[:,i]-u[:,j])**2)-1) for i in range(4) for j in range(i+1,4) for a in (0.25,1.0)])\\ne0=np.empty_like(y); e1=np.empty_like(y)\\nfor k in range(5):\\n    tr=idx%5!=k; te=~tr\\n    b=m._bridge({**c,'true_channel_loads':x[tr],'bridge_raw':y[tr]}); r=y-m._transfer(x,b)\\n    e0[te]=r[te]; f=extra(x); z=np.maximum(np.sqrt(np.mean(f[tr]**2,axis=0)),1e-12); f=f/z\\n    for i in range(4):\\n        q=least_squares(lambda p: np.r_[f[tr]@p-r[tr,i],p],np.zeros(f.shape[1]),loss='cauchy',f_scale=0.0003).x\\n        e1[te,i]=r[te,i]-f[te]@q\\nfor label,e in [('current',e0),('expanded',e1)]:\\n    print(label,'worst load-tercile/channel median and P85 raw absolute error',*[max(np.quantile(abs(e[g]),p,axis=0).max() for g in np.array_split(np.argsort(nz),3)) for p in (.5,.85)])\\nrows=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); traces=np.array([r['facility_telemetry_trace'] for r in rows])[:,:,[1,6]]; margins=[]\\nfor block in np.array_split(np.arange(traces.shape[1]),4):\\n    sig=np.delete(traces,block,axis=1).mean(1); distances=np.linalg.norm(sig[:-1]-sig[-1],axis=1); order=np.argsort(distances); print('omitted telemetry block',block[0],block[-1],'closest',order[0],'distance',distances[order[0]],'runner-up',distances[order[1]]); margins.append(distances[order[1]]-distances[order[0]])\\nprint('minimum marker separation margin',min(margins))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (nonlinear bridge and shared material fit) → H2 (telemetry-matched memory withdrawal); worst held-lab median absolute errors were 0.0090 early, 0.0094 late, and 0.0056 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes or within-batch balanced accuracy\",\n      \"rejected_reason\": \"This is a continuous mechanics regression with neither relay states nor class labels. Leave-one-lab-out validation already tests material generalization across the observed lab strata.\"\n    }\n  ],\n  \"rationale\": \"Test whether omitted pairwise or rational bridge terms improve held-out calibration at any load range, and whether any contiguous telemetry block drives the chamber-law match. A material improvement would justify revising the bridge; a changed match would require revisiting the transfer law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d041b605992ada1c10f32f76a8ebffef795f626b053e30f902ed971150d4e738",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29917.06,
+      "usage_known": true,
+      "prompt_tokens": 26410,
+      "cached_tokens": 9344,
+      "completion_tokens": 1088
+    }
+  ]
+}

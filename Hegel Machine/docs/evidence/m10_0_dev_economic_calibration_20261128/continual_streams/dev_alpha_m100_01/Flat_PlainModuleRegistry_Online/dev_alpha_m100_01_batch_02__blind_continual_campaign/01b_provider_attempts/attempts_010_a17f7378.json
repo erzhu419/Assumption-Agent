@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a17f7378d452469fa6e907279be34688",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:37:18.606784+00:00",
+  "ended_at_utc": "2026-11-28T02:37:50.377429+00:00",
+  "request_sha256": "8b690304449b0ceec8154729e237e0b7009f87255949cc73afe1aebc7e903c13",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 70484,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36615,
+    "cached_tokens": 9344,
+    "completion_tokens": 1256
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport downstream_solver as s\\nfrom _verified_upstream import calibrate_upstream\\nfrom batch_solver import solve_batch\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    item = pickle.load(f)[0]\\nraw = item['dataset']\\ncal = calibrate_upstream(raw)\\ntr, te = cal['train'], cal['test']\\nfit = solve_batch(raw)\\nta, th = fit['estimated_taus'], fit['hereditary_weights']\\ndt, t = cal['past_dt'], cal['eval_times']\\nd = calibrate_upstream(dict(raw, test=item['campaign_diagnostics']))['test']\\nx = d['coupon_features_raw'].copy()\\nlabs = d['lab_id']\\nfor lab in np.unique(labs):\\n    mask = labs == lab\\n    panel = d['ref_coupons'][mask]\\n    x[mask] = (x[mask] - np.median(panel.mean(0))) / np.median(panel.std(0))\\nx = np.where(np.isfinite(x), x, np.nanmean(x, axis=0))\\nbase = s._predict(ta, th, *s._loads(d), x, dt, t, np.zeros((2, 3)))\\ny = s._observations(d)\\nscore = th[2] + x @ th[3:]\\nA = (np.c_[np.ones(len(x)), score][:, None, :, None] * s._basis(ta, t)[None, :, None, :]).reshape(len(x), len(t)+1, 6)\\ndef rmse(res):\\n    r = np.sqrt(np.mean(res**2, axis=0))\\n    return np.array([r[:-1].max(), r[-1]])\\nfor labels in (labs, d['stratum'], np.isnan(d['coupon_features_raw']).any(axis=1)):\\n    original, corrected = [], []\\n    for group in np.unique(labels):\\n        m = labels == group\\n        q = np.linalg.lstsq(A[~m].reshape(-1, 6), (y-base)[~m].ravel(), rcond=None)[0]\\n        original.append(rmse((y-base)[m]))\\n        corrected.append(rmse((y-base)[m] - A[m] @ q))\\n    a, b = np.max(original, axis=0), np.max(corrected, axis=0)\\n    print('worst group: baseline, held-out chamber:', a.round(5), b.round(5))\\n    assert np.all(b < a)\\nfixed = rmse(y - s._predict(ta, th, *s._loads(d), x, dt, t, s._CHAMBER))\\nprint('shipped chamber law, diagnostic worst-horizon and initial-rate RMSE:', fixed.round(5))\\nassert max(fixed) < .02\\nxtr = s._features(tr, te)[:len(tr['lab_id'])]\\npast, hold = s._loads(tr)\\nobs = s._observations(tr)\\nfor lab in np.unique(tr['lab_id']):\\n    m = tr['lab_id'] == lab\\n    tt, hh = s._fit(past[~m], hold[~m], xtr[~m], dt, t, obs[~m])\\n    pred = s._predict(tt, hh, past[m], hold[m], xtr[m], dt, t, np.zeros((2, 3)))\\n    print('benchtop held-out lab', lab, 'taus', tt.round(5), 'median abs error strain/rate', np.round([np.median(abs(obs[m, :-1] - pred[:, :-1])), np.median(abs(obs[m, -1] - pred[:, -1]))], 5))\\n    assert np.max(np.abs(tt/ta - 1)) < .1 and np.max(abs(hh-th)) < .05\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unchanged benchtop coefficients → H2 affine chamber corrections in the material drift score; worst held-out lab RMSE is 0.01010 across strain horizons and 0.01068 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Use a read-only clean-process probe to compare the chamber law against the refuted baseline, independently of the schema validator. Also hold out each benchtop lab to detect instability in the material fit; if those fits are unstable, revisit the estimator before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "02f4c1004bcf08fad7725da0b307d8fadda431531bba437005434041b0390173",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33717.99,
+      "usage_known": true,
+      "prompt_tokens": 36615,
+      "cached_tokens": 9344,
+      "completion_tokens": 1256
+    }
+  ]
+}

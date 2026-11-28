@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e858ea02c7064bb896bc11670f6a9e0c",
+  "call_seq": 13,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:57:19.416516+00:00",
+  "ended_at_utc": "2026-11-28T02:58:06.887425+00:00",
+  "request_sha256": "5c36fae100f1b8421f9c23b25158396c9864cce4778e6b88a4595e8e31359cf0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 91061,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 46440,
+    "cached_tokens": 9344,
+    "completion_tokens": 1934
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\np=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(p); p.loader.exec_module(m)\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; out=m.solve_batch(s); cert=out['kkt_certificate']; w=out['weights']; cap=s['u_box']; budget=s['total_budget']; rho=s['source_ridge']\\nX=s['sensor_calibration_sweeps']['ref_rosette']; Y=s['sensor_calibration_sweeps']['raw_rosette']; B=s['sensor_calibration_sweeps']['single_bank_sweeps']; cal=[]\\nfor j in range(4):\\n    take=B['bank_id']==j; z=np.zeros((take.sum(),4)); z[:,0]=B['ref_signal'][take]; x=np.r_[X[:,(j+np.arange(4))%4],z]; y=np.r_[Y[:,j],B['raw_readout'][take]]; idx=np.arange(len(y)); err=[]\\n    for k in range(5):\\n        tst=(idx%5==k); q=m._fit_bank(x[~tst],y[~tst]); keep=tst & (abs(y)<5); err.extend(m._response(x[keep],q)-y[keep])\\n    cal.append(np.quantile(np.abs(err),.9))\\nassert max(cal)<.015,cal\\nprint('Held-out sweep absolute error p90 by bank:', np.round(cal,8))\\ny=m._calibrate(s); Z=s['Z_nuisance']; zr=s['nuisance_ridge']; nx,ny=s['nx'],s['ny']; S,U=m._forward(s)\\ndef axis(k,v,h,rob):\\n    a=np.zeros((len(k),len(k))); a[0,:2]=[k[0]/h**2+rob/h,-k[0]/h**2]; a[-1,-2:]=[-k[-1]/h**2,k[-1]/h**2+rob/h]\\n    for i in range(1,len(k)-1):\\n        lo=(k[i-1]+k[i])/(2*h**2)+max(v[i],0)/h; hi=(k[i]+k[i+1])/(2*h**2)+max(-v[i],0)/h; a[i,i-1:i+2]=[-lo,lo+hi,-hi]\\n    return a\\ndef dense_forward(reflect=False):\\n    ax,ay=[axis(s['kappa_'+d],s['vel_'+d],s['L'+d]/(s['n'+d]-1),0 if reflect else s['robin_'+d]) for d in 'xy']; L=np.kron(np.eye(ny),ax)+np.kron(ay,np.eye(nx))+np.diag(s['V_reaction_2d'].ravel(order='F')); f=[]; samp=[]\\n    ij=s['sensor_ij']\\n    for mu in s['mu_shifts']:\\n        rhs=np.column_stack([mode.ravel(order='F') for mode in s['source_modes']]); u=np.linalg.solve(L+mu*np.eye(nx*ny),rhs); f=np.array([v.reshape((nx,ny),order='F') for v in u.T]); samp.append(f[:,ij[:,0],ij[:,1]].T)\\n    return np.vstack(samp),f\\nD,F=dense_forward(); field_err=np.max(abs(out['terminal_field']-np.einsum('k,kij->ij',w,F))); assert np.allclose(S,D,atol=1e-12,rtol=0) and field_err<1e-12\\nix=np.arange(len(y)).reshape(len(s['mu_shifts']),-1,4)\\ndef project(D,y,z):\\n    P=np.linalg.solve(z.T@z+zr*np.eye(z.shape[1]),z.T); return D-z@(P@D),y-z@(P@y),P\\ndef worst(D,parts):\\n    errs=[]\\n    for fold in parts:\\n        test=fold.ravel(); tr=np.setdiff1d(ix,test); z=Z[tr]; A,b,P=project(D[tr],y[tr],z); v,_=m._qp(A,b,rho,cap,budget); pred=D[test]@v+Z[test]@(P@(y[tr]-D[tr]@v)); errs.append(np.sqrt(np.mean((pred-y[test])**2)))\\n    return max(errs)\\nDr,_=dense_forward(True); cv=worst(D,np.array_split(ix,8,axis=1)); shift=worst(D,ix); refl=worst(Dr,ix); assert max(cv,shift)<.02 and shift<refl\\nprint('Worst held-out rosette RMSE:',cv,'shift RMSE:',shift,'reflecting shift RMSE:',refl,'terminal field max error:',field_err)\\ndef check(A,b,rr,cc,bb,v,nu):\\n    g=A.T@(A@v-b)+rr*v; d=g-nu; lo=d.clip(0); hi=(-d).clip(0); gap=lo@v+hi@(cc-v); assert abs(v.sum()-bb)<1e-10 and np.min(v)>=-1e-12 and np.max(v)<=cc+1e-12 and gap<1e-6,(v,gap); return gap,g,lo,hi\\nA,b,_=project(D,y,Z); gap,g,lo,hi=check(A,b,rho,cap,budget,w,cert['nu_sum']); J=.5*(np.linalg.norm(A@w-b)**2+rho*(w@w)); lower=J-g@w+cert['nu_sum']*budget-cap*hi.sum(); assert np.allclose(cert['weights'],w) and np.allclose(cert['lam_lower'],lo,atol=1e-12) and np.allclose(cert['lam_upper'],hi,atol=1e-12) and abs(cert['primal_objective']-J)<1e-12 and abs(cert['dual_lower_bound']-lower)<1e-12\\nrng=np.random.default_rng(7); gaps=[]\\nfor n in (2,8,12):\\n    for scale in (.1,1,10):\\n        R=rng.normal(size=(18,n))*scale; b0=rng.normal(size=18)*scale; rr=.04\\n        for amount in (0.,.03,cap,cap*n*.47,cap*n-.03,cap*n):\\n            v,nu=m._qp(R,b0,rr,cap,amount); gaps.append(check(R,b0,rr,cap,amount,v,nu)[0])\\nprint('Public KKT gap:',gap,'worst KKT gap over',len(gaps),'stress cases:',max(gaps))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited reflecting walls and cubic calibration → H2 nominal Robin walls and sweep-fitted opposite-bank response; prototype worst held-out rosette RMSE was 0.013613 and the delivered candidate’s public duality gap was 1.27e-16.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\", \"ng_t11\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the schema receipt alone\",\n      \"rejected_reason\": \"The schema check cannot detect a transposed terminal field, stale boundary selection, calibration misspecification, or an invalid certificate at a box-simplex corner.\"\n    }\n  ],\n  \"rationale\": \"Test the shipped model on held-out sweep rows and chamber slices, then independently reconstruct the Robin stencil, terminal field, and certificate. Correct the affected module only if its check fails.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_013_att0.json",
+      "response_sha256": "d8f5c4f70e32fa6fc558687f1859f9b8ba4c6e85a289b7fec8b9fcf968f6c6a7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49459.49,
+      "usage_known": true,
+      "prompt_tokens": 46440,
+      "cached_tokens": 9344,
+      "completion_tokens": 1934
+    }
+  ]
+}

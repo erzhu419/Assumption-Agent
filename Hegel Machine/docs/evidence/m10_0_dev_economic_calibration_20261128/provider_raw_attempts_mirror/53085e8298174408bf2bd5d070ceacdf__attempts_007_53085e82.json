@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53085e8298174408bf2bd5d070ceacdf",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:42:40.285863+00:00",
+  "ended_at_utc": "2026-11-28T02:43:13.855356+00:00",
+  "request_sha256": "db422dad23beceb52c304a362b5638bb8bc32f68ba556fac9afa96775596f4c3",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 41138,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25181,
+    "cached_tokens": 9344,
+    "completion_tokens": 1368
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/rosette_margin_audit.py <<'PY'\\nimport pickle\\nimport sys\\nfrom itertools import combinations\\n\\nimport numpy as np\\n\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit, _invert\\nfrom batch_solver import solve_batch\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    studies = [item['study'] for item in pickle.load(f)]\\n\\nfor s in studies:\\n    sweep = s['sensor_calibration_sweeps']\\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\\n    print('study and sweep metadata keys:', sorted(s), sorted(sweep))\\n    # Gross spikes are excluded from scoring, never from the inputs to the candidate fit.\\n    score = np.max(abs(y), axis=1) < 5\\n    norm = np.max(abs(x), axis=1)\\n    mixed = np.flatnonzero(np.count_nonzero(x, axis=1) > 1)\\n    splits = [(f'blocked-{i}', block) for i, block in enumerate(np.array_split(np.arange(len(x)), 5))]\\n    splits.append(('largest-mixed-amplitude', mixed[np.argsort(norm[mixed])[-len(mixed)//5:]]))\\n    q = np.column_stack([*x.T, *(sign*x[:, i] + x[:, j] for i, j in combinations(range(4), 2) for sign in (1, -1))])\\n    a = _basis(x)\\n    for name, block in splits:\\n        train = np.setdiff1d(np.arange(len(x)), block)\\n        test = block[score[block]]\\n        b = _fit(x[train], y[train])\\n        residual = np.linalg.norm(a[train] @ b - y[train], axis=1)\\n        inliers = train[residual <= max(8*np.median(residual), 1e-8)]\\n        # Profile rational response directions and strengths on training rows only.\\n        rational = []\\n        for unit in range(4):\\n            choices = []\\n            for j in range(q.shape[1]):\\n                for alpha in (1e-4, 1e-3, 0.01, 0.1, 0.3):\\n                    design = a / (1 + alpha*q[:, j:j+1]**2)\\n                    coef = np.linalg.lstsq(design[inliers], y[inliers, unit], rcond=None)[0]\\n                    resid = design[inliers] @ coef - y[inliers, unit]\\n                    choices.append((resid @ resid, design[test] @ coef))\\n            rational.append(min(choices, key=lambda c: c[0])[1])\\n        forward = np.max(abs(a[test] @ b - y[test]))\\n        inverse = np.max(abs(_invert(y[test], b) - x[test]))\\n        rational_error = np.max(abs(np.column_stack(rational) - y[test]))\\n        print(f'{name}: cubic-forward={forward:.4g} cubic-inverse={inverse:.4g} rational-forward={rational_error:.4g}')\\n        assert inverse < 1e-4, (name, inverse)\\n    # Compare actual inversion errors against the clean sweep noise floor, not a synthetic round trip.\\n    b = _fit(x, y)\\n    raw_obs = np.asarray(s['y_obs_raw']).reshape(-1, 4)\\n    obs = _invert(raw_obs, b)\\n    singular = np.linalg.svd(b[1:5], compute_uv=False)[-1]\\n    print(f'linear minimum singular value={singular:.5g}; max reference amplitude: observed={np.max(abs(obs)):.5g}, measured clean sweep={np.max(abs(x[score])):.5g}')\\n    out = solve_batch(s)\\n    cert = out['kkt_certificate']\\n    gap = abs(cert['primal_objective'] - cert['dual_lower_bound'])\\n    print(f'composed primal-dual gap={gap:.4g}')\\n    assert gap < 1e-8\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/rosette_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 pairwise coupling plus channelwise cubics; the verified worst blocked inverse error is 4.06e-5, with a high-amplitude sweep slice still to test.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Run relay, drift-operator, or classification checks\",\n      \"rejected_reason\": \"The calibration task is a continuous four-channel regression; those checks do not test its response or inverse.\"\n    }\n  ],\n  \"rationale\": \"Hold out the largest-amplitude mixed sweeps to detect an extrapolation failure that ordered blocks could miss. Compare rational responses along individual and sum/difference directions with selection confined to training rows. Reconsider the cubic only if it loses meaningful inverse margin or the challenger materially improves held-out response.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "f39b226c4b6d8126832aab8612714d87c21da04e021268941be7fa184b04d19c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 35594.63,
+      "usage_known": true,
+      "prompt_tokens": 25181,
+      "cached_tokens": 9344,
+      "completion_tokens": 1368
+    }
+  ]
+}

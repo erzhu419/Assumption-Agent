@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0279d270012c4943b98d1a863fde276e",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:42:01.758827+00:00",
+  "ended_at_utc": "2026-11-28T02:42:28.986132+00:00",
+  "request_sha256": "ab24c1d82288b1ad5abffdd68632d37a3949c86ebe48804552c9e3b7f9f86871",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 22364,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18442,
+    "cached_tokens": 9344,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/bridge_probe.py <<'PY'\\nimport numpy as np, pickle\\nfrom itertools import combinations_with_replacement\\nr=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('items',len(r));d=r[0]['dataset'];c=d['calibration_load_cells'];print('calibration', {k:(getattr(v,'shape',None) or list(v) if isinstance(v,dict) else getattr(v,'shape',type(v).__name__)) for k,v in c.items()});print('top-level',list(d));v=d.get('chamber_verification_trials');print('verification',type(v),{k:getattr(s,'shape',None) for k,s in v.items()} if isinstance(v,dict) else v is None);s=c['single_channel_sweeps'];print('sweeps',{k:np.shape(v) for k,v in s.items()}); x=np.asarray(c['true_channel_loads']);y=np.asarray(c['bridge_raw']);print('x range',x.min(0),x.max(0),'y range',np.quantile(y,[0,.05,.95,1],axis=0));print('x rows',x[:10]); print('sweep starts',{k:np.asarray(v).ravel()[:8].tolist() for k,v in s.items()});\\ndef matrix(x,deg):\\n return np.column_stack([np.ones(len(x))]+[np.prod(x[:,it],axis=1) for p in range(1,deg+1) for it in combinations_with_replacement(range(4),p)])\\ndef fit(A,y):\\n b=np.linalg.lstsq(A,y,rcond=None)[0];w=np.ones(len(y))\\n for _ in range(25):\\n  e=np.linalg.norm(A@b-y,axis=1);w=1/(1+(e/max(2*np.median(e),1e-9))**2); t=np.sqrt(w);b=np.linalg.lstsq(t[:,None]*A,t[:,None]*y,rcond=None)[0]\\n return b,w\\nfor j in range(1,5):\\n a=matrix(x,j); b,w=fit(a,y);pred=np.empty_like(y);idx=np.random.default_rng(31).permutation(len(x));\\n for ts in np.array_split(idx,5):\\n  tr=np.setdiff1d(idx,ts);pred[ts]=a[ts]@fit(a[tr],y[tr])[0]\\n e=np.linalg.norm(pred-y,axis=1);tail=np.max(np.abs((x-np.median(x,axis=0))/np.std(x,axis=0)),axis=1); edge=tail>=np.quantile(tail,.8);print('degree',j,'parameters',len(b),'OOF e quantiles',np.quantile(e,[.5,.8,.9,.95,.98,1]),'edge quantiles',np.quantile(e[edge],[.5,.8,.9,1]),'weights<.1',np.where(w<.1)[0]);\\n if j in (2,3):\\n  for k in range(4):print(k,[(i,round(z,5)) for i,z in enumerate(b[:,k]) if abs(z)>.002]);\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\\npython3 - <<'PY'\\nimport json\\nl=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'));m=json.load(open('/tmp/hegel_continual_archive/archive_manifest.json'));print('apparatus records',[(list(x),{k:str(v)[:240] for k,v in x.items() if not isinstance(v,(list,dict))}) for x in l]); print('manifest',[(list(x),{k:str(v)[:160] for k,v in x.items() if not isinstance(v,(list,dict))}) for x in m]);\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine cross-channel mixing → H2 robust multivariate nonlinear forward calibration; held-out edge error is pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible inverse directly\",\"rejected_reason\":\"Forward residuals can distinguish bridge structure from gross raw-readout spikes before inversion, and edge errors will show whether the extra terms generalize.\"}],\"rationale\":\"Compare affine and nonlinear forward models using the same held-out rows and report edge errors separately. Inspect sweep and telemetry structure to see whether either supplies an independent calibration constraint.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "14741d75ec3c1682f04b3bffff17a88ecfe7c18acf9821686a04e7d4c8c800f8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29274.62,
+      "usage_known": true,
+      "prompt_tokens": 18442,
+      "cached_tokens": 9344,
+      "completion_tokens": 1069
+    }
+  ]
+}

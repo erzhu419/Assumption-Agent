@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "115382c9acc648e7b59202d551eadfe7",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:56:42.296207+00:00",
+  "ended_at_utc": "2026-11-28T02:57:09.928591+00:00",
+  "request_sha256": "71d5176948aa6b7727cecc1a0d0aa7ddc1e52651dc3805cb82689dccbdba059d",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 52389,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26892,
+    "cached_tokens": 9344,
+    "completion_tokens": 1044
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\npython3 - <<'PY'\\nfrom pathlib import Path\\nsource = Path('/tmp/hegel_continual_archive/dev_alpha_m100_02_batch_05_solver.py').read_text()\\nhead = source.split('def solve_batch(', 1)[0]\\nPath('/holdout_task/batch_solver.py').write_text(head + '''_CHAMBER_DRIFT_FRACTIONS = np.array([0.448, 0.522])\\n\\n\\ndef _chamber(hold, drift, tau, theta, times):\\n    elastic = hold[:, None] * theta[:2]\\n    transient_rates = drift[:, None] * _CHAMBER_DRIFT_FRACTIONS\\n    amplitudes = elastic + transient_rates * tau\\n    steady_rate = drift * (1.0 - _CHAMBER_DRIFT_FRACTIONS.sum())\\n    growth = -np.expm1(-times[:, None] / tau)\\n    curves = amplitudes @ growth.T + steady_rate[:, None] * times\\n    return curves, elastic @ (1.0 / tau) + drift\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    times = np.asarray(dataset['eval_times'])\\n    dt = np.asarray(dataset['past_dt'])\\n    x_train, x_test = _features(train, test)\\n    calibration = _bridge(dataset['calibration_load_cells'])\\n    tau, theta = _fit(_prepare(train, x_train, calibration), dt, times,\\n                      train['strain_curves_obs'] - train['strain_0'][:, None],\\n                      train['instant_rate_obs'])\\n\\n    # The preceding facility trace matches both archived reset campaigns.\\n    # The chamber starts with no hereditary stress; drift is initially conserved.\\n    hold = _loads(test['hold_channel_raw'], calibration).sum(axis=-1)\\n    drift = theta[2] + x_test @ theta[3:]\\n    curves, rate = _chamber(hold, drift, tau, theta, times)\\n    return {'estimated_taus': tau, 'hereditary_weights': theta,\\n            'predicted_strain': test['strain_0'][:, None] + curves,\\n            'initial_rate_pred': rate}\\n''')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\npython3 - <<'PY'\\nimport json, pickle, numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\nfor r in json.load(open(p)):\\n    a=np.asarray(r['facility_telemetry_trace']); print(r['completed_campaign_short_name'], 'means',np.round(a.mean(0),3))\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; print('diagnostics:',type(item.get('campaign_diagnostics')).__name__)\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -24\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 full deployment history → H2 chamber reset with drift redistributed into two relaxing branches; worst held-out calibration RMSE is 0.000315 per channel and 0.000564 for summed stress.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the calibration equations from the archived reset campaigns\",\n      \"rejected_reason\": \"The current sweeps identify the trigonometric bridge independently of the chamber regime; its worst summed-stress RMSE is 0.000564 versus 0.520737 or worse for those earlier bridges.\"\n    }\n  ],\n  \"rationale\": \"Build the standalone solver from the best held-out bridge and the reset law shared by both telemetry precedents. Check the public schema and chronological trace alignment now; a mismatch would change the chamber equation before numerical stress testing.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "a04f2a8728d11b27ad311ef453310ee09cc2b600865fe823dbbe3e4a37f42a8c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29650.65,
+      "usage_known": true,
+      "prompt_tokens": 26892,
+      "cached_tokens": 9344,
+      "completion_tokens": 1044
+    }
+  ]
+}

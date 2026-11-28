@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b662dee0ae994155b8efa617aeb0e773",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:51.743069+00:00",
+  "ended_at_utc": "2026-11-28T02:46:10.452805+00:00",
+  "request_sha256": "c933f7e05fb00a7bb6c3d05ab08d6adf18fef942a13a3de22afffb57744d601e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23492,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18553,
+    "cached_tokens": 0,
+    "completion_tokens": 687
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; grep -nE '^def |tau|drift|telemetry|chamber|gap|sweep' \\\"$f\\\" | tail -45; done; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_control_panel_deconfounding.align_control_panel | head -35; python3 - <<'PY'\\nimport pickle,json,numpy as np\\nq=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']\\nfor k in ['train','test']:\\n s=q[k]; print(k, 'lab counts',np.unique(s['lab_id'],return_counts=True),'cells',np.unique(np.c_[s['lab_id'],s['stratum']],axis=0,return_counts=True)[1]);\\n for a in ['aux_chamber_telemetry','ref_coupons','coupon_features_raw']:\\n  v=s[a]; print(a,'range',np.nanmin(v,axis=0).round(3),np.nanmax(v,axis=0).round(3),'nan',np.isnan(v).sum(axis=0))\\n print('telemetry rows',s['aux_chamber_telemetry'][:5].round(3))\\nc=q['calibration_load_cells']; b,y=c['bridge_raw'],c['true_channel_loads']; z=np.c_[b,np.ones(len(b))]; r=z@np.linalg.lstsq(z,y,rcond=None)[0]-y; print('calibration affine RMSE',np.sqrt(np.mean(r*r,axis=0))); print('sweeps', {k:(np.shape(v),np.asarray(v).ravel()[:8]) for k,v in c['single_channel_sweeps'].items()})\\nfor e in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'],*[f'{f(a,axis=0).round(3)}' for f in [np.mean,np.std,np.max]])\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 benchtop deployment law → H2 chamber law inferred from archived solvers and observable apparatus signatures; no validation metric yet.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Transfer the last archived chamber law unchanged\",\"rejected_reason\":\"The current gate rejected the prior monolithic solution, but did not identify which component failed; compare archived mechanisms and current signatures first.\"}],\"rationale\":\"Archived equations can distinguish bridge, memory, and drift changes. The affine calibration residual determines whether to test a richer bridge basis, and the telemetry summaries show whether the current inputs contain a usable regime signature.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "dbf9bddecd1bb751749c18c461b49b106f5ac3b626819ddd7c423c70c654fae7",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20743.34,
+      "usage_known": true,
+      "prompt_tokens": 18553,
+      "cached_tokens": 0,
+      "completion_tokens": 687
+    }
+  ]
+}

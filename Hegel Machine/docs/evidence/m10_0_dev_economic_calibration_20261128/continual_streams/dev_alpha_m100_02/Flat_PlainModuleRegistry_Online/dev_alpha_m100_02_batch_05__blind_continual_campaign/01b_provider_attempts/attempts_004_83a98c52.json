@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "83a98c528da94dec928bc8924650277b",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:10.624075+00:00",
+  "ended_at_utc": "2026-11-28T02:46:35.350600+00:00",
+  "request_sha256": "24e9bbe121687766beb11844f65e8cbd3a6da57e033712a271f108a060a098c8",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 31468,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22101,
+    "cached_tokens": 9344,
+    "completion_tokens": 946
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_probe.py <<'PY'\\nimport pickle,itertools\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nnp.set_printoptions(precision=5,suppress=True,linewidth=200)\\nx=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=x['calibration_load_cells']; t=c['true_channel_loads']; r=c['bridge_raw']; s=c['single_channel_sweeps']; clean=np.max(abs(r),axis=1)<5\\nfams={'tanh':lambda u,a,b: np.tanh(a*u),'atan':lambda u,a,b:np.arctan(a*u),'tanh+cubic':lambda u,a,b: np.tanh(a*u)+b*u**3,'atan+cubic':lambda u,a,b:np.arctan(a*u)+b*u**3,'tanh+sin':lambda u,a,b:np.tanh(a*u)+b*np.sin(3*u),'tanh+sinfit':lambda u,a,b:np.tanh(a*u)+b[0]*np.sin(b[1]*u),'rational+cubic':lambda u,a,b:u/(1+a*u*u)+b*u**3}\\nfor name,f in fams.items():\\n print(name)\\n for k in range(4):\\n  m=(s['lab_id']==k)&(abs(s['cmd_stress'])<5); u=s['true_stress'][m]; y=s['cmd_stress'][m]; ma=clean & (t[:,k]!=0) & (np.count_nonzero(t,axis=1)==1); u=np.r_[u,t[ma,k]]; y=np.r_[y,r[ma,k]]\\n  def pred(p,u):return p[0]+p[1]*u+p[2]*f(u,p[3],p[4:] if name.endswith('sinfit') else p[4])\\n  p=least_squares(lambda p:pred(p,u)-y, [0,.3,.5,1.8,0]+([3.] if name.endswith('sinfit') else []),max_nfev=3000).x\\n  print(k,p,'rmse',np.mean((pred(p,u)-y)**2)**.5)\\nprint('mixed count and spike index',sum(clean),np.where(~clean)[0]); print('all near-zero rows',np.c_[t,r][np.linalg.norm(t,axis=1)<.4]); print('trial shape in archive source:')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py; grep -nE 'chamber_verification_trials|bridge_raw|channel_raw' /tmp/hegel_continual_archive/*solver.py /holdout_task/_verified_downstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine bridge → H2 saturating self-response with paired coupling; clean channel-0 axis secants span 0.430 to 1.118, and held-out inverse error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Diffusive-network skill\",\"rejected_reason\":\"The available operator models time-stepped dynamics, not a static bridge response.\"}],\"rationale\":\"Compare saturating and rational laws on isolated sweeps before fitting mixed loads; residuals above the observed noise floor would show which laws need additional terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "5d25388617051a0d56c51234a969082ed1fbcbc92ba295d02af164d1ed03eb9a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26798.69,
+      "usage_known": true,
+      "prompt_tokens": 22101,
+      "cached_tokens": 9344,
+      "completion_tokens": 946
+    }
+  ]
+}

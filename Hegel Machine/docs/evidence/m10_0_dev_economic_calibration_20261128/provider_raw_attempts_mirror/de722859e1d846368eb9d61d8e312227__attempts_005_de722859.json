@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de722859e1d846368eb9d61d8e312227",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:28.657395+00:00",
+  "ended_at_utc": "2026-11-28T02:50:08.077527+00:00",
+  "request_sha256": "8720fecc0ee4771a148db164429d01374b2a80ab42d928a3a16ed48b7e98c3df",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41930,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25963,
+    "cached_tokens": 9344,
+    "completion_tokens": 1734
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/probe_batch05.py <<'PY'\\nimport sys,pickle,itertools,numpy as np\\nfrom scipy import sparse\\nfrom scipy.optimize import least_squares,root\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_beta_m100_01_batch_04_solver as m\\nimport dev_beta_m100_01_batch_03_solver as r\\nimport dev_beta_m100_01_batch_02_solver as p\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; ref,raw=sw['ref_rosette'],sw['raw_rosette']; bank=sw['single_bank_sweeps']; obs=s['y_obs_raw'].reshape(-1,4)\\nprint('sweep ranges',ref.min(0),ref.max(0),[(k,np.shape(v),np.min(v),np.max(v)) for k,v in bank.items()]); print('aux correlations',np.round(np.corrcoef(s['aux_manifold_telemetry'].T),2))\\nbase=m._calibration(sw)\\ndef feat(x,j):return x[:,j], x[:,(j+1)%4], x[:,(j-1)%4], x[:,(j+2)%4]\\ndef pred(x,j,q,kind):\\n a,b,c,d=feat(x,j)\\n if kind=='poly': return q[0]+q[1]*a+q[2]*b+q[3]*c+q[4]*a*b+q[5]*a**3\\n if kind=='poly5': return q[0]+q[1]*a+q[2]*b+q[3]*c+q[4]*a*b+q[5]*a**3+q[6]*a**5\\n if kind=='tanh': f=np.tanh(q[5]*a)/q[5]\\n elif kind=='sin': f=np.sin(q[5]*a)/q[5]\\n elif kind=='atan': f=np.arctan(q[5]*a)/q[5]\\n elif kind=='sqrt': f=a/np.sqrt(1+(q[5]*a)**2)\\n return q[0]+q[1]*f+q[2]*b+q[3]*c+q[4]*a*b\\n\\ndef fit(kind):\\n qs=[]; cvs=[]\\n for j in range(4):\\n  use=bank['bank_id']==j; xb=np.zeros((use.sum(),4));xb[:,j]=bank['ref_signal'][use];X=np.vstack((ref,xb));Y=np.r_[raw[:,j],bank['raw_readout'][use]]\\n  q0=base[j].copy()\\n  if kind=='poly5':q0=np.r_[q0,0.]\\n  elif kind!='poly':q0[5]=0.7\\n  def estimate(ix):return least_squares(lambda q: pred(X[ix],j,q,kind)-Y[ix],q0,loss='cauchy',f_scale=.002).x\\n  res=np.zeros(len(Y))\\n  for k in range(5):\\n   mask=np.arange(len(Y))%5==k;q=estimate(~mask);res[mask]=pred(X[mask],j,q,kind)-Y[mask]\\n  cvs.append(np.quantile(abs(res),[.5,.8,.9,.95]));qs.append(estimate(np.ones(len(Y),bool)))\\n print(kind,np.round(np.array(cvs),6).tolist(), 'coeff',np.round(qs,4).tolist())\\n def inv(y):\\n  return root(lambda x: np.array([pred(x[None,:],j,qs[j],kind)[0] for j in range(4)])-y,(y-base[:,0])/base[:,1]).x\\n return np.array(list(map(inv,obs))).ravel()\\nys={k:fit(k) for k in ('poly','poly5','tanh','sin','atan','sqrt')};ys['archive']=m._calibrate(s)\\nZ=s['Z_nuisance']; ridge=s['nuisance_ridge']; splits=np.array_split(np.arange(len(obs)*4).reshape(3,-1,4),8,axis=1)\\nfor aa,bb in itertools.product('ROP',repeat=2):\\n def axis(a,kind):\\n  args=(s['kappa_'+a],s['vel_'+a],s['L'+a]/(s['n'+a]-1));return {'R':lambda:m._axis(*args),'O':lambda:r._axis(*args,s['robin_'+a]),'P':lambda:p._axis(*args)}[kind]()\\n L=sparse.kron(sparse.eye(s['ny']),axis('x',aa),format='csc')+sparse.kron(axis('y',bb),sparse.eye(s['nx']),format='csc')+sparse.diags(s['V_reaction_2d'].ravel(order='F'),format='csc');S,_=m._forward(s,L)\\n out=[]\\n for name,y in ys.items():\\n  errs=[]\\n  for part in [*splits,np.arange(len(y))]:\\n   test=part.ravel();train=np.setdiff1d(np.arange(len(y)),test) if len(test)<len(y) else test;z=Z[train];D=np.column_stack((S[train],y[train]));P=np.linalg.solve(z.T@z+ridge*np.eye(z.shape[1]),z.T@D);T=D-z@P;w,_=m._qp(T[:,:-1],T[:,-1],s['source_ridge'],s['u_box'],s['total_budget']);e=S[test]@w+Z[test]@(P[:,-1]-P[:,:-1]@w)-y[test];errs.append(np.mean(e*e))\\n  out.append((name,*np.round(np.sqrt([np.mean(errs[:-1]),max(errs[:-1]),errs[-1]]),6)))\\n print(aa+bb,out)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_batch05.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 inherited reflecting walls → H2 compare exact Robin, reflecting, and periodic stencils after independent calibration selection; worst held-out rosette RMSE was 0.053641 for Robin versus 0.108735 for reflecting.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Freeze the Robin and cubic-calibration candidate\",\n      \"rejected_reason\": \"Robin improves prediction, but the remaining residual could come from an untested wall stencil or sensor saturation law.\"\n    }\n  ],\n  \"rationale\": \"Compare the archived wall stencils on both axes, and test calibration alternatives on held-out sweep rows rather than selecting calibration from chamber residuals.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "df5ead777005a0c8f916c1d24311a201641d6ee22f3d23c7ee67714a2de127cb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43486.02,
+      "usage_known": true,
+      "prompt_tokens": 25963,
+      "cached_tokens": 9344,
+      "completion_tokens": 1734
+    }
+  ]
+}

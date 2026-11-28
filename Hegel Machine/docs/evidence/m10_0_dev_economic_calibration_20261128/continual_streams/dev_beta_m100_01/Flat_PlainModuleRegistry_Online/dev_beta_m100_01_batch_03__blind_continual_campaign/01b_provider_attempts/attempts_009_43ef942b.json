@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "43ef942b67b9456992ce9c4e67c17495",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:29.828635+00:00",
+  "ended_at_utc": "2026-11-28T02:43:54.703345+00:00",
+  "request_sha256": "de4f37cb5a27236db6205d725939976e8ecd1bed3ea841f9a7ae2403d7f29445",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45393,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25378,
+    "cached_tokens": 9344,
+    "completion_tokens": 855
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _basis, _fit, _invert\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nfor item in items:\\n    s = item['study']; c = s['sensor_calibration_sweeps']\\n    x, y = c['ref_rosette'], c['raw_rosette']\\n    clean = np.max(abs(y), axis=1) < 5\\n    mixed = np.flatnonzero(np.count_nonzero(x, axis=1) > 1)\\n    test = mixed[np.argsort(np.max(abs(x[mixed]), axis=1))[:max(1, len(mixed)//5)]]\\n    train = np.setdiff1d(np.arange(len(x)), test)\\n    test = test[clean[test]]\\n    b = _fit(x[train], y[train])\\n    inv_err = np.max(abs(_invert(y[test], b) - x[test]))\\n    obs = np.asarray(s['y_obs_raw'])\\n    all_b = _fit(x, y)\\n    clean_b = np.linalg.lstsq(_basis(x[clean]), y[clean], rcond=None)[0]\\n    emi_shift = np.max(abs(_invert(obs, all_b) - _invert(obs, clean_b)))\\n    print(f'Low-amplitude mixed holdout: n={len(test)}, inverse max={inv_err:.6g}; effect of including gross EMI rows on calibrated observations={emi_shift:.6g}')\\n    assert inv_err < 1e-4 and emi_shift < 1e-5\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine response → H2 pairwise interactions and channelwise cubics; worst measured holdout inverse error is 4.29e-5 on the high-amplitude slice.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the high-amplitude rational comparison\",\n      \"rejected_reason\": \"It already lost on all six measured slices; the remaining targeted check is low-amplitude inversion and EMI influence on actual observations.\"\n    }\n  ],\n  \"rationale\": \"Hold out the weakest mixed sweeps to detect local inverse bias, and compare calibrated observations with and without the gross spike rows to detect residual EMI influence. If either check fails, revisit the fit; otherwise retain the verified bundle.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "0cac6bc69d8e52dec8c784c2705dd2f63d6ccc118701969560289c0017724872",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24835.18,
+      "usage_known": true,
+      "prompt_tokens": 25378,
+      "cached_tokens": 9344,
+      "completion_tokens": 855
+    }
+  ]
+}

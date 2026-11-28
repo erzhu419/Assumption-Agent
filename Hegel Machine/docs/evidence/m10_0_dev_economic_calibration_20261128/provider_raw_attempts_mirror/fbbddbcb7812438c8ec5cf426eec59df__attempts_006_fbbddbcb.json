@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "fbbddbcb7812438c8ec5cf426eec59df",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:46:47.126600+00:00",
+  "ended_at_utc": "2026-11-28T02:47:06.036062+00:00",
+  "request_sha256": "da0f7a3ade088284a8c9abf9860fd55dd680753d27e15a676ef509a2322ff227",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43791,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25914,
+    "cached_tokens": 9344,
+    "completion_tokens": 666
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=160)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; s=c['single_channel_sweeps'];\\nfor i in range(4):\\n m=s['lab_id']==i; print('sweep',i,np.c_[s['true_stress'][m],s['cmd_stress'][m]].T)\\na,y=c['bridge_raw'],c['true_channel_loads']; print('calibration range',y.min(0),y.max(0),'raw quantiles',np.quantile(a,[0,.05,.5,.95,1],axis=0)); print('paired sample',np.c_[y,a][:12]);\\nfor k in ['train','test']:\\n for key in ['past_channel_raw','hold_channel_raw','aux_chamber_telemetry']:\\n  x=d[k][key].reshape(-1,4);print(k,key,'quantiles',np.quantile(x,[0,.05,.5,.95,1],axis=0))\\nPY\\nsed -n '75,190p' /tmp/hegel_continual_archive/*batch_03_solver.py; head -c 4500 /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json; printf '\\\\n'; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust Cauchy IRLS regression viscoelastic relaxation' | cut -c1-170 | head -12\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic cubic bridge → H2 a different dynamically calibrated transfer law; the archived cubic leaves median absolute calibration error up to 0.233 raw units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Retune outlier rejection on the archived cubic\",\n      \"rejected_reason\": \"The residual is large on typical calibration rows, not just on the gross sweep outliers; inspect the sweep shape before retuning.\"\n    }\n  ],\n  \"rationale\": \"Single-channel sweeps isolate the diagonal transfer and will distinguish saturation, oscillation, or a polynomial mismatch. The deployment ranges show how far the inverse must extrapolate. The archived batch-03 law and gate diagnostic may clarify which chamber model transfers after calibration is fixed.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "abbc973223d9cfaf1d66c4803f05724d5dff0a475294e0970871487211fc1008",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20883.68,
+      "usage_known": true,
+      "prompt_tokens": 25914,
+      "cached_tokens": 9344,
+      "completion_tokens": 666
+    }
+  ]
+}

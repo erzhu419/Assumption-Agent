@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "696f9d916305448080fa149079829cba",
+  "call_seq": 2,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:03.806740+00:00",
+  "ended_at_utc": "2026-11-28T02:41:23.401042+00:00",
+  "request_sha256": "dd70478f5e14b1920fa9d30652749a687647ad5d2e1dedd51c096e791167b249",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 14635,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 16415,
+    "cached_tokens": 9344,
+    "completion_tokens": 628
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"du -ah /tmp/hegel_continual_archive | sort -h | tail -35; python3 - <<'PY'\\nimport pickle,numpy as np,json\\nfrom pathlib import Path\\np=Path('/tmp/hegel_continual_archive')\\nfor f in p.glob('*.json'):\\n d=json.loads(f.read_text()); print(f.name,type(d).__name__, list(d) if isinstance(d,dict) else len(d));\\n if 'manifest' in f.name: print(str(d)[:6000])\\n if 'apparatus' in f.name:\\n  for k,v in (d.items() if isinstance(d,dict) else [(None,d)]):\\n   if isinstance(v,list) and v and isinstance(v[0],dict):\\n    for row in v:\\n     print({a:b for a,b in row.items() if 'trace' not in a},[(a,np.round(np.mean(b,axis=0),3)) for a,b in row.items() if 'trace' in a]);\\n   else: print(k,str(v)[:500])\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('batch length',len(b)); s=b[0]['study']; print('diagnostics',type(b[0].get('campaign_diagnostics')),len(b[0].get('campaign_diagnostics') or []))\\nfor k,v in s.items():\\n print(k, (v.shape,np.round(v.ravel()[:6],5)) if isinstance(v,np.ndarray) else ([(a, (b.shape if isinstance(b,np.ndarray) else (type(b),len(b) if hasattr(b,'__len__') else b))) for a,b in v.items()] if isinstance(v,dict) else v))\\nc=s['sensor_calibration_sweeps']; print('single',str(c.get('single_bank_sweeps'))[:2000]); print('telemetry mean',np.mean(s['aux_manifold_telemetry'],axis=0))\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -25\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Open-wall baseline → pulse-identified boundary rows and sweep-fitted sensor inverse; residuals not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The first log was truncated. Extract the archive paths and compact sweep schema to decide which prior mechanisms and pulse fits to test.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "71ce49f94854faa25b5e847e679cab7d230ccdd775ec8307e4a60d14ff171d69",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19552.36,
+      "usage_known": true,
+      "prompt_tokens": 16415,
+      "cached_tokens": 9344,
+      "completion_tokens": 628
+    }
+  ]
+}

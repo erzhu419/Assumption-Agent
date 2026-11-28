@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "45e1b14a84b04348853487f788c1365c",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:35:49.157117+00:00",
+  "ended_at_utc": "2026-11-28T02:36:24.030731+00:00",
+  "request_sha256": "5406d7597b686f2de9e779b171cba81fdfdb2db82b9e49d4ba6a51f95534d09d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45354,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26722,
+    "cached_tokens": 9344,
+    "completion_tokens": 1511
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\npython3 - <<'PY'\\nfrom pathlib import Path\\np = Path('upstream_transducer.py')\\ns = p.read_text()\\na = s.index('    jac[:, _CHANNELS')\\nb = s.index('    return jac', a)\\ns = s[:a] + '    jac += 3.0 * x[:, None, :]**2 * coef[15:].T\\\\n' + s[b:]\\np.write_text(s.replace('_CHANNELS = np.arange(4)\\\\n', ''))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I - <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _basis, _inverse, calibrate_upstream\\nfrom batch_solver import solve_batch\\n\\nd = pickle.load(open('public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; x, y = c['true_channel_loads'], c['bridge_raw']\\nrng = np.random.default_rng(137)\\nrandom_folds = rng.permutation(len(x)) % 5\\nz = np.count_nonzero(x, axis=1)\\nfolds = [random_folds == j for j in range(5)] + [((z == 1) & (x[:, j] != 0)) for j in range(4)] + [np.max(np.abs(x), axis=1) >= 1.5]\\nmetrics = []\\nfor hold in folds:\\n    b = _fit_bridge(x[~hold], y[~hold]); xh, yh = x[hold], y[hold]\\n    pred = _basis(xh) @ b\\n    bridge_err = np.linalg.norm(pred - yh, axis=1)\\n    # Public gross spikes are >27 in row norm, well separated from physical residuals.\\n    clean = bridge_err < 5\\n    inv_err = _inverse(yh[clean], b) - xh[clean]\\n    val = (int(clean.sum()), int((~clean).sum()), float(np.sqrt(np.mean((pred[clean] - yh[clean])**2))), float(np.sqrt(np.mean(inv_err**2))), float(np.max(np.abs(inv_err))))\\n    metrics.append(val)\\nprint('Held-out slices (clean count, spikes, bridge RMSE, load RMSE, max load error):', metrics)\\nassert sum(v[1] for v in metrics[:5]) == 3 and max(v[4] for v in metrics) < .002\\nb = _fit_bridge(x, y)\\naxis = np.linspace(-2.0, 2.0, 7)\\ngrid = np.stack(np.meshgrid(axis, axis, axis, axis), -1).reshape(-1, 4)\\ngrid_err = float(np.max(np.abs(_inverse(_basis(grid) @ b, b) - grid)))\\nprint('Grid inversion max load error:', grid_err)\\nassert grid_err < 1e-8\\noriginal = copy.deepcopy(d)\\nextra = {'past_channel_raw': _basis(grid[:12]) @ b, 'hold_channel_raw': _basis(grid[::750]) @ b, 'lab_id': np.arange(4)}\\nextra['past_channel_raw'] = extra['past_channel_raw'].reshape(4, 3, 4)\\na = calibrate_upstream(dict(d, chamber_verification_trials=extra))\\nassert calibrate_upstream(dict(d, chamber_verification_trials=None))['chamber_verification_trials'] is None\\nassert np.allclose(a['chamber_verification_trials']['past_channel_raw'], grid[:12].reshape(4, 3, 4), atol=1e-9)\\nassert np.allclose(a['chamber_verification_trials']['hold_channel_raw'], grid[::750], atol=1e-9)\\nassert np.array_equal(a['calibration_load_cells']['bridge_raw'], x) and not np.shares_memory(a['calibration_load_cells']['bridge_raw'], x)\\nsweeps = a['calibration_load_cells']['single_channel_sweeps']\\nassert np.array_equal(sweeps['cmd_stress'], sweeps['true_stress']) and not np.shares_memory(sweeps['cmd_stress'], sweeps['true_stress'])\\nfor name in ('train', 'test'):\\n    for key in ('past_channel_raw', 'hold_channel_raw'):\\n        raw = d[name][key]; restored = a[name][key]\\n        assert restored.shape == raw.shape and np.array_equal(raw, original[name][key])\\n        err = np.max(np.abs(_basis(restored.reshape(-1, 4)) @ b - raw.reshape(-1, 4)))\\n        print(name, key, 'max forward round trip error', float(err))\\n        assert err < 1e-8\\nassert np.array_equal(c['bridge_raw'], original['calibration_load_cells']['bridge_raw'])\\nassert np.array_equal(c['single_channel_sweeps']['cmd_stress'], original['calibration_load_cells']['single_channel_sweeps']['cmd_stress'])\\nprint('Isolated composed output:', {k: (v.shape, bool(np.isfinite(v).all())) for k, v in solve_batch(d).items()})\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 robust quadratic interactions and self-cubics; preliminary worst-fold bridge RMSE was 0.00016, and the public schema and reference-exchange checks passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Complete the Jacobian simplification and test the exact candidate. Held-out single-channel and extreme-load slices can expose unstable calibration; round trips and the optional-trial check can expose inversion or schema errors independently of the downstream solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d14be92c0937a8b45c0c8bc0634373aa29f4d00f7f6e4fb5450bff7af2fff8f6",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38899.82,
+      "usage_known": true,
+      "prompt_tokens": 26722,
+      "cached_tokens": 9344,
+      "completion_tokens": 1511
+    }
+  ]
+}

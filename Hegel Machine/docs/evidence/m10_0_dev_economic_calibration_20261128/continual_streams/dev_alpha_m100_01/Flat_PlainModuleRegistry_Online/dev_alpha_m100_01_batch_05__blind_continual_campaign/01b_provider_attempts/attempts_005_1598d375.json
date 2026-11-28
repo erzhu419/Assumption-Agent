@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1598d3751e8d41b39277c5b1c7de3fc3",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:31.462787+00:00",
+  "ended_at_utc": "2026-11-28T02:49:01.290968+00:00",
+  "request_sha256": "819fcd8e3b6a27ff2a27fab885f7e8bc33d5889f40efcebe684f75f65d2d0fe0",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39265,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25476,
+    "cached_tokens": 9344,
+    "completion_tokens": 1199
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"grep -inE 'bridge|tanh|calibrat|arctan|coupl|saturat' /tmp/hegel_continual_archive/*solver.py; python3 - <<'PY'\\nimport json\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\na=json.load(open(p)); print('telemetry entries:',[(i,list(r)) for i,r in enumerate(a)])\\nPY\\ncat > /tmp/bridge_terms.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nc=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; clean=np.max(abs(y),axis=1)<5\\nterms={\\n 'tanh_shift': (lambda v,k,s:np.tanh(k*v+s)-np.tanh(s), [.5,.6]),\\n 'atan_shift': (lambda v,k,s:np.arctan(k*v+s)-np.arctan(s), [.5,.6]),\\n 'exp': (lambda v,k:-np.expm1(-k*v), [.3]),\\n 'rat':(lambda v,k:v/(1+k*v), [.15]),\\n 'quadratic':(lambda v,k:v+k*v*v, [-.1]),\\n 'sin_cos':(lambda v,k,s:np.sin(k*v)+s*(np.cos(k*v)-1), [.6,.5]),\\n 'log':(lambda v,k:np.log1p(k*v), [.2]),\\n 'linear_tanh':(lambda v,k,s:v+s*(np.tanh(k*v+.6)-np.tanh(.6)), [.6,1]),\\n}\\nfor j in range(4):\\n u,v=x[:,j],x[:,j^2]; z=y[:,j]\\n for name,(term,start) in terms.items():\\n  for interaction in ('none','uv','sum_inside','sum_difference'):\\n   def pred(p):\\n    b,a,k,d=p[:4]; m=0 if interaction=='none' else p[-1]; w=p[4:4+len(start)]\\n    if interaction=='sum_difference': return b+a*np.tanh(k*u)+d*(term(v+m*u,*w)-term(m*u,*w))\\n    return b+a*np.tanh(k*(u+(m*v if interaction=='sum_inside' else 0)))+d*term(v,*w)+(m*u*v if interaction=='uv' else 0)\\n   ini=[0,1.8 if j%2==0 else 1.1,1,.35]+start+([] if interaction=='none' else [0.]); lo=np.full(len(ini),-np.inf); hi=-lo\\n   if name in ('rat','log'):lo[4]=-.53;hi[4]=.53\\n   errs=[]\\n   for fold in range(5):\\n    val=clean&(np.arange(len(x))%5==fold); tr=clean&~val\\n    p=least_squares(lambda p:(pred(p)-z)[tr],ini,bounds=(lo,hi),max_nfev=180).x; errs.extend((pred(p)-z)[val])\\n   p=least_squares(lambda p:(pred(p)-z)[clean],ini,bounds=(lo,hi),max_nfev=260).x\\n   print(j,name,interaction,'%.6f %.6f %.6f'%(np.mean(np.square(errs))**.5,max(abs(np.array(errs))),np.mean((pred(p)-z)[clean]**2)**.5),np.round(p,4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_terms.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 centered separable saturation -> H2 asymmetric coupling or mixed-load interaction; worst channel five-fold bridge RMSE is 0.03438 for shifted tanh.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use shifted tanh immediately\",\n      \"rejected_reason\": \"Its worst held-out bridge error is 0.164, large enough to warrant checking whether a missing coupling term explains it.\"\n    }\n  ],\n  \"rationale\": \"Compare compact asymmetric coupling laws and mixed-load terms on the same held-out rows. If an interaction consistently lowers error, retain it; otherwise prefer the simpler separable law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "96f590061c09f337a94069c3934bb9e4e6dccd288fd72bc0727497f6111cb80f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31904.7,
+      "usage_known": true,
+      "prompt_tokens": 25476,
+      "cached_tokens": 9344,
+      "completion_tokens": 1199
+    }
+  ]
+}

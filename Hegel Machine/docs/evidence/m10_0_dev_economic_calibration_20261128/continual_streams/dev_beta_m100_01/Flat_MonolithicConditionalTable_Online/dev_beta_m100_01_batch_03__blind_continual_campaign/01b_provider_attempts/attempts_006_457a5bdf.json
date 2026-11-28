@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "457a5bdfb6c24963be3244497502ebc0",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:38:15.042957+00:00",
+  "ended_at_utc": "2026-11-28T02:38:49.676752+00:00",
+  "request_sha256": "d1fa80c562a9cdda519cba5924ab1c5d001457c317ad7cd6ccf8b99c410c9c5f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51815,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30533,
+    "cached_tokens": 9344,
+    "completion_tokens": 1392
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"python3 - <<'PY'\\nfrom pathlib import Path\\narchive=Path('/tmp/hegel_continual_archive')\\nbase=(archive/'dev_beta_m100_01_s00_solver.py').read_text()\\nqp=(archive/'dev_beta_m100_01_batch_02_solver.py').read_text().split('def _project(',1)[1]\\nforward=base.split('def _calibrate(',1)[0]\\nforward=forward.replace('from scipy.optimize import minimize','from scipy.optimize import minimize, root')\\ncal='''def _design(x, j):\\n    a, b, c = x[:, j], x[:, (j + 1) % 4], x[:, (j - 1) % 4]\\n    return np.column_stack((np.ones(len(x)), a, b, c, a * b, a**3))\\n\\n\\ndef _calibration(sweeps):\\n    x, raw = sweeps['ref_rosette'], sweeps['raw_rosette']\\n    bank = sweeps['single_bank_sweeps']\\n    coeff = []\\n    for j in range(4):\\n        use = bank['bank_id'] == j\\n        xb = np.zeros((np.count_nonzero(use), 4))\\n        xb[:, j] = bank['ref_signal'][use]\\n        A = np.vstack((_design(x, j), _design(xb, j)))\\n        y = np.r_[raw[:, j], bank['raw_readout'][use]]\\n        fit = np.linalg.lstsq(A, y, rcond=None)[0]\\n        # Downweight contaminated pulses, then refit on the coherent sweeps.\\n        for _ in range(6):\\n            e = y - A @ fit\\n            scale = max(1e-8, 1.4826 * np.median(np.abs(e - np.median(e))))\\n            q = 1 / np.hypot(1, e / (2.5 * scale))\\n            fit = np.linalg.lstsq(A * q[:, None], y * q, rcond=None)[0]\\n        e = y - A @ fit\\n        scale = 1.4826 * np.median(np.abs(e - np.median(e)))\\n        keep = np.abs(e) < max(8 * scale, 2e-4)\\n        coeff.append(np.linalg.lstsq(A[keep], y[keep], rcond=None)[0])\\n    return np.array(coeff)\\n\\n\\ndef _calibrate(st):\\n    offset, gain, following, preceding, cross, cubic = _calibration(\\n        st['sensor_calibration_sweeps']).T\\n\\n    def forward(x):\\n        b, c = np.roll(x, -1), np.roll(x, 1)\\n        return offset + gain * x + following * b + preceding * c + cross * x * b + cubic * x**3\\n\\n    obs = st['y_obs_raw'].reshape(-1, 4)\\n    return np.array([root(lambda x: forward(x) - y, (y - offset) / gain,\\n                          tol=1e-11).x for y in obs]).ravel()\\n\\n\\n'''\\nPath('/holdout_task/batch_solver.py').write_text(forward+cal+'def _project('+qp)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py\\ncat /holdout_task/public_asset_index.json; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nspec=importlib.util.spec_from_file_location('batch_solver','/holdout_task/batch_solver.py');m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)\\nbatch=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('public studies',len(batch))\\nfor item in batch:\\n s=item['study']; o=m.solve_batch(s); c=o['kkt_certificate']; print('grid',s['nx'],s['ny'],'robin',s['robin_x'],s['robin_y'],'primal',c['primal_objective'],'gap',c['primal_objective']-c['dual_lower_bound'],'budget error',abs(o['weights'].sum()-s['total_budget']),'field range',(o['terminal_field'].min(),o['terminal_field'].max()))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (inherited periodic walls and affine calibration) -> H2 (Robin walls and robust cyclic cubic calibration); worst held-out calibration RMSE is 1.99e-5 and worst held-out shift RMSE for Robin is 0.00844.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Inherit the most recent periodic wall stencil\",\n      \"rejected_reason\": \"It predicts held-out shifts much worse: pooled RMSE 0.10952 versus 0.00790 for Robin.\"\n    },\n    {\n      \"option\": \"Use the dense cubic calibration basis\",\n      \"rejected_reason\": \"The six-term cyclic basis already gives worst held-out clean RMSE below 2e-5 and is better constrained by isolated-bank sweeps.\"\n    }\n  ],\n  \"rationale\": \"Write the best supported solver now and check the public schema and numerical certificate in a clean process. The remaining Robin residual warrants checking for a documented or telemetry-supported wall variant before freezing the stencil.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "d2d090e600b97c50fa8a1ef455890d3f9686607c1ceec12a042959b98efc00fe",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36690.55,
+      "usage_known": true,
+      "prompt_tokens": 30533,
+      "cached_tokens": 9344,
+      "completion_tokens": 1392
+    }
+  ]
+}

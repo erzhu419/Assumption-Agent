@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "09858ccec0f8439c9c150bf7815a22ba",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:46.495653+00:00",
+  "ended_at_utc": "2026-11-28T02:49:05.015883+00:00",
+  "request_sha256": "711ca98ff7e050b7d87eb54e7383c0486a5d0a5f744abaa51d1abc2eeacfc6ec",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46586,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25927,
+    "cached_tokens": 9344,
+    "completion_tokens": 649
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,numpy as np\\nnp.set_printoptions(precision=5,suppress=True,linewidth=145)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('count',len(x));print('single-axis and then mixed rows',np.column_stack([x,y])[:34]); print('sweep table',np.column_stack(list(c['single_channel_sweeps'].values())));print('specimen raw range');\\nfor part in ('train','test'):\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  a=d[part][k].reshape(-1,4); print(part,k,np.quantile(a,[0,.02,.5,.98,1],axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cubic bridge -> H2 monotone saturation with paired coupling and isolated bad sweeps; worst held-out stress p90 is 5.530 and the cubic bridge has pooled raw p90 error of 0.129.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"The archived cubic and nearest-neighbor bridge law adequately describes the active bridge.\",\n    \"empirical_witness\": \"Raw errors persist before inversion: the cubic bridge has median absolute error of 0.052 out of fold, and substituting other low-order polynomial bases does not remove it. Three axis-sweep rows also have distinct 12–14 unit jumps.\",\n    \"causal_blanket_diagnosis\": \"Two effects are mixed in the raw residuals: clean sweep curvature and a small group of gross readout offsets. The inverse fit cannot distinguish them.\",\n    \"sublated_pivot\": \"Use the known axis loads to isolate channel response shapes, then use mixed sweeps to distinguish coupling before inverting.\",\n    \"risk_kind\": \"bridge model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Increase the polynomial degree\",\n      \"rejected_reason\": \"The tested polynomial expansions did not materially improve out-of-fold error, and a nonmonotone extrapolation can make load inversion ambiguous.\"\n    }\n  ],\n  \"rationale\": \"Read only the calibration rows and specimen range summaries. The axis sweeps can distinguish saturation from polynomial curvature, and the specimen ranges show where the inverse must be reliable.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "610ab3ca1a4c0c404b9ba0cee7ada8e880137cdc97f9329ab09be7c158b0a0b1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 20510.01,
+      "usage_known": true,
+      "prompt_tokens": 25927,
+      "cached_tokens": 9344,
+      "completion_tokens": 649
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9c3c13bc49cd467e99bba9eb4b4a4a72",
+  "call_seq": 12,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step07__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_07__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:11:58.527537+00:00",
+  "ended_at_utc": "2026-11-28T03:12:29.117937+00:00",
+  "request_sha256": "d30149eab2dc4a12743f19c84359739ac2e97a59e3746b7f2d909c49d1007fd8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 77509,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37674,
+    "cached_tokens": 9344,
+    "completion_tokens": 1192
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('batch_solver', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']\\no = m.solve_batch(s)\\nw, cert = o['weights'], o['kkt_certificate']\\ncap, budget = s['u_box'], s['total_budget']\\nnx, ny = s['nx'], s['ny']\\ndef dense_axis(k, v, h):\\n    a = np.zeros((len(k), len(k)))\\n    for i in range(len(k)):\\n        for d in (-1, 1):\\n            j = (i+d) % len(k)\\n            c = .5*(k[i]+k[j])/h**2 + max(0., -d*v[i])/h\\n            a[i, j] -= c\\n            a[i, i] += c\\n    return a\\nax = dense_axis(s['kappa_x'], s['vel_x'], s['Lx']/(nx-1))\\nay = dense_axis(s['kappa_y'], s['vel_y'], s['Ly']/(ny-1))\\nL = np.kron(np.eye(ny), ax) + np.kron(ay, np.eye(nx)) + np.diag(s['V_reaction_2d'].ravel(order='F'))\\nI = np.eye(nx*ny)\\nrhs = np.column_stack([a.ravel(order='F') for a in s['source_modes']])\\ni, j = s['sensor_ij'].T\\nu = [np.linalg.solve(L+mu*I, rhs) for mu in s['mu_shifts']]\\nS = np.vstack([a[i+nx*j] for a in u])\\ny = m._calibrate(s)\\nraw_err = np.max(np.abs(m._readout(y.reshape(-1,4), m._fit_calibration(*m._sweeps(s))).ravel() - s['y_obs_raw']))\\nZ = s['Z_nuisance']\\nP = np.eye(len(y)) - Z @ np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]), Z.T)\\nA, b = P@S, P@y\\nr = A@w-b\\nridge = s['source_ridge']\\nJ = .5*(r@r+ridge*(w@w))\\ng = A.T@r+ridge*w\\nnu = cert['nu_sum']\\nlo, hi = np.array(cert['lam_lower']), np.array(cert['lam_upper'])\\ndual = J-g@w+nu*budget+cap*np.minimum(0,g-nu).sum()\\nfield_err = np.max(np.abs(o['terminal_field'] - (u[-1]@w).reshape((nx,ny), order='F')))\\nstat_err = np.max(np.abs(g-nu-lo+hi))\\ncomp_err = max(np.max(np.abs(lo*w)),np.max(np.abs(hi*(cap-w))))\\nassert np.array_equal(w,cert['weights']) and abs(w.sum()-budget)<1e-10 and w.min()>=-1e-12 and w.max()<=cap+1e-12\\nassert lo.min()>=0 and hi.min()>=0\\nassert max(raw_err,field_err,stat_err,comp_err)<1e-9\\nassert max(abs(J-cert['primal_objective']),abs(dual-cert['dual_lower_bound']),abs(J-dual))<1e-9\\nprint(f'readout inverse max error={raw_err:.3g}; dense field max error={field_err:.3g}; stationarity max error={stat_err:.3g}; complementarity max error={comp_err:.3g}; same-model duality gap={J-dual:.3g}')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 reflecting endpoints → H2 periodic wrapping on both axes; worst unregularized rosette-by-shift holdout RMSE is 0.01301, and the host reports terminal-field relative error 2.07e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The host already checked the scientific fit. The isolated run checks for import failures, calibration inversion errors, field ordering errors, and inconsistencies in the reported certificate. If any assertion fails, fix the corresponding component before submitting.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_012_att0.json",
+      "response_sha256": "78c53eedf79d3a026c3d9902a39eec87a26b182b68a7de8713902d8d77734b81",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32572.45,
+      "usage_known": true,
+      "prompt_tokens": 37674,
+      "cached_tokens": 9344,
+      "completion_tokens": 1192
+    }
+  ]
+}

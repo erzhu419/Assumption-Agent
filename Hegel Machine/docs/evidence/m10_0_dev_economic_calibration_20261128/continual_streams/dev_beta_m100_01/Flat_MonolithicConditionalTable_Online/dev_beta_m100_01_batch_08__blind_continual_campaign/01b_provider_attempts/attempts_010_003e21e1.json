@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "003e21e107764a7ea7132153ba3b3716",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:17:13.115680+00:00",
+  "ended_at_utc": "2026-11-28T03:17:47.876489+00:00",
+  "request_sha256": "35710d29887dc3bb3efdfe113263cdea65a9a9d4ab05793b4e2e930cbc05dfa2",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 47434,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25754,
+    "cached_tokens": 9344,
+    "completion_tokens": 1393
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit08.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\n\\np = '/holdout_task/'\\nspec = importlib.util.spec_from_file_location('candidate', p+'batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ni = pickle.load(open(p+'public_batch.pkl', 'rb'))[0]\\ns = i['study']; c = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nS, _ = m._forward(s, ('periodic','reflect'))\\nw = np.stack([d['w_pulse'] for d in i['campaign_diagnostics']])\\nyp = np.stack([d['y_pulse_raw'] for d in i['campaign_diagnostics']])\\nxp = (w@S.T).reshape(-1,4)\\n\\n# Compare plausible algebraic extensions only when they improve held-out sweeps and tracer predictions.\\ndef basis(t, j, model):\\n    A = m._design(t,j)\\n    a,b,d,o = (t[:,(j+k)%4] for k in (0,1,-1,2))\\n    if model == 'contrasts':\\n        return np.column_stack((A, a-b, a-d, o, (a-b)**2, (a-d)**2, (a-b)**3, (a-d)**3, a*b*d))\\n    if model == 'rational':\\n        q = np.column_stack(tuple(v**2 for v in (a,b,a-b,a+b)))\\n        return np.column_stack((A,q[:,:,None].__mul__(t[:,j,None,None]).reshape(len(t),-1)/(1+q)))\\n    return A\\n\\nrng = np.random.default_rng(8)\\nheld = np.array_split(rng.permutation(len(x)), 5)\\nfor model in ('polynomial','contrasts','rational'):\\n    e = np.zeros_like(y); pulse=[]\\n    for test in held:\\n        tr = np.setdiff1d(np.arange(len(x)),test)\\n        anchor = m._calibration(dict(c, ref_rosette=x[tr], raw_rosette=y[tr]))\\n        pred = np.empty_like(xp)\\n        for j in range(4):\\n            good = tr[abs(m._design(x[tr],j)@anchor[j]-y[tr,j])<2e-4]\\n            A = basis(x[good],j,model)\\n            coef = np.linalg.lstsq(A,y[good,j],rcond=None)[0]\\n            e[test,j] = basis(x[test],j,model)@coef-y[test,j]\\n            pred[:,j] = basis(xp,j,model)@coef\\n        pulse.append(np.sqrt(np.mean((pred.reshape(yp.shape)-yp).reshape(len(w),len(s['mu_shifts']),-1)**2,axis=2)).max())\\n    gross = np.max(abs(e),axis=1)>0.1\\n    print(model,'gross rows',np.flatnonzero(gross).tolist(),'worst held-out inlier bank RMSE',np.sqrt(np.mean(e[~gross]**2,axis=0)).max(),'worst pulse-shift RMSE over fits',max(pulse))\\n\\n# Quantify fitted nuisance impact within the actual study, rather than treating archived campaigns as labeled cohorts.\\nycal = m._calibrate(s); sol=m.solve_batch(s); ww=np.asarray(sol['weights']); Z=s['Z_nuisance']\\nr=ycal-S@ww\\nn=Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@r)\\nprint('per-shift unprojected residual RMS',np.sqrt(np.mean(r.reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\nprint('per-shift projected residual RMS',np.sqrt(np.mean((r-n).reshape(len(s['mu_shifts']),-1)**2,axis=1)))\\nprint('certificate gap',sol['kkt_certificate']['primal_objective']-sol['kkt_certificate']['dual_lower_bound'])\\nPY\\npython3 -I /tmp/audit08.py && python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 symmetric walls → H2 periodic x and reflecting y with cyclic polynomial readout; worst held-out pulse-by-shift RMSE is 1.37e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Test relay modes, Fokker–Planck/HJB drift, or within-batch classification accuracy\",\"rejected_reason\":\"The study is a steady transport inverse problem with no relay state, stochastic-control drift, or class labels. Nuisance projection can be evaluated directly by shift.\"}],\"rationale\":\"Use held-out calibration rows and independent tracer predictions to test whether signed contrast, three-way, or rational terms improve the readout. Inspect nuisance projection by shift for a failure hidden by pooling, and verify isolated execution.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "cb53e62d6e7466de1a35a8b70b01cc625e838d0511900383ef33ac0e4db99627",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36837.82,
+      "usage_known": true,
+      "prompt_tokens": 25754,
+      "cached_tokens": 9344,
+      "completion_tokens": 1393
+    }
+  ]
+}

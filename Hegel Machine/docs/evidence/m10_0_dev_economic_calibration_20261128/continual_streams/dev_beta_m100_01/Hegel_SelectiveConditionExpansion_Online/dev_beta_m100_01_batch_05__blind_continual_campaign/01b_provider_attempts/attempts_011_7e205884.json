@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "7e2058843e864c92b34b408a625c88a3",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:51:50.000212+00:00",
+  "ended_at_utc": "2026-11-28T02:52:27.387277+00:00",
+  "request_sha256": "59a9bdc2d2f35b77b32b2ad0dae089233968bfe0369eaeda4f8a33b852b5c5dd",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 56836,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30428,
+    "cached_tokens": 9344,
+    "completion_tokens": 1512
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_rosette.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _invert, _basis, _PAIR, _gross_good\\nfrom batch_solver import solve_batch\\n\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl', 'rb')):\\n    s = item['study']\\n    c = s['sensor_calibration_sweeps']\\n    X, Y = c['ref_rosette'], c['raw_rosette']\\n    axis = np.count_nonzero(X, axis=1) == 1\\n    good = np.all(_gross_good(Y), axis=1)\\n    rng = np.random.default_rng(52)\\n    folds = [np.array_split(rng.permutation(np.flatnonzero(m & good)), 5) for m in (axis, ~axis)]\\n    mods = ('affine', 'harmonic', 'harmonic+rational', 'harmonic+pairwise')\\n    errors = {m: np.zeros_like(Y) for m in mods}\\n    inverse = np.zeros_like(X)\\n    def design(x, f, mod):\\n        z = x[:, _PAIR]\\n        d = _basis(x, z, f)\\n        if mod == 'harmonic': return d\\n        if mod == 'affine': return d[..., [0, 1, 3]]\\n        if mod == 'harmonic+rational':\\n            return np.concatenate((d, np.stack([a**i/(1+a*a) for a in (x,z,x-z,x+z) for i in (1,2)], axis=-1)), axis=-1)\\n        return np.concatenate((d, np.stack([np.sin(f[0]*(x-z)), np.sin(f[0]*(x+z)), np.cos(f[1]*(x-z))-1, np.cos(f[1]*(x+z))-1], axis=-1)), axis=-1)\\n    for a,b in zip(*folds):\\n        test = np.r_[a,b]; train = np.ones(len(X), bool); train[test] = False\\n        f,p = _fit(dict(c, ref_rosette=X[train], raw_rosette=Y[train]))\\n        errors['harmonic'][test] = np.einsum('nck,ck->nc', design(X[test],f,'harmonic'),p)-Y[test]\\n        inverse[test] = _invert(Y[test],f,p)-X[test]\\n        sb = c['single_bank_sweeps']; ids = sb['bank_id']; u = sb['ref_signal']; v = sb['raw_readout']\\n        for mod in ('affine', 'harmonic+rational', 'harmonic+pairwise'):\\n            tr = train & good\\n            d, dt = design(X[tr],f,mod), design(X[test],f,mod)\\n            for j in range(4):\\n                m = ids == j; m[m] = _gross_good(v[m]); bank_x = np.eye(4)[j] * u[m,None]\\n                d0 = np.vstack((d[:,j],design(bank_x,f,mod)[:,j])); y0 = np.r_[Y[tr,j], v[m]]\\n                errors[mod][test,j] = dt[:,j] @ np.linalg.lstsq(d0,y0,rcond=None)[0] - Y[test,j]\\n    for k,r in errors.items():\\n        print(k,'forward RMSE axis/mixed', [float(np.sqrt(np.mean(r[m & good]**2))) for m in (axis,~axis)])\\n    print('inverse RMSE axis/mixed', [float(np.sqrt(np.mean(inverse[m & good]**2))) for m in (axis,~axis)])\\n    print('field scope keys', list(s))\\n    f,p = _fit(c)\\n    diag_min = p[:,1]-abs(p[:,2]*f[0]); off_max = abs(p[:,3])+abs(p[:,4]*f[1])\\n    print('global row diagonal-dominance margins',diag_min-off_max)\\n    assert np.min(diag_min-off_max) > 0\\n    # Exercise the actual response at the lowest diagonal gain and highest\\n    # paired derivative, in addition to the observed reference extrema.\\n    u = np.linspace(min(X.min(),-np.pi/f[0]), max(X.max(),np.pi/f[0]), 51)\\n    a,b = np.meshgrid(np.r_[u,np.pi/f[0]],np.r_[u,-np.pi/(2*f[1])]); q=np.c_[a.ravel(), b.ravel(), b.ravel(), a.ravel()]\\n    qy = np.einsum('nck,ck->nc',_basis(q,q[:,_PAIR],f),p)\\n    e = np.max(np.abs(_invert(qy,f,p)-q)); print('stress-grid max inverse error',e); assert e < 1e-9\\n    print('real batch certificate gap', (lambda k: k['primal_objective']-k['dual_lower_bound'])(solve_batch(s)['kkt_certificate']))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_rosette.py && OPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coupling -> H2 paired harmonic response; current worst held-out inverse RMSE is 2.49e-5 on mixed sweeps.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[\"ng_t04\"]},\"considered_alternatives\":[{\"option\":\"Run relay, HJB, or classification audits\",\"rejected_reason\":\"This task has continuous rosette calibration and a fixed PDE solver; it has no relay state, HJB control, or labeled cohorts.\"}],\"rationale\":\"Use a fresh split of the real sweeps to test whether rational or pairwise sum/difference terms improve on the harmonic response. Check global Jacobian margins and stress the inverse near its weakest gains; a failure there would warrant changing the inversion rather than adding forward terms.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "bd5c8bf1f15183bffcb281ca24c0d0f8749d83e5de652e2a75aa559aad8cb16b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 39409.95,
+      "usage_known": true,
+      "prompt_tokens": 30428,
+      "cached_tokens": 9344,
+      "completion_tokens": 1512
+    }
+  ]
+}

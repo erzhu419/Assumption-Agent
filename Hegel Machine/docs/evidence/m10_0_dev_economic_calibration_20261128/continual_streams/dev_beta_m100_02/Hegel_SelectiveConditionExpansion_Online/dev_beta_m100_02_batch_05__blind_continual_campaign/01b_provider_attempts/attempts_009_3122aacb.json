@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3122aacb6fe1485199b8bd6213250104",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:32.690383+00:00",
+  "ended_at_utc": "2026-11-28T02:49:21.289077+00:00",
+  "request_sha256": "62259975ce46afa9668d6b61f369753cc16fc729d84dcaad4c64ef86e6704439",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 49288,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29420,
+    "cached_tokens": 9344,
+    "completion_tokens": 2079
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Calibrate a four-channel rosette before the canonical PDE solve.\\\"\\\"\\\"\\nfrom __future__ import annotations\\n\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\n\\n_OPPOSITE = [2, 3, 0, 1]\\n\\n\\ndef _forward(x, shape):\\n    a, k, c, d, h = shape\\n    z = x[..., _OPPOSITE]\\n    return x + a * np.sin(k * x) + c * z + d * (1 - np.cos(h * z))\\n\\n\\ndef _fit(sweeps):\\n    x = np.asarray(sweeps['ref_rosette'], dtype=float)\\n    y = np.asarray(sweeps['raw_rosette'], dtype=float)\\n    single = sweeps['single_bank_sweeps']\\n    bank = np.asarray(single['bank_id'], dtype=int).ravel()\\n    u = np.asarray(single['ref_signal'], dtype=float).ravel()\\n    v = np.asarray(single['raw_readout'], dtype=float).ravel()\\n\\n    def residual(p):\\n        bias, gain = p[:4], p[4:8]\\n        a, k = p[8:10]\\n        return (bias + gain * _forward(x, p[8:]) - y,\\n                bias[bank] + gain[bank] * (u + a * np.sin(k * u)) - v)\\n\\n    p0 = np.r_[np.zeros(4), np.ones(4), .25, 2.5, -.21, .06, 2.]\\n    # These bounds keep the normalized response strictly diagonally dominant:\\n    # the maximum summed nonlinear and cross-channel slope is below one.\\n    lower = np.r_[np.full(4, -np.inf), np.full(4, 1e-6), .18, 2.2, -.24, .03, 1.7]\\n    upper = np.r_[np.full(8, np.inf), .27, 2.6, -.17, .07, 2.2]\\n    bounds = (lower, upper)\\n\\n    def all_residuals(p):\\n        r, t = residual(p)\\n        return np.r_[r.ravel(), t]\\n\\n    p = least_squares(all_residuals, p0, bounds=bounds,\\n                      loss='soft_l1', f_scale=.003).x\\n    r, t = residual(p)\\n    # Reject whole rosette rows: EMI can corrupt more than one channel.\\n    dev = np.abs(np.r_[r.ravel(), t])\\n    cutoff = max(10 * np.median(dev), 1e-4)\\n    keep_r = np.max(np.abs(r), axis=1) <= cutoff\\n    keep_t = np.abs(t) <= cutoff\\n\\n    def clean_residuals(p):\\n        r, t = residual(p)\\n        return np.r_[r[keep_r].ravel(), t[keep_t]]\\n\\n    p = least_squares(clean_residuals, p, bounds=bounds).x\\n    return p[:4], p[4:8], p[8:]\\n\\n\\ndef _inverse(raw, bias, gain, shape):\\n    raw = np.asarray(raw, dtype=float)\\n    y = (raw.reshape(-1, 4) - bias) / gain\\n    x = y.copy()\\n    a, k, c, d, h = shape\\n    # Solve the two opposite-bank pairs in parallel. Limit the Newton step\\n    # if necessary; a residual step is contractive under the fit bounds.\\n    for _ in range(60):\\n        r = _forward(x, shape) - y\\n        norm = np.max(np.abs(r), axis=1, keepdims=True)\\n        if np.max(norm, initial=0.) <= 2e-13:\\n            return x.reshape(raw.shape)\\n        diag = 1 + a * k * np.cos(k * x)\\n        off = c + d * h * np.sin(h * x[:, _OPPOSITE])\\n        det = diag * diag[:, _OPPOSITE] - off * off[:, _OPPOSITE]\\n        step = (diag[:, _OPPOSITE] * r - off * r[:, _OPPOSITE]) / det\\n        fixed = x - r\\n        newton = x - step\\n        fixed_norm = np.max(np.abs(_forward(fixed, shape) - y), axis=1, keepdims=True)\\n        newton_norm = np.max(np.abs(_forward(newton, shape) - y), axis=1, keepdims=True)\\n        x = np.where(newton_norm <= fixed_norm, newton, fixed)\\n    # Finish by contraction if a row is far outside the sweep range.\\n    for _ in range(4000):\\n        r = _forward(x, shape) - y\\n        if np.max(np.abs(r), initial=0.) <= 2e-13:\\n            break\\n        x -= r\\n    return x.reshape(raw.shape)\\n\\n\\ndef calibrate_upstream(study: dict) -> dict:\\n    \\\"\\\"\\\"Return a canonical-coordinate study without modifying the input.\\\"\\\"\\\"\\n    sweeps = study['sensor_calibration_sweeps']\\n    params = _fit(sweeps)\\n    out = dict(study)\\n    out['y_obs_raw'] = _inverse(study['y_obs_raw'], *params)\\n    single = sweeps['single_bank_sweeps']\\n    out['sensor_calibration_sweeps'] = dict(\\n        sweeps, raw_rosette=np.asarray(sweeps['ref_rosette']).copy(),\\n        single_bank_sweeps=dict(single, raw_readout=np.asarray(single['ref_signal']).copy()))\\n    pulses = study.get('reference_tracer_pulses')\\n    if pulses is not None:\\n        out['reference_tracer_pulses'] = [\\n            dict(pulse, y_pulse_raw=_inverse(pulse['y_pulse_raw'], *params))\\n            if pulse.get('y_pulse_raw') is not None else dict(pulse)\\n            for pulse in pulses\\n        ]\\n    return out\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Gain-normalized polynomials → shared direct sine and opposite-channel cosine law; the axis-derived law gives 1.11×10⁻⁵ worst mixed-slice normalized forward RMS before robust joint refitting.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add mixed-channel products\",\n      \"rejected_reason\": \"Without these terms, the axis-derived model already predicts mixed sweeps at the measurement noise floor.\"\n    }\n  ],\n  \"rationale\": \"Fit the supported shared response with row-level EMI rejection and invert the two coupled bank pairs. Run the prescribed schema gate now to detect integration failures before checking calibration accuracy and pulse handling in isolation.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "4884c7c40a6d8c10498c83a62ddc1815beb3acf990de2f946fffce54dbd5aa38",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 50584.87,
+      "usage_known": true,
+      "prompt_tokens": 29420,
+      "cached_tokens": 9344,
+      "completion_tokens": 2079
+    }
+  ]
+}

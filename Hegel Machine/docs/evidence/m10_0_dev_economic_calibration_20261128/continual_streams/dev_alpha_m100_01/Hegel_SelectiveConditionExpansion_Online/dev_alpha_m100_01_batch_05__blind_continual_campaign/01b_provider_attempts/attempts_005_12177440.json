@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1217744036c046f99b8c42b7b28586ba",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:15.754335+00:00",
+  "ended_at_utc": "2026-11-28T02:48:58.727033+00:00",
+  "request_sha256": "577be5838212053dc1ef3a5cc796170a44b2c48a5b70e1c3130541f9c34bd118",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 33268,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 22759,
+    "cached_tokens": 9344,
+    "completion_tokens": 1811
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && sed -n '1,66p' /tmp/hegel_continual_archive/dev_alpha_m100_01_batch_01_solver.py && cat public_asset_index.json | head -95; cat > /tmp/bridge_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import least_squares\\nb=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']['calibration_load_cells']; X,Y=map(np.asarray,(b['true_channel_loads'],b['bridge_raw'])); orig=np.arange(len(X)); clean=np.max(np.abs(Y-np.median(Y,axis=0)),axis=1)<5; X,Y,orig=X[clean],Y[clean],orig[clean]; print('excluded',np.where(~clean)[0]); o=np.array([.13,-.11,.14,-.10]); pairs=[2,3,0,1]\\nfor j,k in enumerate(pairs):\\n u,v=X[:,j],X[:,k]; y=Y[:,j];\\n print('CHANNEL',j)\\n def design(mode,p,u,v):\\n  s=p[0]; t=np.tanh(s*u); base=[np.ones_like(u),t];\\n  if mode=='affine': return np.stack([np.ones_like(u),u,v],1)\\n  if mode=='premix': return np.stack([np.ones_like(u),np.tanh(s*(u+p[1]*v))],1)\\n  if mode=='postmix': return np.stack([np.ones_like(u),np.tanh(s*u)+p[1]*v],1)\\n  if mode=='rational6': base=[np.ones_like(u),u/(1+(s*u)**6)**(1/6)]\\n  if mode=='atan': base=[np.ones_like(u),np.arctan(s*u)]\\n  if mode=='erf':\\n   from scipy.special import erf\\n   base=[np.ones_like(u),erf(s*u)]\\n  if mode=='tanhpoly': base += [u,t*t]\\n  if mode in ('premix','postmix','affine'): return np.stack(base,1)\\n  if mode=='hinge': base += [v,abs(v),np.tanh(p[1]*v),np.abs(np.tanh(p[1]*v))]\\n  elif mode=='shifted': base += [v,np.tanh(p[1]*(v+p[2]))]\\n  elif mode=='signedpoly': base += [v,abs(v),v*v,v*abs(v),v**3]\\n  else: base += [v,v*v,v**3,v**4,v**5]\\n  return np.stack(base,1)\\n for mode in ['affine','premix','postmix','tanh','tanhpoly','atan','erf','rational6','hinge','shifted','signedpoly']:\\n  init={'affine':[], 'premix':[1,.25], 'postmix':[1,.25],'hinge':[1,1],'shifted':[1,1,.35]}.get(mode,[1]); low={'premix':[.05,-2],'postmix':[.05,-2],'hinge':[.05,.05],'shifted':[.05,.05,-3]}.get(mode,[.05]*len(init)); high={'premix':[8,2],'postmix':[8,2],'hinge':[8,8],'shifted':[8,8,3]}.get(mode,[8]*len(init)); pred=np.zeros_like(y)\\n  for m in [orig%5==i for i in range(5)]+[np.zeros_like(y,dtype=bool)]:\\n   def ff(p,full=False):\\n    a=design(mode,p,u,v); q=np.linalg.lstsq(a[~m],y[~m],rcond=None)[0]; return (a@q,q) if full else (a@q-y)[~m]\\n   p=least_squares(ff,init,bounds=(low,high),max_nfev=250).x if init else []\\n   yh,q=ff(p,True); pred[m]=yh[m]\\n  e=abs(pred-y); full=abs(yh-y); print(mode,'OOF RMSE/max',round(np.mean(e**2)**.5,6),round(max(e),6),'full rmse',round(np.mean(full**2)**.5,6),'p,q',np.round(p,4),np.round(q,4))\\n best=np.linalg.lstsq(np.stack((np.ones(len(u)),np.tanh(u)),1)[abs(v)<1e-10],y[abs(v)<1e-10],rcond=None)[0]; print('selected mixed',np.c_[u,v,y-o[j]][:22].round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 coupled affine bridge -> H2 channelwise saturation with paired coupling; five-fold calibration errors are being measured after excluding gross spike rows.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The axis sweeps identify paired channels and three gross spike rows. Compare held-out errors for saturation before and after mixing, along with asymmetric coupling bases; a model that fails on mixed loads should not be used to invert them.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "23f5a759a5b2e3a9ebe27e9edee1fe6844dd02ab414dbb2e0edc5888184c48a4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45045.34,
+      "usage_known": true,
+      "prompt_tokens": 22759,
+      "cached_tokens": 9344,
+      "completion_tokens": 1811
+    }
+  ]
+}

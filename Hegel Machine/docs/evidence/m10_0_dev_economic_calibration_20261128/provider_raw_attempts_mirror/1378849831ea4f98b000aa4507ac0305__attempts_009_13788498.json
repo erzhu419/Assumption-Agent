@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1378849831ea4f98b000aa4507ac0305",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:38:40.375601+00:00",
+  "ended_at_utc": "2026-11-28T02:39:25.421429+00:00",
+  "request_sha256": "d6457cf80ad06b4048f804cf9c158ab5998b873b002ae3fbbac7b6d06ab39760",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43863,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25049,
+    "cached_tokens": 9344,
+    "completion_tokens": 1854
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/audit_transport.py <<'PY'\\nimport importlib.util\\nimport pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\nspec = importlib.util.spec_from_file_location('candidate', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\ns = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']\\nx, y = c['ref_rosette'], c['raw_rosette']\\nb = c['single_bank_sweeps']\\n\\ndef design(x, k, extra=False):\\n    j = (k + 1) % 4\\n    cols = [np.ones(len(x)), *x.T, x[:, k]**3, x[:, k] * x[:, j]]\\n    if extra:\\n        cols += [x[:, a] * x[:, d] for a in range(4) for d in range(a, 4) if (a, d) != tuple(sorted((k, j)))]\\n    return np.column_stack(cols)\\n\\nerrors = {key: np.empty_like(y) for key in ('cubic_cross', 'all_quadratics', 'rational_self', 'rational_difference')}\\nfor test in np.array_split(np.arange(len(x)), 6):\\n    train = np.setdiff1d(np.arange(len(x)), test)\\n    fold = dict(s, sensor_calibration_sweeps=dict(c, ref_rosette=x[train], raw_rosette=y[train]))\\n    ts = m._sweep_fit(fold)\\n    errors['cubic_cross'][test] = m._raw(x[test], ts) - y[test]\\n    for k, t in enumerate(ts):\\n        j = (k + 1) % 4\\n        sel = b['bank_id'].ravel() == k\\n        iso = np.zeros((np.count_nonzero(sel), 4))\\n        iso[:, k] = b['ref_signal'].ravel()[sel]\\n        xx = np.vstack((x[train], iso))\\n        yy = np.r_[y[train, k], b['raw_readout'].ravel()[sel]]\\n        # Isolate gross contamination using only this fold's training data.\\n        good = np.abs(design(xx, k) @ t - yy) < .01\\n        xx, yy = xx[good], yy[good]\\n        a, at = design(xx, k, True), design(x[test], k, True)\\n        errors['all_quadratics'][test, k] = at @ np.linalg.lstsq(a, yy, rcond=None)[0] - y[test, k]\\n        a, at = design(xx, k), design(x[test], k)\\n        for label, q, qt in [('rational_self', xx[:, k], x[test, k]), ('rational_difference', xx[:, k]-xx[:, j], x[test, k]-x[test, j])]:\\n            p = least_squares(lambda p: (a @ p[:-1]) / (1 + p[-1]*q*q) - yy, np.r_[t, 0.], bounds=(np.r_[np.full(len(t), -np.inf), 0.], np.inf), gtol=1e-13).x\\n            errors[label][test, k] = (at @ p[:-1]) / (1 + p[-1]*qt*qt) - y[test, k]\\n\\nbase = errors['cubic_cross']\\ngross = np.abs(base) > .01\\nprint('calibration held-out gross residuals:', np.count_nonzero(gross), 'across rows', np.flatnonzero(gross.any(axis=1)).tolist(), 'smallest gross', np.min(abs(base[gross]), initial=np.inf))\\nfor name, e in errors.items():\\n    print(name, 'clean worst channel CV RMSE', max(np.sqrt(np.mean(e[~gross[:, k], k]**2)) for k in range(4)), 'clean max abs', max(abs(e[~gross])))\\n\\nS, _ = m._responses(s, m._operator(s))\\nY, Z = m._calibrate(s), s['Z_nuisance']\\nfor nuisance in (False, True):\\n    rmse = []\\n    for test in np.array_split(np.arange(Y.size), len(s['mu_shifts'])):\\n        train = np.setdiff1d(np.arange(Y.size), test)\\n        a = np.c_[S[train], Y[train]]\\n        z = Z[train]\\n        p = np.linalg.solve(z.T @ z + s['nuisance_ridge']*np.eye(z.shape[1]), z.T @ a) if nuisance else np.zeros((z.shape[1], a.shape[1]))\\n        a -= z @ p\\n        X, y_train = a[:, :-1], a[:, -1]\\n        w, _ = m._box_simplex(X.T @ X + s['source_ridge']*np.eye(X.shape[1]), -X.T @ y_train, s['u_box'], s['total_budget'])\\n        err = S[test] @ w + Z[test] @ (p[:, -1] - p[:, :-1] @ w) - Y[test]\\n        rmse.append(float(np.sqrt(np.mean(err**2))))\\n    print('profile nuisance', nuisance, 'held-shift RMSE', np.round(rmse, 8))\\nprint('study fields:', ', '.join(sorted(s)))\\nPY\\nset -e\\nexport OPENBLAS_NUM_THREADS=1\\npython3 -I /tmp/audit_transport.py\\npython3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls → H2 sealed walls with robust cubic-cross calibration; worst held-shift RMSE is 0.009895, and the independent host probe reports relative field error of 2.84e-06.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, stochastic drift, or classification parity\",\n      \"rejected_reason\": \"This is steady continuous regression with no relay, stochastic evolution, or class labels. Held-shift nuisance ablation is the relevant confounding check.\"\n    }\n  ],\n  \"rationale\": \"A missing calibration interaction or saturation term would improve prediction on held-out sweep blocks. Compare those alternatives on the same observations, and isolate nuisance profiling on held-out shifts to see whether it improves prediction rather than merely lowering the fit residual.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "11b8523e69a905fbbd7d815aa28dd09b7d3792228029330d4ec9f28613d33fc0",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 49008.29,
+      "usage_known": true,
+      "prompt_tokens": 25049,
+      "cached_tokens": 9344,
+      "completion_tokens": 1854
+    }
+  ]
+}

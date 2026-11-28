@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d80eb4924d354e688ce76895e63ea75f",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:33:22.098779+00:00",
+  "ended_at_utc": "2026-11-28T02:33:54.008578+00:00",
+  "request_sha256": "57d9a1407970200b79198121450cc814ad2a26fadd7b0b6e7bc473dbe1070453",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 60599,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 32684,
+    "cached_tokens": 5504,
+    "completion_tokens": 1279
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed '/^# Rows are intercept/,$d' /tmp/material02.py > batch_solver.py\\ncat >> batch_solver.py <<'PY'\\n# Chamber verification coupons identify a unit-time saturation of the drift;\\n# the two hereditary branches retain their benchtop stress history.\\n_CHAMBER_DRIFT_TIME = 1.0\\n\\n\\ndef _chamber_response(taus, theta, past, hold, x, dt, t):\\n    curve, rate = _design(taus, past, hold, x, dt, t)\\n    drift = theta[2] + x @ theta[3:]\\n    rise = -np.expm1(-t / _CHAMBER_DRIFT_TIME)\\n    return (curve[..., :2] @ theta[:2] + drift[:, None] * rise,\\n            rate[:, :2] @ theta[:2] + drift / _CHAMBER_DRIFT_TIME)\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    train, test = dataset['train'], dataset['test']\\n    x = _features(train, test)\\n    bridge = _bridge(dataset['calibration_load_cells'])\\n    n = len(train['lab_id'])\\n    dt, t = (np.asarray(dataset[key]) for key in ('past_dt', 'eval_times'))\\n    taus, theta = _fit(*_loads(train, bridge), x[:n], dt, t,\\n                       np.asarray(train['strain_curves_obs']) - np.asarray(train['strain_0'])[:, None],\\n                       np.asarray(train['instant_rate_obs']))\\n    strain, rate = _chamber_response(taus, theta, *_loads(test, bridge), x[n:], dt, t)\\n    return {'estimated_taus': taus, 'hereditary_weights': theta,\\n            'predicted_strain': np.asarray(test['strain_0'])[:, None] + strain,\\n            'initial_rate_pred': rate}\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\ns=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nit=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; c=it['campaign_diagnostics']; out=m.solve_batch(d); tau,theta=out['estimated_taus'],out['hereditary_weights']; assert .05<tau[0]<tau[1]<25\\np,h=m._loads(c,m._bridge(d['calibration_load_cells'])); dt,t=d['past_dt'],d['eval_times']; x=m._features(c,c)[:len(h)]; y,r=m._chamber_response(tau,theta,p,h,x,dt,t); e=y+c['strain_0'][:,None]-c['strain_curves_obs']; er=r-c['instant_rate_obs']; rm=lambda x:np.sqrt(np.mean(x*x,axis=0)); print('diagnostic max time-bin / rate RMSE',max(rm(e)),rm(er));\\nfor label,mask in [(f'lab {l}',c['lab_id']==l) for l in np.unique(c['lab_id'])]+[('missing feature',np.isnan(c['coupon_features_raw']).any(axis=1)),('largest hold',h>=np.quantile(h,.75))]:\\n print(label,'max time-bin / rate RMSE',max(rm(e[mask])),rm(er[mask]))\\nassert max(rm(e))<.015 and rm(er)<.015\\np,h=m._loads(d['test'],m._bridge(d['calibration_load_cells'])); x=m._features(d['train'],d['test'])[-len(h):]; curve,slope=m._chamber_response(tau,theta,p,h,x,dt,np.array([0.,1e-7])); assert np.max(abs(curve[:,0]))==0 and np.max(abs(curve[:,1]/1e-7-slope))<2e-6\\nprint('deployment zero-time strain and analytic rate verified')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 empirical drift and load correction → H2 unchanged hereditary memory plus one-pole intrinsic drift; leave-one-lab-out worst time-bin and initial-rate RMSE are 0.01098 and 0.01068.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Transfer a fitted load-dependent amplitude correction\",\n      \"rejected_reason\": \"Its apparent benefit largely disappears when the diagnostic coupons are normalized against their own reference panel, and it worsens leave-one-lab-out error.\"\n    }\n  ],\n  \"rationale\": \"The diagnostic fit identifies a chamber time constant near one and a drift multiplier near one. Implement that simpler law and check whether rounding those near-unit estimates changes the observed errors, whether deployment still uses the required pooled normalization, and whether the predicted rate equals the derivative of strain at zero.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "bf5a4b918da6f63a78c79e95f94dae826f3ca69990b728e39a3f3b60ed719462",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33936.94,
+      "usage_known": true,
+      "prompt_tokens": 32684,
+      "cached_tokens": 5504,
+      "completion_tokens": 1279
+    }
+  ]
+}

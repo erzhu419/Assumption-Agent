@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5819dc4fdca14fdf935ce943fc9877f7",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:44:26.869543+00:00",
+  "ended_at_utc": "2026-11-28T02:45:01.100529+00:00",
+  "request_sha256": "81b3cdf50e0b1789f9f14f809bef18f0ac989afd90b6f902f4e972c197230494",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 40384,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 23620,
+    "cached_tokens": 9344,
+    "completion_tokens": 1401
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nfrom itertools import combinations\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _basis, _invert, calibrate_upstream\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f:\\n    items = pickle.load(f)\\n\\ndef extras(x):\\n    pairs = [x[:, i] + sign*x[:, j] for i,j in combinations(range(4),2) for sign in (-1,1)]\\n    q = np.column_stack([*x.T,*pairs])\\n    return np.column_stack([q**3/(1+a*q*q) for a in (.25,1.)])\\n\\nfor item in items:\\n    st = item['study']\\n    c = st['sensor_calibration_sweeps']\\n    ref,raw = c['ref_rosette'], c['raw_rosette']\\n    clean = np.linalg.norm(raw,axis=1)<10  # Same public EMI cut as prior holdouts.\\n    idx = np.flatnonzero(clean)\\n    ordered = idx[np.argsort(np.linalg.norm(ref[idx],axis=1))]\\n    slices = np.array_split(ordered,3)\\n    a, z = _basis(ref), extras(ref)\\n    groups = [g for group in slices for g in np.array_split(group,5)]\\n    tests = [np.sort(np.concatenate(groups[k::5])) for k in range(5)] + [slices[-1]]\\n    oof = np.zeros((len(ref),2))\\n    inv = np.zeros(len(ref))\\n    for k,test in enumerate(tests):\\n        train = np.setdiff1d(np.arange(len(ref)),test)\\n        coef = _fit(ref[train],raw[train])\\n        good = train[clean[train]]\\n        baseline = a[test]@coef\\n        alternative = baseline.copy()\\n        # Select a rational correction using only inner training data.\\n        inner = np.array_split(np.random.default_rng(420+k).permutation(good),4)\\n        for j in range(4):\\n            v = a[:,coef[:,j]!=0]\\n            scores = np.zeros(z.shape[1])\\n            for val in inner:\\n                sub = np.setdiff1d(good,val)\\n                for h in range(z.shape[1]):\\n                    m = np.column_stack((v,z[:,h]))\\n                    w = np.linalg.lstsq(m[sub],raw[sub,j],rcond=None)[0]\\n                    scores[h] += np.sum((m[val]@w-raw[val,j])**2)\\n            m = np.column_stack((v,z[:,np.argmin(scores)]))\\n            alternative[:,j] = m[test]@np.linalg.lstsq(m[good],raw[good,j],rcond=None)[0]\\n        errs = np.column_stack([np.linalg.norm(pred-raw[test],axis=1) for pred in (baseline,alternative)])\\n        ie = np.linalg.norm(_invert(raw[test],coef)-ref[test],axis=1)\\n        if k<5:\\n            oof[test],inv[test] = errs,ie\\n        else:\\n            print('High-amplitude tertile withheld: polynomial/rational max forward', errs.max(axis=0), 'max inverse', ie.max())\\n    print('Worst OOF amplitude-tertile median forward, polynomial/rational:', np.max([np.median(oof[g],axis=0) for g in slices],axis=0))\\n    print('Max clean OOF inverse:', max(inv[idx]))\\n    coef = _fit(ref,raw)\\n    cal = calibrate_upstream(st)\\n    y = st['y_obs_raw'].reshape(-1,4)\\n    xc = cal['y_obs_raw'].reshape(-1,4)\\n    err = np.linalg.norm(_basis(xc)@coef-y,axis=1)/(1+np.linalg.norm(y,axis=1))\\n    print('Observed max relative forward closure:', err.max())\\n    assert err.max()<1e-9\\n    print('Study fields:', sorted(st))\\n    print('Calibration fields:', sorted(c))\\n    out = solve_batch(st)\\n    assert np.all(np.isfinite(out['weights'])) and np.all(np.isfinite(out['terminal_field']))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separate-bank nonlinearity → H2 sparse coupled cubic; prior worst clean OOF inverse error was 4.04e-5, pending an amplitude-blocked holdout and rational challenger.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Test relay modes, classification balance, or Fokker–Planck drift\",\n      \"rejected_reason\": \"Those tests do not apply to the four-channel calibration or its verified transport-reaction consumer. Inspect the study fields for any actual batch variable before proposing nuisance adjustment.\"\n    }\n  ],\n  \"rationale\": \"Withhold the highest-amplitude references as a block to expose extrapolation errors, and use inner-fold selection to test rational corrections along channel and pairwise sum/difference directions. Revise the fit only if a challenger improves the limiting slice; revise the inverse if it fails forward closure on real observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "e836de5bc182f6c86b8d43892d1528b79ffd4ccc4a9203cc97e89fe686b5dc71",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38302.47,
+      "usage_known": true,
+      "prompt_tokens": 23620,
+      "cached_tokens": 9344,
+      "completion_tokens": 1401
+    }
+  ]
+}

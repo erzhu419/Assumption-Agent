@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "61ba2ee7ff1f411c999b61da84526bdf",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:44:31.842700+00:00",
+  "ended_at_utc": "2026-11-28T02:45:08.656609+00:00",
+  "request_sha256": "b51d6325b685adb338d4d78d268c73151b1fe04419ef6f4b76ca1efe276108f2",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44494,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24877,
+    "cached_tokens": 9344,
+    "completion_tokens": 1488
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat >/tmp/bridge_margin_audit.py <<'PY'\\nimport json, pickle, sys\\nfrom itertools import combinations\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nwith open('public_batch.pkl', 'rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; x = c['true_channel_loads']; y = c['bridge_raw']\\ns = c['single_channel_sweeps']; ids = np.arange(len(x))\\nprint('sections', {k:list(ds[k]) for k in ('train','test')})\\nprint('calibration metadata', list(c), 'sweep metadata', list(s))\\nlog = json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor rec in log:\\n    print('apparatus', str(rec)[:850])\\nb = u._fit_bridge(x,y,s)\\nprint('full coefficients', np.round(b,7).tolist())\\nprint('cross/diagonal normalized', np.round(b[1:] / np.diag(b[1:5]),6).tolist())\\n\\ndef features(a, j, option):\\n    z = u._design(a,j); own = a[:,j]; nxt = a[:,(j+1)%4]\\n    if option == 'opposite-zero':\\n        return np.delete(z, 1+(j+2)%4, axis=1)\\n    if option == 'pairwise':\\n        return np.column_stack((z, own**2, nxt**2, own**2*nxt, own*nxt**2, nxt**3))\\n    if option.startswith('quotient'):\\n        strength = float(option.split(':')[1]); q = own if option.endswith('own') else own-nxt\\n        return np.column_stack((z[:,:5], z[:,5:] / (1 + strength*q[:,None]**2)))\\n    return z\\n\\ndef make_fit(train, option):\\n    return [u._fit_channel(features(x[train],j,option),y[train,j]) for j in range(4)]\\n\\ndef prediction(test, option, fit):\\n    return np.column_stack([features(x[test],j,option) @ fit[j] for j in range(4)])\\n\\n# Identical clean evaluation rows for all challengers; the previous independent folds identified these gross spikes.\\nclean = ~np.isin(ids,[13,14,15]); radius = np.max(abs(x),axis=1)\\nfolds = {'random':np.array_split(np.random.default_rng(31).permutation(ids),5), 'axis':[np.arange(i,i+4) for i in range(0,16,4)], 'outer':[ids[radius>=np.quantile(radius,.8)]]}\\nlinear = b[1:5].T\\nfor name, tests in folds.items():\\n    for family in ('cyclic','opposite-zero','pairwise','quotient'):\\n        errors=[]; total=[]; chosen=[]\\n        for ts in tests:\\n            tr=np.setdiff1d(ids,ts); te=ts[clean[ts]]\\n            option=family\\n            if family=='quotient':\\n                options=['cyclic']+[f'quotient:{a}:{q}' for a in (.001,.01,.1,1) for q in ('own','difference')]\\n                inner=np.array_split(np.random.default_rng(37).permutation(tr),3)\\n                def score(o):\\n                    e=[]\\n                    for v in inner:\\n                        f=make_fit(np.setdiff1d(tr,v),o); ev=prediction(v,o,f)-y[v]\\n                        e.extend(np.linalg.norm(ev,axis=1))\\n                    return np.quantile(e,.8)\\n                option=min(options,key=score)\\n            fit=make_fit(tr,option); top=prediction(te,option,fit)\\n            err=top-y[te]; errors.extend(np.linalg.norm(err,axis=1))\\n            # Translate raw errors into the downstream-relevant total-load direction\\n            # using the local Jacobian of the baseline trained on this outer fold.\\n            base=np.column_stack(make_fit(tr,'cyclic')); z=x[te]\\n            jac=np.broadcast_to(base[1:5].T,(len(te),4,4)).copy()\\n            j=u._CHANNELS; n=u._NEXT\\n            jac[:,j,j]+=base[5]*z[:,n]+3*base[6]*z**2; jac[:,j,n]+=base[5]*z\\n            total.extend(abs(np.linalg.solve(jac,err[...,None])[...,0].sum(axis=1)))\\n            chosen.append(option)\\n        print(name,family,'raw p90/max',np.quantile(errors,.9),max(errors),'local total-load max',max(total),'options',','.join(chosen))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic → H2 sparse cyclic cubic; current worst clean held-out errors are 3.68×10⁻⁴ per channel and 5.41×10⁻⁴ for total load.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply relay, PDE drift, or classification diagnostics to the bridge regression\",\n      \"rejected_reason\": \"The calibration contract specifies paired continuous loads and bridge readings, not relay modes, PDE states, or class labels. Telemetry and calibration metadata can show whether there is a real nuisance grouping to test.\"\n    }\n  ],\n  \"rationale\": \"Compare the verified sparse model with pairwise and saturating terms and with removal of the near-zero opposite-channel coefficient. Select quotient strength inside each outer fold and report both bridge error and its locally propagated total-load error. A material improvement on the held-out load slices would justify changing the model; otherwise keep the verified bundle.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "841b48c770b00af271273fa2a0eacd9726af59fa760ba20725af86753230086e",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38783.65,
+      "usage_known": true,
+      "prompt_tokens": 24877,
+      "cached_tokens": 9344,
+      "completion_tokens": 1488
+    }
+  ]
+}

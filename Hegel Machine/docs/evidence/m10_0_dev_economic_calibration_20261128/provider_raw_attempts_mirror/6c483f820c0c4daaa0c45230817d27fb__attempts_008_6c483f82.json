@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "6c483f820c0c4daaa0c45230817d27fb",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_08__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:04:14.137456+00:00",
+  "ended_at_utc": "2026-11-28T03:04:45.041548+00:00",
+  "request_sha256": "c4b968a98bc02dc3d5bb758dfb131858386ed2d0491513e84d2142d01e2fc421",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 53174,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30994,
+    "cached_tokens": 9344,
+    "completion_tokens": 1228
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/cubic8.py <<'PY'\\nimport numpy as np\\nfrom itertools import combinations_with_replacement\\n_TERMS = np.array([[k.count(j) for j in range(4)] for d in range(4) for k in combinations_with_replacement(range(4),d)])\\n\\ndef _poly(x, exponents):\\n    return np.prod(x[..., None, :]**exponents, axis=-1)\\n\\ndef _bridge(cal):\\n    loads = np.asarray(cal['true_channel_loads'])\\n    raw = np.asarray(cal['bridge_raw'])\\n    sweeps = cal['single_channel_sweeps']\\n    coefficients = np.zeros((len(_TERMS), 4))\\n    for j in range(4):\\n        m = np.asarray(sweeps['lab_id']) == j\\n        isolated = np.asarray(sweeps['true_stress'])[m,None] * (np.arange(4) == j)\\n        x = np.vstack((loads, isolated))\\n        y = np.r_[raw[:, j], np.asarray(sweeps['cmd_stress'])[m]]\\n        keep = np.isfinite(y) & (np.abs(y - np.nanmedian(y)) < 6)\\n        a, y = _poly(x[keep], _TERMS), y[keep]\\n        coef = np.linalg.lstsq(a, y, rcond=None)[0]\\n        support = np.abs(coef) > 0.002\\n        coefficients[support, j] = np.linalg.lstsq(a[:,support], y, rcond=None)[0]\\n    active = np.any(coefficients != 0, axis=1)\\n    return _TERMS[active], coefficients[active]\\n\\ndef _forward(x, bridge):\\n    exponents, coefficients = bridge\\n    return _poly(x, exponents) @ coefficients\\n\\ndef _invert(raw, bridge):\\n    raw = np.asarray(raw)\\n    exponents, coefficients = bridge\\n    linear = (exponents.sum(axis=1) == 1)\\n    jac0 = (exponents[linear].T @ coefficients[linear]).T\\n    loads = (raw - coefficients[exponents.sum(axis=1) == 0].sum(axis=0)) @ np.linalg.inv(jac0).T\\n    axes = np.eye(4, dtype=int)\\n    derivatives = [np.maximum(exponents - e, 0) for e in axes]\\n    for _ in range(30):\\n        error = _forward(loads, bridge) - raw\\n        if np.max(abs(error)) < 1e-11:\\n            break\\n        jac = np.stack([_poly(loads, derivatives[j]) @ (coefficients * exponents[:,j,None]) for j in range(4)],axis=-1)\\n        step = np.linalg.solve(jac, error[...,None])[...,0]\\n        trial = loads - step\\n        for _ in range(12):\\n            bad = np.max(abs(_forward(trial,bridge)-raw),axis=-1,keepdims=True) > np.max(abs(error),axis=-1,keepdims=True)\\n            if not np.any(bad):\\n                break\\n            step = np.where(bad,step/2,step)\\n            trial = loads-step\\n        loads = trial\\n    return loads\\n\\ndef _loads(part, bridge):\\n    return tuple(_invert(part[key],bridge).sum(axis=-1) for key in ('past_channel_raw','hold_channel_raw'))\\nPY\\nsed -e '/^m=load(7);/s/m=load(7);/m=load(7); import cubic8 as cb; m._bridge=cb._bridge; m._loads=cb._loads;/' -e \\\"s/'bridge',b.round(5)/'bridge',b[0],b[1].round(5)/\\\" /tmp/probe_chamber.py >/tmp/probe8.py\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe8.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1: archived opposite-channel coupling → H2: sparse mixed-cubic bridge; worst held-out forward RMSE is 0.000291 for the full cubic versus 0.201 for the best-degree mixed quadratic across channels.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"An additive opposite-channel bridge captures campaign 08 transduction.\",\n    \"empirical_witness\": \"Single-channel sweeps excite non-opposite channels, and mixed cubic terms reduce held-out forward errors to the sweep noise floor.\",\n    \"causal_blanket_diagnosis\": \"Bridge misspecification changes the physical stress inputs to both training and deployment models.\",\n    \"sublated_pivot\": \"Fit a sparse mixed-cubic forward bridge from the active sweeps, invert it, and repeat chamber-law comparisons at recalibrated stresses.\",\n    \"risk_kind\": \"calibration misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The recalibrated probe will show whether baseline chamber discrepancies persist after removing bridge bias. If they do, the measured initial rates and strain time series will distinguish changes in chamber memory from changes in drift.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "cf400d9d943cfa7a8e97c1d960aabec964e938cbaeea7ec4970ad3966e62baf8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32986.36,
+      "usage_known": true,
+      "prompt_tokens": 30994,
+      "cached_tokens": 9344,
+      "completion_tokens": 1228
+    }
+  ]
+}

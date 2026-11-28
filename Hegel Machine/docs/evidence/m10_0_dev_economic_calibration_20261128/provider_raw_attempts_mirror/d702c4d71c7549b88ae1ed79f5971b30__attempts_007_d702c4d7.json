@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d702c4d71c7549b88ae1ed79f5971b30",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:56:56.823345+00:00",
+  "ended_at_utc": "2026-11-28T02:57:22.474850+00:00",
+  "request_sha256": "92406eb16f3e1ecb803615836efec0848df09b034a7865bf102dbf8f8b30c679",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49878,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29579,
+    "cached_tokens": 9344,
+    "completion_tokens": 972
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/probe2.py <<'PY'\\nexec(open('/tmp/rosette_probe.py').read().split('for j in range(4):')[0])\\nfrom scipy.optimize import least_squares\\nq=(bank==0)&(abs(obs)<5); u=clean&iso&(x[:,0]!=0); z=np.r_[sig[q],x[u,0]]; v=np.r_[obs[q],y[u,0]]\\nfuncs.update({'erf':lambda z,a: __import__('scipy').special.erf(a*z),'asinh':lambda z,a:np.arcsinh(a*z),'exp':lambda z,a:z*np.exp(-a*z*z),'rat4':lambda z,a:z/(1+a*z**4),'sin':lambda z,a:np.sin(a*z)})\\nconfigs=[]\\nfor n in funcs:\\n for extras in [[],[1],[3],[1,3],[1,3,5]]: configs.append((n+str(extras),lambda z,p,n=n,extras=extras:[funcs[n](z,p[0])]+[z**j for j in extras],1))\\nfor n in funcs:\\n for m in funcs:\\n  if n<=m: configs.append((n+'+'+m,lambda z,p,n=n,m=m:[funcs[n](z,p[0]),funcs[m](z,p[1]),z],2))\\nfor numer in [(1,), (1,3), (1,3,5)]:\\n for den in [(2,4),(2,4,6)]:\\n  for extra in [[],[1]]:\\n   configs.append((f'quot{numer}/{den}+{extra}',lambda z,p,numer=numer,den=den,extra=extra:[z**j/(1+sum(a*z**k for a,k in zip(p,den))) for j in numer]+[z**j for j in extra],len(den)))\\nout=[]\\nfor name,f,np_ in configs:\\n def fit(p,zz=z,vv=v):\\n  D=np.column_stack([np.ones(len(zz)),*f(zz,p)]); b=np.linalg.lstsq(D,vv,rcond=None)[0]; return D@b-vv,b\\n best=min((least_squares(lambda p:fit(p)[0], [a]*np_,bounds=(.0001,12),max_nfev=120) for a in [.1,.7,1.8]),key=lambda r:np.linalg.norm(r.fun)); p=best.x; e,b=fit(p); out.append((np.linalg.norm(e),name,p,b))\\nfor e,n,p,b in sorted(out,key=lambda row:row[0])[:32]:print('%.8f'%e,n,p.round(5),b.round(5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe2.py; cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json 2>/dev/null | head -c 1400\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cubic calibration -> H2 compact shared odd saturation law; single-family isolated fits still have residual norms of about 4e-4–7e-4, above sweep jitter.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Adopt the best single-bank approximation now\",\"rejected_reason\":\"Its structured residual is above the measured noise, and it leaves cross-channel behavior unidentified.\"}],\"rationale\":\"Compare compact odd rational denominators and two-component saturation laws on the isolated sweep. A fit at the measurement noise floor would justify carrying that response into mixed-sweep validation; otherwise the mixed data should decide among approximations.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "385fae02dbe3e3956cc9317fcee03cde6d9925a931e6b0df2659e4266b5df2c4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27671.88,
+      "usage_known": true,
+      "prompt_tokens": 29579,
+      "cached_tokens": 9344,
+      "completion_tokens": 972
+    }
+  ]
+}

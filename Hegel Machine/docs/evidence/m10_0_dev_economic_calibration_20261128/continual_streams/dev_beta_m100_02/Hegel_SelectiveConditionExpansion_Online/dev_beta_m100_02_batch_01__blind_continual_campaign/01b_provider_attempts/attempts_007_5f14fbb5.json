@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "5f14fbb5bb1242ac8b56bd2f911f9a7b",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:27:04.373464+00:00",
+  "ended_at_utc": "2026-11-28T02:27:35.820432+00:00",
+  "request_sha256": "a8c5af6095d83af76ab75eaf00ae651b3b59b44481991f1eae5c3188319ae8f7",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41797,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25485,
+    "cached_tokens": 9344,
+    "completion_tokens": 1221
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle,runpy,numpy as np\\np='/holdout_task/'; d=pickle.load(open(p+'public_batch.pkl','rb'))[0]; s=d['study']; m=runpy.run_path(p+'batch_solver.py'); c=s['sensor_calibration_sweeps']; X=c['ref_rosette']; Y=c['raw_rosette']; S,_=m['_responses'](s,m['_operator'](s)); Z=s['Z_nuisance']; shape=(len(s['mu_shifts']),-1,4)\\nprint('study fields',list(s),'calibration rows',len(X),'nuisance shape',Z.shape)\\nb=c['single_bank_sweeps']; print('bank ids and counts',np.unique(b['bank_id'],return_counts=True),'rosette ref range',np.min(X,axis=0),np.max(X,axis=0));print('single bank samples',[(k,np.asarray(v)[:8]) for k,v in b.items()]);\\naff=np.linalg.lstsq(np.c_[np.ones(len(X)),X],Y,rcond=None)[0]; bank=np.asarray(b['bank_id']); ref=np.asarray(b['ref_signal']); raw=np.asarray(b['raw_readout']);\\nfor k,j in enumerate(np.unique(bank)):\\n i=bank==j; f=np.linalg.lstsq(np.c_[np.ones(i.sum()),ref[i]],raw[i],rcond=None)[0]; print('bank',j,'offset/slope',f,'full offset/slope',aff[[0,k+1],k], 'single RMSE',np.sqrt(np.mean((f[0]+f[1]*ref[i]-raw[i])**2)))\\n# Pulse references are external to the sweep regressions. Compare signed pairwise and nonlinear calibration extensions at every shift and channel.\\npred=np.array([(S@q['w_pulse']).reshape(-1,4) for q in d['campaign_diagnostics']]); obs=np.array([q['y_pulse_raw'].reshape(-1,4) for q in d['campaign_diagnostics']]);\\ndef basis(x,kind):\\n cols=[np.ones(len(x)),x];\\n if kind>=1: cols += [x*x]+[x[:,i]*x[:,j] for i in range(4) for j in range(i+1,4)]\\n if kind>=2: cols += [x/(1+x*x),x**3]+[x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i+1,4) for k in range(j+1,4)]\\n return np.column_stack(cols)\\nfor kind in range(3):\\n worstcal=worstpulse=0.\\n for test in np.array_split(np.arange(len(X)),5):\\n  train=np.setdiff1d(np.arange(len(X)),test); B=basis(X,kind); fit=np.linalg.lstsq(B[train],Y[train],rcond=None)[0]; e=B[test]@fit-Y[test]; worstcal=max(worstcal,np.max(np.sqrt(np.mean(e*e,axis=0)))); e=(basis(pred.reshape(-1,4),kind)@fit-obs.reshape(-1,4)).reshape(len(pred),len(s['mu_shifts']),-1,4); worstpulse=max(worstpulse,np.max(np.sqrt(np.mean(e*e,axis=2))))\\n print('basis',kind,'held-out sweep worst channel RMSE',worstcal,'pulse worst shift/channel RMSE in raw units',worstpulse)\\nfor q in d['campaign_diagnostics']:\\n e=S@q['w_pulse']-m['_calibrate'](dict(s,y_obs_raw=q['y_pulse_raw'])); r=e-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T@e); print('pulse signed residual by shift/channel before',e.reshape(shape).mean(axis=1),'after nuisance projection',r.reshape(shape).mean(axis=1))\\nPY\\npython3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Reflecting walls with affine calibration → test for a remaining shift- or channel-specific calibration bias; worst held-out pulse–shift RMSE is 1.75e-6.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Apply relay-mode, drift-operator, or classification checks\",\"rejected_reason\":\"This is a steady linear transport inversion with continuous measurements; it has no relay state, stochastic drift equation, or class labels.\"}],\"rationale\":\"The host gap is larger than the solver-model gap, so look for a calibration error that could explain the difference. Compare affine and expanded bases on held-out sweeps and independent pulses, and stratify nuisance residuals by shift and channel. Change calibration only if these checks identify a material improvement.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "950c8d704b68c7a602ec53f9822d3d9c920326fec39eaa1c8b6a76554ba62ce1",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33433.46,
+      "usage_known": true,
+      "prompt_tokens": 25485,
+      "cached_tokens": 9344,
+      "completion_tokens": 1221
+    }
+  ]
+}

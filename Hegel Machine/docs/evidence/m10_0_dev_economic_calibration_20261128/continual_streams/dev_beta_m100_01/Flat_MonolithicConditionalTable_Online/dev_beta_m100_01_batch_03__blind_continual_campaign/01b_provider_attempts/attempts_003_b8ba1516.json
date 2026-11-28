@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b8ba1516378947779ae8a83af5a98918",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:32.729409+00:00",
+  "ended_at_utc": "2026-11-28T02:36:55.155309+00:00",
+  "request_sha256": "f496cb0e94c9d9858ecf90b4184209cf7702188a6bb252f6d9db9f206414f343",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 23995,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19494,
+    "cached_tokens": 9344,
+    "completion_tokens": 821
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /tmp/hegel_continual_archive; diff -u dev_beta_m100_01_s00_solver.py dev_beta_m100_01_batch_02_solver.py; diff -u dev_beta_m100_01_batch_01_solver.py dev_beta_m100_01_batch_02_solver.py; OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nnp.set_printoptions(precision=4,suppress=True)\\nj=json.load(open('archive_apparatus_log.json'))\\nfor e in j:\\n a=np.array(e['facility_telemetry_trace']); print(e['completed_campaign_short_name']); print(np.quantile(a,[0,.25,.5,.75,1],axis=0)); print('half medians',np.median(a[:12],axis=0),np.median(a[12:],axis=0))\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; a=s['aux_manifold_telemetry']; print('study telemetry',np.quantile(a,[0,.25,.5,.75,1],axis=0));print('half medians',np.median(a[:12],axis=0),np.median(a[12:],axis=0));\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; print('maxabs per sweep',np.max(np.abs(y),axis=1).round(2)); print('bank data');\\nfor k in range(4):\\n i=b['bank_id']==k; print(k,np.c_[b['ref_signal'][i],b['raw_readout'][i]])\\nA=np.c_[np.ones(len(x)),x]; keep=np.max(np.abs(y),axis=1)<4; coef=np.linalg.lstsq(A[keep],y[keep],rcond=None)[0]; e=y-A@coef;print('trimmed',keep.sum(),coef,np.quantile(abs(e),[.5,.8,.9,.95,1],axis=0)); print('raw rosette sample',y[:8]);print('vel endpoints',s['vel_x'][[0,-1]],s['vel_y'][[0,-1]])\\nPY\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'Cauchy robust IRLS regression contaminated calibration' | head -20\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 (ordinary affine calibration and baseline wall) -> H2 (contamination-resistant calibration and telemetry-selected wall); ordinary affine calibration has worst-channel in-sample RMSE 2.55.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add nonlinear calibration terms immediately\",\n      \"rejected_reason\": \"Large affine residuals alone cannot distinguish nonlinear response from a small number of corrupted sweeps.\"\n    }\n  ],\n  \"rationale\": \"Compare archived wall stencils against their contemporaneous telemetry, and inspect sweep-level residuals and independent single-bank measurements to determine whether the affine fit fails throughout or only on contaminated observations.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "1c77c5f633cd9852bebacb05efd7d2cb2fcbd78bdd09147996cd24882e9b3d56",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24449.29,
+      "usage_known": true,
+      "prompt_tokens": 19494,
+      "cached_tokens": 9344,
+      "completion_tokens": 821
+    }
+  ]
+}

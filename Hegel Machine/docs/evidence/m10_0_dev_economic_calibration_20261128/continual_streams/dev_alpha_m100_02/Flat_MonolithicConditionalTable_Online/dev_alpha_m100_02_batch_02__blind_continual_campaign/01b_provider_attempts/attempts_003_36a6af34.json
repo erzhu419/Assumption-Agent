@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "36a6af3434464b9198720190efc5cd24",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:30:34.085994+00:00",
+  "ended_at_utc": "2026-11-28T02:30:51.594844+00:00",
+  "request_sha256": "694074a57402fe15055e6e6100cbf87c94e34d0e06c700be99095d6bf819e4db",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 22295,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19441,
+    "cached_tokens": 9344,
+    "completion_tokens": 587
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task; cat public_asset_index.json; for f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"--- $f\\\"; sed -n '40,220p' \\\"$f\\\"; done; python3 - <<'PY'\\nimport numpy as np,json,pickle\\nnp.set_printoptions(precision=4,suppress=True)\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor x in a:\\n t=np.array(x['facility_telemetry_trace']); print(x['completed_campaign_index'], x['completed_campaign_short_name'],t.shape,'mean',t.mean(0),'std',t.std(0),'range',np.ptp(t,axis=0))\\nd=pickle.load(open('public_batch.pkl','rb'))[0]['dataset'];c=d['calibration_load_cells']; X=np.c_[np.ones(len(c['bridge_raw'])),c['bridge_raw']]; y=c['true_channel_loads']; a=np.linalg.lstsq(X,y,rcond=None)[0]; r=X@a-y; print('bridge inverse',a,'rmse',np.sqrt(np.mean(r*r,axis=0)),'row residual quantiles',np.quantile(np.linalg.norm(r,axis=1),[0,.5,.9,.95,.99,1])); print('test telemetry',np.mean(d['test']['aux_chamber_telemetry'],axis=0),np.std(d['test']['aux_chamber_telemetry'],axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived chamber laws -> regime-specific deployment selection; no labeled chamber slice is available yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Use the immediately preceding chamber law by default\",\n      \"rejected_reason\": \"The previous log was truncated; compact regime summaries can reveal whether the apparatus returned to an earlier state.\"\n    }\n  ],\n  \"rationale\": \"Compare archived constitutive equations with compact telemetry summaries to choose which mechanism transfers. Inspect four-channel bridge residuals separately to determine whether ordinary affine calibration is adequate.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "012c717773639ae833199ab67d25a219df0b8dd794d448009f44dfa405bef258",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 19436.53,
+      "usage_known": true,
+      "prompt_tokens": 19441,
+      "cached_tokens": 9344,
+      "completion_tokens": 587
+    }
+  ]
+}

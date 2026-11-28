@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f8c2751d3b2347a489cfd6e9067ddbe6",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:06:25.065667+00:00",
+  "ended_at_utc": "2026-11-28T03:06:54.763761+00:00",
+  "request_sha256": "37b3e038d3b8fed38535ad57db2846cda919cfb13677d420fc4b87a58d7bc2bd",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 60083,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29712,
+    "cached_tokens": 9344,
+    "completion_tokens": 1106
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\ncat _verified_upstream.py\\ncat > batch_solver.py <<'PY'\\n\\\"\\\"\\\"Compose per-batch bridge calibration with the chamber solver.\\\"\\\"\\\"\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import solve_downstream\\n\\n\\ndef solve_batch(dataset: dict) -> dict:\\n    return solve_downstream(calibrate_upstream(dataset, {}))\\nPY\\nexport OPENBLAS_NUM_THREADS=1\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\npython3 -I - <<'PY'\\nimport sys, pickle\\nfrom copy import deepcopy\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport batch_solver as b\\nimport downstream_solver as s\\nfrom _verified_upstream import calibrate_upstream\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    data = pickle.load(f)[0]['dataset']\\nbase = b.solve_batch(data)\\ncal = calibrate_upstream(data, {})\\nfor key, val in s.solve_downstream(cal).items():\\n    np.testing.assert_array_equal(val, base[key])\\ntau, theta = base['estimated_taus'], base['hereditary_weights']\\nassert .05 < tau[0] < tau[1] < 25\\ntr, te = cal['train'], cal['test']\\nx, y = s._features(tr, te)\\nworst = np.zeros(2)\\nfor lab in np.unique(tr['lab_id']):\\n    m = tr['lab_id'] == lab\\n    subset = lambda mask: {k:v[mask] for k,v in tr.items()}\\n    tt, ww = s._fit(subset(~m), x[~m], cal['past_dt'], cal['eval_times'])\\n    err = abs(s._design(subset(m), x[m], cal['past_dt'], cal['eval_times'], tt) @ ww - s._response(subset(m)))\\n    worst = np.maximum(worst, [np.quantile(err[:,:-1], .9), np.quantile(err[:,-1], .9)])\\nassert worst[0] < .025 and worst[1] < .017, worst\\nprint('Worst held-out-lab p90 strain/rate:', worst)\\nh = 1e-6\\nstrain, rate = s._chamber_response(te, y, np.array([-h, 0., h]), tau, theta)\\nnp.testing.assert_array_equal(strain[:,1], 0.)\\nnp.testing.assert_allclose((strain[:,2]-strain[:,0])/(2*h), rate, atol=1e-9, rtol=1e-9)\\nnp.testing.assert_allclose(rate, base['initial_rate_pred'], atol=1e-12, rtol=1e-12)\\nchanged = deepcopy(te)\\nchanged['past_channel_raw'] = -2 * te['past_channel_raw']\\nfor a, c in zip(s._chamber_response(changed,y,cal['eval_times'],tau,theta), s._chamber_response(te,y,cal['eval_times'],tau,theta)):\\n    np.testing.assert_array_equal(a,c)\\nprint('Chamber zero-time increment, initial derivative, and reset-history invariance passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: retain the batch-04 chamber law based on its pre-run trace match at distance 0.0244 and refit the bridge per batch; prior worst held-out-lab p90 errors were 0.02274 for strain and 0.01497 for initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t07\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the fixed bridge payload\",\n      \"rejected_reason\": \"The public inputs contain calibration sweeps, and the specification requires fitting them on every call.\"\n    }\n  ],\n  \"rationale\": \"The chronological pre-run alignment avoids the rejected same-row comparison. Rerun held-out lab validation after changing calibration, and use an isolated process to verify composition, chamber reset behavior, and agreement between the initial rate and strain derivative. These checks do not establish blind deployment accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "ff45cf0dcfe61ec970786d52d65070186981038af2200f612a86d04e208889a3",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31762.42,
+      "usage_known": true,
+      "prompt_tokens": 29712,
+      "cached_tokens": 9344,
+      "completion_tokens": 1106
+    }
+  ]
+}

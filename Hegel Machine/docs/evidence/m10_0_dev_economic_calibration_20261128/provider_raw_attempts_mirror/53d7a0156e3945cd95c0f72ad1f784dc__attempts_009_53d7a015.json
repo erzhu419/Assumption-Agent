@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "53d7a0156e3945cd95c0f72ad1f784dc",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:02:21.678370+00:00",
+  "ended_at_utc": "2026-11-28T03:02:57.227170+00:00",
+  "request_sha256": "ee22ba8c8b645efb13b6dbbe2590bece481a8157b9aedc8d3736bea384615df8",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 63383,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35121,
+    "cached_tokens": 9344,
+    "completion_tokens": 1385
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/cross_probe.py <<'PY'\\nimport numpy as np,pickle,json\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; C=s['sensor_calibration_sweeps']; X,Y=C['ref_rosette'],C['raw_rosette']; keep=np.max(abs(Y),axis=1)<4; X,Y=X[keep],Y[keep]; ax=np.count_nonzero(X,axis=1)==1; q=C['single_bank_sweeps']; R=[]; A=[]; B=[]; O=[]\\nfor j in range(4):\\n a,b=X[:,j],X[:,(j+2)%4]; m=ax&(a!=0); n=(q['bank_id']==j)&(abs(q['raw_readout'])<4); t=np.r_[a[m],q['ref_signal'][n]]; z=np.r_[Y[m,j],q['raw_readout'][n]]; p=least_squares(lambda p:p[0]+p[1]*t+p[2]*np.sin(p[3]*t)-z,[0,1,.25,2.5]).x\\n R.append((Y[:,j]-p[0]-p[1]*a-p[2]*np.sin(p[3]*a))/p[1]); A.append(a); B.append(b); O.append(p); print(j,p)\\na,b,r=map(np.concatenate,(A,B,R)); group=np.tile(np.arange(len(X)),4); print('own dependence bins'); ids=np.argsort(b); print(np.c_[a,b,r][ids][::12].round(5))\\nfor name in ['sin_cos','tanh_cos','tanh_rat','sin_rat','plain_rat','sincos_no_lin','tanh_quad','sin_gap','poly7','saturated_pair','tanh_gap']:\\n def design(p):\\n  f,g=np.exp(p); L={ 'sin_cos':[b,np.sin(f*b),1-np.cos(g*b)], 'tanh_cos':[b,np.tanh(f*b),1-np.cos(g*b)], 'tanh_rat':[b,np.tanh(f*b),b*b/(1+g*b*b)],'sin_rat':[b,np.sin(f*b),b*b/(1+g*b*b)],'plain_rat':[b,b/(1+f*b*b),b*b/(1+g*b*b)],'sincos_no_lin':[np.sin(f*b),1-np.cos(g*b)],'tanh_quad':[b,np.tanh(f*b),b*b], 'sin_gap':[b,np.sin(f*b),a*np.sin(g*b),1-np.cos(g*b)],'poly7':[b**k for k in range(1,8)],'saturated_pair':[b,np.sin(2.5*(a+f*b))-np.sin(2.5*a),b*b/(1+g*b*b)],'tanh_gap':[b,np.tanh(f*b),np.tanh(g*b)**2]}[name];return np.array(L).T\\n def fit(m):\\n  def pred(p,ret=False):\\n   D=design(p); c=np.linalg.lstsq(D[m],r[m],rcond=None)[0]; return (D@c-r,c) if ret else (D@c-r)[m]\\n  est=min((least_squares(pred,np.log([x,y]),bounds=(-4,1.7),max_nfev=100) for x,y in [(1,1),(2.5,2.5),(.4,2),(2,.4)]),key=lambda z:np.linalg.norm(z.fun)); return *pred(est.x,True),np.exp(est.x)\\n e,c,p=fit(np.ones(len(a),bool)); cv=[]\\n for f in range(4):\\n  m=group%4!=f; cv.append(np.sqrt(np.mean(fit(m)[0][~m]**2)))\\n print(name,'max',max(abs(e)),'worst',max(cv),'p',p,'coef',c)\\nL=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor e in L:\\n t=np.asarray(e['facility_telemetry_trace']); print(e['completed_campaign_short_name'], 'mean',t.mean(0).round(4),'tail',t[-10:].mean(0).round(4),'std',t.std(0).round(4))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cross_probe.py; for f in /tmp/hegel_continual_archive/*batch_05_solver.py /tmp/hegel_continual_archive/*s00_solver.py; do echo ====; head -32 \\\"$f\\\"; done; cat /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 polynomial cross-talk -> H2 shared opposite-bank transfer after gain normalization; the polynomial control has channel-1 held-out RMSE 0.0240.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit four unrelated cross-talk maps\",\n      \"rejected_reason\": \"Measured opposite-bank outputs agree closely after dividing by the primary gain, so a pooled transfer is testable and can borrow clean rows across banks.\"\n    }\n  ],\n  \"rationale\": \"Compare low-parameter pooled transfer laws on held-out rosettes. Print compact telemetry summaries and archived wall definitions to determine whether they independently distinguish the boundary alternatives.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "23fc47a8265ae254ba2819834fa41691f8d6d2c7fe30785783f026554bda3c08",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37608.36,
+      "usage_known": true,
+      "prompt_tokens": 35121,
+      "cached_tokens": 9344,
+      "completion_tokens": 1385
+    }
+  ]
+}

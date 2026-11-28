@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e2b8f73bf27d4bd98df6e701a3f910f3",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:31.577890+00:00",
+  "ended_at_utc": "2026-11-28T02:50:58.801259+00:00",
+  "request_sha256": "ff8c71c4811ea90d57a3cc93c7ba9388241d7c32477084423568a409f62d90e7",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 71580,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38464,
+    "cached_tokens": 9344,
+    "completion_tokens": 1069
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && cat >/tmp/verify_rosette.py <<'PY'\\nimport pickle, runpy, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; x,y,bank = (c[k] for k in ('ref_rosette','raw_rosette','single_bank_sweeps'))\\nclean = np.max(np.abs(y),axis=1)<5\\nworst = 0\\nfor ids in np.array_split(np.argsort(np.linalg.norm(x,axis=1)),5):\\n    tr = np.ones(len(x),bool); tr[ids] = False\\n    p = up._fit(x[tr],y[tr],bank)\\n    ids = ids[clean[ids]]\\n    d = up._inverse(y[ids],p)-x[ids]\\n    err = np.sqrt(np.mean(d*d)); worst=max(worst,err)\\n    print('held-out inverse RMSE/max:',err,np.max(np.abs(d)))\\nassert worst<1e-4\\np=up._fit(x,y,bank)\\nslope,amp,freq,cross,even,cf=p[8:]\\nmargin=slope-abs(amp*freq)-abs(cross)-abs(even*cf)\\nprint('parameters:',p,'global diagonal-dominance margin:',margin)\\nassert margin>0\\nz=np.array(np.meshgrid(*[np.linspace(lo,hi,9) for lo,hi in zip(x.min(0),x.max(0))])).reshape(4,-1).T\\nroundtrip=np.max(np.abs(up._inverse(up._response(z,p),p)-z))\\nprint('edge-grid roundtrip max:',roundtrip)\\nassert roundtrip<1e-9\\npulses=[{'y_pulse_raw':up._response(z[:6],p).reshape(2,3,4),'metadata':7},{'y_pulse_raw':None},None]\\ns2=dict(s,reference_tracer_pulses=pulses); out=up.calibrate_upstream(s2)\\nassert np.allclose(out['reference_tracer_pulses'][0]['y_pulse_raw'],z[:6].reshape(2,3,4),rtol=0,atol=1e-9)\\nassert out['reference_tracer_pulses'][0]['metadata']==7\\nassert out['reference_tracer_pulses'][1:]==pulses[1:]\\nassert out['y_obs_raw'].shape==s['y_obs_raw'].shape\\nassert np.max(np.abs(up._response(out['y_obs_raw'].reshape(-1,4),p)-s['y_obs_raw'].reshape(-1,4)))<1e-9\\nfor target,refkey,rawkey in [(out['sensor_calibration_sweeps'],'ref_rosette','raw_rosette'),(out['sensor_calibration_sweeps']['single_bank_sweeps'],'ref_signal','raw_readout')]:\\n    assert np.array_equal(target[refkey],target[rawkey]) and not np.shares_memory(target[refkey],target[rawkey])\\nassert not np.array_equal(c['ref_rosette'],c['raw_rosette'])\\nassert np.array_equal(up.calibrate_upstream(out)['y_obs_raw'],out['y_obs_raw'])\\nsys.argv=['/holdout_task/validate_public_schema.py','/holdout_task/batch_solver.py']\\nrunpy.run_path(sys.argv[0],run_name='__main__')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rosette.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 affine coupling → H2 shared sinusoidal response with opposite-bank coupling; precursor worst held-out forward RMSE is 1.64e-5, with final inverse validation pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Submit after the public schema pass\",\"rejected_reason\":\"The schema check does not measure inverse error or exercise non-null tracer pulses.\"}],\"rationale\":\"Validate the exact artifacts in an isolated process. A held-out error above the sweep tolerance would trigger a fit revision; a failed edge round-trip or pulse check would trigger an inverse or integration fix.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "89efd7e9374f7a280f8a94fac7ad43c0c1d20685af221e4641709c81e61a2505",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29293.01,
+      "usage_known": true,
+      "prompt_tokens": 38464,
+      "cached_tokens": 9344,
+      "completion_tokens": 1069
+    }
+  ]
+}

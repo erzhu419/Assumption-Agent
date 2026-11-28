@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ab253a792cc24968ade9097ddfb28b41",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:11.652727+00:00",
+  "ended_at_utc": "2026-11-28T02:50:34.830498+00:00",
+  "request_sha256": "29a59ab84e065c04cc8ac43be7447c284dd2c86ba365ea255f8167f6f3765e5c",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46968,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28972,
+    "cached_tokens": 9344,
+    "completion_tokens": 852
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json /tmp/hegel_continual_archive/archive_manifest.json; cd /holdout_task; python3 - <<'PY'\\nimport pickle,numpy as np,json\\nnp.set_printoptions(precision=5,suppress=True,linewidth=170)\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; print('study metadata',[(k,np.shape(v),v if np.isscalar(v) else None) for k,v in s.items()]); w=s['sensor_calibration_sweeps']; print('sweep keys',w.keys()); print('first full rows ref/raw',np.c_[w['ref_rosette'][:14],w['raw_rosette'][:14]]); b=w['single_bank_sweeps']; print('single-bank series',np.c_[b['bank_id'],b['ref_signal'],b['raw_readout']]); print('aux',s['aux_manifold_telemetry']); print('raw channel min/max',np.min(s['y_obs_raw'].reshape(-1,4),0),np.max(s['y_obs_raw'].reshape(-1,4),0));\\nfor r in json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')):\\n a=np.array(r['facility_telemetry_trace']); print(r['completed_campaign_index'],r['completed_campaign_short_name'],'covariate means',a[:,[3,7]].mean(0),'start',a[:4,[3,7]].T,'end',a[-4:,[3,7]].T)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived cubic rosette calibration → H2 identify the missing response structure from single-bank and multichannel sweeps; the best provisional held-out chamber RMSE is 0.035068 on the worst rosette fold.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\n    \"assumption_refuted\": \"Adding a fifth-order self term to the inherited nearest-neighbor cubic rosette model is enough to explain the current calibration sweeps.\",\n    \"empirical_witness\": \"Even the fifth-order model leaves per-bank held-out median absolute raw errors of 0.087–0.151 and 90th-percentile errors of 0.258–0.434.\",\n    \"causal_blanket_diagnosis\": \"Calibration is not independently identified by the tested fits; chamber prediction error can therefore confound wall selection with sensor misspecification.\",\n    \"sublated_pivot\": \"Use single-bank sweeps to isolate self-response and full rosettes to identify cross-bank coupling before selecting walls.\",\n    \"risk_kind\": \"calibration model misspecification\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Select Robin walls and arctangent calibration from chamber CV alone\",\n      \"rejected_reason\": \"The arctangent model improves chamber prediction but leaves large held-out calibration errors and does not identify the sensor law.\"\n    }\n  ],\n  \"rationale\": \"Inspect the short bank sweeps directly to distinguish clipping, isolated contamination, and a missing transfer term. That distinction determines the calibration basis and whether chamber residuals can reliably select the boundary operator.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "794975ce3115896c4175ea3ed25c36cddc3b49602fbd19bd0fec42c24c3ad304",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25247.97,
+      "usage_known": true,
+      "prompt_tokens": 28972,
+      "cached_tokens": 9344,
+      "completion_tokens": 852
+    }
+  ]
+}

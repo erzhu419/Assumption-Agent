@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "efd8ef1d5841484d84bd8d759b3d470d",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:02.915339+00:00",
+  "ended_at_utc": "2026-11-28T02:28:29.202381+00:00",
+  "request_sha256": "ea2a01e5cb5b770e4aebcdeb1595fc4fe467b17174242fc0e6dcc47fcea6bc6e",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 49887,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28366,
+    "cached_tokens": 5504,
+    "completion_tokens": 1021
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\np='/holdout_task/batch_solver.py'; spec=importlib.util.spec_from_file_location('candidate',p); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ni=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=i['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; q=c['single_bank_sweeps']; print('bank sweep keys:',list(q))\\nbank_key=next(k for k in q if 'bank' in k); ids=np.asarray(q[bank_key]); ref=np.asarray(q['ref_signal']); raw=np.asarray(q['raw_readout']); S,_=m._forward(s)\\ndef fit(a,b):\\n    return np.linalg.lstsq(np.c_[np.ones(len(a)),a],b,rcond=None)[0]\\nrosette=[]; bank=[]; combined=[]; distinct=[]\\nfor j,k in enumerate(np.unique(ids)):\\n    a,b=ref[ids==k],raw[ids==k]; duplicate=np.array([np.any((x[:,j]==r)&(y[:,j]==v)) for r,v in zip(a,b)])\\n    distinct.append(int(np.count_nonzero(~duplicate)))\\n    rosette.append(fit(x[:,j],y[:,j])); bank.append(fit(a,b)); combined.append(fit(np.r_[x[:,j],a[~duplicate]],np.r_[y[:,j],b[~duplicate]]))\\nprint('distinct supplemental samples per bank:',distinct)\\nfor name,coef in [('rosette',rosette),('bank',bank),('combined',combined)]:\\n    off,gain=np.array(coef).T\\n    e=np.array([S@d['w_pulse']-((d['y_pulse_raw'].reshape(-1,4)-off)/gain).ravel() for d in i['campaign_diagnostics']]).reshape(len(i['campaign_diagnostics']),len(s['mu_shifts']),-1,4)\\n    print(name,'max sensor-shift RMSE',np.sqrt(np.mean(e**2,axis=0)).max(),'max absolute',np.abs(e).max(),'pulse by bank RMSE',np.sqrt(np.mean(e**2,axis=(1,2))))\\n    ycal=((s['y_obs_raw'].reshape(-1,4)-off)/gain).ravel(); A,b=m._project(s,S,ycal); w,_=m._qp(A,b,s['source_ridge'],s['u_box'],s['total_budget']); print(name,'relative weight change vs deployed',np.linalg.norm(w-m.solve_batch(s)['weights'])/np.linalg.norm(w))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Sealed-wall model with rosette-only affine calibration → test whether single-bank sweeps add independent calibration information; current worst tracer sensor–shift RMSE is 1.59e-6.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the nonlinear calibration and nuisance audit\",\n      \"rejected_reason\": \"The previous audit already tested those alternatives on held-out settings and individual banks; it did not test whether the single-bank sweeps improve calibration.\"\n    }\n  ],\n  \"rationale\": \"Compare sweep-only calibration fits on tracer measurements without fitting any coefficients to the pulses. If supplemental sweeps consistently improve the worst bank and sensor–shift residuals, use them; if they duplicate existing samples or fail to improve tracer predictions, retain the verified solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "0f36f51a37a5c3d05435bda2cc60afbfa98fbfc922ff2fd09f4e96c7b72ac193",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 28313.53,
+      "usage_known": true,
+      "prompt_tokens": 28366,
+      "cached_tokens": 5504,
+      "completion_tokens": 1021
+    }
+  ]
+}

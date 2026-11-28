@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "4ce87edcc7ba418aa48e8890dbfc6490",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:47:28.399734+00:00",
+  "ended_at_utc": "2026-11-28T02:47:43.895742+00:00",
+  "request_sha256": "880763e1800b3a36b9ab3ccd71a8000904e1116f711f81c4648b61ccd63b57c6",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 20860,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 18844,
+    "cached_tokens": 9344,
+    "completion_tokens": 518
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && python3 - <<'PY'\\nimport pickle,numpy as np\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette'];\\nprint('keys',list(s),list(c)); print('pulses',type(s.get('reference_tracer_pulses'))); print('shape',x.shape,y.shape,'ranges',x.min(0),x.max(0),y.min(0),y.max(0)); print('counts by support',np.unique(np.count_nonzero(x,axis=1),return_counts=True));\\nfor i in range(4):\\n m=(np.count_nonzero(x,axis=1)==1)&(x[:,i]!=0); print('axis',i,np.round(np.c_[x[m,i],y[m]],6).tolist())\\nprint('zero',y[np.count_nonzero(x,axis=1)==0].tolist()); print('mixed sample',np.round(np.c_[x,y][np.count_nonzero(x,axis=1)>1][:5],6).tolist()); print('observation ranges',s['y_obs_raw'].reshape(-1,4).min(0),s['y_obs_raw'].reshape(-1,4).max(0)); print('single banks',[(k,list(v)) for k,v in c.get('single_bank_sweeps',{}).items()]);\\nPY\\nsed -n '41,53p' _verified_downstream.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 coupled affine response -> H2 coupled response with identifiable saturation terms; out-of-fold error is not yet measured.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The previous output truncated the calibration structure. A compact view of axis sweeps and mixed rows will show which nonlinear terms can be fitted and held out independently, and the pulse and bank layouts will determine how to apply the inverse.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "3e2d61e0db52dde00812d00b6dd897834090aafa67f80a8c3730e48eb5ad9014",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 17508.11,
+      "usage_known": true,
+      "prompt_tokens": 18844,
+      "cached_tokens": 9344,
+      "completion_tokens": 518
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f639520d5f3f4d8f81bc5e0b6847dfe8",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:06.172250+00:00",
+  "ended_at_utc": "2026-11-28T02:49:49.995364+00:00",
+  "request_sha256": "4d6f57c0af4ae8bda3690c66779bfd94420f548e200035d6341feea0b0ef46a0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51412,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28555,
+    "cached_tokens": 9344,
+    "completion_tokens": 1846
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe viscoelastic_relaxation.fit 2>/dev/null || true\\ncat > /tmp/bridge_models.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; S=C['single_channel_sweeps']; Q={j:np.column_stack((S['true_stress'][S['lab_id']==j],S['cmd_stress'][S['lab_id']==j])) for j in range(4)}\\nclean=(abs(Y)<5).all(1)\\nF={'tanh':np.tanh,'atan':np.arctan,'asinh':np.arcsinh,'softsign':lambda z:z/np.sqrt(1+z*z),'erf':__import__('scipy.special',fromlist=['erf']).erf,'sine':np.sin}\\nfor j,q in Q.items():\\n x,y=q.T; k=abs(y)<5; x,y=x[k],y[k]; print('axis',j)\\n for name,fn in F.items():\\n  for powers in ((1,),(3,),(1,3),()):\\n   def design(a): return np.column_stack([np.ones(len(x)),fn(a[0]*x)]+[x**n for n in powers])\\n   def err(a):\\n    m=design(a); return m@np.linalg.lstsq(m,y,rcond=None)[0]-y\\n   p=min([least_squares(err,[a],bounds=(.03,5.0),ftol=1e-12,gtol=1e-12,xtol=1e-12) for a in (.4,1.0,2.0)], key=lambda p:p.cost)\\n   if np.linalg.norm(p.fun)<.022: print(name,powers,'rmse',round(np.sqrt(np.mean(p.fun**2)),7),'param',np.r_[p.x,np.linalg.lstsq(design(p.x),y,rcond=None)[0]].round(5))\\n\\n# Compare additive saturation with a saturation applied to a coupled load.\\nfolds=np.array_split(np.random.default_rng(42).permutation(len(X)),5)\\nfor name in ('tanh','atan','softsign'):\\n f=F[name]\\n for typ in ('post','pre','both'):\\n  for degree in (0,2,3):\\n   P=np.column_stack([np.prod(X[:,z],axis=1) for n in range(2,degree+1) for z in combinations_with_replacement(range(4),n)]) if degree else np.empty((len(X),0))\\n   out=np.zeros_like(Y)\\n   for j in range(4):\\n    def model(p):\\n     z=X[:,j]*p[2]; g=3\\n     if typ in ('pre','both'):\\n      z=z+X@p[g:g+4]*1.0+p[g+4]; g+=5\\n     phi=np.column_stack((X, X[:,j]**3, P)); return p[0]+p[1]*f(z)+phi@p[g:]\\n    start=np.r_[np.median(Y[clean,j]),1.0,1.2,np.zeros(5 if typ in ('pre','both') else 0),np.zeros(5+P.shape[1])]; start[-(5+P.shape[1])+j]=.2\\n    for ids in folds:\\n     keep=clean.copy(); keep[ids]=False\\n     opt=least_squares(lambda p:(model(p)-Y[:,j])[keep],start,max_nfev=450)\\n     out[ids,j]=model(opt.x)[ids]-Y[ids,j]\\n   print(name,typ,degree,'raw clean p50,90,99',np.quantile(abs(out[clean]),[.5,.9,.99]).round(6),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_models.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 cubic bridge → H2 saturating bridge with coupled channels; the cubic model’s pooled out-of-fold raw p90 error is 0.129.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit the jump rows as ordinary sweep observations\",\"rejected_reason\":\"The three simultaneous channel jumps exceed the clean sweep and specimen ranges by an order of magnitude; they would dominate the fit without describing specimen behavior.\"}],\"rationale\":\"Use single-channel sweeps to identify the saturation shape and held-out clean mixed sweeps to test where coupling enters. Promote a replacement only if it improves out-of-fold bridge error.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "141e51f3ea6f0f909ecda79b58ffb69aeb7636d3a5a9856f099e5d473dbf8976",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45819.73,
+      "usage_known": true,
+      "prompt_tokens": 28555,
+      "cached_tokens": 9344,
+      "completion_tokens": 1846
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "712b6f53a41345b58055ab01474eaba7",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:56:25.517703+00:00",
+  "ended_at_utc": "2026-11-28T02:56:55.455342+00:00",
+  "request_sha256": "68f15749eb7a6b6c555746405be909ca030b9b2dd3a3b565006425f7af9b94f6",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44959,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27379,
+    "cached_tokens": 9344,
+    "completion_tokens": 1184
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/rosette_probe.py <<'PY'\\nimport numpy as np,pickle\\nfrom scipy.optimize import minimize_scalar\\nitem=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; ss=c['single_bank_sweeps']; sig=ss['ref_signal']; obs=ss['raw_readout']; bank=ss['bank_id']; clean=np.max(abs(y),axis=1)<5; iso=np.count_nonzero(x,axis=1)==1\\nprint('pulse availability',item.get('campaign_diagnostics') is not None,'sweep reject',np.flatnonzero(~clean),'geometry',s['nx'],s['ny'],'modes',s['source_modes'].shape,'shifts',s['mu_shifts'])\\nfuncs={'tanh':lambda z,a: np.tanh(a*z),'rational':lambda z,a:z/(1+a*z*z),'arctan':lambda z,a:np.arctan(a*z),'sqrt':lambda z,a:z/np.sqrt(1+a*z*z)}\\nfor j in range(4):\\n q=(bank==j)&(abs(obs)<5); u=(clean&iso)&(x[:,j]!=0); z=np.r_[sig[q],x[u,j]]; v=np.r_[obs[q],y[u,j]]; print('\\\\nbank',j,'size',len(z))\\n for name,f in funcs.items():\\n  for extras in ([],[1],[3],[1,3]):\\n   def fit(a):\\n    D=np.column_stack([np.ones(len(z)),f(z,a)]+[z**k for k in extras]); b=np.linalg.lstsq(D,v,rcond=None)[0]; return np.linalg.norm(D@b-v),b\\n   a=minimize_scalar(lambda a:fit(a)[0],bounds=(.08,5),method='bounded',options={'xatol':1e-13}).x; err,b=fit(a); print(name,extras,round(a,6),f'{err:.4g}',b.round(6))\\n for k in range(4):\\n  print('isolated output',k,np.c_[x[u,j],y[u,k]].round(5).tolist())\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/rosette_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cubic calibration -> H2 saturating rational or transcendental calibration; the archived model’s clean-majority 90th-percentile residual reaches 0.151 raw units.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"The prior affine-plus-cubic rosette model transfers unchanged.\",\"empirical_witness\":\"Uncorrupted single-bank measurements show strong central gain, shoulder saturation, and renewed growth in the tails; the archived fit has a 90th-percentile residual up to 0.151 raw units, far above the roughly 1e-5 isolated readout jitter.\",\"causal_blanket_diagnosis\":\"The calibration forward map has a different diagonal response in this campaign; leakage inference should not absorb that mismatch.\",\"sublated_pivot\":\"Fit candidate saturating scalar responses on isolated bank data before identifying cross-channel terms on mixed sweeps.\",\"risk_kind\":\"sensor model misspecification\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a flexible polynomial directly to all sweeps\",\"rejected_reason\":\"Isolated sweeps can distinguish a compact forward law before introducing higher-order or mixed terms.\"}],\"rationale\":\"The isolated bank measurements separate self-response from interaction terms. Comparing compact response families there will determine which basis to carry into mixed-sweep validation.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "df4c719affc64eda99174191389e6ecf62e58354e267de8f07f362ba013506de",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32002.45,
+      "usage_known": true,
+      "prompt_tokens": 27379,
+      "cached_tokens": 9344,
+      "completion_tokens": 1184
+    }
+  ]
+}

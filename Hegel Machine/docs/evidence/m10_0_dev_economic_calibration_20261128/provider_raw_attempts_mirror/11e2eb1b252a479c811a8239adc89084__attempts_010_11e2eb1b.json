@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "11e2eb1b252a479c811a8239adc89084",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:57.407366+00:00",
+  "ended_at_utc": "2026-11-28T02:51:31.611658+00:00",
+  "request_sha256": "96ece2ef1b7d2481265d8639ef01653669d456b04a326a01ff0e1df2cb32b614",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57323,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31512,
+    "cached_tokens": 9344,
+    "completion_tokens": 1384
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/bridge_sine.py <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; C=D['calibration_load_cells']; X=C['true_channel_loads']; Y=C['bridge_raw']; S=C['single_channel_sweeps']; clean=(abs(Y)<5).all(1); sw=abs(S['cmd_stress'])<5\\nj=S['lab_id'][sw]; z=S['true_stress'][sw]; v=S['cmd_stress'][sw]\\ndef axis(k):\\n a=np.stack([np.ones_like(z),z,np.sin(k*z)],1); b=np.stack([np.linalg.lstsq(a[j==q],v[j==q],rcond=None)[0] for q in range(4)])\\n return np.sum(a*b[j],1)-v,b\\nk=least_squares(lambda p:axis(p[0])[0],[2.5]).x[0]; b=axis(k)[1]; print('frequency',k,'coeffs',b)\\nfolds=np.array_split(np.random.default_rng(42).permutation(np.flatnonzero(clean)),5)\\nfor q in range(4):\\n x=X[:,q]; w=X[:,(q+2)%4]; u=X[:,(q+1)%4]; h=X[:,(q+3)%4]; target=Y[:,q]-(b[q,0]+b[q,1]*x+b[q,2]*np.sin(k*x));\\n terms={'w':w,'w2':w*w,'w3':w**3,'sin(w)':np.sin(k*w),'atan(w)':np.arctan(w),'xw':x*w,'xu':x*u,'xh':x*h,'uw':u*w,'hw':h*w,'uh':u*h,'x2w':x*x*w,'xw2':x*w*w,'sin(x)w':np.sin(k*x)*w,'xsin(w)':x*np.sin(k*w),'w/(1+x2)':w/(1+x*x),'xw/(1+w2)':x*w/(1+w*w),'w/(1+w2)':w/(1+w*w),'w2/(1+w2)':w*w/(1+w*w),'xw/(1+x2)':x*w/(1+x*x),'u':u,'h':h}\\n print('channel',q,'axis cross',np.column_stack([w,target])[(abs(w)>0)&(x==0)&clean]);\\n choices=[['w'],['w','w2'],['w','w2','w3'],['w','sin(w)','w2'],['w','atan(w)','w2'],['w','w/(1+w2)','w2'],['w','w/(1+w2)','w2/(1+w2)'],['w','w2','xw'],['w','w2','w3','xw','xu','xh','uw','hw','uh'],list(terms)]\\n for names in choices:\\n  a=np.column_stack([terms[n] for n in names]); e=np.zeros(len(X))\\n  for ids in folds:\\n   tr=clean.copy(); tr[ids]=False; c=np.linalg.lstsq(a[tr],target[tr],rcond=None)[0]; e[ids]=a[ids]@c-target[ids]\\n  c=np.linalg.lstsq(a[clean],target[clean],rcond=None)[0]; print(','.join(names),np.quantile(abs(e[clean]),[.5,.9,1]).round(6),c.round(5) if len(names)<12 else '')\\n sel=[]\\n for _ in range(8):\\n  def fit(names):\\n   aa=np.column_stack([terms[n] for n in names])[clean]; cc=np.linalg.lstsq(aa,target[clean],rcond=None)[0]; return np.linalg.norm(aa@cc-target[clean]),cc\\n  sel.append(min(set(terms)-set(sel),key=lambda n:fit(sel+[n])[0])); print('greedy',sel,fit(sel))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_sine.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 archived cubic bridge → H2 shared-frequency sinusoidal response with opposite-channel coupling; axis RMS is at most 0.000083 for the sinusoidal law, while the best tested mixed-sweep p90 is 0.02594.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use a generic saturating fit\",\"rejected_reason\":\"A linear-plus-sine response fits all four independent axis sweeps at the measurement-noise scale with a common frequency.\"}],\"rationale\":\"Subtract the axis response from the mixed sweeps to isolate coupling. If a compact opposite-channel law removes the held-out residual, use it for calibration; otherwise test interactions before inverting the bridge.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "a6023fc940e46de4edffcf301c03b90ed6a092e68feea447ad131f659f3b8a0c",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36173.68,
+      "usage_known": true,
+      "prompt_tokens": 31512,
+      "cached_tokens": 9344,
+      "completion_tokens": 1384
+    }
+  ]
+}

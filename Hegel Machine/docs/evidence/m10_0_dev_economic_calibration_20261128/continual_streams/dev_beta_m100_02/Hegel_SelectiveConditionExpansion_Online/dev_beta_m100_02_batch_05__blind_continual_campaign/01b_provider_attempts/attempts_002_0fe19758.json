@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "0fe1975893dc4343ab121420c608efb1",
+  "call_seq": 2,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:22.449141+00:00",
+  "ended_at_utc": "2026-11-28T02:45:39.231942+00:00",
+  "request_sha256": "a991e1fbfbf20e0716c206420883f8b357afe23a8d2478a593004a4c6f6a4903",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 11926,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14727,
+    "cached_tokens": 9344,
+    "completion_tokens": 554
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat /tmp/hegel_continual_archive/pre_llm_gate_diagnostic.json && sed -n '38,155p' _verified_downstream.py && python3 - <<'PY'\\nimport json,pickle,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'; l=json.load(open(p)); print('log structure',type(l).__name__, list(l) if isinstance(l,dict) else len(l)); print(json.dumps(l[-1] if isinstance(l,list) else {k:(v[-1:] if isinstance(v,list) else v) for k,v in l.items()})[:2300]); s=pickle.load(open('public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; np.set_printoptions(precision=5,suppress=True); print('sweep limits',x.min(0),x.max(0),y.min(0),y.max(0)); print('first sweeps',x[:5],y[:5]); z=s['y_obs_raw'].reshape(-1,4); print('obs limits',z.min(0),z.max(0)); print('pulse summaries',[(list(t),None if t['y_pulse_raw'] is None else (np.shape(t['y_pulse_raw']),np.min(t['y_pulse_raw']),np.max(t['y_pulse_raw']))) for t in s['reference_tracer_pulses']]); print('single bank shapes',{k:np.shape(v) for k,v in c['single_bank_sweeps'].items()})\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Coupled affine calibration -> nonlinear forward calibration if supported by held-out sweeps; no validation metric yet.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Check whether observations or pulses fall outside the sweep range, where inverse extrapolation would matter, and confirm which fields the downstream solver consumes.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "d8e9e08ecabfe37c147c02856aaaa4b74e6359d74643a75624989ae9d23c603f",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 18793.19,
+      "usage_known": true,
+      "prompt_tokens": 14727,
+      "cached_tokens": 9344,
+      "completion_tokens": 554
+    }
+  ]
+}

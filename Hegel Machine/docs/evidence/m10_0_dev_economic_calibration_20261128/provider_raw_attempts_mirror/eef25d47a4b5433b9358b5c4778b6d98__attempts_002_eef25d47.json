@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "eef25d47a4b5433b9358b5c4778b6d98",
+  "call_seq": 2,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:45:11.153958+00:00",
+  "ended_at_utc": "2026-11-28T02:45:34.942749+00:00",
+  "request_sha256": "d14e166ab095f6802b132b7bd21945b058b45998ce8bd9806e9765164d6f9d3e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 12206,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 14850,
+    "cached_tokens": 9344,
+    "completion_tokens": 875
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat public_asset_index.json && cat /tmp/hegel_continual_archive/{archive_manifest,pre_llm_gate_diagnostic}.json && PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35; cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nD=pickle.load(open('public_batch.pkl','rb'))['dataset']; c=D['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; print('keys',D.keys()); print('support',np.min(x,axis=0),np.max(x,axis=0));\\nfor k,v in c['single_channel_sweeps'].items():\\n a=np.asarray(v); print(k,a.shape,a.reshape(-1)[:35]);\\nfor s in ('train','test'):\\n for k in ('past_channel_raw','hold_channel_raw'):\\n  z=D[s][k].reshape(-1,4); print(s,k,'range',z.min(0),z.max(0))\\nfor kind in ('linear','diag2','full2','diag3','full3'):\\n terms=[()]+[(i,) for i in range(4)]; deg=int(kind[-1]) if kind!='linear' else 1\\n for d in range(2,deg+1): terms+=list(combinations_with_replacement(range(4),d)) if 'full' in kind else [(i,)*d for i in range(4)]\\n X=np.stack([np.prod(x[:,t],axis=1) for t in terms],axis=1); pred=np.empty_like(y); rng=np.random.default_rng(123); folds=np.array_split(rng.permutation(len(x)),5)\\n for f in folds:\\n  ix=np.setdiff1d(np.arange(len(x)),f); A=X[ix]; B=y[ix]; w=np.ones(len(ix))\\n  for it in range(30):\\n   C=np.linalg.lstsq(A*w[:,None],B*w[:,None],rcond=None)[0]; r=np.linalg.norm(A@C-B,axis=1); w=1/np.sqrt(1+(r/max(1e-10,2*np.median(r)))**2)\\n  pred[f]=X[f]@C\\n r=np.linalg.norm(pred-y,axis=1); print(kind, np.round(np.quantile(r,[.25,.5,.75,.85,.9,.95,1]),7), 'fold medians',np.round([np.median(r[f]) for f in folds],7)); print('sample fitted coeff',np.round(C,5) if kind in ('linear','full2','diag3') else '')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: compare robust affine and low-order nonlinear forward maps on held-out calibration rows; worst-fold error is not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Fit raw-to-load polynomials directly\",\n      \"rejected_reason\": \"Spikes in the raw predictor create leverage; the forward fit keeps the known loads on the predictor side.\"\n    }\n  ],\n  \"rationale\": \"Held-out residuals will distinguish affine underfit from spike contamination. Compare sweep and trajectory ranges to identify where the eventual inverse needs extrapolation tests.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_002_att0.json",
+      "response_sha256": "29348b04e71670c18337d91bfc9750d488a316305d2b21a77ddbbe818588d01b",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 25790.27,
+      "usage_known": true,
+      "prompt_tokens": 14850,
+      "cached_tokens": 9344,
+      "completion_tokens": 875
+    }
+  ]
+}

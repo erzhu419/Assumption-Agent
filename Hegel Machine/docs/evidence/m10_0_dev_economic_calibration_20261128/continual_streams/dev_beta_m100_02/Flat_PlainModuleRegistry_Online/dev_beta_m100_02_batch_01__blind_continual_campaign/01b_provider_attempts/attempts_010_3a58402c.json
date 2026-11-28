@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a58402c47e8494bb610fc87fbeccace",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:28.577662+00:00",
+  "ended_at_utc": "2026-11-28T02:28:59.072895+00:00",
+  "request_sha256": "a43c85b0e7f91dd7fae30c24f56c8a2834ba9bbe43a09f1e339604eaead871bf",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51739,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29095,
+    "cached_tokens": 10880,
+    "completion_tokens": 1156
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('candidate','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\na=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; s=a['study']; c=s['sensor_calibration_sweeps']; x,y=c['ref_rosette'],c['raw_rosette']; b=c['single_bank_sweeps']; bid,t,z=(np.asarray(b[k]) for k in ('bank_id','ref_signal','raw_readout'))\\nS,U=m._responses(s,m._operator(s)); pulses=a['campaign_diagnostics']; truth=S@np.column_stack([p['w_pulse'] for p in pulses]); raws=[p['y_pulse_raw'] for p in pulses]; Z=s['Z_nuisance']; P=np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nfor kind in ('full','joint_diagonal'):\\n    sweep=[]; single=[]; tracer=[]; projected=[]\\n    for fold in range(4):\\n        hold=np.arange(len(x))%4==fold; hs=np.zeros(len(t),bool)\\n        for j in range(4):\\n            ii=np.flatnonzero(bid==j); hs[ii[fold::4]]=True\\n        C=np.linalg.lstsq(np.c_[x[~hold],np.ones(sum(~hold))],y[~hold],rcond=None)[0]\\n        if kind=='joint_diagonal':\\n            C.fill(0.)\\n            for j in range(4):\\n                use=(bid==j)&~hs; tx=np.r_[x[~hold,j],t[use]]; zy=np.r_[y[~hold,j],z[use]]\\n                C[[j,4],j]=np.linalg.lstsq(np.c_[tx,np.ones(len(tx))],zy,rcond=None)[0]\\n        sweep.append(np.max(np.sqrt(np.mean((np.c_[x[hold],np.ones(sum(hold))]@C-y[hold])**2,axis=0))))\\n        er=C[bid[hs],bid[hs]]*t[hs]+C[4,bid[hs]]-z[hs]\\n        single.append(max(np.sqrt(np.mean(er[bid[hs]==j]**2)) for j in range(4)))\\n        e=np.column_stack([np.linalg.solve(C[:4].T,(r.reshape(-1,4)-C[4]).T).T.ravel() for r in raws])-truth\\n        tracer.append(np.max(np.sqrt(np.mean(e.T.reshape(len(pulses),len(s['mu_shifts']),-1,4)**2,axis=2))))\\n        projected.append(np.sqrt(np.mean((P@e)**2)))\\n    print(kind,'worst OOF rosette',max(sweep),'worst OOF single-bank',max(single),'worst tracer pulse/shift/bank',max(tracer),'worst projected tracer RMS',max(projected))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open Robin walls -> H2 zero-loss walls on both axes; worst held-out pulse/shift/bank RMSE is 2.15e-6, and the independent host KKT gap is 1.27e-5.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Repeat the wall search or rational calibration audit\",\n      \"rejected_reason\": \"Both are already resolved on held-out measurements; the untested calibration change is whether including independent single-bank sweeps improves tracer prediction.\"\n    },\n    {\n      \"option\": \"Center observations by sensor bank\",\n      \"rejected_reason\": \"This is continuous regression, not classification. Arbitrary bank centering could remove predicted transport signal; the specified ridge nuisance projection is the relevant comparison.\"\n    }\n  ],\n  \"rationale\": \"A joint fit could expose a gain or offset estimate that fails to transfer between the two sweep types. Compare held-out sweep and tracer errors, including after nuisance projection; change the artifact only if the joint fit materially improves tracer prediction.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "90e3341fc6cc839d22f54dfe5b855ea5d98c2342213ba17a1a7068f30a8330e4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32398.31,
+      "usage_known": true,
+      "prompt_tokens": 29095,
+      "cached_tokens": 10880,
+      "completion_tokens": 1156
+    }
+  ]
+}

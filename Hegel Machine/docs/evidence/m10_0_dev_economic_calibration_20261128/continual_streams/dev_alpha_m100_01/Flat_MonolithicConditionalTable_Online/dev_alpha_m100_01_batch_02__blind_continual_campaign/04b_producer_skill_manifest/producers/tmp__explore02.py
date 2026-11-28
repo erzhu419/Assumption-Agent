@@ -1,0 +1,10 @@
+import pickle,numpy as np
+from material02 import _features,_bridge,_loads,_fit,_design
+np.set_printoptions(precision=5,suppress=True,linewidth=140)
+it=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=it['dataset']; a,b,c=d['train'],d['test'],it['campaign_diagnostics']; t,dt=d['eval_times'],d['past_dt']; br=_bridge(d['calibration_load_cells']); x=_features(a,b)
+xc=_features(dict(a,**{k:np.concatenate((a[k],b[k])) for k in ('lab_id','stratum','ref_coupons','coupon_features_raw')}),c)[len(x):]
+pc,hc=_loads(c,br); p,h=_loads(a,br); response=lambda s:s['strain_curves_obs']-s['strain_0'][:,None]; tau,th=_fit(p,h,x[:len(p)],dt,t,response(a),a['instant_rate_obs']); C,R=_design(tau,pc,hc,xc,dt,t); Y=response(c); rate=c['instant_rate_obs']; e=Y-C@th; er=rate-R@th; dr=th[2]+xc@th[3:]; mall=np.column_stack((e,er)); B=np.vstack((np.c_[-np.expm1(-t[:,None]/tau),t],np.r_[1/tau,1])); coef=np.linalg.lstsq(B,mall.T,rcond=None)[0].T
+rms=lambda q:np.sqrt(np.mean(q*q,axis=0))
+print('tau and theta',tau,th); print('baseline residual by time/rate',rms(mall)); print('fixed-spectrum residual by time/rate',rms(coef@B.T-mall)); print('col: hold, drift, time residual first/middle/last, rate residual, fixed basis corrections'); print(np.c_[hc,dr,e[:,[0,5,-1]],er,coef]); print('residual singular values',np.linalg.svd(mall,compute_uv=False)); print('residual dominant time shape',np.linalg.svd(e,full_matrices=False)[2][0]); print('aux telemetry min/max',np.min(b['aux_chamber_telemetry'],axis=0),np.max(b['aux_chamber_telemetry'],axis=0)); print('aux telemetry first rows',b['aux_chamber_telemetry'][:5]); print('diag feature NaNs',np.sum(np.isnan(c['coupon_features_raw']),axis=0));
+for label,mat in [('linear',np.c_[np.ones(len(hc)),hc,dr,pc]),('material',np.c_[np.ones(len(hc)),hc,dr]),('quadratic',np.c_[np.ones(len(hc)),hc,dr,hc**2,dr**2,hc*dr])]:
+ A=np.linalg.pinv(mat); resid=mall-mat@(A@mall); loo=resid/(1-np.einsum('ij,ji->i',mat,A))[:,None]; print(label,'LOO by time/rate',rms(loo)); print('coef first/mid/late/rate', (A@mall)[:,[0,5,-2,-1]])

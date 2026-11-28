@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ac330c25c5ef46fab03460b5f876c68b",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step10__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_10__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:04:41.946188+00:00",
+  "ended_at_utc": "2026-11-28T03:05:11.188410+00:00",
+  "request_sha256": "c49fd199f1fe63ec321e8703a49ce6128f18567b1be61548ef004f1d32124fd3",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 46383,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26049,
+    "cached_tokens": 9344,
+    "completion_tokens": 1018
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat _upstream_param_payload.json && tail -20 /tmp/hegel_continual_archive/*s00_solver.py && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport json,pickle,numpy as np\\nimport batch_solver as b, downstream_solver as s\\nx=pickle.load(open('public_batch.pkl','rb'))[0]['dataset']; c=b._up.calibrate_upstream(x,b._PAY); d=b._up.calibrate_upstream(x,{})\\nfor k in ('past_channel_raw','hold_channel_raw'):\\n print('dynamic calibration delta',k,np.max(np.abs(c['train'][k]-d['train'][k])))\\ntr,te=c['train'],c['test']; X,Y=s._features(tr,te); dt,t=c['past_dt'],c['eval_times']; tau,w=s._fit(tr,X,dt,t); print('material',tau,w)\\nfor lab in np.unique(tr['lab_id']):\\n mask=tr['lab_id']==lab; a={k:v[~mask] for k,v in tr.items()}; z={k:v[mask] for k,v in tr.items()}; tt,ww=s._fit(a,X[~mask],dt,t); e=s._design(z,X[mask],dt,t,tt)@ww-s._response(z); print('LOLO',lab,'tau',tt,'median',np.median(abs(e[:,:-1])),np.median(abs(e[:,-1])),'p90',np.quantile(abs(e[:,:-1]),.9),np.quantile(abs(e[:,-1]),.9))\\nA=s._design(te,Y,dt,t,tau)@w; S,R=s._chamber_response(te,Y,t,tau,w); print('chamber transfer delta p50/p90',np.quantile(abs(S-A[:,:-1]),[.5,.9]),np.quantile(abs(R-A[:,-1]),[.5,.9]));\\na=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json')); a=a if isinstance(a,list) else next(v for v in a.values() if isinstance(v,list));\\nfor j in (1,2,4,5,9,10):\\n r=a[j]; v=np.asarray(r['facility_telemetry_trace']); print('trace',j,r['completed_campaign_short_name'],v.shape,np.round(v[:3,[2,5]],3).tolist(),np.round(v[-3:,[2,5]],3).tolist())\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: validate the intrinsic model by held-out lab and separate measurable fit error from blind chamber transfer; pooled reference invariance passed with zero prediction change.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": true,\n    \"nogood_rung\": \"RUNG_3_FALSIFIED_PHYSICAL_OR_CAUSAL_MECHANISM\",\n    \"assumption_refuted\": \"Batch 04 is a regime-matched source for the latest facility trace.\",\n    \"empirical_witness\": \"Named batch 04 has channel medians (-0.366, -0.355), while the latest trace has (2.544, -0.350); the high-channel-2 trace at index 4 belongs to batch 03, not batch 04.\",\n    \"causal_blanket_diagnosis\": \"The row index was confounded with the campaign suffix, creating a false apparatus match.\",\n    \"sublated_pivot\": \"Use named campaign records and distinguish verified intrinsic estimation from any unsupported deployment transfer.\",\n    \"risk_kind\": \"blind chamber regime mismatch\",\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Keep the archived law because the public schema passes\",\n      \"rejected_reason\": \"Schema and reference invariance do not validate a chamber law, and the named trace disproves the proposed regime match.\"\n    }\n  ],\n  \"rationale\": \"Held-out lab errors can reveal an unstable intrinsic fit, the dynamic bridge comparison determines whether to retain the staged payload, and the prediction deltas quantify the practical cost of selecting an unsupported chamber law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "d3063c809e095b7bbe983a95274b4543a877be225e8bd59a66f88b6c3b72a5bf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29202.28,
+      "usage_known": true,
+      "prompt_tokens": 26049,
+      "cached_tokens": 9344,
+      "completion_tokens": 1018
+    }
+  ]
+}

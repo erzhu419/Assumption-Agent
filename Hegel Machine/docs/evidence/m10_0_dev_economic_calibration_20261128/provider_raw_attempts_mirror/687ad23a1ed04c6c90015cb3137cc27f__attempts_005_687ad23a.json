@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "687ad23a1ed04c6c90015cb3137cc27f",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:31:36.887680+00:00",
+  "ended_at_utc": "2026-11-28T02:32:07.425917+00:00",
+  "request_sha256": "26be9f1d4a710243e79522ea6d151ae4dd212b27353fa67a921bfadb131c4bd9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 43775,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26963,
+    "cached_tokens": 9344,
+    "completion_tokens": 1186
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/cal_probe.py <<'PY'\\nimport pickle, numpy as np\\nfrom scipy.optimize import least_squares\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nnp.set_printoptions(precision=6,suppress=True,linewidth=170)\\nc=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; b=c['single_bank_sweeps']; a=b['ref_signal']; by=b['raw_readout']; ix=b['bank_id']\\nprint('ref range',x.min(0),x.max(0)); obs=s['y_obs_raw'].reshape(-1,4); print('obs range',obs.min(0),obs.max(0)); print('bank layout',s['row_bank_id'].reshape(-1,4)[:6]); print('Z range',s['Z_nuisance'].min(0),s['Z_nuisance'].max(0))\\nco=[]\\nfor k in range(4):\\n use=ix==k; iso=np.zeros((use.sum(),4));iso[:,k]=a[use]; yy=np.r_[y[:,k],by[use]]; xx=np.vstack((x,iso)); print('BANK',k)\\n for typ in ('own','all','full'):\\n  z=np.column_stack((np.ones(len(xx)),xx,xx[:,k]**3 if typ=='own' else xx**3))\\n  names=['1',*map(str,range(4)),f'{k}^3'] if typ=='own' else ['1',*map(str,range(4)),*[f'{j}^3' for j in range(4)]]\\n  if typ=='full':\\n   for i in range(4):\\n    for j in range(i,4):\\n     z=np.column_stack((z,xx[:,i]*xx[:,j])); names.append(f'{i}{j}')\\n     for l in range(j,4):\\n      if i==l: continue\\n      z=np.column_stack((z,xx[:,i]*xx[:,j]*xx[:,l])); names.append(f'{i}{j}{l}')\\n  def fit(m):\\n   t=least_squares(lambda t:(z@t-yy)[m],np.linalg.lstsq(z[m],yy[m],rcond=None)[0],jac=lambda t:z[m],loss='cauchy',f_scale=.018).x\\n   clean=m&(abs(yy-z@t)<.001)\\n   return np.linalg.lstsq(z[clean],yy[clean],rcond=None)[0]\\n  t=fit(np.ones(len(yy),bool)); e=yy-z@t; cv=np.empty_like(e)\\n  for j in range(5):\\n   m=np.arange(len(e))%5!=j; cv[~m]=yy[~m]-z[~m]@fit(m)\\n  print(typ,[(n,round(v,7)) for n,v in zip(names,t) if abs(v)>.0001], 'CV inlier max',max(abs(cv[abs(e)<.001])), 'outliers',np.flatnonzero(abs(e)>.001))\\n  if typ=='full':co.append((names,t))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_probe.py\\nsed -n '/^def _box_simplex/,$p' /tmp/hegel_continual_archive/dev_beta_m100_02_batch_01_solver.py; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'robust nonlinear regression Cauchy IRLS'\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Robust affine → sparse cubic rosette calibration; full-cubic held-out 95th-percentile absolute error is at most 7e-5 in the visible bank slices.\",\"nogood_update\":{\"has_new_nogood\":true,\"nogood_rung\":\"RUNG_2_INCOMPLETE_DISCRETE_GRAMMAR_OR_SYMMETRY\",\"assumption_refuted\":\"An affine or quadratic rosette model represents the clean sweep response.\",\"empirical_witness\":\"In bank 1, held-out 90th-percentile absolute errors are 0.725 for affine, 0.420 for quadratic, and about 4e-5 for cubic.\",\"causal_blanket_diagnosis\":\"Systematic bank nonlinearity remains after accounting for isolated bad readings; it is not evidence of a chamber boundary change.\",\"sublated_pivot\":\"Identify the smallest repeatable cubic basis and determine the calibrated inverse branch from the study's physically plausible response range.\",\"risk_kind\":\"omitted calibration nonlinearity\",\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The coefficient and held-out checks distinguish a sparse physical sensor law from a full polynomial, while the operating-range check determines whether cubic inversion requires branch selection.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "16dfc602e0747370b4fd73fcb606933d750f8ee901e49e98bcfad88d6c607589",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 32533.19,
+      "usage_known": true,
+      "prompt_tokens": 26963,
+      "cached_tokens": 9344,
+      "completion_tokens": 1186
+    }
+  ]
+}

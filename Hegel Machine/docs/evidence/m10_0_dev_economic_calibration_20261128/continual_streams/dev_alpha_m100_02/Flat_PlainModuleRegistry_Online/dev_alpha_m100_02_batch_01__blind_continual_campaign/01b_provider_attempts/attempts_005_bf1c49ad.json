@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bf1c49adcf354142b633a06146225747",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_PlainModuleRegistry_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:26:17.051721+00:00",
+  "ended_at_utc": "2026-11-28T02:26:47.016928+00:00",
+  "request_sha256": "3af9d2876537e67fd35ac89c95de5a3af5be2ac7317bee6d2ec585d0205e1f6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46096,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 29011,
+    "cached_tokens": 9344,
+    "completion_tokens": 1170
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/memory.py <<'PY'\\nexec(open('/tmp/chamber.py').read().split(\\\"print('chamber drift\\\")[0])\\nfrom itertools import combinations\\nlab=c['lab_id']; drift=f@w[2:]; n=len(lab); past,hold,_=s\\nD=np.c_[np.ones(n),hold,past,drift]; tail=np.r_[np.cumsum(dt[:0:-1])[::-1],0.]; tk=lambda u,dd,tt: np.exp(-tt[:,None]/u)*-np.expm1(-dd[:,None]/u)\\ndef score(M):\\n E=np.zeros_like(Y); XA=(M[:,:,None,:]*T.T[None,:,:,None]).sum(axis=1)\\n for l in np.unique(lab):\\n  k=lab!=l; q=np.linalg.lstsq(XA[k].reshape(-1,M.shape[-1]),Y[k].ravel(),rcond=None)[0]; E[~k]=(XA[~k]@q-Y[~k]);\\n q=np.linalg.lstsq(XA.reshape(-1,M.shape[-1]),Y.ravel(),rcond=None)[0]; return np.round([np.std((XA@q-Y)[:,:-1]),np.std((XA@q-Y)[:,-1]),np.max([np.sqrt(np.mean(E[lab==l,:-1]**2)) for l in np.unique(lab)]),np.max([np.sqrt(np.mean(E[lab==l,-1]**2)) for l in np.unique(lab)])],5), np.round(q,5)\\ndef block(*args):\\n out=np.zeros((n,3,sum(x.shape[1] for x in args))); p=0\\n for j,x in enumerate(args): out[:,j,p:p+x.shape[1]]=x; p+=x.shape[1]\\n return out\\nfor label, x in [('direct',D[:,:-1]),('current',np.c_[D[:,:2],past@tk(tau,dt,tail)]),('reverse',np.c_[D[:,:2],past[:,::-1]@tk(tau,dt,tail)]),('reversed pairs',np.c_[D[:,:2],past[:,::-1]@tk(tau,dt[::-1],tail+dt-np.sum(dt)+np.cumsum(dt)-dt) if False else past@(tk(tau,dt[::-1],np.r_[np.cumsum(dt[::-1][:0:-1])[::-1],0.])[::-1])]),('both',np.c_[D[:,:2],past@tk(tau,dt,tail),past[:,::-1]@tk(tau,dt,tail)])]:\\n print(label,score(block(x,x,D[:,[0,-1]])))\\nprint('direct separate coeffs',np.round(np.linalg.lstsq(D,A,rcond=None)[0],5)); print('drift fit and err',np.linalg.lstsq(D[:,[0,-1]],A[:,2],rcond=None)[0],np.std(D[:,[0,-1]]@np.linalg.lstsq(D[:,[0,-1]],A[:,2],rcond=None)[0]-A[:,2])); print('sweep slopes'); sw=cal['single_channel_sweeps']; print([np.polyfit(sw['cmd_stress'][sw['lab_id']==l],sw['true_stress'][sw['lab_id']==l],1) for l in range(4)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/memory.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: unchanged deployment memory → H2: lag-resolved chamber amplitudes and suppressed drift; baseline initial-rate RMSE is 1.246.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Use unrestricted per-coupon amplitudes\",\"rejected_reason\":\"They cannot be predicted for deployment coupons; lag-resolved fits can identify a transferable law.\"}],\"rationale\":\"Compare direct and reversed hereditary kernels against an unrestricted linear lag model on held-out labs. If the lag model cannot reach the measured noise floor, the next step is to test nonlinear stress terms rather than tune a linear kernel.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "d9232c5e79d8a22875dd8ba0df9fc12b7b0cc719b5f4fd4937e446150c3868eb",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31943.7,
+      "usage_known": true,
+      "prompt_tokens": 29011,
+      "cached_tokens": 9344,
+      "completion_tokens": 1170
+    }
+  ]
+}

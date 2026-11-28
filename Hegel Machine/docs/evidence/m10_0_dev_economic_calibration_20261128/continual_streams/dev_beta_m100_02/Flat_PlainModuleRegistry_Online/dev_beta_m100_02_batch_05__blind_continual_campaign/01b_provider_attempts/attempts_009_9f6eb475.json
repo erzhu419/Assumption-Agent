@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9f6eb47532c940089bab4795a78f74ca",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:25.618875+00:00",
+  "ended_at_utc": "2026-11-28T02:49:55.211960+00:00",
+  "request_sha256": "4e27aa0ec53ee943b50041115071981ce3d22e87b4fca995de1e5112e81a5d59",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 66770,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37349,
+    "cached_tokens": 9344,
+    "completion_tokens": 1178
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncd /holdout_task\\nsed -n '55,150p' _verified_downstream.py\\ncat >/tmp/verify_rosette.py <<'PY'\\nimport copy, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit, _predict, _invert, calibrate_upstream\\nfrom batch_solver import solve_batch\\ns = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']\\nc = s['sensor_calibration_sweeps']; x,y = c['ref_rosette'],c['raw_rosette']; spike = np.max(abs(y),axis=1)>5\\nworst = np.zeros(3)\\nfor order in (np.arange(len(x)), np.argsort(np.max(abs(x),axis=1)), np.random.default_rng(11).permutation(len(x))):\\n    for te in np.array_split(order,5):\\n        tr = np.setdiff1d(np.arange(len(x)),te); te = te[~spike[te]]\\n        f,p = _fit(x[tr],y[tr]); e = _invert(y[te],f,p)-x[te]\\n        worst = np.maximum(worst,[np.sqrt(np.mean((_predict(x[te],f,p)-y[te])**2)),np.sqrt(np.mean(e**2)),np.max(abs(e))])\\nprint('public worst fold [forward RMSE, inverse RMSE, inverse max]',worst)\\nassert np.all(worst<[3e-5,6e-5,2e-4])\\nf,p = _fit(x,y)\\nrng=np.random.default_rng(82)\\nfor amp in (.8,1.8,4.,12.):\\n    t=rng.uniform(-amp,amp,(20000,4)); raw=_predict(t,f,p); out=_invert(raw,f,p)\\n    print('inverse roundtrip',amp,np.max(abs(out-t)), np.sqrt(np.mean((out-t)**2)))\\n    assert np.max(abs(out-t))<1e-8\\ns=copy.deepcopy(s); obs=s['y_obs_raw'].copy(); raw_sweep=s['sensor_calibration_sweeps']['raw_rosette'].copy(); t=rng.uniform(-1.6,1.6,(18,4)); pulse=_predict(t,f,p).reshape(2,3,12); s['reference_tracer_pulses']=[{'y_pulse_raw':pulse,'label':'example'},{'y_pulse_raw':None}]\\no=calibrate_upstream(s); oc=o['sensor_calibration_sweeps']; b=oc['single_bank_sweeps']\\nnp.testing.assert_allclose(o['reference_tracer_pulses'][0]['y_pulse_raw'],t.reshape(pulse.shape),atol=1e-9,rtol=0)\\nassert o['reference_tracer_pulses'][0]['label']=='example' and o['reference_tracer_pulses'][1]['y_pulse_raw'] is None\\nfor lhs,rhs in ((oc['raw_rosette'],oc['ref_rosette']),(b['raw_readout'],b['ref_signal'])):\\n    np.testing.assert_array_equal(lhs,rhs); assert not np.shares_memory(lhs,rhs)\\nnp.testing.assert_array_equal(s['y_obs_raw'],obs); np.testing.assert_array_equal(s['sensor_calibration_sweeps']['raw_rosette'],raw_sweep)\\nassert o['y_obs_raw'].shape==obs.shape\\nout=solve_batch(s); print('pipeline fields',list(out)); print('certificate summary',[(k,list(v)) for k,v in out.items() if isinstance(v,dict)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/verify_rosette.py\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: The compact paired Fourier model reached 1.21e-5 worst-slice forward RMSE in the probe; verify the actual implementation’s held-out inverse and pulse handling.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The public schema passes, but it has no pulse and checks no held-out reference reconstructions. Test both in an isolated process and stress wide amplitudes; any Newton stalls would justify a monotone inverse fallback.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "938ffb6cf29f2325a8e02bfec93f49478fe9378fe8f7b59d85175b50fc2476ac",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31585.65,
+      "usage_known": true,
+      "prompt_tokens": 37349,
+      "cached_tokens": 9344,
+      "completion_tokens": 1178
+    }
+  ]
+}

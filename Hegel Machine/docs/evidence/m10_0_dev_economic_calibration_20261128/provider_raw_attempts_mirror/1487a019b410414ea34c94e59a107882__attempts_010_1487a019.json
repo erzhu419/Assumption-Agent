@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "1487a019b410414ea34c94e59a107882",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:24.703797+00:00",
+  "ended_at_utc": "2026-11-28T02:50:00.006244+00:00",
+  "request_sha256": "5455c0f73349777126ef9ecba6233a975fc59050556b728599e0c4d367c5a18e",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 55292,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31019,
+    "cached_tokens": 9344,
+    "completion_tokens": 1438
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nimport upstream_transducer as up\\nfrom batch_solver import solve_batch\\ns=pickle.load(open('public_batch.pkl','rb'))[0]['study']\\nc=s['sensor_calibration_sweeps']; b=c['single_bank_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; bank=np.asarray(b['bank_id']); ids=np.arange(len(x)); clean=np.max(abs(y),axis=1)<5; axis=np.count_nonzero(x,axis=1)==1; edge=np.max(abs(x),axis=1)>1.35\\nfolds=[('axis',axis,np.ones(len(bank),bool)),('edge',edge & ~axis,np.ones(len(bank),bool))]\\nfor i,fold in enumerate(np.array_split(np.random.default_rng(2026).permutation(ids[~axis]),5)):\\n    folds.append((f'mixed_{i}',np.isin(ids,fold),np.ones(len(bank),bool)))\\nfor i in range(4):\\n    folds.append((f'bank_{i}',axis & (x[:,i]!=0),bank!=i))\\nworst=0.; peak=0.\\nfor name,test,single_train in folds:\\n    p=up._fit(dict(c,ref_rosette=x[~test],raw_rosette=y[~test],single_bank_sweeps={k:np.asarray(v)[single_train] for k,v in b.items()})); m=test & clean\\n    e=up._inverse(y[m],*p)-x[m]; rms=np.sqrt(np.mean(e*e,axis=0)).max(); worst=max(worst,rms); peak=max(peak,np.max(abs(e))); print(name,'worst channel inverse RMS',rms,'peak',np.max(abs(e)))\\n    if not single_train.all():\\n        u=b['ref_signal'][~single_train]; v=b['raw_readout'][~single_train]; ok=abs(v)<5; a,k=p[2][:2]; direct=p[0][i]+p[1][i]*(u+a*np.sin(k*u)); assert np.max(abs(direct[ok]-v[ok]))<1e-4\\nassert worst<5e-5 and peak<2e-4\\nprint('worst held-out channel inverse RMS',worst,'global peak',peak)\\nparams=up._fit(c)\\nbias=np.array([-.06,.07,.06,-.05]); gain=np.array([.8,1.28,1.3,.79]); z=np.array([[-2.1,.3,1.8,-.8],[1.5,-1.6,0.,.05],[.3,.2,.1,-.2],[0.,0.,0.,0.]])\\ndef instrument(v):\\n    o=v[:,[2,3,0,1]]\\n    return bias+gain*(v+.25*np.sin(2.5*v)-.21*o+.06*(1-np.cos(2*o)))\\nraw=instrument(z).reshape(2,2,4); study=dict(s,reference_tracer_pulses=[dict(y_pulse_raw=raw,tag='tracer'),dict(y_pulse_raw=None,tag='missing')]); out=up.calibrate_upstream(study); pulse=out['reference_tracer_pulses']; err=np.max(abs(pulse[0]['y_pulse_raw'].reshape(-1,4)-z)); print('pulse peak inverse error',err); assert err<2e-4 and pulse[0]['y_pulse_raw'].shape==raw.shape and pulse[0]['tag']=='tracer' and pulse[1]==study['reference_tracer_pulses'][1]\\nassert np.array_equal(raw,instrument(z).reshape(raw.shape)) and out['y_obs_raw'].shape==s['y_obs_raw'].shape\\nnorm=out['sensor_calibration_sweeps']; assert np.array_equal(norm['raw_rosette'],x) and not np.shares_memory(norm['raw_rosette'],x) and np.array_equal(norm['single_bank_sweeps']['raw_readout'],b['ref_signal']) and not np.shares_memory(norm['single_bank_sweeps']['raw_readout'],b['ref_signal']) and not np.array_equal(c['raw_rosette'],x)\\nassert 'reference_tracer_pulses' not in up.calibrate_upstream(s) and up.calibrate_upstream(dict(s,reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nret=solve_batch(s); w=ret['weights']; cert=ret['kkt_certificate']; gap=abs(cert['primal_objective']-cert['dual_lower_bound']); budget=abs(w.sum()-s['total_budget']); print('KKT gap',gap,'budget error',budget); assert gap<1e-9 and budget<1e-10 and np.min(w)>-1e-10 and np.max(w)<s['u_box']+1e-10\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Shared direct sine and opposite-channel cosine law → robust fit and coupled inverse; the axis-derived law reached 1.11×10⁻⁵ worst mixed-slice forward RMS, and the composed public schema passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t06\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate does not check calibration accuracy. Held-out banks and sweep ranges can reveal fit bias; an independently generated pulse checks inversion and shape preservation; the composed solve checks that canonicalization preserves budget feasibility and closes the KKT gap.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "d74f380ee50b14b235cc2d71ea3f2b092a5bd3f2797e0cd9eb8bd5ec15a16998",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37291.41,
+      "usage_known": true,
+      "prompt_tokens": 31019,
+      "cached_tokens": 9344,
+      "completion_tokens": 1438
+    }
+  ]
+}

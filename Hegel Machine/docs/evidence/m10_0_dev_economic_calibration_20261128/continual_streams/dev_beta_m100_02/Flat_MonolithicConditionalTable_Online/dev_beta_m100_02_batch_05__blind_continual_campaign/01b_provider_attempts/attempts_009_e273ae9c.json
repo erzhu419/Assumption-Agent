@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e273ae9c56fe4f96bfc53a7b6c3b53c1",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:50:02.125704+00:00",
+  "ended_at_utc": "2026-11-28T02:50:33.503851+00:00",
+  "request_sha256": "caf3429886df7357675205b11e422891f8996168f8b312b679c128ec1803be21",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 59397,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 35069,
+    "cached_tokens": 9344,
+    "completion_tokens": 1271
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/cal_exact.py <<'PY'\\nfrom cal_sat import X,Y,ids,sig,z\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ndef self_curve(u,p,kind):\\n a,b,c,d=p\\n if kind=='rat3': return a*u/(1+b*u*u)+c*u+d*u**3\\n if kind=='tanh3': return a*np.tanh(b*u)+c*u+d*u**3\\n if kind=='soft3': return a*u/np.sqrt(1+b*u*u)+c*u+d*u**3\\n if kind=='inner3': return a*np.tanh(b*u+c*u**3)+d*u\\n if kind=='exp3': return a*u*np.exp(-b*u*u)+c*u+d*u**3\\n if kind=='rat4': return (a*u+c*u**3)/(1+b*u*u+d*u**4)\\n\\ndef cross_curve(v,p,kind):\\n l,q,r,t=p\\n if kind=='even': return l*v+q*v*v/(1+r*v*v)\\n if kind=='both': return (l*v+q*v*v)/(1+r*v*v)\\n if kind=='odd': return l*v/(1+r*v*v)+q*v*v\\n if kind=='split': return l*v/(1+r*v*v)+q*v*v/(1+t*v*v)\\n\\ndef data(k):\\n sel=ids==k; m=np.zeros((sum(sel),4)); m[:,k]=sig[sel]\\n x=np.r_[X,m]; y=np.r_[Y[:,k],z[sel]]; keep=abs(y)<5\\n return x[keep],y[keep],np.flatnonzero(keep)\\n\\ndef predict(p,x,k,sk,ck):\\n u=x[:,k]; v=x[:,(k+2)%4]\\n a=x[:,(k+1)%4]; c=x[:,(k+3)%4]\\n return p[0]+self_curve(u,p[1:5],sk)+cross_curve(v,p[5:9],ck)+p[9]*u*a+p[10]*u*c+p[11]*a*c+p[12]*a+p[13]*c\\n\\ndef fit(x,y,k,sk,ck):\\n lo=np.full(14,-np.inf); hi=np.full(14,np.inf); lo[[1,2,7,8]]=0\\n if sk=='rat4': lo[4]=0\\n p=np.array([0,1.,1.,0.2,.005,-.2,.1,.3,.3,0,0,0,0,0]); return least_squares(lambda p:predict(p,x,k,sk,ck)-y,p,bounds=(lo,hi),loss='soft_l1',f_scale=.001,max_nfev=130).x\\n\\nif __name__=='__main__':\\n for sk in ('rat3','tanh3','soft3','inner3','exp3','rat4'):\\n  for ck in ('even','both','odd','split'):\\n   errs=[]; params=[]\\n   for k in range(4):\\n    x,y,idx=data(k); err=np.empty(len(y)); params.append(fit(x,y,k,sk,ck));\\n    for f in range(4):\\n     tr=idx%4!=f; err[~tr]=predict(fit(x[tr],y[tr],k,sk,ck),x[~tr],k,sk,ck)-y[~tr]\\n    errs.append(np.quantile(abs(err),[.5,.9,1]))\\n   print(sk,ck,'worst med/q90/max',np.round(np.max(errs,axis=0),6),'ch2',np.round(params[2],5),flush=True)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/cal_exact.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 generic saturation plus polynomial coupling -> H2 compact self-transfer with rational opposite-bank coupling; the best tested power-plus-polynomial calibration still has a worst mixed-sweep error of at least 0.097.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add higher-order mixed polynomial terms\",\n      \"rejected_reason\": \"The broader basis has not consistently improved held-out mixed sweeps. The dominant opposite-bank linear and even terms suggest testing a compact rational form first.\"\n    }\n  ],\n  \"rationale\": \"Test whether a self-transfer tail and rational opposite-bank coupling remove the remaining sweep error on held-out rows. If the compact fits fail, retain the best validated calibration and audit its effect on the chamber prediction before freezing the solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "03ff2f309fc984980ecbc64629d34516b44407888632206dfd1e4de7d5bb0759",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 33407.7,
+      "usage_known": true,
+      "prompt_tokens": 35069,
+      "cached_tokens": 9344,
+      "completion_tokens": 1271
+    }
+  ]
+}

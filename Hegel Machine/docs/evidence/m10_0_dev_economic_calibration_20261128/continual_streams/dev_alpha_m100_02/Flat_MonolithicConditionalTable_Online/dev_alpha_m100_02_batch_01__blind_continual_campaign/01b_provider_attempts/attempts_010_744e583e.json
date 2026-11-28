@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "744e583e9e48448a972213cc783c7816",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:24.771951+00:00",
+  "ended_at_utc": "2026-11-28T02:29:03.212050+00:00",
+  "request_sha256": "3d22e46fb8e14476d50206341b05249d1d14660c8e4584dc743b2ac881e008c1",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 58328,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 31683,
+    "cached_tokens": 9344,
+    "completion_tokens": 1547
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/audit_chamber.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\na = pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]\\nd, g = a['dataset'], a['campaign_diagnostics']\\ntr, te, t, dt = d['train'], d['test'], d['eval_times'], d['past_dt']\\nB = m['_bridge'](d['calibration_load_cells'])\\nxtr, _ = m['_features'](tr, te)\\nS = m['_prepare'](tr, xtr, B)\\nstrain = tr['strain_curves_obs']-tr['strain_0'][:,None]\\nrate = tr['instant_rate_obs']\\ntau, th = m['_fit'](S, dt, t, strain, rate)\\np, h, f = m['_prepare'](g, m['_features'](g,g)[0], B)\\nq = f@th[2:]\\ny = np.c_[g['instant_rate_obs'], g['strain_curves_obs']-g['strain_0'][:,None]]\\nG = np.vstack((1/tau, -np.expm1(-t[:,None]/tau)))\\nT = np.r_[1.,t]\\nF = G*tau - T[:,None]\\nbase = h[:,None]*(G@th[:2])+q[:,None]*T\\nw = np.r_[.45,np.ones(len(t))]\\nalt = {'reset':q[:,None,None]*F}\\nfor key, values in [('chronological',p),('reversed',p[:,::-1])]:\\n z = np.zeros((len(h),2))\\n for s,step in enumerate(dt):\\n  z = np.exp(-step/tau)*z - np.expm1(-step/tau)*values[:,s,None]\\n alt[key] = np.concatenate((alt['reset'], z[:,None,:]*G),axis=2)\\ncontrast = p[:,-1]-p[:,0]\\nalt['pairwise contrast'] = np.concatenate((alt['reset'], contrast[:,None,None]*G),axis=2)\\nalt['stress-drift interaction'] = np.concatenate((alt['reset'], (q*(h-np.mean(h)))[:,None,None]*F),axis=2)\\nalt['free initial drift gain'] = np.concatenate((alt['reset'], (q[:,None]*T)[:,:,None]),axis=2)\\nrational = [q[:,None,None]*F/(1+alpha*q[:,None,None]**2) for alpha in (0,.01,.03,.1,.3,1.)]\\ndef predict(A, keep):\\n W = A[keep]*w[None,:,None]\\n return base + A@np.linalg.lstsq(W.reshape(-1,W.shape[2]), ((y-base)[keep]*w).ravel(),rcond=None)[0]\\ndef metrics(e): return np.sqrt(np.array([np.mean(e[:,0]**2),np.mean(e[:,1:]**2),np.mean(e[:,-1]**2)]))\\nfor kind, labels in [('lab',g['lab_id']),('stratum',g['stratum']),('coupon',np.arange(len(g['lab_id'])))]:\\n print(kind, 'worst then pooled RMSE: rate, curve, final')\\n for name in [*alt,'rational gate (nested)']:\\n  E = np.empty_like(y); groups = []\\n  for group in np.unique(labels):\\n   mask = labels == group\\n   if name in alt: A = alt[name]\\n   else:\\n    loss = []\\n    for A in rational:\\n     sq = []\\n     for inner in np.unique(g['lab_id'][~mask]):\\n      inner_mask = (~mask)&(g['lab_id']==inner)\\n      sq.extend(np.ravel(((y-predict(A,~(mask|inner_mask)))[inner_mask]*w)**2))\\n     loss.append(np.mean(sq))\\n    A = rational[np.argmin(loss)]\\n   E[mask]=(y-predict(A,~mask))[mask]\\n   groups.append(metrics(E[mask]))\\n  print(name,np.round(np.max(groups,axis=0),5),np.round(metrics(E),5))\\nE=np.zeros((len(rate),len(t)+1))\\nfor lab in np.unique(tr['lab_id']):\\n j = tr['lab_id']==lab\\n ts, bs = m['_fit'](tuple(s[~j] for s in S),dt,t,strain[~j],rate[~j])\\n C,R = m['_design'](np.log(ts),tuple(s[j] for s in S),dt,t)\\n E[j] = np.c_[rate[j]-R@bs,strain[j]-C@bs]\\n print('material lab',lab,'tau relative shift',np.round(ts/tau-1,5),'median abs rate/curve',np.round([np.median(abs(E[j,0])),np.median(abs(E[j,1:]))],5))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_chamber.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 unchanged benchtop transfer → H2 chamber reset with two-branch transient drift; worst held-out coupon RMSE is 0.0230 for rate, 0.0286 for strain, and 0.0401 at the final horizon.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Run relay-mode, PDE, or balanced-accuracy checks\",\"rejected_reason\":\"The public task has continuous strain and rate measurements, with no relay, PDE, or classification output. Lab and stratum holdouts test the applicable nuisance effects.\"}],\"rationale\":\"Test whether omitted history contrasts, rational saturation, or a change in initial drift gain materially improve prediction on held-out measurements. Separately jackknife the intrinsic fit by lab to detect a material estimate driven by one lab.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "071950204a3a2b259a0c32b36718a3ddfc602bc5c2f282fef81722b7cda52567",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40336.73,
+      "usage_known": true,
+      "prompt_tokens": 31683,
+      "cached_tokens": 9344,
+      "completion_tokens": 1547
+    }
+  ]
+}

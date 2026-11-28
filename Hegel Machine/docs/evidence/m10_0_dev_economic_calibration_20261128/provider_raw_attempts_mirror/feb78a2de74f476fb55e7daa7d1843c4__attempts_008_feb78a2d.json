@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "feb78a2de74f476fb55e7daa7d1843c4",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__stageS__dev_alpha_m100_01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:22:43.574338+00:00",
+  "ended_at_utc": "2026-11-28T02:23:25.209370+00:00",
+  "request_sha256": "89036459021188d482e493fef5d9e6d329f4eda8fc7ea8b65647142e579af740",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 40663,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25279,
+    "cached_tokens": 10880,
+    "completion_tokens": 1826
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/audit_heredity.py <<'PY'\\nimport importlib.util, json, pickle\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\n\\ns = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(s)\\ns.loader.exec_module(m)\\nitem = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]\\nd = item['dataset']; tr = d['train']; te = d['test']\\nlab = tr['lab_id']; labs = np.unique(lab)\\ndt, t = d['past_dt'], d['eval_times']\\np, h = m._loads(tr, m._bridge(d['calibration_load_cells']))\\nx = m._features(tr, te)[:len(h)]\\ny = tr['strain_curves_obs'] - tr['strain_0'][:, None]; r = tr['instant_rate_obs']\\n\\ndef fit(mask):\\n    tau, w = m._fit(p[mask], h[mask], x[mask], dt, t, y[mask], r[mask])\\n    c, z = m._design(tau, p, h, x, dt, t)\\n    return tau, c, z, c @ w - y, z @ w - r\\n\\ndef bases(tau, c, z, mask, name):\\n    if name == 'saturation':\\n        gap = z[:, :2] * tau\\n        unit = np.maximum(np.sqrt(np.mean(gap[mask]**2, axis=0)), 1e-12)\\n        f = 1 / (1 + (gap / unit)**2) - 1\\n        return c[:, :, :2] * f[:, None, :], z[:, :2] * f\\n    if name == 'interactions':\\n        i, j = np.triu_indices(x.shape[1], 1)\\n        f = np.column_stack((x[:, i] * x[:, j], (h-p[:, -1]) * x[:, 0] * x[:, 1]))\\n        return t[None, :, None] * f[:, None, :], f\\n    if name == 'lab_centered':\\n        g = np.column_stack((np.ones(len(h)), x))\\n        for l in labs:\\n            q = mask & (lab == l)\\n            if q.any():\\n                g[q] -= g[q].mean(axis=0)\\n        return t[None, :, None] * g[:, None, :], g\\n    raise ValueError(name)\\n\\ndef predict(fit_result, train, test, name):\\n    tau, c, z, ec, er = fit_result\\n    if name == 'baseline':\\n        return ec[test], er[test]\\n    u, v = bases(tau, c, z, train, name)\\n    def scale(a):\\n        return 1.4826 * np.median(abs(a-np.median(a)))\\n    sc, sr = scale(ec[train]), scale(er[train]); k = v.shape[1]\\n    if name == 'lab_centered':\\n        # Fit slopes within each training lab, then set a shared intercept.\\n        # Never estimate a nuisance offset from a held-out lab's responses.\\n        ec, er = ec.copy(), er.copy()\\n        for l in labs:\\n            q = train & (lab == l)\\n            if q.any():\\n                ec[q] -= np.median(ec[q], axis=0)\\n                er[q] -= np.median(er[q])\\n    a = np.vstack((u[train].reshape(-1, k)/sc, v[train]/sr))\\n    b = np.r_[ec[train].ravel()/sc, er[train]/sr]\\n    w = least_squares(lambda w: np.r_[a @ w+b, 2*w], np.zeros(k), loss='soft_l1', f_scale=1.5).x\\n    return ec[test]+u[test]@w, er[test]+v[test]@w\\n\\ndef metrics(errors):\\n    ec, er = errors\\n    return np.array([np.quantile(abs(ec), .9), np.quantile(abs(er), .9)])\\n\\nnames = ('baseline', 'saturation', 'interactions', 'lab_centered')\\nresults = {n: [] for n in (*names, 'nested')}\\ncache = {}\\nfor l in labs:\\n    trn = lab != l; tst = ~trn\\n    inner = {n: [] for n in names}\\n    for hld in labs[labs != l]:\\n        a = trn & (lab != hld); b = lab == hld\\n        key = tuple(sorted((l,hld)))\\n        if key not in cache: cache[key] = fit(a)\\n        ref = metrics(predict(cache[key], a, b, 'baseline'))\\n        for name in names:\\n            inner[name].append(metrics(predict(cache[key], a, b, name))/ref)\\n    selected = min(names, key=lambda n: np.max(inner[n]))\\n    basefit = fit(trn)\\n    for name in names:\\n        results[name].append(metrics(predict(basefit, trn, tst, name)))\\n    results['nested'].append(metrics(predict(basefit, trn, tst, selected)))\\n    print('outer lab', l, 'selected', selected, 'baseline signed median strain/rate', np.median(basefit[3][tst]), np.median(basefit[4][tst]))\\nfor name, rows in results.items():\\n    print(name, 'per lab p90', np.round(rows, 6).tolist(), 'worst', np.max(rows, axis=0))\\nprint('archive prior fit count:', len(json.load(open('/tmp/hegel_continual_archive/archive_manifest.json'))), 'chamber observations:', item.get('campaign_diagnostics') is not None)\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_heredity.py && OPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 linear two-branch mechanics → H2 nested held-out-lab tests of rational saturation, feature interactions, and within-lab drift estimation; current worst-lab p90 absolute errors are 0.0222 strain and 0.0193 initial rate.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Add linear pairwise differences as new regressors\",\n      \"rejected_reason\": \"They are already in the span of the unrestricted linear columns; the audit instead tests nonlinear terms that can change predictions.\"\n    },\n    {\n      \"option\": \"Run relay, HJB, or balanced-accuracy tests\",\n      \"rejected_reason\": \"There are no relay states, PDEs, or class labels. Held-out labs and within-lab drift estimation test the relevant nuisance mechanism.\"\n    }\n  ],\n  \"rationale\": \"The audit checks whether missing nonlinear terms or between-lab drift materially worsen either deliverable. Challenger selection stays inside the outer lab folds; change the solver only if the held-out results support it.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "6496270a9d5035fc583c061b95bcf7f2e4eaf01f28f565405607acca7532290a",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45580.34,
+      "usage_known": true,
+      "prompt_tokens": 25279,
+      "cached_tokens": 10880,
+      "completion_tokens": 1826
+    }
+  ]
+}

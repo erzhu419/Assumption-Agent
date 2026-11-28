@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "856f3c95e6fd4e8ab207420374f4f0d3",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:29.536050+00:00",
+  "ended_at_utc": "2026-11-28T02:49:58.773975+00:00",
+  "request_sha256": "bd91ed927eb24bb6545971bd462a5c4da927e62531486c32790fae602b17d876",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 75985,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 38542,
+    "cached_tokens": 9344,
+    "completion_tokens": 1119
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle\\nimport numpy as np\\nspec = importlib.util.spec_from_file_location('solver', '/holdout_task/batch_solver.py')\\nm = importlib.util.module_from_spec(spec)\\nspec.loader.exec_module(m)\\nd = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))[0]['dataset']\\nc = d['calibration_load_cells']; raw = c['bridge_raw']; true = c['true_channel_loads']\\nerrs = []; loaderrs = []\\nfor fold in range(5):\\n    test = np.arange(len(raw)) % 5 == fold\\n    fit = m._bridge(dict(c, bridge_raw=raw[~test], true_channel_loads=true[~test]))\\n    dy = m._forward(true[test], fit) - raw[test]\\n    clean = np.max(abs(dy), axis=1) < 1\\n    errs.append(abs(dy[clean])); loaderrs.append(abs(m._invert(raw[test][clean], fit).sum(axis=1) - true[test][clean].sum(axis=1)))\\nprint('held-out bridge max abs per channel', np.vstack(errs).max(axis=0), 'max total load abs', np.concatenate(loaderrs).max(), 'clean rows', sum(map(len, errs)))\\nb = m._bridge(c)\\nprint('global Jacobian diagonal-dominance margin', b[1]-abs(b[2]*b[5])-abs(b[3])-abs(b[4]*b[6]))\\nfor n in ('train','test'):\\n    for k in ('past_channel_raw','hold_channel_raw'):\\n        a = d[n][k]; print(n,k,'inverse roundtrip max',np.max(abs(m._forward(m._invert(a,b),b)-a)))\\ntr, te = d['train'], d['test']; x = m._features(tr,te)[:len(tr['lab_id'])]; past, hold = m._loads(tr,b)\\ndt,t = d['past_dt'],d['eval_times']; yc = tr['strain_curves_obs']-tr['strain_0'][:,None]; yr = tr['instant_rate_obs']; labs = tr['lab_id']\\nz, theta = m._fit(past,hold,x,dt,t,yc,yr)\\nprint('full-data taus',z,'weights',theta)\\nfor lab in np.unique(labs):\\n    q = labs != lab\\n    zs, w = m._fit(past[q],hold[q],x[q],dt,t,yc[q],yr[q]); a,r = m._design(zs,past[~q],hold[~q],x[~q],dt,t)\\n    e1,e2 = abs(a@w-yc[~q]),abs(r@w-yr[~q])\\n    print('held-out lab',lab,'curve/rate median and p90',np.quantile(e1,[.5,.9]),np.quantile(e2,[.5,.9]),'taus',zs)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 cyclic cubic bridge → H2 sinusoidal diagonal and cosine-coupled opposite channels; host probe reports strain MAE 0.000804, rate MAE 0.000789, and relative tau error 2.70%.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit after the host probe\",\n      \"rejected_reason\": \"The probe passed, but it does not show whether held-out bridge errors or an individual lab dominate the remaining spectrum uncertainty.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps and round-trip residuals distinguish calibration error from an inversion failure. Leave-one-lab-out measurements test whether the material fit generalizes across labs; a large error isolated to one lab would warrant inspecting that lab before changing the shared law.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "4e9e4927246d910dad1ece0794b0515e1775bddd9f60df681ee4f7e21b7cf599",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31233.12,
+      "usage_known": true,
+      "prompt_tokens": 38542,
+      "cached_tokens": 9344,
+      "completion_tokens": 1119
+    }
+  ]
+}

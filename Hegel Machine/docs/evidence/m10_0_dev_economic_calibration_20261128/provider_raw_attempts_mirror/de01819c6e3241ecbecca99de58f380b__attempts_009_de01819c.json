@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "de01819c6e3241ecbecca99de58f380b",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:27:51.483549+00:00",
+  "ended_at_utc": "2026-11-28T02:28:19.700267+00:00",
+  "request_sha256": "6290342a89e940ea55d568cbe53a4dfc6c1df1617d232be1b945b3fa73fb1509",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46621,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26574,
+    "cached_tokens": 9344,
+    "completion_tokens": 1099
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit_calibration_banks.py <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\np = '/holdout_task/'\\nd = pickle.load(open(p + 'public_batch.pkl', 'rb'))[0]\\ns = d['study']; m = runpy.run_path(p + 'batch_solver.py')\\nS,_ = m['_responses'](s,m['_operator'](s))\\nc = s['sensor_calibration_sweeps']; X = c['ref_rosette']; Y = c['raw_rosette']; b = c['single_bank_sweeps']\\nR = np.c_[np.ones(len(X)),X]\\nT = np.zeros((len(b['bank_id']),5)); T[:,0] = 1\\nT[np.arange(len(T)),1+np.asarray(b['bank_id'])] = b['ref_signal']\\nZ = s['Z_nuisance']; P = np.eye(len(Z))-Z@np.linalg.solve(Z.T@Z+s['nuisance_ridge']*np.eye(Z.shape[1]),Z.T)\\nA = P@S; H = A.T@A+s['source_ridge']*np.eye(S.shape[1]); Q = np.linalg.qr(np.ones((S.shape[1],1)),mode='complete')[0][:,1:]\\nfor combine in (False, True):\\n    metrics = []\\n    for fold in range(6):\\n        test = np.array_split(np.arange(len(R)),5)[fold] if fold<5 else np.arange(len(R))\\n        train = np.setdiff1d(np.arange(len(R)),test) if fold<5 else np.arange(len(R))\\n        fits=[]; bank_err=[]\\n        for k in range(4):\\n            ids=np.flatnonzero(b['bank_id']==k); kt=np.arange(len(ids))%5!=fold; a=R[train]; y=Y[train,k]\\n            if combine:\\n                a=np.vstack([a,T[ids[kt]]]); y=np.r_[y,b['raw_readout'][ids[kt]]]\\n            fit=np.linalg.lstsq(a,y,rcond=None)[0]; fits.append(fit)\\n            if fold<5: bank_err.append(np.sqrt(np.mean((T[ids[~kt]]@fit-b['raw_readout'][ids[~kt]])**2)))\\n        B=np.column_stack(fits); row=[]\\n        for pulse in d['campaign_diagnostics']:\\n            observed=np.linalg.solve(B[1:].T,(pulse['y_pulse_raw'].reshape(-1,4)-B[0]).T).T.ravel(); e=observed-S@pulse['w_pulse']; shift=e.reshape(len(s['mu_shifts']),-1,4)\\n            dw=Q@np.linalg.solve(Q.T@H@Q,Q.T@A.T@P@e)\\n            row.append([np.max(np.sqrt(np.mean(shift**2,axis=(1,2)))),np.max(np.sqrt(np.mean(shift**2,axis=1))),np.linalg.norm(dw)])\\n        metrics.append([np.max(np.sqrt(np.mean((R[test]@B-Y[test])**2,axis=0))),max(bank_err,default=0),*np.max(row,axis=0)])\\n    print(('joint sweeps' if combine else 'rosette only'), 'metrics: rosette RMSE, bank RMSE, pulse shift RMSE, pulse shift/channel RMSE, projected weight sensitivity')\\n    print('  worst outer fold:',np.max(metrics[:5],axis=0)); print('  full fit, independent pulses:',metrics[-1][2:])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_calibration_banks.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Rosette-only affine calibration → test whether independent single-bank sweeps reduce the worst held-out pulse–shift RMSE of 1.75e-6 and the calibration error propagated into the weights.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Repeat nonlinear calibration or unrelated relay and classification checks\",\"rejected_reason\":\"Nonlinear calibration already worsened held-out prediction; this study has neither relay states nor class labels.\"}],\"rationale\":\"The prior audit found a repeatable channel-3 offset in tracer residuals. Test whether pooling the two measured sweep types reduces that bias and its effect on the budget-constrained weights. Keep the verified solver if the joint fit does not improve the independent pulse results.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "eb555cb0f41cb3f2d3affb1555b62eb785460b41ac3262b62ff9aea690930f76",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30243.54,
+      "usage_known": true,
+      "prompt_tokens": 26574,
+      "cached_tokens": 9344,
+      "completion_tokens": 1099
+    }
+  ]
+}

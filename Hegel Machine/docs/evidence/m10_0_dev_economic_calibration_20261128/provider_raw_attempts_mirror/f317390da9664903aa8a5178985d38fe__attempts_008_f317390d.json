@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "f317390da9664903aa8a5178985d38fe",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:27:32.990080+00:00",
+  "ended_at_utc": "2026-11-28T02:27:57.351924+00:00",
+  "request_sha256": "9b976abbcec2266d5bae2e77241a9c2b400b818631d3472ed76215e8d101ff81",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46636,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 27317,
+    "cached_tokens": 0,
+    "completion_tokens": 935
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util, pickle, numpy as np\\nsp=importlib.util.spec_from_file_location('solver','/holdout_task/batch_solver.py'); m=importlib.util.module_from_spec(sp); sp.loader.exec_module(m)\\nwith open('/holdout_task/public_batch.pkl','rb') as f: item=pickle.load(f)[0]\\ns=item['study']; sw=s['sensor_calibration_sweeps']; ref=np.asarray(sw['ref_rosette']); raw=np.asarray(sw['raw_rosette']); bank=sw['single_bank_sweeps'];\\nfor k,v in bank.items():\\n a=np.asarray(v); print('single-bank',k,a.shape,a[:3])\\nfor k in ['technical_batch','row_bank_id','Z_nuisance','aux_manifold_telemetry']:\\n if k in s:\\n  a=np.asarray(s[k]); print('study',k,a.shape, 'rank' if a.ndim==2 else 'levels',np.linalg.matrix_rank(a) if a.ndim==2 else np.unique(a))\\nS,_=m._responses(s,m._operator(s)); pulses=item['campaign_diagnostics']; x=np.array([(S@p['w_pulse']).reshape(-1,4) for p in pulses]); y=np.array([p['y_pulse_raw'].reshape(-1,4) for p in pulses]);\\nfor method in ('affine','quadratic','rational'):\\n def basis(a):\\n  base=np.column_stack((a,np.ones(len(a))))\\n  if method=='quadratic': return np.column_stack((base,*[a[:,i]*a[:,j] for i in range(4) for j in range(i,4)]))\\n  if method=='rational': return np.column_stack((base,a/(1+a*a),*[((a[:,i]-a[:,j])/(1+(a[:,i]-a[:,j])**2)) for i in range(4) for j in range(i+1,4)]))\\n  return base\\n F=basis(ref); X=basis(x.reshape(-1,4)); cal=[]; tracer=[]\\n for k in range(5):\\n  val=np.arange(len(ref))%5==k; c=np.linalg.lstsq(F[~val],raw[~val],rcond=None)[0]; cal.append(np.sqrt(np.mean((F[val]@c-raw[val])**2,axis=0)).max()); e=(X@c-y.reshape(-1,4)).reshape(len(pulses),len(s['mu_shifts']),-1,4); tracer.append(np.sqrt(np.mean(e*e,axis=2)).max())\\n print(method,'worst held-out sweep-bank, independent pulse-shift-bank RMSE',max(cal),max(tracer))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Robin leakage → sealed Neumann walls with affine calibration; worst measured pulse/shift/bank RMSE is 2.15×10⁻⁶ in calibrated units.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply a batch-centered classifier or test relay modes\",\n      \"rejected_reason\": \"The documented task is a continuous steady-state inversion with explicit nuisance regressors, not classification or hybrid control.\"\n    }\n  ],\n  \"rationale\": \"Test whether missing nonlinear sensor terms cause a repeatable calibration error on a specific bank or shift. Change the calibration only if the challenger improves both held-out sweep and independent tracer slices.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "040f41d14286fcfc78f222a17efc8f51a3894e7cf73ae44b9eb4bb122dc64b37",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26386.4,
+      "usage_known": true,
+      "prompt_tokens": 27317,
+      "cached_tokens": 0,
+      "completion_tokens": 935
+    }
+  ]
+}

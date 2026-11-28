@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "091ec4f935584f2883204b7be0804533",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:36:53.255102+00:00",
+  "ended_at_utc": "2026-11-28T02:37:32.332432+00:00",
+  "request_sha256": "8f8221fab9adacdd316d2aad6fcf51e982008f43e9f9a716fd09dc84d8b6ca7b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 46500,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25781,
+    "cached_tokens": 11904,
+    "completion_tokens": 1687
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat > /tmp/bridge_margin_audit.py <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import least_squares\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\n\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    d = pickle.load(f)[0]['dataset']\\nc = d['calibration_load_cells']\\nx, y = c['true_channel_loads'], c['bridge_raw']\\nidx = np.arange(len(x))\\np = u._fit_bridge(x, y)\\nspikes = np.linalg.norm(u._forward(x, p) - y, axis=1) > 1\\nfolds = list(np.split(idx[:16], 4)) + list(np.array_split(idx[16:], 8))\\n\\ndef response(z, q, kind, sign):\\n    base = u._forward(z, q[:12])\\n    if kind == 'base':\\n        return base\\n    contrast = z + sign * z[:, u._NEXT]\\n    if kind == 'contrast cubic':\\n        return base + q[4:8] * q[12] * contrast**3\\n    return q[:4] + (base - q[:4]) / (1 + q[12] * contrast**2)\\n\\nmodels = [('base', 0), ('contrast cubic', -1), ('contrast cubic', 1), ('rational', -1), ('rational', 1)]\\nerrors = {model: np.zeros_like(x) for model in models}\\nforward = {model: np.zeros(len(x)) for model in models}\\nfor g in folds:\\n    train = ~np.isin(idx, g)\\n    q0 = u._fit_bridge(x[train], y[train])\\n    k = g[~spikes[g]]\\n    a, b = x[train], y[train]\\n    residual = np.linalg.norm(u._forward(a, q0) - b, axis=1)\\n    clean = residual < max(8 * np.median(residual), 0.002)\\n    a, b = a[clean], b[clean]\\n    for model in models:\\n        kind, sign = model\\n        q = q0\\n        if kind != 'base':\\n            lower = np.r_[np.full(12, -np.inf), -0.04 if kind == 'rational' else -np.inf]\\n            q = least_squares(lambda w: (response(a, w, kind, sign) - b).ravel(), np.r_[q0, 0.], bounds=(lower, np.inf), x_scale='jac').x\\n        forward[model][k] = np.linalg.norm(response(x[k], q, kind, sign) - y[k], axis=1)\\n        initial = u._inverse(y[k], q0)\\n        if kind == 'base':\\n            recovered = initial\\n        else:\\n            recovered = np.array([least_squares(lambda z: response(z[None], q, kind, sign)[0] - target, start, gtol=1e-13).x for start, target in zip(initial, y[k])]).reshape(-1, 4)\\n        errors[model][k] = recovered - x[k]\\nfor model in models:\\n    e = errors[model]\\n    norms = np.linalg.norm(e, axis=1)\\n    print(model, 'worst axis/mixed/total/forward', norms[:16].max(), norms[16:].max(), np.abs(e.sum(axis=1)).max(), forward[model].max())\\n\\n# Bound row diagonal dominance of the gain-normalized Jacobian on the observed load box.\\nout = u.calibrate_upstream(d)\\nobserved = [x.ravel()]\\nfor key in ('train', 'test', 'chamber_verification_trials'):\\n    part = out.get(key)\\n    if part is not None:\\n        observed.extend(part[f].ravel() for f in ('past_channel_raw', 'hold_channel_raw'))\\nlo = min(z.min() for z in observed)\\nhi = max(z.max() for z in observed)\\ns, t, m, v = p[8:]\\n# |s + m*z| is a maximum of two affine forms. Minimize each resulting quadratic exactly.\\nassert v > 0\\nmargin = min(1 + min(m*lo, m*hi) + 3*v*z*z - abs(t) - e*(s + m*z)\\n             for e in (-1, 1) for z in (np.clip(e*m/(6*v), lo, hi),))\\nprint('load box', (lo, hi), 'Jacobian dominance margin', margin, 'bridge fields', sorted(c))\\nassert margin > 0\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/bridge_margin_audit.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Gain-normalized cyclic cubic → test signed contrast and rational corrections; the verified baseline's worst blocked inverse row error is 3.50e-4 and worst blocked total-load error is 5.72e-4.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Relay-mode, drift-operator, or within-batch classification audit\",\n      \"rejected_reason\": \"The upstream task is a continuous bridge calibration, not a relay, drift, or classification problem; the calibration rows have no batch or class labels.\"\n    }\n  ],\n  \"rationale\": \"Compare extra algebraic terms on the same real held-out sweeps and mixed loads. Promote a correction only if it meaningfully improves recovered loads. A nonpositive Jacobian margin would instead prompt a closer inversion audit across the observed load range.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "2b2a5bb0f0eb40a3f5ddf1ab48581df73e5ead5f9d8cf60ab3eaa2eb9f2fe7a8",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 43088.74,
+      "usage_known": true,
+      "prompt_tokens": 25781,
+      "cached_tokens": 11904,
+      "completion_tokens": 1687
+    }
+  ]
+}

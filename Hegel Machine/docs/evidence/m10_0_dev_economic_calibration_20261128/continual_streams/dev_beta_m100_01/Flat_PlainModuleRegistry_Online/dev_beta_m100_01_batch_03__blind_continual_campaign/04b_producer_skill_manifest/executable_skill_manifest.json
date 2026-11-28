@@ -1,0 +1,136 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_beta_m100_01_batch_03_4b8eb0a5c996",
+    "source_hash": "4b8eb0a5c9965841de6416285737bec3979bc6bc5a1bc5012caeec3888827c6c",
+    "parent_ids": [],
+    "source_episode_id": "dev_beta_m100_01_batch_03__blind_continual_campaign",
+    "task_id": "dev_beta_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [
+      {
+        "container_path": "/tmp/compare_rosette.py",
+        "archived_relpath": "producers/tmp__compare_rosette.py",
+        "bytes": 1801,
+        "sha256": "cc5f47606e0257b9dfa14a114592d241890e4caa3214aa9ec63a69b77aeb0f35"
+      },
+      {
+        "container_path": "/tmp/rosette_margin_audit.py",
+        "archived_relpath": "producers/tmp__rosette_margin_audit.py",
+        "bytes": 2967,
+        "sha256": "7ad4dd5804b9c1625d6b4524fef1bf28f8726d76be870f324ea184714cfc7a0a"
+      },
+      {
+        "container_path": "/tmp/rosette_probe.py",
+        "archived_relpath": "producers/tmp__rosette_probe.py",
+        "bytes": 1480,
+        "sha256": "5ef40a93d6fdb3f03c794fba6b6506563c6d6c2a5b3a0de43e826db7e4d23c4f"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_01_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_batch_01_solver.py",
+        "bytes": 4903,
+        "sha256": "db79633794c7a7c9cda5076a9ba10028d2e587089a6f53be2b027baeb4163c6a"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_02_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_batch_02_solver.py",
+        "bytes": 4855,
+        "sha256": "695e10864b98477e8a3ce9cc49b3d7a607e8c772d660a88f9df3b0d8477d9039"
+      },
+      {
+        "container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_s00_solver.py",
+        "archived_relpath": "producers/tmp__hegel_continual_archive__dev_beta_m100_01_s00_solver.py",
+        "bytes": 4819,
+        "sha256": "694e1ed992343f0950cf3c3077dd2640a96f328a7e515bba357cd947514194d1"
+      }
+    ],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat batch_solver.py validate_public_schema.py _verified_downstream.py public_asset_index.json; python3 - <<'PY'\nimport pickle, numpy as np\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\ndef show(x,k='',d=0):\n if isinstance(x,dict) and d<3:\n  for a,b in x.items(): show(b,k+'/'+str(a),d+1)\n elif isinstance(x,(tuple,list)):\n  print(k,type(x).__name__,len(x));\n  if len(x) and isinstance(x[0],dict) and d<3: show(x[0],k+'/0',d+1)\n elif isinstance(x,np.ndarray): print(k,x.shape,x.dtype, (float(np.nanmin(x)),float(np.nanmax(x))) if x.size and np.issubdtype(x.dtype,np.nu",
+      "cd /holdout_task; cat _verified_downstream.py; ls -lh /tmp/hegel_continual_archive; grep -nE 'rosette|saturat|calibrat|tanh|asinh' /tmp/hegel_continual_archive/*solver.py | cut -c1-190 | head -75; PYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_robust_network_assimilation.assimilate_diffusive_network | head -35; python3 - <<'PY'\nimport pickle,numpy as np\np=pickle.load(open('public_batch.pkl','rb')); print(type(p),len(p))\nfor item in p:\n s=item['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette']; print(item.keys(),s.keys()); print('cal keys'",
+      "cat >/tmp/rosette_probe.py <<'PY'\nimport pickle, numpy as np, itertools\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; y=c['raw_rosette'];\nprint('telemetry keys',list(s.get('aux_manifold_telemetry',{}))); print('single bank first',np.c_[*c['single_bank_sweeps'].values()][:15]); print('design slice nonzero counts',np.count_nonzero(x,axis=1))\ndef design(x,d,kind):\n terms=[t for k in range(d+1) for t in itertools.combinations_with_replacement(range(4),k) if kind=='full' or len(set(t))<2 or k==2]; return np.column_stack",
+      "cat > /tmp/compare_rosette.py <<'PY'\nimport itertools, pickle\nimport numpy as np\nxdata=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']['sensor_calibration_sweeps']\nx,y=xdata['ref_rosette'],xdata['raw_rosette']\nbase=[()]+[(i,) for i in range(4)]\nquad=list(itertools.combinations_with_replacement(range(4),2))\ncube=[(i,)*3 for i in range(4)]\nterms={'linear':base,'quadratic':base+quad,'compact':base+[t for t in quad if len(set(t))==2]+cube,'compact_sq':base+quad+cube,'full':base+quad+list(itertools.combinations_with_replacement(range(4),3))}\nterms['fifth']=terms['compact_sq']+[",
+      "set -e\ncd /holdout_task\ncat > upstream_transducer.py <<'PY'\n\"\"\"Robust calibration of the coupled four-channel rosette.\"\"\"\nfrom itertools import combinations\n\nimport numpy as np\n\n\n_PAIRS = tuple(combinations(range(4), 2))\n\n\ndef _basis(x):\n    return np.column_stack((np.ones(len(x)), x,\n                            *(x[:, i] * x[:, j] for i, j in _PAIRS), x**3))\n\n\ndef _fit(ref, raw):\n    a = _basis(ref)\n    coef = np.linalg.lstsq(a, raw, rcond=None)[0]\n    # Fit whole rosettes with Huber weights, then refit without EMI rows.\n    for _ in range(24):\n        r = np.linalg.norm(raw - a @ coef, axis=",
+      "set -e\ncat > /tmp/rosette_margin_audit.py <<'PY'\nimport pickle\nimport sys\nfrom itertools import combinations\n\nimport numpy as np\n\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _basis, _fit, _invert\nfrom batch_solver import solve_batch\n\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    studies = [item['study'] for item in pickle.load(f)]\n\nfor s in studies:\n    sweep = s['sensor_calibration_sweeps']\n    x, y = sweep['ref_rosette'], sweep['raw_rosette']\n    print('study and sweep metadata keys:', sorted(s), sorted(sweep))\n    # Gross spikes are excluded from scorin",
+      "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstream_transducer import _basis, _fit, _invert\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\n    items = pickle.load(f)\nfor item in items:\n    s = item['study']; c = s['sensor_calibration_sweeps']\n    x, y = c['ref_rosette'], c['raw_rosette']\n    clean = np.max(abs(y), axis=1) < 5\n    mixed = np.flatnonzero(np.count_nonzero(x, axis=1) > 1)\n    test = mi"
+    ],
+    "retained_code_agent_model": {
+      "retained_model": "tmp__hegel_continual_archive__dev_beta_m100_01_batch_01_solver.py",
+      "primary_producer_container_path": "/tmp/hegel_continual_archive/dev_beta_m100_01_batch_01_solver.py",
+      "selected_channels": [
+        "m100_beta"
+      ],
+      "training_mse": null,
+      "training_mse_status": "not_applicable_general_frontier_task"
+    },
+    "binding_status": "opaque_full_producer_retained"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 204,
+        "sha256": "d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca",
+        "content_addressed_ref": "content_addressed_blobs/d045905dc8467b23ac84e45f40f1a2feefd33f67168ef410f35dcaa24177c5ca.py"
+      },
+      {
+        "declared_root": "/holdout_task/upstream_transducer.py",
+        "filename": "upstream_transducer.py",
+        "bytes": 3602,
+        "sha256": "979cef32ea788eff0bce8af21fc044e55f648b2d119707efb679f882e524d980",
+        "content_addressed_ref": "content_addressed_blobs/979cef32ea788eff0bce8af21fc044e55f648b2d119707efb679f882e524d980.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py",
+      "/holdout_task/upstream_transducer.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "mori_zwanzig_or_stage_history",
+    "supports_multiscale_pi_fold": true
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "4b8eb0a5c9965841de6416285737bec3979bc6bc5a1bc5012caeec3888827c6c",
+      "verified_post_package": true,
+      "verified_turn": 9,
+      "verification_command": "set -e\ncd /holdout_task\nOPENBLAS_NUM_THREADS=1 python3 validate_public_schema.py /holdout_task/batch_solver.py\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport pickle, sys\nimport numpy as np\nsys.path.insert(0, '/holdout_task')\nfrom upstrea",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "4b8eb0a5c9965841de6416285737bec3979bc6bc5a1bc5012caeec3888827c6c",
+        "expected_candidate_sha256": "4b8eb0a5c9965841de6416285737bec3979bc6bc5a1bc5012caeec3888827c6c",
+        "computed_candidate_sha256": "4b8eb0a5c9965841de6416285737bec3979bc6bc5a1bc5012caeec3888827c6c",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 204
+          },
+          {
+            "path": "/holdout_task/upstream_transducer.py",
+            "bytes": 3602
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_4b8eb0a5"
+    }
+  },
+  "structure": {
+    "full_producer_count": 6,
+    "reusable_ast_function_closures": []
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "9534ef30cbd9431aa01a108ea2181432",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:55:07.606899+00:00",
+  "ended_at_utc": "2026-11-28T02:55:36.655361+00:00",
+  "request_sha256": "2c5dd682590dffa3fab1c42b9e7ca0084965e5217f2c77e937c5021926c35455",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 44626,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26053,
+    "cached_tokens": 9344,
+    "completion_tokens": 1142
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport sys,pickle,numpy as np\\nsys.path.insert(0,'/tmp')\\nimport chamber_baseline as b\\nfrom _verified_upstream import calibrate_upstream\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]\\nds=calibrate_upstream(dict(item['dataset'],chamber_verification_trials=item['campaign_diagnostics']))\\ntr,te,di=[ds[k] for k in ('train','test','chamber_verification_trials')]\\ndt,t=[ds[k] for k in ('past_dt','eval_times')]; n=len(tr['lab_id']); x=b._features(tr,te)\\ntau,th=b._fit(*b._loads(tr),x[:n],dt,t,b._observations(tr)); print('tau, theta:',tau,th)\\nB=b._basis(tau,t); print('basis singular values',np.linalg.svd(B,compute_uv=False))\\nfor name,p in [('train',tr),('diag',di)]:\\n y=b._observations(p); obs=np.isfinite(y)\\n print(name,'finite',obs.sum(),'response quantiles',np.nanquantile(y,[0,.05,.5,.95,1]))\\n if name=='train': xx=x[:n]\\n else:\\n  xx=di['coupon_features_raw'].copy(); refs=np.r_[tr['ref_coupons'],te['ref_coupons']]; labs=np.r_[tr['lab_id'],te['lab_id']]\\n  for lab in np.unique(labs):\\n   m=di['lab_id']==lab; r=refs[labs==lab]; xx[m]=(xx[m]-np.median(r.mean(0)))/np.median(r.std(0))\\n  xx=np.where(np.isfinite(xx),xx,np.mean(x,0))\\n past,hold=b._loads(p); gap=b._gap(tau,past,hold,dt); score=th[2]+xx@th[3:]; c=np.c_[gap*th[:2],score]; res=y-c@B.T\\n print('res abs quantiles by mode',np.nanquantile(abs(res[:,:-1]),[.5,.9,1]),np.nanquantile(abs(res[:,-1]),[.5,.9,1]))\\n coef=np.array([np.linalg.lstsq(B[m],row[m],rcond=None)[0] for row,m in zip(res,obs)]); e=res-coef@B.T\\n print('basis remainder median abs by time/rate',np.round(np.nanmedian(abs(e),axis=0),4))\\n if name=='diag':\\n  print('diag NaNs features',np.isnan(di['coupon_features_raw']).sum(axis=0))\\n  print('lab stratum hold gap0 gap1 score dx0 dx1 dx2 observed rate delta')\\n  print(np.round(np.c_[di['lab_id'],di['stratum'],hold,gap,score,coef,res[:,-1]],4))\\n  Q=np.c_[np.ones(len(hold)),hold,past,xx,score,gap]; labs=['1','hold','p0','p1','p2','p3','p4','p5','x0','x1','x2','x3','score','g0','g1']; print('correlations:',[(k,np.round(np.corrcoef(v,coef.T)[0,1:],2).tolist()) for k,v in zip(labs[1:],Q.T[1:])]); print('median signed residual per time/rate',np.round(np.nanmedian(res,0),4)); print('basis-only error percentiles',np.nanquantile(abs(e),[.5,.9,.99]))\\nPY\\ncat batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived slope-preserving amplitude correction → H2 campaign-specific chamber law; 24 diagnostic coupons available, held-out error not yet measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Reuse the archived chamber coefficients\",\n      \"rejected_reason\": \"The current campaign has paired verification measurements that can test whether the archived law transfers.\"\n    }\n  ],\n  \"rationale\": \"Fit the material on train only, then project calibrated chamber residuals onto the documented time basis. The residual shape and independently observed initial rate will show whether an amplitude correction suffices or whether the chamber changes the time dependence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "502e4382b443da08a2d4b4939134a70b5536f2ce57d23e2fdea361fcaba64192",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 31051.64,
+      "usage_known": true,
+      "prompt_tokens": 26053,
+      "cached_tokens": 9344,
+      "completion_tokens": 1142
+    }
+  ]
+}

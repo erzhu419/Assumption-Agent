@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a2a32914056a4ff38b67730093186a5f",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:37:29.655317+00:00",
+  "ended_at_utc": "2026-11-28T02:37:51.770541+00:00",
+  "request_sha256": "48d403a616b032a81876dfb9393e71c1c913b26747126350dc3458423335efd4",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 46098,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26714,
+    "cached_tokens": 9344,
+    "completion_tokens": 691
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/bridge_probe.py <<'PY'\\nimport pickle,itertools,numpy as np\\nfrom scipy.optimize import least_squares\\nD=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=D['calibration_load_cells']; X=c['true_channel_loads']; Y=c['bridge_raw']; print('sweep fields',list(c['single_channel_sweeps'])); print('specimen ranges',[(p,k, np.round(D[p][k].reshape(-1,4).min(0),2).tolist(),np.round(D[p][k].reshape(-1,4).max(0),2).tolist()) for p in ['train','test'] for k in ['past_channel_raw','hold_channel_raw']]); terms=[s for k in range(4) for s in itertools.combinations_with_replacement(range(4),k)]\\nfor j in range(4):\\n for model in ('archive','own_poly','all_cross','full3'):\\n  t=[s for s in terms if len(s)<=1 or (model=='full3') or s==(j,j,j) or s==tuple(sorted((j,(j+1)%4))) or (model in ('own_poly','all_cross') and s==(j,j)) or (model=='all_cross' and len(s)==2)]\\n  a=np.column_stack([np.prod(X[:,s],axis=1) for s in t]); y=Y[:,j]; p=least_squares(lambda b:a@b-y,np.linalg.lstsq(a,y,rcond=None)[0],jac=lambda b:a.copy(),loss='soft_l1',f_scale=.003).x; e=a@p-y; clean=abs(e)<1; p=np.linalg.lstsq(a[clean],y[clean],rcond=None)[0]; e=(a@p-y)[clean]; print(j,model,clean.sum(),np.round(np.quantile(abs(e),[.5,.9,1]),6),[(s,round(v,5)) for s,v in zip(t,p) if len(s)>1 and abs(v)>.008])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/bridge_probe.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1: archived forward bridge → H2: retain or extend its nonlinear terms using clean calibration residuals; affine worst-fold total-load RMSE is 0.776.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"The previous probe returned the design array directly as a Jacobian, which SciPy’s robust loss can rescale in place. Give SciPy a copy so the residuals can actually distinguish a missing bridge term from a corrupted fit.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "12bad4bcde43391e7a8d5cc1aa88c313d4fef3b3056b0e398940abc7a33abb55",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22067.91,
+      "usage_known": true,
+      "prompt_tokens": 26714,
+      "cached_tokens": 9344,
+      "completion_tokens": 691
+    }
+  ]
+}

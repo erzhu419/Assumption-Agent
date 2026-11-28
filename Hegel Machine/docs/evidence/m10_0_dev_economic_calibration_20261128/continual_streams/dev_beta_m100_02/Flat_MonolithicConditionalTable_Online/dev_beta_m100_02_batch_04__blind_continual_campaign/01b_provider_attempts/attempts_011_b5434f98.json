@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b5434f9818664adfa87436701eb4ab73",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:44:39.875495+00:00",
+  "ended_at_utc": "2026-11-28T02:45:02.656619+00:00",
+  "request_sha256": "1e3df51a730235e0c8e73f40b727b9f92a3cd568231d9da49720456e38c1c021",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 57938,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30484,
+    "cached_tokens": 9344,
+    "completion_tokens": 842
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nsed -n '/^def _raw/,/^def _box_simplex/p' /holdout_task/batch_solver.py\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, runpy\\nimport numpy as np\\nm = runpy.run_path('/holdout_task/batch_solver.py')\\nitems = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nprint('public measurement cohorts', len(items))\\nfor item in items:\\n    s = item['study']; Z = np.asarray(s['Z_nuisance']); S, _ = m['_responses'](s, m['_operator'](s))\\n    project = lambda a: a - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T @ a)\\n    for k, pulse in enumerate(item.get('campaign_diagnostics') or []):\\n        e = S @ pulse['w_pulse'] - m['_calibrate'](dict(s, y_obs_raw=pulse['y_pulse_raw']))\\n        print('pulse', k, 'unprojected/projected worst shift-channel RMSE', *[float(np.sqrt(np.mean(a.reshape(len(s['mu_shifts']), -1, 4)**2, axis=1)).max()) for a in (e, project(e))])\\n    n = S.shape[1]; T = np.linalg.qr(np.eye(n)[:, :-1] - np.eye(n)[:, [-1]])[0]; ridge = s['source_ridge']\\n    for label, A in [('raw design', S), ('profiled design', project(S))]:\\n        sv = np.linalg.svd(A @ T, compute_uv=False)\\n        print(label, 'simplex tangent singular extremes', sv[-1], sv[0], 'regularized curvature floor', sv[-1]**2 + ridge)\\n    c = s['sensor_calibration_sweeps']; print('reference sweep range by channel', np.min(c['ref_rosette'], axis=0), np.max(c['ref_rosette'], axis=0))\\n    y = m['_calibrate'](s).reshape(-1, 4); print('calibrated observation range by channel', y.min(axis=0), y.max(axis=0))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Periodic x and sealed y with robust polynomial calibration → audit calibration structure and nuisance identifiability; worst public pulse RMSE is 8.21e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Apply a batch-classification or relay-mode audit\",\n      \"rejected_reason\": \"The public task is a steady continuous inverse problem with no class labels or relay states; nuisance projection and pulse slices test the relevant failure modes.\"\n    }\n  ],\n  \"rationale\": \"The pooled pulse score could hide a shift or channel mismatch. Compare each slice before and after nuisance projection, check whether projection removes identifiable source directions, and inspect sweep coverage and the fitted basis before testing any calibration extension.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "b76f1d5a9a8c9cbda0b9d935a0106f84ce99a0bee6b4c1f722ca1fb961efcdbc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 24748.62,
+      "usage_known": true,
+      "prompt_tokens": 30484,
+      "cached_tokens": 9344,
+      "completion_tokens": 842
+    }
+  ]
+}

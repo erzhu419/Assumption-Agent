@@ -1,0 +1,78 @@
+{
+  "schema_version": "ExecutableSkillManifest_v1",
+  "identity": {
+    "artifact_id": "skill_dev_beta_m100_01_s00_a33112b17d40",
+    "source_hash": "a33112b17d4089bac1a6942a0a4f3b2d8af7022276f34f422509e87124aa4304",
+    "parent_ids": [],
+    "source_episode_id": "dev_beta_m100_01",
+    "task_id": "dev_beta_m100_01_s00__blind_continual_campaign",
+    "wormhole_family": "m100_beta"
+  },
+  "producer": {
+    "sources": [],
+    "build_and_invoke_commands": [
+      "cd /holdout_task && cat validate_public_schema.py public_asset_index.json; ls -lh /tmp/hegel_continual_archive; for f in /tmp/hegel_continual_archive/*.json; do echo \"--- $f\"; head -c 7500 \"$f\"; echo; done; python3 - <<'PY'\nimport pickle, numpy as np\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb'))\nprint('items',len(items),'keys',items[0].keys())\nfor k,v in items[0]['study'].items():\n print(k,type(v).__name__, getattr(v,'shape',None), list(v) if isinstance(v,dict) else (str(v)[:180] if np.size(v)<=12 else ''))\nv=items[0].get('campaign_diagnostics'); print('diagnostics',None if v ",
+      "python3 - <<'PY'\nimport json,pickle,numpy as np,os\np='/tmp/hegel_continual_archive/'\nfor f in sorted(os.listdir(p)):\n if not f.endswith('.json'): continue\n d=json.load(open(p+f)); print('\\n',f)\n def inspect(d,depth=0):\n  if isinstance(d,dict):\n   for k,v in d.items():\n    print(' '*depth,k,end=': '); inspect(v,depth+1)\n  elif isinstance(d,list) and d and isinstance(d[0],dict):\n   print('records',len(d)); inspect(d[-1],depth+1)\n  elif isinstance(d,list) and len(d)>12: print('array',np.shape(d),'first',str(d[:2])[:350])\n  else: print(str(d)[:900])\n inspect(d)\ns=pickle.load(open('/holdout_task/pu",
+      "cat > /holdout_task/batch_solver.py <<'PY'\nimport numpy as np\nfrom scipy import sparse\nfrom scipy.sparse.linalg import splu\nfrom scipy.optimize import minimize\n\n\ndef _axis(kap, vel, h, robin):\n    # Midpoint face diffusivities and row-local upwind velocities.\n    n = len(kap)\n    faces = (kap[1:] + kap[:-1]) / (2 * h*h)\n    left = -faces - np.maximum(vel[1:], 0) / h\n    right = -faces - np.maximum(-vel[:-1], 0) / h\n    left[-1] = -kap[-1] / (h*h)\n    right[0] = -kap[0] / (h*h)\n    diag = -np.r_[0., left] - np.r_[right, 0.]\n    diag[[0, n-1]] += robin / h\n    return sparse.diags((left, diag, ri",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'\nspec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; nx,ny=s['nx'],s['ny']\ndef axis(k,v,h,r):\n n=len(k); a=np.zeros((n,n)); a[0,0]=k[0]/h**2+r/h; a[0,1]=-k[0]/h**2; a[-1,-1]=k[-1]/h**2+r/h; a[-1,-2]=-k[-1]/h**2\n for i in range(1,n-1):\n  km=(k[i]+k[i-1])/2; kp=(k[i]+k[i+1])/2\n  a[i,i-1]=-km/h**2-max(v[i],0)/h; a[i,i+1]=-kp/h**2-max(-v[i],0)/",
+      "cat /holdout_task/public_asset_index.json; OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\nfrom scipy import sparse\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; nx,ny=s['nx'],s['ny']; xy=s['sensor_ij']; Z=s['Z_nuisance']; y=m._calibrate(s); rng=np.random.default_rng(5)\nsw=s['sensor_calibration_sweeps']; x,raw=sw['ref_rosette'],sw['raw_rosette']; ii,jj=np.triu_indices(4); a=np.c_",
+      "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\ns=pickle.load(open(p+'public_batch.pkl','rb'))[0]['study']; sw=s['sensor_calibration_sweeps']; x,y=sw['ref_rosette'],sw['raw_rosette']; banks=sw['single_bank_sweeps']; j=np.asarray(banks['bank_id']).ravel(); xr=np.asarray(banks['ref_signal']).ravel(); yr=np.asarray(banks['raw_readout']).ravel(); D=np.c_[np.ones(len(x)),x]; coef=np.linalg.lstsq(D,"
+    ],
+    "retained_code_agent_model": null,
+    "binding_status": "missing_producer"
+  },
+  "state": {
+    "artifact_blob_refs": [
+      {
+        "declared_root": "/holdout_task/batch_solver.py",
+        "filename": "batch_solver.py",
+        "bytes": 4819,
+        "sha256": "694e1ed992343f0950cf3c3077dd2640a96f328a7e515bba357cd947514194d1",
+        "content_addressed_ref": "content_addressed_blobs/694e1ed992343f0950cf3c3077dd2640a96f328a7e515bba357cd947514194d1.py"
+      }
+    ],
+    "refit_recipe": "Execute archived producer script against public container data paths."
+  },
+  "interface": {
+    "declared_artifacts": [
+      "/holdout_task/batch_solver.py"
+    ],
+    "exported_pure_functions": []
+  },
+  "temporal": {
+    "temporal_readout_mode": "present_or_adiabatic_ode",
+    "supports_multiscale_pi_fold": false
+  },
+  "conditions": {
+    "wormhole_family": "m100_beta",
+    "unresolved_assumptions": []
+  },
+  "evidence": {
+    "candidate_verification_receipt": {
+      "candidate_sha256": "a33112b17d4089bac1a6942a0a4f3b2d8af7022276f34f422509e87124aa4304",
+      "verified_post_package": true,
+      "verified_turn": 8,
+      "verification_command": "OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\nimport importlib.util, pickle, numpy as np\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('candidate',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exe",
+      "contract_check": {
+        "accepted": true,
+        "candidate_sha256": "a33112b17d4089bac1a6942a0a4f3b2d8af7022276f34f422509e87124aa4304",
+        "expected_candidate_sha256": "a33112b17d4089bac1a6942a0a4f3b2d8af7022276f34f422509e87124aa4304",
+        "computed_candidate_sha256": "a33112b17d4089bac1a6942a0a4f3b2d8af7022276f34f422509e87124aa4304",
+        "digest_verified": true,
+        "validator_sha256_16": "f7e1e4b183da26fe",
+        "reasons": [],
+        "checked_files": [
+          {
+            "path": "/holdout_task/batch_solver.py",
+            "bytes": 4819
+          }
+        ]
+      },
+      "archive_path": "/tmp/.hegel_candidate_archive/v01_a33112b1"
+    }
+  },
+  "structure": {
+    "full_producer_count": 0,
+    "reusable_ast_function_closures": []
+  }
+}

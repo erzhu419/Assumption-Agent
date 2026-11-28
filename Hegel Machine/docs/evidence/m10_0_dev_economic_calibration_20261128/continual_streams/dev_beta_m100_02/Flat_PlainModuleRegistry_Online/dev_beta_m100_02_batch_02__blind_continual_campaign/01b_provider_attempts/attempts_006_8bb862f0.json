@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8bb862f0e5754e789a90027223a28b22",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_PlainModuleRegistry_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:34:26.859288+00:00",
+  "ended_at_utc": "2026-11-28T02:35:03.140118+00:00",
+  "request_sha256": "8a4239420e0ff00729e39a1fdde8fab2ea2e0fbfd806fb137e0e6a0f9d0d6376",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39431,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25467,
+    "cached_tokens": 5504,
+    "completion_tokens": 1424
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nimport batch_solver as batch\\nimport _verified_downstream as dn\\nitems = pickle.load(open('/holdout_task/public_batch.pkl', 'rb'))\\nrng = np.random.default_rng(42)\\nworst = {'central': 0., 'edge': 0., 'emi': 0., 'obs': 0., 'pulse': 0.}\\nfor item in items:\\n    st = item['study']; sw = st['sensor_calibration_sweeps']; x = sw['ref_rosette']; y = sw['raw_rosette']\\n    # Physically implausible raw magnitudes are EMI, not inverse ground truth.\\n    clean = np.linalg.norm(y, axis=1) < 8\\n    edge = np.max(abs(x), axis=1) >= np.quantile(np.max(abs(x), axis=1), .8)\\n    for hold in np.array_split(rng.permutation(len(x)), 5):\\n        train = np.ones(len(x), dtype=bool); train[hold] = False\\n        coef = up._fit(x[train], y[train])\\n        for name, sel in [('edge', edge), ('central', ~edge)]:\\n            idx = hold[(sel & clean)[hold]]\\n            if len(idx):\\n                err = np.linalg.norm(up._inverse(y[idx], coef)-x[idx], axis=1).max()\\n                worst[name] = max(worst[name], err)\\n    out = up.calibrate_upstream(st)\\n    coef = up._fit(x, y)\\n    for name, before, after in [('obs', st['y_obs_raw'], out['y_obs_raw'])] + [('pulse', a['y_pulse_raw'], b['y_pulse_raw']) for a,b in zip(st.get('reference_tracer_pulses') or [], out.get('reference_tracer_pulses') or []) if a is not None and a.get('y_pulse_raw') is not None]:\\n        assert np.shape(before) == after.shape and np.isfinite(after).all()\\n        r = np.max(abs(up._design(after.reshape(-1, 4)) @ coef - np.asarray(before).reshape(-1, 4)), initial=0)\\n        worst[name] = max(worst[name], r)\\n    np.testing.assert_array_equal(out['sensor_calibration_sweeps']['raw_rosette'], x)\\n    np.testing.assert_array_equal(out['sensor_calibration_sweeps']['single_bank_sweeps']['raw_readout'], sw['single_bank_sweeps']['ref_signal'])\\n    # Re-encode the calibrated study using a different coupled transducer and gross row spikes.\\n    c = np.zeros((15,4)); c[0] = [.08,-.043,.021,-.094]; c[1:5] = np.roll(coef[1:5], (1,1), axis=(0,1)); c[5:11] = .5*coef[5:11]; c[11:] = .8*coef[11:]\\n    def encode(a):\\n        a = np.asarray(a); return (up._design(a.reshape(-1,4)) @ c).reshape(a.shape)\\n    z = encode(x); ids = rng.choice(len(z), max(1,len(z)//10), replace=False); z[ids] += rng.choice([-1,1], (len(ids),4))*20\\n    synth = dict(out, sensor_calibration_sweeps=dict(sw, raw_rosette=z), y_obs_raw=encode(out['y_obs_raw']), reference_tracer_pulses=[None, {'y_pulse_raw': None}, {'y_pulse_raw': encode(x[edge])}])\\n    got = up.calibrate_upstream(synth)\\n    assert got['reference_tracer_pulses'][:2] == synth['reference_tracer_pulses'][:2]\\n    assert up.calibrate_upstream(dict(synth, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\n    np.testing.assert_array_equal(synth['sensor_calibration_sweeps']['raw_rosette'], z)\\n    worst['emi'] = max(worst['emi'], np.max(abs(got['reference_tracer_pulses'][2]['y_pulse_raw'] - x[edge])), np.max(abs(got['y_obs_raw']-out['y_obs_raw'])))\\n    expected = dn.solve_downstream(out); actual = batch.solve_batch(synth)\\n    assert actual.keys() == expected.keys()\\n    for k in expected:\\n        np.testing.assert_allclose(actual[k], expected[k], rtol=1e-7, atol=1e-8, err_msg=k)\\nprint(f'{len(items)} public studies; worst errors: {worst}')\\nassert max(worst['edge'], worst['central']) < 1e-4\\nassert max(worst['emi'], worst['obs'], worst['pulse']) < 1e-8\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 affine coupling → H2 pairwise interactions plus channel-wise cubics; worst held-out clean-row forward error is 3.8e-5 and the public schema gate passed.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The schema gate cannot detect inverse error. Test the installed module in isolation on held-out edge readings, actual observations and pulses, and a re-encoded study with 10% gross EMI; a failure would identify whether to revise the fit, inverse, or field handling.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "e5230e6abd19d2d217878a223e25b0e083c2482ba3c50598edb8ea52485c7811",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 38208.3,
+      "usage_known": true,
+      "prompt_tokens": 25467,
+      "cached_tokens": 5504,
+      "completion_tokens": 1424
+    }
+  ]
+}

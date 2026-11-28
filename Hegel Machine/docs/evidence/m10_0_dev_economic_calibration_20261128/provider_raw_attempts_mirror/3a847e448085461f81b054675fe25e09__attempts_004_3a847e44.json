@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "3a847e448085461f81b054675fe25e09",
+  "call_seq": 4,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:06.280929+00:00",
+  "ended_at_utc": "2026-11-28T02:41:34.030333+00:00",
+  "request_sha256": "acc2f7c9c02701c735cf74c173695cc5504a842f455b64b402a658311796e317",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 31841,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 20833,
+    "cached_tokens": 9344,
+    "completion_tokens": 1055
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"OPENBLAS_NUM_THREADS=1 python3 - <<'PY'\\nimport pickle,sys,numpy as np\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_alpha_m100_02_batch_03_solver as s\\np=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]; d=p['dataset']; tr,te,g=d['train'],d['test'],p['campaign_diagnostics']; dt,t=d['past_dt'],d['eval_times']; cal=d['calibration_load_cells']; x,y=cal['true_channel_loads'],cal['bridge_raw']; c=s._bridge(cal)\\nprint('bridge coefficients',c.round(5)); print('ranges applied',x.min(0),x.max(0)); print('sweep shapes',[(k,getattr(v,'shape',list(v) if isinstance(v,dict) else type(v))) for k,v in cal['single_channel_sweeps'].items()]);\\nfor j in range(4):\\n A=np.c_[np.ones(len(x)),x,x[:,j]**3,x[:,j]*x[:,(j+1)%4]]; print('cal abs resid',j,np.quantile(abs(A@c[:,j]-y[:,j]),[.5,.8,.9,.95,1]))\\na,b=s._features(tr,te); ta,th=s._fit(s._prepare(tr,a,c),dt,t,tr['strain_curves_obs']-tr['strain_0'][:,None],tr['instant_rate_obs']); print('intrinsic',ta,th)\\nfor part,xx in [(tr,a),(g,s._features({k:np.concatenate((tr[k],te[k])) for k in ('lab_id','stratum','coupon_features_raw','ref_coupons')},g)[1])]:\\n ph,h,f=s._prepare(part,xx,c); cur,r=s._design(np.log(ta),(ph,h,f),dt,t); obs=part['strain_curves_obs']-part['strain_0'][:,None]; slope=part['instant_rate_obs']; reset,rr=s._chamber((ph,h,f),ta,th,t); print('residual abs .5/.9/max curve,rate');\\n for C,R in [(cur@th,r@th),(reset,rr)]: print(np.quantile(abs(C-obs),[.5,.9,1]),np.quantile(abs(R-slope),[.5,.9,1]))\\n if part is g:\\n  E=-np.expm1(-t[:,None]/ta); B=np.c_[E,t]; co=np.linalg.lstsq(B,obs.T,rcond=None)[0].T; print('diagnostic generic exponential residual',np.quantile(abs(co@B.T-obs),[.5,.9,1])); print('rates predicted from curve',np.quantile(abs(co@np.r_[1/ta,1]-slope),[.5,.9,1])); print('coeff ranges',np.quantile(co,[0,.5,1],axis=0)); print('drift ranges',np.quantile(f@th[2:],[0,.5,1])); print('groups',np.unique(np.c_[part['lab_id'],part['stratum']],axis=0,return_counts=True)); print('aux train/test',[(z['aux_chamber_telemetry'].min(0),z['aux_chamber_telemetry'].max(0)) for z in (tr,te)])\\nPY\\nfor f in /tmp/hegel_continual_archive/*solver.py; do echo \\\"=== $f\\\"; tail -32 \\\"$f\\\"; done\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --search 'viscoelastic relaxation' 2>&1 | head -12\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 (archived bridge and chamber reset) -> H2 (current-campaign bridge and chamber law); verification-coupon residuals are pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit an unrestricted chamber model immediately\",\"rejected_reason\":\"Bridge misspecification could mimic chamber changes, and the archived exponential basis may already explain the verification curves.\"}],\"rationale\":\"Check calibration residuals before interpreting chamber errors. Compare the benchtop and archived reset predictions against both observed curves and initial rates; if both fail, the free exponential fit will help locate the missing term.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_004_att0.json",
+      "response_sha256": "0a971ca9ea088101fa3a30a6a68a32eecaef27655c30697debf72cd5dc03be0d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29721.79,
+      "usage_known": true,
+      "prompt_tokens": 20833,
+      "cached_tokens": 9344,
+      "completion_tokens": 1055
+    }
+  ]
+}

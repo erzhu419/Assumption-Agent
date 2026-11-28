@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "aafcb059c9e347f0bf9f4bbd5a20bddb",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_01__Flat_MonolithicConditionalTable_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_01_batch_04__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:28.617386+00:00",
+  "ended_at_utc": "2026-11-28T02:44:09.017350+00:00",
+  "request_sha256": "4eae727032d6cdb70dbd6e0f4e5ae5ae6398f82f508537a1e48186761dab92c0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 41845,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26293,
+    "cached_tokens": 9344,
+    "completion_tokens": 1636
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cat >/tmp/diagnose_chamber.py <<'PY'\\nimport sys,pickle,itertools\\nimport numpy as np\\nfrom scipy import sparse\\nfrom scipy.optimize import root\\nsys.path.insert(0,'/tmp/hegel_continual_archive')\\nimport dev_beta_m100_01_batch_03_solver as prev\\nimport dev_beta_m100_01_batch_02_solver as periodic\\nimport dev_beta_m100_01_batch_01_solver as reflecting\\ns=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['study']; c=s['sensor_calibration_sweeps']; x=c['ref_rosette']; raw=c['raw_rosette']; bank=c['single_bank_sweeps']\\nexps=[p for p in itertools.product(range(4),repeat=4) if sum(p)<=3]; exps.sort(key=lambda p:(sum(p),p))\\nold=[(0,0,0,0),(1,0,0,0),(0,1,0,0),(0,0,0,1),(1,1,0,0),(3,0,0,0)]\\ndef design(x,j,p): return np.prod(np.roll(x,-j,axis=1)[:,None,:]**np.array(p)[None,:,:],axis=2)\\ndef fit(A,b):\\n f=np.linalg.lstsq(A,b,rcond=None)[0]\\n for _ in range(15):\\n  e=b-A@f; scale=max(1e-6,1.4826*np.median(abs(e-np.median(e)))); q=1/np.hypot(1,e/(2.5*scale)); f=np.linalg.lstsq(A*q[:,None],b*q,rcond=None)[0]\\n e=b-A@f; keep=abs(e-np.median(e))<max(2e-4,8*scale)\\n return np.linalg.lstsq(A[keep],b[keep],rcond=None)[0],keep\\ncoefs={}\\nfor name,p in [('archived',old),('full',exps)]:\\n fs=[]\\n for j in range(4):\\n  m=bank['bank_id']==j; bx=np.zeros((sum(m),4)); bx[:,j]=bank['ref_signal'][m]; A=design(np.vstack((x,bx)),j,p); b=np.r_[raw[:,j],bank['raw_readout'][m]]\\n  f,k=fit(A,b); pred=np.empty(len(b));\\n  for fold in range(5):\\n   train=np.arange(len(b))%5!=fold; ff,_=fit(A[train],b[train]); pred[~train]=A[~train]@ff\\n  print(name,j,'inliers',sum(k),'OOF clean RMS/max',np.sqrt(np.mean((b-pred)[k]**2)),max(abs((b-pred)[k])), 'terms',[(a,round(v,6)) for a,v in zip(p,f) if abs(v)>0.001]); fs.append(f)\\n coefs[name]=(fs,p)\\n\\ndef model(i,j):\\n n=s['n'+j]; h=s['L'+j]/(n-1); a=(s['kappa_'+j],s['vel_'+j],h)\\n return prev._axis(*a,s['robin_'+j]) if i=='O' else reflecting._axis(*a) if i=='R' else periodic._axis(*a)\\nZ=s['Z_nuisance']; nr=s['nuisance_ridge']; n=len(Z); ij=s['sensor_ij']; wall=np.tile((ij[:,0]==0)|(ij[:,0]==s['nx']-1)|(ij[:,1]==0)|(ij[:,1]==s['ny']-1),len(s['mu_shifts'])); groups=np.arange(n)//4\\nfor name,(fs,p) in coefs.items():\\n def fwd(t): return np.array([(design(t[None,:],j,p)@fs[j])[0] for j in range(4)])\\n y=[]; errs=[]\\n for obs in s['y_obs_raw'].reshape(-1,4):\\n  r=root(lambda t:fwd(t)-obs,obs,tol=1e-11); y.extend(r.x); errs.append(max(abs(r.fun)))\\n y=np.array(y); print('inverse',name,max(errs)); results=[]\\n for a,b in itertools.product('ORP',repeat=2):\\n  L=sparse.kron(sparse.eye(s['ny']),model(a,'x'),format='csc')+sparse.kron(model(b,'y'),sparse.eye(s['nx']),format='csc')+sparse.diags(s['V_reaction_2d'].ravel(order='F'),format='csc'); S,U=prev._forward(s,L)\\n  pred=np.empty(n)\\n  for group in np.unique(groups):\\n   m=groups!=group; z=Z[m]; v=np.c_[S[m],y[m]]; v=v-z@np.linalg.solve(z.T@z+nr*np.eye(z.shape[1]),z.T@v); w,nu=prev._qp(v[:,:-1],v[:,-1],s['source_ridge'],s['u_box'],s['total_budget']); gam=np.linalg.solve(z.T@z+nr*np.eye(z.shape[1]),z.T@(y[m]-S[m]@w)); pred[~m]=S[~m]@w+Z[~m]@gam\\n  e=y-pred; results.append((np.sqrt(np.mean(e**2)),a+b,np.sqrt(np.mean(e[wall]**2)),np.sqrt(np.mean(e[~wall]**2)),[round(np.sqrt(np.mean(z*z)),5) for z in np.split(e,3)]))\\n print('LO rosette RMS, candidate, wall, interior, shifts:',sorted(results))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/diagnose_chamber.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Archived cubic calibration and wall laws -> compare with a complete cubic basis and independent x/y wall choices; held-out error is pending.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Copy the last campaign solver\",\n      \"rejected_reason\": \"Its wall law and calibration basis have not been validated on this campaign.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps will detect omitted calibration terms and determine whether to retain the archived basis. Holding out entire rosettes while refitting source weights and nuisance coefficients will test whether a wall law predicts new measurements rather than merely fitting observed ones.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "79ea6de01d16af7be08a9208aee1210a53c4ae6958c2e744acf6d267c08fcb04",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 42443.46,
+      "usage_known": true,
+      "prompt_tokens": 26293,
+      "cached_tokens": 9344,
+      "completion_tokens": 1636
+    }
+  ]
+}

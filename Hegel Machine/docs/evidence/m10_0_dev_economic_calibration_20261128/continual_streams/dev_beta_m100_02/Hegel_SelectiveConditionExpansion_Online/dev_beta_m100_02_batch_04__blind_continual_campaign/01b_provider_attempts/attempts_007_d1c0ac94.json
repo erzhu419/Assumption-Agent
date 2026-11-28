@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "d1c0ac94f20145beb08fb6dd0d1e50de",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step04__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_04__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:41:36.981859+00:00",
+  "ended_at_utc": "2026-11-28T02:42:20.859517+00:00",
+  "request_sha256": "ac0481e471661f87c673f04bce295233a233ec43a3e23764d0868ec436cc056d",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 48418,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 28102,
+    "cached_tokens": 9344,
+    "completion_tokens": 1837
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport inspect, json, pickle, sys\\nimport numpy as np\\nfrom scipy.optimize import minimize\\nsys.path.insert(0, '/holdout_task')\\nfrom batch_solver import solve_batch\\nfrom downstream_solver import _axis, _box_simplex, _responses, solve_downstream\\nfrom _verified_upstream import calibrate_upstream\\nprint('Calibration signature:', inspect.signature(calibrate_upstream))\\nwith open('/holdout_task/_upstream_param_payload.json') as f:\\n    payload = json.load(f)\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    items = pickle.load(f)\\nworst_pulse = 0.\\nworst_gap = 0.\\nfor item in items:\\n    s = item['study']\\n    marked = dict(s, reference_tracer_pulses=item.get('campaign_diagnostics'))\\n    cal = calibrate_upstream(marked, payload)\\n    S, U = _responses(cal)\\n    # Check calibration composition against the staged payload-aware interface.\\n    result = solve_batch(s)\\n    direct = solve_downstream(cal)\\n    np.testing.assert_allclose(result['weights'], direct['weights'], atol=1e-12, rtol=0)\\n    for pulse in cal.get('reference_tracer_pulses') or []:\\n        error = S @ pulse['w_pulse'] - pulse['y_pulse_raw']\\n        worst_pulse = max(worst_pulse, float(np.sqrt(np.mean(error**2))))\\n    w = result['weights']; cert = result['kkt_certificate']; Z = cal['Z_nuisance']\\n    P = np.eye(len(S)) - Z @ np.linalg.solve(Z.T @ Z + s['nuisance_ridge'] * np.eye(Z.shape[1]), Z.T)\\n    A = P @ S; d = A @ w - P @ cal['y_obs_raw']; g = A.T @ d + s['source_ridge'] * w\\n    lower = np.array(cert['lam_lower']); upper = np.array(cert['lam_upper'])\\n    np.testing.assert_array_equal(cert['weights'], w)\\n    np.testing.assert_allclose(g - cert['nu_sum'] - lower + upper, 0, atol=1e-11)\\n    np.testing.assert_allclose(lower*w + upper*(s['u_box']-w), 0, atol=1e-11)\\n    np.testing.assert_allclose(result['terminal_field'], np.einsum('i,ijk->jk', w, U), atol=1e-12)\\n    np.testing.assert_allclose(cert['primal_objective'], (d@d + s['source_ridge']*(w@w))/2, atol=1e-12)\\n    assert np.isclose(w.sum(), s['total_budget'], atol=1e-12, rtol=0) and np.all((w>=0)&(w<=s['u_box']))\\n    worst_gap = max(worst_gap, abs(cert['primal_objective'] - cert['dual_lower_bound']))\\nassert 0 < worst_pulse < 3e-6 and worst_gap < 1e-11\\nprint('Public items:', len(items), 'worst calibrated pulse RMSE:', worst_pulse, 'worst certified gap:', worst_gap)\\n\\n# Exercise both signs at both x endpoints with unequal endpoint diffusivities.\\nkap = np.array([.4, .7, .8, 1.1]); h = .3\\nfor left in [-.9, .9]:\\n    for right in [-.8, .8]:\\n        v = np.array([left, -.3, .2, right])\\n        for periodic in [False, True]:\\n            expected = np.zeros((4,4))\\n            for i in range(4):\\n                if not periodic and i in [0,3]:\\n                    expected[i,1 if i == 0 else 2] = -kap[i]/h**2\\n                else:\\n                    for step in [-1,1]:\\n                        j = (i+step)%4\\n                        expected[i,j] = -(kap[i]+kap[j])/(2*h**2)-max(-step*v[i],0)/h\\n                expected[i,i] = -expected[i].sum()\\n            np.testing.assert_allclose(_axis(kap,v,h,periodic).toarray(),expected,atol=1e-13,rtol=0)\\n\\n# Stress lower/upper-active, all-bound integer budgets and endpoint budgets.\\nrng = np.random.default_rng(421)\\nmax_comp = max_objective_regret = 0.\\nfor t in range(240):\\n    n = 8; u = .42\\n    B = rng.normal(size=(12,n)); H = B.T @ B / 12 + .04*np.eye(n)\\n    c = rng.normal(size=n)*[.2,1.,10.][t%3]\\n    total = u*[0,.0001,1,2.5,3,6.5,7.9999,8][t%8]\\n    w, nu = _box_simplex(H,c,u,total)\\n    d = H@w+c-nu\\n    comp = np.maximum(d,0)*w + np.maximum(-d,0)*(u-w)\\n    max_comp = max(max_comp, float(np.max(comp)))\\n    assert np.min(w) >= -1e-13 and np.max(w) <= u+1e-13 and abs(w.sum()-total) < 1e-11\\n    if t < 64 and 0 < total < n*u:\\n        f = lambda x: float(.5*x@H@x+c@x)\\n        ref = minimize(f, np.full(n,total/n), jac=lambda x:H@x+c, bounds=[(0,u)]*n, constraints=[{'type':'eq','fun':lambda x:x.sum()-total,'jac':lambda x:np.ones(n)}], method='SLSQP', options={'ftol':1e-12})\\n        if ref.success:\\n            max_objective_regret = max(max_objective_regret, f(w)-ref.fun)\\nassert max_comp < 1e-10 and max_objective_regret < 1e-9\\nprint('240 QP slices: worst complementarity:', max_comp, 'worst SLSQP objective regret:', max_objective_regret)\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"Fitted endpoint rates → periodic upwind x and reflecting y; the implemented stencil has a worst public tracer RMSE of 7.37e-7.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"Run a read-only check on the exact candidate, independent of the schema validator. A pulse failure would reopen the boundary law; a payload mismatch would require restoring explicit payload forwarding; an active-bound failure would isolate the quadratic solver.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "139de7dbbcd46d1491fa7eb42afd5596fa253e34cc2d64d1bc0f6881e0824148",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 45902.59,
+      "usage_known": true,
+      "prompt_tokens": 28102,
+      "cached_tokens": 9344,
+      "completion_tokens": 1837
+    }
+  ]
+}

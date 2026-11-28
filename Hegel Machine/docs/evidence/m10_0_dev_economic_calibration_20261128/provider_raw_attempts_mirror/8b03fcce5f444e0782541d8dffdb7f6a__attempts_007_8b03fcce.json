@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "8b03fcce5f444e0782541d8dffdb7f6a",
+  "call_seq": 7,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Flat_MonolithicConditionalTable_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:48:15.092380+00:00",
+  "ended_at_utc": "2026-11-28T02:48:42.754714+00:00",
+  "request_sha256": "3abc7554744f7cd03a5391642feb9b8c2c3bc525e0b3370e959552685b917a2f",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 44558,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 25073,
+    "cached_tokens": 9344,
+    "completion_tokens": 1094
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport importlib.util,pickle,numpy as np\\nfrom itertools import combinations_with_replacement\\nfrom scipy.optimize import least_squares\\np='/holdout_task/'; spec=importlib.util.spec_from_file_location('m',p+'batch_solver.py'); m=importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\nd=pickle.load(open(p+'public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; n=len(x); cc=m._bridge(c); q=(np.arange(4)+1)%4\\nprint('load quantiles',np.quantile(x,[0,.1,.5,.9,1],axis=0)); print('archived coefficients',cc)\\nr=y-(cc[0]+x@cc[1:5]+cc[5]*x**3+cc[6]*x*x[:,q]); print('archived raw abs quantiles',np.quantile(abs(r),[.5,.9,.95,1],axis=0)); print('worst rows',[(i,x[i].round(3).tolist(),r[i].round(3).tolist()) for i in np.argsort(np.linalg.norm(r,axis=1))[-5:]])\\nfolds=np.array_split(np.random.default_rng(42).permutation(n),5)\\nP={k:np.column_stack([np.ones(n)]+[np.prod(x[:,z],axis=1) for deg in range(1,k+1) for z in combinations_with_replacement(range(4),deg)]) for k in (1,2,3)}\\nfor label in ['archived','linear','self_quadratic','all_quadratic','all_quadratic_self_cubic','all_cubic','cyclic_prev','cyclic_opposite','cyclic_all']:\\n out=np.zeros_like(y)\\n for j in range(4):\\n  lin=P[1]; z=x[:,j]; cols={'archived':[z**3,z*x[:,(j+1)%4]], 'self_quadratic':[z*z,z**3],'cyclic_prev':[z**3,z*x[:,(j-1)%4]], 'cyclic_opposite':[z**3,z*x[:,(j+2)%4]],'cyclic_all':[z**3]+[z*x[:,(j+k)%4] for k in (1,2,3)]}\\n  a={'linear':lin,'all_quadratic':P[2],'all_quadratic_self_cubic':np.column_stack([P[2],x**3]),'all_cubic':P[3]}.get(label)\\n  if a is None: a=np.column_stack([lin,*cols[label]])\\n  for ids in folds:\\n   keep=np.setdiff1d(np.arange(n),ids); F=a[keep]; g=y[keep,j]; init=np.linalg.lstsq(F,g,rcond=None)[0]; b=least_squares(lambda v:F@v-g,init,jac=lambda v:F.copy(),loss='soft_l1',f_scale=.003).x; out[ids,j]=a[ids]@b-y[ids,j]\\n print(label,'abs raw error p50/p90/max',np.quantile(np.abs(out),[.5,.9,1]).round(6),'worst fold p90',max(np.quantile(abs(out[f]),.90) for f in folds))\\nprint('sweep shapes',[(k,v.shape,np.quantile(v,[0,.5,1])) for k,v in c['single_channel_sweeps'].items()])\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 archived bridge grammar -> H2 campaign-specific bridge grammar; held-out total-stress error reaches 5.530 at p90, and held-lab rate error reaches 0.264 at p90.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit the schema-valid solver\",\n      \"rejected_reason\": \"The held-out sweep errors and the slow time constant's variation across labs point to unresolved calibration error.\"\n    }\n  ],\n  \"rationale\": \"Score bridge predictions in raw coordinates before Newton inversion. If a different algebraic basis materially reduces held-out raw error, replace the bridge law; if raw prediction is already accurate, investigate inversion instead.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_007_att0.json",
+      "response_sha256": "3b8a34920ee116dab24995d218e52c064bfdd7400e0dd49df1e1caf37f9fa4a5",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 29732.15,
+      "usage_known": true,
+      "prompt_tokens": 25073,
+      "cached_tokens": 9344,
+      "completion_tokens": 1094
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "ea7ea8e668894c338ca77cb321b39f67",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step06__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_06__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:57:25.054247+00:00",
+  "ended_at_utc": "2026-11-28T02:57:50.942787+00:00",
+  "request_sha256": "c5d740cf3d7dcf90b9c2d70d23837dbd25043b93fcfdb5a36079267645e78ae0",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 51865,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30499,
+    "cached_tokens": 9344,
+    "completion_tokens": 947
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/mixed.py <<'PY'\\nexec(open('/tmp/rosette_probe.py').read().split('for j in range(4):')[0])\\nfrom itertools import combinations,combinations_with_replacement\\nfrom scipy.optimize import minimize_scalar\\nprint('sweep shape',x.shape,'other sweep keys',list(c),'y ranges',np.quantile(y,[0,.02,.5,.98,1],axis=0)); print('study keys',list(s))\\nx,y=x[clean],y[clean]\\npoly2=list(combinations_with_replacement(range(4),2)); poly3=list(combinations_with_replacement(range(4),3)); poly4=list(combinations_with_replacement(range(4),4))\\ndef design(x,f,degree,extra):\\n t=np.sin(f*x); vals=[np.ones(len(x)),*x.T,*t.T]; names=['1']+[f'x{i}' for i in range(4)]+[f's{i}' for i in range(4)];\\n for tup in (poly2 if degree>=2 else [])+(poly3 if degree>=3 else [])+(poly4 if degree>=4 else []):\\n  vals.append(np.prod(x[:,tup],axis=1)); names.append('x'+str(tup))\\n if extra:\\n  for i in range(4):\\n   for j in range(4):\\n    vals.extend((x[:,i]*t[:,j],x[:,i]**2*t[:,j])); names.extend((f'x{i}s{j}',f'x{i}^2s{j}'))\\n  for i,j in poly2:\\n   vals.append(t[:,i]*t[:,j]); names.append(f's{i}s{j}')\\n return np.column_stack(vals),names\\nfor d,e in ((1,0),(2,0),(3,0),(4,0),(3,1)):\\n def fit(a):\\n  D,n=design(x,a,d,e); T=np.linalg.lstsq(D,y,rcond=None)[0]; return D@T-y,T,n\\n a=minimize_scalar(lambda a: np.linalg.norm(fit(a)[0]),bounds=(2.3,2.7),method='bounded').x\\n r,T,n=fit(a); print('degree extra, frequency, median, max',d,e,a,np.median(abs(r),axis=0),np.max(abs(r),axis=0));\\n if d in (2,3):\\n  for q,t in zip(n,T):\\n   if max(abs(t))>1e-3: print(q,t.round(6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/mixed.py; python3 - <<'PY'\\nimport json,numpy as np\\np='/tmp/hegel_continual_archive/archive_apparatus_log.json'\\nfor r in json.load(open(p)):\\n a=np.array(r['facility_telemetry_trace']);print(r['completed_campaign_index'],r['completed_campaign_short_name'],a.mean(0).round(3),a[-4:].mean(0).round(3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 saturating scalar approximations -> H2 shared sinusoid plus linear response; the bank-0 isolated residual norm is 2.97e-5, at the sweep noise scale.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit separate flexible maps to each bank\",\"rejected_reason\":\"The isolated fit points to a shared frequency; mixed sweeps can identify the cross-channel structure with fewer parameters.\"}],\"rationale\":\"Test whether a shared sinusoid and low-order interactions explain mixed sweeps at the isolated-sweep noise floor. Print the complete trace summary to verify the boundary choice independently.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "2776c65bb0695dc4b6cbdd04fe2fbe4940dadfbee99e9e4fe8f2da59ac71964d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27873.34,
+      "usage_known": true,
+      "prompt_tokens": 30499,
+      "cached_tokens": 9344,
+      "completion_tokens": 947
+    }
+  ]
+}

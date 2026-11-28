@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47da209e9c2942e5a1014cab40127717",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Hegel_SelectiveConditionExpansion_Online__step02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_02__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:35:36.542764+00:00",
+  "ended_at_utc": "2026-11-28T02:36:04.639582+00:00",
+  "request_sha256": "ff3e9f28e5d1fbf8054dbcee6d687a54008047116628fce0a0a44a9bbe5f958d",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 45884,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26399,
+    "cached_tokens": 9344,
+    "completion_tokens": 1050
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\nOPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as up\\nimport batch_solver\\nimport _verified_downstream as down\\nwith open('/holdout_task/public_batch.pkl', 'rb') as f:\\n    s = pickle.load(f)[0]['study']\\nc = s['sensor_calibration_sweeps']; b = c['single_bank_sweeps']; x, y = c['ref_rosette'], c['raw_rosette']\\nmodel = up._fit(x, y, b)\\n# Six four-channel rows, spread across the joint calibration box.\\ngrid = np.stack(np.meshgrid(*[np.linspace(a, d, 7) for a, d in zip(x.min(0), x.max(0))], indexing='ij'), axis=-1).reshape(-1, 4)\\ntruth_pulse = grid[np.linspace(0, len(grid)-1, 6, dtype=int)].reshape(2, 3, 4)\\npulse_raw = up._forward(truth_pulse.reshape(-1, 4), model).reshape(truth_pulse.shape)\\noriginals = [(a, a.copy()) for a in (pulse_raw, y, b['raw_readout'], s['y_obs_raw'])]\\nout = up.calibrate_upstream(dict(s, reference_tracer_pulses=[{'y_pulse_raw': pulse_raw, 'label': 'grid'}, {'y_pulse_raw': None}]))\\npulses = out['reference_tracer_pulses']\\nnp.testing.assert_allclose(pulses[0]['y_pulse_raw'], truth_pulse, atol=1e-10, rtol=0)\\nassert pulses[0]['label'] == 'grid' and pulses[1]['y_pulse_raw'] is None\\nassert up.calibrate_upstream(dict(s, reference_tracer_pulses=None))['reference_tracer_pulses'] is None\\nassert 'reference_tracer_pulses' not in up.calibrate_upstream(s)\\nfor a, original in originals:\\n    np.testing.assert_array_equal(a, original)\\ncs = out['sensor_calibration_sweeps']\\nfor normalized, ref in [(cs['raw_rosette'], x), (cs['single_bank_sweeps']['raw_readout'], b['ref_signal'])]:\\n    np.testing.assert_array_equal(normalized, ref)\\n    assert not np.shares_memory(normalized, ref)\\nobs = out['y_obs_raw']\\nassert obs.shape == s['y_obs_raw'].shape\\nnp.testing.assert_allclose(up._forward(obs.reshape(-1, 4), model).reshape(obs.shape), s['y_obs_raw'], atol=1e-11, rtol=0)\\ntruth = np.clip(obs * 0.8, -0.5, 0.5)\\nbase = up.calibrate_upstream(s)\\nexpected = down.solve_downstream(dict(base, y_obs_raw=truth))\\nactual = batch_solver.solve_batch(dict(s, y_obs_raw=up._forward(truth.reshape(-1, 4), model).reshape(truth.shape)))\\nassert actual.keys() == expected.keys()\\nfor key in actual:\\n    np.testing.assert_allclose(actual[key], expected[key], rtol=1e-8, atol=1e-9, err_msg=key)\\nprint('PASS: pulse shape and optional forms, input preservation, identity sweep copies, observation inversion, and canonical downstream equivalence')\\nPY\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 separable response → H2 cyclic quadratic coupling plus diagonal cubic curvature; the exact artifact had a worst clean held-out inverse L2 error of 4.83e-5 and a box-grid round-trip error of 5.73e-12.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t05\"]\n  },\n  \"considered_alternatives\": [],\n  \"rationale\": \"The measured and box-grid inverse tests passed. The remaining checks never ran because the fixture tried to reshape 24 four-channel rows into six. Correct the fixture without editing either artifact, then verify the optional pulse path and downstream equivalence.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "59eee1098df891cbe7105a716bf6f1335425aef0319fa3446beec339d573bbda",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 30054.16,
+      "usage_known": true,
+      "prompt_tokens": 26399,
+      "cached_tokens": 9344,
+      "completion_tokens": 1050
+    }
+  ]
+}

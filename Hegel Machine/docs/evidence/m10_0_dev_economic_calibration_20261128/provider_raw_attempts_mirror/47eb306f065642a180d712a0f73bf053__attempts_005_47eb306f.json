@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "47eb306f065642a180d712a0f73bf053",
+  "call_seq": 5,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:01.205776+00:00",
+  "ended_at_utc": "2026-11-28T02:43:40.580780+00:00",
+  "request_sha256": "3e374c8308b46eb74bdd6d6f3abad44c6f4062dee7b32fd74a52b5d7a3129a97",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 39942,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24882,
+    "cached_tokens": 9344,
+    "completion_tokens": 1630
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && cat > upstream_transducer.py <<'PY'\\n\\\"\\\"\\\"Calibrate the coupled load-cell bridge before constitutive fitting.\\\"\\\"\\\"\\nimport numpy as np\\n\\n\\n_CHANNELS = np.arange(4)\\n_NEXT = (_CHANNELS + 1) % 4\\n_LOAD_FIELDS = ('past_channel_raw', 'hold_channel_raw')\\n\\n\\ndef _design(loads, channel):\\n    own = loads[:, channel]\\n    return np.column_stack((np.ones(len(loads)), loads,\\n                            own * loads[:, _NEXT[channel]], own**3))\\n\\n\\ndef _fit_channel(a, y):\\n    \\\"\\\"\\\"Downweight gross readout spikes, then refit to the clean readings.\\\"\\\"\\\"\\n    coef = np.linalg.lstsq(a, y, rcond=None)[0]\\n    for _ in range(30):\\n        residual = a @ coef - y\\n        mad = np.median(np.abs(residual - np.median(residual)))\\n        scale = max(2.5 * 1.4826 * mad, 1e-9)\\n        weights = 1 / np.hypot(1, residual / scale)\\n        coef = np.linalg.lstsq(a * weights[:, None], y * weights, rcond=None)[0]\\n    residual = a @ coef - y\\n    centered = residual - np.median(residual)\\n    keep = np.abs(centered) <= max(8 * 1.4826 * np.median(np.abs(centered)), 1e-8)\\n    return np.linalg.lstsq(a[keep], y[keep], rcond=None)[0]\\n\\n\\ndef _fit_bridge(loads, bridge, sweeps):\\n    coefficients = []\\n    labs = np.asarray(sweeps['lab_id'])\\n    for j in _CHANNELS:\\n        use = labs == j\\n        axes = np.zeros((np.count_nonzero(use), 4))\\n        axes[:, j] = np.asarray(sweeps['true_stress'])[use]\\n        a = _design(np.concatenate((loads, axes)), j)\\n        y = np.concatenate((bridge[:, j], np.asarray(sweeps['cmd_stress'])[use]))\\n        coefficients.append(_fit_channel(a, y))\\n    return np.column_stack(coefficients)\\n\\n\\ndef _forward(x, coef):\\n    return coef[0] + x @ coef[1:5] + coef[5] * x * x[:, _NEXT] + coef[6] * x**3\\n\\n\\ndef _inverse(raw, coef):\\n    shape = np.shape(raw)\\n    target = np.asarray(raw, dtype=float).reshape(-1, 4)\\n    x = np.linalg.solve(coef[1:5].T, (target - coef[0]).T).T\\n    for _ in range(35):\\n        residual = _forward(x, coef) - target\\n        error = np.max(np.abs(residual), axis=1)\\n        active = error > 1e-11\\n        if not np.any(active):\\n            break\\n        z = x[active]\\n        jac = np.broadcast_to(coef[1:5].T, (len(z), 4, 4)).copy()\\n        jac[:, _CHANNELS, _CHANNELS] += coef[5] * z[:, _NEXT] + 3 * coef[6] * z**2\\n        jac[:, _CHANNELS, _NEXT] += coef[5] * z\\n        step = np.linalg.solve(jac, residual[active, :, None])[..., 0]\\n        goals = target[active]\\n        size = error[active]\\n        trial = z - step\\n        for _ in range(16):\\n            worse = np.max(np.abs(_forward(trial, coef) - goals), axis=1) >= size\\n            if not np.any(worse):\\n                break\\n            step[worse] *= 0.5\\n            trial[worse] = z[worse] - step[worse]\\n        x[active] = trial\\n    return x.reshape(shape)\\n\\n\\ndef calibrate_upstream(dataset: dict) -> dict:\\n    \\\"\\\"\\\"Return canonical loads without modifying the supplied dataset.\\\"\\\"\\\"\\n    cal = dataset['calibration_load_cells']\\n    sweeps = cal['single_channel_sweeps']\\n    loads = np.asarray(cal['true_channel_loads'], dtype=float)\\n    bridge = np.asarray(cal['bridge_raw'], dtype=float)\\n    coef = _fit_bridge(loads, bridge, sweeps)\\n    result = dict(dataset)\\n    result['calibration_load_cells'] = dict(\\n        cal, bridge_raw=np.asarray(cal['true_channel_loads']).copy(),\\n        single_channel_sweeps=dict(sweeps, cmd_stress=np.asarray(sweeps['true_stress']).copy()),\\n    )\\n    for key in ('train', 'test', 'chamber_verification_trials'):\\n        part = dataset.get(key)\\n        if part is not None:\\n            result[key] = dict(part, **{field: _inverse(part[field], coef) for field in _LOAD_FIELDS})\\n    return result\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\\nsed -n '45,130p' _verified_downstream.py\\npython3 - <<'PY'\\nimport json\\nx=json.load(open('public_asset_index.json'))\\nprint('public metadata keys',list(x) if isinstance(x,dict) else type(x))\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic → H2 sparse cyclic cubic corroborated by independent sweeps; worst clean held-out bridge error was 3.95×10⁻⁴.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": [\"ng_t04\"]\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Unrestricted cubic bridge\",\n      \"rejected_reason\": \"Its worst clean held-out error was 1.03×10⁻³, compared with 3.95×10⁻⁴ for the cyclic basis, and the independent sweeps agree with the cyclic model except for one spike.\"\n    }\n  ],\n  \"rationale\": \"Use the independently corroborated sweeps to constrain the diagonal response, fit with spike-resistant weights, and invert the four coupled equations jointly. Run the public validator to detect composition or output-schema failures before testing inverse accuracy.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_005_att0.json",
+      "response_sha256": "276377a4e7077dda53d354682742218b75694886ccc859a2d731e5d4c76f9db4",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 41346.06,
+      "usage_known": true,
+      "prompt_tokens": 24882,
+      "cached_tokens": 9344,
+      "completion_tokens": 1630
+    }
+  ]
+}

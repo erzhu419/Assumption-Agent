@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "86336107acf144e9bffd33d92e212c61",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_PlainModuleRegistry_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:43:43.909300+00:00",
+  "ended_at_utc": "2026-11-28T02:44:16.695604+00:00",
+  "request_sha256": "05d2bc6a3874f96d1d75586e220b80949f07ab49bf483f1466a52bf667ba316b",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 44843,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26022,
+    "cached_tokens": 5504,
+    "completion_tokens": 1320
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport itertools, pickle, sys\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nimport upstream_transducer as u\\nfrom batch_solver import solve_batch\\nwith open('public_batch.pkl','rb') as f:\\n    ds = pickle.load(f)[0]['dataset']\\nc = ds['calibration_load_cells']; s = c['single_channel_sweeps']; x = c['true_channel_loads']; y = c['bridge_raw']\\nidx = np.arange(len(x)); rng = np.random.default_rng(31)\\nouter = np.max(abs(x), axis=1) >= np.quantile(np.max(abs(x), axis=1), .8)\\nfor name, folds in [('random', np.array_split(rng.permutation(idx),5)), ('axis', [np.arange(i,i+4) for i in range(0,16,4)]), ('outer', [idx[outer]])]:\\n    errors = []; sums = []; spikes = []\\n    for ts in folds:\\n        tr = np.setdiff1d(idx,ts)\\n        # Exclude the entire auxiliary sweep panel for independent load-cell validation.\\n        a = np.column_stack([u._fit_channel(u._design(x[tr],j), y[tr,j]) for j in range(4)])\\n        clean = np.linalg.norm(u._forward(x[ts],a)-y[ts],axis=1) < 0.01\\n        spikes.extend(ts[~clean].tolist())\\n        delta = u._inverse(y[ts][clean],a)-x[ts][clean]\\n        errors.extend(np.max(abs(delta),axis=1)); sums.extend(abs(delta.sum(axis=1)))\\n    print(name, 'clean rows',len(errors),'excluded spikes',sorted(spikes),'max channel error',max(errors),'max total-load error',max(sums))\\n    assert max(errors)<0.002 and max(sums)<0.003\\ncoef=u._fit_bridge(x,y,s)\\ncal=u.calibrate_upstream(ds)\\nfor part in ('train','test'):\\n    for key in u._LOAD_FIELDS:\\n        q=cal[part][key]; raw=ds[part][key]\\n        residual=np.max(abs(u._forward(q.reshape(-1,4),coef).reshape(q.shape)-raw))\\n        print(part,key,'max forward round-trip error',residual)\\n        assert q.shape==raw.shape and residual<1e-9\\ncc=cal['calibration_load_cells']\\nassert np.array_equal(cc['bridge_raw'],x) and not np.shares_memory(cc['bridge_raw'],x)\\nassert np.array_equal(cc['single_channel_sweeps']['cmd_stress'],s['true_stress']) and not np.shares_memory(cc['single_channel_sweeps']['cmd_stress'],s['true_stress'])\\nassert np.array_equal(u.calibrate_upstream(cal)['test']['hold_channel_raw'],cal['test']['hold_channel_raw']) or np.allclose(u.calibrate_upstream(cal)['test']['hold_channel_raw'],cal['test']['hold_channel_raw'],atol=1e-11,rtol=0)\\nassert u.calibrate_upstream(dict(ds,chamber_verification_trials=None))['chamber_verification_trials'] is None\\ntrial_loads=np.concatenate([cal[p][k].reshape(-1,4) for p in ('train','test') for k in u._LOAD_FIELDS])\\nlo=np.minimum(x.min(0),trial_loads.min(0)); hi=np.maximum(x.max(0),trial_loads.max(0)); grid=np.array(list(itertools.product(*[np.linspace(a,b,7) for a,b in zip(lo,hi)])))\\nraw=u._forward(grid,coef)\\nv=dict(past_channel_raw=raw.reshape(49,49,4), hold_channel_raw=raw)\\nout=u.calibrate_upstream(dict(ds,chamber_verification_trials=v))['chamber_verification_trials']\\nfor key in u._LOAD_FIELDS:\\n    err=np.max(abs(out[key].reshape(-1,4)-grid)); print('verification grid',key,'max error',err); assert err<1e-9\\npred=solve_batch(ds)\\nassert {k:np.shape(v) for k,v in pred.items()}=={'estimated_taus':(2,), 'hereditary_weights':(7,), 'predicted_strain':(36,12), 'initial_rate_pred':(36,)}\\nassert all(np.isfinite(v).all() for v in pred.values())\\nprint('isolated composition and normalization passed')\\nPY\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 unrestricted cubic → H2 sparse cyclic cubic; worst clean held-out forward error is 3.95×10⁻⁴, with held-out inverse error still to be measured.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema pass alone\",\n      \"rejected_reason\": \"The schema test does not measure recovered loads or exercise optional verification trials.\"\n    }\n  ],\n  \"rationale\": \"Test recovered loads on held-out real calibration rows, including the total load consumed downstream. Stress the inverse over the observed load envelope and exercise the optional verification path in an isolated process. Failures would distinguish a fit problem from a numerical inversion or schema problem.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "112646254e12b256e0185b381d48ea727980c1afbc3417843a84adf3eb6d3ebc",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 34830.73,
+      "usage_known": true,
+      "prompt_tokens": 26022,
+      "cached_tokens": 5504,
+      "completion_tokens": 1320
+    }
+  ]
+}

@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e27f79e886e1467ab72491042041c83c",
+  "call_seq": 6,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__stageS__dev_beta_m100_02__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_s00__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:22:16.824729+00:00",
+  "ended_at_utc": "2026-11-28T02:22:54.941651+00:00",
+  "request_sha256": "4ddaeda4e052674852473b01a67ae201ec22187da633b0c61848317222a99e6b",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 37032,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 24800,
+    "cached_tokens": 10880,
+    "completion_tokens": 1533
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"set -e\\ncat > /tmp/audit_transport.py <<'PY'\\nimport importlib.util, json, pathlib, pickle\\nimport numpy as np\\np = pathlib.Path('/holdout_task')\\nspec = importlib.util.spec_from_file_location('batch_solver', p/'batch_solver.py'); m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)\\ns = pickle.loads((p/'public_batch.pkl').read_bytes())[0]['study']\\nc = s['sensor_calibration_sweeps']; X = c['ref_rosette']; Y = c['raw_rosette']\\ndef feat(x, kind):\\n    f = [np.ones(len(x)), *x.T]\\n    if kind == 'interaction':\\n        f += [x[:,i]*x[:,j] for i in range(4) for j in range(i,4)]\\n        f += [x[:,i]*x[:,j]*x[:,k] for i in range(4) for j in range(i,4) for k in range(j,4)]\\n    elif kind != 'affine':\\n        a = float(kind)\\n        f = [np.ones(len(x)), *(x/(1+a*x*x)).T, *((x[:,i]-x[:,j])/(1+a*(x[:,i]+x[:,j])**2) for i in range(4) for j in range(i+1,4))]\\n    return np.asarray(f).T\\nrng = np.random.default_rng(39)\\n# Axis-only sweeps and simultaneous sweeps are represented in each fold.\\nsets = [np.flatnonzero(np.count_nonzero(X,axis=1)<=1),np.flatnonzero(np.count_nonzero(X,axis=1)>1)]\\nfolds = [np.concatenate(t) for t in zip(*(np.array_split(rng.permutation(a),5) for a in sets))]\\ndef err(kind,train,test):\\n    A = feat(X[train],kind)\\n    return Y[test]-feat(X[test],kind)@np.linalg.lstsq(A,Y[train],rcond=None)[0]\\nallrows = np.arange(len(X))\\nscores = {k: [] for k in ('affine','interaction','rational nested')}\\nfor i,test in enumerate(folds):\\n    train = np.setdiff1d(allrows,test)\\n    pool = ['0.000001','0.00001','0.0001','0.001','0.01','0.1']\\n    best = min(pool,key=lambda k: sum(np.sum(err(k,np.setdiff1d(train,v),v)**2) for j,v in enumerate(folds) if j!=i))\\n    for label,k in [('affine','affine'),('interaction','interaction'),('rational nested',best)]:\\n        r=err(k,train,test); scores[label].append(float(np.max(np.sqrt(np.mean(r*r,axis=0)))))\\nprint('worst calibration fold/channel RMSE', {k:max(v) for k,v in scores.items()})\\nb = c['single_bank_sweeps']; print('bank sweep RMS from identity', {int(k):float(np.sqrt(np.mean((b['ref_signal'][b['bank_id']==k]-b['raw_readout'][b['bank_id']==k])**2))) for k in np.unique(b['bank_id'])})\\nS,_=m._responses(s,m._operator(s)); y=m._calibrate(s); Z=s['Z_nuisance']; ids=s['row_bank_id']; n=len(s['sensor_ij']); rows=np.arange(len(y)); ridge=s['source_ridge']; cap=s['u_box']; budget=s['total_budget']\\n# Hold out whole rosettes at each position across shifts to avoid channel leakage.\\nfor profile in (False,True):\\n    residual=np.empty(len(y))\\n    for j in range(0,n,4):\\n        test=(rows%n>=j)&(rows%n<j+4); train=~test\\n        A=S[train]; q=y[train]; z=Z[train]\\n        if profile:\\n            P=np.linalg.solve(z.T@z+s['nuisance_ridge']*np.eye(z.shape[1]),z.T)\\n            T=A-z@(P@A); r=q-z@(P@q)\\n        else:\\n            T=A; r=q\\n        w,_=m._box_simplex(T.T@T+ridge*np.eye(T.shape[1]),-T.T@r,cap,budget)\\n        residual[test]=S[test]@w-y[test]\\n        if profile:\\n            residual[test]+=Z[test]@(P@(q-A@w))\\n    print('nuisance profiled',profile,'OOF pooled RMSE',np.sqrt(np.mean(residual**2)),'bank RMSE',{int(k):float(np.sqrt(np.mean(residual[ids==k]**2))) for k in np.unique(ids)})\\nlog=pathlib.Path('/tmp/hegel_continual_archive/archive_apparatus_log.json'); print('apparatus log:',log.read_text() if log.exists() else 'absent')\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_transport.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 open-wall Robin with affine calibration → H2 nonlinear calibration only if supported by held-out sweeps; verified worst sensor holdout RMSE was 0.0161255 and worst shift holdout RMSE was 0.0100156.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Audit relay modes, classification accuracy, or Fokker–Planck/HJB drift\",\n      \"rejected_reason\": \"The specified problem is continuous steady-state transport inversion; it has no relay modes, class labels, or Fokker–Planck/HJB operator.\"\n    }\n  ],\n  \"rationale\": \"Held-out sweeps can reveal missing nonlinear calibration terms without fitting chamber noise. Whole-rosette holdouts test whether nuisance profiling improves pooled error at the expense of a bank; that would prompt a closer look at the bank sweeps and layout while preserving the specified objective.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_006_att0.json",
+      "response_sha256": "375fe6a511610d72ba529c89d4396a83c6dbf56f305d326d7be2ae41e1cee1cf",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 40116.66,
+      "usage_known": true,
+      "prompt_tokens": 24800,
+      "cached_tokens": 10880,
+      "completion_tokens": 1533
+    }
+  ]
+}

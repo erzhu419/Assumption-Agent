@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "b9713470bcd240528d85c1158e1e6bb0",
+  "call_seq": 11,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Hegel_SelectiveConditionExpansion_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:28:55.974937+00:00",
+  "ended_at_utc": "2026-11-28T02:29:31.250475+00:00",
+  "request_sha256": "0da69ebd70d352e52d0725cc7c1f95e29846c66460966cb94b1c2751b3a05ab9",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 69922,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 37712,
+    "cached_tokens": 9344,
+    "completion_tokens": 1378
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cp /tmp/m100_base.py /holdout_task/batch_solver.py\\nsed '/^for rate in/,$d' /tmp/m100_chamber.py >/tmp/m100_phys.py\\ncat >>/tmp/m100_phys.py <<'PY'\\nfrom scipy.optimize import least_squares\\nD=np.c_[q['instant_rate_obs'],q['strain_curves_obs']-q['strain_0'][:,None]]\\nraw=q['coupon_features_raw']; lab=q['lab_id']; O=np.eye(4)[lab]; valid=~np.isnan(raw).any(1); T=np.r_[1.,t]; L=lambda k:np.r_[1/k,-np.expm1(-t/k)]\\nU=np.nan_to_num(raw)@theta[3:]; F=np.c_[h,O,O*U[:,None]]; M=valid\\nfor hist in (0,1):\\n V=np.c_[F,p] if hist else F\\n B=np.linalg.lstsq(V[M],D[M],rcond=None)[0]; print('hist',hist,'linear projected rms',np.mean((V@B-D)[M]**2)**.5)\\n for mode in ('fixed','fixedfast','free','free+linear','free+linearfeature'):\\n  def calc(k, ret=False):\\n   K=np.array([L(j) for j in k[:2]]+([T] if 'linear' in mode else [])); Z=(V[M,:,None,None]*K.T[None,None,:,:]).transpose(0,2,1,3).reshape(M.sum()*len(T),-1); keep=np.ones((V.shape[1],len(K)),bool)\\n   if mode=='free+linearfeature': keep[0,-1]=False\\n   Z=Z[:,keep.ravel()]; coeff=np.linalg.lstsq(Z,D[M].ravel(),rcond=None)[0]; res=Z@coeff-D[M].ravel(); c=np.zeros_like(keep,dtype=float); c[keep]=coeff\\n   return (c,res) if ret else res\\n  k=tau if mode=='fixed' else np.r_[tau[0],least_squares(lambda s:calc(np.r_[tau[0],s]),[4.2],bounds=(1,15)).x] if mode=='fixedfast' else least_squares(calc,[.58,4.2],bounds=([.3,1.],[1.,15.])).x\\n  c,e=calc(k,True); print(mode,k,'rate,curve',np.sqrt(np.mean(e.reshape(-1,len(T))**2,axis=0))[[0,-1]],'coefs',[c[0].round(4),c[1:5].mean(0).round(4),c[5:9].mean(0).round(4)],'history',c[9:].round(4).tolist())\\nprint('panel scales');\\nfor P in [(tr,q),(tr,te,q),(tr,te),(q,), (te,q)]:\\n labp=np.concatenate([a['lab_id'] for a in P]); refs=np.concatenate([a['ref_coupons'] for a in P]); print([np.median(refs[labp==j].std(0)) for j in range(4)])\\nprint('train, diag, test ranges hold history',[(np.min(_loads(a,b)[1]),np.max(_loads(a,b)[1]),np.min(_loads(a,b)[0]),np.max(_loads(a,b)[0])) for a in (tr,q,te)])\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/m100_phys.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 -> H2: absolute hold stress and a shared feature score replace benchtop deployment history; current worst-lab rate and lab-by-time strain RMSE are 0.0379 and 0.0641.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Fit a free chamber drift for each lab\",\"rejected_reason\":\"Complete-coupon responses already show a common feature-score time profile; per-lab drift would conceal reference-frame error.\"}],\"rationale\":\"Stage the validated material fit at the target path. Test whether physical hold stress needs an independent linear drift and whether historical loads add predictive information once the feature coordinate is aligned.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_011_att0.json",
+      "response_sha256": "1ff6fe648dc6dac91ec50d68776f64fda7ce0546caae67fcfac0783fc9480700",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 37256.04,
+      "usage_known": true,
+      "prompt_tokens": 37712,
+      "cached_tokens": 9344,
+      "completion_tokens": 1378
+    }
+  ]
+}

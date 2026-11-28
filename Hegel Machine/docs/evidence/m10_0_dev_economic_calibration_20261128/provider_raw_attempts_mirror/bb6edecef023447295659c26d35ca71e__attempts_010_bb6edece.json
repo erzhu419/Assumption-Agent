@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "bb6edecef023447295659c26d35ca71e",
+  "call_seq": 10,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_01__Flat_MonolithicConditionalTable_Online__step03__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_01_batch_03__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:38:28.430585+00:00",
+  "ended_at_utc": "2026-11-28T02:38:56.346956+00:00",
+  "request_sha256": "e3f6b5a946c8819ae7ed39e0347048cf01bf9b9204e848215d43f401c76c0c32",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 54982,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 30690,
+    "cached_tokens": 9344,
+    "completion_tokens": 962
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat >/tmp/audit_batch.py <<'PY'\\nimport importlib.util,pickle,numpy as np\\np='/holdout_task/batch_solver.py'\\ns=importlib.util.spec_from_file_location('batch_solver',p); m=importlib.util.module_from_spec(s); s.loader.exec_module(m)\\nd=pickle.load(open('/holdout_task/public_batch.pkl','rb'))[0]['dataset']; c=d['calibration_load_cells']; raw=c['bridge_raw']; truth=c['true_channel_loads']\\nb=m._bridge(c); corrupt=np.max(abs(m._transfer(truth,b)-raw),axis=1)>.1\\nprint('corrupted calibration rows:',np.flatnonzero(corrupt))\\nfor fold in np.array_split(np.arange(len(raw)),5):\\n mask=~np.isin(np.arange(len(raw)),fold); sub=dict(c, bridge_raw=raw[mask], true_channel_loads=truth[mask]); coeff=m._bridge(sub); ii=fold[~corrupt[fold]]; e=m._invert(raw[ii],coeff)-truth[ii]; print('bridge blocked fold clean axial RMSE/max',np.sqrt(np.mean(e.sum(1)**2)),max(abs(e.sum(1))))\\nfor k in ['train','test']:\\n for field in ['past_channel_raw','hold_channel_raw']:\\n  a=d[k][field]; print('inverse closure',k,field,np.max(abs(m._transfer(m._invert(a,b),b)-a)))\\ntr,te=d['train'],d['test']; x=m._features(tr,te)[:len(tr['lab_id'])]; dt,t=d['past_dt'],d['eval_times']; past,hold=m._loads(tr,b); y=tr['strain_curves_obs']-tr['strain_0'][:,None]; r=tr['instant_rate_obs']; out=m.solve_batch(d)\\nprint('taus',out['estimated_taus'],'weights',out['hereditary_weights'])\\nfor lab in np.unique(tr['lab_id']):\\n w=tr['lab_id']!=lab; q=~w\\n tau,th=m._fit(past[w],hold[w],x[w],dt,t,y[w],r[w]); a,z=m._design(tau,past[q],hold[q],x[q],dt,t); e=a@th-y[q]; g=z@th-r[q]; print('LOLO',lab,'curve/rate abs error median',np.median(abs(e)),np.median(abs(g)),'q90',np.quantile(abs(e),.9),np.quantile(abs(g),.9),'taus',tau)\\ntau,th=out['estimated_taus'],out['hereditary_weights']; a,z=m._design(tau,*m._loads(te,b),m._features(tr,te)[len(x):],dt,np.array([0.,1e-6])); v=a@th; print('deployment zero-time closure',max(abs(v[:,0])),'max derivative mismatch',max(abs((v[:,1]-v[:,0])/1e-6-out['initial_rate_pred']))); assert np.max(abs(z@th-out['initial_rate_pred']))<1e-12 and 0.05<tau[0]<tau[1]<25.\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 -I /tmp/audit_batch.py\\nOPENBLAS_NUM_THREADS=1 python3 -I /holdout_task/validate_public_schema.py\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Affine inverse → cyclic forward bridge with both chamber modifications withdrawn; held-out forward raw error is 0.00154 at the 95th percentile, and the schema and reference-exchange checks pass.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Check blocked axial calibration error and actual-input Newton closure; either failure would require revisiting the bridge fit or inversion. Refit leaving out each lab to detect unstable material parameters, and check the zero-time derivative independently of the curve outputs.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_010_att0.json",
+      "response_sha256": "fe8f427f82df05656828739b2f00c13d17b078d1090c8d7fc5bcf8298874836d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 27875.65,
+      "usage_known": true,
+      "prompt_tokens": 30690,
+      "cached_tokens": 9344,
+      "completion_tokens": 962
+    }
+  ]
+}

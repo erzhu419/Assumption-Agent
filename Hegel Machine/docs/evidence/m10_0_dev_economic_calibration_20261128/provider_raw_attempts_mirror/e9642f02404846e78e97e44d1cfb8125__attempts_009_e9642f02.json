@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e9642f02404846e78e97e44d1cfb8125",
+  "call_seq": 9,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step05__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_05__blind_continual_campaign__upstream_transducer",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:49:45.174743+00:00",
+  "ended_at_utc": "2026-11-28T02:50:19.493765+00:00",
+  "request_sha256": "cd9aa75550028041fc43a7e12afda8a707cc8efa55595bb8c74e220ef1d5cf20",
+  "system_prompt_chars": 5329,
+  "stdin_payload_chars": 64152,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 36050,
+    "cached_tokens": 9344,
+    "completion_tokens": 1366
+  },
+  "raw_response_text": "{\n  \"action_type\": \"execute_in_remote_docker\",\n  \"bash_command\": \"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys, pickle, copy\\nimport numpy as np\\nsys.path.insert(0, '/holdout_task')\\nfrom upstream_transducer import _fit_bridge, _forward, _invert, calibrate_upstream\\nfrom batch_solver import solve_batch\\nfor item in pickle.load(open('/holdout_task/public_batch.pkl','rb')):\\n d=item['dataset']; c=d['calibration_load_cells']; x=c['true_channel_loads']; y=c['bridge_raw']; s=c['single_channel_sweeps']\\n axis=(x!=0).sum(1)==1\\n # Distinguish actual bridge errors from the observed ~14.5-unit row spikes.\\n clean=np.max(abs(y-np.median(y,axis=0)),axis=1)<8\\n full=_fit_bridge(c)\\n gap=full[:,1]-abs(full[:,2]*full[:,5])-abs(full[:,3])-abs(full[:,4]*full[:,6]); print('minimum global Jacobian diagonal dominance margin',gap.min()); assert np.all(gap>0)\\n def heldout(f):\\n  keep=~f\\n  # Remove sweeps that duplicate the held-out pure-axis setpoints.\\n  sw=np.ones(len(s['lab_id']),dtype=bool)\\n  for j in range(4):\\n   for t in x[f&axis&(x[:,j]!=0),j]: sw &= ~((s['lab_id']==j)&np.isclose(s['true_stress'],t,atol=1e-9))\\n  m=_fit_bridge(dict(c,true_channel_loads=x[keep],bridge_raw=y[keep],single_channel_sweeps={k:v[sw] for k,v in s.items()}))\\n  use=f&clean\\n  r=_forward(x[use],m)-y[use]; e=_invert(y[use],m)-x[use]\\n  return np.max(abs(r)),np.max(abs(e)),np.max(abs(e.sum(1)))\\n for label,folds in [('random',np.array_split(np.random.default_rng(123).permutation(len(x)),5)),('radial',np.array_split(np.argsort(np.max(abs(x),axis=1)),5)),('axis vs mixed',[np.flatnonzero(axis),np.flatnonzero(~axis)])]:\\n  scores=[]\\n  for ix in folds:\\n   f=np.zeros(len(x),dtype=bool); f[ix]=True; scores.append(heldout(f))\\n  print(label,'worst max raw / load / total-load error',np.max(scores,axis=0))\\n  assert np.max(scores,axis=0)[1] < .005\\n # Check that all sections are converted, metadata stays unchanged, and the original input survives the call.\\n d=dict(d,chamber_verification_trials={k:d['test'][k][:3].copy() for k in ('past_channel_raw','hold_channel_raw')}); before=copy.deepcopy(d); out=calibrate_upstream(d)\\n assert np.array_equal(out['calibration_load_cells']['bridge_raw'],x) and not np.shares_memory(out['calibration_load_cells']['bridge_raw'],x)\\n assert np.array_equal(out['calibration_load_cells']['single_channel_sweeps']['cmd_stress'],s['true_stress'])\\n for part in ('train','test','chamber_verification_trials'):\\n  for k in ('past_channel_raw','hold_channel_raw'):\\n   a=out[part][k]; assert a.shape==d[part][k].shape and np.array_equal(d[part][k],before[part][k]); assert np.max(abs(_forward(a,full)-d[part][k]))<1e-9\\n assert np.array_equal(c['bridge_raw'],before['calibration_load_cells']['bridge_raw'])\\n g=np.stack(np.meshgrid(*([np.linspace(-1.8,1.8,11)]*4),indexing='ij'),-1).reshape(-1,4)\\n err=np.max(abs(_invert(_forward(g,full),full)-g)); print('full-box inverse max error',err); assert err<1e-8\\n ans=solve_batch(item['dataset']); assert all(np.all(np.isfinite(np.asarray(v))) for v in ans.values()); print('isolated pipeline output shapes',{k:np.shape(v) for k,v in ans.items()})\\nPY\\nstatus=$?; [ \\\"$status\\\" -eq 0 ] || exit \\\"$status\\\"\\npython3 /holdout_task/validate_public_schema.py /holdout_task/batch_solver.py\",\n  \"final_answer\": null,\n  \"active_hypothesis_and_worst_slice_metric\": \"H1 -> H2: the coupled sinusoidal bridge brings the maximum clean calibration residual to 0.000272 raw units in sample; held-out inverse accuracy is the remaining check.\",\n  \"nogood_update\": {\n    \"has_new_nogood\": false,\n    \"nogood_rung\": \"NONE\",\n    \"assumption_refuted\": null,\n    \"empirical_witness\": null,\n    \"causal_blanket_diagnosis\": null,\n    \"sublated_pivot\": null,\n    \"risk_kind\": null,\n    \"resolves_nogood_ids\": []\n  },\n  \"considered_alternatives\": [\n    {\n      \"option\": \"Submit on the public schema result alone\",\n      \"rejected_reason\": \"Correct shapes and a small round-trip residual do not establish accurate recovery of held-out loads.\"\n    }\n  ],\n  \"rationale\": \"Hold out random, high-load, and axis/mixed slices without duplicate sweep points to detect calibration bias. Check the inverse over the supported box and exercise the optional chamber branch; revise the fit or solver only if those checks expose a failure.\"\n}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_009_att0.json",
+      "response_sha256": "bc50ee914f9e8e125c0d73d273b5d457a3f91b0827108309c5a32cfae9febf56",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 36357.24,
+      "usage_known": true,
+      "prompt_tokens": 36050,
+      "cached_tokens": 9344,
+      "completion_tokens": 1366
+    }
+  ]
+}

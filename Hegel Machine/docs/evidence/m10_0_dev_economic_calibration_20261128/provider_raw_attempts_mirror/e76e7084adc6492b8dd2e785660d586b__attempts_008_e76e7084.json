@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "e76e7084adc6492b8dd2e785660d586b",
+  "call_seq": 8,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_alpha_m100_02__Hegel_SelectiveConditionExpansion_Online__step08__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_alpha_m100_02_batch_08__blind_continual_campaign__downstream_module",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T03:00:44.229409+00:00",
+  "ended_at_utc": "2026-11-28T03:01:06.843826+00:00",
+  "request_sha256": "e75a01a390dba9aa92d12ae0fad0375a9b148529eb6967f79242a5f6f84df377",
+  "system_prompt_chars": 5327,
+  "stdin_payload_chars": 51055,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 26736,
+    "cached_tokens": 9344,
+    "completion_tokens": 725
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cd /holdout_task && OPENBLAS_NUM_THREADS=1 python3 -I - <<'PY'\\nimport sys,pickle,json,numpy as np\\nsys.path.insert(0,'/holdout_task')\\nfrom _verified_upstream import calibrate_upstream\\nfrom downstream_solver import _features\\nitem=pickle.load(open('public_batch.pkl','rb'))[0]\\nd=calibrate_upstream(item['dataset']); xt,xe=_features(d['train'],d['test'])\\nfor key,x in [('train',xt),('test',xe)]:\\n p=d[key]; a=p['aux_chamber_telemetry']; past=p['past_channel_raw'].sum(-1); hold=p['hold_channel_raw'].sum(-1)\\n z=np.column_stack((a,x[:,1:],past,hold,p['strain_0']))\\n print(key,'aux quantiles',np.round(np.quantile(a,[0,.1,.5,.9,1],axis=0),4)); print(key,'aux correlations (aux, features, chronological stress, hold, strain_0)',np.round(np.corrcoef(z,rowvar=False)[:4],2)); print(key,'aux sample',np.round(a[:5],4))\\nlog=json.load(open('/tmp/hegel_continual_archive/archive_apparatus_log.json'))\\nfor row in log:\\n a=np.array(row['facility_telemetry_trace']); print(row['completed_campaign_short_name'],'mean',np.round(a.mean(0),3),'std',np.round(a.std(0),3))\\nPY\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"H1 robust shared benchtop fit → H2 chamber transfer only if current auxiliary telemetry discriminates archived regimes; worst held-out benchtop median absolute errors are 0.011619 strain and 0.006748 initial rate.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[{\"option\":\"Reuse the last completed campaign’s regime\",\"rejected_reason\":\"The trace identifies batch 07, not batch 08, and the two archived laws give materially different deployment predictions.\"}],\"rationale\":\"Check the current auxiliary readings for a regime signature distinct from ordinary coupon and load variation. A signature that can be linked to the verified archive could change the chamber law; without that link, retain the verified benchtop fallback.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_008_att0.json",
+      "response_sha256": "414f0fa0378faa1b932b7c66e54667765bc046226dbd0243c3a77e022a5d5189",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 22571.46,
+      "usage_known": true,
+      "prompt_tokens": 26736,
+      "cached_tokens": 9344,
+      "completion_tokens": 725
+    }
+  ]
+}

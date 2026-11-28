@@ -1,0 +1,34 @@
+{
+  "run_uuid": "",
+  "call_uuid": "a4cf1b29f4444cc2a1b70015886e933b",
+  "call_seq": 3,
+  "stage_subdir": "m100_dev_20261128T021932Z_f5bac8c4__dev_beta_m100_02__Flat_MonolithicConditionalTable_Online__step01__gpt-6.2-sol__Hegel_M6_9_Antithesis_LiveGPT__dev_beta_m100_02_batch_01__blind_continual_campaign",
+  "status": "completed",
+  "started_at_utc": "2026-11-28T02:25:11.722831+00:00",
+  "ended_at_utc": "2026-11-28T02:25:36.357147+00:00",
+  "request_sha256": "748b9e756ed2fe30c25cd2cea728d36db6197db76ffd84e9fa111914aedfbd29",
+  "system_prompt_chars": 5289,
+  "stdin_payload_chars": 24279,
+  "attempt_count": 1,
+  "usage_unknown_attempt_count": 0,
+  "cumulative_usage": {
+    "prompt_tokens": 19582,
+    "cached_tokens": 0,
+    "completion_tokens": 941
+  },
+  "raw_response_text": "{\"action_type\":\"execute_in_remote_docker\",\"bash_command\":\"cat > /tmp/probe_chamber.py <<'PY'\\nimport importlib.util, pickle, numpy as np\\nfrom itertools import combinations_with_replacement\\nspec=importlib.util.spec_from_file_location('prev','/tmp/hegel_continual_archive/dev_beta_m100_02_s00_solver.py'); prev=importlib.util.module_from_spec(spec); spec.loader.exec_module(prev)\\nitems=pickle.load(open('/holdout_task/public_batch.pkl','rb')); print('items',len(items)); item=items[0]; s=item['study']; d=item['campaign_diagnostics']; sw=s['sensor_calibration_sweeps']; a=sw['ref_rosette']; b=sw['raw_rosette']; print('calibration ranges',a.min(0),a.max(0),b.min(0),b.max(0)); print('sensors',s['sensor_ij'].tolist()); print('aux quartiles',np.quantile(s['aux_manifold_telemetry'],[0,.25,.5,.75,1],axis=0)); print('ridges, budget, cap',*[s[k] for k in ('source_ridge','nuisance_ridge','total_budget','u_box')]); print('observations rms',np.sqrt(np.mean(s['y_obs_raw']**2))); print('pulses',[(p['w_pulse'].round(4),np.quantile(p['y_pulse_raw'],[0,.5,1])) for p in d]);\\nfor k,v in sw['single_bank_sweeps'].items(): print('single',k,np.shape(v),np.asarray(v).ravel()[:16]);\\ndef features(x,degree):\\n return np.column_stack([np.ones(len(x))]+[x[:,ix].prod(axis=1) for k in range(1,degree+1) for ix in combinations_with_replacement(range(4),k)])\\nS,_=prev._responses(s,prev._operator(s)); x=np.vstack([(S@p['w_pulse']).reshape(-1,4) for p in d]); y=np.vstack([p['y_pulse_raw'].reshape(-1,4) for p in d]); print('baseline ref range',x.min(0),x.max(0))\\nfor degree in (1,2,3):\\n F=features(a,degree); c=np.linalg.lstsq(F,b,rcond=None)[0]; cv=[]\\n for j in range(5):\\n  val=np.arange(len(a))%5==j; cv.append(np.sqrt(np.mean((F[val]@np.linalg.lstsq(F[~val],b[~val],rcond=None)[0]-b[val])**2)))\\n er=(features(x,degree)@c-y).reshape(len(d),-1,4); print('degree',degree,'fit rmse',np.sqrt(np.mean((F@c-b)**2)), 'max heldout fold RMSE',max(cv),'baseline pulse by pulse and bank',np.sqrt(np.mean(er**2,axis=1))); print('coef',np.round(c,6))\\nPY\\nOPENBLAS_NUM_THREADS=1 python3 /tmp/probe_chamber.py\\nsed -n '48,130p' /tmp/hegel_continual_archive/*_solver.py\\nPYTHONPATH=/tmp python3 -m hegel_wormhole_skills --describe autogenous_sparse_ridge_certification.solve_and_certify_l0 | head -45\",\"final_answer\":null,\"active_hypothesis_and_worst_slice_metric\":\"Archived Robin and affine calibration → separate sensor-model error from wall-model error using held-out sweeps and three tracer pulses; metrics pending.\",\"nogood_update\":{\"has_new_nogood\":false,\"nogood_rung\":\"NONE\",\"assumption_refuted\":null,\"empirical_witness\":null,\"causal_blanket_diagnosis\":null,\"sublated_pivot\":null,\"risk_kind\":null,\"resolves_nogood_ids\":[]},\"considered_alternatives\":[],\"rationale\":\"Held-out sweep error detects missing calibration terms; pulse residuals after calibration show whether the Robin baseline still needs replacement and which banks provide the strongest evidence.\"}",
+  "attempts": [
+    {
+      "attempt_index": 1,
+      "response_filename": "resp_003_att0.json",
+      "response_sha256": "2cc8a3f60276a9a1fa144aad5a688ef816d80969d7adc6e980edbb025396ee6d",
+      "returncode": 0,
+      "timed_out": false,
+      "wall_ms": 26600.77,
+      "usage_known": true,
+      "prompt_tokens": 19582,
+      "cached_tokens": 0,
+      "completion_tokens": 941
+    }
+  ]
+}
